@@ -1,3 +1,7 @@
+---
+url: *
+---
+
 # Search Bar
 
 > **[Open this page in Quilltap](/)**

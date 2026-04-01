@@ -10,7 +10,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { uploadImage, importImageFromUrl } from '@/lib/images-v2';
-import { decryptApiKey } from '@/lib/encryption';
 import { createLLMProvider } from '@/lib/llm';
 import { logger } from '@/lib/logger';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -257,7 +256,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
     if (profile.apiKeyId) {
       const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId);
       if (apiKey) {
-        decryptedKey = decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, user.id);
+        decryptedKey = apiKey.key_value;
       }
     }
 

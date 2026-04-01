@@ -1,3 +1,7 @@
+---
+url: /salon/:id
+---
+
 # Run Tool
 
 ## The Gadgeteer's Workbench

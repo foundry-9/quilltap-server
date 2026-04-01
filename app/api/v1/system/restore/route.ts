@@ -45,7 +45,6 @@ function cleanupExpiredUploads(): void {
   const now = Date.now();
   for (const [id, upload] of pendingUploads) {
     if (now - upload.createdAt > UPLOAD_TTL_MS) {
-      logger.debug('[System Restore v1] Cleaning up expired upload', { uploadId: id });
       pendingUploads.delete(id);
       fs.promises.unlink(upload.path).catch(() => {});
     }
@@ -96,8 +95,6 @@ async function handleUpload(req: NextRequest, userId: string): Promise<NextRespo
 
   const uploadId = randomUUID();
   const tempZipPath = path.join(os.tmpdir(), `quilltap-restore-${uploadId}.zip`);
-
-  logger.debug('[System Restore v1] Starting upload stream', { uploadId, userId });
 
   try {
     const writeStream = fs.createWriteStream(tempZipPath);

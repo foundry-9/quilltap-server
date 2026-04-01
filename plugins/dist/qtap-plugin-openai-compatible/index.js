@@ -74,6 +74,12 @@ var cheapModels = {
 };
 var plugin = {
   metadata,
+  icon: {
+    viewBox: "0 0 24 24",
+    paths: [
+      { d: "M8 2v6H6v3c0 2.2 1.8 4 4 4v5h4v-5c2.2 0 4-1.8 4-4V8h-2V2h-2v6h-4V2H8z", fill: "currentColor" }
+    ]
+  },
   config,
   capabilities,
   attachmentSupport,

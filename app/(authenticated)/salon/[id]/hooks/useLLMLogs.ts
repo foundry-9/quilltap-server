@@ -8,39 +8,38 @@ import type { Message } from '../types'
 interface UseLLMLogsParams {
   chatId: string
   messages: Message[]
-  setLLMLogsForViewer: (logs: LLMLog[]) => void
-  setSelectedMessageIdForLogs: (messageId: string | null) => void
-  setLLMLogViewerOpen: (open: boolean) => void
 }
 
 export function useLLMLogs({
   chatId,
   messages,
-  setLLMLogsForViewer,
-  setSelectedMessageIdForLogs,
-  setLLMLogViewerOpen,
 }: UseLLMLogsParams) {
-  // Track which messages have logs (for showing the button)
+  // All logs for this chat (both chatId-linked and messageId-linked)
+  const [allChatLogs, setAllChatLogs] = useState<LLMLog[]>([])
+  const [loading, setLoading] = useState(false)
+
+  // Inspector panel state
+  const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [inspectorScrollToMessageId, setInspectorScrollToMessageId] = useState<string | null>(null)
+
+  // Derive which messages have logs from the full dataset
   const [messagesWithLogs, setMessagesWithLogs] = useState<Set<string>>(new Set())
 
-  // Check which messages have LLM logs
-  const checkMessagesForLogs = useCallback(async () => {
-    if (!chatId || !messages.length) return
+  // Fetch all logs for this chat using the combined endpoint
+  const fetchLogs = useCallback(async () => {
+    if (!chatId) return
 
-    // Get assistant message IDs
-    const assistantMessageIds = messages
-      .filter(m => m.role === 'ASSISTANT')
-      .map(m => m.id)
-
-    if (assistantMessageIds.length === 0) return
-
+    setLoading(true)
     try {
-      // Batch check - get all logs for this chat and extract message IDs
-      const res = await fetch(`/api/v1/llm-logs?chatId=${chatId}&limit=1000`)
+      const res = await fetch(`/api/v1/llm-logs?chatId=${chatId}&includeMessages=true`)
       if (res.ok) {
         const data = await res.json()
+        const logs: LLMLog[] = data.logs || []
+        setAllChatLogs(logs)
+
+        // Derive messagesWithLogs from the full log set
         const messageIdsWithLogs = new Set<string>(
-          data.logs
+          logs
             .filter((log: LLMLog) => log.messageId)
             .map((log: LLMLog) => log.messageId!)
         )
@@ -48,34 +47,56 @@ export function useLLMLogs({
       }
     } catch {
       // Silent fail - logging is not critical
+    } finally {
+      setLoading(false)
     }
-  }, [chatId, messages])
+  }, [chatId])
 
-  // Call on mount and when messages change
+  // Fetch on mount and when messages change
   useEffect(() => {
-    checkMessagesForLogs()
-  }, [checkMessagesForLogs])
-
-  // Handle viewing LLM logs
-  const handleViewLLMLogs = useCallback(async (messageId: string) => {
-    try {
-      const res = await fetch(`/api/v1/llm-logs?messageId=${messageId}`)
-      if (!res.ok) throw new Error('Failed to fetch logs')
-
-      const data = await res.json()
-      if (data.logs && data.logs.length > 0) {
-        setLLMLogsForViewer(data.logs)
-        setSelectedMessageIdForLogs(messageId)
-        setLLMLogViewerOpen(true)
-      }
-    } catch (error) {
-      console.error('Failed to fetch LLM logs:', error)
-      showErrorToast('Failed to load LLM logs')
+    if (messages.length > 0) {
+      fetchLogs()
     }
-  }, [setLLMLogsForViewer, setSelectedMessageIdForLogs, setLLMLogViewerOpen])
+  }, [fetchLogs, messages.length])
+
+  // Open inspector panel, optionally scrolled to a specific message's logs
+  const handleViewLLMLogs = useCallback((messageId: string) => {
+    setInspectorScrollToMessageId(messageId)
+    setInspectorOpen(true)
+  }, [])
+
+  // Toggle inspector panel (for toolbar button / keyboard shortcut)
+  const toggleInspector = useCallback(() => {
+    setInspectorOpen(prev => {
+      if (!prev) {
+        // Opening - clear any previous scroll target
+        setInspectorScrollToMessageId(null)
+      }
+      return !prev
+    })
+  }, [])
+
+  // Close inspector
+  const closeInspector = useCallback(() => {
+    setInspectorOpen(false)
+    setInspectorScrollToMessageId(null)
+  }, [])
+
+  // Refresh logs (e.g., after streaming completes)
+  const refreshLogs = useCallback(() => {
+    fetchLogs()
+  }, [fetchLogs])
 
   return {
     messagesWithLogs,
     handleViewLLMLogs,
+    // Inspector panel state
+    allChatLogs,
+    loading,
+    inspectorOpen,
+    inspectorScrollToMessageId,
+    toggleInspector,
+    closeInspector,
+    refreshLogs,
   }
 }

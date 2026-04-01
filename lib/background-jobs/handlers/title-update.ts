@@ -80,7 +80,8 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
     recentMessages,
     existingContext,
     cheapLLMSelection,
-    job.userId
+    job.userId,
+    payload.chatId
   );
 
   if (!result.success) {

@@ -13,9 +13,6 @@ jest.mock('@/lib/llm/connection-profile-utils', () => ({
 jest.mock('@/lib/llm/plugin-factory', () => ({
   createLLMProvider: jest.fn(),
 }))
-jest.mock('@/lib/encryption', () => ({
-  decryptApiKey: jest.fn(),
-}))
 
 import {
   needsFallbackProcessing,
@@ -28,11 +25,9 @@ import {
 } from '@/lib/chat/file-attachment-fallback'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { createLLMProvider } from '@/lib/llm'
-import { decryptApiKey } from '@/lib/encryption'
 
 const mockProfileSupportsMimeType = profileSupportsMimeType as jest.MockedFunction<typeof profileSupportsMimeType>
 const mockCreateLLMProvider = createLLMProvider as jest.MockedFunction<typeof createLLMProvider>
-const mockDecryptApiKey = decryptApiKey as jest.MockedFunction<typeof decryptApiKey>
 
 const baseProfile: ConnectionProfile = {
   id: '44444444-4444-4444-4444-444444444444',
@@ -80,7 +75,6 @@ describe('lib/chat/file-attachment-fallback', () => {
     mockRepos.connections.findApiKeyByIdAndUserId.mockReset()
     mockProfileSupportsMimeType.mockReset()
     mockCreateLLMProvider.mockReset()
-    mockDecryptApiKey.mockReset()
   })
 
   it('detects when fallback is required based on MIME support', () => {
@@ -154,11 +148,8 @@ describe('lib/chat/file-attachment-fallback', () => {
     mockRepos.chatSettings.findByUserId.mockResolvedValue({ imageDescriptionProfileId: baseProfile.id })
     mockRepos.connections.findById.mockResolvedValue(baseProfile)
     mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({
-      ciphertext: 'cipher',
-      iv: 'iv',
-      authTag: 'tag',
+      key_value: 'sk-test',
     })
-    mockDecryptApiKey.mockReturnValue('sk-test')
     mockProfileSupportsMimeType.mockReturnValue(true)
 
     const sendMessage = jest.fn().mockResolvedValue({

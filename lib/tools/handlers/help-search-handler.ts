@@ -128,6 +128,7 @@ async function semanticSearch(
     id: result.document.id,
     title: result.document.title,
     path: result.document.path,
+    url: result.document.url,
     score: result.score,
     content: result.document.content,
   }))
@@ -158,6 +159,7 @@ function keywordSearch(query: string, limit: number): HelpSearchResult[] {
     id: item.doc.id,
     title: item.doc.title,
     path: item.doc.path,
+    url: item.doc.url,
     score: item.score,
     content: item.doc.content,
   }))
@@ -283,6 +285,7 @@ export function formatHelpSearchResults(results: HelpSearchResult[]): string {
     return `[Help Document ${index + 1}] (Relevance: ${relevanceLabel})
 Title: ${result.title}
 Path: ${result.path}
+URL: ${result.url}
 Content:
 ${truncatedContent}`
   })

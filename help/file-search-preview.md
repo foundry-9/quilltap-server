@@ -1,3 +1,7 @@
+---
+url: /files
+---
+
 # Searching and Previewing Files
 
 > **[Open this page in Quilltap](/files)**

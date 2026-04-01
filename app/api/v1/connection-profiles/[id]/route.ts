@@ -108,6 +108,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         allowWebSearch,
         useNativeWebSearch,
         allowToolUse,
+        sortIndex,
       } = body;
 
       // Build update data
@@ -215,6 +216,13 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           return badRequest('allowToolUse must be a boolean');
         }
         updateData.allowToolUse = allowToolUse;
+      }
+
+      if (sortIndex !== undefined) {
+        if (typeof sortIndex !== 'number' || !Number.isInteger(sortIndex) || sortIndex < 0) {
+          return badRequest('sortIndex must be a non-negative integer');
+        }
+        updateData.sortIndex = sortIndex;
       }
 
       // Update the profile

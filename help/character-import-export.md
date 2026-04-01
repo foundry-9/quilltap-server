@@ -1,3 +1,7 @@
+---
+url: /aurora
+---
+
 # Importing and Exporting Characters
 
 > **[Open this page in Quilltap](/aurora)**

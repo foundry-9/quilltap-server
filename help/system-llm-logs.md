@@ -1,3 +1,7 @@
+---
+url: /settings?tab=system
+---
+
 # LLM Logs
 
 > **[Open this page in Quilltap](/settings?tab=system)**
@@ -28,7 +32,62 @@ LLM Logs record every interaction with Large Language Models (AI providers like 
 - Audit AI interactions
 - Understand conversation flow
 
-## Accessing LLM Logs
+## The LLM Inspector Panel
+
+The **LLM Inspector** is a slide-over panel available directly from the chat view, rather like having a clerk's ledger open beside your writing desk. It shows every LLM interaction associated with a conversation in neat chronological order.
+
+### Opening the Inspector
+
+There are three ways to summon the Inspector:
+
+1. **Toolbar button** - Click the terminal icon in the chat toolbar (top-right corner, beside the cost summary if enabled)
+2. **Keyboard shortcut** - Press **Cmd+Shift+L** (macOS) or **Ctrl+Shift+L** (Windows/Linux)
+3. **Per-message button** - Click "View LLM logs" on any assistant message that has associated logs; the Inspector will open scrolled directly to that entry
+
+The toolbar button and keyboard shortcut are only available when LLM logging is enabled in your Chat Settings.
+
+### What the Inspector Shows
+
+Each entry in the Inspector displays:
+
+- **Timestamp** - When the API call was made
+- **Type badge** - Color-coded by operation type:
+  - **Chat / Tool** (primary color) - Direct chat messages and tool continuations
+  - **Memory** (info blue) - Memory extraction operations
+  - **Title / Summary / Compress** (secondary) - Background system operations
+  - **Image** (warning amber) - Image prompt crafting, description, appearance resolution
+  - **Safety** (red) - Dangerous content classification
+  - **Wizard / Import** (green) - Character wizard and AI import operations
+- **Provider/Model** - Which AI service and model handled the request
+- **Token summary** - Input tokens and output tokens at a glance
+- **Duration** - How long the API call took
+- **Error indicator** - A red icon if the request failed
+
+### Expanding an Entry
+
+Click any entry to expand it into a tabbed detail view:
+
+- **Request** tab - Provider info, message count, temperature, max tokens, tool count, and a summary of each message sent to the model
+- **Response** tab - Success/error status and content preview (with full content if verbose logging is enabled)
+- **Usage** tab - Token breakdown (prompt, completion, total), cache usage if applicable, and timing information
+
+### Filtering Entries
+
+Use the filter dropdown in the Inspector header to narrow down what you see:
+
+- **All** - Every log entry
+- **Chat Messages** - Direct chat and tool continuation calls
+- **Memory** - Memory extraction operations
+- **System Ops** - Title generation, summarization, context compression
+- **Image** - Image-related operations
+- **Safety** - Dangerous content classification
+- **Other** - Character wizard, AI import
+
+### Live Updates
+
+After you send a message and receive a response, the Inspector automatically refreshes to include the new log entries. You can also click the refresh button in the header at any time.
+
+## Accessing LLM Logs from Settings
 
 **Go to the **Data & System** tab in Settings** (`/settings?tab=system`) and expand the **LLM Logs** card.
 
@@ -103,9 +162,9 @@ The card shows:
 
 ### When AI Response Seems Wrong
 
-1. **Open the LLM Logs**
-2. **Find the relevant log entry** (by timestamp and topic)
-3. **View full details**
+1. **Open the LLM Inspector** from the chat toolbar
+2. **Find the relevant log entry** (by timestamp and type badge)
+3. **Expand it** to view full details
 4. **Check what was sent to model** - Was the prompt correct?
 5. **Review model's response** - What exactly did it return?
 6. **Identify the issue:**
@@ -116,8 +175,8 @@ The card shows:
 
 ### When API Calls Fail
 
-1. **Look for failed logs** (red status)
-2. **Click to view details**
+1. **Look for entries with error indicators** (red circle icon)
+2. **Expand to view details**
 3. **Read error message** from provider
 4. **Common errors:**
    - **Rate limit exceeded:** Too many calls too fast
@@ -128,7 +187,7 @@ The card shows:
 
 ### When Costs Are Higher Than Expected
 
-1. **Check token counts** in logs
+1. **Check token counts** in the Usage tab
 2. **Identify heavy-token-usage calls**
 3. **Look for patterns** - What types of calls use most tokens?
 4. **Review message history** - Long conversations use more tokens
@@ -175,25 +234,29 @@ The card shows:
 
 **How long logs are kept:**
 
-- Recent logs stay in UI (usually 20-100 most recent)
-- Older logs may be archived
-- Contact admin for historical logs if needed
+- Configurable in Chat Settings (default: 30 days)
+- Older logs are automatically cleaned up
+- Set retention to 0 for indefinite storage
 
 **Log storage:**
 
-- Logs stored in your database
-- Don't take up significant space
-- Regularly cleaned up if space needed
+- Logs stored in a separate SQLite database (`quilltap-llm-logs.db`)
+- Isolated from your main data for performance
+- Gracefully degrades if the log database has issues
 
 ## Filtering and Searching Logs
 
-**If available in your UI, you can:**
+**In the Inspector panel, you can:**
 
-- Filter by provider (show only OpenAI logs, etc.)
-- Filter by model (show only GPT-4, etc.)
-- Filter by date range
-- Search by keywords
-- Sort by token usage or cost
+- Filter by category (Chat, Memory, System, Image, Safety, Other)
+- See entry counts for the current filter
+- Refresh to see latest entries
+- Scroll to specific message-linked entries
+
+**In the Settings page, you can:**
+
+- View recent logs across all chats
+- Filter by provider or model
 - Sort by timestamp
 
 ## Common Patterns in Logs
@@ -251,11 +314,16 @@ The card shows:
 - Old logs may be archived
 - Contact support if missing logs
 
+**Inspector button not visible**
+
+- LLM logging may be disabled in Chat Settings
+- Enable it in Settings > Chat tab > LLM Logging
+
 **Log seems incomplete**
 
 - Some logs are truncated for display
-- Click to view full details
-- Very long responses may be shortened
+- Click to expand and view full details
+- Enable "Verbose Mode" in Chat Settings for complete message content
 
 **Wrong information in log**
 

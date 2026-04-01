@@ -405,11 +405,6 @@ class FileStorageManager {
     try {
       const backend = await this.getBackend();
       await backend.upload(storageKey, content, contentType);
-
-      logger.debug('Raw upload completed', {
-        storageKey,
-        size: content.length,
-      });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown upload error';
 
@@ -434,8 +429,6 @@ class FileStorageManager {
     try {
       const backend = await this.getBackend();
       await backend.delete(storageKey);
-
-      logger.debug('Raw delete completed', { storageKey });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown deletion error';
 

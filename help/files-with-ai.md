@@ -1,3 +1,7 @@
+---
+url: /files
+---
+
 # Using Files with AI
 
 > **[Open this page in Quilltap](/files)**

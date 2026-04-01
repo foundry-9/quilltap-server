@@ -88,7 +88,6 @@ export async function findAndPrepareOverwrite(
   // Clean up old physical file
   try {
     await fileStorageManager.deleteFile(existingFile);
-    logger.debug('Old physical file deleted for overwrite', { fileId: existingFile.id });
   } catch (error) {
     logger.warn('Failed to delete old physical file during overwrite — continuing', {
       fileId: existingFile.id,
@@ -100,7 +99,6 @@ export async function findAndPrepareOverwrite(
   if (canGenerateThumbnail(existingFile.mimeType)) {
     try {
       await cleanupThumbnails(existingFile);
-      logger.debug('Old thumbnails cleaned up for overwrite', { fileId: existingFile.id });
     } catch (error) {
       logger.warn('Failed to clean up thumbnails during overwrite — continuing', {
         fileId: existingFile.id,

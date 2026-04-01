@@ -21,6 +21,7 @@ export interface HelpSearchResult {
   id: string
   title: string
   path: string
+  url: string
   score: number
   content: string
 }

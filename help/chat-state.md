@@ -1,3 +1,7 @@
+---
+url: /salon/:id
+---
+
 # Chat State
 
 Chat State provides persistent JSON storage for games, inventory tracking, session data, and any other information that should persist across messages in a conversation.

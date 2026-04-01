@@ -1,3 +1,7 @@
+---
+url: /settings?tab=system
+---
+
 # Import & Export Data
 
 > **[Open this page in Quilltap](/settings?tab=system)**

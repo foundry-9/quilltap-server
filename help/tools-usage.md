@@ -1,3 +1,7 @@
+---
+url: /salon/:id
+---
+
 # Using Tools in Chat
 
 > **[Open this page in Quilltap](/salon)**

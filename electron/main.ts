@@ -28,6 +28,7 @@ import { AppSettings, loadSettings, saveSettings, defaultNameForPath } from './s
 import { getSizesForDir } from './disk-utils';
 import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
 import { initStartupLog, logStartup, closeStartupLog } from './startup-log';
+import { WorkspaceWatcher } from './workspace-watcher';
 
 const isDev = !!process.env.ELECTRON_DEV;
 
@@ -44,12 +45,10 @@ runCrashGuard();
 if (process.platform === 'darwin') {
   app.commandLine.appendSwitch('disable-session-crashed-bubble');
   try {
-    /* eslint-disable quilltap/no-quilltap-misspelling -- actual macOS bundle ID */
     fs.rmSync(
       path.join(os.homedir(), 'Library', 'Saved Application State', 'com.foundry9.quilltap.savedState'),
       { recursive: true, force: true }
     );
-    /* eslint-enable quilltap/no-quilltap-misspelling */
   } catch {
     // Non-fatal — directory may not exist
   }
@@ -76,6 +75,7 @@ let isQuitting = false;
 let appSettings: AppSettings;
 let dockerAvailable = false;
 let nodeAvailable = false;
+let workspaceWatcher: WorkspaceWatcher | null = null;
 
 /** Whether we're in the auto-start countdown (can be interrupted) */
 let autoStartPending = false;
@@ -535,7 +535,7 @@ function buildAppMenu(win: BrowserWindow): void {
 }
 
 /** Create the main application window */
-function createMainWindow(): BrowserWindow {
+function createMainWindow(urlPath?: string): BrowserWindow {
   const win = new BrowserWindow({
     width: MAIN_WIDTH,
     height: MAIN_HEIGHT,
@@ -548,14 +548,14 @@ function createMainWindow(): BrowserWindow {
     },
   });
 
-  const url = isDev
+  const baseUrl = isDev
     ? 'http://localhost:3000'
     : `http://localhost:${HOST_PORT}`;
+  const url = urlPath ? `${baseUrl}${urlPath}` : baseUrl;
 
   // Intercept new-window requests (target="_blank", window.open)
   win.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
-    const appOrigin = isDev ? 'http://localhost:3000' : `http://localhost:${HOST_PORT}`;
-    if (targetUrl.startsWith(appOrigin)) {
+    if (targetUrl.startsWith(baseUrl)) {
       // Same-origin URLs (images, files) can't be opened externally — block them.
       // The frontend handles these with in-app preview modals when running in Electron.
       console.log('[Main] Blocked same-origin new-window request:', targetUrl);
@@ -569,8 +569,7 @@ function createMainWindow(): BrowserWindow {
 
   // Prevent the main window from navigating away to external URLs
   win.webContents.on('will-navigate', (event, navUrl) => {
-    const appOrigin = isDev ? 'http://localhost:3000' : `http://localhost:${HOST_PORT}`;
-    if (!navUrl.startsWith(appOrigin)) {
+    if (!navUrl.startsWith(baseUrl)) {
       event.preventDefault();
       console.log('[Main] Blocked in-window navigation to external URL:', navUrl);
       shell.openExternal(navUrl);
@@ -689,6 +688,13 @@ async function startupSequence(dataDir: string): Promise<void> {
 
     if (status.status === 'healthy' || status.status === 'degraded') {
       mainWindow = createMainWindow();
+      markStartupSuccess();
+      return;
+    }
+
+    if (status.status === 'locked') {
+      // Server is in locked mode — load the setup/unlock page
+      mainWindow = createMainWindow('/setup');
       markStartupSuccess();
       return;
     }
@@ -921,6 +927,14 @@ async function startupSequence(dataDir: string): Promise<void> {
     });
   });
 
+  if (healthStatus.status === 'locked') {
+    sendSplashUpdate({ phase: 'ready', message: 'Database locked — passphrase required' });
+    closeStartupLog();
+    mainWindow = createMainWindow('/setup');
+    markStartupSuccess();
+    return;
+  }
+
   if (healthStatus.status === 'healthy' || healthStatus.status === 'degraded') {
     sendSplashUpdate({
       phase: 'ready',
@@ -930,6 +944,18 @@ async function startupSequence(dataDir: string): Promise<void> {
     closeStartupLog();
     mainWindow = createMainWindow();
     markStartupSuccess();
+
+    // Start workspace watcher after VM/Docker is healthy
+    try {
+      const workspaceDir = path.join(dataDir, 'workspace');
+      workspaceWatcher = new WorkspaceWatcher({
+        workspaceDir,
+        log: (msg, data) => logStartup(`[WorkspaceWatcher] ${msg} ${data ? JSON.stringify(data) : ''}`),
+      });
+      workspaceWatcher.start();
+    } catch (err) {
+      logStartup(`[WorkspaceWatcher] Failed to start: ${err instanceof Error ? err.message : String(err)}`);
+    }
   } else {
     const logs = await vmManager.getLogs(20);
     sendSplashError(
@@ -1077,7 +1103,12 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
     });
   });
 
-  if (healthStatus.status === 'healthy' || healthStatus.status === 'degraded') {
+  if (healthStatus.status === 'locked') {
+    sendSplashUpdate({ phase: 'ready', message: 'Database locked — passphrase required' });
+    closeStartupLog();
+    mainWindow = createMainWindow('/setup');
+    markStartupSuccess();
+  } else if (healthStatus.status === 'healthy' || healthStatus.status === 'degraded') {
     sendSplashUpdate({
       phase: 'ready',
       message: 'Ready!',
@@ -1203,7 +1234,12 @@ async function npxStartupSequence(dataDir: string): Promise<void> {
     });
   });
 
-  if (healthStatus.status === 'healthy' || healthStatus.status === 'degraded') {
+  if (healthStatus.status === 'locked') {
+    sendSplashUpdate({ phase: 'ready', message: 'Database locked — passphrase required' });
+    closeStartupLog();
+    mainWindow = createMainWindow('/setup');
+    markStartupSuccess();
+  } else if (healthStatus.status === 'healthy' || healthStatus.status === 'degraded') {
     sendSplashUpdate({
       phase: 'ready',
       message: 'Ready!',
@@ -1536,6 +1572,12 @@ app.on('before-quit', async (event) => {
 
   isQuitting = true;
   event.preventDefault();
+
+  // Stop workspace watcher
+  if (workspaceWatcher) {
+    workspaceWatcher.stop();
+    workspaceWatcher = null;
+  }
 
   // Close interactive windows immediately so the user can't keep clicking
   if (mainWindow && !mainWindow.isDestroyed()) {

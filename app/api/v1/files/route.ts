@@ -445,12 +445,6 @@ async function handleGenerateThumbnails(
     const { fileIds, size } = parsed.data;
     const thumbnailSize = size ?? DEFAULT_THUMBNAIL_SIZE;
 
-    logger.debug('[Files v1] Batch thumbnail generation requested', {
-      count: fileIds.length,
-      size: thumbnailSize,
-      userId: user.id,
-    });
-
     // Fetch all requested file entries
     const fileEntries = await Promise.all(
       fileIds.map((id: string) => repos.files.findById(id))
@@ -578,11 +572,6 @@ async function handleCleanupOrphaned(
 
           await repos.files.delete(stale.id);
           deleted++;
-
-          logger.debug('[Files v1] Deleted stale file record', {
-            fileId: stale.id,
-            filename: stale.originalFilename,
-          });
         } catch (error) {
           logger.error('[Files v1] Failed to delete stale record', {
             fileId: stale.id,

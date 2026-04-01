@@ -36,6 +36,8 @@ export interface ContextCompressionOptions {
   selection: CheapLLMSelection
   /** User ID for API access */
   userId: string
+  /** Chat ID for LLM call logging */
+  chatId?: string
   /** Character name for compression prompt */
   characterName: string
   /** User/persona name for compression prompt */
@@ -209,7 +211,8 @@ export async function applyContextCompression(
       options.compressionTargetTokens,
       options.selection,
       options.userId,
-      uncensoredFallback
+      uncensoredFallback,
+      options.chatId
     )
 
     if (historyResult.success && historyResult.result) {
@@ -246,7 +249,8 @@ export async function applyContextCompression(
       options.systemPromptTargetTokens,
       options.selection,
       options.userId,
-      uncensoredFallback
+      uncensoredFallback,
+      options.chatId
     )
 
     if (systemResult.success && systemResult.result) {

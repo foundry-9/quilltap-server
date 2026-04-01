@@ -42,6 +42,8 @@ export default function ConnectionProfilesTab() {
     fetchChatSettings,
     handleDelete,
     triggerAutoAssociate,
+    reorderProfiles,
+    resetSort,
   } = useConnectionProfiles()
 
   // Form state and operations
@@ -149,6 +151,8 @@ export default function ConnectionProfilesTab() {
         onDelete={handleDeleteClick}
         onDeleteConfirmChange={setDeleteConfirming}
         onAddClick={handleOpenModal}
+        onReorder={reorderProfiles}
+        onResetSort={resetSort}
       />
 
       {/* Profile Modal - key ensures remount when switching profiles */}

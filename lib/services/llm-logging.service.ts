@@ -21,8 +21,8 @@ import type { LLMLoggingSettings } from '@/lib/schemas/settings.types';
 
 const logger = createServiceLogger('llm-logging');
 
-/** Preview length for content (first N chars) - used for quick display */
-const PREVIEW_LENGTH = 500;
+/** @deprecated Preview length was used for truncation; full content is now stored */
+// const PREVIEW_LENGTH = 500;
 
 /**
  * Parameters for logging an LLM call
@@ -107,7 +107,7 @@ function summarizeRequest(
 ): LLMLogRequestSummary {
   const messages = request.messages.map((msg) => ({
     role: msg.role,
-    contentPreview: msg.content?.slice(0, PREVIEW_LENGTH) || '',
+    content: msg.content || '',
     contentLength: msg.content?.length || 0,
     hasAttachments: !!(msg.attachments && msg.attachments.length > 0),
   }));
@@ -118,8 +118,6 @@ function summarizeRequest(
     temperature: request.temperature ?? null,
     maxTokens: request.maxTokens ?? null,
     toolCount: request.tools?.length || 0,
-    // Always store full messages for complete debugging
-    fullMessages: request.messages,
   };
 }
 
@@ -132,10 +130,8 @@ function summarizeResponse(
   _verboseMode: boolean
 ): LLMLogResponseSummary {
   return {
-    contentPreview: response.content?.slice(0, PREVIEW_LENGTH) || '',
+    content: response.content || '',
     contentLength: response.content?.length || 0,
-    // Always store full content for complete debugging
-    fullContent: response.content || null,
     error: response.error ?? null,
   };
 }

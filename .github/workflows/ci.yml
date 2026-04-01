@@ -176,6 +176,24 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "⚠️ No coverage data was generated." >> $GITHUB_STEP_SUMMARY
 
+  discord-notify:
+    name: Discord Notification
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Discord Commit Message Webhook
+        uses: tristanbudd/discord-commit-github-action@1.0.1
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          show-commit-message: true
+          show-commit-branch: true
+          show-commit-link: true
+          show-commit-author: true
+
   report:
     name: CI Summary
     runs-on: ubuntu-latest

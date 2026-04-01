@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { getUserRepositories } from '@/lib/repositories/factory';
-import { encryptApiKey, decryptApiKey, maskApiKey } from '@/lib/encryption';
+import { maskApiKey } from '@/lib/encryption';
 import { Provider } from '@/lib/schemas/types';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { searchProviderRegistry } from '@/lib/plugins/search-provider-registry';
@@ -74,7 +74,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
           lastUsed: apiKey.lastUsed,
           createdAt: apiKey.createdAt,
           updatedAt: apiKey.updatedAt,
-          keyPreview: maskApiKey(apiKey.ciphertext.substring(0, 32)),
+          keyPreview: maskApiKey(apiKey.key_value.substring(0, 32)),
         },
       });
     } catch (error) {
@@ -117,16 +117,13 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         updateData.isActive = isActive;
       }
 
-      // If new API key is provided, re-encrypt it
+      // If new API key is provided, store it directly
       if (apiKey !== undefined) {
         if (typeof apiKey !== 'string' || apiKey.trim().length === 0) {
           return badRequest('API key must be a non-empty string');
         }
 
-        const encrypted = encryptApiKey(apiKey, user.id);
-        updateData.ciphertext = encrypted.encrypted;
-        updateData.iv = encrypted.iv;
-        updateData.authTag = encrypted.authTag;
+        updateData.key_value = apiKey;
       }
 
       // Update the key
@@ -206,13 +203,8 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('API key');
       }
 
-      // Decrypt the API key
-      const decryptedKey = decryptApiKey(
-        apiKey.ciphertext,
-        apiKey.iv,
-        apiKey.authTag,
-        user.id
-      );
+      // Get the API key value
+      const decryptedKey = apiKey.key_value;
 
       // Get optional baseUrl from request body
       const body = await req.json().catch(() => ({}));

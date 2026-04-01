@@ -386,6 +386,20 @@ export async function buildMessageContext(
     }
   })
 
+  // In multi-character chats, append an assistant prefill message to anchor
+  // the model's response to the correct character identity. This forces the
+  // LLM to continue as the designated character rather than picking up
+  // another character's voice from the conversation flow.
+  // The [Name] prefix is already stripped by stripCharacterNamePrefix() downstream.
+  if (isMultiCharacter) {
+    formattedMessages.push({
+      role: 'assistant',
+      content: `[${character.name}]`,
+      thoughtSignature: undefined,
+      name: undefined,
+    })
+  }
+
   return {
     builtContext,
     formattedMessages,

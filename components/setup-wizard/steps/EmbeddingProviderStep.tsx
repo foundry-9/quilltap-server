@@ -107,10 +107,10 @@ export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
           <button
             type="button"
             onClick={() => handleProviderSelect(BUILTIN_TFIDF_ID)}
-            className={`w-full text-left p-3 rounded-lg border transition-colors ${
+            className={`w-full text-left p-3 rounded-lg transition-colors ${
               selectedProvider === BUILTIN_TFIDF_ID
-                ? 'qt-bg-active border-[var(--qt-border-active,var(--qt-primary))]'
-                : 'qt-bg-hover border-[var(--qt-border-color)]'
+                ? 'qt-option-selected'
+                : 'qt-option-unselected'
             }`}
           >
             <div className="flex items-center justify-between">
@@ -132,10 +132,10 @@ export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
               key={provider.id}
               type="button"
               onClick={() => handleProviderSelect(provider.id)}
-              className={`w-full text-left p-3 rounded-lg border transition-colors ${
+              className={`w-full text-left p-3 rounded-lg transition-colors ${
                 selectedProvider === provider.id
-                  ? 'qt-bg-active border-[var(--qt-border-active,var(--qt-primary))]'
-                  : 'qt-bg-hover border-[var(--qt-border-color)]'
+                  ? 'qt-option-selected'
+                  : 'qt-option-unselected'
               }`}
             >
               <div className="flex items-center gap-3">

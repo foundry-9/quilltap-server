@@ -39,7 +39,6 @@ function loadSchema(): object {
     const schemaPath = join(process.cwd(), 'public', 'schemas', 'qtap-export.schema.json');
     const schemaText = readFileSync(schemaPath, 'utf-8');
     cachedSchema = JSON.parse(schemaText);
-    logger.debug('[QtapSchemaValidator] Schema loaded successfully');
     return cachedSchema!;
   } catch (error) {
     logger.error('[QtapSchemaValidator] Failed to load schema', {
@@ -73,7 +72,6 @@ function getValidator(): ReturnType<Ajv2020['compile']> {
 
   const schema = loadSchema();
   cachedValidator = ajv.compile(schema);
-  logger.debug('[QtapSchemaValidator] Validator compiled successfully');
   return cachedValidator;
 }
 
@@ -89,7 +87,6 @@ export function validateQtapExport(data: unknown): ValidationResult {
     const valid = validate(data);
 
     if (valid) {
-      logger.debug('[QtapSchemaValidator] Validation passed');
       return { valid: true, errors: [] };
     }
 
@@ -97,11 +94,6 @@ export function validateQtapExport(data: unknown): ValidationResult {
       const path = err.instancePath || '/';
       const message = err.message || 'unknown error';
       return `${path}: ${message}`;
-    });
-
-    logger.debug('[QtapSchemaValidator] Validation failed', {
-      errorCount: errors.length,
-      errors: errors.slice(0, 5),
     });
 
     return { valid: false, errors };
@@ -119,5 +111,4 @@ export function validateQtapExport(data: unknown): ValidationResult {
 export function resetValidatorCache(): void {
   cachedSchema = null;
   cachedValidator = null;
-  logger.debug('[QtapSchemaValidator] Cache reset');
 }

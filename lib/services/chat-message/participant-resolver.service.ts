@@ -135,14 +135,7 @@ export async function resolveRespondingParticipant(
   if (connectionProfile.apiKeyId) {
     const apiKeyData = await repos.connections.findApiKeyById(connectionProfile.apiKeyId)
     if (apiKeyData) {
-      // Import here to avoid circular dependencies
-      const { decryptApiKey } = await import('@/lib/encryption')
-      apiKey = decryptApiKey(
-        apiKeyData.ciphertext,
-        apiKeyData.iv,
-        apiKeyData.authTag,
-        userId
-      )
+      apiKey = apiKeyData.key_value
     }
   }
 

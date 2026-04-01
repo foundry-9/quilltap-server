@@ -1,3 +1,7 @@
+---
+url: /salon/:id
+---
+
 # Quick-Hide Feature
 
 > **[Open this page in Quilltap](/aurora)**

@@ -104,6 +104,13 @@ const cheapModels = {
 export const plugin: LLMProviderPlugin = {
   metadata,
 
+  icon: {
+    viewBox: '0 0 24 24',
+    paths: [
+      { d: 'M19 3l-7 7-7-7-2 2 7 7-7 7 2 2 7-7 7 7 2-2-7-7 7-7-2-2z', fill: 'currentColor' },
+    ],
+  },
+
   config,
 
   capabilities,

@@ -72,13 +72,6 @@ export async function handleRunTool(
       projectId: chat.projectId || undefined,
     };
 
-    logger.debug('[Chats v1] Executing user-invoked tool', {
-      chatId,
-      userId: user.id,
-      toolName: validated.toolName,
-      arguments: validated.arguments,
-    });
-
     // Execute the tool
     const result = await executeToolCallWithContext(
       { name: validated.toolName, arguments: validated.arguments },

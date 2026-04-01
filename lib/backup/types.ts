@@ -16,6 +16,7 @@ import type {
   Memory,
   FileEntry,
   FileWritePermission,
+  Folder,
   MessageEvent,
   PromptTemplate,
   RoleplayTemplate,
@@ -88,6 +89,8 @@ export interface BackupManifest {
     chatSettings?: number;
     /** Number of FileWritePermission entities (LLM file write permissions) */
     filePermissions?: number;
+    /** Number of Folder entities (user-created file folders) */
+    folders?: number;
     /** Number of npm-installed plugins backed up */
     npmPlugins?: number;
   };
@@ -155,6 +158,9 @@ export interface BackupData {
 
   /** Array of FileWritePermission entities (LLM file write permissions) */
   filePermissions?: FileWritePermission[];
+
+  /** Array of Folder entities (user-created file/project folders) */
+  folders?: Folder[];
 }
 
 // ============================================================================
@@ -259,6 +265,9 @@ export interface RestoreSummary {
 
   /** Number of FileWritePermission entities restored */
   filePermissions?: number;
+
+  /** Number of Folder entities restored */
+  folders?: number;
 
   /** Number of npm plugins restored */
   npmPlugins?: number;

@@ -97,9 +97,6 @@ async function handleFileAdd(filesDir: string, relativePath: string): Promise<vo
     // Check if a DB record already exists for this storageKey
     const existing = await repos.files.findByStorageKey(relativePath);
     if (existing) {
-      logger.debug('File add event for existing DB record, skipping', {
-        storageKey: relativePath,
-      });
       return;
     }
 
@@ -245,9 +242,6 @@ async function handleFileUnlink(relativePath: string): Promise<void> {
 
     const existing = await repos.files.findByStorageKey(relativePath);
     if (!existing) {
-      logger.debug('File unlink event for unknown storageKey, ignoring', {
-        storageKey: relativePath,
-      });
       return;
     }
 
@@ -270,12 +264,6 @@ async function handleFileUnlink(relativePath: string): Promise<void> {
     }, PENDING_UNLINK_MS);
 
     pendingUnlinks.set(relativePath, { record: existing, timer });
-
-    logger.debug('File unlink deferred for move detection', {
-      fileId: existing.id,
-      storageKey: relativePath,
-      pendingCount: pendingUnlinks.size,
-    });
   } catch (error) {
     logger.warn('Error handling file unlink event', {
       relativePath,
@@ -443,10 +431,6 @@ export async function stopWatcher(): Promise<void> {
 
   // Flush all pending unlinks — execute deletions immediately
   if (pendingUnlinks.size > 0) {
-    logger.debug('Flushing pending unlinks on watcher stop', {
-      count: pendingUnlinks.size,
-    });
-
     const { getRepositories } = await import('@/lib/database/repositories');
     const repos = getRepositories();
 
@@ -454,10 +438,6 @@ export async function stopWatcher(): Promise<void> {
       clearTimeout(pending.timer);
       try {
         await repos.files.delete(pending.record.id);
-        logger.debug('Flushed pending unlink deletion', {
-          fileId: pending.record.id,
-          storageKey,
-        });
       } catch (err) {
         logger.warn('Error flushing pending unlink deletion', {
           storageKey,

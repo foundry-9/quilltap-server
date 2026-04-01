@@ -26,9 +26,7 @@ export const ApiKeySchema = z.object({
   userId: UUIDSchema,
   label: z.string(),
   provider: ProviderEnum,
-  ciphertext: z.string(),
-  iv: z.string(),
-  authTag: z.string(),
+  key_value: z.string(),
   isActive: z.boolean().default(true),
   lastUsed: TimestampSchema.nullable().optional(),
   createdAt: TimestampSchema,
@@ -62,6 +60,9 @@ export const ConnectionProfileSchema = z.object({
   /** Whether this profile is suitable for uncensored/dangerous content (user must explicitly opt in) */
   isDangerousCompatible: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
+
+  /** Custom sort order for display (lower numbers appear first) */
+  sortIndex: z.number().default(0),
 
   // Token usage tracking (persisted, incremented after each message)
   /** Total tokens used through this profile */

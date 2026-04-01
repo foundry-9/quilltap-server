@@ -90,9 +90,7 @@ async function getApiKeyForProfile(
 
   if (!apiKey) return null
 
-  // Import the decryption utility
-  const { decryptApiKey } = await import('@/lib/encryption')
-  return decryptApiKey(apiKey.ciphertext, apiKey.iv, apiKey.authTag, userId)
+  return apiKey.key_value
 }
 
 /**

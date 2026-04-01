@@ -1,6 +1,6 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v3.1.
+Complete API reference for Quilltap v3.2.
 
 ## Table of Contents
 
@@ -31,6 +31,8 @@ Complete API reference for Quilltap v3.1.
   - [Templates](#templates)
   - [System Backup & Restore](#system-backup--restore)
   - [System Data Directory](#system-data-directory)
+  - [System Unlock](#system-unlock)
+  - [System Migration Warnings](#system-migration-warnings)
   - [Tools & Backup (Legacy)](#tools--backup)
   - [LLM Logs](#llm-logs)
   - [Themes](#themes)
@@ -606,6 +608,28 @@ Send a test message using a profile.
   }
 }
 ```
+
+#### `POST /api/v1/connection-profiles?action=reorder`
+
+Bulk-update profile sort indices for custom ordering.
+
+**Request Body**:
+
+```json
+{
+  "order": [
+    { "id": "profile-uuid-1", "sortIndex": 0 },
+    { "id": "profile-uuid-2", "sortIndex": 1 },
+    { "id": "profile-uuid-3", "sortIndex": 2 }
+  ]
+}
+```
+
+#### `POST /api/v1/connection-profiles?action=reset-sort`
+
+Reset all profile sort indices to the default algorithm: default profile first, then non-cheap profiles alphabetically, then cheap profiles alphabetically.
+
+**Request Body**: `{}`
 
 ---
 
@@ -2133,6 +2157,153 @@ Open the data directory in the system file browser (not available in Docker).
 {
   "message": "Data directory opened in file browser",
   "path": "/Users/user/Library/Application Support/Quilltap"
+}
+```
+
+---
+
+### System Unlock
+
+Database encryption key management. These endpoints are unauthenticated because they must be accessible before the app is fully operational (during locked mode and initial setup).
+
+#### `GET /api/v1/system/unlock`
+
+Returns the current database key state.
+
+**Response**: `200 OK`
+
+```json
+{
+  "state": "resolved"
+}
+```
+
+| State | Description |
+|-------|-------------|
+| `needs-setup` | No encryption key exists yet (first run) |
+| `needs-passphrase` | Key file is passphrase-protected and locked |
+| `needs-vault-storage` | Env var pepper needs to be stored in .dbkey file |
+| `resolved` | Key is available, database is accessible |
+
+#### `POST /api/v1/system/unlock?action=setup`
+
+First-run setup: generates encryption pepper, writes `.dbkey` file, and encrypts any existing plaintext databases.
+
+**Request Body**:
+
+```json
+{
+  "passphrase": "optional-passphrase"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "pepper": "hex-encoded-pepper-value",
+  "message": "Encryption key generated and stored. Save this value — it will not be displayed again."
+}
+```
+
+#### `POST /api/v1/system/unlock?action=unlock`
+
+Unlock database with passphrase. Supports both current `.dbkey` format and legacy pepper vault migration.
+
+**Request Body**:
+
+```json
+{
+  "passphrase": "your-passphrase"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true
+}
+```
+
+#### `POST /api/v1/system/unlock?action=store`
+
+Store an existing environment variable pepper into the `.dbkey` file.
+
+**Request Body**:
+
+```json
+{
+  "passphrase": "optional-passphrase"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true
+}
+```
+
+#### `POST /api/v1/system/unlock?action=change-passphrase`
+
+Change the passphrase protecting the `.dbkey` file. Requires the app to be in `resolved` state.
+
+**Request Body**:
+
+```json
+{
+  "oldPassphrase": "current-passphrase",
+  "newPassphrase": "new-passphrase"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true
+}
+```
+
+---
+
+### System Migration Warnings
+
+Migration warning notifications generated during server startup (e.g., unrecoverable API keys after column migration). Unauthenticated as it runs during startup.
+
+#### `GET /api/v1/system/migration-warnings`
+
+Returns pending migration warning notifications. Returns empty array if already notified or none occurred.
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "ready": true,
+  "warnings": [
+    {
+      "type": "unrecoverable-api-keys",
+      "message": "Some API keys could not be decrypted after migration",
+      "details": {}
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/system/migration-warnings`
+
+Marks migration warnings as acknowledged. Call after displaying notifications to prevent re-notification.
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Migration warnings marked as notified"
 }
 ```
 

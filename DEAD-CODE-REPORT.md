@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-02-20
+**Last Updated**: 2026-03-05
 **Tool Used**: knip
-**Codebase**: Quilltap v3.0-dev
+**Codebase**: Quilltap v3.2.0-dev
 
 ---
 
@@ -12,10 +12,40 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | Cleaned up 2026-02-20 |
+| Unused Files | Cleaned up 2026-03-05 |
 | Migration Scripts | Deleted (migrations complete) |
-| Unused Dependencies | bcrypt, qrcode, ts-jest removed 2026-01-30 |
-| Unused Exports | Low priority, ~600 remaining (mostly barrel re-exports) |
+| Unused Dependencies | @aws-sdk/client-s3, svgo removed 2026-03-05; bcrypt, qrcode, ts-jest removed 2026-01-30 |
+| Unused Exports | Low priority, ~813 remaining (mostly barrel re-exports) |
+
+---
+
+## Cleanup Completed (2026-03-05)
+
+### Files Removed
+
+| File | Reason |
+|------|--------|
+| `components/settings/ai-import/index.tsx` | Barrel file never imported; consumers import sub-modules directly |
+
+### Dependencies Removed
+
+| Dependency | Reason |
+|------------|--------|
+| `@aws-sdk/client-s3` | Never imported; S3 functionality is in plugins |
+| `svgo` | Never imported |
+
+### Configuration Changes
+
+- Removed stale `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` mock mappings from `jest.config.ts`
+
+### Known False Positives (Current)
+
+These are flagged by knip but are actually used:
+
+| Item | How It's Used |
+|------|---------------|
+| `@quilltap/theme-storybook` (dep) | Our own npm package used for Storybook theme development |
+| `@electron/notarize` (devDep) | Used by `electron/notarize.js` (Electron is in knip ignore list) |
 
 ---
 
@@ -230,7 +260,7 @@ These files are flagged by knip but are actually used:
 
 ### Unused Exports
 
-Knip reports ~628 unused exports. Most fall into these categories:
+Knip reports ~813 unused exports. Most fall into these categories:
 
 1. **Index File Re-exports**: Intentional public API surfaces
 2. **Schema Definitions**: Runtime validation schemas

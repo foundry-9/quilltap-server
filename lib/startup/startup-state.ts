@@ -21,10 +21,16 @@
 
 import { logger } from '@/lib/logger';
 import type { UpgradeResults } from '@/lib/plugins/upgrader';
-import type { PepperState } from './pepper-vault';
+import type { DbKeyState } from './dbkey';
+
+/**
+ * @deprecated Use DbKeyState from './dbkey' instead
+ */
+export type PepperState = DbKeyState;
 
 export type StartupPhase =
   | 'pending'
+  | 'locked'
   | 'migrations'
   | 'seeding'
   | 'plugin-updates'
@@ -44,8 +50,14 @@ interface StartupStateData {
   pluginUpgrades: UpgradeResults | null;
   /** Whether upgrade notifications have been sent to the client */
   upgradesNotified: boolean;
-  /** Pepper vault state */
-  pepperState: PepperState;
+  /** Database key state */
+  pepperState: DbKeyState;
+  /** Whether the server is in locked mode (waiting for passphrase) */
+  isLockedMode: boolean;
+  /** Migration warnings to surface to the user */
+  migrationWarnings: string[];
+  /** Whether migration warning notifications have been sent to the client */
+  migrationWarningsNotified: boolean;
 }
 
 // Extend globalThis type for our startup state
@@ -53,6 +65,7 @@ declare global {
   var __quilltapStartupState: StartupStateData | undefined;
   var __quilltapStartupReadyPromise: Promise<void> | undefined;
   var __quilltapStartupReadyResolve: (() => void) | undefined;
+  var __quilltapMigrationWarnings: string[] | undefined;
 }
 
 /**
@@ -74,8 +87,18 @@ function getGlobalState(): StartupStateData {
       pluginUpgrades: null,
       upgradesNotified: false,
       pepperState: isTest ? 'resolved' : 'needs-setup',
+      isLockedMode: false,
+      migrationWarnings: [],
+      migrationWarningsNotified: false,
     };
   }
+
+  // Absorb any migration warnings pushed to the global before startup state was created
+  if (global.__quilltapMigrationWarnings && global.__quilltapMigrationWarnings.length > 0) {
+    global.__quilltapStartupState.migrationWarnings.push(...global.__quilltapMigrationWarnings);
+    global.__quilltapMigrationWarnings = [];
+  }
+
   return global.__quilltapStartupState;
 }
 
@@ -232,16 +255,23 @@ export const startupState = {
   },
 
   /**
-   * Set the pepper vault state
+   * Set the database key state
    */
-  setPepperState(state: PepperState): void {
-    getGlobalState().pepperState = state;
+  setPepperState(state: DbKeyState): void {
+    const globalState = getGlobalState();
+    globalState.pepperState = state;
+    // Enter locked mode if passphrase is needed
+    if (state === 'needs-passphrase') {
+      globalState.isLockedMode = true;
+    } else if (state === 'resolved') {
+      globalState.isLockedMode = false;
+    }
   },
 
   /**
-   * Get the pepper vault state
+   * Get the database key state
    */
-  getPepperState(): PepperState {
+  getPepperState(): DbKeyState {
     return getGlobalState().pepperState;
   },
 
@@ -253,6 +283,54 @@ export const startupState = {
   isPepperResolved(): boolean {
     const state = getGlobalState().pepperState;
     return state === 'resolved' || state === 'needs-vault-storage';
+  },
+
+  /**
+   * Check if the server is in locked mode (waiting for passphrase).
+   *
+   * In locked mode, most API routes return 423 Locked and the server
+   * only responds to health checks, unlock endpoints, and setup pages.
+   */
+  isLockedMode(): boolean {
+    return getGlobalState().isLockedMode;
+  },
+
+  /**
+   * Add a migration warning to surface to the user
+   */
+  addMigrationWarning(message: string): void {
+    const state = getGlobalState();
+    state.migrationWarnings.push(message);
+  },
+
+  /**
+   * Get all migration warnings
+   */
+  getMigrationWarnings(): string[] {
+    return [...getGlobalState().migrationWarnings];
+  },
+
+  /**
+   * Check if there are any migration warnings
+   */
+  hasMigrationWarnings(): boolean {
+    return getGlobalState().migrationWarnings.length > 0;
+  },
+
+  /**
+   * Check if there are un-notified migration warnings
+   */
+  hasUnnotifiedMigrationWarnings(): boolean {
+    const state = getGlobalState();
+    return !state.migrationWarningsNotified && state.migrationWarnings.length > 0;
+  },
+
+  /**
+   * Mark migration warnings as notified
+   */
+  markMigrationWarningsNotified(): void {
+    const state = getGlobalState();
+    state.migrationWarningsNotified = true;
   },
 
   /**
@@ -341,7 +419,11 @@ export const startupState = {
       pluginUpgrades: null,
       upgradesNotified: false,
       pepperState: 'needs-setup',
+      isLockedMode: false,
+      migrationWarnings: [],
+      migrationWarningsNotified: false,
     };
+    global.__quilltapMigrationWarnings = [];
     setReadyPromise(undefined);
     setReadyResolve(undefined);
   },

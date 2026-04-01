@@ -211,12 +211,14 @@ jest.mock('next/server', () => {
 })
 
 
-// Mock encryption library
+// Mock encryption library (field-level encryption removed; only passphrase-based functions remain)
 jest.mock('@/lib/encryption', () => ({
-  decryptApiKey: jest.fn(),
-  encryptApiKey: jest.fn(),
   maskApiKey: jest.fn(),
-  testEncryption: jest.fn(),
+  encryptWithPassphrase: jest.fn(),
+  decryptWithPassphrase: jest.fn(),
+  deriveKeyFromPassphrase: jest.fn(),
+  signWithPassphrase: jest.fn(),
+  verifyWithPassphrase: jest.fn(),
 }))
 
 // Mock LLM plugin factory
