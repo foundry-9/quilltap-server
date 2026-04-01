@@ -2209,7 +2209,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     )
   }
 
-  const shouldShowParticipantSidebar = isMultiChar && showParticipantSidebar
+  const shouldShowParticipantSidebar = showParticipantSidebar
 
   return (
     <div

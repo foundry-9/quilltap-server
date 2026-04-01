@@ -335,10 +335,19 @@ async function handleListFiles(req: NextRequest, context: AuthenticatedContext, 
       .filter(f => f.projectId === id)
       .map(f => ({
         id: f.id,
+        userId: f.userId,
         originalFilename: f.originalFilename,
+        filename: f.originalFilename,
         mimeType: f.mimeType,
         size: f.size,
+        category: f.category,
+        description: f.description,
+        projectId: f.projectId,
+        folderPath: f.folderPath || '/',
+        width: f.width,
+        height: f.height,
         createdAt: f.createdAt,
+        updatedAt: f.updatedAt,
       }));
 
     return successResponse({

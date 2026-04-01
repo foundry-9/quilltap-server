@@ -272,9 +272,8 @@ export function DataDirectorySection() {
                 <p className="font-medium">Docker Environment</p>
                 <p className="mt-1">
                   The data directory is mounted from your host system. Access it through your
-                  host&apos;s file browser at the location configured in your docker-compose.yml
-                  (typically <code className="text-xs bg-muted px-1 rounded">~/.quilltap</code> or
-                  the value of <code className="text-xs bg-muted px-1 rounded">QUILLTAP_HOST_DATA_DIR</code>).
+                  host&apos;s file browser at the path you mounted with{' '}
+                  <code className="text-xs bg-muted px-1 rounded">docker run -v /path:/app/quilltap</code>.
                 </p>
               </div>
             </div>

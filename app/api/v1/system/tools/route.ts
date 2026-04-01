@@ -554,8 +554,50 @@ async function handleImportExecute(req: NextRequest, context: any) {
   const { user } = context;
 
   try {
-    const body = await req.json();
-    const { exportData, options } = body;
+    const contentType = req.headers.get('content-type') || '';
+    let exportData: unknown;
+    let options: { conflictStrategy?: string; importMemories?: boolean; selectedIds?: Record<string, string[]> } | undefined;
+
+    if (contentType.includes('multipart/form-data')) {
+      // Handle FormData with file upload (avoids body size limits for large exports)
+      const formData = await req.formData();
+      const file = formData.get('file') as File | null;
+      const optionsStr = formData.get('options') as string | null;
+
+      if (!file) {
+        logger.warn('[System Tools v1] Import execute missing file', { userId: user.id });
+        return badRequest('No file provided');
+      }
+
+      if (file.size > MAX_IMPORT_FILE_SIZE) {
+        logger.warn('[System Tools v1] Import file too large', {
+          userId: user.id,
+          fileSize: file.size,
+          maxSize: MAX_IMPORT_FILE_SIZE,
+        });
+        return badRequest(`File too large (max ${Math.round(MAX_IMPORT_FILE_SIZE / 1024 / 1024)}MB)`);
+      }
+
+      const text = await file.text();
+      try {
+        exportData = JSON.parse(text);
+      } catch {
+        return badRequest('Invalid JSON: Failed to parse export file');
+      }
+
+      if (optionsStr) {
+        try {
+          options = JSON.parse(optionsStr);
+        } catch {
+          return badRequest('Invalid JSON: Failed to parse options');
+        }
+      }
+    } else {
+      // Handle JSON body
+      const body = await req.json();
+      exportData = body.exportData;
+      options = body.options;
+    }
 
     if (!exportData) {
       logger.warn('[System Tools v1] Import execute missing exportData', { userId: user.id });
@@ -581,7 +623,7 @@ async function handleImportExecute(req: NextRequest, context: any) {
 
     // Map 'replace' to 'overwrite' for the import service
     const mappedConflictStrategy: ConflictStrategy =
-      conflictStrategy === 'replace' ? 'overwrite' : conflictStrategy;
+      conflictStrategy === 'replace' ? 'overwrite' : conflictStrategy as ConflictStrategy;
 
     logger.info('[System Tools v1] Starting import execution', {
       userId: user.id,
@@ -590,7 +632,7 @@ async function handleImportExecute(req: NextRequest, context: any) {
       importMemories: importMemories || false,
     });
 
-    const result = await executeImport(user.id, exportData, {
+    const result = await executeImport(user.id, exportData as QuilltapExport, {
       conflictStrategy: mappedConflictStrategy,
       includeMemories: importMemories || false,
       includeRelatedEntities: false,

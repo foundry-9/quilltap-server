@@ -190,6 +190,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
 
         await withTransaction(async (getCollection) => {
           // Tables that have a userId column referencing users
+          // Note: table names must match actual SQLite table names from the schema
           const tablesWithUserId = [
             'chat_settings',
             'chats',
@@ -197,9 +198,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
             'api_keys',
             'connection_profiles',
             'embedding_profiles',
-            'prompts',
-            'memories',
-            'messages',
+            'prompt_templates',
             'files',
             'projects',
           ];

@@ -32,10 +32,12 @@ const nextConfig = {
 
   // Experimental features
   experimental: {
-    turbopackUseSystemTlsCerts: true,
     serverActions: {
       bodySizeLimit: '100mb',
     },
+    // Proxy/middleware body size limit - allow large import/export files
+    // Default is 10MB which truncates .qtap import files with memories
+    proxyClientMaxBodySize: '100mb',
   },
 
   // Image optimization configuration
@@ -91,7 +93,10 @@ const nextConfig = {
     ];
   },
 
-  // Webpack optimizations
+  // Turbopack configuration (Next.js 16+ uses Turbopack by default)
+  turbopack: {},
+
+  // Webpack optimizations (used when building with --webpack flag)
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Don't resolve 'fs' module on the client to prevent errors

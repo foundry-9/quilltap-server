@@ -12,7 +12,7 @@
 
 import { readFile, writeFile, mkdir, access, copyFile, readdir, unlink, stat, rmdir } from 'fs/promises';
 import { Readable } from 'stream';
-import { join, normalize, relative } from 'path';
+import { dirname, join, normalize, relative } from 'path';
 import { homedir } from 'os';
 import { createLogger } from '../../../logging/create-logger';
 import type {
@@ -235,10 +235,8 @@ export class LocalFileStorageBackend implements FileStorageBackend {
 
     try {
       // Ensure parent directory exists
-      const directory = filePath.substring(0, filePath.lastIndexOf('/'));
-      if (directory) {
-        await mkdir(directory, { recursive: true });
-      }
+      const directory = dirname(filePath);
+      await mkdir(directory, { recursive: true });
 
       // Convert Readable to Buffer if necessary
       let fileContent: Buffer;
@@ -426,10 +424,8 @@ export class LocalFileStorageBackend implements FileStorageBackend {
 
     try {
       // Ensure destination directory exists
-      const directory = destinationPath.substring(0, destinationPath.lastIndexOf('/'));
-      if (directory) {
-        await mkdir(directory, { recursive: true });
-      }
+      const directory = dirname(destinationPath);
+      await mkdir(directory, { recursive: true });
 
       // Copy the file
       await copyFile(sourcePath, destinationPath);
