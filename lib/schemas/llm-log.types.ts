@@ -30,6 +30,7 @@ export const LLMLogTypeEnum = z.enum([
   'SCENE_STATE_TRACKING',
   'CHARACTER_OPTIMIZER',
   'EXTERNAL_PROMPT',
+  'AUTO_CONFIGURE',
 ]);
 export type LLMLogType = z.infer<typeof LLMLogTypeEnum>;
 

@@ -6,6 +6,7 @@
  * DELETE /api/v1/connection-profiles/[id] - Delete a profile
  * POST /api/v1/connection-profiles/[id]?action=add-tag - Add a tag
  * POST /api/v1/connection-profiles/[id]?action=remove-tag - Remove a tag
+ * POST /api/v1/connection-profiles/[id]?action=auto-configure - Auto-configure profile settings
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,6 +16,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
 import { isValidModelClassName } from '@/lib/llm/model-classes';
+import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -29,7 +31,7 @@ const removeTagSchema = z.object({
   tagId: z.uuid(),
 });
 
-const CONNECTION_PROFILE_ITEM_POST_ACTIONS = ['add-tag', 'remove-tag'] as const;
+const CONNECTION_PROFILE_ITEM_POST_ACTIONS = ['add-tag', 'remove-tag', 'auto-configure'] as const;
 type ConnectionProfileItemPostAction = typeof CONNECTION_PROFILE_ITEM_POST_ACTIONS[number];
 
 /**
@@ -370,6 +372,56 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           }
           logger.error('[Connection Profiles v1] Error removing tag', { profileId: id }, error instanceof Error ? error : undefined);
           return serverError('Failed to remove tag from connection profile');
+        }
+      },
+      'auto-configure': async () => {
+        try {
+          // Call auto-configure service
+          const result = await autoConfigureProfile(profile.provider, profile.modelName, user.id);
+
+          // Merge result into profile
+          const existingParams = typeof profile.parameters === 'string' ? JSON.parse(profile.parameters) : (profile.parameters || {});
+          const updateData: Record<string, unknown> = {
+            maxContext: result.maxContext,
+            maxTokens: result.maxTokens,
+            modelClass: result.modelClass,
+            isDangerousCompatible: result.isDangerousCompatible,
+            parameters: {
+              ...existingParams,
+              temperature: result.temperature,
+              max_tokens: result.maxTokens,
+              top_p: result.topP,
+            },
+          };
+
+          // Update the profile
+          const updatedProfile = await repos.connections.update(id, updateData);
+
+          if (!updatedProfile) {
+            return serverError('Failed to update connection profile with auto-configure results');
+          }
+
+          // Enrich and return the profile
+          const enrichedProfile = await enrichProfile(updatedProfile, repos);
+
+          logger.info('[Connection Profiles v1] Profile auto-configured', {
+            profileId: id,
+            provider: profile.provider,
+            modelName: profile.modelName,
+            result: {
+              maxContext: result.maxContext,
+              maxTokens: result.maxTokens,
+              temperature: result.temperature,
+              topP: result.topP,
+              modelClass: result.modelClass,
+              isDangerousCompatible: result.isDangerousCompatible,
+            },
+          });
+
+          return NextResponse.json({ profile: enrichedProfile, autoConfigureResult: result }, { status: 200 });
+        } catch (error) {
+          logger.error('[Connection Profiles v1] Error auto-configuring profile', { profileId: id }, error instanceof Error ? error : undefined);
+          return serverError(error instanceof Error ? error.message : 'Failed to auto-configure connection profile');
         }
       },
     };

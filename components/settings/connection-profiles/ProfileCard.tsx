@@ -19,6 +19,8 @@ interface ProfileCardProps {
   deleteConfirming: string | null
   onDeleteConfirmChange: (profileId: string | null) => void
   isDeleting: boolean
+  onAutoConfigure?: (profileId: string) => void
+  isAutoConfiguring?: boolean
 }
 
 /**
@@ -58,6 +60,8 @@ function ProfileCardContent({
   deleteConfirming,
   onDeleteConfirmChange,
   isDeleting,
+  onAutoConfigure,
+  isAutoConfiguring,
 }: ProfileCardProps) {
   // Check if API key is missing when provider requires one
   const isMissingApiKey = providerRequiresApiKey && !profile.apiKey
@@ -92,6 +96,13 @@ function ProfileCardContent({
       badges={badges}
       actions={[
         { label: 'Edit', onClick: () => onEdit(profile), variant: 'primary' },
+        ...(onAutoConfigure ? [{
+          label: 'Auto-Configure',
+          onClick: () => onAutoConfigure(profile.id),
+          variant: 'secondary' as const,
+          loading: isAutoConfiguring,
+          loadingLabel: 'Configuring...',
+        }] : []),
       ]}
       deleteConfig={{
         isConfirming: deleteConfirming === profile.id,

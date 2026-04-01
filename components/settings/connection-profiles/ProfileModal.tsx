@@ -29,9 +29,11 @@ interface ProfileModalProps {
     connectError: string | null
     fetchModelsLoading: boolean
     testMessageLoading: boolean
+    autoConfigureLoading: boolean
     handleConnect: (callback: (data: any) => void) => Promise<any>
     handleFetchModels: (callback: (data: any) => void) => Promise<any>
     handleTestMessage: (callback: (data: any) => void) => Promise<any>
+    handleAutoConfigure: (callback: (data: any) => void) => Promise<any>
     handleSubmit: (editingId: string | null, onSuccess: () => void) => Promise<any>
     getProviderRequirements: (provider: string) => any
   }
@@ -58,6 +60,9 @@ export function ProfileModal({
 
   // Test message states
   const [testMessageResult, setTestMessageResult] = useState<string | null>(null)
+
+  // Auto-configure states
+  const [autoConfigureMessage, setAutoConfigureMessage] = useState<string | null>(null)
 
   // Note: No need for state reset effect - modal is keyed by profile.id so it remounts fresh
 
@@ -119,6 +124,21 @@ export function ProfileModal({
       setTestMessageResult(null)
     }
   }, [operations])
+
+  const handleAutoConfigureClick = useCallback(async () => {
+    const result = await operations.handleAutoConfigure((data) => {
+      form.setField('temperature', data.suggestions.temperature)
+      form.setField('maxTokens', data.suggestions.maxTokens)
+      form.setField('topP', data.suggestions.topP)
+      form.setField('maxContext', String(data.suggestions.maxContext))
+      form.setField('modelClass', data.suggestions.modelClass)
+      form.setField('isDangerousCompatible', data.suggestions.isDangerousCompatible)
+      setAutoConfigureMessage('Configuration applied successfully!')
+    })
+    if (!result) {
+      setAutoConfigureMessage(null)
+    }
+  }, [operations, form])
 
   const handleFormSubmit = async () => {
     const result = await operations.handleSubmit(profile?.id || null, () => {
@@ -348,6 +368,15 @@ export function ProfileModal({
                 >
                   {operations.testMessageLoading ? 'Testing...' : 'Test Message'}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={handleAutoConfigureClick}
+                  disabled={!form.formData.modelName || operations.autoConfigureLoading}
+                  className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+                >
+                  {operations.autoConfigureLoading ? 'Auto-Configuring...' : 'Auto-Configure'}
+                </button>
               </div>
 
               {/* Status messages */}
@@ -372,6 +401,12 @@ export function ProfileModal({
               {testMessageResult && (
                 <div className="text-sm qt-alert-info">
                   ✓ {testMessageResult}
+                </div>
+              )}
+
+              {autoConfigureMessage && (
+                <div className="text-sm qt-alert-success">
+                  {autoConfigureMessage}
                 </div>
               )}
 

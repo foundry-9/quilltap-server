@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- feat: auto-configure connection profiles — new button on profile cards and in the edit/create modal that performs web searches for model specifications and recommended settings, sends results to the default LLM for structured analysis, and applies optimal maxContext, maxTokens, temperature, topP, modelClass, and isDangerousCompatible settings; falls back to cheap LLM for JSON cleanup if needed
 - fix: Concierge DETECT_ONLY mode now shows a moderation-aware message when the provider returns an empty response for flagged content, instead of a generic "empty response" error; suggests enabling Auto-Route mode
 - refactor: unify all LLM provider interfaces into four canonical shapes — TextProvider (text→text), ImageProvider (text→image), EmbeddingProvider (text→vector), ScoringProvider (text+candidates→scores); move canonical definitions to `@quilltap/plugin-types` providers/ directory; remove `generateImage()` from text provider interface; generalize moderation into ScoringProvider with documented reranking/classification support; update all plugins and lib/ to use new names with backward-compatible aliases
 - chore: reduce Commonplace Book memory recap limits from 50/20/10 to 20/10/5 (high/medium/low importance tiers)

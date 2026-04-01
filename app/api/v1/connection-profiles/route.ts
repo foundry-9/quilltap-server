@@ -20,6 +20,7 @@ import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { badRequest, serverError, notFound, validationError } from '@/lib/api/responses';
 import { isValidModelClassName } from '@/lib/llm/model-classes';
+import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -46,7 +47,7 @@ const testMessageSchema = z.object({
     .optional(),
 });
 
-  const CONNECTION_PROFILE_POST_ACTIONS = ['test-connection', 'test-message', 'reorder', 'reset-sort'] as const;
+  const CONNECTION_PROFILE_POST_ACTIONS = ['test-connection', 'test-message', 'reorder', 'reset-sort', 'auto-configure'] as const;
   type ConnectionProfilePostAction = typeof CONNECTION_PROFILE_POST_ACTIONS[number];
 
 /**
@@ -542,6 +543,40 @@ async function handleResetSort(req: NextRequest, context: AuthenticatedContext) 
 }
 
 /**
+ * Auto-configure profile suggestions based on provider and model
+ */
+async function handleAutoConfigure(req: NextRequest, context: AuthenticatedContext) {
+  const { user } = context;
+
+  try {
+    const body = await req.json();
+    const { provider, modelName } = body;
+
+    // Validation
+    if (!provider || typeof provider !== 'string') {
+      return badRequest('Provider is required');
+    }
+
+    if (!modelName || typeof modelName !== 'string') {
+      return badRequest('Model name is required');
+    }
+
+    // Call auto-configure service
+    const result = await autoConfigureProfile(provider, modelName, user.id);
+
+    logger.info('[Connection Profiles v1] Auto-configure suggestions generated', {
+      provider,
+      modelName,
+    });
+
+    return NextResponse.json({ suggestions: result });
+  } catch (error) {
+    logger.error('[Connection Profiles v1] Error auto-configuring profile', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to auto-configure profile');
+  }
+}
+
+/**
  * POST /api/v1/connection-profiles - Action dispatch or create
  */
 export const POST = createAuthenticatedHandler(async (req, context) => {
@@ -556,6 +591,7 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
     'test-message': () => handleTestMessage(req, context),
     reorder: () => handleReorder(req, context),
     'reset-sort': () => handleResetSort(req, context),
+    'auto-configure': () => handleAutoConfigure(req, context),
   };
 
   return actionHandlers[action]();
