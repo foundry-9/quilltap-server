@@ -4,28 +4,18 @@
  * Characters Section
  *
  * Displays favorite characters and top conversation participants in the sidebar.
+ * Uses SidebarDataProvider for centralized data fetching and refresh.
  *
  * @module components/layout/left-sidebar/characters-section
  */
 
-import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useSidebar } from '@/components/providers/sidebar-provider'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { useSidebarData, type SidebarCharacter } from '@/components/providers/sidebar-data-provider'
 import { SidebarSection } from './sidebar-section'
 import { ViewAllLink } from './sidebar-item'
-import { clientLogger } from '@/lib/client-logger'
 import Avatar from '@/components/ui/Avatar'
-
-interface Character {
-  id: string
-  name: string
-  avatarUrl?: string | null
-  defaultImage?: string | null
-  isFavorite?: boolean
-  chatCount?: number
-  tags?: string[]
-}
 
 /**
  * Star icon (for favorites)
@@ -51,7 +41,7 @@ function CharacterItem({
   isCollapsed,
   onClick,
 }: {
-  character: Character
+  character: SidebarCharacter
   isCollapsed: boolean
   onClick: () => void
 }) {
@@ -89,33 +79,8 @@ function CharacterItem({
 
 export function CharactersSection() {
   const { isCollapsed, closeMobile, isMobile } = useSidebar()
-  const { hiddenTagIds, shouldHideByIds } = useQuickHide()
-  const [characters, setCharacters] = useState<Character[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetchCharacters = useCallback(async () => {
-    try {
-      clientLogger.debug('Fetching sidebar characters')
-      const response = await fetch('/api/sidebar/characters')
-      if (!response.ok) {
-        throw new Error(`Failed to fetch characters: ${response.status}`)
-      }
-      const data = await response.json()
-      setCharacters(data.characters || [])
-      clientLogger.debug('Fetched sidebar characters', { count: data.characters?.length || 0 })
-    } catch (error) {
-      clientLogger.error('Failed to fetch sidebar characters', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      setCharacters([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchCharacters()
-  }, [fetchCharacters, hiddenTagIds])
+  const { shouldHideByIds } = useQuickHide()
+  const { characters, loading } = useSidebarData()
 
   const handleItemClick = () => {
     if (isMobile) {

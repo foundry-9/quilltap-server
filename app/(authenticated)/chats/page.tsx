@@ -8,6 +8,7 @@ import { clientLogger } from '@/lib/client-logger'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import { ImportWizard } from '@/components/import/import-wizard'
 import AvatarStack from '@/components/ui/AvatarStack'
 
@@ -69,6 +70,7 @@ export default function ChatsPage() {
   const importedChatRef = useRef<HTMLDivElement>(null)
   const { formatPersonaName } = usePersonaDisplayName()
   const { shouldHideByIds } = useQuickHide()
+  const { refreshSidebar } = useSidebarData()
 
   const visibleChats = useMemo(
     () => chats.filter(chat => {
@@ -192,6 +194,9 @@ export default function ChatsPage() {
       const res = await fetch(`/api/chats/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete chat')
       setChats(chats.filter((c) => c.id !== id))
+
+      // Refresh sidebar to reflect deletion
+      refreshSidebar()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to delete chat')
     }
@@ -206,10 +211,12 @@ export default function ChatsPage() {
     // Also refetch characters/personas in case new ones were created
     await fetchCharacters()
     await fetchPersonas()
+    // Refresh sidebar to show new chat and any new characters
+    refreshSidebar()
     // Highlight the imported chat
     setHighlightedChatId(chatId)
     setImportDialogOpen(false)
-  }, [])
+  }, [refreshSidebar])
 
   if (loading) {
     return (

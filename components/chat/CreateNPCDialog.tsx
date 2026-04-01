@@ -15,6 +15,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { useSidebarDataOptional } from '@/components/providers/sidebar-data-provider'
 
 interface ConnectionProfile {
   id: string
@@ -36,6 +37,7 @@ export default function CreateNPCDialog({
   chatId,
   onNPCCreated,
 }: CreateNPCDialogProps) {
+  const sidebarData = useSidebarDataOptional()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [physicalDescription, setPhysicalDescription] = useState('')
@@ -295,6 +297,10 @@ export default function CreateNPCDialog({
       }
 
       showSuccessToast(`NPC "${name}" created successfully`)
+
+      // Refresh sidebar to show new character
+      sidebarData?.refreshSidebar()
+
       onNPCCreated(characterId)
       onClose()
     } catch (error) {

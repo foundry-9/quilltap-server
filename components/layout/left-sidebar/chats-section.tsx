@@ -4,32 +4,17 @@
  * Chats Section
  *
  * Displays recent chats in the sidebar.
+ * Uses SidebarDataProvider for centralized data fetching and refresh.
  *
  * @module components/layout/left-sidebar/chats-section
  */
 
-import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useSidebar } from '@/components/providers/sidebar-provider'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { useSidebarData, type SidebarChat } from '@/components/providers/sidebar-data-provider'
 import { SidebarSection } from './sidebar-section'
 import { ViewAllLink } from './sidebar-item'
-import { clientLogger } from '@/lib/client-logger'
-
-interface ChatParticipant {
-  id: string
-  name: string
-  avatarUrl?: string | null
-}
-
-interface Chat {
-  id: string
-  title?: string | null
-  updatedAt: string
-  participants: ChatParticipant[]
-  characterTags?: string[]
-  messageCount?: number
-}
 
 /**
  * Message icon (for default chat icon)
@@ -50,7 +35,7 @@ function MessageIcon({ className }: { className?: string }) {
   )
 }
 
-function getChatDisplayName(chat: Chat): string {
+function getChatDisplayName(chat: SidebarChat): string {
   if (chat.title) return chat.title
   if (chat.participants.length > 0) {
     const names = chat.participants.map(p => p.name)
@@ -65,7 +50,7 @@ function ChatItem({
   isCollapsed,
   onClick,
 }: {
-  chat: Chat
+  chat: SidebarChat
   isCollapsed: boolean
   onClick: () => void
 }) {
@@ -108,33 +93,8 @@ function ChatItem({
 
 export function ChatsSection() {
   const { isCollapsed, closeMobile, isMobile } = useSidebar()
-  const { hiddenTagIds, shouldHideByIds } = useQuickHide()
-  const [chats, setChats] = useState<Chat[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const fetchChats = useCallback(async () => {
-    try {
-      clientLogger.debug('Fetching sidebar chats')
-      const response = await fetch('/api/sidebar/chats')
-      if (!response.ok) {
-        throw new Error(`Failed to fetch chats: ${response.status}`)
-      }
-      const data = await response.json()
-      setChats(data.chats || [])
-      clientLogger.debug('Fetched sidebar chats', { count: data.chats?.length || 0 })
-    } catch (error) {
-      clientLogger.error('Failed to fetch sidebar chats', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      setChats([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchChats()
-  }, [fetchChats, hiddenTagIds])
+  const { shouldHideByIds } = useQuickHide()
+  const { chats, loading } = useSidebarData()
 
   const handleItemClick = () => {
     if (isMobile) {

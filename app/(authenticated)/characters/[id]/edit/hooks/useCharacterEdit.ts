@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { clientLogger } from '@/lib/client-logger'
 import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { useSidebarDataOptional } from '@/components/providers/sidebar-data-provider'
 import {
   Character,
   CharacterFormData,
@@ -30,6 +31,7 @@ const INITIAL_FORM_DATA: CharacterFormData = {
  */
 export function useCharacterEdit(id: string) {
   const router = useRouter()
+  const sidebarData = useSidebarDataOptional()
 
   // State management
   const [state, setState] = useState<CharacterEditState>({
@@ -148,6 +150,10 @@ export function useCharacterEdit(id: string) {
       setState((prev) => ({ ...prev, saving: false }))
       showSuccessToast('Character saved successfully!')
       clientLogger.info('Character saved successfully', { characterId: id })
+
+      // Refresh sidebar to reflect character changes
+      sidebarData?.refreshCharacters()
+
       router.push(`/characters/${id}/view`)
       return true
     } catch (err) {

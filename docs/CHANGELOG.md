@@ -2,7 +2,16 @@
 
 ## Recent Changes
 
-### 2.6-dev
+### 2.6.1
+
+- feat: Sidebar auto-refresh on character/chat changes
+  - Created `SidebarDataProvider` context to centralize sidebar data management
+  - Sidebar now automatically updates when characters or chats are created, edited, or deleted
+  - Added `useSidebarData` hook with `refreshSidebar()`, `refreshCharacters()`, and `refreshChats()` functions
+  - Implemented debounced refresh (300ms) to prevent rapid re-fetches
+  - Updated 10 mutation points across the app to trigger sidebar refresh
+
+### 2.6.0
 
 - refactor: Phase 6 - Plugin registry integration
   - Created `lib/llm/fallback-data.ts` consolidating all legacy fallback constants

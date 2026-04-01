@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { DebugProvider, useDebugOptional } from "./debug-provider";
 import { TagStyleProvider } from "./tag-style-provider";
 import { QuickHideProvider } from "./quick-hide-provider";
+import { SidebarDataProvider } from "./sidebar-data-provider";
 import { ContentWidthProvider } from "./content-width-provider";
 import { AvatarDisplayProvider } from "./avatar-display-provider";
 import { DevConsoleProvider, useDevConsoleOptional } from "./dev-console-provider";
@@ -194,11 +195,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <DebugModeSync />
             <TagStyleProvider>
               <QuickHideProvider>
-                <ContentWidthProvider>
-                  <AvatarDisplayProvider>
-                    {children}
-                  </AvatarDisplayProvider>
-                </ContentWidthProvider>
+                <SidebarDataProvider>
+                  <ContentWidthProvider>
+                    <AvatarDisplayProvider>
+                      {children}
+                    </AvatarDisplayProvider>
+                  </ContentWidthProvider>
+                </SidebarDataProvider>
               </QuickHideProvider>
             </TagStyleProvider>
           </DebugProvider>
