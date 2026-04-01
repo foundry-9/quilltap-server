@@ -1,6 +1,6 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v2.9.
+Complete API reference for Quilltap v2.10.
 
 ## Table of Contents
 
@@ -10,6 +10,7 @@ Complete API reference for Quilltap v2.9.
 - [Error Handling](#error-handling)
 - [Providers](#providers)
 - [Endpoints](#endpoints)
+  - [Providers (Endpoint)](#providers-endpoint)
   - [Health](#health)
   - [User Profile](#user-profile)
   - [Chat Settings](#chat-settings)
@@ -173,6 +174,72 @@ Quilltap uses a plugin-based provider system. Available providers depend on whic
 | `OPENAI_COMPATIBLE` | qtap-plugin-openai-compatible | Chat (any OpenAI-format API) |
 
 ## Endpoints
+
+### Providers (Endpoint)
+
+#### `GET /api/v1/providers`
+
+List all available providers, including both LLM providers and search providers. The response combines both provider types into a single list, distinguished by the `type` field.
+
+**Response**: `200 OK`
+
+```json
+{
+  "providers": [
+    {
+      "id": "OPENAI",
+      "name": "OPENAI",
+      "displayName": "OpenAI",
+      "description": "OpenAI LLM and image generation provider",
+      "abbreviation": "OAI",
+      "colors": {
+        "bg": "bg-green-100",
+        "text": "text-green-800",
+        "icon": "text-green-600"
+      },
+      "type": "llm",
+      "capabilities": {
+        "chat": true,
+        "embeddings": true,
+        "imageGeneration": true,
+        "toolCalling": true
+      },
+      "configRequirements": {
+        "requiresApiKey": true,
+        "requiresBaseUrl": false
+      }
+    },
+    {
+      "id": "SERPER",
+      "name": "SERPER",
+      "displayName": "Serper Web Search",
+      "description": "Google search results via the Serper.dev API",
+      "abbreviation": "SRP",
+      "colors": {
+        "bg": "bg-orange-100",
+        "text": "text-orange-800",
+        "icon": "text-orange-600"
+      },
+      "type": "search",
+      "configRequirements": {
+        "requiresApiKey": true,
+        "requiresBaseUrl": false,
+        "apiKeyLabel": "Serper API Key"
+      }
+    }
+  ],
+  "count": 2
+}
+```
+
+**Provider Types:**
+
+| Type | Description |
+|------|-------------|
+| `llm` | LLM providers for chat, embeddings, and image generation. Include `capabilities` describing supported features. |
+| `search` | Search providers that power the `search_web` tool. Include `configRequirements` with `requiresApiKey`, `requiresBaseUrl`, and `apiKeyLabel`. |
+
+---
 
 ### Health
 
@@ -382,7 +449,35 @@ Delete an API key.
 
 #### `POST /api/v1/api-keys/[id]?action=test`
 
-Test an API key connection with the provider.
+Test an API key connection with the provider. Supports both LLM providers and search providers -- the endpoint automatically detects the provider type from the key's associated provider and routes the validation accordingly. For LLM providers, it calls the provider's `validateApiKey` method. For search providers, it calls the search provider's `validateApiKey` method (e.g., making a minimal test query to the search API).
+
+**Request Body** (optional):
+
+```json
+{
+  "baseUrl": "https://custom-endpoint.example.com"
+}
+```
+
+**Response (valid)**: `200 OK`
+
+```json
+{
+  "valid": true,
+  "provider": "OPENAI",
+  "message": "API key is valid"
+}
+```
+
+**Response (invalid)**: `400 Bad Request`
+
+```json
+{
+  "valid": false,
+  "provider": "SERPER",
+  "error": "API key validation failed"
+}
+```
 
 #### `POST /api/v1/api-keys?action=auto-associate`
 
@@ -2873,7 +2968,7 @@ characters = data['characters']
 
 ## Versioning
 
-Current API version: **v2.9**
+Current API version: **v2.10**
 
 All core endpoints use the `/api/v1/` prefix. Legacy routes (without prefix) were removed in v2.8.
 

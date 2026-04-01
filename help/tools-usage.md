@@ -110,6 +110,7 @@ When the AI uses a tool:
 
 - Search Web tool must be enabled
 - Connection profile must allow web search
+- A search provider API key must be configured in Settings > API Keys (e.g., Serper)
 
 **Best practices:**
 

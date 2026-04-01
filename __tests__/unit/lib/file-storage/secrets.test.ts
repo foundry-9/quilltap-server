@@ -200,11 +200,7 @@ describe('Mount Point Secrets Encryption', () => {
 
     it('throws error when no encryption key configured', async () => {
       delete process.env.QUILLTAP_ENCRYPTION_KEY
-
-      // Mock the env module to not have ENCRYPTION_MASTER_PEPPER
-      jest.doMock('@/lib/env', () => ({
-        env: { ENCRYPTION_MASTER_PEPPER: null },
-      }))
+      delete process.env.ENCRYPTION_MASTER_PEPPER
 
       // This test is tricky because the module caches the key
       // We're mainly testing that the error path exists
