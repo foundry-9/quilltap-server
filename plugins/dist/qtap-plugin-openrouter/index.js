@@ -20165,7 +20165,7 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
-// node_modules/@quilltap/plugin-utils/dist/index.mjs
+// ../../../node_modules/@quilltap/plugin-utils/dist/index.mjs
 var import_fs = require("fs");
 function parseOpenAIToolCalls(response) {
   const toolCalls = [];
@@ -20278,7 +20278,6 @@ var OpenRouterProvider = class {
     this.supportsFileAttachments = false;
     // Model-dependent, conservative default
     this.supportedMimeTypes = [];
-    this.supportsImageGeneration = true;
     this.supportsWebSearch = true;
   }
   /**
@@ -20711,53 +20710,6 @@ var OpenRouterProvider = class {
       return [];
     }
   }
-  async generateImage(params, apiKey) {
-    const client = new OpenRouter({
-      apiKey,
-      httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      xTitle: getQuilltapUserAgent()
-    });
-    const requestBody = {
-      model: params.model ?? "google/gemini-2.5-flash-image-preview",
-      messages: [{ role: "user", content: params.prompt }],
-      modalities: ["image", "text"],
-      // Required for image generation
-      stream: false
-    };
-    if (params.aspectRatio) {
-      requestBody.imageConfig = { aspectRatio: params.aspectRatio };
-    }
-    const response = await client.chat.send({
-      chatGenerationParams: requestBody
-    });
-    const choice = response.choices?.[0];
-    if (!choice) {
-      throw new Error("No choices in OpenRouter response");
-    }
-    const images = [];
-    if (choice.message.images && Array.isArray(choice.message.images)) {
-      for (const image of choice.message.images) {
-        if (image.imageUrl?.url || image.image_url?.url) {
-          const dataUrl = image.imageUrl?.url || image.image_url?.url;
-          if (dataUrl.startsWith("data:image/")) {
-            const [, base64] = dataUrl.split(",");
-            const mimeType = dataUrl.match(/data:(image\/[^;]+)/)?.[1] || "image/png";
-            images.push({
-              data: base64,
-              mimeType
-            });
-          }
-        }
-      }
-    }
-    if (images.length === 0) {
-      throw new Error("No images returned from OpenRouter");
-    }
-    return {
-      images,
-      raw: response
-    };
-  }
 };
 
 // embedding-provider.ts
@@ -20892,7 +20844,7 @@ var OpenRouterEmbeddingProvider = class {
   }
 };
 
-// node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
+// ../../../node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
 var TOOL_NAME_ALIASES = {
   // Direct mappings
   "search_memories": "search_memories",

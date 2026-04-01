@@ -3,33 +3,15 @@
  * Implements a unified interface for different image generation APIs
  */
 
-export interface ImageGenParams {
-  prompt: string;
-  negativePrompt?: string;
-  model: string;
-  n?: number; // Number of images
-  size?: string; // e.g., "1024x1024"
-  aspectRatio?: string; // e.g., "16:9" (for providers that use this instead of size)
-  quality?: 'standard' | 'hd';
-  style?: 'vivid' | 'natural';
-  seed?: number;
-  guidanceScale?: number; // CFG scale for diffusion models
-  steps?: number; // Inference steps for diffusion models
-}
+import type { ImageProvider, ImageGenParams, ImageGenResponse } from '@quilltap/plugin-types'
 
-export interface GeneratedImage {
-  data: string; // Base64-encoded image data
-  mimeType: string;
-  revisedPrompt?: string; // Some providers revise the prompt
-  seed?: number; // Seed used for generation
-}
+// Re-export types for backward compatibility
+export type { ImageGenParams, GeneratedImage, ImageGenResponse, ImageProvider } from '@quilltap/plugin-types'
 
-export interface ImageGenResponse {
-  images: GeneratedImage[];
-  raw: unknown; // Provider-specific raw response
-}
+/** @deprecated Use ImageProvider instead */
+export type ImageGenProvider = ImageProvider
 
-export abstract class ImageGenProvider {
+export abstract class BaseImageProvider implements ImageProvider {
   abstract readonly provider: string;
   abstract readonly supportedModels: string[];
 

@@ -13798,7 +13798,7 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
-// node_modules/@quilltap/plugin-utils/dist/index.mjs
+// ../../../node_modules/@quilltap/plugin-utils/dist/index.mjs
 var import_fs = require("fs");
 function getCoreLoggerFactory() {
   return globalThis.__quilltap_logger_factory ?? null;

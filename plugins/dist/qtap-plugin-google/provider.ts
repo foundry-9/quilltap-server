@@ -7,7 +7,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
-import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse, ModelMetadata } from './types';
+import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ModelMetadata } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-google');
@@ -87,10 +87,9 @@ function sanitizeSchemaForGoogle(schema: any): any {
   return sanitized;
 }
 
-export class GoogleProvider implements LLMProvider {
+export class GoogleProvider implements TextProvider {
   readonly supportsFileAttachments = true;
   readonly supportedMimeTypes = GOOGLE_SUPPORTED_MIME_TYPES;
-  readonly supportsImageGeneration = true;
   readonly supportsWebSearch = true;
 
   /**
@@ -784,68 +783,6 @@ export class GoogleProvider implements LLMProvider {
         'imagen-4',
         'imagen-4-fast',
       ];
-    }
-  }
-
-  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
-
-    // Use the specified model or default to gemini-2.5-flash-image
-    const modelName = params.model ?? 'gemini-2.5-flash-image';
-
-    const config: any = {
-      temperature: 0.7,
-      safetySettings: SAFETY_CATEGORIES.map(category => ({
-        category,
-        threshold: 'BLOCK_NONE',
-      })),
-    };
-
-    // Note: aspect ratio support varies by model
-    // if (params.aspectRatio) {
-    //   config.aspectRatio = params.aspectRatio;
-    // }
-
-    try {
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: params.prompt,
-        config,
-      });
-
-      const images: Array<{ data: string; mimeType: string; revisedPrompt?: string }> = [];
-
-      // Extract images from response - check candidates array
-      const candidates = response.candidates ?? [];
-      for (const candidate of candidates) {
-        const parts = candidate.content?.parts ?? [];
-        for (const part of parts) {
-          if (part.inlineData && part.inlineData.data) {
-            images.push({
-              data: part.inlineData.data,
-              mimeType: part.inlineData.mimeType || 'image/png',
-            });
-          }
-        }
-      }
-
-      if (images.length === 0) {
-        logger.error('No images generated in response', { context: 'GoogleProvider.generateImage' });
-        throw new Error('No images generated in response');
-      }
-
-      return {
-        images,
-        // Convert SDK response class to plain object for Zod validation
-        raw: JSON.parse(JSON.stringify(response)),
-      };
-    } catch (error) {
-      logger.error('Error generating image with Google Gemini', {
-        context: 'GoogleProvider.generateImage',
-        model: modelName,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
     }
   }
 

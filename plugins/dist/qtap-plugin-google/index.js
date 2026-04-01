@@ -47036,7 +47036,7 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
-// node_modules/@quilltap/plugin-utils/dist/index.mjs
+// ../../../node_modules/@quilltap/plugin-utils/dist/index.mjs
 var import_fs2 = require("fs");
 function parseGoogleToolCalls(response) {
   const toolCalls = [];
@@ -47197,7 +47197,6 @@ var GoogleProvider = class {
   constructor() {
     this.supportsFileAttachments = true;
     this.supportedMimeTypes = GOOGLE_SUPPORTED_MIME_TYPES;
-    this.supportsImageGeneration = true;
     this.supportsWebSearch = true;
   }
   /**
@@ -47744,53 +47743,6 @@ var GoogleProvider = class {
       ];
     }
   }
-  async generateImage(params, apiKey) {
-    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
-    const modelName = params.model ?? "gemini-2.5-flash-image";
-    const config2 = {
-      temperature: 0.7,
-      safetySettings: SAFETY_CATEGORIES.map((category) => ({
-        category,
-        threshold: "BLOCK_NONE"
-      }))
-    };
-    try {
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: params.prompt,
-        config: config2
-      });
-      const images = [];
-      const candidates = response.candidates ?? [];
-      for (const candidate of candidates) {
-        const parts = candidate.content?.parts ?? [];
-        for (const part of parts) {
-          if (part.inlineData && part.inlineData.data) {
-            images.push({
-              data: part.inlineData.data,
-              mimeType: part.inlineData.mimeType || "image/png"
-            });
-          }
-        }
-      }
-      if (images.length === 0) {
-        logger.error("No images generated in response", { context: "GoogleProvider.generateImage" });
-        throw new Error("No images generated in response");
-      }
-      return {
-        images,
-        // Convert SDK response class to plain object for Zod validation
-        raw: JSON.parse(JSON.stringify(response))
-      };
-    } catch (error) {
-      logger.error("Error generating image with Google Gemini", {
-        context: "GoogleProvider.generateImage",
-        model: modelName,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
-    }
-  }
   /**
    * Get metadata for a specific model, including warnings and recommendations.
    * Returns warnings for models with known issues or limitations.
@@ -48088,7 +48040,7 @@ var GoogleImagenProvider = class {
   }
 };
 
-// node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
+// ../../../node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
 var TOOL_NAME_ALIASES = {
   // Direct mappings
   "search_memories": "search_memories",

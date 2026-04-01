@@ -1,219 +1,51 @@
 // LLM Provider Base Interface
-// Phase 0.5: Single Chat MVP
+// Re-exports canonical types from @quilltap/plugin-types
+// and provides the BaseLLMProvider abstract class
 
-// Model metadata for warnings, recommendations, and capability info
-export type ModelWarningLevel = 'info' | 'warning' | 'error'
+// Re-export all types from plugin-types as the single source of truth
+export type {
+  // Common types
+  ModelWarningLevel,
+  ModelWarning,
+  ModelMetadata,
+  FileAttachment,
+  TokenUsage,
+  CacheUsage,
+  AttachmentResults,
 
-export interface ModelWarning {
-  level: ModelWarningLevel
-  message: string
-  // Optional link to documentation or more info
-  documentationUrl?: string
-}
+  // Text provider types
+  LLMMessage,
+  JSONSchemaDefinition,
+  ResponseFormat,
+  LLMParams,
+  LLMResponse,
+  StreamChunk,
 
-export interface ModelMetadata {
-  // The model ID (e.g., "gemini-3-pro-image-preview")
-  id: string
-  // Optional display name (e.g., "Gemini 3 Pro Image Preview")
-  displayName?: string
-  // Warnings or recommendations for this model
-  warnings?: ModelWarning[]
-  // Whether this model is deprecated
-  deprecated?: boolean
-  // Whether this model is experimental/preview
-  experimental?: boolean
-  // Capabilities this model lacks (for informational purposes)
-  missingCapabilities?: string[]
-  // Maximum output tokens supported by this model
-  maxOutputTokens?: number
-  // Context window size (input tokens)
-  contextWindow?: number
-}
+  // Provider interfaces (new canonical names)
+  TextProvider,
 
-export interface FileAttachment {
-  id: string
-  filepath: string
-  filename: string
-  mimeType: string
-  size: number
-  // Base64 encoded data (loaded at send time)
-  data?: string
-}
+  // Image types (used by image-gen/base.ts)
+  ImageGenParams,
+  GeneratedImage,
+  ImageGenResponse,
+  ImageProvider,
+} from '@quilltap/plugin-types'
 
-// Image Generation Types
-export interface ImageGenParams {
-  prompt: string
-  model?: string // Provider-specific model
-  n?: number // Number of images (default 1)
-  size?: string // e.g., "1024x1024"
-  quality?: 'standard' | 'hd'
-  style?: 'vivid' | 'natural'
-  aspectRatio?: string // For Gemini: "16:9", "4:3", etc.
-}
+// Deprecated aliases
+export type { TextProvider as LLMProvider } from '@quilltap/plugin-types'
 
-export interface GeneratedImage {
-  data: string // Base64 encoded image data
-  mimeType: string // "image/png" or "image/jpeg"
-  revisedPrompt?: string // Some providers return revised prompt
-}
-
-export interface ImageGenResponse {
-  images: GeneratedImage[]
-  raw: any
-}
-
-export interface LLMMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string
-  // File attachments for this message (typically only for user messages)
-  attachments?: FileAttachment[]
-  // Google Gemini thought signature for thinking models (e.g., gemini-3-pro)
-  // Must be preserved and passed back for multi-turn conversations with function calling
-  thoughtSignature?: string
-  // Optional name for multi-character chats (provider-dependent support)
-  // OpenAI: supports on user/assistant messages (a-zA-Z0-9_- only, max 64 chars)
-  // Anthropic: not supported natively (will be prefixed to content instead)
-  // Other providers: varies, fallback to content prefix if not supported
-  name?: string
-  // Cache control for prompt caching (Anthropic, Google)
-  // When set to { type: 'ephemeral' }, marks this message as a cache breakpoint
-  // Anthropic: reduces cost by 90% for cached content, 5-minute TTL
-  cacheControl?: { type: 'ephemeral' }
-  // Tool call ID — identifies which tool call this result responds to (for role: 'tool')
-  toolCallId?: string
-  // Tool calls made by the assistant in this message (for native tool result formatting)
-  toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
-}
-
-// JSON Schema definition for structured outputs
-export interface JSONSchemaDefinition {
-  name: string
-  strict?: boolean
-  schema: Record<string, unknown>
-}
-
-// Response format for structured outputs
-export interface ResponseFormat {
-  type: 'text' | 'json_object' | 'json_schema'
-  jsonSchema?: JSONSchemaDefinition
-}
-
-export interface LLMParams {
-  messages: LLMMessage[]
-  model: string
-  temperature?: number
-  maxTokens?: number
-  topP?: number
-  stop?: string[]
-  tools?: any[] // Provider-specific tool definitions (OpenAI function_calling, Anthropic tool_use, etc.)
-  // Native web search - when enabled, provider will use its built-in web search capability
-  webSearchEnabled?: boolean
-  // Response format for structured outputs (JSON schema enforcement)
-  responseFormat?: ResponseFormat
-  // Provider-specific parameters from profile (e.g., fallbackModels, providerPreferences)
-  profileParameters?: Record<string, unknown>
-  // Previous response ID for conversation chaining (OpenAI Responses API)
-  previousResponseId?: string
-}
-
-// Cache usage statistics (OpenRouter, Anthropic)
-export interface CacheUsage {
-  cachedTokens?: number
-  cacheDiscount?: number
-  cacheCreationInputTokens?: number
-  cacheReadInputTokens?: number
-}
-
-export interface LLMResponse {
-  content: string
-  finishReason: string
-  usage: {
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-  }
-  raw: any // Provider-specific raw response
-  // Report which attachments were successfully sent vs failed
-  attachmentResults?: {
-    sent: string[] // IDs of attachments sent successfully
-    failed: { id: string; error: string }[] // IDs of attachments that failed
-  }
-  // Google Gemini thought signature for thinking models (must be stored and passed back)
-  thoughtSignature?: string
-  // Cache usage statistics (OpenRouter, Anthropic)
-  cacheUsage?: CacheUsage
-}
-
-export interface StreamChunk {
-  content: string
-  done: boolean
-  usage?: {
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-  }
-  // On the final chunk, include attachment results
-  attachmentResults?: {
-    sent: string[]
-    failed: { id: string; error: string }[]
-  }
-  // Raw response for tool call detection
-  rawResponse?: any
-  // Google Gemini thought signature for thinking models (must be stored and passed back)
-  thoughtSignature?: string
-  // Cache usage statistics (OpenRouter, Anthropic)
-  cacheUsage?: CacheUsage
-}
-
-/**
- * LLMProvider interface for duck-typing compatibility with plugins.
- * Use this interface when typing provider instances.
- */
-export interface LLMProvider {
-  // Whether this provider supports file attachments
-  readonly supportsFileAttachments: boolean
-
-  // Supported MIME types for file attachments (empty if no support)
-  readonly supportedMimeTypes: string[]
-
-  // Whether this provider supports image generation
-  readonly supportsImageGeneration: boolean
-
-  // Whether this provider supports web search
-  readonly supportsWebSearch: boolean
-
-  sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse>
-  streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk>
-  validateApiKey(apiKey: string): Promise<boolean>
-  getAvailableModels(apiKey: string): Promise<string[]>
-  generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse>
-
-  /**
-   * Get metadata for a specific model, including warnings and recommendations.
-   * Optional - providers can implement to return model-specific warnings.
-   */
-  getModelMetadata?(modelId: string): ModelMetadata | undefined
-
-  /**
-   * Get metadata for all available models.
-   * Optional - providers can implement to return metadata for models with warnings.
-   */
-  getModelsWithMetadata?(apiKey: string): Promise<ModelMetadata[]>
-}
+import type { TextProvider, LLMParams, LLMResponse, StreamChunk, ModelMetadata } from '@quilltap/plugin-types'
 
 /**
  * Abstract base class for LLM providers.
  * Providers can extend this class for default implementations of optional methods.
  */
-export abstract class BaseLLMProvider implements LLMProvider {
+export abstract class BaseLLMProvider implements TextProvider {
   // Whether this provider supports file attachments
   abstract readonly supportsFileAttachments: boolean
 
   // Supported MIME types for file attachments (empty if no support)
   abstract readonly supportedMimeTypes: string[]
-
-  // Whether this provider supports image generation
-  abstract readonly supportsImageGeneration: boolean
 
   // Whether this provider supports web search
   abstract readonly supportsWebSearch: boolean
@@ -222,7 +54,6 @@ export abstract class BaseLLMProvider implements LLMProvider {
   abstract streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk>
   abstract validateApiKey(apiKey: string): Promise<boolean>
   abstract getAvailableModels(apiKey: string): Promise<string[]>
-  abstract generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse>
 
   /**
    * Get metadata for a specific model, including warnings and recommendations.
@@ -231,8 +62,6 @@ export abstract class BaseLLMProvider implements LLMProvider {
    * @returns ModelMetadata or undefined if no special metadata exists
    */
   getModelMetadata(_modelId: string): ModelMetadata | undefined {
-    // Default implementation returns undefined (no special metadata)
-    // Providers can override this to return warnings for specific models
     return undefined
   }
 
@@ -243,8 +72,6 @@ export abstract class BaseLLMProvider implements LLMProvider {
    * @returns Array of ModelMetadata for models with special metadata
    */
   async getModelsWithMetadata(_apiKey: string): Promise<ModelMetadata[]> {
-    // Default implementation returns empty array
-    // Providers can override to return metadata for models with warnings
     return []
   }
 }

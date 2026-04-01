@@ -8,7 +8,7 @@
  * - Function calling / tool use
  */
 
-import type { LLMProviderPlugin } from './types'
+import type { TextProviderPlugin } from './types'
 import { AnthropicProvider } from './provider'
 import {
   createPluginLogger,
@@ -91,7 +91,7 @@ const cheapModels = {
  * The Anthropic Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
-export const plugin: LLMProviderPlugin = {
+export const plugin: TextProviderPlugin = {
   metadata,
 
   icon: {

@@ -375,7 +375,7 @@ async function handleGenerateSwipe(
     swipeGroupId,
     swipeIndex: newSwipeIndex,
     tokenCount: response.usage.totalTokens,
-    rawResponse: response.raw,
+    rawResponse: response.raw as Record<string, unknown> | null | undefined,
     attachments: [],
     createdAt: result.message.createdAt, // Keep same timestamp as original
   };

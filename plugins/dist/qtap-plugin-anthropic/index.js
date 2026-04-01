@@ -11865,7 +11865,7 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills2;
 OpenAI.Videos = Videos;
 
-// node_modules/@quilltap/plugin-utils/dist/index.mjs
+// ../../../node_modules/@quilltap/plugin-utils/dist/index.mjs
 var import_fs = require("fs");
 function parseAnthropicToolCalls(response) {
   const toolCalls = [];
@@ -11976,7 +11976,6 @@ var AnthropicProvider = class {
   constructor() {
     this.supportsFileAttachments = true;
     this.supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES;
-    this.supportsImageGeneration = false;
     this.supportsWebSearch = false;
   }
   /**
@@ -12408,13 +12407,9 @@ var AnthropicProvider = class {
       return fallbackModels;
     }
   }
-  async generateImage(params, apiKey) {
-    logger.error("Image generation not supported by Anthropic", { context: "AnthropicProvider.generateImage" });
-    throw new Error("Anthropic does not support image generation. Claude can analyze images but cannot generate them.");
-  }
 };
 
-// node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
+// ../../../node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
 var TOOL_NAME_ALIASES = {
   // Direct mappings
   "search_memories": "search_memories",

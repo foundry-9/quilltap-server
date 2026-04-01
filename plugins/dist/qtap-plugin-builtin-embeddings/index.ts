@@ -17,7 +17,7 @@
  * updated, the vocabulary should be refitted and all embeddings regenerated.
  */
 
-import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
+import type { TextProviderPlugin, EmbeddingModelInfo } from './types';
 import { BuiltinEmbeddingProvider, BUILTIN_MODEL_NAME } from './embedding-provider';
 
 /**
@@ -71,7 +71,7 @@ const attachmentSupport = {
  * Since this is an embedding-only provider, many LLM-related methods
  * throw errors when called.
  */
-export const plugin: LLMProviderPlugin = {
+export const plugin: TextProviderPlugin = {
   metadata,
 
   config,

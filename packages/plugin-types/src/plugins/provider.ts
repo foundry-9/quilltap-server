@@ -4,9 +4,10 @@
  * @module @quilltap/plugin-types/plugins/provider
  */
 
-import type { LLMProvider, ImageGenProvider } from '../llm/base';
+import type { TextProvider } from '../providers/text';
+import type { ImageProvider } from '../providers/image';
 import type { ToolCallRequest, ToolFormatOptions } from '../llm/tools';
-import type { EmbeddingProvider, LocalEmbeddingProvider } from '../llm/embeddings';
+import type { EmbeddingProvider, LocalEmbeddingProvider } from '../providers/embedding';
 
 /**
  * SVG icon data that can be provided by plugins without React dependency
@@ -296,16 +297,18 @@ export interface CheapModelConfig {
 export type ToolFormatType = 'openai' | 'anthropic' | 'google';
 
 /**
- * Main LLM Provider Plugin Interface
+ * Main Text Provider Plugin Interface
  *
  * Plugins implementing this interface can be dynamically loaded
  * by Quilltap to provide LLM functionality from various providers.
+ * A single plugin may support multiple provider shapes (text, image,
+ * embedding) through the factory methods.
  *
  * @example
  * ```typescript
- * import type { LLMProviderPlugin } from '@quilltap/plugin-types';
+ * import type { TextProviderPlugin } from '@quilltap/plugin-types';
  *
- * export const plugin: LLMProviderPlugin = {
+ * export const plugin: TextProviderPlugin = {
  *   metadata: {
  *     providerName: 'MY_PROVIDER',
  *     displayName: 'My Provider',
@@ -339,7 +342,7 @@ export type ToolFormatType = 'openai' | 'anthropic' | 'google';
  * };
  * ```
  */
-export interface LLMProviderPlugin {
+export interface TextProviderPlugin {
   /** Provider metadata for UI display and identification */
   metadata: ProviderMetadata;
 
@@ -353,17 +356,17 @@ export interface LLMProviderPlugin {
   attachmentSupport: AttachmentSupport;
 
   /**
-   * Factory method to create an LLMProvider instance
+   * Factory method to create a TextProvider instance
    * @param baseUrl Optional base URL for the provider
    */
-  createProvider: (baseUrl?: string) => LLMProvider;
+  createProvider: (baseUrl?: string) => TextProvider;
 
   /**
-   * Factory method to create an ImageGenProvider instance (optional)
+   * Factory method to create an ImageProvider instance (optional)
    * Only required if capabilities.imageGeneration is true
    * @param baseUrl Optional base URL for the provider
    */
-  createImageProvider?: (baseUrl?: string) => ImageGenProvider;
+  createImageProvider?: (baseUrl?: string) => ImageProvider;
 
   /**
    * Factory method to create an embedding provider (optional)
@@ -525,9 +528,14 @@ export interface LLMProviderPlugin {
 }
 
 /**
+ * @deprecated Use `TextProviderPlugin` instead. This alias is kept for backward compatibility.
+ */
+export type LLMProviderPlugin = TextProviderPlugin;
+
+/**
  * Standard export type for provider plugins
  */
 export interface ProviderPluginExport {
   /** The provider plugin instance */
-  plugin: LLMProviderPlugin;
+  plugin: TextProviderPlugin;
 }

@@ -10,12 +10,10 @@
 import { OpenRouter, fromChatMessages } from '@openrouter/sdk';
 import type { ChatGenerationParams, Message, OpenResponsesNonStreamingResponse } from '@openrouter/sdk/models';
 import type {
-  LLMProvider,
+  TextProvider,
   LLMParams,
   LLMResponse,
   StreamChunk,
-  ImageGenParams,
-  ImageGenResponse,
 } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
@@ -44,10 +42,9 @@ interface OpenRouterProfileParams {
   topP?: number;
 }
 
-export class OpenRouterProvider implements LLMProvider {
+export class OpenRouterProvider implements TextProvider {
   readonly supportsFileAttachments = false; // Model-dependent, conservative default
   readonly supportedMimeTypes: string[] = [];
-  readonly supportsImageGeneration = true;
   readonly supportsWebSearch = true;
 
   /**
@@ -601,67 +598,4 @@ export class OpenRouterProvider implements LLMProvider {
     }
   }
 
-  async generateImage(
-    params: ImageGenParams,
-    apiKey: string
-  ): Promise<ImageGenResponse> {
-    const client = new OpenRouter({
-      apiKey,
-      httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: getQuilltapUserAgent(),
-    });
-
-    const requestBody: any = {
-      model: params.model ?? 'google/gemini-2.5-flash-image-preview',
-      messages: [{ role: 'user', content: params.prompt }],
-      modalities: ['image', 'text'], // Required for image generation
-      stream: false,
-    };
-
-    // Add image configuration if aspect ratio is specified
-    if (params.aspectRatio) {
-      requestBody.imageConfig = { aspectRatio: params.aspectRatio };
-    }
-
-    const response = (await client.chat.send({
-      chatGenerationParams: requestBody,
-    })) as any;
-
-    const choice = response.choices?.[0];
-    if (!choice) {
-      throw new Error('No choices in OpenRouter response');
-    }
-
-    const images = [];
-
-    // Check if response includes images
-    if (
-      (choice.message as any).images &&
-      Array.isArray((choice.message as any).images)
-    ) {
-      for (const image of (choice.message as any).images) {
-        if (image.imageUrl?.url || image.image_url?.url) {
-          // Extract base64 data from data URL
-          const dataUrl = image.imageUrl?.url || image.image_url?.url;
-          if (dataUrl.startsWith('data:image/')) {
-            const [, base64] = dataUrl.split(',');
-            const mimeType =
-              dataUrl.match(/data:(image\/[^;]+)/)?.[1] || 'image/png';
-            images.push({
-              data: base64,
-              mimeType,
-            });
-          }
-        }
-      }
-    }
-
-    if (images.length === 0) {
-      throw new Error('No images returned from OpenRouter');
-    }
-    return {
-      images,
-      raw: response,
-    };
-  }
 }

@@ -7016,7 +7016,7 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
-// node_modules/@quilltap/plugin-utils/dist/index.mjs
+// ../../../node_modules/@quilltap/plugin-utils/dist/index.mjs
 var import_fs = require("fs");
 function parseOpenAIToolCalls(response) {
   const toolCalls = [];
@@ -7128,7 +7128,6 @@ var OllamaProvider = class {
   constructor(baseUrl) {
     this.supportsFileAttachments = false;
     this.supportedMimeTypes = [];
-    this.supportsImageGeneration = false;
     this.supportsWebSearch = false;
     this.baseUrl = baseUrl.replace(/\/+$/, "");
   }
@@ -7405,10 +7404,6 @@ var OllamaProvider = class {
       return [];
     }
   }
-  async generateImage(params, apiKey) {
-    logger.warn("Image generation not supported", { context: "OllamaProvider.generateImage" });
-    throw new Error("Ollama does not support image generation. Use a multimodal model for image analysis.");
-  }
 };
 
 // embedding-provider.ts
@@ -7526,7 +7521,7 @@ var OllamaEmbeddingProvider = class {
   }
 };
 
-// node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
+// ../../../node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
 var TOOL_NAME_ALIASES = {
   // Direct mappings
   "search_memories": "search_memories",

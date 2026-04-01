@@ -5,7 +5,7 @@
  */
 
 // Provider interface and base class
-export type { LLMProvider } from './base'
+export type { TextProvider, LLMProvider } from './base'
 export { BaseLLMProvider } from './base'
 
 // Factory (now uses plugin registry)

@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { uploadImage, importImageFromUrl } from '@/lib/images-v2';
-import { createLLMProvider } from '@/lib/llm';
+import { createImageProvider } from '@/lib/llm';
 import { logger } from '@/lib/logger';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
@@ -260,11 +260,11 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       }
     }
 
-    // Create provider instance
-    const provider = await createLLMProvider(profile.provider as any, profile.baseUrl ?? undefined);
-
-    // Verify provider supports image generation
-    if (!provider.supportsImageGeneration) {
+    // Create image provider instance
+    let provider;
+    try {
+      provider = createImageProvider(profile.provider as any, profile.baseUrl ?? undefined);
+    } catch {
       return badRequest(`${profile.provider} provider does not support image generation`);
     }
 
@@ -279,7 +279,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       aspectRatio: options.aspectRatio,
     };
 
-    // Generate images - generateImage takes (request, apiKey)
+    // Generate images
     const imageGenResponse = await provider.generateImage(imageGenRequest, decryptedKey);
 
     // Build linkedTo from tags
@@ -289,10 +289,14 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
     const savedImages = await Promise.all(
       imageGenResponse.images.map(async (generatedImage, index) => {
         // Decode base64 to buffer
-        const imageBuffer = Buffer.from(generatedImage.data, 'base64');
+        const imageData = generatedImage.data || generatedImage.b64Json;
+        if (!imageData) {
+          throw new Error('Generated image has no data');
+        }
+        const imageBuffer = Buffer.from(imageData, 'base64');
 
         // Get file extension from mime type
-        const mimeTypeParts = generatedImage.mimeType.split('/');
+        const mimeTypeParts = (generatedImage.mimeType || 'image/png').split('/');
         const ext = mimeTypeParts[1] === 'jpeg' ? 'jpg' : mimeTypeParts[1] || 'png';
 
         // Generate unique filename and hash
@@ -309,7 +313,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
         const { storageKey } = await fileStorageManager.uploadFile({
           filename,
           content: imageBuffer,
-          contentType: generatedImage.mimeType,
+          contentType: generatedImage.mimeType || 'image/png',
           projectId: null,
           folderPath: '/',
         });
