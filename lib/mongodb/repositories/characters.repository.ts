@@ -5,7 +5,7 @@
  * Each character is stored as a document in the 'characters' MongoDB collection.
  */
 
-import { Character, CharacterSchema, PhysicalDescription } from '@/lib/schemas/types';
+import { Character, CharacterInput, CharacterSchema, PhysicalDescription } from '@/lib/schemas/types';
 import { MongoBaseRepository } from './base.repository';
 import { logger } from '@/lib/logger';
 
@@ -139,23 +139,24 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
 
   /**
    * Create a new character
-   * @param data The character data (without id, createdAt, updatedAt)
+   * @param data The character data (without id, createdAt, updatedAt). Fields with defaults are optional.
    * @returns Promise<Character> The created character with generated id and timestamps
    */
-  async create(data: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>): Promise<Character> {
+  async create(data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>): Promise<Character> {
     logger.debug('Creating new character', { userId: data.userId, name: data.name });
     try {
       const id = this.generateId();
       const now = this.getCurrentTimestamp();
 
-      const character: Character = {
+      // Use schema.parse to apply defaults for fields like talkativeness, isFavorite, etc.
+      const characterInput = {
         ...data,
         id,
         createdAt: now,
         updatedAt: now,
       };
 
-      const validated = this.validate(character);
+      const validated = this.validate(characterInput);
       const collection = await this.getCollection();
       await collection.insertOne(validated as any);
 

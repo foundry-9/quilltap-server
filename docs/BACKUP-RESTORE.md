@@ -4,6 +4,76 @@
 
 Quilltap stores application data in **MongoDB** and files in **S3-compatible storage**. This guide covers backing up and restoring your Quilltap data safely.
 
+## Built-in Backup & Restore (Recommended)
+
+Quilltap includes a built-in backup and restore system accessible from the **Tools** page (`/tools`).
+
+### Using the UI
+
+1. Navigate to **Tools** from the dashboard or sidebar
+2. Click **Create Backup** to export your data:
+   - **Download**: Creates a ZIP file downloaded to your computer
+   - **Save to Cloud**: Stores the backup in your S3 storage for later restoration
+3. Click **Restore from Backup** to import data:
+   - Upload a local ZIP file, or
+   - Select a cloud backup from the list
+
+### What's Included in Backups
+
+The backup creates a ZIP file containing:
+
+- All characters and their metadata
+- All personas
+- Chat history and messages
+- Tags
+- Memories
+- Connection profiles (API keys remain encrypted)
+- Image profiles
+- Embedding profiles
+- File metadata (actual files are referenced from S3)
+
+### Cloud Backups
+
+Cloud backups are stored in your S3 bucket under `backups/{userId}/` and can be:
+
+- Listed and restored directly from the UI
+- Downloaded for offline storage
+- Restored even after account data is cleared
+
+### API Endpoints
+
+For automation or scripting, you can use the backup API directly:
+
+```bash
+# Create a backup (save to S3)
+curl -X POST https://your-quilltap/api/tools/backup/create \
+  -H "Content-Type: application/json" \
+  -H "Cookie: your-session-cookie" \
+  -d '{"destination": "s3"}'
+
+# List cloud backups
+curl https://your-quilltap/api/tools/backup/list \
+  -H "Cookie: your-session-cookie"
+
+# Preview a backup before restoring
+curl -X POST https://your-quilltap/api/tools/backup/preview \
+  -H "Content-Type: application/json" \
+  -H "Cookie: your-session-cookie" \
+  -d '{"s3Key": "backups/user-id/backup-2024-01-15.zip"}'
+
+# Restore from cloud backup
+curl -X POST https://your-quilltap/api/tools/backup/restore \
+  -H "Content-Type: application/json" \
+  -H "Cookie: your-session-cookie" \
+  -d '{"s3Key": "backups/user-id/backup-2024-01-15.zip"}'
+```
+
+---
+
+## Manual Backup Procedures
+
+For server administrators who need direct database access or want additional backup strategies:
+
 ## Data Structure
 
 ### MongoDB Collections

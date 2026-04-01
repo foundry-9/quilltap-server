@@ -11,6 +11,7 @@ import { uploadFile as uploadS3File, deleteFile as deleteS3File, downloadFile as
 import { buildS3Key } from './s3/client';
 import type { FileEntry, FileSource, FileCategory } from './schemas/types';
 import { logger } from './logger';
+import { getInheritedTags, mergeTags } from './files/tag-inheritance';
 
 export interface ImageUploadResult {
   id: string;
@@ -158,6 +159,18 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
   });
   logger.debug('Uploaded file to S3', { fileId, s3Key, size: buffer.length });
 
+  // Inherit tags from linked entities and merge with any explicitly provided tags
+  const inheritedTags = await getInheritedTags(linkedTo, userId);
+  const finalTags = mergeTags(tags, inheritedTags);
+
+  logger.debug('Computed final tags for file', {
+    context: 'images-v2',
+    fileId,
+    explicitTagCount: tags.length,
+    inheritedTagCount: inheritedTags.length,
+    finalTagCount: finalTags.length,
+  });
+
   // Create metadata in repository
   const fileEntry = await repos.files.create({
     userId,
@@ -174,7 +187,7 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
     generationModel: generationModel || null,
     generationRevisedPrompt: generationRevisedPrompt || null,
     description: description || null,
-    tags,
+    tags: finalTags,
     s3Key,
   });
 

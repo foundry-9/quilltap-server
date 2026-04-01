@@ -73,57 +73,113 @@ export async function resolvePlaceholders(
   const repos = getRepositories();
   const resolved: PlaceholderInfo[] = [];
 
+  // Pre-fetch chat data if we have a chatId
+  let chat: Awaited<ReturnType<typeof repos.chats.findById>> | null = null;
+  if (chatId) {
+    chat = await repos.chats.findById(chatId);
+  }
+
   for (const { placeholder, name } of placeholders) {
     const lowerName = name.toLowerCase();
 
-    // Check if it's the caller (me/I)
-    if (lowerName === 'me' || lowerName === 'i' || lowerName === 'user') {
+    // {{me}}, {{I}}, or {{char}} = the caller (character when assistant calls, persona when user calls)
+    if (lowerName === 'me' || lowerName === 'i' || lowerName === 'char') {
       let descriptions: PhysicalDescription[] = [];
       let entityId: string | undefined;
       let entityType: 'character' | 'persona' | 'user' = 'user';
+      let resolvedName = name;
 
       // If we have a calling participant, use that
-      if (callingParticipantId && chatId) {
-        const chat = await repos.chats.findById(chatId);
-        if (chat) {
-          const participant = chat.participants.find(p => p.id === callingParticipantId);
-          if (participant) {
-            if (participant.type === 'CHARACTER' && participant.characterId) {
-              const character = await repos.characters.findById(participant.characterId);
-              if (character) {
-                descriptions = character.physicalDescriptions || [];
-                entityId = character.id;
-                entityType = 'character';
-              }
-            } else if (participant.type === 'PERSONA' && participant.personaId) {
-              const persona = await repos.personas.findById(participant.personaId);
-              if (persona) {
-                descriptions = persona.physicalDescriptions || [];
-                entityId = persona.id;
-                entityType = 'persona';
-              }
+      if (callingParticipantId && chat) {
+        const participant = chat.participants.find(p => p.id === callingParticipantId);
+        if (participant) {
+          if (participant.type === 'CHARACTER' && participant.characterId) {
+            const character = await repos.characters.findById(participant.characterId);
+            if (character) {
+              descriptions = character.physicalDescriptions || [];
+              entityId = character.id;
+              entityType = 'character';
+              resolvedName = character.name;
             }
-          }
-        }
-      } else if (chatId) {
-        // Fall back to user's persona from chat context
-        const chat = await repos.chats.findById(chatId);
-        if (chat) {
-          const personaParticipant = chat.participants.find(p => p.type === 'PERSONA');
-          if (personaParticipant?.personaId) {
-            const persona = await repos.personas.findById(personaParticipant.personaId);
+          } else if (participant.type === 'PERSONA' && participant.personaId) {
+            const persona = await repos.personas.findById(participant.personaId);
             if (persona) {
               descriptions = persona.physicalDescriptions || [];
               entityId = persona.id;
               entityType = 'persona';
+              resolvedName = persona.name;
             }
+          }
+        }
+      } else if (chat) {
+        // No calling participant specified - fall back to first character (likely assistant-initiated)
+        const characterParticipant = chat.participants.find(p => p.type === 'CHARACTER');
+        if (characterParticipant?.characterId) {
+          const character = await repos.characters.findById(characterParticipant.characterId);
+          if (character) {
+            descriptions = character.physicalDescriptions || [];
+            entityId = character.id;
+            entityType = 'character';
+            resolvedName = character.name;
           }
         }
       }
 
       resolved.push({
         placeholder,
-        name,
+        name: resolvedName,
+        type: entityType,
+        entityId,
+        descriptions,
+      });
+      continue;
+    }
+
+    // {{user}} = the OTHER participant (persona when character calls, character when user calls)
+    if (lowerName === 'user') {
+      let descriptions: PhysicalDescription[] = [];
+      let entityId: string | undefined;
+      let entityType: 'character' | 'persona' | 'user' = 'persona';
+      let resolvedName = name;
+
+      if (chat) {
+        // Determine who the "other" participant is based on the caller
+        let otherParticipantType: 'CHARACTER' | 'PERSONA' = 'PERSONA';
+
+        if (callingParticipantId) {
+          const callerParticipant = chat.participants.find(p => p.id === callingParticipantId);
+          // If caller is a character, {{user}} means persona; if caller is persona, {{user}} means character
+          if (callerParticipant?.type === 'CHARACTER') {
+            otherParticipantType = 'PERSONA';
+          } else if (callerParticipant?.type === 'PERSONA') {
+            otherParticipantType = 'CHARACTER';
+          }
+        }
+
+        const otherParticipant = chat.participants.find(p => p.type === otherParticipantType);
+
+        if (otherParticipantType === 'PERSONA' && otherParticipant?.personaId) {
+          const persona = await repos.personas.findById(otherParticipant.personaId);
+          if (persona) {
+            descriptions = persona.physicalDescriptions || [];
+            entityId = persona.id;
+            entityType = 'persona';
+            resolvedName = persona.name;
+          }
+        } else if (otherParticipantType === 'CHARACTER' && otherParticipant?.characterId) {
+          const character = await repos.characters.findById(otherParticipant.characterId);
+          if (character) {
+            descriptions = character.physicalDescriptions || [];
+            entityId = character.id;
+            entityType = 'character';
+            resolvedName = character.name;
+          }
+        }
+      }
+
+      resolved.push({
+        placeholder,
+        name: resolvedName,
         type: entityType,
         entityId,
         descriptions,

@@ -381,6 +381,102 @@ CHARACTER: ${assistantMessage}`,
 }
 
 /**
+ * Memory extraction prompt template for inter-character memories
+ */
+const INTER_CHARACTER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories that one CHARACTER has learned about ANOTHER CHARACTER from their conversation.
+Analyze the conversation exchange below and identify if there is something significant that CHARACTER A learns about CHARACTER B that should be remembered for future conversations.
+
+Criteria for significance:
+- Personal information CHARACTER B shares or reveals (preferences, history, relationships, traits, background)
+- Emotional moments or important decisions that reveal CHARACTER B's nature
+- Facts about CHARACTER B that should persist across conversations
+- Relationship dynamics established between the two characters
+- Observations CHARACTER A would naturally make about CHARACTER B
+
+IMPORTANT: Extract what CHARACTER A would remember about CHARACTER B based on this exchange.
+The memory should capture something CHARACTER A learns about CHARACTER B from this interaction.
+
+If significant, respond with JSON only (no markdown, no code blocks):
+{
+  "significant": true,
+  "content": "Full memory content describing what Character A learns about Character B",
+  "summary": "Brief 1-sentence summary",
+  "keywords": ["keyword1", "keyword2"],
+  "importance": 0.0-1.0
+}
+
+If not significant, respond with JSON only:
+{ "significant": false }
+
+Do not include any text outside the JSON object.`
+
+/**
+ * Extracts a potential memory that one character has about another character
+ *
+ * @param characterAName - The character who will remember (the observer)
+ * @param characterAMessage - What character A said
+ * @param characterBName - The character being remembered (the subject)
+ * @param characterBMessage - What character B said
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @returns A memory candidate or null if nothing significant
+ */
+export async function extractInterCharacterMemoryFromMessage(
+  characterAName: string,
+  characterAMessage: string,
+  characterBName: string,
+  characterBMessage: string,
+  selection: CheapLLMSelection,
+  userId: string
+): Promise<CheapLLMTaskResult<MemoryCandidate>> {
+  const messages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: INTER_CHARACTER_MEMORY_EXTRACTION_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Character A (the observer): ${characterAName}
+Character B (the subject): ${characterBName}
+
+CONVERSATION:
+${characterAName}: ${characterAMessage}
+
+${characterBName}: ${characterBMessage}`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (content: string): MemoryCandidate => {
+      try {
+        // Clean the response - remove markdown code blocks if present
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+        return {
+          significant: parsed.significant === true,
+          content: parsed.content,
+          summary: parsed.summary,
+          keywords: parsed.keywords || [],
+          importance: typeof parsed.importance === 'number' ? parsed.importance : 0.5,
+        }
+      } catch {
+        // If JSON parsing fails, assume not significant
+        return { significant: false }
+      }
+    }
+  )
+}
+
+/**
  * Chat summarization prompt template
  */
 const CHAT_SUMMARY_PROMPT = `You are a summarizer. Create a concise summary of the following conversation.
@@ -856,29 +952,39 @@ ${exchangesText}`,
 /**
  * Image prompt crafting prompt template
  */
-const IMAGE_PROMPT_CRAFTING_PROMPT = `You are crafting an image generation prompt by replacing character/persona placeholders with their physical descriptions.
+const IMAGE_PROMPT_CRAFTING_PROMPT = `You are an expert image prompt writer. Your job is to craft coherent, well-structured image generation prompts by integrating physical descriptions of people into a scene description.
 
-You will be provided with:
-- The original prompt with {{placeholders}}
-- For each placeholder, up to 4 description tiers (short, medium, long, complete)
-- A target character limit for the final prompt
+You will receive:
+- An original prompt describing a scene with {{placeholders}} for people
+- Physical descriptions for each person (in multiple detail levels: short, medium, long, complete)
+- A character limit for the final prompt
 
-Your task:
-1. Replace each placeholder with an appropriate description
-2. Select or combine content from the available description tiers to maximize detail while staying under the limit
-3. Integrate descriptions naturally and grammatically into the prompt
-4. Preserve the original scene/action/context
-5. Make the descriptions as long and detailed as possible WITHOUT exceeding the character limit
+Your task is to write a SINGLE COHERENT PARAGRAPH that:
+1. Describes the scene and what is happening
+2. Introduces each person naturally with their physical details woven into the narrative
+3. Maintains proper sentence structure and flow
 
-Guidelines:
-- You can use any combination of the provided tiers - use complete if it fits, or mix details from different tiers
-- Make descriptions flow naturally with proper grammar, commas, and conjunctions
-- Keep visual details vivid and clear
-- For multiple subjects, describe them cohesively and show their relationships
-- CRITICAL: The final prompt MUST be under the character limit
-- Maximize detail - use every available character wisely
+CRITICAL WRITING GUIDELINES:
+- Write in a cinematic, descriptive style suitable for image generation
+- Introduce people with phrases like "A young woman with...", "Beside her, a middle-aged man with..."
+- NEVER just concatenate descriptions - write flowing prose that a human would write
+- Use transitional phrases to connect people: "sitting on the lap of", "next to", "holding hands with", etc.
+- Keep the scene context (location, mood, lighting) as a frame around the people descriptions
+- Each person must be clearly distinct and identifiable in the description
 
-Respond with ONLY the final image prompt text, no additional commentary or formatting.`
+STRUCTURE EXAMPLE:
+BAD (concatenated): "Woman with red hair, hazel eyes, fair skin. sitting on Man with gray hair, glasses, plaid shirt.'s lap on a bench"
+GOOD (coherent): "On a sunlit park bench, a young woman with flowing red-orange hair and warm hazel eyes sits comfortably on the lap of a middle-aged man wearing rectangular glasses and a cozy sweater vest. Dappled light filters through the leaves above them."
+
+For the descriptions:
+- Use the most detailed tier that fits within the limit
+- You may condense or paraphrase descriptions to fit naturally
+- Prioritize the most visually distinctive features (hair color, eye color, notable clothing, distinguishing features)
+- Don't include every detail if it makes the text awkward - focus on what matters visually
+
+The final prompt MUST be under the character limit.
+
+Respond with ONLY the final image prompt - no explanations, no markdown, no quotes around it.`
 
 /**
  * Expansion context for image prompt crafting

@@ -221,7 +221,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     if (loading) {
       return (
         <div className="flex items-center justify-center py-12">
-          <p className="text-gray-500 dark:text-gray-400">Loading images...</p>
+          <p className="text-muted-foreground">Loading images...</p>
         </div>
       )
     }
@@ -229,7 +229,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     if (items.length === 0) {
       return (
         <div className="flex items-center justify-center py-12">
-          <p className="text-gray-500 dark:text-gray-400">{emptyStateText}</p>
+          <p className="text-muted-foreground">{emptyStateText}</p>
         </div>
       )
     }
@@ -259,7 +259,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
             <Container
               key={id}
               {...containerProps}
-              className="relative rounded overflow-hidden hover:ring-2 hover:ring-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+              className="relative rounded overflow-hidden hover:ring-2 hover:ring-ring focus:ring-2 focus:ring-ring focus:outline-none transition-all"
               style={{ width: thumbnailSize, height: thumbnailSize }}
             >
               {isMissing ? (
@@ -289,17 +289,17 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
         <div
-          className="bg-white dark:bg-slate-800 rounded-lg flex flex-col max-h-[90vh] max-w-[90vw]"
+          className="qt-dialog flex flex-col max-h-[90vh] max-w-[90vw]"
           style={{ minWidth: '300px' }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h2>
+          <div className="qt-dialog-header border-b border-border">
+            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleZoomOut}
                 disabled={thumbnailSizeIndex === 0}
-                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Smaller thumbnails"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -309,7 +309,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
               <button
                 onClick={handleZoomIn}
                 disabled={thumbnailSizeIndex === THUMBNAIL_SIZES.length - 1}
-                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Larger thumbnails"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -318,7 +318,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                className="p-2 text-muted-foreground hover:text-foreground"
                 title="Close"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

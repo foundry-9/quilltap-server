@@ -95,8 +95,8 @@ export default function DevConsolePanel({ layout }: DevConsolePanelProps) {
           onClick={() => setActiveTab(tab.id)}
           className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
             activeTab === tab.id
-              ? 'bg-white dark:bg-slate-900 text-gray-900 dark:text-white border-t border-l border-r border-gray-200 dark:border-slate-700 -mb-px rounded-t'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-700 rounded-t'
+              ? 'bg-background text-foreground border-t border-l border-r border-border -mb-px rounded-t'
+              : 'qt-button qt-button-ghost rounded-t'
           }`}
         >
           {tab.icon}
@@ -120,19 +120,19 @@ export default function DevConsolePanel({ layout }: DevConsolePanelProps) {
   // Side panel layout (integrated into page layout)
   if (isSideLayout) {
     return (
-      <div className="h-full flex flex-col bg-white dark:bg-slate-900">
+      <div className="h-full flex flex-col bg-background">
         {/* Tab bar - horizontal at top */}
-        <div className="flex items-center border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-2">
+        <div className="flex items-center border-b border-border bg-muted px-2">
           {renderTabs()}
 
           {/* Controls */}
           <div className="flex items-center gap-2 ml-auto">
-            <span className="text-xs text-gray-400 dark:text-gray-500">
+            <span className="text-xs text-muted-foreground">
               Ctrl+Shift+D
             </span>
             <button
               onClick={closePanel}
-              className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-slate-700 rounded transition-colors"
+              className="qt-button qt-button-icon"
               title="Close DevConsole"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -153,21 +153,21 @@ export default function DevConsolePanel({ layout }: DevConsolePanelProps) {
   // Bottom panel layout (fixed overlay)
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 shadow-lg flex flex-col"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border shadow-lg flex flex-col"
       style={{ height: '40vh', minHeight: '200px', maxHeight: '60vh' }}
     >
       {/* Tab bar - horizontal at top */}
-      <div className="flex items-center border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-2">
+      <div className="flex items-center border-b border-border bg-muted px-2">
         {renderTabs()}
 
         {/* Controls */}
         <div className="flex items-center gap-2 ml-auto">
-          <span className="text-xs text-gray-400 dark:text-gray-500">
+          <span className="text-xs text-muted-foreground">
             Ctrl+Shift+D
           </span>
           <button
             onClick={closePanel}
-            className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-slate-700 rounded transition-colors"
+            className="qt-button qt-button-icon"
             title="Close DevConsole"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

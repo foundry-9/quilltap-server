@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/auth/session'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
-import { TagStyleMapSchema, type AvatarDisplayMode } from '@/lib/schemas/types'
+import { TagStyleMapSchema, ThemePreferenceSchema, type AvatarDisplayMode } from '@/lib/schemas/types'
 
 /**
  * Validate and update chat settings
@@ -21,7 +21,8 @@ async function updateChatSettings(
   avatarDisplayStyle?: string,
   tagStyles?: unknown,
   cheapLLMSettings?: unknown,
-  imageDescriptionProfileId?: string | null
+  imageDescriptionProfileId?: string | null,
+  themePreference?: unknown
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -67,6 +68,10 @@ async function updateChatSettings(
   if (typeof imageDescriptionProfileId !== 'undefined') {
     updateData.imageDescriptionProfileId = imageDescriptionProfileId
   }
+  if (typeof themePreference !== 'undefined') {
+    const validatedThemePreference = ThemePreferenceSchema.parse(themePreference)
+    updateData.themePreference = validatedThemePreference
+  }
 
   return repos.users.updateChatSettings(userId, updateData)
 }
@@ -96,6 +101,11 @@ export async function GET(req: NextRequest) {
         avatarDisplayMode: 'ALWAYS',
         avatarDisplayStyle: 'CIRCULAR',
         tagStyles: {},
+        themePreference: {
+          activeThemeId: null,
+          colorMode: 'system',
+          showNavThemeSelector: false,
+        },
       })
     }
 
@@ -123,7 +133,7 @@ async function handleSettingsUpdate(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings, imageDescriptionProfileId } = body
+    const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings, imageDescriptionProfileId, themePreference } = body
 
     const chatSettings = await updateChatSettings(
       session.user.id,
@@ -131,7 +141,8 @@ async function handleSettingsUpdate(req: NextRequest) {
       avatarDisplayStyle,
       tagStyles,
       cheapLLMSettings,
-      imageDescriptionProfileId
+      imageDescriptionProfileId,
+      themePreference
     )
 
     return NextResponse.json(chatSettings)

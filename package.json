@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -16,7 +16,7 @@
   "scripts": {
     "dev": "next dev",
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
-    "build": "npm run lint && next build",
+    "build": "next build",
     "build:plugins": "tsx scripts/build-plugins.ts",
     "start": "next start",
     "lint": "eslint .",
@@ -42,7 +42,7 @@
     "@aws-sdk/client-s3": "^3.943.0",
     "@aws-sdk/s3-request-presigner": "^3.943.0",
     "@google/generative-ai": "^0.24.1",
-    "@openrouter/sdk": "^0.1.27",
+    "@openrouter/sdk": "^0.2.9",
     "adm-zip": "^0.5.16",
     "archiver": "^7.0.1",
     "bcrypt": "^5.1.1",

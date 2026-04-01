@@ -506,7 +506,7 @@ var require_package = __commonJS({
   "package.json"(exports2, module2) {
     module2.exports = {
       name: "quilltap",
-      version: "1.8.5-dev.39",
+      version: "2.2.0",
       private: true,
       author: {
         name: "Charles Sebold",
@@ -522,7 +522,7 @@ var require_package = __commonJS({
       scripts: {
         dev: "next dev",
         devssl: "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
-        build: "npm run lint && next build",
+        build: "next build",
         "build:plugins": "tsx scripts/build-plugins.ts",
         start: "next start",
         lint: "eslint .",
@@ -548,9 +548,10 @@ var require_package = __commonJS({
         "@aws-sdk/client-s3": "^3.943.0",
         "@aws-sdk/s3-request-presigner": "^3.943.0",
         "@google/generative-ai": "^0.24.1",
-        "@openrouter/sdk": "^0.1.27",
+        "@openrouter/sdk": "^0.2.9",
+        "adm-zip": "^0.5.16",
+        archiver: "^7.0.1",
         bcrypt: "^5.1.1",
-        glob: "^12.0.0",
         "jest-fetch-mock": "^3.0.3",
         mongodb: "^6.21.0",
         next: "^16.0.5",
@@ -567,12 +568,13 @@ var require_package = __commonJS({
         zod: "^3.23.0"
       },
       devDependencies: {
-        "@eslint/eslintrc": "^3.3.1",
         "@jest/globals": "^30.2.0",
         "@playwright/test": "^1.49.0",
         "@tailwindcss/postcss": "^4.1.17",
         "@testing-library/jest-dom": "^6.9.1",
         "@testing-library/react": "^16.3.0",
+        "@types/adm-zip": "^0.5.7",
+        "@types/archiver": "^7.0.0",
         "@types/bcrypt": "^5.0.2",
         "@types/jest": "^30.0.0",
         "@types/node": "^22.0.0",
@@ -33342,15 +33344,15 @@ var init_emitWarningIfUnsupportedVersion = __esm({
       warningEmitted: false
     };
     emitWarningIfUnsupportedVersion = (version) => {
-      if (version && !state.warningEmitted && parseInt(version.substring(1, version.indexOf("."))) < 18) {
+      if (version && !state.warningEmitted && parseInt(version.substring(1, version.indexOf("."))) < 20) {
         state.warningEmitted = true;
         process.emitWarning(`NodeDeprecationWarning: The AWS SDK for JavaScript (v3) will
-no longer support Node.js 16.x on January 6, 2025.
+no longer support Node.js ${version} in January 2026.
 
 To continue receiving updates to AWS services, bug fixes, and security
 updates please upgrade to a supported Node.js LTS version.
 
-More information can be found at: https://a.co/74kJMmI`);
+More information can be found at: https://a.co/c895JFp`);
       }
     };
   }
@@ -44755,12 +44757,8 @@ var init_AwsRestXmlProtocol = __esm({
             request.headers["content-type"] = contentType;
           }
         }
-        if (request.headers["content-type"] === this.getDefaultContentType()) {
-          if (typeof request.body === "string") {
-            if (!request.body.startsWith("<?xml ")) {
-              request.body = '<?xml version="1.0" encoding="UTF-8"?>' + request.body;
-            }
-          }
+        if (typeof request.body === "string" && request.headers["content-type"] === this.getDefaultContentType() && !request.body.startsWith("<?xml ") && !this.hasUnstructuredPayloadBinding(inputSchema)) {
+          request.body = '<?xml version="1.0" encoding="UTF-8"?>' + request.body;
         }
         return request;
       }
@@ -44788,6 +44786,14 @@ var init_AwsRestXmlProtocol = __esm({
       }
       getDefaultContentType() {
         return "application/xml";
+      }
+      hasUnstructuredPayloadBinding(ns) {
+        for (const [, member2] of ns.structIterator()) {
+          if (member2.getMergedTraits().httpPayload) {
+            return !(member2.isStructSchema() || member2.isMapSchema() || member2.isListSchema());
+          }
+        }
+        return false;
       }
     };
   }
@@ -50250,7 +50256,7 @@ var require_package3 = __commonJS({
     module2.exports = {
       name: "@aws-sdk/client-s3",
       description: "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
-      version: "3.946.0",
+      version: "3.948.0",
       scripts: {
         build: "concurrently 'yarn:build:cjs' 'yarn:build:es' 'yarn:build:types'",
         "build:cjs": "node ../../scripts/compilation/inline client-s3",
@@ -50279,24 +50285,24 @@ var require_package3 = __commonJS({
         "@aws-crypto/sha1-browser": "5.2.0",
         "@aws-crypto/sha256-browser": "5.2.0",
         "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.946.0",
-        "@aws-sdk/credential-provider-node": "3.946.0",
+        "@aws-sdk/core": "3.947.0",
+        "@aws-sdk/credential-provider-node": "3.948.0",
         "@aws-sdk/middleware-bucket-endpoint": "3.936.0",
         "@aws-sdk/middleware-expect-continue": "3.936.0",
-        "@aws-sdk/middleware-flexible-checksums": "3.946.0",
+        "@aws-sdk/middleware-flexible-checksums": "3.947.0",
         "@aws-sdk/middleware-host-header": "3.936.0",
         "@aws-sdk/middleware-location-constraint": "3.936.0",
         "@aws-sdk/middleware-logger": "3.936.0",
-        "@aws-sdk/middleware-recursion-detection": "3.936.0",
-        "@aws-sdk/middleware-sdk-s3": "3.946.0",
+        "@aws-sdk/middleware-recursion-detection": "3.948.0",
+        "@aws-sdk/middleware-sdk-s3": "3.947.0",
         "@aws-sdk/middleware-ssec": "3.936.0",
-        "@aws-sdk/middleware-user-agent": "3.946.0",
+        "@aws-sdk/middleware-user-agent": "3.947.0",
         "@aws-sdk/region-config-resolver": "3.936.0",
-        "@aws-sdk/signature-v4-multi-region": "3.946.0",
+        "@aws-sdk/signature-v4-multi-region": "3.947.0",
         "@aws-sdk/types": "3.936.0",
         "@aws-sdk/util-endpoints": "3.936.0",
         "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.946.0",
+        "@aws-sdk/util-user-agent-node": "3.947.0",
         "@smithy/config-resolver": "^4.4.3",
         "@smithy/core": "^3.18.7",
         "@smithy/eventstream-serde-browser": "^4.2.5",
@@ -50333,7 +50339,7 @@ var require_package3 = __commonJS({
         tslib: "^2.6.2"
       },
       devDependencies: {
-        "@aws-sdk/signature-v4-crt": "3.946.0",
+        "@aws-sdk/signature-v4-crt": "3.947.0",
         "@tsconfig/node18": "18.2.4",
         "@types/node": "^18.19.69",
         concurrently: "7.0.0",
@@ -51048,7 +51054,7 @@ var init_package = __esm({
   "node_modules/@aws-sdk/nested-clients/package.json"() {
     package_default = {
       name: "@aws-sdk/nested-clients",
-      version: "3.946.0",
+      version: "3.948.0",
       description: "Nested clients for AWS SDK packages.",
       main: "./dist-cjs/index.js",
       module: "./dist-es/index.js",
@@ -51077,16 +51083,16 @@ var init_package = __esm({
       dependencies: {
         "@aws-crypto/sha256-browser": "5.2.0",
         "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.946.0",
+        "@aws-sdk/core": "3.947.0",
         "@aws-sdk/middleware-host-header": "3.936.0",
         "@aws-sdk/middleware-logger": "3.936.0",
-        "@aws-sdk/middleware-recursion-detection": "3.936.0",
-        "@aws-sdk/middleware-user-agent": "3.946.0",
+        "@aws-sdk/middleware-recursion-detection": "3.948.0",
+        "@aws-sdk/middleware-user-agent": "3.947.0",
         "@aws-sdk/region-config-resolver": "3.936.0",
         "@aws-sdk/types": "3.936.0",
         "@aws-sdk/util-endpoints": "3.936.0",
         "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.946.0",
+        "@aws-sdk/util-user-agent-node": "3.947.0",
         "@smithy/config-resolver": "^4.4.3",
         "@smithy/core": "^3.18.7",
         "@smithy/fetch-http-handler": "^5.3.6",
@@ -52393,7 +52399,7 @@ var require_package4 = __commonJS({
     module2.exports = {
       name: "@aws-sdk/client-sso",
       description: "AWS SDK for JavaScript Sso Client for Node.js, Browser and React Native",
-      version: "3.946.0",
+      version: "3.948.0",
       scripts: {
         build: "concurrently 'yarn:build:cjs' 'yarn:build:es' 'yarn:build:types'",
         "build:cjs": "node ../../scripts/compilation/inline client-sso",
@@ -52413,16 +52419,16 @@ var require_package4 = __commonJS({
       dependencies: {
         "@aws-crypto/sha256-browser": "5.2.0",
         "@aws-crypto/sha256-js": "5.2.0",
-        "@aws-sdk/core": "3.946.0",
+        "@aws-sdk/core": "3.947.0",
         "@aws-sdk/middleware-host-header": "3.936.0",
         "@aws-sdk/middleware-logger": "3.936.0",
-        "@aws-sdk/middleware-recursion-detection": "3.936.0",
-        "@aws-sdk/middleware-user-agent": "3.946.0",
+        "@aws-sdk/middleware-recursion-detection": "3.948.0",
+        "@aws-sdk/middleware-user-agent": "3.947.0",
         "@aws-sdk/region-config-resolver": "3.936.0",
         "@aws-sdk/types": "3.936.0",
         "@aws-sdk/util-endpoints": "3.936.0",
         "@aws-sdk/util-user-agent-browser": "3.936.0",
-        "@aws-sdk/util-user-agent-node": "3.946.0",
+        "@aws-sdk/util-user-agent-node": "3.947.0",
         "@smithy/config-resolver": "^4.4.3",
         "@smithy/core": "^3.18.7",
         "@smithy/fetch-http-handler": "^5.3.6",
@@ -69880,6 +69886,221 @@ var ensureUserUsernamesMigration = {
   }
 };
 
+// plugins/dist/qtap-plugin-upgrade/migrations/inherit-file-tags.ts
+init_logger();
+function isMongoDBBackendEnabled3() {
+  const backend = process.env.DATA_BACKEND || "";
+  return backend === "mongodb" || backend === "dual";
+}
+async function getMongoDatabase4() {
+  const { getMongoDatabase: getDb } = await Promise.resolve().then(() => (init_client(), client_exports));
+  return getDb();
+}
+async function isMongoDBAccessible3() {
+  try {
+    const db = await getMongoDatabase4();
+    await db.admin().ping();
+    return true;
+  } catch (error2) {
+    logger.warn("MongoDB is not accessible for file tags migration", {
+      context: "migration.inherit-file-tags",
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return false;
+  }
+}
+async function getFilesWithLinks() {
+  try {
+    const db = await getMongoDatabase4();
+    const filesCollection = db.collection("files");
+    const files = await filesCollection.find({
+      linkedTo: { $exists: true, $ne: [], $type: "array" }
+    }).toArray();
+    return files.map((f4) => ({
+      id: f4.id,
+      userId: f4.userId,
+      linkedTo: f4.linkedTo || [],
+      tags: f4.tags || []
+    }));
+  } catch (error2) {
+    logger.error("Error getting files with links", {
+      context: "migration.inherit-file-tags",
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return [];
+  }
+}
+async function getEntityTags(entityId, userId) {
+  try {
+    const db = await getMongoDatabase4();
+    const character = await db.collection("characters").findOne({ id: entityId, userId });
+    if (character && Array.isArray(character.tags)) {
+      return character.tags;
+    }
+    const persona = await db.collection("personas").findOne({ id: entityId, userId });
+    if (persona && Array.isArray(persona.tags)) {
+      return persona.tags;
+    }
+    const chat = await db.collection("chats").findOne({ id: entityId, userId });
+    if (chat && Array.isArray(chat.tags)) {
+      return chat.tags;
+    }
+    const connectionProfile = await db.collection("connection_profiles").findOne({ id: entityId, userId });
+    if (connectionProfile && Array.isArray(connectionProfile.tags)) {
+      return connectionProfile.tags;
+    }
+    const imageProfile = await db.collection("image_profiles").findOne({ id: entityId, userId });
+    if (imageProfile && Array.isArray(imageProfile.tags)) {
+      return imageProfile.tags;
+    }
+    const embeddingProfile = await db.collection("embedding_profiles").findOne({ id: entityId, userId });
+    if (embeddingProfile && Array.isArray(embeddingProfile.tags)) {
+      return embeddingProfile.tags;
+    }
+    return [];
+  } catch (error2) {
+    logger.debug("Error looking up entity tags", {
+      context: "migration.inherit-file-tags",
+      entityId,
+      error: error2 instanceof Error ? error2.message : String(error2)
+    });
+    return [];
+  }
+}
+async function getInheritedTagsForFile(file) {
+  const allTags = /* @__PURE__ */ new Set();
+  for (const tag2 of file.tags) {
+    allTags.add(tag2);
+  }
+  for (const entityId of file.linkedTo) {
+    const entityTags = await getEntityTags(entityId, file.userId);
+    for (const tag2 of entityTags) {
+      allTags.add(tag2);
+    }
+  }
+  return Array.from(allTags);
+}
+var inheritFileTagsMigration = {
+  id: "inherit-file-tags-v1",
+  description: "Inherit tags from linked entities to files",
+  introducedInVersion: "2.2.0",
+  dependsOn: ["migrate-json-to-mongodb-v1"],
+  // Run after data migration to MongoDB
+  async shouldRun() {
+    if (!isMongoDBBackendEnabled3()) {
+      logger.debug("MongoDB not enabled, skipping file tags migration", {
+        context: "migration.inherit-file-tags"
+      });
+      return false;
+    }
+    if (!await isMongoDBAccessible3()) {
+      logger.debug("MongoDB not accessible, deferring file tags migration", {
+        context: "migration.inherit-file-tags"
+      });
+      return false;
+    }
+    const filesWithLinks = await getFilesWithLinks();
+    logger.debug("Checked for files with linked entities", {
+      context: "migration.inherit-file-tags",
+      count: filesWithLinks.length
+    });
+    return filesWithLinks.length > 0;
+  },
+  async run() {
+    const startTime = Date.now();
+    let updatedFiles = 0;
+    let skippedFiles = 0;
+    const errors = [];
+    logger.info("Starting file tags inheritance migration", {
+      context: "migration.inherit-file-tags"
+    });
+    try {
+      const db = await getMongoDatabase4();
+      const filesCollection = db.collection("files");
+      const filesWithLinks = await getFilesWithLinks();
+      logger.info("Found files with linked entities", {
+        context: "migration.inherit-file-tags",
+        count: filesWithLinks.length
+      });
+      for (const file of filesWithLinks) {
+        try {
+          const inheritedTags = await getInheritedTagsForFile(file);
+          const existingTagSet = new Set(file.tags);
+          const newTags = inheritedTags.filter((t4) => !existingTagSet.has(t4));
+          if (newTags.length === 0) {
+            skippedFiles++;
+            continue;
+          }
+          const result = await filesCollection.updateOne(
+            { id: file.id },
+            {
+              $set: {
+                tags: inheritedTags,
+                updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+              }
+            }
+          );
+          if (result.modifiedCount > 0) {
+            updatedFiles++;
+            logger.debug("Updated file with inherited tags", {
+              context: "migration.inherit-file-tags",
+              fileId: file.id,
+              previousTagCount: file.tags.length,
+              newTagCount: inheritedTags.length,
+              addedTags: newTags.length
+            });
+          }
+        } catch (error2) {
+          const errorMessage = error2 instanceof Error ? error2.message : String(error2);
+          errors.push({
+            fileId: file.id,
+            error: errorMessage
+          });
+          logger.error("Failed to update file tags", {
+            context: "migration.inherit-file-tags",
+            fileId: file.id,
+            error: errorMessage
+          });
+        }
+      }
+    } catch (error2) {
+      const errorMessage = error2 instanceof Error ? error2.message : String(error2);
+      logger.error("File tags migration failed", {
+        context: "migration.inherit-file-tags",
+        error: errorMessage
+      });
+      return {
+        id: "inherit-file-tags-v1",
+        success: false,
+        itemsAffected: updatedFiles,
+        message: `Migration failed: ${errorMessage}`,
+        error: errorMessage,
+        durationMs: Date.now() - startTime,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const success = errors.length === 0;
+    const durationMs = Date.now() - startTime;
+    logger.info("File tags inheritance migration completed", {
+      context: "migration.inherit-file-tags",
+      success,
+      updatedFiles,
+      skippedFiles,
+      errorCount: errors.length,
+      durationMs
+    });
+    return {
+      id: "inherit-file-tags-v1",
+      success,
+      itemsAffected: updatedFiles,
+      message: success ? `Updated ${updatedFiles} files with inherited tags (${skippedFiles} already up-to-date)` : `Updated ${updatedFiles} files with ${errors.length} errors`,
+      error: errors.length > 0 ? `Failed files: ${errors.slice(0, 5).map((e4) => `${e4.fileId}: ${e4.error}`).join("; ")}${errors.length > 5 ? ` (and ${errors.length - 5} more)` : ""}` : void 0,
+      durationMs,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+};
+
 // plugins/dist/qtap-plugin-upgrade/migrations/index.ts
 var migrations = [
   convertOpenRouterProfilesMigration,
@@ -69890,7 +70111,8 @@ var migrations = [
   migrateJsonToMongoDBMigration,
   migrateFilesToS3Migration,
   // Data integrity migrations
-  ensureUserUsernamesMigration
+  ensureUserUsernamesMigration,
+  inheritFileTagsMigration
 ];
 
 // plugins/dist/qtap-plugin-upgrade/index.ts

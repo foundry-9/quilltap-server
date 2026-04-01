@@ -3,9 +3,53 @@ import fetchMock from 'jest-fetch-mock'
 
 fetchMock.enableMocks()
 
+const shouldSilenceConsole = process.env.ENABLE_TEST_LOGS !== 'true'
+
+if (shouldSilenceConsole) {
+  const consoleMethodsToSilence: Array<'log' | 'info' | 'debug' | 'warn' | 'trace' | 'error'> = [
+    'log',
+    'info',
+    'debug',
+    'warn',
+    'trace',
+    'error',
+  ]
+  const noop = (..._args: any[]) => {}
+  const silencedSpies = consoleMethodsToSilence.map((method) => jest.spyOn(console, method).mockImplementation(noop))
+
+  afterAll(() => {
+    silencedSpies.forEach((spy) => spy.mockRestore())
+  })
+}
+
 // Mock next-auth before any tests import it
 jest.mock('next-auth', () => ({
   getServerSession: jest.fn(),
+}))
+
+// Mock our session utilities to avoid running full plugin initialization in tests
+const mockGetServerSession = jest.fn().mockResolvedValue(null)
+
+jest.mock('@/lib/auth/session', () => ({
+  getServerSession: mockGetServerSession,
+  getRequiredSession: jest.fn(async () => {
+    const session = await mockGetServerSession()
+    if (!session?.user?.id) {
+      throw new Error('Unauthorized: No valid session')
+    }
+    return session
+  }),
+  getCurrentUserId: jest.fn(async () => {
+    const session = await mockGetServerSession()
+    return session?.user?.id ?? null
+  }),
+  getRequiredUserId: jest.fn(async () => {
+    const session = await mockGetServerSession()
+    if (!session?.user?.id) {
+      throw new Error('Unauthorized: No valid session')
+    }
+    return session.user.id
+  }),
 }))
 
 // Mock next-auth/react
@@ -22,6 +66,8 @@ process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-google-clie
 process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-google-client-secret'
 process.env.ENCRYPTION_MASTER_PEPPER = process.env.ENCRYPTION_MASTER_PEPPER || 'test-pepper-for-unit-tests-32-chars-long!'
 process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quilltap-test'
+process.env.S3_ACCESS_KEY = process.env.S3_ACCESS_KEY || 'test-s3-access-key'
+process.env.S3_SECRET_KEY = process.env.S3_SECRET_KEY || 'test-s3-secret-key'
 
 // Set up globals required for Next.js
 // Note: We check if they're undefined to avoid conflicts with jsdom's implementation
@@ -149,6 +195,21 @@ jest.mock('@/lib/llm/plugin-factory', () => ({
   isProviderFromPlugin: jest.fn(() => true),
 }))
 
+// Mock LLM module (re-exports from plugin-factory)
+jest.mock('@/lib/llm', () => ({
+  createLLMProvider: jest.fn(),
+  createImageProvider: jest.fn(),
+  getAllAvailableProviders: jest.fn(() => []),
+  getAllAvailableImageProviders: jest.fn(() => []),
+  isProviderFromPlugin: jest.fn(() => true),
+}))
+
+// Mock file tag inheritance
+jest.mock('@/lib/files/tag-inheritance', () => ({
+  getInheritedTags: jest.fn().mockResolvedValue([]),
+  mergeTags: jest.fn().mockImplementation((a: string[], b: string[]) => [...new Set([...a, ...b])]),
+}))
+
 // Mock Repositories
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
@@ -174,6 +235,9 @@ jest.mock('@/lib/s3/operations', () => ({
 jest.mock('@/lib/s3/client', () => ({
   getS3Client: jest.fn().mockReturnValue({}),
   getS3Bucket: jest.fn().mockReturnValue('mock-bucket'),
+  buildS3Key: jest.fn().mockImplementation((userId: string, fileId: string, filename: string, category: string) => {
+    return `users/${userId}/${category.toLowerCase()}s/${fileId}/${filename}`
+  }),
 }))
 
 // Mock vector store for embedding operations

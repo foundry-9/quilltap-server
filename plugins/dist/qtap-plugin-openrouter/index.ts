@@ -5,13 +5,19 @@
  * This plugin provides:
  * - Chat completion using 100+ models including GPT-4, Claude, Gemini, Llama, Mistral and more
  * - Image generation using various available models
+ * - Text embeddings using multiple embedding models
  * - Function calling / tool use (model-dependent)
  * - Cost-aware model selection with real-time pricing
  * - Access to cutting-edge and open-source models
  */
 
-import type { LLMProviderPlugin } from './types';
+import type {
+  LLMProviderPlugin,
+  EmbeddingModelInfo,
+  ImageGenerationModelInfo,
+} from './types';
 import { OpenRouterProvider } from './provider';
+import { OpenRouterEmbeddingProvider } from './embedding-provider';
 import { OpenRouterIcon } from './icon';
 import { logger } from '../../../lib/logger';
 import {
@@ -50,9 +56,9 @@ const config = {
  */
 const capabilities = {
   chat: true,
-  imageGeneration: false,
-  embeddings: false,
-  webSearch: false,
+  imageGeneration: true,
+  embeddings: true,
+  webSearch: true,
 } as const;
 
 /**
@@ -90,6 +96,17 @@ export const plugin: LLMProviderPlugin = {
       baseUrl,
     });
     return new OpenRouterProvider();
+  },
+
+  /**
+   * Factory method to create an OpenRouter embedding provider instance
+   */
+  createEmbeddingProvider: (baseUrl?: string) => {
+    logger.debug('Creating OpenRouter embedding provider instance', {
+      context: 'plugin.createEmbeddingProvider',
+      baseUrl,
+    });
+    return new OpenRouterEmbeddingProvider();
   },
 
   /**
@@ -197,6 +214,94 @@ export const plugin: LLMProviderPlugin = {
         maxOutputTokens: 4096,
         supportsImages: false,
         supportsTools: false,
+      },
+    ];
+  },
+
+  /**
+   * Get static embedding model information
+   * Returns cached information about popular OpenRouter embedding models
+   */
+  getEmbeddingModels: (): EmbeddingModelInfo[] => {
+    return [
+      {
+        id: 'openai/text-embedding-3-small',
+        name: 'OpenAI Text Embedding 3 Small',
+        dimensions: 1536,
+        description: 'OpenAI small embedding model, efficient for most use cases',
+      },
+      {
+        id: 'openai/text-embedding-3-large',
+        name: 'OpenAI Text Embedding 3 Large',
+        dimensions: 3072,
+        description: 'OpenAI large embedding model for highest quality',
+      },
+      {
+        id: 'openai/text-embedding-ada-002',
+        name: 'OpenAI Ada 002',
+        dimensions: 1536,
+        description: 'OpenAI legacy embedding model',
+      },
+      {
+        id: 'cohere/embed-english-v3.0',
+        name: 'Cohere Embed English v3',
+        dimensions: 1024,
+        description: 'Cohere English embedding model',
+      },
+      {
+        id: 'cohere/embed-multilingual-v3.0',
+        name: 'Cohere Embed Multilingual v3',
+        dimensions: 1024,
+        description: 'Cohere multilingual embedding model',
+      },
+      {
+        id: 'voyage/voyage-large-2',
+        name: 'Voyage Large 2',
+        dimensions: 1536,
+        description: 'Voyage AI large embedding model',
+      },
+      {
+        id: 'voyage/voyage-code-2',
+        name: 'Voyage Code 2',
+        dimensions: 1536,
+        description: 'Voyage AI embedding model optimized for code',
+      },
+    ];
+  },
+
+  /**
+   * Get static image generation model information
+   * Returns cached information about popular OpenRouter image generation models
+   */
+  getImageGenerationModels: (): ImageGenerationModelInfo[] => {
+    return [
+      {
+        id: 'google/gemini-2.0-flash-exp:free',
+        name: 'Gemini 2.0 Flash Experimental (Free)',
+        supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+        description:
+          'Free experimental Gemini 2.0 model with image generation capabilities',
+      },
+      {
+        id: 'google/gemini-2.5-flash-preview-05-20',
+        name: 'Gemini 2.5 Flash Preview',
+        supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+        description:
+          'Fast preview model with state-of-the-art image generation',
+      },
+      {
+        id: 'google/gemini-2.5-flash-preview-native-image',
+        name: 'Gemini 2.5 Flash Native Image',
+        supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+        description:
+          'Native image generation variant of Gemini 2.5 Flash',
+      },
+      {
+        id: 'google/gemini-3-pro-image-preview',
+        name: 'Nano Banana Pro (Gemini 3 Pro Image)',
+        supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9', '21:9'],
+        description:
+          'Advanced image generation with fine-grained creative controls, 2K/4K output support',
       },
     ];
   },

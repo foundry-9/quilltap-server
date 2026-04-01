@@ -345,6 +345,57 @@ export const AuthProviderConfigSchema = z.object({
 
 export type AuthProviderConfig = z.infer<typeof AuthProviderConfigSchema>;
 
+/**
+ * Font definition for theme plugins
+ * Allows themes to bundle and load custom fonts
+ */
+export const ThemeFontDefinitionSchema = z.object({
+  /** Font family name (as used in CSS) */
+  family: z.string().min(1).describe('Font family name'),
+  /** Font file path (relative to plugin root) */
+  src: z.string().min(1).describe('Font file path relative to plugin'),
+  /** Font weight (e.g., "400", "700") */
+  weight: z.string().default('400').describe('Font weight'),
+  /** Font style (e.g., "normal", "italic") */
+  style: z.string().default('normal').describe('Font style'),
+  /** Font display strategy */
+  display: z.enum(['auto', 'block', 'swap', 'fallback', 'optional']).default('swap'),
+});
+
+export type ThemeFontDefinition = z.infer<typeof ThemeFontDefinitionSchema>;
+
+/**
+ * Theme plugin configuration schema
+ *
+ * Defines the configuration for theme plugins that provide UI theming.
+ * Theme plugins use the THEME capability and provide design tokens
+ * (colors, typography, spacing) plus optional component CSS overrides.
+ */
+export const ThemeConfigSchema = z.object({
+  /** Theme tokens file path (relative to plugin root) */
+  tokensPath: z.string().default('tokens.json').describe('Path to theme tokens JSON file'),
+
+  /** Optional component overrides CSS file path (relative to plugin root) */
+  stylesPath: z.string().optional().describe('Path to component override CSS file'),
+
+  /** Whether this theme supports dark mode (default: true) */
+  supportsDarkMode: z.boolean().default(true).describe('Whether theme provides dark mode colors'),
+
+  /** Preview image path (relative to plugin root) */
+  previewImage: z.string().optional().describe('Theme preview image for theme picker'),
+
+  /** Base theme to extend (null = extend default theme) */
+  extendsTheme: z.string().nullable().optional().describe('Plugin name of theme to extend'),
+
+  /** Theme tags for categorization */
+  tags: z.array(z.string()).default([]).optional().describe('Tags for theme discovery'),
+
+  /** Custom fonts bundled with the theme */
+  fonts: z.array(ThemeFontDefinitionSchema).default([]).optional().describe('Custom fonts to load'),
+});
+
+export type ThemeConfig = z.infer<typeof ThemeConfigSchema>;
+
 // ============================================================================
 // MAIN MANIFEST SCHEMA
 // ============================================================================
@@ -452,6 +503,9 @@ export const PluginManifestSchema = z.object({
 
   /** Auth provider configuration (for authentication provider plugins) */
   authProviderConfig: AuthProviderConfigSchema.optional(),
+
+  /** Theme configuration (for THEME capability plugins) */
+  themeConfig: ThemeConfigSchema.optional(),
 
   // ===== SECURITY & PERMISSIONS =====
   /** Permissions required by the plugin */

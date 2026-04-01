@@ -1,14 +1,22 @@
 'use client'
 
-import { use, useEffect, useState, useRef, useCallback } from 'react'
+import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
+import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
+import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
+import type { ParticipantData } from '@/components/chat/ParticipantCard'
+import {
+  EphemeralMessage,
+  createEphemeralMessage,
+  type EphemeralMessageData,
+} from '@/components/chat/EphemeralMessage'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { showConfirmation } from '@/lib/alert'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { clientLogger } from '@/lib/client-logger'
 import MessageContent from '@/components/chat/MessageContent'
@@ -21,6 +29,19 @@ import type { TagVisualStyle } from '@/lib/schemas/types'
 import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
+import {
+  type TurnState,
+  type TurnSelectionResult,
+  createInitialTurnState,
+  calculateTurnStateFromHistory,
+  selectNextSpeaker,
+  nudgeParticipant,
+  addToQueue,
+  removeFromQueue,
+  findUserParticipant,
+  isMultiCharacterChat,
+} from '@/lib/chat/turn-manager'
+import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 
 interface MessageAttachment {
   id: string
@@ -38,6 +59,7 @@ interface Message {
   swipeIndex?: number | null
   attachments?: MessageAttachment[]
   debugMemoryLogs?: string[]
+  participantId?: string | null
 }
 
 interface CharacterData {
@@ -51,6 +73,7 @@ interface CharacterData {
     filepath: string
     url?: string
   } | null
+  talkativeness?: number
 }
 
 interface PersonaData {
@@ -84,6 +107,8 @@ interface Participant {
   displayOrder: number
   isActive: boolean
   systemPromptOverride?: string | null
+  characterId?: string | null
+  personaId?: string | null
   character?: CharacterData | null
   persona?: PersonaData | null
   connectionProfile?: ConnectionProfileData | null
@@ -93,6 +118,11 @@ interface Participant {
     provider: string
     modelName: string
   } | null
+  // Multi-character chat fields
+  hasHistoryAccess?: boolean
+  joinScenario?: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 interface Chat {
@@ -143,9 +173,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
+  const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
-  const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
+  const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ id: string; name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
+  const [showParticipantSidebar, setShowParticipantSidebar] = useState(true)
+  const [turnState, setTurnState] = useState<TurnState>(createInitialTurnState())
+  const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
+  // Phase 5: Ephemeral messages for nudge/queue notifications (session-only, not persisted)
+  const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
+  // Track which participant is currently responding during streaming (for correct avatar display)
+  const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
+  // Track the last auto-triggered participant to prevent duplicate triggers
+  const lastAutoTriggeredRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -188,14 +228,469 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const getFirstPersona = () => getFirstPersonaParticipant()?.persona
   const getFirstConnectionProfile = () => getFirstCharacterParticipant()?.connectionProfile
 
+  // Get the character that is currently responding (for streaming avatar display)
+  // Falls back to first character if no responding participant is set
+  const getRespondingCharacter = () => {
+    if (respondingParticipantId) {
+      const participant = chat?.participants.find(p => p.id === respondingParticipantId)
+      if (participant?.character) {
+        return participant.character
+      }
+    }
+    return getFirstCharacter()
+  }
+
+  // Multi-character chat helpers
+  // Convert Participant[] to ChatParticipantBase[] for turn manager functions
+  const participantsAsBase = useMemo((): ChatParticipantBase[] => {
+    if (!chat?.participants) return []
+    return chat.participants.map(p => ({
+      id: p.id,
+      type: p.type,
+      characterId: p.characterId ?? (p.character?.id ?? null),
+      personaId: p.personaId ?? (p.persona?.id ?? null),
+      connectionProfileId: p.connectionProfile?.id ?? null,
+      imageProfileId: p.imageProfile?.id ?? null,
+      systemPromptOverride: p.systemPromptOverride ?? null,
+      displayOrder: p.displayOrder,
+      isActive: p.isActive,
+      hasHistoryAccess: p.hasHistoryAccess ?? false,
+      joinScenario: p.joinScenario ?? null,
+      createdAt: p.createdAt ?? new Date().toISOString(),
+      updatedAt: p.updatedAt ?? new Date().toISOString(),
+    }))
+  }, [chat?.participants])
+
+  const userParticipantId = useMemo(() => {
+    if (participantsAsBase.length === 0) return null
+    const userParticipant = findUserParticipant(participantsAsBase)
+    return userParticipant?.id ?? null
+  }, [participantsAsBase])
+
+  const isMultiChar = useMemo(() => {
+    if (participantsAsBase.length === 0) return false
+    return isMultiCharacterChat(participantsAsBase)
+  }, [participantsAsBase])
+
+  // Phase 7: Track if there are any active characters (edge case handling)
+  const hasActiveCharacters = useMemo(() => {
+    return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length > 0
+  }, [participantsAsBase])
+
+  // Single-character chat: exactly 1 active character (show "Add Character" in tool palette)
+  const isSingleCharacterChat = useMemo(() => {
+    return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length === 1
+  }, [participantsAsBase])
+
+  // Build character map for turn selection
+  // The turn manager expects Character objects with at least id and talkativeness
+  const charactersMap = useMemo((): Map<string, Character> => {
+    const map = new Map<string, Character>()
+    if (!chat?.participants) return map
+    chat.participants.forEach(p => {
+      if (p.type === 'CHARACTER' && p.character) {
+        // Create a minimal Character object with required fields
+        map.set(p.character.id, {
+          id: p.character.id,
+          userId: '', // Not needed for turn selection
+          name: p.character.name,
+          talkativeness: p.character.talkativeness ?? 0.5,
+          isFavorite: false,
+          createdAt: '',
+          updatedAt: '',
+        } as Character)
+      }
+    })
+    return map
+  }, [chat?.participants])
+
+  // Convert participants to ParticipantData format for sidebar
+  const participantData: ParticipantData[] = useMemo(() => {
+    if (!chat?.participants) return []
+    return chat.participants.map(p => ({
+      id: p.id,
+      type: p.type,
+      displayOrder: p.displayOrder,
+      isActive: p.isActive,
+      character: p.character ? {
+        id: p.character.id,
+        name: p.character.name,
+        title: p.character.title,
+        avatarUrl: p.character.avatarUrl,
+        talkativeness: p.character.talkativeness ?? 0.5,
+        defaultImage: p.character.defaultImage,
+      } : null,
+      persona: p.persona ? {
+        id: p.persona.id,
+        name: p.persona.name,
+        title: p.persona.title,
+        avatarUrl: p.persona.avatarUrl,
+        defaultImage: p.persona.defaultImage,
+      } : null,
+      connectionProfile: p.connectionProfile,
+    }))
+  }, [chat?.participants])
+
+  // Get participant by ID for message avatar lookup
+  const getParticipantById = useCallback((participantId: string | null | undefined) => {
+    if (!participantId || !chat?.participants) return null
+    return chat.participants.find(p => p.id === participantId) ?? null
+  }, [chat?.participants])
+
+  // Calculate turn state when messages change
+  useEffect(() => {
+    if (participantsAsBase.length === 0 || messages.length === 0) return
+
+    clientLogger.debug('[Chat] Calculating turn state from messages', {
+      messageCount: messages.length,
+      participantCount: participantsAsBase.length,
+    })
+
+    const messageEvents = messages.map(m => ({
+      type: 'message' as const,
+      id: m.id,
+      role: m.role as 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL',
+      content: m.content,
+      participantId: m.participantId,
+      createdAt: m.createdAt,
+      attachments: m.attachments?.map(a => a.id) ?? [],
+    }))
+
+    const newTurnState = calculateTurnStateFromHistory({
+      messages: messageEvents,
+      participants: participantsAsBase,
+      userParticipantId,
+    })
+
+    setTurnState(newTurnState)
+
+    // Calculate next speaker
+    const result = selectNextSpeaker(
+      participantsAsBase,
+      charactersMap,
+      newTurnState,
+      userParticipantId
+    )
+
+    setTurnSelectionResult(result)
+
+    clientLogger.debug('[Chat] Turn state calculated', {
+      nextSpeakerId: result.nextSpeakerId,
+      reason: result.reason,
+      cycleComplete: result.cycleComplete,
+    })
+  }, [messages, participantsAsBase, userParticipantId, charactersMap])
+
+  // Phase 5: Trigger character response without user message (for nudge action)
+  // Phase 7: Enhanced with edge case validation
+  const triggerContinueMode = useCallback(async (participantId: string) => {
+    if (streaming || waitingForResponse) {
+      clientLogger.debug('[Chat] Skipping continue mode - already generating')
+      return
+    }
+
+    // Phase 7: Edge Case 5 - Validate that the participant still exists and is active
+    const participant = participantsAsBase.find(p => p.id === participantId && p.isActive)
+    if (!participant) {
+      clientLogger.warn('[Chat] Cannot trigger continue mode - participant not found or inactive', {
+        participantId,
+      })
+      showErrorToast('This participant is no longer available in the chat.')
+      return
+    }
+
+    // Phase 7: Edge Case 3 - Check if there are any eligible speakers
+    if (!hasActiveCharacters) {
+      clientLogger.warn('[Chat] No active characters available for continue mode')
+      showErrorToast('No characters available. Add a character to continue the conversation.')
+      return
+    }
+
+    clientLogger.debug('[Chat] Triggering continue mode for participant', { participantId })
+
+    setWaitingForResponse(true)
+    setStreaming(false)
+    setStreamingContent('')
+    // Set the responding participant for correct avatar display during streaming
+    setRespondingParticipantId(participantId)
+    clientLogger.debug('[Chat] Set responding participant for streaming', { participantId })
+
+    try {
+      const res = await fetch(`/api/chats/${id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          continueMode: true,
+          respondingParticipantId: participantId,
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to trigger response')
+      }
+
+      // Handle streaming response
+      const reader = res.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (!reader) throw new Error('No response body')
+
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+
+              if (data.content) {
+                fullContent += data.content
+                setWaitingForResponse(false)
+                setStreaming(true)
+                setStreamingContent(fullContent)
+              }
+
+              if (data.done) {
+                // Response complete - add message to state
+                if (fullContent.trim()) {
+                  const newMessage: Message = {
+                    id: data.messageId || `continue-${Date.now()}`,
+                    role: 'ASSISTANT',
+                    content: fullContent,
+                    createdAt: new Date().toISOString(),
+                    participantId,
+                  }
+                  setMessages(prev => [...prev, newMessage])
+                }
+
+                // Clear ephemeral messages for this participant after response
+                setEphemeralMessages(prev =>
+                  prev.filter(em => em.participantId !== participantId)
+                )
+
+                // Update turn state if provided
+                if (data.turn) {
+                  clientLogger.debug('[Chat] Turn info from continue mode', data.turn)
+                }
+              }
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (err) {
+      clientLogger.error('[Chat] Continue mode error:', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      showErrorToast(err instanceof Error ? err.message : 'Failed to generate response')
+    } finally {
+      setStreaming(false)
+      setWaitingForResponse(false)
+      setStreamingContent('')
+      setRespondingParticipantId(null)
+      scrollToBottom()
+    }
+  }, [id, streaming, waitingForResponse, participantsAsBase, hasActiveCharacters])
+
+  // Auto-trigger next character in multi-character mode when it's their turn
+  // This ensures characters who haven't spoken yet (including newly added ones) get their turn
+  useEffect(() => {
+    // Only auto-trigger in multi-character mode
+    if (!isMultiChar) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - not multi-character mode')
+      return
+    }
+
+    // Don't trigger if we're already generating or waiting
+    if (streaming || waitingForResponse) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - already generating', {
+        streaming,
+        waitingForResponse,
+      })
+      return
+    }
+
+    // Don't trigger if there's no turn selection result yet
+    if (!turnSelectionResult) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - no turn selection result')
+      return
+    }
+
+    // Don't trigger if it's the user's turn (nextSpeakerId is null)
+    if (turnSelectionResult.nextSpeakerId === null) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - user\'s turn', {
+        reason: turnSelectionResult.reason,
+        cycleComplete: turnSelectionResult.cycleComplete,
+      })
+      // Reset the last auto-triggered ref when cycle completes
+      lastAutoTriggeredRef.current = null
+      return
+    }
+
+    // Don't trigger if the next speaker is the user participant
+    if (turnSelectionResult.nextSpeakerId === userParticipantId) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - next speaker is user')
+      return
+    }
+
+    const nextSpeakerId = turnSelectionResult.nextSpeakerId
+
+    // Don't trigger the same participant twice in a row (prevents race condition loops)
+    if (lastAutoTriggeredRef.current === nextSpeakerId) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - same participant already triggered', {
+        nextSpeakerId,
+      })
+      return
+    }
+
+    // We have a character who should speak - trigger them
+    clientLogger.info('[Chat] Auto-triggering next character in multi-character mode', {
+      nextSpeakerId,
+      reason: turnSelectionResult.reason,
+    })
+
+    // Mark this participant as triggered before starting
+    lastAutoTriggeredRef.current = nextSpeakerId
+
+    // Small delay to allow state to settle and prevent race conditions
+    const timeoutId = setTimeout(() => {
+      triggerContinueMode(nextSpeakerId)
+    }, 100)
+
+    return () => clearTimeout(timeoutId)
+  }, [isMultiChar, streaming, waitingForResponse, turnSelectionResult, userParticipantId, triggerContinueMode])
+
+  // Handle nudge action - Phase 5: Shows ephemeral message and triggers immediate response
+  const handleNudge = useCallback((participantId: string) => {
+    clientLogger.debug('[Chat] Nudging participant', { participantId })
+
+    // Find participant name for ephemeral message
+    const participant = participantData.find(p => p.id === participantId)
+    const participantName = participant?.character?.name || participant?.persona?.name || 'Participant'
+
+    // Add ephemeral nudge notification
+    const ephemeral = createEphemeralMessage('nudge', participantId, participantName)
+    setEphemeralMessages(prev => [...prev, ephemeral])
+
+    // Update turn state
+    const newTurnState = nudgeParticipant(turnState, participantId)
+    setTurnState(newTurnState)
+
+    // Recalculate next speaker
+    if (participantsAsBase.length > 0) {
+      const result = selectNextSpeaker(
+        participantsAsBase,
+        charactersMap,
+        newTurnState,
+        userParticipantId
+      )
+      setTurnSelectionResult(result)
+    }
+
+    // Trigger immediate response generation (Phase 5 enhancement)
+    triggerContinueMode(participantId)
+  }, [turnState, participantsAsBase, charactersMap, userParticipantId, participantData, triggerContinueMode])
+
+  // Handle queue action
+  const handleQueue = useCallback((participantId: string) => {
+    clientLogger.debug('[Chat] Queueing participant', { participantId })
+    const newTurnState = addToQueue(turnState, participantId)
+    setTurnState(newTurnState)
+
+    // Recalculate next speaker
+    if (participantsAsBase.length > 0) {
+      const result = selectNextSpeaker(
+        participantsAsBase,
+        charactersMap,
+        newTurnState,
+        userParticipantId
+      )
+      setTurnSelectionResult(result)
+    }
+  }, [turnState, participantsAsBase, charactersMap, userParticipantId])
+
+  // Handle dequeue action
+  const handleDequeue = useCallback((participantId: string) => {
+    clientLogger.debug('[Chat] Dequeuing participant', { participantId })
+    const newTurnState = removeFromQueue(turnState, participantId)
+    setTurnState(newTurnState)
+
+    // Recalculate next speaker
+    if (participantsAsBase.length > 0) {
+      const result = selectNextSpeaker(
+        participantsAsBase,
+        charactersMap,
+        newTurnState,
+        userParticipantId
+      )
+      setTurnSelectionResult(result)
+    }
+  }, [turnState, participantsAsBase, charactersMap, userParticipantId])
+
+  // Handle talkativeness change (optimistic update - would need API for persistence)
+  const handleTalkativenessChange = useCallback((participantId: string, value: number) => {
+    clientLogger.debug('[Chat] Talkativeness change', { participantId, value })
+    // TODO: Persist this to the database via API
+    // For now, just log it - the local slider state handles display
+  }, [])
+
+  // Phase 5: Dismiss an ephemeral message
+  const handleDismissEphemeral = useCallback((ephemeralId: string) => {
+    clientLogger.debug('[Chat] Dismissing ephemeral message', { ephemeralId })
+    setEphemeralMessages(prev => prev.filter(em => em.id !== ephemeralId))
+  }, [])
+
+  // Phase 7: Continue button - User passes turn to next character
+  const handleContinue = useCallback(() => {
+    clientLogger.debug('[Chat] User passing turn via Continue button')
+
+    // Edge case: No active characters
+    if (!hasActiveCharacters) {
+      clientLogger.warn('[Chat] Cannot continue - no active characters')
+      showErrorToast('No characters available. Add a character to continue.')
+      return
+    }
+
+    // Get the next character to speak
+    const result = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
+    if (result.nextSpeakerId && result.nextSpeakerId !== userParticipantId) {
+      clientLogger.debug('[Chat] Selected next speaker for continue', {
+        participantId: result.nextSpeakerId,
+        reason: result.reason,
+      })
+      triggerContinueMode(result.nextSpeakerId)
+    } else {
+      clientLogger.warn('[Chat] Continue button clicked but no valid next speaker', {
+        nextSpeakerId: result.nextSpeakerId,
+        reason: result.reason,
+      })
+      // User-friendly message for edge case 3
+      showInfoToast('All characters have spoken. Send a message to continue the conversation.')
+    }
+  }, [participantsAsBase, charactersMap, turnState, userParticipantId, triggerContinueMode, hasActiveCharacters])
+
   const fetchChatSettings = useCallback(async () => {
     try {
       const res = await fetch('/api/chat-settings')
-      if (!res.ok) throw new Error('Failed to fetch chat settings')
+      if (!res.ok) {
+        const errorBody = await res.text().catch(() => 'Unable to read response body')
+        throw new Error(`Failed to fetch chat settings: ${res.status} ${res.statusText} - ${errorBody}`)
+      }
       const data = await res.json()
       setChatSettings(data)
     } catch (err) {
-      clientLogger.error('Failed to fetch chat settings:', { error: err instanceof Error ? err.message : String(err) })
+      clientLogger.error('Failed to fetch chat settings', {
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      })
       // Use default settings if fetch fails
       setChatSettings({ id: '', userId: '', avatarDisplayMode: 'ALWAYS', avatarDisplayStyle: 'CIRCULAR', tagStyles: {}, createdAt: '', updatedAt: '' })
     }
@@ -261,6 +756,100 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       clientLogger.error('Failed to fetch chat photo count:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [id])
+
+  // Phase 6: Handle adding a character to the chat
+  const handleAddCharacter = useCallback(() => {
+    clientLogger.debug('[Chat] Opening add character dialog')
+    setAddCharacterDialogOpen(true)
+  }, [])
+
+  // Phase 6: Handle character added callback - refresh chat data
+  const handleCharacterAdded = useCallback(() => {
+    clientLogger.info('[Chat] Character added, refreshing chat data')
+    fetchChat()
+  }, [fetchChat])
+
+  // Phase 6: Handle removing a character from the chat
+  // Phase 7: Enhanced with edge case handling
+  const handleRemoveCharacter = useCallback(async (participantId: string) => {
+    const participant = participantData.find(p => p.id === participantId)
+    const characterName = participant?.character?.name || 'This character'
+
+    clientLogger.debug('[Chat] Requesting character removal', {
+      participantId,
+      characterName,
+      isGenerating: streaming || waitingForResponse,
+      currentSpeakerId: turnState.lastSpeakerId,
+    })
+
+    // Edge Case 4: Check if this character is currently generating
+    if ((streaming || waitingForResponse) && turnState.lastSpeakerId === participantId) {
+      clientLogger.warn('[Chat] Cannot remove character while they are generating', {
+        participantId,
+        characterName,
+      })
+      showErrorToast(`Cannot remove ${characterName} while they are generating a response. Please wait for them to finish.`)
+      return
+    }
+
+    // Confirm with user
+    const confirmed = await showConfirmation(
+      `Remove ${characterName} from this chat? Their past messages will remain visible, but they will no longer participate in the conversation.`
+    )
+
+    if (!confirmed) {
+      clientLogger.debug('[Chat] Character removal cancelled by user')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/chats/${id}/participants`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to remove character')
+      }
+
+      clientLogger.info('[Chat] Character removed successfully', {
+        participantId,
+        characterName,
+      })
+
+      showSuccessToast(`${characterName} has been removed from the chat`)
+
+      // Clear ephemeral messages for this participant
+      setEphemeralMessages(prev => prev.filter(em => em.participantId !== participantId))
+
+      // Remove from queue if they were queued
+      setTurnState(prev => ({
+        ...prev,
+        queue: prev.queue.filter(qId => qId !== participantId),
+      }))
+
+      // Refresh chat data
+      await fetchChat()
+
+      // Edge Case 1: Check if this was the last character
+      const remainingCharacters = participantsAsBase.filter(
+        p => p.type === 'CHARACTER' && p.isActive && p.id !== participantId
+      )
+
+      if (remainingCharacters.length === 0) {
+        clientLogger.warn('[Chat] No active characters remain in chat')
+        showErrorToast('All characters have been removed. Add a character to continue the conversation.')
+      }
+    } catch (err) {
+      clientLogger.error('[Chat] Error removing character', {
+        error: err instanceof Error ? err.message : String(err),
+        participantId,
+      })
+      showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
+    }
+  }, [id, participantData, fetchChat, streaming, waitingForResponse, turnState.lastSpeakerId, participantsAsBase])
 
   useEffect(() => {
     fetchChat()
@@ -344,6 +933,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     e.preventDefault()
     if ((!input.trim() && attachedFiles.length === 0) || sending) return
 
+    // Reset auto-trigger ref when user sends a message (new turn cycle starts)
+    lastAutoTriggeredRef.current = null
+
     const userMessage = input.trim()
     const fileIds = attachedFiles.map((f) => f.id)
     // Capture attachments before clearing state
@@ -359,6 +951,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setWaitingForResponse(true)
     setStreaming(false)
     setStreamingContent('')
+    // Set the responding participant for correct avatar display during streaming
+    // For normal messages, the server uses the first active character
+    const firstCharParticipant = getFirstCharacterParticipant()
+    setRespondingParticipantId(firstCharParticipant?.id || null)
+    clientLogger.debug('[Chat] Set responding participant for streaming', {
+      participantId: firstCharParticipant?.id,
+      characterName: firstCharParticipant?.character?.name,
+    })
     // Reset textarea to minimum height (single line)
     if (inputRef.current) {
       inputRef.current.style.height = 'auto'
@@ -478,6 +1078,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 const toolNames = data.toolNames as string[]
                 const toolArgs = (data.toolArguments || []) as Record<string, unknown>[]
                 setPendingToolCalls(toolNames.map((name, idx) => ({
+                  id: `tool-${idx}`,
                   name,
                   status: 'pending' as const,
                   arguments: toolArgs[idx],
@@ -494,10 +1095,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
               // Handle tool results
               if (data.toolResult) {
-                const { name, success, result } = data.toolResult
-                // Update pending tool call status
-                setPendingToolCalls(prev => prev.map(tc =>
-                  tc.name === name ? { ...tc, status: success ? 'success' : 'error', result } : tc
+                const { index, name, success, result } = data.toolResult
+                // Update pending tool call status by index (more reliable) or fall back to name
+                setPendingToolCalls(prev => prev.map((tc, idx) =>
+                  (index !== undefined && idx === index) || (index === undefined && tc.name === name)
+                    ? { ...tc, status: success ? 'success' : 'error', result }
+                    : tc
                 ))
                 // Only show toast/status for image generation
                 if (name === 'generate_image') {
@@ -538,6 +1141,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   setStreaming(false)
                   setWaitingForResponse(false)
                   setSending(false)
+                  setRespondingParticipantId(null)
                   return
                 }
 
@@ -551,6 +1155,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setMessages((prev) => [...prev, assistantMessage])
                 setStreamingContent('')
                 setStreaming(false)
+                setRespondingParticipantId(null)
                 // Refresh chat to get tool messages and memory debug logs
                 await fetchChat()
                 // Update debug entry with memory logs from the fetched chat (with polling)
@@ -589,7 +1194,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 throw new Error(data.error)
               }
             } catch (parseError) {
-              clientLogger.error('Failed to parse SSE data:', { error: parseError instanceof Error ? parseError.message : String(parseError) })
+              // Only log if it's a real parse error, not an empty JSON object
+              const errorMessage = parseError instanceof Error ? parseError.message : String(parseError)
+              if (errorMessage && errorMessage !== 'undefined' && errorMessage !== '[object Object]') {
+                clientLogger.error('Failed to parse SSE data:', { error: errorMessage, raw: line.slice(6).substring(0, 100) })
+              }
             }
           }
         }
@@ -613,6 +1222,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setStreamingContent('')
       setStreaming(false)
       setWaitingForResponse(false)
+      setRespondingParticipantId(null)
     } finally {
       setSending(false)
       setTimeout(() => {
@@ -830,6 +1440,29 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }
 
   const getMessageAvatar = (message: Message) => {
+    // Multi-character support: use participantId if available
+    if (message.participantId) {
+      const participant = getParticipantById(message.participantId)
+      if (participant) {
+        if (participant.type === 'CHARACTER' && participant.character) {
+          return {
+            name: participant.character.name,
+            title: participant.character.title,
+            avatarUrl: participant.character.avatarUrl,
+            defaultImage: participant.character.defaultImage,
+          }
+        } else if (participant.type === 'PERSONA' && participant.persona) {
+          return {
+            name: participant.persona.name,
+            title: participant.persona.title,
+            avatarUrl: participant.persona.avatarUrl,
+            defaultImage: participant.persona.defaultImage,
+          }
+        }
+      }
+    }
+
+    // Fallback to original logic for messages without participantId
     if (message.role === 'USER') {
       // Use persona participant if available, otherwise fall back to user
       const persona = getFirstPersona()
@@ -893,7 +1526,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return (
       <div className="flex flex-col items-center flex-shrink-0 w-32 gap-1">
         <div
-          className="bg-gray-300 dark:bg-slate-700 flex items-center justify-center overflow-hidden"
+          className="bg-muted flex items-center justify-center overflow-hidden"
           style={{
             width: `${avatarWidth}px`,
             height: `${avatarHeight}px`,
@@ -909,17 +1542,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               className="w-full h-full object-cover"
             />
           ) : (
-            <span className="text-4xl font-bold text-gray-600 dark:text-gray-400">
+            <span className="text-4xl font-bold text-muted-foreground">
               {avatar.name.charAt(0).toUpperCase()}
             </span>
           )}
         </div>
         <div className="text-center">
-          <div className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-2">
+          <div className="text-sm font-semibold text-foreground line-clamp-2">
             {avatar.name}
           </div>
           {avatar.title && (
-            <div className="text-xs italic text-gray-600 dark:text-gray-400 line-clamp-2">
+            <div className="text-xs italic text-muted-foreground line-clamp-2">
               {avatar.title}
             </div>
           )}
@@ -931,14 +1564,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   if (awaitingTagInfo) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-gray-600 dark:text-gray-400">Loading chat...</p>
+        <p className="text-lg text-muted-foreground">Loading chat...</p>
       </div>
     )
   }
 
   if (chatHidden) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <HiddenPlaceholder />
       </div>
     )
@@ -955,21 +1588,32 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   if (error || !chat) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-red-600">Error: {error || 'Chat not found'}</p>
+        <p className="text-lg text-destructive">Error: {error || 'Chat not found'}</p>
       </div>
     )
   }
 
   const isDebugMode = debug?.isDebugMode ?? false
 
+  // Show participant sidebar when:
+  // - Multi-character chat (2+ characters)
+  // - Not in debug mode (debug panel takes precedence)
+  // - User hasn't hidden it
+  const shouldShowParticipantSidebar = isMultiChar && !isDebugMode && showParticipantSidebar
+
+  const mainClasses = ['qt-chat-main']
+  if (isDebugMode) {
+    mainClasses.push('qt-chat-main-split')
+  }
+
   return (
-    <div className="flex h-full bg-white dark:bg-slate-900">
+    <div className="qt-chat-layout">
       {/* Main chat area */}
-      <div className={`flex flex-col flex-1 min-h-0 ${isDebugMode ? 'w-1/2' : 'w-full'}`}>
+      <div className={mainClasses.join(' ')}>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-slate-900 min-h-0">
-        <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4 space-y-4`}>
+      <div className="qt-chat-messages">
+        <div className="qt-chat-messages-list">
         {messages.map((message, messageIndex) => {
           const isEditing = editingMessageId === message.id
           const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
@@ -983,32 +1627,37 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 message={message}
                 character={getFirstCharacter() ?? undefined}
                 onImageClick={(filepath, filename, fileId) => {
-                  setModalImage({ src: `/${filepath}`, filename, fileId })
+                  // filepath is already normalized by ToolMessage
+                  setModalImage({ src: filepath, filename, fileId })
                 }}
               />
             )
           }
 
-          const messageAvatar = shouldShowAvatars() ? getMessageAvatar(message) : null
+        const messageAvatar = shouldShowAvatars() ? getMessageAvatar(message) : null
+        const messageRowClasses = ['qt-chat-message-row']
+        if (message.role === 'USER') {
+          messageRowClasses.push('qt-chat-message-row-user')
+        } else {
+          messageRowClasses.push('qt-chat-message-row-assistant')
+        }
 
-          return (
-            <div
-              key={message.id}
-              className={`flex gap-4 w-[90%] ${
-                message.role === 'USER' ? 'justify-end ml-auto' : 'justify-start'
-              }`}
-            >
+        return (
+          <div
+            key={message.id}
+            className={messageRowClasses.join(' ')}
+          >
               {message.role === 'ASSISTANT' && shouldShowAvatars() && (
                 <div className="flex-shrink-0">
                   {renderAvatar(messageAvatar)}
                 </div>
               )}
-              <div className="flex-1 min-w-0 group relative">
+            <div className="qt-chat-message-body group">
                 <div
-                  className={`px-4 py-3 rounded-lg ${
+                  className={`chat-message ${
                     message.role === 'USER'
-                      ? 'bg-blue-600 dark:bg-blue-700 text-white'
-                      : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white'
+                      ? 'qt-chat-message-user'
+                      : 'qt-chat-message-assistant'
                   }`}
                 >
                   {isEditing ? (
@@ -1016,19 +1665,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       <textarea
                         value={editContent}
                         onChange={(e) => setEditContent(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded"
+                        className="qt-textarea"
                         rows={3}
                       />
                       <div className="flex gap-2">
                         <button
                           onClick={() => saveEdit(message.id)}
-                          className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                          className="qt-button qt-button-primary qt-button-sm"
                         >
                           Save
                         </button>
                         <button
                           onClick={cancelEdit}
-                          className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+                          className="qt-button qt-button-secondary qt-button-sm"
                         >
                           Cancel
                         </button>
@@ -1037,7 +1686,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   ) : (
                     <>
                       {viewSourceMessageIds.has(message.id) ? (
-                        <div className="bg-gray-100 dark:bg-gray-900 p-3 rounded font-mono text-sm whitespace-pre-wrap break-words overflow-auto max-h-96">
+                        <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
                           {message.content}
                         </div>
                       ) : (
@@ -1045,16 +1694,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       )}
                       {/* Image attachment thumbnails */}
                       {getImageAttachments(message).length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
+                        <div className="qt-chat-attachment-list">
                           {getImageAttachments(message).map((attachment) => (
                             <button
                               key={attachment.id}
                               onClick={() => setModalImage({
-                                src: `/${attachment.filepath}`,
+                                src: attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`,
                                 filename: attachment.filename,
                                 fileId: attachment.id,
                               })}
-                              className="relative group/thumb overflow-hidden rounded border border-gray-300 dark:border-slate-600 hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
+                              type="button"
+                              className="qt-button qt-chat-attachment-button"
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
@@ -1062,10 +1712,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                                 alt={attachment.filename}
                                 width={80}
                                 height={80}
-                                className="w-20 h-20 object-cover"
+                                className="qt-chat-attachment-image"
                               />
-                              <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/20 transition-colors flex items-center justify-center">
-                                <svg className="w-6 h-6 text-white opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <div className="qt-chat-attachment-overlay">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                                 </svg>
                               </div>
@@ -1073,7 +1723,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                           ))}
                         </div>
                       )}
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                      <div className="text-xs text-muted-foreground mt-2">
                         {formatMessageTime(message.createdAt)}
                       </div>
                     </>
@@ -1082,17 +1732,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
                 {/* Hover action buttons */}
                 {!isEditing && (
-                  <div className="absolute -top-8 right-0 flex gap-1 bg-gray-200 dark:bg-slate-700 rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute -top-8 right-0 flex gap-1 bg-muted rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => copyMessageContent(message.content)}
-                      className="p-1 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                      className="p-1 text-muted-foreground hover:text-foreground"
                       title="Copy message"
                     >
                       📋
                     </button>
                     <button
                       onClick={() => toggleSourceView(message.id)}
-                      className="p-1 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+                      className="p-1 text-muted-foreground hover:text-foreground"
                       title={viewSourceMessageIds.has(message.id) ? 'View rendered' : 'View source'}
                     >
                       {viewSourceMessageIds.has(message.id) ? '👁️' : '</>'}
@@ -1107,20 +1757,20 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       <>
                         <button
                           onClick={() => startEdit(message)}
-                          className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                          className="text-muted-foreground hover:text-foreground"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => deleteMessage(message.id)}
-                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                          className="text-destructive hover:text-destructive/80"
                         >
                           Delete
                         </button>
                         {showResendButton && (
                           <button
                             onClick={() => resendMessage(message)}
-                            className="text-orange-600 dark:text-orange-400 hover:text-orange-900 dark:hover:text-orange-300"
+                            className="text-warning hover:text-warning/80"
                             title="Resend this message (deletes blank responses and restores to input)"
                           >
                             ↻ Resend
@@ -1133,13 +1783,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       <>
                         <button
                           onClick={() => deleteMessage(message.id)}
-                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+                          className="text-destructive hover:text-destructive/80"
                         >
                           Delete
                         </button>
                         <button
                           onClick={() => generateSwipe(message.id)}
-                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300"
+                          className="text-info hover:text-info/80"
                         >
                           🔄 Regenerate
                         </button>
@@ -1150,17 +1800,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                             <button
                               onClick={() => switchSwipe(message.swipeGroupId!, 'prev')}
                               disabled={swipeState.current === 0}
-                              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               ←
                             </button>
-                            <span className="text-gray-600 dark:text-gray-400 text-xs">
+                            <span className="text-muted-foreground text-xs">
                               {swipeState.current + 1} / {swipeState.total}
                             </span>
                             <button
                               onClick={() => switchSwipe(message.swipeGroupId!, 'next')}
                               disabled={swipeState.current === swipeState.total - 1}
-                              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               →
                             </button>
@@ -1182,18 +1832,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         {/* Waiting for response - show large quill animation */}
         {waitingForResponse && !streaming && (
-          <div className="flex gap-4 w-[90%] justify-start items-center">
+          <div className="qt-chat-message-row qt-chat-message-row-assistant items-center">
             {shouldShowAvatars() && (
               <div className="flex-shrink-0">
                 {renderAvatar({
-                  name: getFirstCharacter()?.name || 'AI',
+                  name: getRespondingCharacter()?.name || 'AI',
                   title: null,
-                  avatarUrl: getFirstCharacter()?.avatarUrl,
-                  defaultImage: getFirstCharacter()?.defaultImage,
+                  avatarUrl: getRespondingCharacter()?.avatarUrl,
+                  defaultImage: getRespondingCharacter()?.defaultImage,
                 })}
               </div>
             )}
-            <div className="text-gray-500 dark:text-gray-400">
+            <div className="text-muted-foreground">
               <QuillAnimation size="lg" />
             </div>
           </div>
@@ -1201,8 +1851,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         {/* Pending tool calls - shown collapsed before streaming response */}
         {pendingToolCalls.length > 0 && (
-          <div className="flex gap-4 w-[90%] justify-start">
-            <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 text-lg">
+          <div className="qt-chat-message-row qt-chat-message-row-assistant">
+            <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-muted text-lg">
               {(() => {
                 if (pendingToolCalls.some(tc => tc.name === 'generate_image')) return '🎨'
                 if (pendingToolCalls.some(tc => tc.name === 'search_memories')) return '🧠'
@@ -1212,11 +1862,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             </div>
             <div className="flex-1 min-w-0">
               <details className="group" open={pendingToolCalls.some(tc => tc.status === 'pending')}>
-                <summary className="px-4 py-2 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 cursor-pointer list-none flex items-center gap-2">
+                <summary className="px-4 py-2 rounded-lg bg-muted border border-border cursor-pointer list-none flex items-center gap-2">
                   <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <span className="text-sm font-medium text-foreground">
                     {pendingToolCalls.map(tc => {
                       const displayNames: Record<string, string> = {
                         'generate_image': 'Image Generation',
@@ -1227,30 +1877,30 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     }).join(', ')}
                   </span>
                   {pendingToolCalls.some(tc => tc.status === 'pending') && (
-                    <QuillAnimation size="sm" className="ml-auto text-gray-400" />
+                    <QuillAnimation size="sm" className="ml-auto text-muted-foreground" />
                   )}
                   {pendingToolCalls.every(tc => tc.status === 'success') && (
-                    <span className="ml-auto text-xs px-2 py-0.5 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
+                    <span className="ml-auto text-xs px-2 py-0.5 bg-success/20 text-success rounded">
                       Complete
                     </span>
                   )}
                   {pendingToolCalls.some(tc => tc.status === 'error') && (
-                    <span className="ml-auto text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded">
+                    <span className="ml-auto text-xs px-2 py-0.5 bg-destructive/20 text-destructive rounded">
                       Error
                     </span>
                   )}
                 </summary>
-                <div className="mt-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                <div className="mt-2 px-4 py-2 rounded-lg bg-muted border border-border">
                   {pendingToolCalls.map((tc) => (
-                    <div key={tc.name} className="text-xs text-gray-600 dark:text-gray-400">
+                    <div key={tc.id} className="text-xs text-muted-foreground">
                       <span className="font-medium">{tc.name}</span>
                       {tc.arguments && Object.keys(tc.arguments).length > 0 && (
-                        <span className="ml-2 text-gray-500">
+                        <span className="ml-2 text-muted-foreground/70">
                           ({Object.entries(tc.arguments).map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 50) : JSON.stringify(v)}`).join(', ')})
                         </span>
                       )}
-                      {tc.status === 'success' && <span className="ml-2 text-green-600 dark:text-green-400">✓</span>}
-                      {tc.status === 'error' && <span className="ml-2 text-red-600 dark:text-red-400">✗</span>}
+                      {tc.status === 'success' && <span className="ml-2 text-success">✓</span>}
+                      {tc.status === 'error' && <span className="ml-2 text-destructive">✗</span>}
                     </div>
                   ))}
                 </div>
@@ -1259,22 +1909,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           </div>
         )}
 
+        {/* Phase 5: Ephemeral messages (nudge notifications, etc.) */}
+        {ephemeralMessages.map((em) => (
+          <EphemeralMessage
+            key={em.id}
+            message={em}
+            onDismiss={handleDismissEphemeral}
+          />
+        ))}
+
         {/* Streaming message */}
         {streaming && streamingContent && (
-          <div className="flex gap-4 w-[90%] justify-start">
+          <div className="qt-chat-message-row qt-chat-message-row-assistant">
             {shouldShowAvatars() && (
               <div className="flex-shrink-0">
                 {renderAvatar({
-                  name: getFirstCharacter()?.name || 'AI',
+                  name: getRespondingCharacter()?.name || 'AI',
                   title: null,
-                  avatarUrl: getFirstCharacter()?.avatarUrl,
-                  defaultImage: getFirstCharacter()?.defaultImage,
+                  avatarUrl: getRespondingCharacter()?.avatarUrl,
+                  defaultImage: getRespondingCharacter()?.defaultImage,
                 })}
               </div>
             )}
-            <div className="flex-1 min-w-0 px-4 py-3 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-white">
+            <div className="flex-1 min-w-0 px-4 py-3 rounded-lg bg-card border border-border text-foreground">
               <MessageContent content={streamingContent} />
-              <QuillAnimation size="sm" className="inline-block ml-2 text-gray-400 dark:text-gray-500" />
+              <QuillAnimation size="sm" className="inline-block ml-2 text-muted-foreground" />
             </div>
           </div>
         )}
@@ -1284,17 +1943,39 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
-        <div className={`${isDebugMode ? '' : 'mx-auto max-w-[800px]'} p-4`}>
+      <div className="qt-chat-composer">
+        {/* Phase 7: Edge Case 1 - No active characters warning */}
+        {!hasActiveCharacters && messages.length > 0 && (
+          <div className="qt-alert qt-alert-warning flex items-center gap-3">
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div className="flex-1">
+              <p className="font-medium text-sm">No characters in this chat</p>
+              <p className="text-xs opacity-80 mt-0.5">
+                Add a character to continue the conversation.
+              </p>
+            </div>
+            {isMultiChar && (
+              <button
+                onClick={handleAddCharacter}
+                className="qt-button qt-button-secondary qt-button-sm"
+              >
+                Add Character
+              </button>
+            )}
+          </div>
+        )}
+        <div className="qt-chat-composer-content">
           {/* Tool execution status indicator */}
           {toolExecutionStatus && (
             <div
-              className={`mb-4 p-3 rounded-lg flex items-center gap-2 ${
+              className={`qt-alert flex items-center gap-2 ${
                 toolExecutionStatus.status === 'pending'
-                  ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200'
+                  ? 'qt-alert-info'
                   : toolExecutionStatus.status === 'success'
-                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
-                  : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+                    ? 'qt-alert-success'
+                    : 'qt-alert-error'
               }`}
             >
               {toolExecutionStatus.status === 'pending' ? (
@@ -1316,28 +1997,28 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
           {/* Attached files preview */}
           {attachedFiles.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2">
+            <div className="qt-chat-attachment-list mb-2">
               {attachedFiles.map((file) => (
                 <div
                   key={file.id}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-slate-700 rounded-lg text-sm"
+                  className="qt-chat-attachment-chip"
                 >
                   {file.mimeType.startsWith('image/') ? (
-                    <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   ) : (
-                    <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   )}
-                  <span className="text-gray-700 dark:text-gray-300 max-w-[150px] truncate">
+                  <span className="text-foreground max-w-[150px] truncate">
                     {file.filename}
                   </span>
                   <button
                     type="button"
                     onClick={() => removeAttachedFile(file.id)}
-                    className="text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400"
+                    className="qt-chat-attachment-chip-remove"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1347,7 +2028,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               ))}
             </div>
           )}
-          <form onSubmit={sendMessage} className="flex gap-2">
+          <form onSubmit={sendMessage} className="qt-chat-composer-inner">
             {/* Hidden file input */}
             <input
               ref={fileInputRef}
@@ -1357,13 +2038,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               className="hidden"
             />
             {/* Buttons column */}
-            <div className="flex flex-col gap-2">
+            <div className="qt-chat-toolbar">
               {/* Attach file button */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending || uploadingFile}
-                className="w-11 h-11 flex items-center justify-center border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="qt-button qt-chat-toolbar-button"
                 title="Attach file"
               >
                 {uploadingFile ? (
@@ -1384,7 +2065,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     e.stopPropagation()
                     setToolPaletteOpen(!toolPaletteOpen)
                   }}
-                  className="w-11 h-11 flex items-center justify-center border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+                  className="qt-button qt-chat-toolbar-button"
                   title="Tools menu"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1397,13 +2078,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   onGalleryClick={() => setGalleryOpen(true)}
                   onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
                   onSettingsClick={() => setChatSettingsModalOpen(true)}
+                  onAddCharacterClick={handleAddCharacter}
                   chatPhotoCount={chatPhotoCount}
                   hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
+                  showAddCharacter={isSingleCharacterChat}
+                  chatId={id}
                 />
               </div>
             </div>
             {showPreview ? (
-              <div className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg overflow-y-auto"
+              <div className="qt-chat-composer-input overflow-y-auto"
                 style={{
                   lineHeight: '1.5'
                 }}
@@ -1443,33 +2127,55 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                     }
                   }
                 }}
-                disabled={sending}
+                disabled={sending || !hasActiveCharacters}
                 rows={1}
-                placeholder={attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
-                className="flex-1 px-4 py-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:bg-gray-100 dark:disabled:bg-slate-700 resize-none overflow-y-auto"
+                placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
+                className="qt-chat-composer-input resize-none overflow-y-auto"
                 style={{
                   lineHeight: '1.5'
                 }}
               />
             )}
             {/* Buttons column - right side */}
-            <div className="flex flex-col gap-2">
+            <div className="qt-chat-toolbar">
               {/* Send button */}
               <button
                 type="submit"
-                disabled={sending || (!input.trim() && attachedFiles.length === 0)}
-                className="w-11 h-11 flex items-center justify-center bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition-colors"
-                title="Send message"
+                disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
+                className="qt-chat-composer-send"
+                title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
+              {/* Continue button - Phase 7: Pass turn to next character */}
+              {isMultiChar && hasActiveCharacters && (
+                <button
+                  type="button"
+                  onClick={handleContinue}
+                  disabled={
+                    streaming ||
+                    waitingForResponse ||
+                    turnSelectionResult?.nextSpeakerId !== null
+                  }
+                  className="qt-chat-toolbar-button qt-chat-continue-button"
+                  title={
+                    turnSelectionResult?.nextSpeakerId !== null
+                      ? "It's not your turn"
+                      : "Pass turn to next character"
+                  }
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+              )}
               {/* Toggle Preview button */}
               <button
                 type="button"
                 onClick={() => setShowPreview(!showPreview)}
-                className="w-11 h-11 flex items-center justify-center border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+                className="qt-chat-toolbar-button"
                 title="Toggle preview"
               >
                 {showPreview ? (
@@ -1586,9 +2292,38 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       />
       </div>
 
+      {/* Participant Sidebar - shown for multi-character chats when debug mode is off */}
+      {shouldShowParticipantSidebar && (
+        <ParticipantSidebar
+          participants={participantData}
+          turnState={turnState}
+          turnSelectionResult={turnSelectionResult}
+          isGenerating={streaming || waitingForResponse}
+          userParticipantId={userParticipantId}
+          onNudge={handleNudge}
+          onQueue={handleQueue}
+          onDequeue={handleDequeue}
+          onTalkativenessChange={handleTalkativenessChange}
+          onAddCharacter={handleAddCharacter}
+          onRemoveCharacter={handleRemoveCharacter}
+        />
+      )}
+
+      {/* Add Character Dialog - Phase 6 */}
+      <AddCharacterDialog
+        isOpen={addCharacterDialogOpen}
+        onClose={() => setAddCharacterDialogOpen(false)}
+        chatId={id}
+        existingCharacterIds={chat?.participants
+          .filter(p => p.type === 'CHARACTER' && p.isActive)
+          .map(p => p.character?.id)
+          .filter((id): id is string => id !== null && id !== undefined) || []}
+        onCharacterAdded={handleCharacterAdded}
+      />
+
       {/* Debug Panel */}
       {isDebugMode && (
-        <div className="w-1/2 h-full">
+        <div className="qt-chat-debug-panel">
           <DebugPanel />
         </div>
       )}

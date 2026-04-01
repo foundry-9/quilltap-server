@@ -10,7 +10,7 @@ import { decryptApiKey } from '@/lib/encryption'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
-import type { ChatEvent, ChatParticipantBase, FileEntry } from '@/lib/schemas/types'
+import type { ChatEvent, ChatParticipantBase, ChatParticipantBaseInput, FileEntry } from '@/lib/schemas/types'
 
 type Repos = ReturnType<typeof getRepositories>
 
@@ -27,9 +27,9 @@ function getFilePath(file: FileEntry): string {
   return `data/files/storage/${file.id}${ext}`
 }
 
-// Result types for participant builders
+// Result types for participant builders (uses Input type for optional defaults)
 type ParticipantBuildSuccess = {
-  participant: Omit<ChatParticipantBase, 'id' | 'createdAt' | 'updatedAt'>
+  participant: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>
   tags: string[]
 }
 type ParticipantBuildError = { error: string }
@@ -72,6 +72,7 @@ async function getCharacterSummary(characterId: string, repos: Repos) {
     avatarUrl: character.avatarUrl,
     defaultImageId: character.defaultImageId,
     defaultImage,
+    tags: character.tags || [],
   }
 }
 
@@ -95,6 +96,7 @@ async function getPersonaSummary(personaId: string, repos: Repos) {
     avatarUrl: persona.avatarUrl,
     defaultImageId: persona.defaultImageId,
     defaultImage,
+    tags: persona.tags || [],
   }
 }
 
@@ -254,9 +256,9 @@ async function buildPersonaParticipant(
   }
 }
 
-// Result type for building all participants
+// Result type for building all participants (uses Input type for optional defaults)
 type BuildParticipantsResult = {
-  participants: Omit<ChatParticipantBase, 'id' | 'createdAt' | 'updatedAt'>[]
+  participants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[]
   tags: Set<string>
   firstCharacter: { characterId: string; personaId?: string }
 } | { error: string }
@@ -267,7 +269,7 @@ async function buildAllParticipants(
   userId: string,
   repos: Repos
 ): Promise<BuildParticipantsResult> {
-  const builtParticipants: Omit<ChatParticipantBase, 'id' | 'createdAt' | 'updatedAt'>[] = []
+  const builtParticipants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[] = []
   const allTagIds = new Set<string>()
   let firstCharacter: { characterId: string; personaId?: string } | null = null
 
@@ -309,7 +311,7 @@ async function buildAllParticipants(
 async function createInitialMessages(
   chatId: string,
   context: ChatContext,
-  participants: ChatParticipantBase[],
+  participants: ChatParticipantBaseInput[],
   userId: string,
   repos: Repos
 ): Promise<void> {
@@ -346,7 +348,7 @@ async function createInitialMessages(
 
 async function autoGenerateFirstMessage(
   context: ChatContext,
-  participants: ChatParticipantBase[],
+  participants: ChatParticipantBaseInput[],
   userId: string,
   repos: Repos
 ): Promise<string> {
@@ -401,11 +403,11 @@ async function autoGenerateFirstMessage(
 
 function selectCharacterParticipant(
   characterId: string,
-  participants: ChatParticipantBase[]
-): ChatParticipantBase | null {
+  participants: ChatParticipantBaseInput[]
+): ChatParticipantBaseInput | null {
   const matches = participants
     .filter(p => p.type === 'CHARACTER' && p.characterId === characterId)
-    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
 
   if (matches.length > 0) {
     return matches[0]
@@ -413,7 +415,7 @@ function selectCharacterParticipant(
 
   const firstCharacter = participants
     .filter(p => p.type === 'CHARACTER')
-    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
 
   return firstCharacter[0] || null
 }
@@ -465,7 +467,8 @@ export async function POST(req: NextRequest) {
     )
 
     const now = new Date().toISOString()
-    const participantsWithTimestamps: ChatParticipantBase[] = buildResult.participants.map(p => ({
+    // Use input type here - the schema validation will apply defaults
+    const participantsWithTimestamps: ChatParticipantBaseInput[] = buildResult.participants.map(p => ({
       ...p,
       id: crypto.randomUUID(),
       createdAt: now,

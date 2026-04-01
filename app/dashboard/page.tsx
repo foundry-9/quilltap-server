@@ -1,8 +1,8 @@
 import { getServerSession } from "@/lib/auth/session";
 import { getUserRepositories, getRepositories } from "@/lib/repositories/factory";
-import Link from "next/link";
 import { RecentChatsSection } from "@/components/dashboard/recent-chats";
 import { FavoriteCharactersSection } from "@/components/dashboard/favorite-characters";
+import { DashboardCards } from "@/components/dashboard/dashboard-cards";
 import { TwoFactorPrompt } from "@/components/auth/TwoFactorPrompt";
 import type { FileEntry } from "@/lib/schemas/types";
 
@@ -43,10 +43,31 @@ export default async function Dashboard() {
     repos ? repos.personas.findAll() : Promise.resolve([]),
   ]);
 
-  // Count items (now properly filtered by user)
-  const charactersCount = allCharacters.length;
-  const chatsCount = allChats.length;
-  const personasCount = allPersonas.length;
+  // Prepare minimal tag data for dashboard cards (for quick-hide filtering)
+  const characterTagData = allCharacters.map(c => ({ id: c.id, tags: c.tags ?? [] }));
+  // For chats, include participant tags for quick-hide filtering
+  const chatTagData = await Promise.all(allChats.map(async (c) => {
+    const allTagIds: string[] = [...(c.tags ?? [])];
+
+    // Add participant tags
+    for (const participant of c.participants) {
+      if (participant.type === 'CHARACTER' && participant.characterId && repos) {
+        const character = await repos.characters.findById(participant.characterId);
+        if (character?.tags) {
+          allTagIds.push(...character.tags);
+        }
+      }
+      if (participant.type === 'PERSONA' && participant.personaId && repos) {
+        const persona = await repos.personas.findById(participant.personaId);
+        if (persona?.tags) {
+          allTagIds.push(...persona.tags);
+        }
+      }
+    }
+
+    return { id: c.id, tags: allTagIds };
+  }));
+  const personaTagData = allPersonas.map(p => ({ id: p.id, tags: p.tags ?? [] }));
 
   // Get favorite characters
   const favoriteCharacters = repos
@@ -86,13 +107,15 @@ export default async function Dashboard() {
     title: string
     updatedAt: string
     messageCount: number
-    character: {
+    characters: Array<{
+      id: string
       name: string
       avatarUrl: string | null
       defaultImageId: string | null
       defaultImage: { id: string; filepath: string; url: null } | null
-    }
-    persona: { id: string; name: string } | null
+      tags: string[]
+    }>
+    persona: { id: string; name: string; title?: string | null; tags?: string[] } | null
     tags: Array<{ tag: { id: string; name: string } }>
   } | null> = repos
     ? await Promise.all(
@@ -100,27 +123,44 @@ export default async function Dashboard() {
           .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
           .slice(0, 5)
           .map(async (chat) => {
-            // Get character from participants
-            const characterParticipant = chat.participants.find(
-              p => p.type === 'CHARACTER' && p.characterId
-            );
-            if (!characterParticipant?.characterId) return null;
+            // Get all active character participants, sorted by displayOrder
+            const characterParticipants = chat.participants
+              .filter(p => p.type === 'CHARACTER' && p.characterId && p.isActive !== false)
+              .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
 
-            const character = await repos.characters.findById(characterParticipant.characterId);
-            // Skip chats without characters
-            if (!character) return null;
+            if (characterParticipants.length === 0) return null;
 
-            let characterDefaultImage = null;
-            if (character.defaultImageId) {
-              const fileEntry = await repos.files.findById(character.defaultImageId);
-              if (fileEntry) {
-                characterDefaultImage = {
-                  id: fileEntry.id,
-                  filepath: getFilePath(fileEntry),
-                  url: null,
+            // Fetch all characters with their images
+            const characters = await Promise.all(
+              characterParticipants.map(async (participant) => {
+                const character = await repos.characters.findById(participant.characterId!);
+                if (!character) return null;
+
+                let defaultImage = null;
+                if (character.defaultImageId) {
+                  const fileEntry = await repos.files.findById(character.defaultImageId);
+                  if (fileEntry) {
+                    defaultImage = {
+                      id: fileEntry.id,
+                      filepath: getFilePath(fileEntry),
+                      url: null,
+                    };
+                  }
+                }
+
+                return {
+                  id: character.id,
+                  name: character.name,
+                  avatarUrl: character.avatarUrl ?? null,
+                  defaultImageId: character.defaultImageId ?? null,
+                  defaultImage,
+                  tags: character.tags ?? [],
                 };
-              }
-            }
+              })
+            );
+
+            const validCharacters = characters.filter((c): c is NonNullable<typeof c> => c !== null);
+            if (validCharacters.length === 0) return null;
 
             // Get persona data from participants if present
             let persona = null;
@@ -128,7 +168,15 @@ export default async function Dashboard() {
               p => p.type === 'PERSONA' && p.personaId
             );
             if (personaParticipant?.personaId) {
-              persona = await repos.personas.findById(personaParticipant.personaId);
+              const personaData = await repos.personas.findById(personaParticipant.personaId);
+              if (personaData) {
+                persona = {
+                  id: personaData.id,
+                  name: personaData.name,
+                  title: personaData.title ?? null,
+                  tags: personaData.tags ?? [],
+                };
+              }
             }
 
             // Get tags
@@ -144,18 +192,8 @@ export default async function Dashboard() {
               title: chat.title,
               updatedAt: chat.updatedAt,
               messageCount: chat.messageCount || 0,
-              character: {
-                name: character.name,
-                avatarUrl: character.avatarUrl ?? null,
-                defaultImageId: character.defaultImageId ?? null,
-                defaultImage: characterDefaultImage,
-              },
-              persona: persona
-                ? {
-                    id: persona.id,
-                    name: persona.name,
-                  }
-                : null,
+              characters: validCharacters,
+              persona,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
             };
           })
@@ -165,8 +203,8 @@ export default async function Dashboard() {
   const recentChats = allRecentChats.filter((chat) => chat !== null);
 
   return (
-    <div className="container mx-auto px-4 py-8 flex flex-col max-w-[800px]">
-      <div className="flex-1">
+    <div className="container mx-auto px-4 pt-4 pb-4 flex flex-col max-w-[800px] h-full overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* 2FA Setup Prompt */}
         <TwoFactorPrompt />
 
@@ -184,61 +222,11 @@ export default async function Dashboard() {
           </div>
         )}
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-8">
-        {/* Characters Card */}
-        <Link href="/characters">
-          <div className="h-full flex flex-col rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-blue-500 hover:shadow-md dark:hover:border-blue-500 dark:hover:shadow-md transition-all cursor-pointer">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Characters</h2>
-              <span className="rounded-full bg-blue-100 dark:bg-blue-900 px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200">
-                {charactersCount}
-              </span>
-            </div>
-            <p className="mb-6 flex-1 text-sm text-gray-600 dark:text-gray-400">
-              Create and manage your AI characters
-            </p>
-            <div className="w-full rounded-md bg-blue-600 dark:bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 dark:hover:bg-blue-800 text-center">
-              Manage Characters
-            </div>
-          </div>
-        </Link>
-
-        {/* Chats Card */}
-        <Link href="/chats">
-          <div className="h-full flex flex-col rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-green-500 hover:shadow-md dark:hover:border-green-500 dark:hover:shadow-md transition-all cursor-pointer">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Chats</h2>
-              <span className="rounded-full bg-green-100 dark:bg-green-900 px-3 py-1 text-sm font-medium text-green-800 dark:text-green-200">
-                {chatsCount}
-              </span>
-            </div>
-            <p className="mb-6 flex-1 text-sm text-gray-600 dark:text-gray-400">
-              Start conversations with your characters
-            </p>
-            <div className="w-full rounded-md bg-green-600 dark:bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 dark:hover:bg-green-800 text-center">
-              Manage Chats
-            </div>
-          </div>
-        </Link>
-
-        {/* Personas Card */}
-        <Link href="/personas">
-          <div className="h-full flex flex-col rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-6 shadow-sm dark:shadow-lg hover:border-purple-500 hover:shadow-md dark:hover:border-purple-500 dark:hover:shadow-md transition-all cursor-pointer">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Personas</h2>
-              <span className="rounded-full bg-purple-100 dark:bg-purple-900 px-3 py-1 text-sm font-medium text-purple-800 dark:text-purple-200">
-                {personasCount}
-              </span>
-            </div>
-            <p className="mb-6 flex-1 text-sm text-gray-600 dark:text-gray-400">
-              Manage your user personas
-            </p>
-            <div className="w-full rounded-md bg-purple-600 dark:bg-purple-700 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 dark:hover:bg-purple-800 text-center">
-              Manage Personas
-            </div>
-          </div>
-        </Link>
-      </div>
+        <DashboardCards
+          characters={characterTagData}
+          chats={chatTagData}
+          personas={personaTagData}
+        />
 
         {/* Recent Chats */}
         <RecentChatsSection chats={recentChats} />

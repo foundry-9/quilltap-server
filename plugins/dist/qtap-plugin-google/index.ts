@@ -10,7 +10,7 @@
  * - Web search integration via Google Search
  */
 
-import type { LLMProviderPlugin } from './types';
+import type { LLMProviderPlugin, ImageGenerationModelInfo } from './types';
 import { GoogleProvider } from './provider';
 import { GoogleImagenProvider } from './image-provider';
 import { GoogleIcon } from './icon';
@@ -134,27 +134,14 @@ export const plugin: LLMProviderPlugin = {
    * Returns cached information about Google models without needing API calls
    */
   getModelInfo: () => {
-    logger.debug('Getting Google model information', { context: 'plugin.getModelInfo' });
+    logger.debug('Getting Google model information', {
+      context: 'plugin.getModelInfo',
+    });
     return [
+      // Chat models
       {
         id: 'gemini-2.5-flash',
         name: 'Gemini 2.5 Flash',
-        contextWindow: 1000000,
-        maxOutputTokens: 8192,
-        supportsImages: true,
-        supportsTools: true,
-      },
-      {
-        id: 'gemini-2.5-flash-image',
-        name: 'Gemini 2.5 Flash Image',
-        contextWindow: 1000000,
-        maxOutputTokens: 8192,
-        supportsImages: true,
-        supportsTools: true,
-      },
-      {
-        id: 'gemini-3-pro-image-preview',
-        name: 'Gemini 3 Pro Image Preview',
         contextWindow: 1000000,
         maxOutputTokens: 8192,
         supportsImages: true,
@@ -168,6 +155,40 @@ export const plugin: LLMProviderPlugin = {
         supportsImages: true,
         supportsTools: true,
       },
+      // Gemini image generation models (use generateContent API)
+      {
+        id: 'gemini-2.0-flash-exp',
+        name: 'Gemini 2.0 Flash Experimental',
+        contextWindow: 1000000,
+        maxOutputTokens: 8192,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'gemini-2.5-flash-image',
+        name: 'Gemini 2.5 Flash Image (Nano Banana)',
+        contextWindow: 1000000,
+        maxOutputTokens: 8192,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'gemini-2.5-flash-preview-native-image',
+        name: 'Gemini 2.5 Flash Native Image',
+        contextWindow: 1000000,
+        maxOutputTokens: 8192,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'gemini-3-pro-image-preview',
+        name: 'Gemini 3 Pro Image Preview (Nano Banana Pro)',
+        contextWindow: 65536,
+        maxOutputTokens: 32768,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      // Imagen models (use predict API)
       {
         id: 'imagen-4',
         name: 'Imagen 4',
@@ -183,6 +204,98 @@ export const plugin: LLMProviderPlugin = {
         maxOutputTokens: 0,
         supportsImages: false,
         supportsTools: false,
+      },
+    ];
+  },
+
+  /**
+   * Get static image generation model information
+   * Returns cached information about Google image generation models
+   */
+  getImageGenerationModels: (): ImageGenerationModelInfo[] => {
+    return [
+      // Gemini image generation models (use generateContent API)
+      {
+        id: 'gemini-2.0-flash-exp',
+        name: 'Gemini 2.0 Flash Experimental',
+        supportedAspectRatios: [
+          '1:1',
+          '2:3',
+          '3:2',
+          '3:4',
+          '4:3',
+          '4:5',
+          '5:4',
+          '9:16',
+          '16:9',
+        ],
+        description: 'Experimental Gemini 2.0 model with image generation',
+      },
+      {
+        id: 'gemini-2.5-flash-image',
+        name: 'Gemini 2.5 Flash Image (Nano Banana)',
+        supportedAspectRatios: [
+          '1:1',
+          '2:3',
+          '3:2',
+          '3:4',
+          '4:3',
+          '4:5',
+          '5:4',
+          '9:16',
+          '16:9',
+          '21:9',
+        ],
+        description:
+          'Fast, efficient model for general image generation with text rendering',
+      },
+      {
+        id: 'gemini-2.5-flash-preview-native-image',
+        name: 'Gemini 2.5 Flash Native Image',
+        supportedAspectRatios: [
+          '1:1',
+          '2:3',
+          '3:2',
+          '3:4',
+          '4:3',
+          '4:5',
+          '5:4',
+          '9:16',
+          '16:9',
+          '21:9',
+        ],
+        description: 'Native image generation variant of Gemini 2.5 Flash',
+      },
+      {
+        id: 'gemini-3-pro-image-preview',
+        name: 'Gemini 3 Pro Image Preview (Nano Banana Pro)',
+        supportedAspectRatios: [
+          '1:1',
+          '2:3',
+          '3:2',
+          '3:4',
+          '4:3',
+          '4:5',
+          '5:4',
+          '9:16',
+          '16:9',
+          '21:9',
+        ],
+        description:
+          'Advanced image generation with fine-grained creative controls, 2K/4K output, up to 14 reference images',
+      },
+      // Imagen models (use predict API)
+      {
+        id: 'imagen-4',
+        name: 'Imagen 4',
+        supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+        description: 'High-quality image generation with Imagen 4',
+      },
+      {
+        id: 'imagen-4-fast',
+        name: 'Imagen 4 Fast',
+        supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+        description: 'Faster image generation variant of Imagen 4',
       },
     ];
   },

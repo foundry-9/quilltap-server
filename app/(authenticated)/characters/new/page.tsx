@@ -80,22 +80,22 @@ export default function NewCharacterPage() {
       <div className="mb-8">
         <Link
           href="/characters"
-          className="text-blue-600 dark:text-blue-400 hover:underline mb-4 inline-block"
+          className="qt-link mb-4 inline-block"
         >
           ← Back to Characters
         </Link>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create Character</h1>
+        <h1 className="text-3xl font-bold text-foreground">Create Character</h1>
       </div>
 
       {error && (
-        <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded mb-4">
+        <div className="qt-alert-error mb-4">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label htmlFor="name" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+          <label htmlFor="name" className="block text-sm font-medium mb-2 text-foreground">
             Name *
           </label>
           <input
@@ -105,12 +105,12 @@ export default function NewCharacterPage() {
             value={formData.name}
             onChange={handleChange}
             required
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            className="qt-input"
           />
         </div>
 
         <div>
-          <label htmlFor="title" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+          <label htmlFor="title" className="block text-sm font-medium mb-2 text-foreground">
             Title (Optional)
           </label>
           <input
@@ -119,13 +119,13 @@ export default function NewCharacterPage() {
             name="title"
             value={formData.title}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            className="qt-input"
             placeholder="e.g., The Wanderer, Knight of the Realm"
           />
         </div>
 
         <div>
-          <label htmlFor="description" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+          <label htmlFor="description" className="block text-sm font-medium mb-2 text-foreground">
             Description (Optional)
           </label>
           <textarea
@@ -134,13 +134,13 @@ export default function NewCharacterPage() {
             value={formData.description}
             onChange={handleChange}
             rows={4}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            className="qt-textarea"
             placeholder="Describe the character's appearance, background, and key traits"
           />
         </div>
 
         <div>
-          <label htmlFor="personality" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+          <label htmlFor="personality" className="block text-sm font-medium mb-2 text-foreground">
             Personality (Optional)
           </label>
           <textarea
@@ -149,13 +149,13 @@ export default function NewCharacterPage() {
             value={formData.personality}
             onChange={handleChange}
             rows={4}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            className="qt-textarea"
             placeholder="Describe the character's personality traits and behavioral patterns"
           />
         </div>
 
         <div>
-          <label htmlFor="scenario" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+          <label htmlFor="scenario" className="block text-sm font-medium mb-2 text-foreground">
             Scenario (Optional)
           </label>
           <textarea
@@ -164,13 +164,13 @@ export default function NewCharacterPage() {
             value={formData.scenario}
             onChange={handleChange}
             rows={4}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            className="qt-textarea"
             placeholder="Describe the setting and context for conversations"
           />
         </div>
 
         <div>
-          <label htmlFor="firstMessage" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+          <label htmlFor="firstMessage" className="block text-sm font-medium mb-2 text-foreground">
             First Message (Optional)
           </label>
           <textarea
@@ -179,13 +179,13 @@ export default function NewCharacterPage() {
             value={formData.firstMessage}
             onChange={handleChange}
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            className="qt-textarea"
             placeholder="The character's opening message to start conversations"
           />
         </div>
 
         <div>
-          <label htmlFor="exampleDialogues" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+          <label htmlFor="exampleDialogues" className="block text-sm font-medium mb-2 text-foreground">
             Example Dialogues (Optional)
           </label>
           <textarea
@@ -194,13 +194,13 @@ export default function NewCharacterPage() {
             value={formData.exampleDialogues}
             onChange={handleChange}
             rows={6}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            className="qt-textarea"
             placeholder="Example conversations to guide the AI's responses"
           />
         </div>
 
         <div>
-          <label htmlFor="systemPrompt" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+          <label htmlFor="systemPrompt" className="block text-sm font-medium mb-2 text-foreground">
             System Prompt (Optional)
           </label>
           <textarea
@@ -209,13 +209,13 @@ export default function NewCharacterPage() {
             value={formData.systemPrompt}
             onChange={handleChange}
             rows={4}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            className="qt-textarea"
             placeholder="Custom system instructions (will be combined with auto-generated prompt)"
           />
         </div>
 
         <div>
-          <label htmlFor="avatarUrl" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+          <label htmlFor="avatarUrl" className="block text-sm font-medium mb-2 text-foreground">
             Avatar URL (Optional)
           </label>
           <input
@@ -224,13 +224,13 @@ export default function NewCharacterPage() {
             name="avatarUrl"
             value={formData.avatarUrl}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            className="qt-input"
             placeholder="https://example.com/avatar.png"
           />
         </div>
 
         <div>
-          <label htmlFor="defaultConnectionProfileId" className="block text-sm font-medium mb-2 text-gray-900 dark:text-white">
+          <label htmlFor="defaultConnectionProfileId" className="block text-sm font-medium mb-2 text-foreground">
             Default Connection Profile (Optional)
           </label>
           <select
@@ -238,7 +238,7 @@ export default function NewCharacterPage() {
             name="defaultConnectionProfileId"
             value={formData.defaultConnectionProfileId}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            className="qt-select"
           >
             <option value="">No default profile</option>
             {profiles.map((profile) => (
@@ -247,7 +247,7 @@ export default function NewCharacterPage() {
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-xs text-muted-foreground">
             Can be overridden for individual chats
           </p>
         </div>
@@ -256,13 +256,13 @@ export default function NewCharacterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600"
+            className="qt-button flex-1 qt-button-primary"
           >
             {loading ? 'Creating...' : 'Create Character'}
           </button>
           <Link
             href="/characters"
-            className="px-6 py-3 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 text-center"
+            className="qt-button px-6 py-3 qt-button-secondary text-center"
           >
             Cancel
           </Link>

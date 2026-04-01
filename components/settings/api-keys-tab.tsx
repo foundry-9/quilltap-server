@@ -124,7 +124,7 @@ export default function ApiKeysTab() {
   return (
     <div>
       {error && (
-        <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded mb-4">
+        <div className="qt-alert-error mb-4">
           {error}
         </div>
       )}
@@ -136,7 +136,7 @@ export default function ApiKeysTab() {
           {!showForm && (
             <button
               onClick={() => setShowForm(true)}
-              className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
             >
               + Add API Key
             </button>
@@ -144,7 +144,7 @@ export default function ApiKeysTab() {
         </div>
 
         {apiKeys.length === 0 ? (
-          <div className="bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-6 text-center text-gray-600 dark:text-gray-400">
+          <div className="bg-muted border border-border rounded-lg p-6 text-center text-muted-foreground">
             <p>No API keys yet. Add one to get started.</p>
           </div>
         ) : (
@@ -152,24 +152,24 @@ export default function ApiKeysTab() {
             {apiKeys.toSorted((a, b) => a.label.localeCompare(b.label)).map(key => (
               <div
                 key={key.id}
-                className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 flex items-center justify-between bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700"
+                className="border border-border rounded-lg p-4 flex items-center justify-between bg-card hover:bg-accent/50"
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-3">
                     <div>
-                      <p className="font-medium dark:text-white">{key.label}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="font-medium text-foreground">{key.label}</p>
+                      <p className="text-sm text-muted-foreground">
                         {key.provider} • {key.keyPreview}
                       </p>
                       {key.lastUsed && (
-                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                        <p className="text-xs text-muted-foreground/70">
                           Last used: {new Date(key.lastUsed).toLocaleDateString()}
                         </p>
                       )}
                     </div>
                   </div>
                   {testResults[key.id] && (
-                    <p className={`text-sm mt-2 ${testResults[key.id].startsWith('✓') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    <p className={`text-sm mt-2 ${testResults[key.id].startsWith('✓') ? 'text-green-600' : 'text-destructive/80'}`}>
                       {testResults[key.id]}
                     </p>
                   )}
@@ -178,13 +178,13 @@ export default function ApiKeysTab() {
                   <button
                     onClick={() => handleTest(key.id)}
                     disabled={testingKeyId === key.id}
-                    className="px-3 py-1 text-sm bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-slate-600 disabled:bg-gray-100 dark:disabled:bg-slate-700"
+                    className="px-3 py-1 text-sm bg-muted text-foreground rounded hover:bg-accent disabled:bg-muted"
                   >
                     {testingKeyId === key.id ? 'Testing...' : 'Test'}
                   </button>
                   <button
                     onClick={() => handleDelete(key.id)}
-                    className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-800"
+                    className="px-3 py-1 text-sm bg-destructive/10 text-destructive rounded hover:bg-destructive/20"
                   >
                     Delete
                   </button>
@@ -197,7 +197,7 @@ export default function ApiKeysTab() {
 
       {/* Add API Key Form */}
       {showForm && (
-        <div className="bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg p-6">
+        <div className="bg-muted border border-border rounded-lg p-6">
           <h3 className="text-lg font-semibold mb-4">Add New API Key</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -212,9 +212,9 @@ export default function ApiKeysTab() {
                 onChange={handleChange}
                 placeholder="e.g., My OpenAI Key"
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                className="qt-input"
               />
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">A friendly name to identify this key</p>
+              <p className="text-xs text-muted-foreground mt-1">A friendly name to identify this key</p>
             </div>
 
             <div>
@@ -226,7 +226,7 @@ export default function ApiKeysTab() {
                 name="provider"
                 value={formData.provider}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                className="qt-select"
               >
                 <option value="OPENAI">OpenAI</option>
                 <option value="ANTHROPIC">Anthropic</option>
@@ -251,23 +251,23 @@ export default function ApiKeysTab() {
                 onChange={handleChange}
                 placeholder="Your API key (will be encrypted)"
                 required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                className="qt-input"
               />
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Your key is encrypted and never exposed</p>
+              <p className="text-xs text-muted-foreground mt-1">Your key is encrypted and never exposed</p>
             </div>
 
             <div className="flex gap-3 pt-2">
               <button
                 type="submit"
                 disabled={formLoading}
-                className="px-6 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 disabled:bg-gray-400 dark:disabled:bg-gray-600"
+                className="px-6 py-2 qt-button qt-button-primary"
               >
                 {formLoading ? 'Creating...' : 'Create API Key'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-6 py-2 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600"
+                className="px-6 py-2 qt-button qt-button-secondary"
               >
                 Cancel
               </button>

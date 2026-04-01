@@ -143,6 +143,13 @@ export function showWarningToast(message: string, duration?: number): string {
 }
 
 /**
+ * Convenience function for info toasts
+ */
+export function showInfoToast(message: string, duration?: number): string {
+  return showToast(message, { type: 'info', duration })
+}
+
+/**
  * Removes a specific toast by ID
  */
 export function removeToast(id: string) {

@@ -1,0 +1,640 @@
+/**
+ * Quilltap Component System - Content Components
+ *
+ * Badges, avatars, code blocks, typography
+ *
+ * Note: We define shared base styles using comma-separated selectors
+ * rather than @apply to reference other qt-* classes.
+ */
+
+@layer components {
+  /* ==========================================================================
+     BADGES - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All badge variants share these base styles
+   */
+  .qt-badge,
+  .qt-badge-primary,
+  .qt-badge-secondary,
+  .qt-badge-outline,
+  .qt-badge-success,
+  .qt-badge-warning,
+  .qt-badge-destructive,
+  .qt-badge-info,
+  .qt-badge-character,
+  .qt-badge-persona,
+  .qt-badge-chat,
+  .qt-badge-tag,
+  .qt-badge-memory,
+  .qt-badge-characters,
+  .qt-badge-chats,
+  .qt-badge-personas,
+  .qt-badge-enabled,
+  .qt-badge-disabled,
+  .qt-badge-related,
+  .qt-badge-manual,
+  .qt-badge-auto,
+  .qt-badge-source-included,
+  .qt-badge-source-npm,
+  .qt-badge-source-git,
+  .qt-badge-source-manual,
+  .qt-badge-capability,
+  .qt-badge-version {
+    @apply inline-flex items-center justify-center flex-shrink-0;
+    padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
+    border-radius: var(--qt-badge-radius);
+    font-size: var(--qt-badge-font-size);
+    font-weight: var(--qt-badge-font-weight);
+  }
+
+  /* ==========================================================================
+     BADGE VARIANTS
+     ========================================================================== */
+
+  /**
+   * Primary badge
+   */
+  .qt-badge-primary {
+    background: var(--qt-badge-primary-bg);
+    color: var(--qt-badge-primary-fg);
+  }
+
+  /**
+   * Secondary badge
+   */
+  .qt-badge-secondary {
+    background: var(--qt-badge-secondary-bg);
+    color: var(--qt-badge-secondary-fg);
+  }
+
+  /**
+   * Outline badge
+   */
+  .qt-badge-outline {
+    background: var(--qt-badge-outline-bg);
+    color: var(--qt-badge-outline-fg);
+    border: 1px solid var(--qt-badge-outline-border);
+  }
+
+  /**
+   * Success badge
+   */
+  .qt-badge-success {
+    background: var(--qt-status-success-bg);
+    color: var(--qt-status-success-fg);
+    border: 1px solid var(--qt-status-success-border);
+  }
+
+  /**
+   * Warning badge
+   */
+  .qt-badge-warning {
+    background: var(--qt-status-warning-bg);
+    color: var(--qt-status-warning-fg);
+    border: 1px solid var(--qt-status-warning-border);
+  }
+
+  /**
+   * Destructive badge
+   */
+  .qt-badge-destructive {
+    background: var(--qt-status-danger-bg);
+    color: var(--qt-status-danger-fg);
+    border: 1px solid var(--qt-status-danger-border);
+  }
+
+  /**
+   * Info badge
+   */
+  .qt-badge-info {
+    background: var(--qt-status-info-bg);
+    color: var(--qt-status-info-fg);
+    border: 1px solid var(--qt-status-info-border);
+  }
+
+  /* ==========================================================================
+     TAG BADGES
+     ========================================================================== */
+
+  /**
+   * Tag badge - base structural styling
+   * Used with dynamic inline styles for colors from tag style provider
+   */
+  .qt-tag-badge {
+    @apply inline-flex items-center gap-1;
+    @apply font-medium;
+    @apply transition-colors;
+    border-width: 2px;
+    border-style: solid;
+    border-radius: var(--qt-tag-badge-radius, 9999px);
+  }
+
+  .qt-tag-badge-sm {
+    @apply text-xs px-2 py-0.5;
+  }
+
+  .qt-tag-badge-md {
+    @apply text-sm px-3 py-1;
+  }
+
+  /**
+   * Tag badge emoji
+   */
+  .qt-tag-badge-emoji {
+    @apply text-base leading-none;
+  }
+
+  /**
+   * Tag badge remove button
+   */
+  .qt-tag-badge-remove {
+    @apply ml-1 inline-flex h-4 w-4 items-center justify-center;
+    @apply rounded-full border border-current bg-transparent;
+    @apply focus:outline-none disabled:opacity-50;
+    @apply transition-colors;
+  }
+
+  .qt-tag-badge-remove:hover:not(:disabled) {
+    @apply bg-current/10;
+  }
+
+  /* ==========================================================================
+     AVATARS
+     ========================================================================== */
+
+  /**
+   * Base avatar
+   */
+  .qt-avatar {
+    @apply relative inline-flex items-center justify-center;
+    @apply overflow-hidden;
+    @apply flex-shrink-0;
+    width: var(--qt-avatar-size);
+    height: var(--qt-avatar-size);
+    border-radius: var(--qt-avatar-radius);
+    background: var(--qt-avatar-bg);
+    color: var(--qt-avatar-fg);
+    border: 2px solid var(--qt-avatar-border);
+  }
+
+  /**
+   * Avatar image
+   */
+  .qt-avatar-image {
+    @apply w-full h-full object-cover;
+  }
+
+  /**
+   * Avatar fallback (initials)
+   */
+  .qt-avatar-fallback {
+    @apply flex items-center justify-center;
+    @apply w-full h-full;
+    @apply text-sm font-medium;
+  }
+
+  /**
+   * Avatar size variants
+   */
+  .qt-avatar-sm {
+    width: var(--qt-avatar-size-sm);
+    height: var(--qt-avatar-size-sm);
+    @apply text-xs;
+  }
+
+  .qt-avatar-lg {
+    width: var(--qt-avatar-size-lg);
+    height: var(--qt-avatar-size-lg);
+    @apply text-base;
+  }
+
+  .qt-avatar-xl {
+    width: var(--qt-avatar-size-xl);
+    height: var(--qt-avatar-size-xl);
+    @apply text-lg;
+  }
+
+  /**
+   * Avatar group (stacked avatars)
+   */
+  .qt-avatar-group {
+    @apply flex -space-x-2;
+  }
+
+  .qt-avatar-group .qt-avatar {
+    @apply ring-2 ring-background;
+  }
+
+  /* ==========================================================================
+     CODE BLOCKS
+     ========================================================================== */
+
+  /**
+   * Inline code
+   */
+  .qt-code-inline {
+    @apply px-1.5 py-0.5;
+    @apply text-sm;
+    border-radius: calc(var(--qt-code-radius) / 2);
+    background: var(--qt-code-bg);
+    color: var(--qt-code-fg);
+    font-family: var(--qt-code-font);
+  }
+
+  /**
+   * Code block
+   */
+  .qt-code-block {
+    @apply p-4;
+    @apply overflow-x-auto;
+    @apply text-sm;
+    border-radius: var(--qt-code-radius);
+    background: var(--qt-code-bg);
+    color: var(--qt-code-fg);
+    border: 1px solid var(--qt-code-border);
+    font-family: var(--qt-code-font);
+  }
+
+  /**
+   * Code block header (language label, copy button)
+   */
+  .qt-code-header {
+    @apply flex items-center justify-between;
+    @apply px-4 py-2;
+    @apply text-xs text-muted-foreground;
+    @apply border-b border-border;
+    border-radius: var(--qt-code-radius) var(--qt-code-radius) 0 0;
+    background: var(--qt-code-bg);
+  }
+
+  /* ==========================================================================
+     TYPOGRAPHY
+     ========================================================================== */
+
+  /**
+   * Prose container for rich text content
+   * Note: Use with "prose prose-sm dark:prose-invert" classes in the component
+   * for typography plugin support (prose classes can't be @apply'd in v4)
+   */
+  .qt-prose {
+    @apply max-w-none;
+  }
+
+  /**
+   * Heading styles
+   */
+  .qt-heading-1 {
+    @apply text-3xl font-bold tracking-tight;
+  }
+
+  .qt-heading-2 {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+
+  .qt-heading-3 {
+    @apply text-xl font-semibold;
+  }
+
+  .qt-heading-4 {
+    @apply text-lg font-semibold;
+  }
+
+  /**
+   * Text styles
+   */
+  .qt-text-lead {
+    @apply text-xl text-muted-foreground;
+  }
+
+  .qt-text-large {
+    @apply text-lg font-semibold;
+  }
+
+  .qt-text-small {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .qt-text-muted {
+    @apply text-muted-foreground;
+  }
+
+  /* ==========================================================================
+     EMPTY STATES
+     ========================================================================== */
+
+  /**
+   * Empty state container
+   */
+  .qt-empty-state {
+    @apply flex flex-col items-center justify-center;
+    @apply py-12 px-4;
+    @apply text-center;
+  }
+
+  /**
+   * Empty state icon
+   */
+  .qt-empty-state-icon {
+    @apply w-12 h-12;
+    @apply text-muted-foreground/50;
+    @apply mb-4;
+  }
+
+  /**
+   * Empty state title
+   */
+  .qt-empty-state-title {
+    @apply text-lg font-medium text-foreground;
+    @apply mb-1;
+  }
+
+  /**
+   * Empty state description
+   */
+  .qt-empty-state-description {
+    @apply text-sm text-muted-foreground;
+    @apply max-w-sm;
+  }
+
+  /**
+   * Empty state action
+   */
+  .qt-empty-state-action {
+    @apply mt-4;
+  }
+
+  /* ==========================================================================
+     LOADING STATES - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All spinner variants share these base styles
+   */
+  .qt-spinner,
+  .qt-spinner-sm,
+  .qt-spinner-lg {
+    @apply animate-spin;
+    @apply border-2 border-current border-t-transparent;
+    @apply rounded-full;
+  }
+
+  /* ==========================================================================
+     LOADING STATE VARIANTS
+     ========================================================================== */
+
+  /**
+   * Spinner (default size)
+   */
+  .qt-spinner {
+    @apply w-5 h-5;
+  }
+
+  .qt-spinner-sm {
+    @apply w-4 h-4;
+  }
+
+  .qt-spinner-lg {
+    @apply w-8 h-8;
+  }
+
+  /* ==========================================================================
+     SKELETON - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All skeleton variants share these base styles
+   */
+  .qt-skeleton,
+  .qt-skeleton-text,
+  .qt-skeleton-circle {
+    @apply animate-pulse;
+    @apply bg-muted;
+    @apply rounded;
+  }
+
+  /* ==========================================================================
+     SKELETON VARIANTS
+     ========================================================================== */
+
+  /**
+   * Text skeleton
+   */
+  .qt-skeleton-text {
+    @apply h-4 w-full;
+  }
+
+  /**
+   * Circle skeleton
+   */
+  .qt-skeleton-circle {
+    @apply rounded-full;
+  }
+
+  /* ==========================================================================
+     ALERTS - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All alert variants share these base styles
+   */
+  .qt-alert,
+  .qt-alert-success,
+  .qt-alert-warning,
+  .qt-alert-error,
+  .qt-alert-info {
+    @apply rounded-lg border px-4 py-3 text-sm;
+  }
+
+  /* ==========================================================================
+     ALERT VARIANTS
+     ========================================================================== */
+
+  /**
+   * Success alert
+   */
+  .qt-alert-success {
+    @apply border-green-200 bg-green-50 text-green-800;
+    @apply dark:border-green-900/50 dark:bg-green-900/20 dark:text-green-200;
+  }
+
+  /**
+   * Warning alert
+   */
+  .qt-alert-warning {
+    @apply border-amber-200 bg-amber-50 text-amber-800;
+    @apply dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200;
+  }
+
+  /**
+   * Error alert
+   */
+  .qt-alert-error {
+    @apply border-red-200 bg-red-50 text-red-800;
+    @apply dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-200;
+  }
+
+  /**
+   * Info alert
+   */
+  .qt-alert-info {
+    @apply border-blue-200 bg-blue-50 text-blue-800;
+    @apply dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-200;
+  }
+
+  /* ==========================================================================
+     ENTITY-TYPE BADGES - Semantic naming with default colors
+     Characters = blue, Chats = green, Personas = purple
+     ========================================================================== */
+
+  /**
+   * Character badge (blue)
+   */
+  .qt-badge-character {
+    @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
+  }
+
+  /**
+   * Persona badge (purple)
+   */
+  .qt-badge-persona {
+    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+  }
+
+  /**
+   * Chat badge (green)
+   */
+  .qt-badge-chat {
+    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+  }
+
+  /**
+   * Tag badge (orange)
+   */
+  .qt-badge-tag {
+    @apply bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400;
+  }
+
+  /**
+   * Memory badge (pink)
+   */
+  .qt-badge-memory {
+    @apply bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400;
+  }
+
+  /* ==========================================================================
+     DASHBOARD ENTITY BADGES - For dashboard card counts
+     Characters = blue, Chats = green, Personas = purple
+     ========================================================================== */
+
+  /**
+   * Characters badge (blue) - for dashboard character count
+   */
+  .qt-badge-characters {
+    @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
+  }
+
+  /**
+   * Chats badge (green) - for dashboard chat count
+   */
+  .qt-badge-chats {
+    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+  }
+
+  /**
+   * Personas badge (purple) - for dashboard persona count
+   */
+  .qt-badge-personas {
+    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+  }
+
+  /* ==========================================================================
+     STATUS BADGES
+     ========================================================================== */
+
+  /**
+   * Enabled status badge (green)
+   */
+  .qt-badge-enabled {
+    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+  }
+
+  /**
+   * Disabled status badge (muted)
+   */
+  .qt-badge-disabled {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  /**
+   * Related badge (purple)
+   */
+  .qt-badge-related {
+    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+  }
+
+  /**
+   * Manual badge (purple)
+   */
+  .qt-badge-manual {
+    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+  }
+
+  /**
+   * Auto badge (muted)
+   */
+  .qt-badge-auto {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  /* ==========================================================================
+     PLUGIN SOURCE BADGES
+     ========================================================================== */
+
+  /**
+   * Included plugin source badge (purple)
+   */
+  .qt-badge-source-included {
+    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+  }
+
+  /**
+   * NPM plugin source badge (red)
+   */
+  .qt-badge-source-npm {
+    @apply bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400;
+  }
+
+  /**
+   * Git plugin source badge (orange)
+   */
+  .qt-badge-source-git {
+    @apply bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400;
+  }
+
+  /**
+   * Manual plugin source badge (muted)
+   */
+  .qt-badge-source-manual {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  /* ==========================================================================
+     CAPABILITY & VERSION BADGES
+     ========================================================================== */
+
+  /**
+   * Capability badge (blue)
+   */
+  .qt-badge-capability {
+    @apply bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400;
+  }
+
+  /**
+   * Version badge (muted)
+   */
+  .qt-badge-version {
+    @apply bg-muted text-muted-foreground;
+  }
+}

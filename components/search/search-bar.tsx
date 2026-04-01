@@ -142,7 +142,7 @@ export function SearchBar() {
       <div ref={containerRef} className="relative hidden md:block">
         <div className="relative">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -162,13 +162,13 @@ export function SearchBar() {
             onKeyDown={handleKeyDown}
             onFocus={handleFocus}
             placeholder="Search... (⌘K)"
-            className="w-48 lg:w-64 pl-9 pr-3 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all"
+            className="w-48 lg:w-64 pl-9 pr-3 py-1.5 text-sm border border-input rounded-md bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
           />
         </div>
 
         {/* Dropdown results */}
         {showDropdown && (query.length >= 2 || hasSearched) && (
-          <div className="absolute top-full left-0 mt-2 w-96 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden z-50">
+          <div className="absolute top-full left-0 mt-2 w-96 bg-background rounded-lg shadow-xl border border-border overflow-hidden z-50">
             <div className="max-h-96 overflow-y-auto">
               {hasSearched ? (
                 <SearchResults
@@ -178,19 +178,19 @@ export function SearchBar() {
                   onResultClick={handleResultClick}
                 />
               ) : (
-                <div className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
+                <div className="p-4 text-center text-muted-foreground text-sm">
                   Type at least 2 characters to search
                 </div>
               )}
             </div>
             {results.length > 0 && (
-              <div className="px-3 py-2 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900">
+              <div className="px-3 py-2 border-t border-border bg-muted">
                 <button
                   onClick={() => {
                     setIsDialogOpen(true)
                     setShowDropdown(false)
                   }}
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                  className="text-xs text-primary hover:underline"
                 >
                   See all results →
                 </button>
@@ -206,7 +206,7 @@ export function SearchBar() {
           clientLogger.debug('Mobile search button clicked')
           setIsDialogOpen(true)
         }}
-        className="md:hidden p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+        className="md:hidden p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
         aria-label="Search"
       >
         <svg

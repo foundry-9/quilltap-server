@@ -119,7 +119,7 @@ export function MemoryList({ characterId }: MemoryListProps) {
   if (loading && memories.length === 0) {
     return (
       <div className="flex items-center justify-center py-8">
-        <p className="text-gray-500 dark:text-gray-400">Loading memories...</p>
+        <p className="text-muted-foreground">Loading memories...</p>
       </div>
     )
   }
@@ -128,14 +128,14 @@ export function MemoryList({ characterId }: MemoryListProps) {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <h3 className="text-lg font-semibold text-foreground">
           Memories ({memories.length})
         </h3>
         <div className="flex gap-2">
           {memories.length > 0 && (
             <button
               onClick={() => setShowHousekeeping(true)}
-              className="px-3 py-1.5 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-white text-sm rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600"
+              className="px-3 py-1.5 bg-muted text-foreground text-sm rounded-lg hover:bg-accent"
               title="Clean up old and low-importance memories"
             >
               Cleanup
@@ -143,7 +143,7 @@ export function MemoryList({ characterId }: MemoryListProps) {
           )}
           <button
             onClick={handleCreate}
-            className="px-3 py-1.5 bg-blue-600 dark:bg-blue-700 text-white text-sm rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800"
+            className="px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-lg hover:bg-primary/90"
           >
             Add Memory
           </button>
@@ -158,13 +158,13 @@ export function MemoryList({ characterId }: MemoryListProps) {
             placeholder="Search memories..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortBy)}
-          className="px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="createdAt">Created Date</option>
           <option value="updatedAt">Updated Date</option>
@@ -172,7 +172,7 @@ export function MemoryList({ characterId }: MemoryListProps) {
         </select>
         <button
           onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-          className="px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+          className="px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg hover:bg-accent"
           title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
         >
           {sortOrder === 'asc' ? '↑' : '↓'}
@@ -180,7 +180,7 @@ export function MemoryList({ characterId }: MemoryListProps) {
         <select
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value as 'ALL' | 'AUTO' | 'MANUAL')}
-          className="px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="ALL">All Sources</option>
           <option value="AUTO">Auto-generated</option>
@@ -190,19 +190,19 @@ export function MemoryList({ characterId }: MemoryListProps) {
 
       {/* Error State */}
       {error && (
-        <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded">
+        <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {/* Empty State */}
       {!loading && memories.length === 0 && (
-        <div className="text-center py-8 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-          <p className="text-gray-500 dark:text-gray-400 mb-2">
+        <div className="text-center py-8 bg-muted/50 rounded-lg">
+          <p className="text-muted-foreground mb-2">
             {search ? 'No memories match your search' : 'No memories yet'}
           </p>
           {!search && (
-            <p className="text-sm text-gray-400 dark:text-gray-500">
+            <p className="text-sm text-muted-foreground/70">
               Memories will be created automatically during conversations, or you can add them manually.
             </p>
           )}

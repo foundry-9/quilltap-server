@@ -30,6 +30,8 @@ export interface CreateMemoryOptions {
   importance?: number
   /** Associated persona ID */
   personaId?: string | null
+  /** Character ID this memory is about (for inter-character memories) */
+  aboutCharacterId?: string | null
   /** Source chat ID */
   chatId?: string | null
   /** How the memory was created */
@@ -86,6 +88,7 @@ export async function createMemoryWithEmbedding(
     tags: data.tags || [],
     importance: data.importance ?? 0.5,
     personaId: data.personaId || null,
+    aboutCharacterId: data.aboutCharacterId || null,
     chatId: data.chatId || null,
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,

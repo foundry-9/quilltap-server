@@ -41,7 +41,20 @@ export default function CharactersPage() {
   const { shouldHideByIds } = useQuickHide()
 
   const visibleCharacters = useMemo(
-    () => characters.filter(character => !shouldHideByIds(character.tags || [])),
+    () => characters
+      .filter(character => !shouldHideByIds(character.tags || []))
+      .sort((a, b) => {
+        // 1. Favorites first
+        if (a.isFavorite !== b.isFavorite) {
+          return a.isFavorite ? -1 : 1
+        }
+        // 2. Then by chat count (descending)
+        if (a._count.chats !== b._count.chats) {
+          return b._count.chats - a._count.chats
+        }
+        // 3. Then alphabetically by name (case-insensitive)
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      }),
     [characters, shouldHideByIds]
   )
 
@@ -145,34 +158,34 @@ export default function CharactersPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-gray-900 dark:text-white">Loading characters...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-foreground">Loading characters...</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-red-600 dark:text-red-400">Error: {error}</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-destructive">Error: {error}</p>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-[800px]">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Characters</h1>
-        <div className="flex gap-2">
+    <div className="character-page container mx-auto max-w-5xl px-4 py-8 text-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
+        <h1 className="text-3xl font-semibold leading-tight">Characters</h1>
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setImportDialogOpen(true)}
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Import
           </button>
           <Link
             href="/characters/new"
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="qt-button character-toolbar__button character-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Create Character
           </Link>
@@ -180,21 +193,21 @@ export default function CharactersPage() {
       </div>
 
       {visibleCharacters.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-lg text-gray-600 dark:text-gray-300 mb-4">No characters yet</p>
+        <div className="character-empty-state mt-12 rounded-2xl border border-dashed border-border/70 bg-card/80 px-8 py-12 text-center shadow-sm">
+          <p className="mb-4 text-lg text-muted-foreground">No characters yet</p>
           <Link
             href="/characters/new"
-            className="text-blue-600 dark:text-blue-400 hover:underline"
+            className="font-medium text-primary hover:text-primary/80"
           >
             Create your first character
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="character-card-grid mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
           {visibleCharacters.map((character) => (
             <div
               key={character.id}
-              className="border border-gray-200 dark:border-slate-700 rounded-lg p-6 hover:shadow-lg transition-shadow bg-white dark:bg-slate-800"
+              className="qt-entity-card character-card"
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center flex-grow gap-4">
@@ -215,32 +228,32 @@ export default function CharactersPage() {
                     </div>
                   )}
                   <div className="flex-grow">
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{character.name}</h2>
+                    <h2 className="text-xl font-semibold text-foreground">{character.name}</h2>
                     {character.title && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{character.title}</p>
+                      <p className="text-sm text-muted-foreground">{character.title}</p>
                     )}
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <p className="text-sm text-muted-foreground">
                       {character._count.chats} chat{character._count.chats !== 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={(e) => toggleFavorite(e, character.id)}
-                  className="ml-2 text-2xl hover:scale-110 transition-transform flex-shrink-0"
+                  className="ml-2 text-2xl text-amber-400 transition-transform hover:scale-110"
                   title={character.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                 >
                   {character.isFavorite ? '⭐' : '☆'}
                 </button>
               </div>
 
-              <p className="text-gray-700 dark:text-gray-300 mb-4 line-clamp-3">
+              <p className="line-clamp-3 text-sm text-muted-foreground">
                 {character.description}
               </p>
 
-              <div className="flex gap-2">
+              <div className="qt-entity-card-actions character-card-actions">
                 <Link
                   href={`/characters/${character.id}/view?action=chat`}
-                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 cursor-pointer flex items-center justify-center gap-2"
+                  className="character-card__action character-card__action--chat inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow-sm transition hover:bg-success/90"
                   title="Start a chat with this character"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -250,7 +263,7 @@ export default function CharactersPage() {
                 </Link>
                 <Link
                   href={`/characters/${character.id}/view`}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer flex items-center justify-center gap-2 flex-1"
+                  className="character-card__action inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"
                   title="View character details"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -261,7 +274,7 @@ export default function CharactersPage() {
                 </Link>
                 <a
                   href={`/api/characters/${character.id}/export?format=json`}
-                  className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 flex items-center justify-center"
+                  className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted"
                   title="Export character data"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -270,7 +283,7 @@ export default function CharactersPage() {
                 </a>
                 <button
                   onClick={() => openDeleteDialog(character)}
-                  className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 cursor-pointer flex items-center justify-center"
+                  className="character-card__action inline-flex items-center justify-center rounded-lg bg-destructive px-3 py-2 text-sm font-semibold text-destructive-foreground shadow-sm transition hover:bg-destructive/90"
                   title="Delete this character"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -285,14 +298,14 @@ export default function CharactersPage() {
 
       {/* Import Dialog */}
       {importDialogOpen && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+        <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <h3 className="mb-4 text-lg font-semibold text-foreground">
               Import Character
             </h3>
             <form onSubmit={handleImport}>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="mb-2 block text-sm font-medium text-foreground">
                   Select SillyTavern character file (PNG or JSON)
                 </label>
                 <input
@@ -300,20 +313,20 @@ export default function CharactersPage() {
                   name="file"
                   accept=".png,.json"
                   required
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:bg-primary/30"
                 />
               </div>
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => setImportDialogOpen(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                  className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                  className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90"
                 >
                   Import
                 </button>

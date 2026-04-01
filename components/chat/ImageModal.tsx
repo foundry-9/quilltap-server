@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useCallback, useState } from 'react'
-import Image from 'next/image'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { clientLogger } from '@/lib/client-logger'
@@ -163,6 +162,8 @@ export default function ImageModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
     >
       {/* Control buttons - top right */}
       <div className="absolute top-4 right-4 flex gap-2 z-10">
@@ -174,7 +175,7 @@ export default function ImageModal({
               handleTagCharacter()
             }}
             disabled={isTagging}
-            className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors disabled:opacity-50"
+            className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors disabled:opacity-50"
             title={`Add to ${characterName || 'character'}'s gallery`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -190,7 +191,7 @@ export default function ImageModal({
               handleTagPersona()
             }}
             disabled={isTagging}
-            className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors disabled:opacity-50"
+            className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors disabled:opacity-50"
             title={`Add to ${personaName || 'persona'}'s gallery`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -204,7 +205,7 @@ export default function ImageModal({
             e.stopPropagation()
             handleDownload()
           }}
-          className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+          className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors"
           title="Download"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -217,7 +218,7 @@ export default function ImageModal({
             e.stopPropagation()
             onClose()
           }}
-          className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+          className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors"
           title="Close"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -235,7 +236,7 @@ export default function ImageModal({
               handleDelete()
             }}
             disabled={isDeleting}
-            className="p-2 bg-red-600/80 hover:bg-red-600 rounded-full text-white transition-colors disabled:opacity-50"
+            className="p-2 bg-destructive/80 hover:bg-destructive rounded-full text-primary-foreground transition-colors disabled:opacity-50"
             title="Delete image"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -250,13 +251,13 @@ export default function ImageModal({
         className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
         onClick={(e) => e.stopPropagation()}
       >
-        <Image
+        {/* Using regular img instead of Next.js Image because authenticated API routes
+            require session cookies, which Next.js image optimization doesn't forward */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={src}
           alt={filename}
-          width={1920}
-          height={1080}
           className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
-          priority
         />
       </div>
 

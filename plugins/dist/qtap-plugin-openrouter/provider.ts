@@ -6,7 +6,7 @@
  */
 
 import { OpenRouter } from '@openrouter/sdk';
-import type { ChatStreamingResponseChunkData } from '@openrouter/sdk/models/chatstreamingresponsechunk';
+import type { ChatGenerationParams, ChatStreamingResponseChunkData } from '@openrouter/sdk/models';
 import type {
   LLMProvider,
   LLMParams,
@@ -17,11 +17,34 @@ import type {
 } from './types';
 import { logger } from '../../../lib/logger';
 
+/**
+ * OpenRouter provider preferences for fine-grained provider control
+ */
+interface OpenRouterProviderPreferences {
+  order?: string[];              // Provider priority: ["Anthropic", "AWS Bedrock"]
+  allowFallbacks?: boolean;      // Allow fallback to other providers (default: true)
+  requireParameters?: boolean;   // Only use providers supporting all params
+  dataCollection?: 'allow' | 'deny';  // ZDR privacy control
+  ignore?: string[];             // Providers to skip
+  only?: string[];               // Use only these providers
+}
+
+/**
+ * OpenRouter-specific profile parameters
+ */
+interface OpenRouterProfileParams {
+  fallbackModels?: string[];
+  providerPreferences?: OpenRouterProviderPreferences;
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+}
+
 export class OpenRouterProvider implements LLMProvider {
   readonly supportsFileAttachments = false; // Model-dependent, conservative default
   readonly supportedMimeTypes: string[] = [];
   readonly supportsImageGeneration = true;
-  readonly supportsWebSearch = false;
+  readonly supportsWebSearch = true;
 
   /**
    * Helper to collect attachment failures
@@ -87,17 +110,88 @@ export class OpenRouterProvider implements LLMProvider {
       requestParams.toolChoice = 'auto';
     }
 
+    // Add web search plugin if enabled
+    if (params.webSearchEnabled) {
+      logger.debug('Enabling web search plugin', {
+        context: 'OpenRouterProvider.sendMessage',
+      });
+      requestParams.plugins = [{ id: 'web', maxResults: 5 }];
+    }
+
+    // Add structured output format if specified
+    if (params.responseFormat) {
+      if (params.responseFormat.type === 'json_schema' && params.responseFormat.jsonSchema) {
+        logger.debug('Adding JSON schema response format', {
+          context: 'OpenRouterProvider.sendMessage',
+          schemaName: params.responseFormat.jsonSchema.name,
+        });
+        requestParams.responseFormat = {
+          type: 'json_schema',
+          jsonSchema: {
+            name: params.responseFormat.jsonSchema.name,
+            strict: params.responseFormat.jsonSchema.strict ?? true,
+            schema: params.responseFormat.jsonSchema.schema,
+          },
+        };
+      } else if (params.responseFormat.type !== 'text') {
+        requestParams.responseFormat = { type: params.responseFormat.type };
+      }
+    }
+
+    // Handle OpenRouter-specific profile parameters
+    const profileParams = params.profileParameters as OpenRouterProfileParams | undefined;
+
+    // Add model fallbacks if configured
+    if (profileParams?.fallbackModels?.length) {
+      logger.debug('Adding fallback models', {
+        context: 'OpenRouterProvider.sendMessage',
+        fallbackCount: profileParams.fallbackModels.length,
+      });
+      requestParams.models = [params.model, ...profileParams.fallbackModels];
+      requestParams.route = 'fallback';
+      delete requestParams.model; // Can't have both model and models
+    }
+
+    // Add provider preferences if configured
+    const providerPrefs = profileParams?.providerPreferences;
+    if (providerPrefs) {
+      logger.debug('Adding provider preferences', {
+        context: 'OpenRouterProvider.sendMessage',
+        hasOrder: !!providerPrefs.order,
+        dataCollection: providerPrefs.dataCollection,
+      });
+      requestParams.provider = {};
+      if (providerPrefs.order) requestParams.provider.order = providerPrefs.order;
+      if (providerPrefs.allowFallbacks !== undefined) requestParams.provider.allowFallbacks = providerPrefs.allowFallbacks;
+      if (providerPrefs.requireParameters) requestParams.provider.requireParameters = providerPrefs.requireParameters;
+      if (providerPrefs.dataCollection) requestParams.provider.dataCollection = providerPrefs.dataCollection;
+      if (providerPrefs.ignore) requestParams.provider.ignore = providerPrefs.ignore;
+      if (providerPrefs.only) requestParams.provider.only = providerPrefs.only;
+    }
+
     const response = await client.chat.send(requestParams);
 
     const choice = response.choices[0];
     const content = choice.message.content;
     const contentStr = typeof content === 'string' ? content : '';
 
+    // Extract cache usage if available
+    const usageAny = response.usage as any;
+    const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount
+      ? {
+          cachedTokens: usageAny.cachedTokens,
+          cacheDiscount: usageAny.cacheDiscount,
+          cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
+          cacheReadInputTokens: usageAny.cacheReadInputTokens,
+        }
+      : undefined;
+
     logger.debug('Received OpenRouter response', {
       context: 'OpenRouterProvider.sendMessage',
       finishReason: choice.finishReason,
       promptTokens: response.usage?.promptTokens,
       completionTokens: response.usage?.completionTokens,
+      cachedTokens: cacheUsage?.cachedTokens,
     });
 
     return {
@@ -110,6 +204,7 @@ export class OpenRouterProvider implements LLMProvider {
       },
       raw: response,
       attachmentResults,
+      cacheUsage,
     };
   }
 
@@ -136,7 +231,7 @@ export class OpenRouterProvider implements LLMProvider {
       content: m.content,
     }));
 
-    const requestParams: any = {
+    const requestParams: ChatGenerationParams & { stream: true } = {
       model: params.model,
       messages,
       temperature: params.temperature ?? 0.7,
@@ -157,17 +252,67 @@ export class OpenRouterProvider implements LLMProvider {
       requestParams.toolChoice = 'auto';
     }
 
-    const response = await client.chat.send(requestParams);
-
-    // Type guard to ensure we have a stream
-    if (
-      !response ||
-      typeof (response as any)[Symbol.asyncIterator] !== 'function'
-    ) {
-      throw new Error('Expected streaming response from OpenRouter');
+    // Add web search plugin if enabled
+    if (params.webSearchEnabled) {
+      logger.debug('Enabling web search plugin for streaming', {
+        context: 'OpenRouterProvider.streamMessage',
+      });
+      (requestParams as any).plugins = [{ id: 'web', maxResults: 5 }];
     }
 
-    const stream = response as unknown as AsyncIterable<ChatStreamingResponseChunkData>;
+    // Add structured output format if specified
+    if (params.responseFormat) {
+      if (params.responseFormat.type === 'json_schema' && params.responseFormat.jsonSchema) {
+        logger.debug('Adding JSON schema response format for streaming', {
+          context: 'OpenRouterProvider.streamMessage',
+          schemaName: params.responseFormat.jsonSchema.name,
+        });
+        (requestParams as any).responseFormat = {
+          type: 'json_schema',
+          jsonSchema: {
+            name: params.responseFormat.jsonSchema.name,
+            strict: params.responseFormat.jsonSchema.strict ?? true,
+            schema: params.responseFormat.jsonSchema.schema,
+          },
+        };
+      } else if (params.responseFormat.type !== 'text') {
+        (requestParams as any).responseFormat = { type: params.responseFormat.type };
+      }
+    }
+
+    // Handle OpenRouter-specific profile parameters
+    const profileParams = params.profileParameters as OpenRouterProfileParams | undefined;
+
+    // Add model fallbacks if configured
+    if (profileParams?.fallbackModels?.length) {
+      logger.debug('Adding fallback models for streaming', {
+        context: 'OpenRouterProvider.streamMessage',
+        fallbackCount: profileParams.fallbackModels.length,
+      });
+      (requestParams as any).models = [params.model, ...profileParams.fallbackModels];
+      (requestParams as any).route = 'fallback';
+      delete (requestParams as any).model; // Can't have both model and models
+    }
+
+    // Add provider preferences if configured
+    const providerPrefs = profileParams?.providerPreferences;
+    if (providerPrefs) {
+      logger.debug('Adding provider preferences for streaming', {
+        context: 'OpenRouterProvider.streamMessage',
+        hasOrder: !!providerPrefs.order,
+        dataCollection: providerPrefs.dataCollection,
+      });
+      (requestParams as any).provider = {};
+      if (providerPrefs.order) (requestParams as any).provider.order = providerPrefs.order;
+      if (providerPrefs.allowFallbacks !== undefined) (requestParams as any).provider.allowFallbacks = providerPrefs.allowFallbacks;
+      if (providerPrefs.requireParameters) (requestParams as any).provider.requireParameters = providerPrefs.requireParameters;
+      if (providerPrefs.dataCollection) (requestParams as any).provider.dataCollection = providerPrefs.dataCollection;
+      if (providerPrefs.ignore) (requestParams as any).provider.ignore = providerPrefs.ignore;
+      if (providerPrefs.only) (requestParams as any).provider.only = providerPrefs.only;
+    }
+
+    // SDK 0.2.x returns properly typed EventStream<ChatStreamingResponseChunkData>
+    const stream = await client.chat.send(requestParams);
     let fullMessage: ChatStreamingResponseChunkData | null = null;
 
     for await (const chunk of stream) {
@@ -205,11 +350,23 @@ export class OpenRouterProvider implements LLMProvider {
 
       // Final chunk with usage info
       if (finishReason && hasUsage) {
+        // Extract cache usage if available
+        const usageAny = chunk.usage as any;
+        const cacheUsage = usageAny?.cachedTokens || usageAny?.cacheDiscount
+          ? {
+              cachedTokens: usageAny.cachedTokens,
+              cacheDiscount: usageAny.cacheDiscount,
+              cacheCreationInputTokens: usageAny.cacheCreationInputTokens,
+              cacheReadInputTokens: usageAny.cacheReadInputTokens,
+            }
+          : undefined;
+
         logger.debug('Stream completed', {
           context: 'OpenRouterProvider.streamMessage',
           finishReason,
           promptTokens: chunk.usage?.promptTokens,
           completionTokens: chunk.usage?.completionTokens,
+          cachedTokens: cacheUsage?.cachedTokens,
         });
         yield {
           content: '',
@@ -221,6 +378,7 @@ export class OpenRouterProvider implements LLMProvider {
           },
           attachmentResults,
           rawResponse: fullMessage,
+          cacheUsage,
         };
       }
     }
@@ -298,11 +456,11 @@ export class OpenRouterProvider implements LLMProvider {
     const requestBody: any = {
       model: params.model ?? 'google/gemini-2.5-flash-image-preview',
       messages: [{ role: 'user', content: params.prompt }],
+      modalities: ['image', 'text'], // Required for image generation
       stream: false,
-      // Note: OpenRouter SDK doesn't have direct image generation support yet
-      // We'll use chat completion with special parameters
     };
 
+    // Add image configuration if aspect ratio is specified
     if (params.aspectRatio) {
       requestBody.imageConfig = { aspectRatio: params.aspectRatio };
     }

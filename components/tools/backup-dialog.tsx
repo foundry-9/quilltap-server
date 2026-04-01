@@ -97,7 +97,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
     <>
       {/* Overlay */}
       <button
-        className="fixed inset-0 bg-black bg-opacity-50 z-40 cursor-default border-none p-0"
+        className="qt-dialog-overlay !p-0 cursor-default border-none z-40"
         onClick={handleClose}
         aria-label="Close dialog"
         type="button"
@@ -105,14 +105,14 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
 
       {/* Dialog */}
       <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
-        <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md">
+        <div className="qt-dialog max-w-md">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700">
+          <div className="qt-dialog-header">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Create Backup</h2>
+              <h2 className="qt-dialog-title">Create Backup</h2>
               <button
                 onClick={handleClose}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                className="text-muted-foreground hover:text-foreground"
                 aria-label="Close dialog"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -120,24 +120,24 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                 </svg>
               </button>
             </div>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            <p className="qt-dialog-description">
               Back up your data to restore it later
             </p>
           </div>
 
           {/* Body */}
-          <div className="px-6 py-6 space-y-6">
+          <div className="qt-dialog-body space-y-6">
             {/* Destination Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <label className="block text-sm font-medium text-foreground mb-3">
                 Backup Destination
               </label>
               <div className="space-y-3">
                 {/* Download Option */}
                 <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-colors ${
                     destination === 'download'
-                      ? 'border-blue-500 bg-blue-50 dark:border-blue-600 dark:bg-blue-900/20'
-                      : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700/50'
+                      ? 'border-primary bg-accent'
+                      : 'border-border bg-background'
                   }`}
                 >
                   <input
@@ -149,10 +149,10 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                     className="w-4 h-4"
                   />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    <p className="text-sm font-medium text-foreground">
                       Download to Computer
                     </p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Save backup as a ZIP file to your device
                     </p>
                   </div>
@@ -161,8 +161,8 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                 {/* S3 Option */}
                 <label className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-colors ${
                   destination === 's3'
-                    ? 'border-blue-500 bg-blue-50 dark:border-blue-600 dark:bg-blue-900/20'
-                    : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700/50'
+                    ? 'border-primary bg-accent'
+                    : 'border-border bg-background'
                 }`}>
                   <input
                     type="radio"
@@ -173,10 +173,10 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                     className="w-4 h-4"
                   />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    <p className="text-sm font-medium text-foreground">
                       Save to Cloud Storage (S3)
                     </p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Store backup in your configured cloud storage
                     </p>
                   </div>
@@ -187,7 +187,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
             {/* Filename Input (S3 only) */}
             {destination === 's3' && (
               <div>
-                <label htmlFor="filename" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label htmlFor="filename" className="block text-sm font-medium text-foreground mb-2">
                   Filename (optional)
                 </label>
                 <input
@@ -196,9 +196,9 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                   value={filename}
                   onChange={(e) => setFilename(e.target.value)}
                   placeholder="backup-2025-12-07"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="qt-input"
                 />
-                <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Leave empty to use default name with timestamp
                 </p>
               </div>
@@ -206,25 +206,25 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
 
             {/* Error Display */}
             {error && (
-              <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 rounded-lg">
-                <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+              <div className="p-3 bg-destructive/10 border border-destructive rounded-lg">
+                <p className="text-sm text-destructive">{error}</p>
               </div>
             )}
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 flex gap-3 justify-end">
+          <div className="qt-dialog-footer">
             <button
               onClick={handleClose}
               disabled={loading}
-              className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+              className="qt-button qt-button-secondary"
             >
               Cancel
             </button>
             <button
               onClick={handleCreateBackup}
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg text-sm font-medium hover:bg-blue-700 dark:hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="qt-button qt-button-primary flex items-center gap-2"
             >
               {loading && (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

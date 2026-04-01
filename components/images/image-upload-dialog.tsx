@@ -122,28 +122,28 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
 
       {/* Upload/Import Dialog */}
       {!showGeneration && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={handleClose}>
+        <div className="qt-dialog-overlay" onClick={handleClose}>
           <div
-            className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden"
+            className="qt-dialog max-w-md mx-4"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Import Image</h2>
+            <div className="qt-dialog-header">
+              <h2 className="qt-dialog-title">Import Image</h2>
             </div>
 
             {/* Body */}
             <form onSubmit={handleSubmit}>
               <div className="px-6 py-4 space-y-4">
                 {/* Upload Mode Toggle */}
-                <div className="flex space-x-2 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex space-x-2 border-b border-border">
                   <button
                     type="button"
                     onClick={() => setUploadMode('file')}
                     className={`px-4 py-2 font-medium transition-colors ${
                       uploadMode === 'file'
-                        ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                        ? 'text-primary border-b-2 border-primary'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     Upload File
@@ -153,8 +153,8 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                     onClick={() => setUploadMode('url')}
                     className={`px-4 py-2 font-medium transition-colors ${
                       uploadMode === 'url'
-                        ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                        ? 'text-primary border-b-2 border-primary'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     Import from URL
@@ -164,8 +164,8 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                     onClick={() => setShowGeneration(true)}
                     className={`px-4 py-2 font-medium transition-colors ${
                       showGeneration
-                        ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                        ? 'text-primary border-b-2 border-primary'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     Generate with AI
@@ -175,7 +175,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                 {/* File Upload */}
                 {uploadMode === 'file' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">
                       Select Image File
                     </label>
                     <input
@@ -183,10 +183,10 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                       type="file"
                       accept="image/*"
                       onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                      className="block w-full text-sm text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer bg-gray-50 dark:bg-gray-700 focus:outline-none"
+                      className="block w-full text-sm text-foreground border border-input rounded-lg cursor-pointer bg-muted focus:outline-none"
                     />
                     {selectedFile && (
-                      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                      <p className="mt-2 text-sm text-muted-foreground">
                         Selected: {selectedFile.name} ({Math.round(selectedFile.size / 1024)} KB)
                       </p>
                     )}
@@ -196,21 +196,21 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                 {/* URL Import */}
                 {uploadMode === 'url' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Image URL</label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Image URL</label>
                     <input
                       type="url"
                       value={imageUrl}
                       onChange={(e) => setImageUrl(e.target.value)}
                       placeholder="https://example.com/image.jpg"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
                 )}
 
                 {/* Context Info */}
                 {contextType && contextId && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
-                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <div className="bg-accent border border-border rounded-md p-3">
+                    <p className="text-sm text-primary">
                       This image will be automatically tagged with this {contextType.toLowerCase()}.
                     </p>
                   </div>
@@ -218,26 +218,26 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
 
                 {/* Error */}
                 {error && (
-                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3">
-                    <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+                  <div className="qt-alert-error">
+                    <p className="text-sm">{error}</p>
                   </div>
                 )}
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
+              <div className="qt-dialog-footer">
                 <button
                   type="button"
                   onClick={handleClose}
                   disabled={uploading}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  className="qt-button qt-button-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={uploading || (uploadMode === 'file' && !selectedFile) || (uploadMode === 'url' && !imageUrl)}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="qt-button qt-button-primary"
                 >
                   {uploading ? 'Uploading...' : uploadMode === 'file' ? 'Upload' : 'Import'}
                 </button>

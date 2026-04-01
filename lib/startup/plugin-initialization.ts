@@ -13,6 +13,7 @@ import { initializeProviderRegistry } from '@/lib/plugins/provider-registry';
 import { transpileAllPlugins } from '@/lib/plugins/plugin-transpiler';
 import { registerAuthProvider, clearAuthProviders } from '@/lib/plugins/auth-provider-registry';
 import type { AuthProviderPluginExport } from '@/lib/plugins/interfaces/auth-provider-plugin';
+import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-registry';
 import packageJson from '@/package.json';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
@@ -422,6 +423,18 @@ async function performInitialization(): Promise<PluginInitializationResult> {
       });
     }
 
+    // Initialize theme registry from enabled plugins with THEME capability
+    logger.debug('Initializing theme registry');
+    await initializeThemeRegistry();
+    const themeStats = themeRegistry.getStats();
+    if (themeStats.total > 1) { // More than just the default theme
+      logger.info('Theme plugins initialized', {
+        total: themeStats.total,
+        withDarkMode: themeStats.withDarkMode,
+        withCssOverrides: themeStats.withCssOverrides,
+      });
+    }
+
     return result;
   } catch (error) {
     logger.error('Failed to initialize plugin system', { error });
@@ -452,6 +465,8 @@ export function resetPluginSystem(): void {
   pluginRouteRegistry.routes.clear();
   pluginRouteRegistry.initialized = false;
   pluginRouteRegistry.skipValidation = false;
+  // Reset theme registry
+  themeRegistry.reset();
   logger.debug('Plugin system reset');
 }
 

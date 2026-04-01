@@ -1,0 +1,32 @@
+/**
+ * Quilltap Component System
+ *
+ * A semantic CSS class layer for consistent, themeable UI components.
+ *
+ * Usage:
+ *   <button class="qt-button-primary">Click me</button>
+ *   <div class="qt-card">Card content</div>
+ *   <nav class="qt-navbar">...</nav>
+ *
+ * Theme authors can override these classes via:
+ *   1. CSS variable overrides: [data-theme="mytheme"] { --qt-button-radius: 1rem; }
+ *   2. Direct class overrides: [data-theme="mytheme"] .qt-button-primary { ... }
+ *
+ * Class naming convention:
+ *   qt-{component}[-{variant}][-{modifier}]
+ *
+ * Examples:
+ *   qt-button, qt-button-primary, qt-button-sm
+ *   qt-card, qt-card-interactive, qt-card-header
+ *   qt-chat-message, qt-chat-message-user
+ */
+
+/* CSS Custom Properties (theme override hooks) */
+@import "./_variables.css";
+
+/* Component categories */
+@import "./_interactive.css";  /* Buttons, inputs, links */
+@import "./_surfaces.css";     /* Cards, panels, dialogs, popovers */
+@import "./_layout.css";       /* Navbar, sidebar, page containers */
+@import "./_chat.css";         /* Chat messages, composer, participants */
+@import "./_content.css";      /* Badges, avatars, code blocks, typography */

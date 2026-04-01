@@ -31,6 +31,8 @@ export interface ToolResult {
   metadata?: {
     provider?: string;
     model?: string;
+    /** For image generation, the expanded prompt with {{me}} etc. resolved */
+    expandedPrompt?: string;
   };
 }
 
@@ -140,6 +142,7 @@ export async function executeToolCallWithContext(
         metadata: {
           provider: result.provider,
           model: result.model,
+          expandedPrompt: result.expandedPrompt,
         },
       };
     }

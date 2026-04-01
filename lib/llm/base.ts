@@ -66,6 +66,28 @@ export interface LLMMessage {
   // Google Gemini thought signature for thinking models (e.g., gemini-3-pro)
   // Must be preserved and passed back for multi-turn conversations with function calling
   thoughtSignature?: string
+  // Optional name for multi-character chats (provider-dependent support)
+  // OpenAI: supports on user/assistant messages (a-zA-Z0-9_- only, max 64 chars)
+  // Anthropic: not supported natively (will be prefixed to content instead)
+  // Other providers: varies, fallback to content prefix if not supported
+  name?: string
+  // Cache control for prompt caching (Anthropic, Google)
+  // When set to { type: 'ephemeral' }, marks this message as a cache breakpoint
+  // Anthropic: reduces cost by 90% for cached content, 5-minute TTL
+  cacheControl?: { type: 'ephemeral' }
+}
+
+// JSON Schema definition for structured outputs
+export interface JSONSchemaDefinition {
+  name: string
+  strict?: boolean
+  schema: Record<string, unknown>
+}
+
+// Response format for structured outputs
+export interface ResponseFormat {
+  type: 'text' | 'json_object' | 'json_schema'
+  jsonSchema?: JSONSchemaDefinition
 }
 
 export interface LLMParams {
@@ -78,6 +100,18 @@ export interface LLMParams {
   tools?: any[] // Provider-specific tool definitions (OpenAI function_calling, Anthropic tool_use, etc.)
   // Native web search - when enabled, provider will use its built-in web search capability
   webSearchEnabled?: boolean
+  // Response format for structured outputs (JSON schema enforcement)
+  responseFormat?: ResponseFormat
+  // Provider-specific parameters from profile (e.g., fallbackModels, providerPreferences)
+  profileParameters?: Record<string, unknown>
+}
+
+// Cache usage statistics (OpenRouter, Anthropic)
+export interface CacheUsage {
+  cachedTokens?: number
+  cacheDiscount?: number
+  cacheCreationInputTokens?: number
+  cacheReadInputTokens?: number
 }
 
 export interface LLMResponse {
@@ -96,6 +130,8 @@ export interface LLMResponse {
   }
   // Google Gemini thought signature for thinking models (must be stored and passed back)
   thoughtSignature?: string
+  // Cache usage statistics (OpenRouter, Anthropic)
+  cacheUsage?: CacheUsage
 }
 
 export interface StreamChunk {
@@ -115,6 +151,8 @@ export interface StreamChunk {
   rawResponse?: any
   // Google Gemini thought signature for thinking models (must be stored and passed back)
   thoughtSignature?: string
+  // Cache usage statistics (OpenRouter, Anthropic)
+  cacheUsage?: CacheUsage
 }
 
 /**

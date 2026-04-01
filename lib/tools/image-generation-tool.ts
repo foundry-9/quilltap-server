@@ -76,7 +76,7 @@ export const imageGenerationToolDefinition = {
         prompt: {
           type: 'string',
           description:
-            'A detailed description of the image to generate. Be specific about style, composition, colors, mood, lighting, and any other visual elements. IMPORTANT: You can use {{placeholders}} to reference characters and personas - use {{CharacterName}} for any character, {{PersonaName}} for any persona, or {{me}}/{{I}} to refer to yourself (the character you are playing). The system will automatically expand these with physical descriptions. Examples: "{{me}} in a forest clearing at sunset", "{{Alice}} and {{me}} having coffee together", "A serene mountain landscape with snow-capped peaks"',
+            'A detailed description of the image to generate. Be specific about style, composition, colors, mood, lighting, and any other visual elements.\n\n**CRITICAL: Always use {{placeholders}} for people - the system expands these with physical descriptions:**\n- {{me}}, {{I}}, or {{char}} = yourself (the character/assistant)\n- {{user}} = the person you are talking to (their persona)\n- {{CharacterName}} = any character by name\n- {{PersonaName}} = any persona by name\n\n**When depicting BOTH yourself AND the user together, you MUST use BOTH placeholders.** Do NOT describe appearances directly - use placeholders so the system can insert the correct descriptions.\n\nGood: "{{me}} and {{user}} sitting together in a cozy café, warm lighting"\nGood: "{{char}} handing a gift to {{user}} in a garden setting"\nBad: "A woman with brown hair sitting with a man" (missing placeholders!)',
           minLength: 1,
           maxLength: 4000,
         },
@@ -139,7 +139,7 @@ export const anthropicImageGenerationToolDefinition = {
       prompt: {
         type: 'string',
         description:
-          'A detailed description of the image to generate. Be specific about style, composition, colors, mood, lighting, and any other visual elements. IMPORTANT: You can use {{placeholders}} to reference characters and personas - use {{CharacterName}} for any character, {{PersonaName}} for any persona, or {{me}}/{{I}} to refer to yourself (the character you are playing). The system will automatically expand these with physical descriptions. Examples: "{{me}} in a forest clearing at sunset", "{{Alice}} and {{me}} having coffee together", "A serene mountain landscape with snow-capped peaks"',
+          'A detailed description of the image to generate. Be specific about style, composition, colors, mood, lighting, and any other visual elements.\n\n**CRITICAL: Always use {{placeholders}} for people - the system expands these with physical descriptions:**\n- {{me}}, {{I}}, or {{char}} = yourself (the character/assistant)\n- {{user}} = the person you are talking to (their persona)\n- {{CharacterName}} = any character by name\n- {{PersonaName}} = any persona by name\n\n**When depicting BOTH yourself AND the user together, you MUST use BOTH placeholders.** Do NOT describe appearances directly - use placeholders so the system can insert the correct descriptions.\n\nGood: "{{me}} and {{user}} sitting together in a cozy café, warm lighting"\nGood: "{{char}} handing a gift to {{user}} in a garden setting"\nBad: "A woman with brown hair sitting with a man" (missing placeholders!)',
         minLength: 1,
         maxLength: 4000,
       },

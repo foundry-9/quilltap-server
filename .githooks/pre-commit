@@ -1,95 +1,236 @@
 #!/bin/bash
 
-# Pre-commit hook to run lint, tests, and set version based on branch:
-# - release branch: x.y.z
-# - main branch: x.y.z-dev.[n] where n = commits since base version
-# - other branches: x.y.z-[branch-name].[n]
+set -euo pipefail
 
-set -e  # Exit on any error
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
+
+log_step() {
+  local message="$1"
+  echo ""
+  echo "$message"
+}
+
+kill_repo_node_processes() {
+  local repo_root="$1"
+  local killed=0
+  local processes=""
+
+  if command -v pgrep >/dev/null 2>&1; then
+    processes=$(pgrep -fl "node.*${repo_root}" 2>/dev/null || true)
+  else
+    processes=$(ps -axo pid=,command= | awk -v root="$repo_root" '$0 ~ /node/ && index($0, root)' || true)
+  fi
+
+  if [[ -z "${processes// }" ]]; then
+    return 1
+  fi
+
+  while IFS= read -r proc_line; do
+    [[ -z "$proc_line" ]] && continue
+    local pid
+    pid=$(echo "$proc_line" | awk '{print $1}')
+    if [[ -z "$pid" || ! "$pid" =~ ^[0-9]+$ ]]; then
+      continue
+    fi
+    local cmd
+    cmd=$(echo "$proc_line" | sed -E 's/^[[:space:]]*[0-9]+[[:space:]]+//')
+    if kill "$pid" >/dev/null 2>&1; then
+      echo "   - Terminated PID $pid ($cmd)"
+      killed=1
+    fi
+  done <<< "$processes"
+
+  if [[ $killed -eq 0 ]]; then
+    return 1
+  fi
+
+  return 0
+}
+
+ensure_next_removed_with_retry() {
+  local max_attempts="${1:-2}"
+  local wait_seconds="${2:-5}"
+  local attempt=1
+
+  while [ $attempt -le $max_attempts ]; do
+    if [ ! -d "$REPO_ROOT/.next" ]; then
+      if [ $attempt -eq 1 ]; then
+        echo "   - .next directory already absent."
+      else
+        echo "   - .next directory removed."
+      fi
+      return 0
+    fi
+
+    if rm -rf "$REPO_ROOT/.next" 2>/dev/null; then
+      if [ ! -d "$REPO_ROOT/.next" ]; then
+        echo "   - .next directory removed."
+        return 0
+      fi
+    fi
+
+    if [ $attempt -lt $max_attempts ]; then
+      echo "   - Failed to remove .next directory (attempt $attempt/$max_attempts). Retrying in $wait_seconds seconds..."
+      sleep "$wait_seconds"
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  if [ -d "$REPO_ROOT/.next" ]; then
+    echo "   - .next directory is still present after $max_attempts attempts."
+    return 1
+  fi
+
+  echo "   - .next directory removed."
+  return 0
+}
+
+watchman_available() {
+  command -v watchman >/dev/null 2>&1
+}
+
+is_watchman_watching_repo() {
+  if ! watchman_available; then
+    return 1
+  fi
+
+  local roots
+  roots=$(watchman watch-list 2>/dev/null || true)
+  if [[ -z "$roots" ]]; then
+    return 1
+  fi
+
+  if echo "$roots" | grep -Fq "$REPO_ROOT"; then
+    return 0
+  fi
+
+  return 1
+}
+
+stop_watchman_for_repo() {
+  if ! watchman_available; then
+    echo "   - watchman not installed; skipping."
+    return 0
+  fi
+
+  if is_watchman_watching_repo; then
+    if watchman watch-del "$REPO_ROOT" >/dev/null 2>&1; then
+      echo "   - Removed watchman watch for $REPO_ROOT"
+    else
+      echo "   - watchman watch-del returned an error; verifying status..."
+    fi
+  else
+    echo "   - watchman was not watching this directory."
+  fi
+
+  if is_watchman_watching_repo; then
+    return 1
+  fi
+
+  return 0
+}
+
+assert_watchman_not_watching() {
+  if ! watchman_available; then
+    return 0
+  fi
+
+  if is_watchman_watching_repo; then
+    echo "❌ watchman is still watching $REPO_ROOT."
+    return 1
+  fi
+
+  return 0
+}
 
 echo "🔍 Running pre-commit checks..."
-echo ""
 
-# Step 1: Run linting
-echo "📋 Step 1/3: Running ESLint..."
-if ! npm run lint; then
-  echo ""
-  echo "❌ Linting failed! Please fix the errors before committing."
-  echo "   You can run 'npm run lint:fix' to auto-fix some issues."
-  echo "   Or use 'git commit --no-verify' to skip this check (not recommended)."
+log_step "🛑 Step 1/12: Ensuring the local Node app for this repo is stopped..."
+if kill_repo_node_processes "$REPO_ROOT"; then
+  echo "✅ Active Node processes tied to this repo were terminated."
+else
+  echo "ℹ️ No running Node processes for this repo were detected."
+fi
+
+log_step "🧹 Step 2/12: Ensuring the .next directory is removed..."
+if ensure_next_removed_with_retry 2 5; then
+  echo "✅ Pre-build .next cleanup completed."
+else
+  echo "❌ Unable to remove .next directory before running checks."
   exit 1
 fi
+
+log_step "📋 Step 3/12: Running ESLint..."
+npm run lint
 echo "✅ Linting passed!"
-echo ""
 
-# Step 2: Build
-echo "🏗️ Step 2/3: Building the project..."
-if ! npm run build; then
-  echo ""
-  echo "❌ Build failed! Please fix the errors before committing."
+log_step "👀 Step 4/12: Stopping watchman for this repository..."
+stop_watchman_for_repo
+assert_watchman_not_watching
+echo "✅ watchman is not watching this repository."
+
+log_step "🧪 Step 5/12: Running unit tests (npm run test:unit)..."
+assert_watchman_not_watching
+npm run test:unit
+echo "✅ Unit tests passed!"
+
+log_step "👀 Step 6/12: Re-checking watchman and stopping it again if needed..."
+stop_watchman_for_repo
+assert_watchman_not_watching
+echo "✅ watchman confirmed stopped."
+
+log_step "🧾 Step 7/12: Running TypeScript (npx tsc)..."
+assert_watchman_not_watching
+npx tsc
+echo "✅ TypeScript check passed!"
+
+log_step "🏗️ Step 8/12: Building the project..."
+build_exit_code=0
+if npm run build; then
+  echo "✅ Build passed!"
+else
+  build_exit_code=$?
+  echo "❌ Build failed! Post-build cleanup will still run before exiting."
+fi
+
+log_step "🧹 Step 9/12: Ensuring .next directory is removed after build..."
+if ensure_next_removed_with_retry 2 5; then
+  echo "✅ Post-build .next cleanup completed."
+else
+  echo "❌ Unable to remove .next directory after retries."
   exit 1
 fi
-echo "✅ Build passed!"
-echo ""
 
-# Step 3: Run tests
-echo "🧪 Step 3/3: Running tests..."
-if ! npm test -- --passWithNoTests; then
-  echo ""
-  echo "❌ Tests failed! Please fix the failing tests before committing."
-  echo "   You can run 'npm test' to see the failures."
-  echo "   Or use 'git commit --no-verify' to skip this check (not recommended)."
-  exit 1
+if [ $build_exit_code -ne 0 ]; then
+  exit $build_exit_code
 fi
-echo "✅ Tests passed!"
-echo ""
 
-# Step 3: Calculate version based on branch
-echo "📦 Calculating version..."
+log_step "🧮 Step 10/12: Calculating and applying version updates..."
 
-# Detect OS for sed compatibility
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  # macOS
   SED_INPLACE=(-i '')
 else
-  # Linux
   SED_INPLACE=(-i)
 fi
 
-# Get the current version from package.json (strip any suffix to get base x.y.z)
 CURRENT_VERSION=$(grep -m1 '"version"' package.json | sed 's/.*"\([^"]*\)".*/\1/')
 BASE_VERSION=$(echo "$CURRENT_VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-
-# Get the current branch
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-
-# Count commits since the base version was set
-# We look for the most recent commit that changed the base version (x.y.z part)
-# by finding when package.json version line was changed to current base
 COMMIT_COUNT=$(git rev-list --count HEAD -- . 2>/dev/null || echo "0")
-
-# Try to find when the base version was FIRST introduced (when the x.y.z part changed)
-# We need to look for when the version was changed TO this base version from a DIFFERENT base
-# This means finding commits where the previous version had a different x.y.z base
-#
-# Strategy: Walk through git log for package.json and find the commit where
-# the base version first appears (parent commit has different base)
 BASE_VERSION_FIRST_COMMIT=""
 
-# Look through git log for the commit that first introduced this base version
 while IFS= read -r commit_hash; do
-  # Get the version from this commit
   VERSION_AT_COMMIT=$(git show "$commit_hash:package.json" 2>/dev/null | grep -m1 '"version"' | sed 's/.*"\([^"]*\)".*/\1/' || echo "")
   COMMIT_BASE=$(echo "$VERSION_AT_COMMIT" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
 
   if [ "$COMMIT_BASE" = "$BASE_VERSION" ]; then
-    # This commit has our base version, check if the parent has a different base
     PARENT_COMMIT="${commit_hash}^"
     PARENT_VERSION=$(git show "$PARENT_COMMIT:package.json" 2>/dev/null | grep -m1 '"version"' | sed 's/.*"\([^"]*\)".*/\1/' || echo "")
     PARENT_BASE=$(echo "$PARENT_VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
 
     if [ "$PARENT_BASE" != "$BASE_VERSION" ]; then
-      # Found the commit where base version was first introduced!
       BASE_VERSION_FIRST_COMMIT="$commit_hash"
       break
     fi
@@ -97,46 +238,36 @@ while IFS= read -r commit_hash; do
 done < <(git log --format="%h" -- package.json 2>/dev/null)
 
 if [ -n "$BASE_VERSION_FIRST_COMMIT" ]; then
-  # Count commits from that point to HEAD (not including the base commit itself)
   COMMIT_COUNT=$(git rev-list --count "$BASE_VERSION_FIRST_COMMIT"..HEAD 2>/dev/null || echo "0")
 fi
 
-# Determine the new version based on branch
 if [[ "$CURRENT_BRANCH" == "release" || "$CURRENT_BRANCH" == release/* ]]; then
-  # Release branch: just x.y.z
   NEW_VERSION="$BASE_VERSION"
   BADGE_COLOR="green"
 elif [[ "$CURRENT_BRANCH" == "main" ]]; then
-  # Main branch: x.y.z-dev.[n]
   NEW_VERSION="$BASE_VERSION-dev.$COMMIT_COUNT"
   BADGE_COLOR="yellow"
 else
-  # Feature/other branches: x.y.z-[branch-name].[n]
-  # Sanitize branch name (replace / with -)
   SANITIZED_BRANCH=$(echo "$CURRENT_BRANCH" | sed 's/\//-/g')
   NEW_VERSION="$BASE_VERSION-$SANITIZED_BRANCH.$COMMIT_COUNT"
   BADGE_COLOR="yellow"
 fi
 
-# Update package.json with the new version
 sed "${SED_INPLACE[@]}" -E "s/\"version\": \"[^\"]+\"/\"version\": \"$NEW_VERSION\"/" package.json
 
-# Update README.md with the new version in the badge
 if [ -f README.md ]; then
-  # shields.io requires hyphens to be escaped as -- in badge labels
-  # e.g., 1.8.5-dev.5 becomes 1.8.5--dev.5
   BADGE_VERSION=$(echo "$NEW_VERSION" | sed 's/-/--/g')
-  # Match the badge pattern: badge/version-ANYTHING.svg
-  # [^]]+ matches everything up to the ] that closes the markdown image syntax
   sed "${SED_INPLACE[@]}" -E "s|badge/version-[^]]+\.svg|badge/version-$BADGE_VERSION-$BADGE_COLOR.svg|" README.md
 fi
 
-# Check if package-lock.json exists and update it as well
+echo "✅ Version set: $NEW_VERSION (base: $BASE_VERSION, branch: $CURRENT_BRANCH)"
+
+log_step "📦 Step 11/12: Finalizing dependency artifacts and staging changes..."
+
 if [ -f package-lock.json ]; then
   npm install --package-lock-only
 fi
 
-# Bump versions for plugins
 if [ -f ./plugins/dist/qtap-plugin-template/schemas/plugin-manifest.json ]; then
   npm run generate:schemas
   npm run build:plugins
@@ -144,7 +275,6 @@ if [ -f ./plugins/dist/qtap-plugin-template/schemas/plugin-manifest.json ]; then
   git add ./plugins
 fi
 
-# Stage the updated package files
 git add package.json
 if [ -f package-lock.json ]; then
   git add package-lock.json
@@ -153,8 +283,7 @@ if [ -f README.md ]; then
   git add README.md
 fi
 
-echo "✅ Version set: $NEW_VERSION (base: $BASE_VERSION, branch: $CURRENT_BRANCH)"
-echo ""
+log_step "🎉 Step 12/12: All validations completed successfully!"
 echo "✨ All pre-commit checks passed!"
 
 exit 0

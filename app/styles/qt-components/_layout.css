@@ -1,0 +1,537 @@
+/**
+ * Quilltap Component System - Layout Components
+ *
+ * Navbar, sidebar, page containers
+ *
+ * Note: We define shared base styles using comma-separated selectors
+ * rather than @apply to reference other qt-* classes.
+ */
+
+@layer components {
+  /* ==========================================================================
+     NAVBAR
+     ========================================================================== */
+
+  /**
+   * Main navigation bar
+   */
+  .qt-navbar {
+    @apply border-b relative z-40;
+    height: var(--qt-navbar-height);
+    background: var(--qt-navbar-bg);
+    border-color: var(--qt-navbar-border);
+    backdrop-filter: var(--qt-navbar-blur);
+    -webkit-backdrop-filter: var(--qt-navbar-blur);
+    box-shadow: var(--qt-navbar-shadow);
+  }
+
+  /**
+   * Navbar content container
+   */
+  .qt-navbar-container {
+    @apply container mx-auto px-4;
+    @apply flex items-center justify-between;
+    @apply h-full;
+  }
+
+  /**
+   * Navbar section - group of items
+   */
+  .qt-navbar-section {
+    @apply flex items-center gap-4;
+  }
+
+  /* ==========================================================================
+     NAVBAR LINKS - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All navbar link variants share these base styles
+   */
+  .qt-navbar-link,
+  .qt-navbar-link-active {
+    @apply text-sm font-medium;
+    @apply transition-colors duration-150;
+    padding: var(--qt-navbar-link-padding-y) var(--qt-navbar-link-padding-x);
+    border-radius: var(--qt-navbar-link-radius);
+    color: var(--qt-navbar-link-fg);
+  }
+
+  .qt-navbar-link:hover {
+    background: var(--qt-navbar-link-hover-bg);
+  }
+
+  /* ==========================================================================
+     NAVBAR LINK VARIANTS
+     ========================================================================== */
+
+  /**
+   * Active navbar link
+   */
+  .qt-navbar-link-active {
+    background: var(--qt-navbar-link-active-bg);
+  }
+
+  /**
+   * Navbar button - button styled for navbar context
+   */
+  .qt-navbar-button {
+    @apply inline-flex items-center justify-center gap-2;
+    @apply text-sm font-medium;
+    @apply transition-all duration-200;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    padding: var(--qt-navbar-link-padding-y) var(--qt-navbar-link-padding-x);
+    border-radius: var(--qt-navbar-link-radius);
+    background: transparent;
+    color: var(--qt-navbar-link-fg);
+  }
+
+  .qt-navbar-button:hover:not(:disabled) {
+    background: var(--qt-navbar-link-hover-bg);
+  }
+
+  /**
+   * Navbar toggle/icon button
+   */
+  .qt-navbar-toggle {
+    @apply inline-flex items-center justify-center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--qt-navbar-link-radius);
+    color: var(--qt-navbar-link-fg);
+    transition: color 150ms ease, background 150ms ease;
+  }
+
+  .qt-navbar-toggle:hover:not(:disabled) {
+    background: var(--qt-navbar-link-hover-bg);
+  }
+
+  .qt-navbar-toggle-active {
+    background: color-mix(in srgb, var(--color-primary) 13%, transparent);
+    color: var(--color-primary);
+  }
+
+  .qt-navbar-toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /**
+   * Navbar dropdown/panel shell
+   */
+  .qt-navbar-dropdown {
+    @apply absolute right-0 mt-2 z-50;
+    min-width: 14rem;
+    border-radius: var(--qt-popover-radius);
+    background: var(--qt-popover-bg);
+    color: var(--qt-popover-fg);
+    border: 1px solid var(--qt-popover-border);
+    box-shadow: var(--qt-popover-shadow);
+  }
+
+  .qt-navbar-dropdown-section {
+    @apply p-3 space-y-3;
+  }
+
+  .qt-navbar-dropdown-label {
+    @apply text-xs font-semibold uppercase tracking-wider;
+    padding: 0.25rem 0.5rem;
+    color: var(--qt-navbar-link-fg);
+    opacity: 0.7;
+  }
+
+  .qt-navbar-dropdown-header {
+    @apply text-right text-sm font-medium;
+  }
+
+  .qt-navbar-dropdown-subtext {
+    @apply text-xs text-muted-foreground;
+  }
+
+  .qt-navbar-dropdown-divider {
+    @apply border-t;
+    border-color: var(--qt-popover-border);
+  }
+
+  .qt-navbar-dropdown-item {
+    @apply flex items-center justify-between gap-2;
+    @apply w-full px-3 py-2 rounded-md text-sm;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .qt-navbar-dropdown-item:hover {
+    background: var(--qt-navbar-link-hover-bg);
+  }
+
+  .qt-navbar-dropdown-item-active {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+  }
+
+  /**
+   * Compact chip-style navbar buttons (quick-hide tags)
+   */
+  .qt-navbar-chip-button {
+    @apply inline-flex items-center gap-1 text-sm;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    border: 1px solid var(--qt-navbar-link-hover-bg);
+    transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+  }
+
+  .qt-navbar-chip-button:hover {
+    background: var(--qt-navbar-link-hover-bg);
+  }
+
+  .qt-navbar-chip-button-active {
+    border-color: var(--qt-sidebar-item-active-border);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+  }
+
+  /* ==========================================================================
+     SIDEBAR
+     ========================================================================== */
+
+  /**
+   * Sidebar container
+   */
+  .qt-sidebar {
+    @apply h-full;
+    @apply border-r;
+    @apply overflow-y-auto;
+    width: var(--qt-sidebar-width);
+    background: var(--qt-sidebar-bg);
+    border-color: var(--qt-sidebar-border);
+  }
+
+  /**
+   * Sidebar section - group of items
+   */
+  .qt-sidebar-section {
+    @apply p-4;
+  }
+
+  /**
+   * Sidebar section title
+   */
+  .qt-sidebar-title {
+    @apply text-xs font-semibold uppercase tracking-wider;
+    @apply text-muted-foreground;
+    @apply mb-2 px-2;
+  }
+
+  /* ==========================================================================
+     SIDEBAR ITEMS - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All sidebar item variants share these base styles
+   */
+  .qt-sidebar-item,
+  .qt-sidebar-item-active {
+    @apply flex items-center gap-3;
+    @apply text-sm;
+    @apply transition-colors duration-150;
+    @apply cursor-pointer;
+    padding: var(--qt-sidebar-item-padding-y) var(--qt-sidebar-item-padding-x);
+    border-radius: var(--qt-sidebar-item-radius);
+  }
+
+  .qt-sidebar-item:hover {
+    background: var(--qt-sidebar-item-hover-bg);
+  }
+
+  /* ==========================================================================
+     SIDEBAR ITEM VARIANTS
+     ========================================================================== */
+
+  /**
+   * Active sidebar item
+   */
+  .qt-sidebar-item-active {
+    @apply border-l-2;
+    background: var(--qt-sidebar-item-active-bg);
+    border-color: var(--qt-sidebar-item-active-border);
+  }
+
+  /* ==========================================================================
+     CONTENT AREA
+     ========================================================================== */
+
+  /**
+   * Full-height content wrapper for app-like pages (chat, etc.)
+   * Unlike qt-page which uses min-h-screen for scrollable pages,
+   * qt-content fills available space in flex containers.
+   */
+  .qt-content {
+    @apply flex h-full;
+    background: var(--qt-content-bg);
+    color: var(--qt-content-fg);
+  }
+
+  /**
+   * Scrollable message/content area within qt-content
+   * This is the primary themed background area where messages appear
+   */
+  .qt-content-scroll {
+    @apply flex-1 overflow-y-auto min-h-0;
+    background: var(--qt-content-scroll-bg);
+  }
+
+  /* ==========================================================================
+     PAGE LAYOUT - Shared base styles
+     ========================================================================== */
+
+  /**
+   * All page variants share these base styles
+   */
+  .qt-page,
+  .qt-page-with-navbar {
+    @apply min-h-screen;
+    @apply bg-background text-foreground;
+  }
+
+  /* ==========================================================================
+     PAGE LAYOUT VARIANTS
+     ========================================================================== */
+
+  /**
+   * Page with navbar offset
+   */
+  .qt-page-with-navbar {
+    padding-top: var(--qt-navbar-height);
+  }
+
+  /**
+   * Page content container
+   */
+  .qt-page-container {
+    @apply container mx-auto px-4 py-6;
+  }
+
+  /**
+   * Page header
+   */
+  .qt-page-header {
+    @apply mb-6;
+  }
+
+  /**
+   * Page title
+   */
+  .qt-page-title {
+    @apply text-2xl font-bold text-foreground;
+  }
+
+  /**
+   * Page description
+   */
+  .qt-page-description {
+    @apply text-muted-foreground mt-1;
+  }
+
+  /* ==========================================================================
+     GRID LAYOUTS
+     ========================================================================== */
+
+  /**
+   * Card grid - responsive grid for cards
+   */
+  .qt-card-grid {
+    @apply grid gap-6;
+    @apply grid-cols-1 md:grid-cols-2 lg:grid-cols-3;
+  }
+
+  /**
+   * Two-column layout
+   */
+  .qt-two-col {
+    @apply grid gap-6;
+    @apply grid-cols-1 lg:grid-cols-2;
+  }
+
+  /**
+   * Main + sidebar layout
+   */
+  .qt-layout-with-sidebar {
+    @apply flex gap-6;
+  }
+
+  .qt-layout-main {
+    @apply flex-1 min-w-0;
+  }
+
+  .qt-layout-sidebar {
+    @apply flex-shrink-0;
+    width: var(--qt-sidebar-width);
+  }
+
+  /* ==========================================================================
+     FOOTER
+     ========================================================================== */
+
+  /**
+   * Site footer
+   */
+  .qt-footer {
+    @apply border-t;
+    @apply px-4 py-4;
+    background: var(--qt-footer-bg);
+    border-color: var(--qt-footer-border);
+  }
+
+  /**
+   * Footer content container
+   */
+  .qt-footer-container {
+    @apply flex flex-wrap items-center justify-center gap-4;
+    @apply text-sm;
+    color: var(--qt-footer-fg);
+  }
+
+  /**
+   * Footer link
+   */
+  .qt-footer-link {
+    @apply flex items-center gap-1;
+    @apply transition-colors;
+    color: var(--qt-footer-fg);
+  }
+
+  .qt-footer-link:hover {
+    color: var(--qt-footer-link-hover);
+  }
+
+  /**
+   * Footer separator (bullet point between items)
+   */
+  .qt-footer-separator {
+    @apply hidden sm:inline;
+  }
+
+  /* ==========================================================================
+     AUTH LAYOUT
+     ========================================================================== */
+
+  /**
+   * Auth page wrapper - full page gradient background
+   */
+  .qt-auth-page {
+    @apply flex min-h-screen items-center justify-center;
+    @apply p-4;
+    background: var(--qt-auth-page-bg, linear-gradient(to bottom right, var(--color-slate-900, #0f172a), var(--color-slate-800, #1e293b)));
+  }
+
+  /**
+   * Auth card - centered card for auth forms
+   */
+  .qt-auth-card {
+    @apply w-full max-w-md space-y-8;
+    @apply rounded-lg p-10 shadow-xl;
+    background: var(--qt-auth-card-bg, var(--color-card));
+    color: var(--qt-auth-card-fg, var(--color-card-foreground));
+  }
+
+  /**
+   * Auth card header - title area
+   */
+  .qt-auth-header {
+    @apply text-center;
+  }
+
+  /**
+   * Auth card title
+   */
+  .qt-auth-title {
+    @apply text-3xl font-bold;
+    color: var(--qt-auth-title-fg, var(--color-foreground));
+  }
+
+  /**
+   * Auth card subtitle/description
+   */
+  .qt-auth-subtitle {
+    @apply mt-2 text-sm;
+    color: var(--qt-auth-subtitle-fg, var(--color-muted-foreground));
+  }
+
+  /**
+   * Auth form container
+   */
+  .qt-auth-form {
+    @apply space-y-6;
+  }
+
+  /**
+   * Auth form field group
+   */
+  .qt-auth-field {
+    @apply space-y-1;
+  }
+
+  /**
+   * Auth form label
+   */
+  .qt-auth-label {
+    @apply block text-sm font-medium;
+    color: var(--qt-auth-label-fg, var(--color-foreground));
+  }
+
+  /**
+   * Auth form hint text (below inputs)
+   */
+  .qt-auth-hint {
+    @apply mt-1 text-xs;
+    color: var(--qt-auth-hint-fg, var(--color-muted-foreground));
+  }
+
+  /**
+   * Auth form footer text (sign up / sign in links)
+   */
+  .qt-auth-footer {
+    @apply text-center text-sm;
+    color: var(--qt-auth-footer-fg, var(--color-muted-foreground));
+  }
+
+  /**
+   * Auth divider (Or separator)
+   */
+  .qt-auth-divider {
+    @apply relative;
+  }
+
+  .qt-auth-divider::before {
+    @apply absolute inset-0 flex items-center;
+    content: '';
+  }
+
+  .qt-auth-divider-line {
+    @apply w-full border-t;
+    border-color: var(--qt-auth-divider-color, var(--color-border));
+  }
+
+  .qt-auth-divider-text {
+    @apply relative flex justify-center text-sm;
+  }
+
+  .qt-auth-divider-text span {
+    @apply px-2;
+    background: var(--qt-auth-card-bg, var(--color-card));
+    color: var(--qt-auth-subtitle-fg, var(--color-muted-foreground));
+  }
+
+  /* ==========================================================================
+     BRAND TYPOGRAPHY
+     ========================================================================== */
+
+  /**
+   * Brand name text - uses brand font with appropriate color
+   * In dark mode, defaults to foreground color (typically white)
+   */
+  .qt-font-brand {
+    font-family: var(--font-brand);
+    color: var(--qt-brand-fg, var(--color-foreground));
+  }
+}

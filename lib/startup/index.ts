@@ -7,6 +7,7 @@
 import { getMongoDatabase, setupMongoDBShutdownHandlers } from '@/lib/mongodb/client';
 import { validateMongoDBConfig, testMongoDBConnection } from '@/lib/mongodb/config';
 import { ensureIndexes } from '@/lib/mongodb/indexes';
+import { runAllMigrations } from '@/lib/mongodb/migrations';
 import { testS3Connection } from '@/lib/s3/client';
 import { validateS3Config } from '@/lib/s3/config';
 import { logger } from '@/lib/logger';
@@ -71,6 +72,16 @@ export async function initializeMongoDBIfNeeded(): Promise<ServiceInitialization
 
     logger.debug('Ensuring MongoDB indexes');
     await ensureIndexes(db);
+
+    // Run migrations
+    logger.debug('Running pending migrations');
+    const migrationResult = await runAllMigrations(db);
+    if (migrationResult.errors.length > 0) {
+      logger.warn('Some migrations had errors', {
+        migrationsRun: migrationResult.migrationsRun,
+        errors: migrationResult.errors,
+      });
+    }
 
     // Setup shutdown handlers
     logger.debug('Setting up MongoDB shutdown handlers');

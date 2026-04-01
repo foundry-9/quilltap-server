@@ -512,20 +512,20 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 <button
                   onClick={() => handleTemplateReplace('char')}
                   disabled={replacingTemplate !== null}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-medium text-primary shadow-sm transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
                   title={`Replace ${templateCounts.charCount} occurrences of "${character?.name}" with {{char}}`}
                 >
                   {replacingTemplate === 'char' ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-r-transparent"></div>
                   ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                   )}
                   <span className="hidden sm:inline">{character?.name}</span>
-                  <span className="text-blue-500 dark:text-blue-400">→</span>
-                  <code className="text-xs bg-blue-200 dark:bg-blue-800 px-1 rounded">{`{{char}}`}</code>
-                  <span className="text-xs text-blue-500 dark:text-blue-400">({templateCounts.charCount})</span>
+                  <span className="text-primary">→</span>
+                  <code className="rounded bg-primary/20 px-1 text-xs text-primary">{`{{char}}`}</code>
+                  <span className="text-xs text-primary/80">({templateCounts.charCount})</span>
                 </button>
               )}
 
@@ -534,26 +534,26 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                 <button
                   onClick={() => handleTemplateReplace('user')}
                   disabled={replacingTemplate !== null}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm font-medium text-success shadow-sm transition hover:bg-success/20 disabled:cursor-not-allowed disabled:opacity-50"
                   title={`Replace ${templateCounts.userCount} occurrences of "${defaultPersonaName}" with {{user}}`}
                 >
                   {replacingTemplate === 'user' ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-r-transparent"></div>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-success border-r-transparent"></div>
                   ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                   )}
                   <span className="hidden sm:inline">{defaultPersonaName}</span>
-                  <span className="text-green-500 dark:text-green-400">→</span>
-                  <code className="text-xs bg-green-200 dark:bg-green-800 px-1 rounded">{`{{user}}`}</code>
-                  <span className="text-xs text-green-500 dark:text-green-400">({templateCounts.userCount})</span>
+                  <span className="text-success">→</span>
+                  <code className="rounded bg-success/20 px-1 text-xs text-success">{`{{user}}`}</code>
+                  <span className="text-xs text-success/80">({templateCounts.userCount})</span>
                 </button>
               )}
 
               <Link
                 href={`/characters/${id}/edit`}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-800 font-medium text-sm"
+                className="character-edit-link flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition hover:bg-primary/90"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -566,15 +566,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             <div className="space-y-6">
               {character?.description && (
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-foreground mb-2">
                     Description
                     {(templateCounts.fieldCounts.description?.char > 0 || templateCounts.fieldCounts.description?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
                         (template replacements available)
                       </span>
                     )}
                   </h2>
-                  <div className="text-gray-700 dark:text-gray-300">
+                  <div className="text-muted-foreground">
                     <TemplateHighlighter
                       content={character.description}
                       characterName={character.name}
@@ -587,15 +587,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
               {character?.personality && (
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-foreground mb-2">
                     Personality
                     {(templateCounts.fieldCounts.personality?.char > 0 || templateCounts.fieldCounts.personality?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
                         (template replacements available)
                       </span>
                     )}
                   </h2>
-                  <div className="text-gray-700 dark:text-gray-300">
+                  <div className="text-muted-foreground">
                     <TemplateHighlighter
                       content={character.personality}
                       characterName={character.name}
@@ -608,15 +608,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
               {character?.scenario && (
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-foreground mb-2">
                     Scenario
                     {(templateCounts.fieldCounts.scenario?.char > 0 || templateCounts.fieldCounts.scenario?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
                         (template replacements available)
                       </span>
                     )}
                   </h2>
-                  <div className="text-gray-700 dark:text-gray-300">
+                  <div className="text-muted-foreground">
                     <TemplateHighlighter
                       content={character.scenario}
                       characterName={character.name}
@@ -629,15 +629,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
               {character?.firstMessage && (
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-foreground mb-2">
                     First Message
                     {(templateCounts.fieldCounts.firstMessage?.char > 0 || templateCounts.fieldCounts.firstMessage?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
                         (template replacements available)
                       </span>
                     )}
                   </h2>
-                  <div className="text-gray-700 dark:text-gray-300">
+                  <div className="text-muted-foreground">
                     <TemplateHighlighter
                       content={character.firstMessage}
                       characterName={character.name}
@@ -650,15 +650,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
               {character?.exampleDialogues && (
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-foreground mb-2">
                     Example Dialogues
                     {(templateCounts.fieldCounts.exampleDialogues?.char > 0 || templateCounts.fieldCounts.exampleDialogues?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
                         (template replacements available)
                       </span>
                     )}
                   </h2>
-                  <div className="text-gray-700 dark:text-gray-300">
+                  <div className="text-muted-foreground">
                     <TemplateHighlighter
                       content={character.exampleDialogues}
                       characterName={character.name}
@@ -671,15 +671,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
               {character?.systemPrompt && (
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  <h2 className="text-lg font-semibold text-foreground mb-2">
                     System Prompt
                     {(templateCounts.fieldCounts.systemPrompt?.char > 0 || templateCounts.fieldCounts.systemPrompt?.user > 0) && (
-                      <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
                         (template replacements available)
                       </span>
                     )}
                   </h2>
-                  <pre className="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded-md overflow-hidden my-2">
+                  <pre className="my-2 overflow-hidden rounded-md bg-muted/80 p-4 text-sm text-foreground">
                     <code className="text-sm whitespace-pre-wrap break-words">
                       <TemplateHighlighter
                         content={character.systemPrompt}
@@ -710,15 +710,15 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h2 className="text-lg font-semibold text-foreground">
                   Character Tags
                 </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Tags help organize and categorize this character. They can also be used for filtering and searching.
                 </p>
               </div>
             </div>
-            <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
+            <div className="character-section-card rounded-lg border border-border bg-card p-6">
               <TagEditor entityType="character" entityId={id} />
             </div>
           </div>
@@ -728,11 +728,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         return (
           <div className="space-y-8">
             {/* Connection Profile Section */}
-            <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            <div className="character-section-card rounded-lg border border-border bg-card p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-2">
                 Default Connection Profile
               </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 The default AI provider and model to use when chatting with this character. Can be overridden per chat.
               </p>
               <div className="flex items-center gap-3">
@@ -740,7 +740,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   value={character?.defaultConnectionProfileId || ''}
                   onChange={(e) => handleSaveConnectionProfile(e.target.value)}
                   disabled={savingConnectionProfile}
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:opacity-50"
+                className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 >
                   <option value="">No default profile</option>
                   {profiles.map((profile) => (
@@ -750,25 +750,25 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   ))}
                 </select>
                 {savingConnectionProfile && (
-                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
                     Saving...
                   </div>
                 )}
               </div>
               {profiles.length === 0 && (
-                <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                <p className="mt-2 text-sm text-warning">
                   No connection profiles available. <Link href="/settings" className="underline hover:no-underline">Create one in Settings</Link>.
                 </p>
               )}
             </div>
 
             {/* Persona Section */}
-            <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            <div className="character-section-card rounded-lg border border-border bg-card p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-2">
                 Default Persona
               </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 The default persona to use when chatting with this character. Represents &quot;you&quot; in the conversation.
               </p>
               <div className="flex items-center gap-3">
@@ -776,7 +776,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   value={defaultPersonaId}
                   onChange={(e) => handleSaveDefaultPersona(e.target.value)}
                   disabled={savingPersona}
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 disabled:opacity-50"
+                className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
                 >
                   <option value="">No default persona</option>
                   {personas.map((persona) => (
@@ -786,25 +786,25 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                   ))}
                 </select>
                 {savingPersona && (
-                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent"></div>
                     Saving...
                   </div>
                 )}
               </div>
               {personas.length === 0 && (
-                <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                <p className="mt-2 text-sm text-warning">
                   No personas available. <Link href="/personas/new" className="underline hover:no-underline">Create one</Link>.
                 </p>
               )}
             </div>
 
             {/* Image Profile Section */}
-            <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            <div className="character-section-card rounded-lg border border-border bg-card p-6">
+              <h2 className="text-lg font-semibold text-foreground mb-2">
                 Image Generation Profile
               </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 The default image generation profile for creating images during chats. Optional.
               </p>
               <ImageProfilePicker
@@ -846,20 +846,20 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-gray-900 dark:text-white">Loading character...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-foreground">Loading character...</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <p className="text-lg text-red-600 dark:text-red-400 mb-4">Error: {error}</p>
+          <p className="mb-4 text-lg text-destructive">Error: {error}</p>
           <Link
             href="/characters"
-            className="text-blue-600 dark:text-blue-400 hover:underline"
+            className="font-medium text-primary hover:text-primary/80"
           >
             ← Back to Characters
           </Link>
@@ -870,23 +870,23 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
   if (quickHideActive && character && shouldHideByIds(characterTagIds)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-slate-900">
+      <div className="flex min-h-screen items-center justify-center bg-muted">
         <HiddenPlaceholder />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen px-4 py-8">
-      <div className="mx-auto max-w-[800px]">
+    <div className="character-view min-h-screen px-4 py-8 text-foreground">
+      <div className="mx-auto max-w-5xl">
         <Link
           href="/characters"
-          className="text-blue-600 dark:text-blue-400 hover:underline mb-4 inline-block"
+          className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
         >
           ← Back to Characters
         </Link>
-        <div className="flex items-start justify-between gap-4 mb-8">
-          <div className="flex items-center gap-4 flex-grow">
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-6 rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm">
+          <div className="flex flex-grow items-center gap-4">
             <div className="relative">
               {getAvatarSrc() ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -905,18 +905,18 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
               )}
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-3xl font-semibold">
                 {character?.name || 'Loading...'}
               </h1>
               {character?.title && (
-                <p className="text-gray-600 dark:text-gray-400">{character.title}</p>
+                <p className="text-sm text-muted-foreground">{character.title}</p>
               )}
             </div>
           </div>
-          <div className="flex gap-2 flex-shrink-0">
+          <div className="flex flex-shrink-0 gap-2">
             <button
               onClick={handleStartChat}
-              className="px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-800 font-medium whitespace-nowrap"
+              className="inline-flex items-center rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow hover:bg-success/90"
             >
               Start Chat
             </button>
@@ -931,23 +931,23 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
       {/* Chat Creation Dialog */}
       {showChatDialog && (
-        <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md w-full shadow-xl">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+        <div className="character-chat-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+            <h3 className="mb-4 text-lg font-semibold">
               Start Chat with {character?.name}
             </h3>
 
             <div className="space-y-4">
               {/* Connection Profile Selection */}
               <div>
-                <label htmlFor="profile" className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                <label htmlFor="profile" className="mb-2 block text-sm font-medium text-foreground">
                   Connection Profile *
                 </label>
                 <select
                   id="profile"
                   value={selectedProfileId}
                   onChange={(e) => setSelectedProfileId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">Select a profile</option>
                   {profiles.map((profile) => (
@@ -961,14 +961,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
               {/* Persona Selection */}
               {personas.length > 0 && (
                 <div>
-                  <label htmlFor="persona" className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                  <label htmlFor="persona" className="mb-2 block text-sm font-medium text-foreground">
                     Persona (Optional)
                   </label>
                   <select
                     id="persona"
                     value={selectedPersonaId}
                     onChange={(e) => setSelectedPersonaId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="">Use character defaults</option>
                     {personas.map((persona) => (
@@ -982,7 +982,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
               {/* Image Profile Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
+                <label className="mb-2 block text-sm font-medium text-foreground">
                   Image Generation Profile (Optional)
                 </label>
                 <ImageProfilePicker
@@ -994,7 +994,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
-            <div className="flex gap-3 justify-end mt-6">
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => {
                   if (openedFromQuery) {
@@ -1003,14 +1003,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
                     setShowChatDialog(false)
                   }
                 }}
-                className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-700 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors"
+                className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-sm transition hover:bg-muted"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateChat}
                 disabled={!selectedProfileId || creatingChat}
-                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition-colors"
+                className="inline-flex items-center rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow transition hover:bg-success/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {creatingChat ? 'Creating...' : 'Start Chat'}
               </button>
