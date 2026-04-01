@@ -1,6 +1,6 @@
 # Chat Settings
 
-> **[Open this page in Quilltap](/settings?tab=chat)**
+> **[Open this page in Quilltap](/foundry/salon)**
 
 Chat Settings control global behavior for all your chats in Quilltap, including how conversations look, how they're stored, and which services are used for special features.
 
@@ -217,6 +217,38 @@ Controls whether interactions with AI providers are logged and stored.
 
 **Privacy Note:** Logs contain your chat content. Keep retention period reasonable if privacy is a concern.
 
+### Story Backgrounds Settings
+
+Configure AI-generated atmospheric background images for your chats.
+
+**Setting Options:**
+
+- **Enable Story Backgrounds** — Toggle automatic background generation on/off
+- **Image Generation Profile** — Select which image profile to use for generating backgrounds:
+  - Choose from available image generation profiles
+  - If not set, uses the character's image profile or your default profile
+
+**How it works:**
+
+1. When enabled, Quilltap generates a landscape scene image after each chat title update
+2. The scene features your characters based on their physical descriptions
+3. The chat title provides context for the scene (e.g., "Sunset conversation on the beach")
+4. Generated images appear as subtle backgrounds (30% opacity) behind chat content
+
+**Benefits:**
+
+- Creates immersive visual context for roleplay and storytelling
+- Backgrounds automatically update as the story progresses
+- Preserves readability with semi-transparent overlay
+
+**Prerequisites:**
+
+- At least one image generation profile configured
+- Valid API key for your image provider
+- Characters with physical descriptions produce better results
+
+**Learn more:** See [Story Backgrounds](/help/story-backgrounds) for detailed information.
+
 ### Automation Settings
 
 Controls automatic behavior during chat interactions.
@@ -346,3 +378,4 @@ Most settings save automatically as you make changes. You'll see:
 - **Image Profiles** — Configure image generation (separate from descriptions)
 - **Embedding Profiles** — Required for memory cascade and semantic search
 - **Appearance Settings** — Control chat UI appearance (separate from behavior)
+- **Story Backgrounds** — AI-generated atmospheric backgrounds for chats

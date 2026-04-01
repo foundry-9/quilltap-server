@@ -1,6 +1,6 @@
 # Project Settings
 
-> **[Open this page in Quilltap](/projects)**
+> **[Open this page in Quilltap](/prospero)**
 
 Project settings let you configure how your project works, including instructions, file storage, tool access, and character participation. These settings affect all chats and operations within the project.
 

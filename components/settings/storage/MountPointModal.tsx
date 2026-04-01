@@ -88,9 +88,9 @@ export function MountPointModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="qt-dialog-overlay">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative qt-card w-full max-w-lg max-h-[90vh] overflow-y-auto mx-4 p-6">
@@ -101,7 +101,7 @@ export function MountPointModal({
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="p-1 rounded hover:bg-muted"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,7 +117,7 @@ export function MountPointModal({
 
         {/* Error display */}
         {error && (
-          <div className="mb-4 p-3 rounded bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">
+          <div className="mb-4 p-3 rounded qt-alert-destructive text-sm">
             {error}
           </div>
         )}

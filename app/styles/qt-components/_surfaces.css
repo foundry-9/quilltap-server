@@ -105,6 +105,49 @@
   }
 
   /* ==========================================================================
+     FOUNDRY CARDS - Image-backed subsystem cards
+     ========================================================================== */
+
+  /**
+   * Foundry card - horizontal card with background image on the left
+   * that fades into the card background color on the right.
+   * Overrides default card padding since layout is handled internally.
+   */
+  .qt-foundry-card {
+    padding: 0 !important;
+    overflow: hidden;
+    min-height: 10rem;
+  }
+
+  /**
+   * Foundry card image container - absolutely positioned with CSS mask
+   * to create a smooth left-to-right fade into the card background.
+   */
+  .qt-foundry-card-image {
+    -webkit-mask-image: linear-gradient(to right,
+      black 0%,
+      black 20%,
+      rgba(0,0,0,0.5) 42%,
+      rgba(0,0,0,0.08) 58%,
+      transparent 68%
+    );
+    mask-image: linear-gradient(to right,
+      black 0%,
+      black 20%,
+      rgba(0,0,0,0.5) 42%,
+      rgba(0,0,0,0.08) 58%,
+      transparent 68%
+    );
+  }
+
+  /**
+   * Foundry card content - right-side text area with internal padding.
+   */
+  .qt-foundry-card-content {
+    padding: var(--qt-card-padding);
+  }
+
+  /* ==========================================================================
      PANELS - Shared base styles
      ========================================================================== */
 
@@ -278,5 +321,72 @@
     border-radius: var(--qt-popover-radius);
     background: var(--color-foreground);
     color: var(--color-background);
+  }
+
+  /* ==========================================================================
+     COLLAPSIBLE CARDS
+     ========================================================================== */
+
+  /**
+   * Collapsible card container
+   */
+  .qt-collapsible-card {
+    @apply transition-all duration-200;
+    border-radius: var(--qt-card-radius);
+    background: var(--qt-card-bg);
+    color: var(--qt-card-fg);
+    border: 1px solid color-mix(in srgb, var(--qt-card-border) calc(var(--qt-card-border-opacity) * 100%), transparent);
+    box-shadow: var(--qt-card-shadow);
+  }
+
+  /**
+   * Collapsible card header - clickable toggle area
+   */
+  .qt-collapsible-card-header {
+    @apply flex items-center justify-between w-full cursor-pointer;
+    @apply text-left;
+    padding: var(--qt-card-padding);
+    background: transparent;
+    border: none;
+    color: inherit;
+  }
+
+  .qt-collapsible-card-header:hover {
+    @apply bg-muted/50;
+    border-radius: var(--qt-card-radius);
+  }
+
+  /**
+   * Collapsible card icon slot
+   */
+  .qt-collapsible-card-icon {
+    @apply flex-shrink-0 text-muted-foreground;
+  }
+
+  /**
+   * Collapsible card chevron indicator
+   */
+  .qt-collapsible-card-chevron {
+    @apply w-5 h-5 flex-shrink-0 text-muted-foreground;
+    @apply transition-transform duration-200;
+  }
+
+  .qt-collapsible-card-chevron-open {
+    @apply rotate-180;
+  }
+
+  /**
+   * Collapsible card divider between header and body
+   */
+  .qt-collapsible-card-divider {
+    @apply mx-4;
+    border-top: 1px solid var(--qt-card-border);
+  }
+
+  /**
+   * Collapsible card body - content area shown when expanded
+   */
+  .qt-collapsible-card-body {
+    padding: var(--qt-card-padding);
   }
 }

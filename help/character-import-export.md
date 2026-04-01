@@ -1,6 +1,6 @@
 # Importing and Exporting Characters
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 This guide covers how to export characters for sharing or backup, and how to import characters created by others or from other tools.
 

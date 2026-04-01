@@ -1,6 +1,6 @@
 # Backup & Restore
 
-> **[Open this page in Quilltap](/tools)**
+> **[Open this page in Quilltap](/foundry)**
 
 The Backup & Restore tool lets you create complete backups of your Quilltap system and restore from previous backups.
 
@@ -39,7 +39,7 @@ A complete backup includes everything needed to recreate your Quilltap environme
 
 **Step-by-Step:**
 
-1. **Go to the Tools page** (`/tools`)
+1. **Go to The Forge** (`/foundry/forge`)
 
 2. **Find the Backup & Restore card**
 
@@ -69,7 +69,7 @@ A complete backup includes everything needed to recreate your Quilltap environme
 
 **Step-by-Step:**
 
-1. **Go to the Tools page** (`/tools`)
+1. **Go to The Forge** (`/foundry/forge`)
 
 2. **Find the Backup & Restore card**
 

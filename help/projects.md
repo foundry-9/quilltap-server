@@ -1,6 +1,6 @@
 # Projects Overview
 
-> **[Open this page in Quilltap](/projects)**
+> **[Open this page in Quilltap](/prospero)**
 
 Projects are optional organizational containers that group files, chats, and characters together to provide focused context for your AI conversations. They help you compartmentalize different creative works, worldbuilding efforts, or collaborative stories.
 

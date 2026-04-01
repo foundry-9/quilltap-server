@@ -247,6 +247,7 @@ export type ConnectionProfile = z.infer<typeof ConnectionProfileSchema>;
 export const PhysicalDescriptionSchema = z.object({
   id: UUIDSchema,
   name: z.string().min(1),
+  usageContext: z.string().max(200).nullable().optional(),
   shortPrompt: z.string().max(350).nullable().optional(),
   mediumPrompt: z.string().max(500).nullable().optional(),
   longPrompt: z.string().max(750).nullable().optional(),

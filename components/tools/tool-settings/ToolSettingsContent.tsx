@@ -568,11 +568,11 @@ function ToolToggle({ tool, isEnabled, onToggle, indentLevel, showAvailability }
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-medium text-sm text-foreground">{tool.name}</span>
-            <span className="text-xs text-amber-500 dark:text-amber-400">(unavailable)</span>
+            <span className="text-xs text-warning">(unavailable)</span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{tool.description}</p>
           {tool.unavailableReason && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 italic">
+            <p className="text-xs text-warning mt-1 italic">
               {tool.unavailableReason}
             </p>
           )}

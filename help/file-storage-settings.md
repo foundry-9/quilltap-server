@@ -1,6 +1,6 @@
 # File Storage Settings
 
-> **[Open this page in Quilltap](/settings?tab=storage)**
+> **[Open this page in Quilltap](/foundry/forge)**
 
 File Storage Settings configure where Quilltap stores uploaded files and generated images. You can use local filesystem storage, cloud storage, or a combination of both.
 

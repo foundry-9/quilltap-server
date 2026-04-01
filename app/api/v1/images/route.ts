@@ -19,6 +19,10 @@ import { z } from 'zod';
 import { successResponse, badRequest, serverError, validationError } from '@/lib/api/responses';
 import { createHash } from 'crypto';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
+import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { classifyContent as classifyDangerousContent } from '@/lib/services/dangerous-content/gatekeeper.service';
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } from '@/lib/llm/cheap-llm';
+import { getErrorMessage } from '@/lib/errors';
 
 const importFromUrlSchema = z.object({
   url: z.url(),
@@ -170,12 +174,82 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
     const body = await request.json();
     const { prompt, profileId, tags, options = {} } = generateImageSchema.parse(body);
 
-
     // Load and validate connection profile
-    const profile = await repos.connections.findById(profileId);
+    let profile = await repos.connections.findById(profileId);
 
     if (!profile || profile.userId !== user.id) {
       return badRequest('Connection profile not found');
+    }
+
+    // Dangermouse integration: classify prompt and potentially reroute provider
+    try {
+      const chatSettings = await repos.chatSettings.findByUserId(user.id);
+      const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
+      const dangerSettings = dangerousContentResolved.settings;
+
+      if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts) {
+        // Build cheap LLM selection for classification
+        const allProfiles = await repos.connections.findByUserId(user.id);
+        const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
+          strategy: chatSettings.cheapLLMSettings.strategy,
+          userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
+          defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
+          fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
+        } : DEFAULT_CHEAP_LLM_CONFIG;
+
+        const defaultProfile = allProfiles.find((p: any) => p.isDefault) || allProfiles[0];
+        if (defaultProfile) {
+          const cheapLLMSelection = getCheapLLMProvider(
+            defaultProfile,
+            cheapLLMConfig,
+            allProfiles,
+            false
+          );
+
+          const classification = await classifyDangerousContent(
+            prompt,
+            cheapLLMSelection,
+            user.id,
+            dangerSettings
+          );
+
+          if (classification.isDangerous) {
+            logger.info('[Images v1] Front page image prompt classified as dangerous', {
+              userId: user.id,
+              score: classification.score,
+              categories: classification.categories.map(c => c.category),
+              mode: dangerSettings.mode,
+            });
+
+            // If AUTO_ROUTE, try to find an uncensored provider
+            if (dangerSettings.mode === 'AUTO_ROUTE') {
+              const uncensoredProfile = allProfiles.find(
+                (p: any) => p.isDangerousCompatible === true && p.id !== profile.id
+              );
+
+              if (uncensoredProfile) {
+                profile = uncensoredProfile;
+                logger.info('[Images v1] Rerouted to uncensored connection profile', {
+                  userId: user.id,
+                  originalProfileId: profileId,
+                  uncensoredProfileId: uncensoredProfile.id,
+                  uncensoredProfileName: uncensoredProfile.name,
+                });
+              } else {
+                logger.warn('[Images v1] No uncensored connection profile available, using original', {
+                  userId: user.id,
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Fail safe — never block on Dangermouse errors
+      logger.error('[Images v1] Dangermouse classification failed, continuing normally', {
+        userId: user.id,
+        error: getErrorMessage(error),
+      });
     }
 
     // Get API key if profile has one

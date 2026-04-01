@@ -179,7 +179,7 @@ export function DeleteDataCard() {
         <>
           {/* Overlay */}
           <button
-            className="fixed inset-0 bg-black/50 z-40 cursor-default border-none p-0"
+            className="qt-dialog-overlay z-40 cursor-default border-none p-0"
             onClick={handleClose}
             aria-label="Close dialog"
             type="button"
@@ -187,7 +187,7 @@ export function DeleteDataCard() {
 
           {/* Dialog */}
           <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
-            <div className="bg-card rounded-lg shadow-xl w-full max-w-md">
+            <div className="bg-card rounded-lg qt-shadow-lg w-full max-w-md">
               {/* Header */}
               <div className="px-6 py-4 border-b border-border">
                 <div className="flex items-center justify-between">
@@ -229,7 +229,7 @@ export function DeleteDataCard() {
                         <p className="qt-text-small">
                           The following data will be permanently deleted:
                         </p>
-                        <div className="bg-muted rounded-lg p-4 space-y-2 text-sm">
+                        <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Characters</span>
                             <span className="qt-text-primary">{preview.characters}</span>
@@ -356,8 +356,8 @@ export function DeleteDataCard() {
                 {step === 'complete' && deleteSummary && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-center">
-                      <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="w-16 h-16 qt-bg-success/10 rounded-full flex items-center justify-center">
+                        <svg className="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>

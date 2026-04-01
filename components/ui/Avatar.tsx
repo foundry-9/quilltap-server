@@ -134,9 +134,9 @@ export function Avatar({
 
   // Build image container classes
   const containerClasses = [
-    'overflow-hidden bg-muted flex items-center justify-center',
+    'overflow-hidden qt-bg-muted flex items-center justify-center',
     style === 'CIRCULAR' ? 'rounded-full' : '',
-    isActive ? 'ring-2 ring-primary ring-offset-1 ring-offset-card' : '',
+    isActive ? 'ring-2 ring-primary ring-offset-1 ring-offset-card' : '',  /* ring-primary uses shadcn token */
   ].filter(Boolean).join(' ')
 
   const containerStyle: React.CSSProperties = {
@@ -155,7 +155,7 @@ export function Avatar({
           className="w-full h-full object-cover"
         />
       ) : (
-        <span className={`font-bold text-muted-foreground ${sizeConfig.textSize}`}>
+        <span className={`font-bold qt-text-secondary ${sizeConfig.textSize}`}>
           {initial}
         </span>
       )}
@@ -164,7 +164,7 @@ export function Avatar({
 
   // Queue position badge
   const badgeElement = queuePosition && queuePosition > 0 ? (
-    <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-info text-info-foreground text-xs font-bold flex items-center justify-center shadow-md z-10">
+    <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full qt-bg-info/20 qt-text-info qt-text-xs font-bold flex items-center justify-center qt-shadow-md z-10">
       {queuePosition}
     </div>
   ) : null

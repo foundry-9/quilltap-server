@@ -43,7 +43,7 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
   return (
     <>
       <button
-        className="qt-dialog-overlay !bg-black/10 !p-0 cursor-default border-none z-[100]"
+        className="qt-dialog-overlay cursor-default border-none z-[100]"
         onClick={() => onClose()}
         aria-label="Close dialog"
         type="button"

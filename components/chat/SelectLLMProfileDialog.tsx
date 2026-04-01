@@ -62,7 +62,7 @@ export function SelectLLMProfileDialog({
       try {
         setLoading(true)
 
-        const res = await fetch('/api/settings/connection-profiles')
+        const res = await fetch('/api/v1/connection-profiles')
         if (!res.ok) {
           throw new Error('Failed to fetch connection profiles')
         }

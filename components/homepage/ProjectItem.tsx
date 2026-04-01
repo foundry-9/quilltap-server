@@ -32,7 +32,7 @@ function FolderIcon({ className, color }: { className?: string; color?: string |
 export function ProjectItem({ project }: ProjectItemProps) {
   return (
     <Link
-      href={`/projects/${project.id}`}
+      href={`/prospero/${project.id}`}
       className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
     >
       <div className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md bg-muted">

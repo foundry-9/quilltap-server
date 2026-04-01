@@ -13,6 +13,7 @@ import { notFound, serverError, validationError, created } from '@/lib/api/respo
 
 const createDescriptionSchema = z.object({
   name: z.string().min(1, 'Name is required'),
+  usageContext: z.string().max(200).nullable().optional(),
   shortPrompt: z.string().max(350).nullable().optional(),
   mediumPrompt: z.string().max(500).nullable().optional(),
   longPrompt: z.string().max(750).nullable().optional(),

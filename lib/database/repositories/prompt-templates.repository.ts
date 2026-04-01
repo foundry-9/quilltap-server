@@ -9,7 +9,7 @@
 import { logger } from '@/lib/logger';
 import { PromptTemplate, PromptTemplateSchema } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
 import { loadSamplePrompts } from '@/lib/prompts/sample-prompts-loader';
 
 /**
@@ -46,57 +46,56 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
   }
 
   private async _doSeedSamplePrompts(): Promise<void> {
-    try {
-      const samplePrompts = await loadSamplePrompts();
-      if (samplePrompts.length === 0) {
-        return;
-      }
-
-      const collection = await this.getCollection();
-
-      for (const sample of samplePrompts) {
-        // Check if prompt already exists by name and isBuiltIn
-        const existing = await collection.findOne({
-          name: sample.name,
-          isBuiltIn: true,
-        } as QueryFilter);
-
-        if (!existing) {
-          const id = this.generateId();
-          const now = this.getCurrentTimestamp();
-
-          const newTemplate: PromptTemplate = {
-            id,
-            userId: null,
-            name: sample.name,
-            content: sample.content,
-            description: `${sample.category} prompt optimized for ${sample.modelHint} models`,
-            isBuiltIn: true,
-            category: sample.category,
-            modelHint: sample.modelHint,
-            tags: [],
-            createdAt: now,
-            updatedAt: now,
-          };
-
-          const validated = this.validate(newTemplate);
-          await collection.insertOne(validated);
-
-          logger.info('Sample prompt template seeded', {
-            templateId: id,
-            name: sample.name,
-            modelHint: sample.modelHint,
-            category: sample.category,
-          });
-        } else {
+    return this.safeQuery(
+      async () => {
+        const samplePrompts = await loadSamplePrompts();
+        if (samplePrompts.length === 0) {
+          return;
         }
-      }
-    } catch (error) {
-      logger.error('Error seeding sample prompts', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      // Don't throw - seeding failure shouldn't break the app
-    }
+
+        const collection = await this.getCollection();
+
+        for (const sample of samplePrompts) {
+          // Check if prompt already exists by name and isBuiltIn
+          const existing = await collection.findOne({
+            name: sample.name,
+            isBuiltIn: true,
+          });
+
+          if (!existing) {
+            const id = this.generateId();
+            const now = this.getCurrentTimestamp();
+
+            const newTemplate: PromptTemplate = {
+              id,
+              userId: null,
+              name: sample.name,
+              content: sample.content,
+              description: `${sample.category} prompt optimized for ${sample.modelHint} models`,
+              isBuiltIn: true,
+              category: sample.category,
+              modelHint: sample.modelHint,
+              tags: [],
+              createdAt: now,
+              updatedAt: now,
+            };
+
+            const validated = this.validate(newTemplate);
+            await collection.insertOne(validated);
+
+            logger.info('Sample prompt template seeded', {
+              templateId: id,
+              name: sample.name,
+              modelHint: sample.modelHint,
+              category: sample.category,
+            });
+          }
+        }
+      },
+      'Error seeding sample prompts',
+      {},
+      undefined
+    );
   }
 
   // ============================================================================
@@ -107,116 +106,100 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    * Find a prompt template by ID
    */
   async findById(id: string): Promise<PromptTemplate | null> {
-    try {
-      // Ensure built-in templates are seeded
-      await this.seedSamplePrompts();
+    return this.safeQuery(
+      async () => {
+        // Ensure built-in templates are seeded
+        await this.seedSamplePrompts();
 
-      return this._findById(id);
-    } catch (error) {
-      logger.error('Error finding prompt template by ID', {
-        templateId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+        return this._findById(id);
+      },
+      'Error finding prompt template by ID',
+      { templateId: id },
+      null
+    );
   }
 
   /**
    * Find all prompt templates
    */
   async findAll(): Promise<PromptTemplate[]> {
-    try {
-      // Ensure built-in templates are seeded
-      await this.seedSamplePrompts();
+    return this.safeQuery(
+      async () => {
+        // Ensure built-in templates are seeded
+        await this.seedSamplePrompts();
 
-      const templates = await this._findAll();
-      return templates;
-    } catch (error) {
-      logger.error('Error finding all prompt templates', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const templates = await this._findAll();
+        return templates;
+      },
+      'Error finding all prompt templates',
+      {},
+      []
+    );
   }
 
   /**
    * Find prompt templates by user ID (user-created templates only)
    */
   async findByUserId(userId: string): Promise<PromptTemplate[]> {
-    try {
-      const templates = await this.findByFilter({ userId } as QueryFilter);
-      return templates;
-    } catch (error) {
-      logger.error('Error finding prompt templates by user ID', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      () => this.findByFilter({ userId }),
+      'Error finding prompt templates by user ID',
+      { userId },
+      []
+    );
   }
 
   /**
    * Find all built-in prompt templates
    */
   async findBuiltIn(): Promise<PromptTemplate[]> {
-    try {
-      // Ensure built-in templates are seeded
-      await this.seedSamplePrompts();
+    return this.safeQuery(
+      async () => {
+        // Ensure built-in templates are seeded
+        await this.seedSamplePrompts();
 
-      const templates = await this.findByFilter({ isBuiltIn: true } as QueryFilter);
-      return templates;
-    } catch (error) {
-      logger.error('Error finding built-in prompt templates', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const templates = await this.findByFilter({ isBuiltIn: true });
+        return templates;
+      },
+      'Error finding built-in prompt templates',
+      {},
+      []
+    );
   }
 
   /**
    * Find all templates available to a user (built-in + user's own templates)
    */
   async findAllForUser(userId: string): Promise<PromptTemplate[]> {
-    try {
-      // Ensure built-in templates are seeded
-      await this.seedSamplePrompts();
+    return this.safeQuery(
+      async () => {
+        // Ensure built-in templates are seeded
+        await this.seedSamplePrompts();
 
-      const templates = await this.findByFilter({
-        $or: [
-          { isBuiltIn: true },
-          { userId },
-        ],
-      } as QueryFilter);
-      return templates;
-    } catch (error) {
-      logger.error('Error finding all prompt templates for user', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const templates = await this.findByFilter({
+          $or: [
+            { isBuiltIn: true },
+            { userId },
+          ],
+        } as TypedQueryFilter<PromptTemplate>);
+        return templates;
+      },
+      'Error finding all prompt templates for user',
+      { userId },
+      []
+    );
   }
 
   /**
    * Find prompt template by name for a specific user
    */
   async findByName(userId: string, name: string): Promise<PromptTemplate | null> {
-    try {
-      const template = await this.findOneByFilter({ userId, name } as QueryFilter);
-
-      if (template) {
-      } else {
-      }
-
-      return template;
-    } catch (error) {
-      logger.error('Error finding prompt template by name', {
-        userId,
-        name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    return this.safeQuery(
+      () => this.findOneByFilter({ userId, name }),
+      'Error finding prompt template by name',
+      { userId, name },
+      null
+    );
   }
 
   /**
@@ -228,25 +211,22 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
     data: Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<PromptTemplate> {
-    try {
-      const template = await this._create(data, options);
+    return this.safeQuery(
+      async () => {
+        const template = await this._create(data, options);
 
-      logger.info('Prompt template created successfully', {
-        templateId: template.id,
-        userId: data.userId,
-        name: data.name,
-        isBuiltIn: data.isBuiltIn,
-      });
+        logger.info('Prompt template created successfully', {
+          templateId: template.id,
+          userId: data.userId,
+          name: data.name,
+          isBuiltIn: data.isBuiltIn,
+        });
 
-      return template;
-    } catch (error) {
-      logger.error('Error creating prompt template', {
-        userId: data.userId,
-        name: data.name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return template;
+      },
+      'Error creating prompt template',
+      { userId: data.userId, name: data.name }
+    );
   }
 
   /**
@@ -254,35 +234,33 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    * Note: Built-in templates cannot be updated
    */
   async update(id: string, data: Partial<PromptTemplate>): Promise<PromptTemplate | null> {
-    try {
-      const existing = await this.findById(id);
-      if (!existing) {
-        logger.warn('Prompt template not found for update', { templateId: id });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const existing = await this.findById(id);
+        if (!existing) {
+          logger.warn('Prompt template not found for update', { templateId: id });
+          return null;
+        }
 
-      // Prevent updating built-in templates
-      if (existing.isBuiltIn) {
-        logger.warn('Cannot update built-in prompt template', { templateId: id });
-        return null;
-      }
+        // Prevent updating built-in templates
+        if (existing.isBuiltIn) {
+          logger.warn('Cannot update built-in prompt template', { templateId: id });
+          return null;
+        }
 
-      const updated = await this._update(id, data);
+        const updated = await this._update(id, data);
 
-      if (updated) {
-        logger.info('Prompt template updated successfully', {
-          templateId: id,
-        });
-      }
+        if (updated) {
+          logger.info('Prompt template updated successfully', {
+            templateId: id,
+          });
+        }
 
-      return updated;
-    } catch (error) {
-      logger.error('Error updating prompt template', {
-        templateId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return updated;
+      },
+      'Error updating prompt template',
+      { templateId: id }
+    );
   }
 
   /**
@@ -290,35 +268,33 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    * Note: Built-in templates cannot be deleted
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const existing = await this.findById(id);
-      if (!existing) {
-        logger.warn('Prompt template not found for deletion', { templateId: id });
-        return false;
-      }
+    return this.safeQuery(
+      async () => {
+        const existing = await this.findById(id);
+        if (!existing) {
+          logger.warn('Prompt template not found for deletion', { templateId: id });
+          return false;
+        }
 
-      // Prevent deleting built-in templates
-      if (existing.isBuiltIn) {
-        logger.warn('Cannot delete built-in prompt template', { templateId: id });
-        return false;
-      }
+        // Prevent deleting built-in templates
+        if (existing.isBuiltIn) {
+          logger.warn('Cannot delete built-in prompt template', { templateId: id });
+          return false;
+        }
 
-      const result = await this._delete(id);
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('Prompt template deleted successfully', {
-          templateId: id,
-        });
-      }
+        if (result) {
+          logger.info('Prompt template deleted successfully', {
+            templateId: id,
+          });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting prompt template', {
-        templateId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting prompt template',
+      { templateId: id }
+    );
   }
 
   /**
@@ -326,33 +302,30 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    * Note: Built-in templates cannot be tagged
    */
   async addTag(templateId: string, tagId: string): Promise<PromptTemplate | null> {
-    try {
-      const template = await this.findById(templateId);
-      if (!template) {
-        logger.warn('Prompt template not found for tag addition', { templateId });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const template = await this.findById(templateId);
+        if (!template) {
+          logger.warn('Prompt template not found for tag addition', { templateId });
+          return null;
+        }
 
-      // Prevent modifying built-in templates
-      if (template.isBuiltIn) {
-        logger.warn('Cannot add tag to built-in prompt template', { templateId });
-        return null;
-      }
+        // Prevent modifying built-in templates
+        if (template.isBuiltIn) {
+          logger.warn('Cannot add tag to built-in prompt template', { templateId });
+          return null;
+        }
 
-      // Add tag if not already present
-      if (!template.tags.includes(tagId)) {
-        const updatedTags = [...template.tags, tagId];
-        return this.update(templateId, { tags: updatedTags } as Partial<PromptTemplate>);
-      }
-      return template;
-    } catch (error) {
-      logger.error('Error adding tag to prompt template', {
-        templateId,
-        tagId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        // Add tag if not already present
+        if (!template.tags.includes(tagId)) {
+          const updatedTags = [...template.tags, tagId];
+          return this.update(templateId, { tags: updatedTags } as Partial<PromptTemplate>);
+        }
+        return template;
+      },
+      'Error adding tag to prompt template',
+      { templateId, tagId }
+    );
   }
 
   /**
@@ -360,32 +333,29 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
    * Note: Built-in templates cannot be modified
    */
   async removeTag(templateId: string, tagId: string): Promise<PromptTemplate | null> {
-    try {
-      const template = await this.findById(templateId);
-      if (!template) {
-        logger.warn('Prompt template not found for tag removal', { templateId });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const template = await this.findById(templateId);
+        if (!template) {
+          logger.warn('Prompt template not found for tag removal', { templateId });
+          return null;
+        }
 
-      // Prevent modifying built-in templates
-      if (template.isBuiltIn) {
-        logger.warn('Cannot remove tag from built-in prompt template', { templateId });
-        return null;
-      }
+        // Prevent modifying built-in templates
+        if (template.isBuiltIn) {
+          logger.warn('Cannot remove tag from built-in prompt template', { templateId });
+          return null;
+        }
 
-      // Remove tag if present
-      const updatedTags = template.tags.filter((id) => id !== tagId);
-      if (updatedTags.length !== template.tags.length) {
-        return this.update(templateId, { tags: updatedTags } as Partial<PromptTemplate>);
-      }
-      return template;
-    } catch (error) {
-      logger.error('Error removing tag from prompt template', {
-        templateId,
-        tagId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        // Remove tag if present
+        const updatedTags = template.tags.filter((id) => id !== tagId);
+        if (updatedTags.length !== template.tags.length) {
+          return this.update(templateId, { tags: updatedTags } as Partial<PromptTemplate>);
+        }
+        return template;
+      },
+      'Error removing tag from prompt template',
+      { templateId, tagId }
+    );
   }
 }

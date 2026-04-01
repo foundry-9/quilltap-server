@@ -118,11 +118,11 @@ export default function StorageSettingsTab() {
 
       {/* Info box about default behavior */}
       {mountPoints.length === 0 && (
-        <div className="qt-card p-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-          <h3 className="qt-text font-medium text-blue-700 dark:text-blue-300 mb-1">
+        <div className="qt-alert-info">
+          <h3 className="qt-text font-medium mb-1">
             Default Storage
           </h3>
-          <p className="qt-text-small text-blue-600 dark:text-blue-400">
+          <p className="qt-text-small">
             When no mount points are configured, files are stored locally at the path specified by the
             QUILLTAP_FILE_STORAGE_PATH environment variable (default: ./data/files).
           </p>

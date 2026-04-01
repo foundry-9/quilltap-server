@@ -12,7 +12,7 @@
 import { logger } from '@/lib/logger';
 import { User, UserSchema, GeneralSettings, GeneralSettingsSchema, ChatSettings } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter, UpdateSpec } from '../interfaces';
 
 /**
  * Users Repository
@@ -28,88 +28,76 @@ export class UsersRepository extends AbstractBaseRepository<User> {
    * Returns the first user found, or null if no users exist
    */
   async getCurrentUser(): Promise<User | null> {
-    try {
-      const users = await this.findAll();
-      if (users.length === 0) {
-        return null;
-      }
-      return users[0];
-    } catch (error) {
-      logger.error('Error getting current user', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+    return this.safeQuery(
+      async () => {
+        const users = await this.findAll();
+        if (users.length === 0) {
+          return null;
+        }
+        return users[0];
+      },
+      'Error getting current user',
+      {},
+      null
+    );
   }
 
   /**
    * Find a user by ID
    */
   async findById(id: string): Promise<User | null> {
-    try {
-      return await this._findById(id);
-    } catch (error) {
-      logger.error('Error finding user by ID', {
-        userId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      () => this._findById(id),
+      'Error finding user by ID',
+      { userId: id }
+    );
   }
 
   /**
    * Find a user by email
    */
   async findByEmail(email: string): Promise<User | null> {
-    try {
-      const user = await this.findOneByFilter({ email } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const user = await this.findOneByFilter({ email });
 
-      if (!user) {
-        return null;
-      }
-      return user;
-    } catch (error) {
-      logger.error('Error finding user by email', {
-        email,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (!user) {
+          return null;
+        }
+        return user;
+      },
+      'Error finding user by email',
+      { email }
+    );
   }
 
   /**
    * Find a user by username
    */
   async findByUsername(username: string): Promise<User | null> {
-    try {
-      const user = await this.findOneByFilter({ username } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const user = await this.findOneByFilter({ username });
 
-      if (!user) {
-        return null;
-      }
-      return user;
-    } catch (error) {
-      logger.error('Error finding user by username', {
-        username,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        if (!user) {
+          return null;
+        }
+        return user;
+      },
+      'Error finding user by username',
+      { username }
+    );
   }
 
   /**
    * Find all users
    */
   async findAll(): Promise<User[]> {
-    try {
-      const users = await this._findAll();
-      return users;
-    } catch (error) {
-      logger.error('Error finding all users', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      () => this._findAll(),
+      'Error finding all users',
+      {}
+    );
   }
 
   /**
@@ -119,150 +107,143 @@ export class UsersRepository extends AbstractBaseRepository<User> {
     data: Omit<User, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<User> {
-    try {
-      const user = await this._create(data, options);
+    return this.safeQuery(
+      async () => {
+        const user = await this._create(data, options);
 
-      logger.info('User created successfully', {
-        userId: user.id,
-        username: data.username,
-      });
+        logger.info('User created successfully', {
+          userId: user.id,
+          username: data.username,
+        });
 
-      return user;
-    } catch (error) {
-      logger.error('Error creating user', {
-        username: data.username,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return user;
+      },
+      'Error creating user',
+      { username: data.username }
+    );
   }
 
   /**
    * Update a user
    */
   async update(id: string, data: Partial<User>): Promise<User | null> {
-    try {
-      // Remove id and createdAt to prevent accidental overwrites
-      const updateData = { ...data };
-      delete updateData.id;
-      delete updateData.createdAt;
+    return this.safeQuery(
+      async () => {
+        // Remove id and createdAt to prevent accidental overwrites
+        const updateData = { ...data };
+        delete updateData.id;
+        delete updateData.createdAt;
 
-      const user = await this._update(id, updateData);
+        const user = await this._update(id, updateData);
 
-      if (user) {
-        logger.info('User updated successfully', {
-          userId: id,
-        });
-      } else {
-        logger.warn('User not found during update', {
-          userId: id,
-        });
-      }
+        if (user) {
+          logger.info('User updated successfully', {
+            userId: id,
+          });
+        } else {
+          logger.warn('User not found during update', {
+            userId: id,
+          });
+        }
 
-      return user;
-    } catch (error) {
-      logger.error('Error updating user', {
-        userId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return user;
+      },
+      'Error updating user',
+      { userId: id }
+    );
   }
 
   /**
    * Delete a user
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
 
-      if (result) {
-        logger.info('User deleted successfully', {
-          userId: id,
-        });
-      } else {
-        logger.warn('User not found during delete', {
-          userId: id,
-        });
-      }
+        if (result) {
+          logger.info('User deleted successfully', {
+            userId: id,
+          });
+        } else {
+          logger.warn('User not found during delete', {
+            userId: id,
+          });
+        }
 
-      return result;
-    } catch (error) {
-      logger.error('Error deleting user', {
-        userId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return result;
+      },
+      'Error deleting user',
+      { userId: id }
+    );
   }
 
   /**
    * Migrate a user from an old ID to a new ID
-   * Updates the user record and all related records that reference the user
+   * Updates the user record and all related records that reference the user.
+   * Runs within a transaction so all updates succeed or all roll back.
    */
   async migrateUserId(oldId: string, newId: string): Promise<void> {
-    try {
-      const db = await (await import('../manager')).getDatabaseAsync();
+    return this.safeQuery(
+      async () => {
+        const { withTransaction } = await import('../manager');
 
-      // Get the raw database connection for direct SQL updates
-      const sqliteDb = (db as any).db;
-      if (!sqliteDb) {
-        throw new Error('Could not access SQLite database for migration');
-      }
+        await withTransaction(async (getCollection) => {
+          // Tables that have a userId column referencing users
+          const tablesWithUserId = [
+            'chat_settings',
+            'chats',
+            'characters',
+            'api_keys',
+            'connection_profiles',
+            'embedding_profiles',
+            'prompts',
+            'memories',
+            'messages',
+            'files',
+            'projects',
+          ];
 
-      // Tables that have a userId column referencing users
-      const tablesWithUserId = [
-        'chat_settings',
-        'chats',
-        'characters',
-        'api_keys',
-        'connection_profiles',
-        'embedding_profiles',
-        'prompts',
-        'memories',
-        'messages',
-        'files',
-        'projects',
-      ];
-
-      // Update the user ID in each related table
-      for (const table of tablesWithUserId) {
-        try {
-          const stmt = sqliteDb.prepare(`UPDATE ${table} SET userId = ? WHERE userId = ?`);
-          const result = stmt.run(newId, oldId);
-          if (result.changes > 0) {
-            logger.debug(`Migrated ${result.changes} records in ${table}`, {
-              context: 'UsersRepository.migrateUserId',
-              oldId,
-              newId,
-            });
+          // Update the userId foreign key in each related table
+          for (const table of tablesWithUserId) {
+            try {
+              const collection = getCollection(table);
+              const result = await collection.updateMany(
+                { userId: oldId } as TypedQueryFilter<any>,
+                { $set: { userId: newId } } as UpdateSpec<unknown>
+              );
+              logger.debug('Migrated userId references in table', {
+                context: 'UsersRepository.migrateUserId',
+                table,
+                modifiedCount: result.modifiedCount,
+              });
+            } catch (tableError) {
+              // Table might not exist yet or might not have userId column — log and continue
+              logger.warn('Could not migrate userId in table', {
+                context: 'UsersRepository.migrateUserId',
+                table,
+                error: tableError instanceof Error ? tableError.message : String(tableError),
+              });
+            }
           }
-        } catch (tableError) {
-          // Table might not exist or might not have userId column - that's OK
-          logger.debug(`Skipping table ${table} during user ID migration`, {
-            context: 'UsersRepository.migrateUserId',
-            error: tableError instanceof Error ? tableError.message : String(tableError),
-          });
-        }
-      }
 
-      // Finally, update the user's own ID
-      const userStmt = sqliteDb.prepare('UPDATE users SET id = ? WHERE id = ?');
-      userStmt.run(newId, oldId);
+          // Finally, update the user's own primary key
+          const usersCollection = getCollection('users');
+          await usersCollection.updateMany(
+            { id: oldId } as TypedQueryFilter<User>,
+            { $set: { id: newId } } as UpdateSpec<unknown>
+          );
+        });
 
-      logger.info('User ID migration completed', {
-        context: 'UsersRepository.migrateUserId',
-        oldId,
-        newId,
-      });
-    } catch (error) {
-      logger.error('Error migrating user ID', {
-        oldId,
-        newId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        logger.info('User ID migration completed', {
+          context: 'UsersRepository.migrateUserId',
+          oldId,
+          newId,
+        });
+      },
+      'Error migrating user ID',
+      { oldId, newId }
+    );
   }
 
   // ============================================================================
@@ -274,59 +255,57 @@ export class UsersRepository extends AbstractBaseRepository<User> {
    * Returns a compound object with version, user, chatSettings, and timestamps
    */
   async getGeneralSettings(userId: string): Promise<GeneralSettings | null> {
-    try {
-      // Get the chat settings repository from the database manager
-      const db = await (await import('../manager')).getDatabaseAsync();
-      const chatSettingsCollection = db.getCollection<ChatSettings>('chat_settings');
+    return this.safeQuery(
+      async () => {
+        // Get the chat settings repository from the database manager
+        const db = await (await import('../manager')).getDatabaseAsync();
+        const chatSettingsCollection = db.getCollection<ChatSettings>('chat_settings');
 
-      // Fetch user and chat settings in parallel
-      const [user, chatSettingsDocs] = await Promise.all([
-        this.findById(userId),
-        chatSettingsCollection.find({ userId } as QueryFilter),
-      ]);
+        // Fetch user and chat settings in parallel
+        const [user, chatSettingsDocs] = await Promise.all([
+          this.findById(userId),
+          chatSettingsCollection.find({ userId } as TypedQueryFilter<ChatSettings>),
+        ]);
 
-      if (!user) {
-        logger.warn('User not found when retrieving general settings', {
-          userId,
-        });
-        return null;
-      }
+        if (!user) {
+          logger.warn('User not found when retrieving general settings', {
+            userId,
+          });
+          return null;
+        }
 
-      if (!chatSettingsDocs || chatSettingsDocs.length === 0) {
-        logger.warn('Chat settings not found when retrieving general settings', {
-          userId,
-        });
-        return null;
-      }
+        if (!chatSettingsDocs || chatSettingsDocs.length === 0) {
+          logger.warn('Chat settings not found when retrieving general settings', {
+            userId,
+          });
+          return null;
+        }
 
-      const chatSettings: ChatSettings = chatSettingsDocs[0];
+        const chatSettings: ChatSettings = chatSettingsDocs[0];
 
-      // Create the compound general settings object
-      const now = new Date().toISOString();
-      const generalSettings: GeneralSettings = {
-        version: 1,
-        user,
-        chatSettings,
-        createdAt: now,
-        updatedAt: now,
-      };
+        // Create the compound general settings object
+        const now = new Date().toISOString();
+        const generalSettings: GeneralSettings = {
+          version: 1,
+          user,
+          chatSettings,
+          createdAt: now,
+          updatedAt: now,
+        };
 
-      const validationResult = this.validateGeneralSettingsSafe(generalSettings);
-      if (!validationResult.success) {
-        logger.warn('GeneralSettings validation failed', {
-          userId,
-          error: validationResult.error,
-        });
-        return null;
-      }
-      return validationResult.data || null;
-    } catch (error) {
-      logger.error('Error getting general settings', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const validationResult = this.validateGeneralSettingsSafe(generalSettings);
+        if (!validationResult.success) {
+          logger.warn('GeneralSettings validation failed', {
+            userId,
+            error: validationResult.error,
+          });
+          return null;
+        }
+        return validationResult.data || null;
+      },
+      'Error getting general settings',
+      { userId }
+    );
   }
 
   /**
@@ -337,64 +316,62 @@ export class UsersRepository extends AbstractBaseRepository<User> {
     userId: string,
     data: Partial<GeneralSettings>
   ): Promise<GeneralSettings | null> {
-    try {
-      // Get the chat settings repository from the database manager
-      const db = await (await import('../manager')).getDatabaseAsync();
-      const chatSettingsCollection = db.getCollection('chatSettings');
+    return this.safeQuery(
+      async () => {
+        // Get the chat settings repository from the database manager
+        const db = await (await import('../manager')).getDatabaseAsync();
+        const chatSettingsCollection = db.getCollection<ChatSettings>('chatSettings');
 
-      // Update user if provided
-      if (data.user) {
-        const updatedUser = await this.update(userId, data.user);
-        if (!updatedUser) {
-          logger.error('Failed to update user during general settings update', {
+        // Update user if provided
+        if (data.user) {
+          const updatedUser = await this.update(userId, data.user);
+          if (!updatedUser) {
+            logger.error('Failed to update user during general settings update', {
+              userId,
+            });
+            return null;
+          }
+        }
+
+        // Update chat settings if provided
+        if (data.chatSettings) {
+          const result = await chatSettingsCollection.updateMany(
+            { userId } as TypedQueryFilter<ChatSettings>,
+            {
+              $set: {
+                ...data.chatSettings,
+                updatedAt: this.getCurrentTimestamp(),
+              },
+            } as any
+          );
+
+          if (result.modifiedCount === 0) {
+            logger.error('Failed to update chat settings during general settings update', {
+              userId,
+            });
+            return null;
+          }
+        }
+
+        // Fetch and return the updated general settings
+        const generalSettings = await this.getGeneralSettings(userId);
+
+        if (!generalSettings) {
+          logger.error('Failed to retrieve updated general settings', {
             userId,
           });
           return null;
         }
-      }
 
-      // Update chat settings if provided
-      if (data.chatSettings) {
-        const result = await chatSettingsCollection.updateMany(
-          { userId } as QueryFilter,
-          {
-            $set: {
-              ...data.chatSettings,
-              updatedAt: this.getCurrentTimestamp(),
-            },
-          } as any
-        );
-
-        if (result.modifiedCount === 0) {
-          logger.error('Failed to update chat settings during general settings update', {
-            userId,
-          });
-          return null;
-        }
-      }
-
-      // Fetch and return the updated general settings
-      const generalSettings = await this.getGeneralSettings(userId);
-
-      if (!generalSettings) {
-        logger.error('Failed to retrieve updated general settings', {
+        logger.info('General settings updated successfully', {
           userId,
         });
-        return null;
-      }
 
-      logger.info('General settings updated successfully', {
-        userId,
-      });
-
-      return generalSettings;
-    } catch (error) {
-      logger.error('Error updating general settings', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return generalSettings;
+      },
+      'Error updating general settings',
+      { userId }
+    );
   }
 
   // ============================================================================

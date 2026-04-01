@@ -48,13 +48,13 @@ export function ImageMetadata({
     <div className="qt-panel bg-black/70 backdrop-blur-sm w-full max-w-2xl">
       <div className="flex flex-col gap-4">
         {loadingEntities && (
-          <p className="text-gray-300 text-sm">Loading characters...</p>
+          <p className="text-muted-foreground text-sm">Loading characters...</p>
         )}
 
         {/* Section 1: Tagged Characters */}
         {!loadingEntities && taggedCharacters.length > 0 && (
           <div>
-            <h3 className="text-white font-semibold mb-3">Tagged to Characters</h3>
+            <h3 className="text-foreground font-semibold mb-3">Tagged to Characters</h3>
             <div className="flex flex-col gap-2">
               {taggedCharacters.map((character) => {
                 const isLoading = taggingInProgress.has(`char-${character.id}`)
@@ -66,11 +66,11 @@ export function ImageMetadata({
                     key={character.id}
                     className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded"
                   >
-                    <span className="flex-1 text-white font-medium text-sm">
+                    <span className="flex-1 text-foreground font-medium text-sm">
                       {character.name}
                     </span>
                     {isAvatar ? (
-                      <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded">
+                      <span className="text-xs bg-success text-success-foreground px-2 py-0.5 rounded">
                         Avatar
                       </span>
                     ) : (
@@ -80,7 +80,7 @@ export function ImageMetadata({
                           onSetAsAvatar('character', character.id)
                         }}
                         disabled={isSettingAvatar}
-                        className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition-colors disabled:opacity-50"
+                        className="px-2 py-1 bg-success hover:bg-success/90 text-success-foreground rounded text-xs font-medium transition-colors disabled:opacity-50"
                         title="Set as avatar"
                       >
                         {isSettingAvatar ? '...' : 'Set Avatar'}
@@ -92,7 +92,7 @@ export function ImageMetadata({
                         onToggleCharacterTag(character.id)
                       }}
                       disabled={isLoading}
-                      className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/20 rounded transition-colors disabled:opacity-50"
+                      className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/20 rounded transition-colors disabled:opacity-50"
                       title="Remove tag"
                     >
                       {isLoading ? '...' : '×'}
@@ -109,7 +109,7 @@ export function ImageMetadata({
           <div>
             <label
               htmlFor="add-character-tag"
-              className="block text-white font-semibold mb-2"
+              className="block text-foreground font-semibold mb-2"
             >
               Add to character
             </label>
@@ -137,7 +137,7 @@ export function ImageMetadata({
 
         {/* No characters available message */}
         {!loadingEntities && characters.length === 0 && (
-          <p className="text-gray-400 text-sm">No characters available for tagging.</p>
+          <p className="text-muted-foreground text-sm">No characters available for tagging.</p>
         )}
       </div>
     </div>

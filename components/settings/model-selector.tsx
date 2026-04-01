@@ -74,12 +74,12 @@ export function ModelSelector({
   const getWarningClasses = (level: 'info' | 'warning' | 'error') => {
     switch (level) {
       case 'error':
-        return 'bg-destructive/10 border-destructive/30 text-destructive'
+        return 'qt-alert-error'
       case 'warning':
-        return 'bg-yellow-50 border-yellow-200 text-yellow-700 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-300'
+        return 'qt-alert-warning'
       case 'info':
       default:
-        return 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
+        return 'qt-alert-info'
     }
   }
   const useSearchMode = models.length > 10
@@ -136,7 +136,7 @@ export function ModelSelector({
         {selectedModelInfo.warnings.map((warning) => (
           <div
             key={`${warning.level}-${warning.message.substring(0, 20)}`}
-            className={`px-3 py-2 text-sm rounded-lg border ${getWarningClasses(warning.level)}`}
+            className={getWarningClasses(warning.level)}
           >
             <span className="mr-2">{getWarningIcon(warning.level)}</span>
             {warning.message}
@@ -154,12 +154,12 @@ export function ModelSelector({
     return (
       <span className="ml-2 inline-flex gap-1">
         {info.experimental && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
             experimental
           </span>
         )}
         {info.deprecated && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-destructive/10 text-destructive dark:bg-red-900/30 dark:text-red-300">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-destructive/10 text-destructive">
             deprecated
           </span>
         )}
@@ -236,7 +236,7 @@ export function ModelSelector({
       </div>
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-10 max-h-64 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg qt-shadow-lg z-10 max-h-64 overflow-y-auto">
           {filteredModels.length > 0 ? (
             <ul className="py-1">
               {filteredModels.map(model => (

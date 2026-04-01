@@ -115,6 +115,71 @@ export interface EmbeddingReindexAllPayload {
 }
 
 /**
+ * Payload for story background generation job
+ */
+export interface StoryBackgroundGenerationPayload {
+  /** Chat ID to generate background for */
+  chatId: string;
+  /** Image profile ID to use for generation */
+  imageProfileId: string;
+  /** Character IDs participating in the chat */
+  characterIds: string[];
+  /** Optional scene context (e.g., chat title or summary) */
+  sceneContext?: string;
+  /** Optional project ID if the chat belongs to a project */
+  projectId?: string | null;
+}
+
+/**
+ * Payload for chat danger classification job
+ */
+export interface ChatDangerClassificationPayload {
+  chatId: string;
+  connectionProfileId: string;
+}
+
+/**
+ * Result of enqueueing a chat danger classification job
+ */
+export interface ChatDangerClassificationEnqueueResult {
+  jobId: string;
+  isNew: boolean;
+}
+
+/**
+ * Enqueue a chat danger classification job
+ * Skips if there's already a pending/processing job for the same chat
+ */
+export async function enqueueChatDangerClassification(
+  userId: string,
+  payload: ChatDangerClassificationPayload,
+  options?: EnqueueJobOptions
+): Promise<ChatDangerClassificationEnqueueResult> {
+  const repos = getRepositories();
+
+  // Check for existing pending/processing classification jobs for this chat
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existingJob = pendingJobs.find(job => job.type === 'CHAT_DANGER_CLASSIFICATION');
+
+  if (existingJob) {
+    logger.info('[ChatDangerClassification] Reusing existing pending job for chat', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      existingJobId: existingJob.id,
+      existingStatus: existingJob.status,
+    });
+    return { jobId: existingJob.id, isNew: false };
+  }
+
+  const jobId = await enqueueJob(userId, 'CHAT_DANGER_CLASSIFICATION', payload as unknown as Record<string, unknown>, {
+    // Lower priority than interactive tasks
+    priority: options?.priority ?? -1,
+    ...options,
+  });
+  return { jobId, isNew: true };
+}
+
+/**
  * Message pair for batch memory extraction
  */
 export interface MessagePair {
@@ -255,6 +320,47 @@ export async function enqueueEmbeddingReindexAll(
 }
 
 /**
+ * Result of enqueueing a story background job
+ */
+export interface StoryBackgroundEnqueueResult {
+  jobId: string;
+  isNew: boolean;
+}
+
+/**
+ * Enqueue a story background generation job
+ * Skips if there's already a pending/processing job for the same chat
+ */
+export async function enqueueStoryBackgroundGeneration(
+  userId: string,
+  payload: StoryBackgroundGenerationPayload,
+  options?: EnqueueJobOptions
+): Promise<StoryBackgroundEnqueueResult> {
+  const repos = getRepositories();
+
+  // Check for existing pending/processing story background jobs for this chat
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existingJob = pendingJobs.find(job => job.type === 'STORY_BACKGROUND_GENERATION');
+
+  if (existingJob) {
+    logger.info('[StoryBackground] Reusing existing pending job for chat', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      existingJobId: existingJob.id,
+      existingStatus: existingJob.status,
+    });
+    return { jobId: existingJob.id, isNew: false };
+  }
+
+  const jobId = await enqueueJob(userId, 'STORY_BACKGROUND_GENERATION', payload as unknown as Record<string, unknown>, {
+    // Lower priority than interactive tasks
+    priority: options?.priority ?? -1,
+    ...options,
+  });
+  return { jobId, isNew: true };
+}
+
+/**
  * Batch enqueue memory extraction jobs for an imported chat
  * Creates one job per message pair
  */
@@ -326,6 +432,14 @@ export async function getJobStatus(jobId: string) {
 export async function getQueueStats(userId?: string): Promise<QueueStats> {
   const repos = getRepositories();
   return repos.backgroundJobs.getStats(userId);
+}
+
+/**
+ * Get active (PENDING + PROCESSING) job counts grouped by type
+ */
+export async function getActiveCountsByType(userId?: string): Promise<Record<string, number>> {
+  const repos = getRepositories();
+  return repos.backgroundJobs.getActiveCountsByType(userId);
 }
 
 /**

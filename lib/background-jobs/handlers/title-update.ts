@@ -5,12 +5,14 @@
  * needs a new title based on recent conversation content.
  */
 
-import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
+import { BackgroundJob, ChatSettings } from '@/lib/schemas/types';
+import type { ChatMetadata } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { considerTitleUpdate, ChatMessage } from '@/lib/memory/cheap-llm-tasks';
+import { considerTitleUpdate, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import type { TitleUpdatePayload } from '../queue-service';
+import { enqueueStoryBackgroundGeneration } from '../queue-service';
 
 /**
  * Handle a title update job
@@ -57,16 +59,9 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   // Get chat messages
   const allMessages = await repos.chats.getMessages(payload.chatId);
 
-  // Filter to only messages (not system events)
-  const messageEvents = allMessages.filter(
-    (m): m is MessageEvent => m.type === 'message'
-  );
-
-  // Convert to ChatMessage format for the LLM task
-  const chatMessages: ChatMessage[] = messageEvents.map((m) => ({
-    role: m.role as 'user' | 'assistant' | 'system',
-    content: m.content,
-  }));
+  // Extract only visible conversational messages (USER/ASSISTANT, tool artifacts stripped)
+  const totalCount = allMessages.length;
+  const chatMessages = extractVisibleConversation(allMessages);
 
   // Use last 5 messages or fewer if the chat is shorter
   const recentMessages = chatMessages.slice(-5);
@@ -114,4 +109,109 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
     newTitle: result.result.suggestedTitle,
     reason: result.result.reason,
   });
+
+  // Queue story background generation if enabled
+  await queueStoryBackgroundIfEnabled(
+    job.userId,
+    chat,
+    chatSettings,
+    result.result.suggestedTitle
+  );
+}
+
+/**
+ * Queue a story background generation job if the feature is enabled
+ */
+export async function queueStoryBackgroundIfEnabled(
+  userId: string,
+  chat: ChatMetadata,
+  chatSettings: ChatSettings,
+  newTitle: string
+): Promise<void> {
+
+  // Check if story backgrounds are enabled
+  const storyBackgroundsSettings = chatSettings.storyBackgroundsSettings;
+  if (!storyBackgroundsSettings?.enabled) {
+    return;
+  }
+
+  // Determine the image profile to use
+  const imageProfileId = await resolveImageProfileForChat(userId, chat, chatSettings);
+  if (!imageProfileId) {
+    return;
+  }
+
+  // Get character IDs from participants
+  const characterIds = chat.participants
+    .filter(p => p.characterId)
+    .map(p => p.characterId!);
+
+  if (characterIds.length === 0) {
+    return;
+  }
+
+  // Queue the story background generation job
+  try {
+    const { jobId, isNew } = await enqueueStoryBackgroundGeneration(userId, {
+      chatId: chat.id,
+      imageProfileId,
+      characterIds,
+      sceneContext: newTitle,
+      projectId: chat.projectId ?? null,
+    });
+
+    if (isNew) {
+      logger.info('[TitleUpdate] Queued story background generation', {
+        context: 'background-jobs.title-update',
+        chatId: chat.id,
+        jobId,
+        imageProfileId,
+        characterCount: characterIds.length,
+      });
+    }
+  } catch (error) {
+    logger.warn('[TitleUpdate] Failed to queue story background generation', {
+      context: 'background-jobs.title-update',
+      chatId: chat.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Resolve the image profile to use for story background generation
+ * Priority: Chat image profile > Story backgrounds default > User default
+ */
+export async function resolveImageProfileForChat(
+  userId: string,
+  chat: ChatMetadata,
+  chatSettings: ChatSettings
+): Promise<string | null> {
+  const repos = getRepositories();
+
+  // First, check the chat's image profile (most specific, chat-level)
+  if (chat.imageProfileId) {
+    const profile = await repos.imageProfiles.findById(chat.imageProfileId);
+    if (profile && profile.userId === userId && profile.apiKeyId) {
+      return profile.id;
+    }
+  }
+
+  // Second, check if story backgrounds settings has a default profile
+  const storyBackgroundsSettings = chatSettings.storyBackgroundsSettings;
+  if (storyBackgroundsSettings?.defaultImageProfileId) {
+    // Verify the profile exists and is valid
+    const profile = await repos.imageProfiles.findById(storyBackgroundsSettings.defaultImageProfileId);
+    if (profile && profile.userId === userId && profile.apiKeyId) {
+      return profile.id;
+    }
+  }
+
+  // Third, try the user's default image profile
+  const defaultProfile = await repos.imageProfiles.findDefault(userId);
+  if (defaultProfile && defaultProfile.apiKeyId) {
+    return defaultProfile.id;
+  }
+
+  return null;
 }

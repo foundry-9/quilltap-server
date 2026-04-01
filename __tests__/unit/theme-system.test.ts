@@ -7,8 +7,8 @@ describe('Theme System', () => {
   describe('Theme heading fonts', () => {
     it('should include headingFont property in theme summary', () => {
       const theme = {
-        id: 'ocean',
-        name: 'Ocean',
+        id: 'forest',
+        name: 'Forest',
         headingFont: {
           family: 'Inter',
           url: undefined,
@@ -95,8 +95,8 @@ describe('Theme System', () => {
     it('should return theme list with heading font info', () => {
       const themeList = [
         {
-          id: 'ocean',
-          name: 'Ocean',
+          id: 'forest',
+          name: 'Forest',
           headingFont: { family: 'Inter', url: undefined },
         },
         {
@@ -147,7 +147,7 @@ describe('Theme System', () => {
 
     it('should support side-by-side light and dark mode previews', () => {
       const theme = {
-        id: 'ocean',
+        id: 'forest',
         lightMode: {
           primary: '#0066cc',
           background: '#ffffff',
@@ -226,7 +226,7 @@ describe('Theme System', () => {
 
     it('should handle theme preview expansion/collapse', () => {
       const preview = {
-        id: 'ocean',
+        id: 'forest',
         expanded: false,
       };
 
@@ -263,14 +263,14 @@ describe('Theme System', () => {
 
     it('should display theme names in their heading font', () => {
       const theme = {
-        name: 'Ocean',
+        name: 'Forest',
         headingFont: { family: 'Inter' },
       };
 
       const displayName = theme.name;
       const displayStyle = `font-family: ${theme.headingFont.family}`;
 
-      expect(displayName).toBe('Ocean');
+      expect(displayName).toBe('Forest');
       expect(displayStyle).toContain('Inter');
     });
 
@@ -317,7 +317,7 @@ describe('Theme System', () => {
     });
 
     it('should update theme without page reload', () => {
-      const currentTheme = 'ocean';
+      const currentTheme = 'forest';
       let isReloading = false;
 
       const changeTheme = (newTheme: string) => {

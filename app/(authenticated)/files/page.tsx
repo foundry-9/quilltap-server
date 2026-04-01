@@ -16,7 +16,7 @@ function FilesPageContent() {
   const selectedFileId = searchParams.get('fileId')
 
   return (
-    <div className="qt-page-container text-foreground">
+    <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/commonplace_book.png)' } as React.CSSProperties}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
         <div>
           <h1 className="text-3xl font-semibold leading-tight">Files</h1>
@@ -50,7 +50,7 @@ function FilesPageContent() {
 export default function FilesPage() {
   return (
     <Suspense fallback={
-      <div className="qt-page-container text-foreground">
+      <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/commonplace_book.png)' } as React.CSSProperties}>
         <div className="flex min-h-screen items-center justify-center">
           <p className="text-lg text-foreground">Loading files...</p>
         </div>

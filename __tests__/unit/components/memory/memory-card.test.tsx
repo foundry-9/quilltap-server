@@ -85,7 +85,7 @@ describe('MemoryCard', () => {
       const mediumImportanceMemory = { ...mockMemory, importance: 0.5 };
       const { container } = render(<MemoryCard memory={mediumImportanceMemory} />);
 
-      const importanceElement = container.querySelector('.text-yellow-600');
+      const importanceElement = container.querySelector('.text-warning');
       expect(importanceElement).toBeInTheDocument();
       expect(screen.getByText('Medium')).toBeInTheDocument();
     });

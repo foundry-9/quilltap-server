@@ -128,7 +128,9 @@ export async function buildTools(
   /** List of tool IDs to disable (or undefined to return empty tools for this message) */
   disabledTools?: string[],
   /** List of disabled group patterns (e.g., "plugin:mcp", "plugin:mcp:subgroup:filesystem") */
-  disabledToolGroups?: string[]
+  disabledToolGroups?: string[],
+  /** Whether agent mode is enabled (enables submit_final_response tool) */
+  agentModeEnabled?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -185,6 +187,7 @@ export async function buildTools(
     webSearch: connectionProfile.allowWebSearch,
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
+    agentMode: !!agentModeEnabled,
     toolConfigs,
   })
 

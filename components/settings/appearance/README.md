@@ -17,7 +17,6 @@ appearance/
 │   └── index.ts                   # Barrel export
 ├── DisplayOptions.tsx         # Display options container
 ├── ThemeSelector.tsx          # Theme selection container
-├── SidebarWidthControl.tsx    # Sidebar width display and reset control
 ├── index.tsx                  # Main appearance tab component
 └── README.md                  # This file
 ```
@@ -38,12 +37,6 @@ appearance/
 ### Display Options
 - Quick theme access toggle (nav selector)
 - Theme selector visibility control
-
-### Sidebar Width Control
-- Display current sidebar width
-- Visual indicator showing deviation from default width
-- Reset button to restore default sidebar width
-- Automatic width persistence via drag handle
 
 ### Development Features
 - Debug theme state display

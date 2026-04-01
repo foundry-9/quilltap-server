@@ -1,6 +1,6 @@
 # Multi-Character Chats
 
-> **[Open this page in Quilltap](/chats)**
+> **[Open this page in Quilltap](/salon)**
 
 Multi-character chats allow you to have conversations with multiple AI characters simultaneously. This creates dynamic group interactions where characters can talk to each other and respond to you as a group.
 

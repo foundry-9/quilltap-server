@@ -30,6 +30,7 @@ import { executeCascadeDelete, getCascadeDeletePreview } from '@/lib/cascade-del
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
 import { readImageBuffer } from '@/lib/images-v2';
 import { z } from 'zod';
+import { PronounsSchema } from '@/lib/schemas/character.types';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
 
@@ -59,8 +60,11 @@ const updateCharacterSchema = z.object({
       z.literal('').transform(() => undefined)
     )
     .nullable(),
+  aliases: z.array(z.string()).optional(),
+  pronouns: PronounsSchema.nullable().optional(),
   controlledBy: z.enum(['llm', 'user']).optional(),
   npc: z.boolean().optional(),
+  defaultAgentModeEnabled: z.boolean().nullable().optional(),
 });
 
 const avatarSchema = z.object({
@@ -217,8 +221,8 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
               })
             );
 
-            // Get all messages and count them for badge
-            const messageCount = messages.filter((msg) => msg.type === 'message').length;
+            // Get all messages and count only visible bubbles (USER/ASSISTANT) for badge
+            const messageCount = messages.filter((msg) => msg.type === 'message' && msg.role !== 'SYSTEM' && msg.role !== 'TOOL').length;
 
             // Get last 3 messages for preview
             const recentMessages = messages
@@ -235,6 +239,18 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
             // Get project info if chat belongs to a project
             const project = chat.projectId ? projectMap.get(chat.projectId) || null : null;
 
+            // Get story background if available
+            let storyBackground = null;
+            if (chat.storyBackgroundImageId) {
+              const bgFile = await repos.files.findById(chat.storyBackgroundImageId);
+              if (bgFile) {
+                storyBackground = {
+                  id: bgFile.id,
+                  filepath: getFilePath(bgFile),
+                };
+              }
+            }
+
             return {
               id: chat.id,
               title: chat.title,
@@ -246,8 +262,10 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
                 name: character.name,
               },
               project,
+              storyBackground,
               messages: recentMessages,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
+              isDangerousChat: chat.isDangerousChat === true,
               _count: {
                 messages: messageCount,
               },

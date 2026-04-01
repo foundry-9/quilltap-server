@@ -15,11 +15,44 @@
   /**
    * Page container that respects content width toggle
    * Replaces manual container + max-w-* classes in page components
+   * Supports story background via --story-background-url CSS variable
    */
   .qt-page-container {
-    @apply w-full mx-auto px-4 pt-8 pb-20;
+    @apply w-full mx-auto px-4 pt-8 pb-20 relative;
     max-width: var(--qt-page-max-width);
     transition: max-width 200ms ease-out;
+    min-height: 100vh;
+  }
+
+  /**
+   * Story background image layer for page containers
+   * Renders behind all page content using a ::before pseudo-element.
+   * Only visible when --story-background-url CSS variable is set.
+   * Uses fixed attachment for parallax effect while scrolling.
+   */
+  .qt-page-container::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: var(--story-background-url) top center/cover no-repeat;
+    z-index: 0;
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  /**
+   * Hide background layer when no story background URL is set
+   */
+  .qt-page-container:not([style*="--story-background-url"])::before {
+    display: none;
+  }
+
+  /**
+   * Ensure page content stays above the background
+   */
+  .qt-page-container > * {
+    position: relative;
+    z-index: 1;
   }
 
   /* ==========================================================================
@@ -131,6 +164,74 @@
     background: var(--qt-status-info-bg);
     color: var(--qt-status-info-fg);
     border: 1px solid var(--qt-status-info-border);
+  }
+
+  /* ==========================================================================
+     QUEUE STATUS BADGE GROUP
+     ========================================================================== */
+
+  /**
+   * Queue status badge group container
+   * Displays tightly grouped badges showing active job counts per queue type
+   */
+  .qt-queue-badge-group {
+    @apply inline-flex items-center overflow-hidden flex-shrink-0;
+    gap: var(--qt-queue-badge-group-gap);
+    border-radius: var(--qt-queue-badge-group-radius);
+  }
+
+  /**
+   * Individual queue badge - shared base
+   */
+  .qt-queue-badge,
+  .qt-queue-badge-memory,
+  .qt-queue-badge-summary,
+  .qt-queue-badge-danger,
+  .qt-queue-badge-story {
+    @apply inline-flex items-center gap-1 flex-shrink-0 leading-none whitespace-nowrap;
+    padding: var(--qt-queue-badge-padding-y) var(--qt-queue-badge-padding-x);
+    font-size: var(--qt-queue-badge-font-size);
+    font-weight: var(--qt-queue-badge-font-weight);
+    transition: opacity 200ms ease;
+  }
+
+  /**
+   * Queue badge idle state (count is 0)
+   */
+  .qt-queue-badge-idle {
+    opacity: var(--qt-queue-badge-idle-opacity);
+  }
+
+  /**
+   * Memory queue badge (blue)
+   */
+  .qt-queue-badge-memory {
+    background: var(--qt-queue-badge-memory-bg);
+    color: var(--qt-queue-badge-memory-fg);
+  }
+
+  /**
+   * Summarization queue badge (green)
+   */
+  .qt-queue-badge-summary {
+    background: var(--qt-queue-badge-summary-bg);
+    color: var(--qt-queue-badge-summary-fg);
+  }
+
+  /**
+   * Danger classification queue badge (red)
+   */
+  .qt-queue-badge-danger {
+    background: var(--qt-queue-badge-danger-bg);
+    color: var(--qt-queue-badge-danger-fg);
+  }
+
+  /**
+   * Story background queue badge (dark gray)
+   */
+  .qt-queue-badge-story {
+    background: var(--qt-queue-badge-story-bg);
+    color: var(--qt-queue-badge-story-fg);
   }
 
   /* ==========================================================================
@@ -311,6 +412,101 @@
     @apply border-b border-border;
     border-radius: var(--qt-code-radius) var(--qt-code-radius) 0 0;
     background: var(--qt-code-bg);
+  }
+
+  /* ==========================================================================
+     HIGHLIGHT.JS SYNTAX HIGHLIGHTING (Server-side rendered code blocks)
+     ========================================================================== */
+
+  /**
+   * Highlight.js code block container
+   * Matches the client-side oneDark theme colors
+   */
+  /**
+   * Server-rendered code blocks: <pre><code class="hljs">...</code></pre>
+   * Need to style both the pre wrapper and the code element
+   */
+  pre:has(> code.hljs) {
+    @apply my-3 rounded-lg overflow-x-auto;
+    background: var(--qt-code-bg);
+  }
+
+  .hljs {
+    @apply p-4 block;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+    border-radius: var(--qt-code-radius);
+    background: var(--qt-code-bg);
+    color: var(--qt-code-fg);
+    font-family: var(--qt-code-font);
+  }
+
+  /* Reset prose styles on code inside pre for server-rendered blocks */
+  .prose pre code.hljs,
+  .qt-prose pre code.hljs {
+    @apply p-4 block;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+    background: transparent;
+  }
+
+  /* Highlight.js syntax colors (oneDark-inspired) */
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-section,
+  .hljs-link {
+    color: #c678dd;
+  }
+
+  .hljs-string,
+  .hljs-title,
+  .hljs-name,
+  .hljs-type,
+  .hljs-attribute,
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-addition,
+  .hljs-variable,
+  .hljs-template-tag,
+  .hljs-template-variable {
+    color: #98c379;
+  }
+
+  .hljs-comment,
+  .hljs-quote,
+  .hljs-deletion,
+  .hljs-meta {
+    color: #5c6370;
+  }
+
+  .hljs-keyword,
+  .hljs-selector-class,
+  .hljs-function,
+  .hljs-selector-id,
+  .hljs-attr {
+    color: #61afef;
+  }
+
+  .hljs-number,
+  .hljs-regexp,
+  .hljs-built_in,
+  .hljs-params {
+    color: #d19a66;
+  }
+
+  .hljs-tag {
+    color: #e06c75;
+  }
+
+  .hljs-emphasis {
+    font-style: italic;
+  }
+
+  .hljs-strong {
+    font-weight: bold;
   }
 
   /* ==========================================================================

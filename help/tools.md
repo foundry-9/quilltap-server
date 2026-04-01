@@ -1,6 +1,6 @@
 # Tools
 
-> **[Open this page in Quilltap](/settings?tab=plugins)**
+> **[Open this page in Quilltap](/foundry/forge)**
 
 Tools are AI capabilities that allow the AI assistant to perform actions within Quilltap and access information beyond the conversation. They extend what the AI can do during a chat session.
 

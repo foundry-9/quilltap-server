@@ -29,6 +29,7 @@ interface ImageProfile {
   modelName: string
   parameters: Record<string, any>
   isDefault: boolean
+  isDangerousCompatible?: boolean
   apiKey?: ApiKey | null
 }
 
@@ -179,6 +180,9 @@ export default function ImageProfilesTab() {
             const badges: SettingsCardBadge[] = []
             if (profile.isDefault) {
               badges.push({ text: 'Default', variant: 'success' })
+            }
+            if (profile.isDangerousCompatible) {
+              badges.push({ text: 'Uncensored', variant: 'destructive' })
             }
 
             // Build metadata array

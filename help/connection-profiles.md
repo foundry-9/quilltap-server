@@ -1,6 +1,6 @@
 # Connection Profiles
 
-> **[Open this page in Quilltap](/settings?tab=profiles)**
+> **[Open this page in Quilltap](/foundry/forge)**
 
 Connection Profiles are where you configure your AI language models (LLMs) for use in Quilltap chats. A connection profile links together an API key, a provider, and a specific model, allowing Quilltap to communicate with the AI service.
 
@@ -44,7 +44,7 @@ The profiles list shows:
 
 Before creating a connection profile, you need an API key:
 
-1. Go to Settings → **API Keys** tab
+1. Go to **The Forge** (`/foundry/forge`) and expand **API Keys**
 2. Add your API key from the provider
 3. Test the key to verify it works
 4. Return to Connection Profiles tab

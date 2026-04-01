@@ -74,21 +74,13 @@ interface ToolPlugin {
 }
 
 interface ToolRegistryType {
-  registerTool: (plugin: ToolPlugin) => void
   registerPlugin: (plugin: ToolPlugin) => void
-  getTool: (name: string) => ToolPlugin | null
   getPlugin: (name: string) => ToolPlugin | null
-  getAllTools: () => ToolPlugin[]
   getAllPlugins: () => ToolPlugin[]
-  hasTool: (name: string) => boolean
   hasPlugin: (name: string) => boolean
-  getToolNames: () => string[]
   getPluginNames: () => string[]
-  getToolMetadata: (name: string) => ToolMetadata | null
   getPluginMetadata: (name: string) => ToolMetadata | null
-  getAllToolMetadata: () => ToolMetadata[]
   getAllPluginMetadata: () => ToolMetadata[]
-  getToolDefinitions: () => UniversalTool[]
   getConfiguredToolDefinitions: (configs: Map<string, Record<string, unknown>>) => Promise<UniversalTool[]>
   executeTool: (name: string, input: unknown, context: ToolExecutionContext) => Promise<ToolExecutionResult>
   formatToolResults: (name: string, result: ToolExecutionResult) => Promise<string>
@@ -104,10 +96,10 @@ interface ToolRegistryType {
 // Import using require after mocks
 const {
   toolRegistry,
-  registerTool,
+  registerPlugin,
 } = require('@/lib/plugins/tool-registry') as {
   toolRegistry: ToolRegistryType
-  registerTool: (plugin: ToolPlugin) => void
+  registerPlugin: (plugin: ToolPlugin) => void
 }
 
 // Test fixtures
@@ -171,25 +163,25 @@ describe('Tool Registry', () => {
     toolRegistry.reset()
   })
 
-  describe('registerTool', () => {
+  describe('registerPlugin', () => {
     it('registers a tool plugin successfully', () => {
       const plugin = makeToolPlugin()
 
-      toolRegistry.registerTool(plugin)
+      toolRegistry.registerPlugin(plugin)
 
-      expect(toolRegistry.hasTool('test-tool')).toBe(true)
+      expect(toolRegistry.hasPlugin('test-tool')).toBe(true)
     })
 
-    it('throws error when registering duplicate tool', () => {
+    it('throws error when registering duplicate plugin', () => {
       const plugin1 = makeToolPlugin()
       const plugin2 = makeToolPlugin()
 
-      toolRegistry.registerTool(plugin1)
+      toolRegistry.registerPlugin(plugin1)
 
-      expect(() => toolRegistry.registerTool(plugin2)).toThrow("Plugin 'test-tool' is already registered")
+      expect(() => toolRegistry.registerPlugin(plugin2)).toThrow("Plugin 'test-tool' is already registered")
     })
 
-    it('registers multiple unique tools', () => {
+    it('registers multiple unique plugins', () => {
       const plugin1 = makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'tool-1' }),
       })
@@ -197,38 +189,38 @@ describe('Tool Registry', () => {
         metadata: makeToolMetadata({ toolName: 'tool-2' }),
       })
 
-      toolRegistry.registerTool(plugin1)
-      toolRegistry.registerTool(plugin2)
+      toolRegistry.registerPlugin(plugin1)
+      toolRegistry.registerPlugin(plugin2)
 
-      expect(toolRegistry.hasTool('tool-1')).toBe(true)
-      expect(toolRegistry.hasTool('tool-2')).toBe(true)
+      expect(toolRegistry.hasPlugin('tool-1')).toBe(true)
+      expect(toolRegistry.hasPlugin('tool-2')).toBe(true)
     })
   })
 
-  describe('getTool', () => {
-    it('returns registered tool by name', () => {
+  describe('getPlugin', () => {
+    it('returns registered plugin by name', () => {
       const plugin = makeToolPlugin()
-      toolRegistry.registerTool(plugin)
+      toolRegistry.registerPlugin(plugin)
 
-      const result = toolRegistry.getTool('test-tool')
+      const result = toolRegistry.getPlugin('test-tool')
 
       expect(result).toBe(plugin)
     })
 
-    it('returns null for non-existent tool', () => {
-      const result = toolRegistry.getTool('nonexistent')
+    it('returns null for non-existent plugin', () => {
+      const result = toolRegistry.getPlugin('nonexistent')
 
       expect(result).toBeNull()
     })
   })
 
-  describe('getAllTools', () => {
-    it('returns empty array when no tools registered', () => {
-      const tools = toolRegistry.getAllTools()
-      expect(tools).toEqual([])
+  describe('getAllPlugins', () => {
+    it('returns empty array when no plugins registered', () => {
+      const plugins = toolRegistry.getAllPlugins()
+      expect(plugins).toEqual([])
     })
 
-    it('returns all registered tools', () => {
+    it('returns all registered plugins', () => {
       const plugin1 = makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'tool-1' }),
       })
@@ -236,78 +228,78 @@ describe('Tool Registry', () => {
         metadata: makeToolMetadata({ toolName: 'tool-2' }),
       })
 
-      toolRegistry.registerTool(plugin1)
-      toolRegistry.registerTool(plugin2)
+      toolRegistry.registerPlugin(plugin1)
+      toolRegistry.registerPlugin(plugin2)
 
-      const tools = toolRegistry.getAllTools()
+      const plugins = toolRegistry.getAllPlugins()
 
-      expect(tools).toHaveLength(2)
-      expect(tools).toContain(plugin1)
-      expect(tools).toContain(plugin2)
+      expect(plugins).toHaveLength(2)
+      expect(plugins).toContain(plugin1)
+      expect(plugins).toContain(plugin2)
     })
   })
 
-  describe('hasTool', () => {
-    it('returns true for registered tool', () => {
-      toolRegistry.registerTool(makeToolPlugin())
-      expect(toolRegistry.hasTool('test-tool')).toBe(true)
+  describe('hasPlugin', () => {
+    it('returns true for registered plugin', () => {
+      toolRegistry.registerPlugin(makeToolPlugin())
+      expect(toolRegistry.hasPlugin('test-tool')).toBe(true)
     })
 
-    it('returns false for non-registered tool', () => {
-      expect(toolRegistry.hasTool('nonexistent')).toBe(false)
+    it('returns false for non-registered plugin', () => {
+      expect(toolRegistry.hasPlugin('nonexistent')).toBe(false)
     })
   })
 
-  describe('getToolNames', () => {
-    it('returns empty array when no tools registered', () => {
-      const names = toolRegistry.getToolNames()
+  describe('getPluginNames', () => {
+    it('returns empty array when no plugins registered', () => {
+      const names = toolRegistry.getPluginNames()
       expect(names).toEqual([])
     })
 
-    it('returns all registered tool names', () => {
-      toolRegistry.registerTool(makeToolPlugin({
+    it('returns all registered plugin names', () => {
+      toolRegistry.registerPlugin(makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'alpha' }),
       }))
-      toolRegistry.registerTool(makeToolPlugin({
+      toolRegistry.registerPlugin(makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'beta' }),
       }))
 
-      const names = toolRegistry.getToolNames()
+      const names = toolRegistry.getPluginNames()
 
       expect(names).toContain('alpha')
       expect(names).toContain('beta')
     })
   })
 
-  describe('getToolMetadata', () => {
-    it('returns metadata for registered tool', () => {
+  describe('getPluginMetadata', () => {
+    it('returns metadata for registered plugin', () => {
       const metadata = makeToolMetadata({
         toolName: 'my-tool',
         displayName: 'My Tool',
         description: 'Does something useful',
       })
-      toolRegistry.registerTool(makeToolPlugin({ metadata }))
+      toolRegistry.registerPlugin(makeToolPlugin({ metadata }))
 
-      const result = toolRegistry.getToolMetadata('my-tool')
+      const result = toolRegistry.getPluginMetadata('my-tool')
 
       expect(result).toEqual(metadata)
     })
 
-    it('returns null for non-existent tool', () => {
-      const result = toolRegistry.getToolMetadata('nonexistent')
+    it('returns null for non-existent plugin', () => {
+      const result = toolRegistry.getPluginMetadata('nonexistent')
       expect(result).toBeNull()
     })
   })
 
-  describe('getAllToolMetadata', () => {
-    it('returns metadata for all tools', () => {
+  describe('getAllPluginMetadata', () => {
+    it('returns metadata for all plugins', () => {
       const metadata1 = makeToolMetadata({ toolName: 'tool-1' })
       const metadata2 = makeToolMetadata({ toolName: 'tool-2' })
 
-      toolRegistry.registerTool(makeToolPlugin({ metadata: metadata1 }))
-      toolRegistry.registerTool(makeToolPlugin({ metadata: metadata2 }))
+      toolRegistry.registerPlugin(makeToolPlugin({ metadata: metadata1 }))
+      toolRegistry.registerPlugin(makeToolPlugin({ metadata: metadata2 }))
 
-      const allMetadata = toolRegistry.getAllToolMetadata()
+      const allMetadata = toolRegistry.getAllPluginMetadata()
 
       expect(allMetadata).toHaveLength(2)
       expect(allMetadata).toContainEqual(metadata1)
@@ -316,8 +308,8 @@ describe('Tool Registry', () => {
   })
 
   describe('getConfiguredToolDefinitions', () => {
-    it('includes tools without isConfigured method', async () => {
-      toolRegistry.registerTool(makeToolPlugin({
+    it('includes plugins without isConfigured method', async () => {
+      toolRegistry.registerPlugin(makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'simple-tool' }),
         isConfigured: undefined,
       }))
@@ -327,8 +319,8 @@ describe('Tool Registry', () => {
       expect(definitions).toHaveLength(1)
     })
 
-    it('excludes unconfigured tools with isConfigured method', async () => {
-      toolRegistry.registerTool(makeToolPlugin({
+    it('excludes unconfigured plugins with isConfigured method', async () => {
+      toolRegistry.registerPlugin(makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'configured-tool' }),
         isConfigured: (config: Record<string, unknown>) => !!config.apiKey,
       }))
@@ -338,8 +330,8 @@ describe('Tool Registry', () => {
       expect(definitions).toHaveLength(0)
     })
 
-    it('includes configured tools', async () => {
-      toolRegistry.registerTool(makeToolPlugin({
+    it('includes configured plugins', async () => {
+      toolRegistry.registerPlugin(makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'configured-tool' }),
         isConfigured: (config: Record<string, unknown>) => !!config.apiKey,
       }))
@@ -359,7 +351,7 @@ describe('Tool Registry', () => {
         result: { answer: 42 },
       })
 
-      toolRegistry.registerTool(makeToolPlugin({
+      toolRegistry.registerPlugin(makeToolPlugin({
         executeByName: executeByNameFn,
       }))
 
@@ -380,7 +372,7 @@ describe('Tool Registry', () => {
     })
 
     it('returns error for invalid input', async () => {
-      toolRegistry.registerTool(makeToolPlugin({
+      toolRegistry.registerPlugin(makeToolPlugin({
         validateInput: () => false,
       }))
 
@@ -391,21 +383,21 @@ describe('Tool Registry', () => {
       expect(result.error).toContain('Invalid input')
     })
 
-    it('skips unconfigured tools when finding tool to execute', async () => {
-      toolRegistry.registerTool(makeToolPlugin({
+    it('skips unconfigured plugins when finding tool to execute', async () => {
+      toolRegistry.registerPlugin(makeToolPlugin({
         isConfigured: (config: Record<string, unknown>) => !!config.apiKey,
       }))
 
       const context = makeExecutionContext({ toolConfig: {} })
       const result = await toolRegistry.executeTool('test-tool', { input: 'test' }, context)
 
-      // Tool is skipped during search because it's not configured
+      // Plugin is skipped during search because it's not configured
       expect(result.success).toBe(false)
       expect(result.error).toContain('not found')
     })
 
     it('catches and reports execution errors', async () => {
-      toolRegistry.registerTool(makeToolPlugin({
+      toolRegistry.registerPlugin(makeToolPlugin({
         executeByName: async () => { throw new Error('Execution failed') },
       }))
 
@@ -418,8 +410,8 @@ describe('Tool Registry', () => {
   })
 
   describe('formatToolResults', () => {
-    it('formats results using tool formatter', async () => {
-      toolRegistry.registerTool(makeToolPlugin({
+    it('formats results using plugin formatter', async () => {
+      toolRegistry.registerPlugin(makeToolPlugin({
         formatResults: (result: ToolExecutionResult) => `Formatted: ${JSON.stringify(result)}`,
       }))
 
@@ -429,7 +421,7 @@ describe('Tool Registry', () => {
       expect(formatted).toBe('Formatted: {"success":true,"result":"data"}')
     })
 
-    it('returns JSON for non-existent tool', async () => {
+    it('returns JSON for non-existent plugin', async () => {
       const result: ToolExecutionResult = { success: true, result: 'data' }
       const formatted = await toolRegistry.formatToolResults('nonexistent', result)
 
@@ -438,8 +430,8 @@ describe('Tool Registry', () => {
   })
 
   describe('getDefaultConfig', () => {
-    it('returns default config from tool', () => {
-      toolRegistry.registerTool(makeToolPlugin({
+    it('returns default config from plugin', () => {
+      toolRegistry.registerPlugin(makeToolPlugin({
         getDefaultConfig: () => ({ timeout: 30000, retries: 3 }),
       }))
 
@@ -449,7 +441,7 @@ describe('Tool Registry', () => {
     })
 
     it('returns empty object when no getDefaultConfig', () => {
-      toolRegistry.registerTool(makeToolPlugin({
+      toolRegistry.registerPlugin(makeToolPlugin({
         getDefaultConfig: undefined,
       }))
 
@@ -458,14 +450,14 @@ describe('Tool Registry', () => {
       expect(config).toEqual({})
     })
 
-    it('returns empty object for non-existent tool', () => {
+    it('returns empty object for non-existent plugin', () => {
       const config = toolRegistry.getDefaultConfig('nonexistent')
       expect(config).toEqual({})
     })
   })
 
   describe('initialize', () => {
-    it('registers all provided tools', async () => {
+    it('registers all provided plugins', async () => {
       const tools = [
         makeToolPlugin({ metadata: makeToolMetadata({ toolName: 'tool-1' }) }),
         makeToolPlugin({ metadata: makeToolMetadata({ toolName: 'tool-2' }) }),
@@ -475,11 +467,11 @@ describe('Tool Registry', () => {
       await toolRegistry.initialize(tools)
 
       expect(toolRegistry.isInitialized()).toBe(true)
-      expect(toolRegistry.getToolNames()).toHaveLength(3)
+      expect(toolRegistry.getPluginNames()).toHaveLength(3)
     })
 
     it('clears existing state before initialization', async () => {
-      toolRegistry.registerTool(makeToolPlugin({
+      toolRegistry.registerPlugin(makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'old-tool' }),
       }))
 
@@ -487,8 +479,8 @@ describe('Tool Registry', () => {
         makeToolPlugin({ metadata: makeToolMetadata({ toolName: 'new-tool' }) }),
       ])
 
-      expect(toolRegistry.hasTool('old-tool')).toBe(false)
-      expect(toolRegistry.hasTool('new-tool')).toBe(true)
+      expect(toolRegistry.hasPlugin('old-tool')).toBe(false)
+      expect(toolRegistry.hasPlugin('new-tool')).toBe(true)
     })
 
     it('tracks registration errors', async () => {
@@ -538,7 +530,7 @@ describe('Tool Registry', () => {
       toolRegistry.reset()
 
       expect(toolRegistry.isInitialized()).toBe(false)
-      expect(toolRegistry.getAllTools()).toHaveLength(0)
+      expect(toolRegistry.getAllPlugins()).toHaveLength(0)
     })
   })
 
@@ -568,15 +560,15 @@ describe('Tool Registry', () => {
     })
   })
 
-  describe('registerTool convenience function', () => {
-    it('registers tool via module export', () => {
+  describe('registerPlugin convenience function', () => {
+    it('registers plugin via module export', () => {
       const plugin = makeToolPlugin({
         metadata: makeToolMetadata({ toolName: 'convenience-test' }),
       })
 
-      registerTool(plugin)
+      registerPlugin(plugin)
 
-      expect(toolRegistry.hasTool('convenience-test')).toBe(true)
+      expect(toolRegistry.hasPlugin('convenience-test')).toBe(true)
     })
   })
 })

@@ -13,12 +13,17 @@ import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import type { RecentChatsSectionProps } from './types'
 
 export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
-  const { shouldHideByIds } = useQuickHide()
+  const { shouldHideByIds, hideDangerousChats } = useQuickHide()
 
   // Filter chats using quick-hide (same logic as chats page)
   // CSS overflow:hidden will hide chats that don't fit in the card
   const visibleChats = useMemo(() => {
     return chats.filter(chat => {
+      // Hide dangerous chats when filter is active
+      if (hideDangerousChats && chat.isDangerousChat) {
+        return false
+      }
+
       // Collect all tag IDs from character participants
       const allTagIds: string[] = []
 
@@ -30,13 +35,13 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
 
       return !shouldHideByIds(allTagIds)
     })
-  }, [chats, shouldHideByIds])
+  }, [chats, shouldHideByIds, hideDangerousChats])
 
   return (
     <div className="qt-homepage-section">
       <div className="qt-homepage-section-header">
         <h2 className="qt-homepage-section-title">Recent Chats</h2>
-        <Link href="/chats" className="qt-homepage-section-link">
+        <Link href="/salon" className="qt-homepage-section-link">
           View all &rarr;
         </Link>
       </div>
@@ -44,7 +49,7 @@ export function RecentChatsSection({ chats }: RecentChatsSectionProps) {
         {visibleChats.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
             <p className="text-sm">No chats yet</p>
-            <Link href="/chats/new" className="text-xs text-primary hover:underline">
+            <Link href="/salon/new" className="text-xs text-primary hover:underline">
               Start your first chat
             </Link>
           </div>

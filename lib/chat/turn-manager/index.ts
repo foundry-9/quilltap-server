@@ -48,6 +48,15 @@ export {
   isAllLLMChat,
 } from './utils';
 
+// Turn order computation (display-only)
+export {
+  computePredictedTurnOrder,
+} from './turn-order';
+export type {
+  TurnOrderEntry,
+  TurnOrderStatus,
+} from './turn-order';
+
 // All-LLM pause logic
 export {
   INITIAL_PAUSE_INTERVAL,

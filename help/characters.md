@@ -1,6 +1,6 @@
 # Characters Overview
 
-> **[Open this page in Quilltap](/characters)**
+> **[Open this page in Quilltap](/aurora)**
 
 Characters are the core of roleplaying in Quilltap. They represent personas that you can chat with, each with their own personality, background, and conversation style.
 
@@ -106,6 +106,8 @@ Characters are sorted by:
 ### Identity
 
 - **Name** — What the character is called
+- **Aliases** — Optional alternate names the character goes by (e.g., "Liz", "Lizzy" for "Elizabeth")
+- **Pronouns** — Optional pronouns for the character (e.g., he/him/his, she/her/her, they/them/their). Choose from presets or enter custom pronouns. When set, pronouns are included in system prompts so the LLM uses them correctly, and displayed on the character's view page.
 - **Title** — Optional subtitle or role (e.g., "Bounty Hunter")
 - **Description** — Long-form narrative about character
 - **Personality** — Key traits and characteristics
@@ -222,6 +224,8 @@ View associated memories:
 - Memories about this character
 - Memory details and dates
 - Search and filter
+- **Reinforcement count** — shows how many times a memory has been observed (e.g., "x3" badge means the same fact was seen in 3 separate exchanges). Frequently reinforced memories are considered stable knowledge and are better protected from housekeeping cleanup
+- **Related memories** — memories that are thematically linked are connected together. When a new memory is similar but distinct from an existing one, both are linked for context
 
 ### Tags Tab
 
@@ -251,13 +255,12 @@ Browse character images:
 - Upload new images
 - Set as default avatar
 
-### Physical Descriptions Tab
+### Appearance Tab
 
-View detailed appearance:
+View detailed appearance and outfits:
 
-- Various description lengths (short/medium/long/complete/full)
-- Useful for AI context and image generation
-- View or regenerate descriptions
+- **Physical Descriptions** — Various description lengths (short/medium/long/complete/full) for AI context and image generation
+- **Clothing & Outfits** — Named outfit records with usage context and markdown descriptions, used in system prompts and image generation
 
 ## Editing Characters
 
@@ -270,7 +273,7 @@ View detailed appearance:
 
 Editable fields:
 
-- Name, title, description
+- Name, aliases, pronouns, title, description
 - Personality and scenario
 - First message and examples
 - Avatar and images
@@ -298,7 +301,7 @@ Replace text across:
 - All system prompts
 - Physical descriptions
 - All chat messages (optionally)
-- Associated memories
+- Associated memories (content, summary, and keywords)
 
 Useful for consistency and corrections.
 

@@ -54,6 +54,7 @@ import {
 import {
   checkShouldUsePseudoTools,
   buildPseudoToolSystemInstructions,
+  buildNativeToolSystemInstructions,
   parsePseudoToolsFromResponse,
   stripPseudoToolMarkersFromResponse,
   determineEnabledToolOptions,
@@ -70,12 +71,15 @@ import {
   triggerInterCharacterMemory,
   triggerUserControlledCharacterMemory,
   triggerContextSummaryCheck,
+  triggerChatDangerClassification,
 } from './memory-trigger.service'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { isRecoverableRequestError } from '@/lib/llm/errors'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
+import { extractMemorySearchKeywords, stripToolArtifacts, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
+import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import {
   getCachedCompression,
@@ -88,6 +92,23 @@ import {
   type RngToolCall,
 } from './rng-pattern-detector.service'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
+import {
+  resolveAgentModeSetting,
+  buildAgentModeInstructions,
+  buildForceFinalMessage,
+  generateIterationSummary,
+  type ResolvedAgentMode,
+} from './agent-mode-resolver.service'
+import {
+  resolveDangerousContentSettings,
+} from '@/lib/services/dangerous-content/resolver.service'
+import {
+  classifyContent as classifyDangerousContent,
+} from '@/lib/services/dangerous-content/gatekeeper.service'
+import {
+  resolveProviderForDangerousContent,
+} from '@/lib/services/dangerous-content/provider-routing.service'
+import type { DangerFlag } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
 
@@ -216,6 +237,26 @@ async function processMessage(
   const chatSettings = await repos.chatSettings.findByUserId(userId)
 
   // ============================================================================
+  // Agent Mode Resolution
+  // ============================================================================
+
+  // Get project for agent mode resolution (also used later for project context)
+  const project = chat.projectId ? await repos.projects.findById(chat.projectId) : null
+
+  // Resolve agent mode settings through the cascade
+  const agentMode = resolveAgentModeSetting(
+    chat,
+    project,
+    character,
+    chatSettings
+  )
+
+  // Reset agent turn count on new user message (not continue mode)
+  if (!isContinueMode && agentMode.enabled) {
+    await repos.chats.update(chatId, { agentTurnCount: 0 })
+  }
+
+  // ============================================================================
   // Context Compression Setup
   // ============================================================================
 
@@ -237,37 +278,151 @@ async function processMessage(
     projectContextReinjectInterval: 5,
   }
 
-  // Get cheap LLM selection for compression
+  // Get cheap LLM selection (used for compression, danger classification, and proactive memory recall)
   let cheapLLMSelection = null
-  if (contextCompressionSettings.enabled && !bypassCompression) {
-    try {
-      // Get all connection profiles for cheap LLM selection
-      const allProfiles = await repos.connections.findByUserId(userId)
-      const cheapLLMConfig = chatSettings?.cheapLLMSettings || DEFAULT_CHEAP_LLM_CONFIG
+  let allProfiles: ConnectionProfile[] = []
+  try {
+    // Get all connection profiles for cheap LLM selection
+    allProfiles = await repos.connections.findByUserId(userId)
+    const cheapLLMConfig = chatSettings?.cheapLLMSettings || DEFAULT_CHEAP_LLM_CONFIG
 
-      // Convert null values to undefined for CheapLLMConfig compatibility
-      const compatibleConfig = {
-        ...cheapLLMConfig,
-        userDefinedProfileId: cheapLLMConfig.userDefinedProfileId ?? undefined,
-        defaultCheapProfileId: cheapLLMConfig.defaultCheapProfileId ?? undefined,
-      }
-
-      cheapLLMSelection = getCheapLLMProvider(
-        connectionProfile,
-        compatibleConfig,
-        allProfiles,
-        false // Ollama availability - could be checked but keeping simple for now
-      )
-
-    } catch (error) {
-      logger.warn('Failed to get cheap LLM for compression, compression will be skipped', {
-        error: error instanceof Error ? error.message : String(error),
-      })
+    // Convert null values to undefined for CheapLLMConfig compatibility
+    const compatibleConfig = {
+      ...cheapLLMConfig,
+      userDefinedProfileId: cheapLLMConfig.userDefinedProfileId ?? undefined,
+      defaultCheapProfileId: cheapLLMConfig.defaultCheapProfileId ?? undefined,
     }
+
+    cheapLLMSelection = getCheapLLMProvider(
+      connectionProfile,
+      compatibleConfig,
+      allProfiles,
+      false // Ollama availability - could be checked but keeping simple for now
+    )
+
+  } catch (error) {
+    logger.warn('Failed to get cheap LLM provider, features requiring it will be skipped', {
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 
   // Determine if compression is actually enabled for this request
   const compressionEnabled = !!(contextCompressionSettings.enabled && cheapLLMSelection && !bypassCompression)
+
+  // ============================================================================
+  // Dangerous Content Classification & Routing
+  // ============================================================================
+
+  let dangerFlags: DangerFlag[] | undefined
+  // Effective profile/key - may be overridden by dangerous content routing
+  let effectiveProfile = connectionProfile
+  let effectiveApiKey = apiKey
+
+  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings)
+  const dangerSettings = dangerousContentResolved.settings
+
+  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanTextChat && !isContinueMode && options.content && cheapLLMSelection) {
+    try {
+      // Send classification status
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'classifying',
+        message: 'Checking content...',
+        characterName: character.name,
+        characterId: character.id,
+      }))
+
+      const classificationResult = await classifyDangerousContent(
+        options.content,
+        cheapLLMSelection,
+        userId,
+        dangerSettings,
+        chatId
+      )
+
+      if (classificationResult.isDangerous) {
+        // Build danger flags for the message
+        dangerFlags = classificationResult.categories.map(cat => ({
+          category: cat.category,
+          score: cat.score,
+          userOverridden: false,
+          wasRerouted: false,
+        }))
+
+        logger.info('[DangerousContent] User message classified as dangerous', {
+          chatId,
+          score: classificationResult.score,
+          categories: classificationResult.categories.map(c => c.category),
+          mode: dangerSettings.mode,
+        })
+
+        // If AUTO_ROUTE, try to reroute to uncensored provider
+        if (dangerSettings.mode === 'AUTO_ROUTE') {
+          safeEnqueue(controller, encodeStatusEvent(encoder, {
+            stage: 'rerouting',
+            message: 'Routing to uncensored provider...',
+            characterName: character.name,
+            characterId: character.id,
+          }))
+
+          const routeResult = await resolveProviderForDangerousContent(
+            effectiveProfile,
+            effectiveApiKey,
+            dangerSettings,
+            userId
+          )
+
+          if (routeResult.rerouted) {
+            effectiveProfile = routeResult.connectionProfile
+            effectiveApiKey = routeResult.apiKey
+
+            // Update danger flags with routing info
+            dangerFlags = dangerFlags.map(flag => ({
+              ...flag,
+              wasRerouted: true,
+              reroutedProvider: routeResult.connectionProfile.provider,
+              reroutedModel: routeResult.connectionProfile.modelName,
+            }))
+
+            logger.info('[DangerousContent] Rerouted to uncensored provider', {
+              chatId,
+              originalProfile: connectionProfile.name,
+              uncensoredProfile: routeResult.connectionProfile.name,
+              reason: routeResult.reason,
+            })
+          } else {
+            logger.warn('[DangerousContent] No uncensored provider available, using original', {
+              chatId,
+              reason: routeResult.reason,
+            })
+          }
+        }
+
+        // Save DANGER_CLASSIFICATION system event for token tracking
+        if (classificationResult.usage) {
+          const classificationEvent = {
+            id: crypto.randomUUID(),
+            type: 'system' as const,
+            systemEventType: 'DANGER_CLASSIFICATION' as const,
+            description: `Content classified: score ${classificationResult.score.toFixed(2)}, categories: ${classificationResult.categories.map(c => c.category).join(', ')}`,
+            promptTokens: classificationResult.usage.promptTokens,
+            completionTokens: classificationResult.usage.completionTokens,
+            totalTokens: classificationResult.usage.totalTokens,
+            provider: cheapLLMSelection.provider,
+            modelName: cheapLLMSelection.modelName,
+            createdAt: new Date().toISOString(),
+          }
+          await repos.chats.addMessage(chatId, classificationEvent)
+        }
+
+      }
+    } catch (error) {
+      // Fail safe - never block on classification errors
+      logger.error('[DangerousContent] Classification failed, continuing with original provider', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
 
   // Get roleplay template
   const roleplayTemplate = await getRoleplayTemplate(repos, chat, chatSettings ? { defaultRoleplayTemplateId: chatSettings.defaultRoleplayTemplateId ?? undefined } : null)
@@ -296,27 +451,24 @@ async function processMessage(
   // ============================================================================
   // Project Context Injection
   // ============================================================================
-  // Load project context and determine if it should be injected this message
+  // Use project loaded earlier for agent mode resolution
   let projectContext: ProjectContext | null = null
 
-  if (chat.projectId) {
-    const project = await repos.projects.findById(chat.projectId)
-    if (project && (project.description || project.instructions)) {
-      // Calculate if we should inject project context this message
-      // Default interval matches windowSize (5), can be configured to 0 to disable
-      const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
-      const messageCount = existingMessages.filter(m => m.type === 'message').length
+  if (project && (project.description || project.instructions)) {
+    // Calculate if we should inject project context this message
+    // Default interval matches windowSize (5), can be configured to 0 to disable
+    const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
+    const messageCount = existingMessages.filter(m => m.type === 'message').length
 
-      // Inject on first message (count 0) or every N messages after that
-      // Using messageCount because the new user message hasn't been saved yet
-      const shouldInject = reinjectInterval > 0 && (messageCount === 0 || messageCount % reinjectInterval === 0)
+    // Inject on first message (count 0) or every N messages after that
+    // Using messageCount because the new user message hasn't been saved yet
+    const shouldInject = reinjectInterval > 0 && (messageCount === 0 || messageCount % reinjectInterval === 0)
 
-      if (shouldInject) {
-        projectContext = {
-          name: project.name,
-          description: project.description,
-          instructions: project.instructions,
-        }
+    if (shouldInject) {
+      projectContext = {
+        name: project.name,
+        description: project.description,
+        instructions: project.instructions,
       }
     }
   }
@@ -427,6 +579,19 @@ async function processMessage(
     for (const file of fileProcessing.attachedFiles) {
       await repos.files.addLink(file.id, userMessageId)
     }
+
+    // Attach dangerFlags to the saved user message
+    if (dangerFlags && dangerFlags.length > 0) {
+      try {
+        await repos.chats.updateMessage(chatId, userMessageId, { dangerFlags })
+      } catch (updateError) {
+        logger.warn('[DangerousContent] Failed to attach dangerFlags to user message', {
+          chatId,
+          messageId: userMessageId,
+          error: updateError instanceof Error ? updateError.message : String(updateError),
+        })
+      }
+    }
   }
 
   // Build final user message content
@@ -450,35 +615,38 @@ async function processMessage(
   // Check for pseudo-tools
   const enabledToolOptions = determineEnabledToolOptions(
     imageProfileId,
-    connectionProfile.allowWebSearch
+    effectiveProfile.allowWebSearch
   )
 
-  // Build tools (include request_full_context when compression is enabled)
+  // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
   // Always pass disabledTools and disabledToolGroups for filtering
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
-    connectionProfile,
+    effectiveProfile,
     imageProfileId,
     imageProfile,
     userId,
     false, // Will check pseudo-tools after
-    undefined, // projectId (will be set if needed)
+    chat.projectId ?? undefined, // projectId - enables project_info tool
     compressionEnabled, // requestFullContext - enable the tool when compression is active
     chat.disabledTools ?? [],
-    chat.disabledToolGroups ?? []
+    chat.disabledToolGroups ?? [],
+    agentMode.enabled // agentModeEnabled - enables submit_final_response tool
   )
 
   const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)
   const actualTools = usePseudoTools ? [] : tools
 
-  // Build pseudo-tool instructions if needed
-  let pseudoToolInstructions: string | undefined
+  // Build tool instructions (pseudo-tool instructions or native tool rules)
+  let toolInstructions: string | undefined
   if (usePseudoTools) {
-    pseudoToolInstructions = buildPseudoToolSystemInstructions(enabledToolOptions)
-    logPseudoToolUsage(connectionProfile.provider, connectionProfile.modelName, enabledToolOptions)
+    toolInstructions = buildPseudoToolSystemInstructions(enabledToolOptions)
+    logPseudoToolUsage(effectiveProfile.provider, effectiveProfile.modelName, enabledToolOptions)
+  } else if (actualTools.length > 0) {
+    toolInstructions = buildNativeToolSystemInstructions()
   }
 
   // Build message context
-  const modelParams = connectionProfile.parameters as Record<string, unknown>
+  const modelParams = effectiveProfile.parameters as Record<string, unknown>
   const contextChatSettings = chatSettings ? {
     cheapLLMSettings: chatSettings.cheapLLMSettings ? {
       embeddingProfileId: chatSettings.cheapLLMSettings.embeddingProfileId ?? undefined,
@@ -487,38 +655,147 @@ async function processMessage(
   } : null
 
   // ============================================================================
-  // Async Pre-Compression: Get cached compression result if available
+  // Async Pre-Compression + Proactive Memory Recall (run in parallel)
   // ============================================================================
-  let cachedCompressionResponse: CachedCompressionResponse | undefined = undefined
-  if (compressionEnabled && !bypassCompression) {
-    // Send status update for compression check
+
+  // Compression check task
+  const compressionTask = async (): Promise<CachedCompressionResponse | undefined> => {
+    if (compressionEnabled && !bypassCompression) {
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'compressing',
+        message: 'Checking context cache...',
+        characterName: character.name,
+        characterId: character.id,
+      }))
+
+      const actualMessageCount = existingMessages.filter(m => m.type === 'message').length
+      const result = await getCachedCompression(chatId, actualMessageCount)
+      if (result) {
+        logger.info('Using cached compression from async pre-computation', {
+          chatId,
+          messageCount: actualMessageCount,
+          cachedMessageCount: result.cachedMessageCount,
+          isFallback: result.isFallback,
+          savings: result.result.compressionDetails?.totalSavings,
+        })
+      }
+      return result
+    } else if (bypassCompression) {
+      invalidateCompressionCache(chatId)
+    }
+    return undefined
+  }
+
+  // Proactive memory recall task
+  const proactiveRecallTask = async (): Promise<SemanticSearchResult[] | undefined> => {
+    if (!cheapLLMSelection || !character.id) return undefined
+
+    // Filter to actual message events with proper type narrowing
+    const messageEvents = existingMessages
+      .filter((m): m is MessageEvent => m.type === 'message' && 'role' in m && 'content' in m)
+
+    // Find messages since this character last spoke
+    const characterMessages = messageEvents.filter(
+      m => m.role === 'ASSISTANT' && m.participantId === characterParticipant.id
+    )
+
+    if (characterMessages.length === 0) {
+      return undefined
+    }
+
+    // Character has spoken before - find all messages after the last one
+    const lastCharacterMessage = characterMessages[characterMessages.length - 1]
+    const lastCharacterMessageIndex = messageEvents.lastIndexOf(lastCharacterMessage)
+    const messagesSinceLastSpoke = messageEvents
+      .slice(lastCharacterMessageIndex + 1)
+      .filter(m => m.role === 'USER' || m.role === 'ASSISTANT')
+
+    // Include the new user message that was just saved but isn't in the existingMessages snapshot
+    if (!isContinueMode && content) {
+      messagesSinceLastSpoke.push({
+        role: 'USER',
+        content,
+      } as MessageEvent)
+    }
+
+    if (messagesSinceLastSpoke.length === 0) {
+      return undefined
+    }
+
+    // Status: analyzing conversation for keywords
     safeEnqueue(controller, encodeStatusEvent(encoder, {
-      stage: 'compressing',
-      message: 'Checking context cache...',
+      stage: 'recalling_keywords',
+      message: 'Analyzing recent conversation...',
       characterName: character.name,
       characterId: character.id,
     }))
 
-    // Try to get cached compression from previous async pre-computation
-    // This returns immediately without waiting for in-flight compression,
-    // falling back to previous cache if async isn't ready yet
-    // IMPORTANT: Use filtered message count (only type === 'message') to match
-    // how messages are counted when persisting the cache
-    const actualMessageCount = existingMessages.filter(m => m.type === 'message').length
-    cachedCompressionResponse = await getCachedCompression(chatId, actualMessageCount)
-    if (cachedCompressionResponse) {
-      logger.info('Using cached compression from async pre-computation', {
+    // Extract keywords via cheap LLM, stripping tool artifacts from assistant messages
+    const keywordResult = await extractMemorySearchKeywords(
+      messagesSinceLastSpoke.reduce<Array<{ role: 'user' | 'assistant' | 'system'; content: string }>>((acc, m) => {
+        const role = m.role.toLowerCase() as 'user' | 'assistant' | 'system'
+        if (role === 'assistant') {
+          const cleaned = stripToolArtifacts(m.content || '')
+          if (cleaned) acc.push({ role, content: cleaned })
+        } else {
+          acc.push({ role, content: m.content || '' })
+        }
+        return acc
+      }, []),
+      character.name,
+      cheapLLMSelection,
+      userId,
+      chatId
+    )
+
+    if (!keywordResult.success || !keywordResult.result || keywordResult.result.length === 0) {
+      return undefined
+    }
+
+    // Status: searching memories
+    safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage: 'recalling_memories',
+      message: `Searching ${character.name}'s memories...`,
+      characterName: character.name,
+      characterId: character.id,
+    }))
+
+    // Search memories using extracted keywords
+    const searchQuery = keywordResult.result.join(' ')
+    const embeddingProfileId = chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined
+
+    try {
+      const memoryResults = await searchMemoriesSemantic(
+        character.id,
+        searchQuery,
+        {
+          userId,
+          embeddingProfileId,
+          limit: 20,
+          minImportance: 0.3,
+        }
+      )
+
+      if (memoryResults.length > 0) {
+        const results = memoryResults.slice(0, 10)
+        return results
+      }
+    } catch (error) {
+      logger.warn('Proactive memory recall: memory search failed, falling back to default', {
         chatId,
-        messageCount: actualMessageCount,
-        cachedMessageCount: cachedCompressionResponse.cachedMessageCount,
-        isFallback: cachedCompressionResponse.isFallback,
-        savings: cachedCompressionResponse.result.compressionDetails?.totalSavings,
+        characterId: character.id,
+        error: error instanceof Error ? error.message : String(error),
       })
     }
-  } else if (bypassCompression) {
-    // Invalidate cache when bypass is requested
-    invalidateCompressionCache(chatId)
+
+    return undefined
   }
+
+  // Run compression check and proactive recall in parallel
+  const [cachedCompressionResponse, preSearchedMemories] = await Promise.all([
+    compressionTask(),
+    proactiveRecallTask(),
+  ])
 
   // Start keep-alive pings during context building (especially important during compression)
   // This prevents proxy/load balancer timeouts during long compression operations
@@ -551,13 +828,13 @@ async function processMessage(
       chat,
       character,
       characterParticipant,
-      connectionProfile,
+      connectionProfile: effectiveProfile,
       persona,
       isMultiCharacter,
       participantCharacters,
       roleplayTemplate,
       chatSettings: contextChatSettings,
-      pseudoToolInstructions,
+      toolInstructions,
       newUserMessage: finalUserMessageContent,
       isContinueMode,
       // Project context (injected at configured interval)
@@ -569,6 +846,8 @@ async function processMessage(
       // Pass cached compression result and message count for dynamic window calculation
       cachedCompressionResult: cachedCompressionResponse?.result,
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
+      // Proactive memory recall results
+      preSearchedMemories,
     },
     existingMessages,
     fileProcessing.attachmentsToSend
@@ -635,10 +914,41 @@ async function processMessage(
     })
   }
 
+  // ============================================================================
+  // Agent Mode Instructions
+  // ============================================================================
+  // If agent mode is enabled, inject instructions into the system prompt
+  if (agentMode.enabled) {
+    const agentModeInstructions = buildAgentModeInstructions(agentMode.maxTurns)
+    const agentModeMessage = {
+      role: 'system',
+      content: agentModeInstructions,
+      attachments: [],
+    }
+
+    // Insert agent mode instructions at the beginning (after any existing system messages)
+    // Find the first non-system message and insert before it
+    const firstNonSystemIndex = formattedMessages.findIndex(m => m.role !== 'system')
+    if (firstNonSystemIndex > 0) {
+      formattedMessages.splice(firstNonSystemIndex, 0, agentModeMessage)
+    } else if (firstNonSystemIndex === 0) {
+      formattedMessages.unshift(agentModeMessage)
+    } else {
+      // All messages are system messages - add at end
+      formattedMessages.push(agentModeMessage)
+    }
+
+    logger.info('Injected agent mode instructions', {
+      chatId,
+      maxTurns: agentMode.maxTurns,
+      enabledSource: agentMode.enabledSource,
+    })
+  }
+
   // Send debug info
   controller.enqueue(encodeDebugInfo(encoder, {
     builtContext,
-    connectionProfile,
+    connectionProfile: effectiveProfile,
     modelParams,
     messages: formattedMessages.map(m => ({
       role: m.role,
@@ -680,8 +990,8 @@ async function processMessage(
   try {
     for await (const chunk of streamMessage({
       messages: formattedMessages,
-      connectionProfile,
-      apiKey,
+      connectionProfile: effectiveProfile,
+      apiKey: effectiveApiKey,
       modelParams,
       tools: actualTools,
       useNativeWebSearch,
@@ -720,8 +1030,8 @@ async function processMessage(
     if (isRecoverableRequestError(streamingError)) {
       logger.info('Recoverable request error detected, attempting recovery', {
         chatId,
-        provider: connectionProfile.provider,
-        model: connectionProfile.modelName,
+        provider: effectiveProfile.provider,
+        model: effectiveProfile.modelName,
         attachmentCount: fileProcessing.attachedFiles.length,
         error: streamingError instanceof Error ? streamingError.message : String(streamingError),
       })
@@ -730,8 +1040,8 @@ async function processMessage(
         controller,
         encoder,
         character,
-        connectionProfile,
-        apiKey,
+        connectionProfile: effectiveProfile,
+        apiKey: effectiveApiKey,
         attachedFiles: fileProcessing.attachedFiles,
         originalMessage: options.content,
         error: streamingError,
@@ -766,16 +1076,67 @@ async function processMessage(
   let currentMessages = [...formattedMessages]
   let currentResponse = fullResponse
   let currentRawResponse = rawResponse
-  const MAX_TOOL_ITERATIONS = 5
+  // Use agent mode max turns if enabled, otherwise default to 5
+  const effectiveMaxTurns = agentMode.enabled ? agentMode.maxTurns : 5
   let toolIterations = 0
+  let agentModeCompleted = false
+  let agentFinalResponse: string | undefined
 
   // Tool call loop
-  while (currentRawResponse && toolIterations < MAX_TOOL_ITERATIONS) {
-    const toolCalls = detectToolCallsInResponse(currentRawResponse, connectionProfile.provider)
+  while (currentRawResponse && toolIterations < effectiveMaxTurns) {
+    const toolCalls = detectToolCallsInResponse(currentRawResponse, effectiveProfile.provider)
 
     if (toolCalls.length === 0) break
 
+    // Check if this is the submit_final_response tool in agent mode
+    const submitFinalCall = agentMode.enabled
+      ? toolCalls.find(tc => tc.name === 'submit_final_response')
+      : undefined
+
+    if (submitFinalCall) {
+      // Agent mode completion - extract final response
+      const args = submitFinalCall.arguments as { response?: string; summary?: string; confidence?: number }
+      agentFinalResponse = args.response || currentResponse
+      agentModeCompleted = true
+
+      // Send agent completion event
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'agent_completed',
+        message: 'Agent completed task',
+        characterName: character.name,
+        characterId: character.id,
+      }))
+
+      logger.info('Agent mode completed via submit_final_response', {
+        chatId,
+        iterations: toolIterations,
+        responseLength: agentFinalResponse?.length,
+        summary: args.summary,
+        confidence: args.confidence,
+      })
+
+      // Use the final response as the full response
+      fullResponse = agentFinalResponse
+      break
+    }
+
     toolIterations++
+
+    // Send agent iteration event if in agent mode
+    if (agentMode.enabled) {
+      const toolNames = toolCalls.map(tc => tc.name)
+      const iterationSummary = generateIterationSummary(toolIterations, toolNames, currentResponse)
+
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'agent_iteration',
+        message: iterationSummary,
+        characterName: character.name,
+        characterId: character.id,
+      }))
+
+      // Update agent turn count in database
+      await repos.chats.update(chatId, { agentTurnCount: toolIterations })
+    }
 
     // Send tool executing status for each detected tool
     for (const toolCall of toolCalls) {
@@ -819,8 +1180,8 @@ async function processMessage(
 
     for await (const chunk of streamMessage({
       messages: currentMessages,
-      connectionProfile,
-      apiKey,
+      connectionProfile: effectiveProfile,
+      apiKey: effectiveApiKey,
       modelParams,
       tools: actualTools,
       useNativeWebSearch,
@@ -847,8 +1208,74 @@ async function processMessage(
     }
   }
 
-  if (toolIterations >= MAX_TOOL_ITERATIONS) {
-    logger.warn('Max tool iterations reached', { iterations: toolIterations, chatId })
+  // Handle max iterations reached
+  if (toolIterations >= effectiveMaxTurns && !agentModeCompleted) {
+    if (agentMode.enabled) {
+      // Force final response in agent mode
+      logger.info('Agent mode max turns reached, forcing final response', {
+        chatId,
+        iterations: toolIterations,
+        maxTurns: effectiveMaxTurns,
+      })
+
+      // Send force final event
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'agent_force_final',
+        message: 'Requesting final response...',
+        characterName: character.name,
+        characterId: character.id,
+      }))
+
+      // Add force final message and make one more LLM call
+      const forceFinalMessage = buildForceFinalMessage()
+      currentMessages = [
+        ...currentMessages,
+        { role: 'assistant' as const, content: currentResponse, thoughtSignature, name: undefined },
+        { role: 'user' as const, content: forceFinalMessage, thoughtSignature: undefined, name: undefined }
+      ]
+
+      // Make one final call with force message
+      for await (const chunk of streamMessage({
+        messages: currentMessages,
+        connectionProfile: effectiveProfile,
+        apiKey: effectiveApiKey,
+        modelParams,
+        tools: actualTools,
+        useNativeWebSearch,
+        userId,
+        messageId: preGeneratedAssistantMessageId,
+        chatId,
+      })) {
+        if (chunk.content) {
+          fullResponse += chunk.content
+          controller.enqueue(encodeContentChunk(encoder, chunk.content))
+        }
+
+        if (chunk.done) {
+          usage = chunk.usage || null
+          cacheUsage = chunk.cacheUsage || null
+          attachmentResults = chunk.attachmentResults || null
+          rawResponse = chunk.rawResponse
+          if (chunk.thoughtSignature) {
+            thoughtSignature = chunk.thoughtSignature
+          }
+
+          // Check if the final call includes submit_final_response
+          if (chunk.rawResponse) {
+            const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, effectiveProfile.provider)
+            const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
+            if (submitCall) {
+              const args = submitCall.arguments as { response?: string }
+              if (args.response) {
+                fullResponse = args.response
+              }
+            }
+          }
+        }
+      }
+    } else {
+      logger.warn('Max tool iterations reached', { iterations: toolIterations, chatId })
+    }
   }
 
   // Process XML tool calls (runs for ALL providers, regardless of pseudo-tool mode)
@@ -906,8 +1333,8 @@ async function processMessage(
       let continuationResponse = ''
       for await (const chunk of streamMessage({
         messages: currentMessages,
-        connectionProfile,
-        apiKey,
+        connectionProfile: effectiveProfile,
+        apiKey: effectiveApiKey,
         modelParams,
         tools: actualTools,
         useNativeWebSearch,
@@ -982,8 +1409,8 @@ async function processMessage(
       let continuationResponse = ''
       for await (const chunk of streamMessage({
         messages: currentMessages,
-        connectionProfile,
-        apiKey,
+        connectionProfile: effectiveProfile,
+        apiKey: effectiveApiKey,
         modelParams,
         tools: [],
         useNativeWebSearch: useNativeWebSearch && !usePseudoTools,
@@ -1011,6 +1438,108 @@ async function processMessage(
     }
   }
 
+  // ============================================================================
+  // Uncensored Retry for Empty Responses
+  // ============================================================================
+  // If the response is empty and no tool calls were made, this may be a silent
+  // content refusal. Attempt to re-stream with the uncensored provider if
+  // Dangermouse is in AUTO_ROUTE mode.
+  let uncensoredRetryAttempted = false
+  if (
+    fullResponse.trim().length === 0 &&
+    toolMessages.length === 0 &&
+    dangerSettings.mode === 'AUTO_ROUTE' &&
+    !effectiveProfile.isDangerousCompatible &&
+    dangerSettings.uncensoredTextProfileId
+  ) {
+    uncensoredRetryAttempted = true
+    logger.warn('[DangerousContent] Empty response detected, attempting uncensored retry', {
+      chatId,
+      originalProvider: effectiveProfile.provider,
+      originalModel: effectiveProfile.modelName,
+    })
+
+    try {
+      const routeResult = await resolveProviderForDangerousContent(
+        effectiveProfile,
+        effectiveApiKey,
+        dangerSettings,
+        userId
+      )
+
+      if (routeResult.rerouted) {
+        safeEnqueue(controller, encodeStatusEvent(encoder, {
+          stage: 'rerouting',
+          message: 'Retrying with uncensored provider...',
+          characterName: character.name,
+          characterId: character.id,
+        }))
+
+        // Re-stream with uncensored provider
+        for await (const chunk of streamMessage({
+          messages: formattedMessages,
+          connectionProfile: routeResult.connectionProfile,
+          apiKey: routeResult.apiKey,
+          modelParams,
+          tools: actualTools,
+          useNativeWebSearch,
+          userId,
+          messageId: preGeneratedAssistantMessageId,
+          chatId,
+        })) {
+          if (chunk.content) {
+            if (!hasStartedStreaming) {
+              safeEnqueue(controller, encodeStatusEvent(encoder, {
+                stage: 'streaming',
+                message: `${character.name} is responding...`,
+                characterName: character.name,
+                characterId: character.id,
+              }))
+              hasStartedStreaming = true
+            }
+            fullResponse += chunk.content
+            controller.enqueue(encodeContentChunk(encoder, chunk.content))
+          }
+
+          if (chunk.done) {
+            usage = chunk.usage || null
+            cacheUsage = chunk.cacheUsage || null
+            attachmentResults = chunk.attachmentResults || null
+            rawResponse = chunk.rawResponse
+            if (chunk.thoughtSignature) {
+              thoughtSignature = chunk.thoughtSignature
+            }
+          }
+        }
+
+        if (fullResponse.trim().length > 0) {
+          effectiveProfile = routeResult.connectionProfile
+          effectiveApiKey = routeResult.apiKey
+
+          logger.info('[DangerousContent] Uncensored retry succeeded', {
+            chatId,
+            uncensoredProvider: routeResult.connectionProfile.provider,
+            uncensoredModel: routeResult.connectionProfile.modelName,
+            responseLength: fullResponse.length,
+          })
+        } else {
+          logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
+            chatId,
+            safeProvider: connectionProfile.provider,
+            safeModel: connectionProfile.modelName,
+            uncensoredProvider: routeResult.connectionProfile.provider,
+            uncensoredModel: routeResult.connectionProfile.modelName,
+          })
+        }
+      }
+    } catch (retryError) {
+      logger.error('[DangerousContent] Uncensored retry failed', {
+        chatId,
+        error: retryError instanceof Error ? retryError.message : String(retryError),
+      })
+    }
+  }
+
   // Save assistant message
   let assistantMessageId: string | null = null
 
@@ -1021,7 +1550,7 @@ async function processMessage(
 
     // Strip any character name prefixes that the LLM might have echoed back
     // This handles cases where LLMs mimic the [Name] prefix format from the input
-    const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name)
+    const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
 
     assistantMessageId = await saveAssistantMessage(
       repos,
@@ -1045,12 +1574,8 @@ async function processMessage(
     // before the user sends their next message.
     if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
       const updatedMessages = [
-        ...existingMessages
-          .filter((m): m is MessageEvent => m.type === 'message' && 'role' in m && 'content' in m)
-          .map(m => ({
-            role: m.role.toLowerCase() as 'user' | 'assistant' | 'system',
-            content: m.content || '',
-          })),
+        // Extract only visible conversation (USER/ASSISTANT, tool artifacts stripped)
+        ...extractVisibleConversation(existingMessages),
         // Add the user message we just sent (if not continue mode)
         ...(content && !isContinueMode ? [{
           role: 'user' as const,
@@ -1077,6 +1602,8 @@ async function processMessage(
           userId,
           characterName: character.name,
           userName: 'User',
+          dangerSettings,
+          availableProfiles: allProfiles,
         },
       })
     }
@@ -1085,13 +1612,13 @@ async function processMessage(
     if (usage && (usage.promptTokens || usage.completionTokens)) {
       // Estimate cost using available pricing data
       const costResult = await estimateMessageCost(
-        connectionProfile.provider,
-        connectionProfile.modelName,
+        effectiveProfile.provider,
+        effectiveProfile.modelName,
         usage.promptTokens || 0,
         usage.completionTokens || 0,
         userId
       )
-      await trackMessageTokenUsage(chatId, connectionProfile.id, usage, costResult.cost, costResult.source)
+      await trackMessageTokenUsage(chatId, effectiveProfile.id, usage, costResult.cost, costResult.source)
     }
 
     // ============================================================================
@@ -1173,6 +1700,7 @@ async function processMessage(
     if (chatSettings) {
       const memoryChatSettings: MemoryChatSettings = {
         cheapLLMSettings: chatSettings.cheapLLMSettings,
+        dangerSettings,
       }
 
       // Note: personaName is undefined since we only support CHARACTER type participants now
@@ -1255,6 +1783,14 @@ async function processMessage(
         connectionProfile,
         chatSettings: memoryChatSettings,
       })
+
+      // Trigger chat-level danger classification (runs after context summary in job queue)
+      await triggerChatDangerClassification(repos, {
+        chatId,
+        userId,
+        connectionProfile,
+        chatSettings: memoryChatSettings,
+      })
     }
   } else if (toolMessages.length > 0) {
     // Save tool messages even without text response
@@ -1277,8 +1813,15 @@ async function processMessage(
       toolsExecuted: true,
     }))
   } else {
-    // Empty response - known Gemini issue
-    logger.warn(`Empty response for chat ${chatId} - this is a known Gemini API issue`)
+    // Empty response
+    const emptyReason = uncensoredRetryAttempted
+      ? 'The AI model returned an empty response, and retrying with an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
+      : 'The AI model returned an empty response. This is a known issue with some providers. Please try resending your message.'
+    logger.warn(`Empty response for chat ${chatId}`, {
+      uncensoredRetryAttempted,
+      provider: effectiveProfile.provider,
+      model: effectiveProfile.modelName,
+    })
     controller.enqueue(encodeDoneEvent(encoder, {
       messageId: null,
       usage,
@@ -1286,7 +1829,7 @@ async function processMessage(
       attachmentResults,
       toolsExecuted: false,
       emptyResponse: true,
-      emptyResponseReason: 'The AI model returned an empty response. This is a known issue with some Gemini models. Please try resending your message.',
+      emptyResponseReason: emptyReason,
     }))
   }
 

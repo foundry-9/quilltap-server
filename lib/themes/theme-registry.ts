@@ -93,6 +93,14 @@ export interface LoadedTheme {
 
   /** Custom fonts bundled with the theme */
   fonts?: LoadedThemeFont[];
+
+  /** Subsystem display overrides from theme plugin */
+  subsystems?: Record<string, {
+    name?: string;
+    description?: string;
+    thumbnail?: string;
+    backgroundImage?: string;
+  }>;
 }
 
 /**
@@ -139,6 +147,54 @@ function getGlobalState(): ThemeRegistryState {
     };
   }
   return global.__quilltapThemeRegistryState;
+}
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Resolve a theme asset value to a URL the browser can use.
+ *
+ * - data URIs, absolute URLs (http/https), and `/`-prefixed paths pass through as-is
+ * - relative paths are resolved to the theme asset API route
+ * - undefined/empty values return undefined
+ */
+function resolveThemeAssetUrl(
+  value: string | undefined,
+  pluginName: string
+): string | undefined {
+  if (!value) return undefined;
+  // explicit "none" — theme wants to suppress the default image
+  if (value === 'none') return 'none';
+  // data URIs
+  if (value.startsWith('data:')) return value;
+  // absolute URLs
+  if (/^https?:\/\//.test(value)) return value;
+  // already rooted
+  if (value.startsWith('/')) return value;
+  // relative → theme asset route
+  return `/api/themes/assets/${pluginName}/${value}`;
+}
+
+/**
+ * Resolve all image paths inside a subsystems override record.
+ */
+function resolveSubsystemOverrides(
+  raw: Record<string, { name?: string; description?: string; thumbnail?: string; backgroundImage?: string }> | undefined,
+  pluginName: string
+): Record<string, { name?: string; description?: string; thumbnail?: string; backgroundImage?: string }> | undefined {
+  if (!raw || Object.keys(raw).length === 0) return undefined;
+
+  const resolved: Record<string, { name?: string; description?: string; thumbnail?: string; backgroundImage?: string }> = {};
+  for (const [id, overrides] of Object.entries(raw)) {
+    resolved[id] = {
+      ...overrides,
+      thumbnail: resolveThemeAssetUrl(overrides.thumbnail, pluginName),
+      backgroundImage: resolveThemeAssetUrl(overrides.backgroundImage, pluginName),
+    };
+  }
+  return resolved;
 }
 
 // ============================================================================
@@ -209,7 +265,7 @@ class ThemeRegistry {
 
   /**
    * Extract theme ID from plugin name
-   * qtap-plugin-theme-ocean -> ocean
+   * qtap-plugin-theme-great-estate -> great-estate
    */
   private extractThemeId(pluginName: string): string {
     const prefix = 'qtap-plugin-theme-';
@@ -294,6 +350,12 @@ class ThemeRegistry {
       }
     }
 
+    // Resolve subsystem overrides (image paths → URLs)
+    const subsystems = resolveSubsystemOverrides(
+      themePlugin.subsystems as Record<string, { name?: string; description?: string; thumbnail?: string; backgroundImage?: string }> | undefined,
+      plugin.manifest.name
+    );
+
     // Create the loaded theme
     const loadedTheme: LoadedTheme = {
       id: themeId,
@@ -314,6 +376,7 @@ class ThemeRegistry {
       pluginName: plugin.manifest.name,
       isDefault: false,
       fonts: fonts.length > 0 ? fonts : undefined,
+      subsystems,
     };
 
     // Register the theme
@@ -462,6 +525,12 @@ class ThemeRegistry {
       }
     }
 
+    // Resolve subsystem overrides from manifest themeConfig
+    const subsystems = resolveSubsystemOverrides(
+      themeConfig.subsystems as Record<string, { name?: string; description?: string; thumbnail?: string; backgroundImage?: string }> | undefined,
+      plugin.manifest.name
+    );
+
     // Create the loaded theme
     const loadedTheme: LoadedTheme = {
       id: themeId,
@@ -478,6 +547,7 @@ class ThemeRegistry {
       pluginName: plugin.manifest.name,
       isDefault: false,
       fonts: fonts.length > 0 ? fonts : undefined,
+      subsystems,
     };
 
     // Register the theme

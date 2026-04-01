@@ -101,7 +101,7 @@ function ProjectChatItem({
 
   return (
     <Link
-      href={`/chats/${chat.id}`}
+      href={`/salon/${chat.id}`}
       className="qt-left-sidebar-item pl-6"
     >
       {avatarSrc ? (
@@ -120,6 +120,9 @@ function ProjectChatItem({
         <span className="ml-auto px-1.5 py-0.5 text-xs bg-muted text-muted-foreground rounded-full flex-shrink-0">
           {messageCount > 999 ? '999+' : messageCount}
         </span>
+      )}
+      {chat.isDangerous && (
+        <span className="qt-text-destructive text-xs flex-shrink-0" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>
       )}
     </Link>
   )
@@ -163,7 +166,7 @@ function ProjectItem({
         {/* Spacer when no expand button */}
         {!isCollapsed && !hasChats && <span className="w-4 flex-shrink-0" />}
         <Link
-          href={`/projects/${project.id}`}
+          href={`/prospero/${project.id}`}
           className="flex items-center gap-2 flex-1 min-w-0"
           title={isCollapsed ? `${project.name} (${totalCount} items)` : undefined}
         >
@@ -197,7 +200,7 @@ function ProjectItem({
           ))}
           {projectChats.length > 5 && (
             <Link
-              href={`/projects/${project.id}`}
+              href={`/prospero/${project.id}`}
               className="qt-left-sidebar-item pl-6 text-xs text-muted-foreground hover:text-foreground"
             >
               +{projectChats.length - 5} more...
@@ -212,12 +215,12 @@ function ProjectItem({
 export function ProjectsSection() {
   const { isCollapsed, sectionCollapsed, toggleSectionCollapsed } = useSidebar()
   const { projects, chats, loading } = useSidebarData()
-  const { shouldHideByIds } = useQuickHide()
+  const { shouldHideChat } = useQuickHide()
 
-  // Filter chats by project and apply quick-hide filter
+  // Filter chats by project and apply quick-hide filter (tags + danger)
   const getProjectChats = (projectId: string): SidebarChat[] => {
     return chats.filter(
-      chat => chat.projectId === projectId && !shouldHideByIds(chat.characterTags)
+      chat => chat.projectId === projectId && !shouldHideChat(chat)
     )
   }
 
@@ -251,7 +254,7 @@ export function ProjectsSection() {
         <div className="px-2 py-1 text-xs text-muted-foreground">
           {!isCollapsed && 'No projects yet'}
         </div>
-        <ViewAllLink href="/projects" label="Create one" />
+        <ViewAllLink href="/prospero" label="Create one" />
       </SidebarSection>
     )
   }
@@ -268,7 +271,7 @@ export function ProjectsSection() {
           projectChats={getProjectChats(project.id)}
         />
       ))}
-      {projects.length > 5 && <ViewAllLink href="/projects" />}
+      {projects.length > 5 && <ViewAllLink href="/prospero" />}
     </SidebarSection>
   )
 }

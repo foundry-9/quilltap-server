@@ -42,6 +42,7 @@ export interface ConnectionProfile {
   parameters: Record<string, any>
   isDefault: boolean
   isCheap?: boolean
+  isDangerousCompatible?: boolean
   allowWebSearch?: boolean
   useNativeWebSearch?: boolean
   apiKey?: ApiKey | null
@@ -63,6 +64,7 @@ export interface ProfileFormData {
   topP: number
   isDefault: boolean
   isCheap: boolean
+  isDangerousCompatible: boolean
   allowWebSearch: boolean
   useNativeWebSearch: boolean
   // OpenRouter-specific fields
@@ -87,6 +89,7 @@ export const initialFormState: ProfileFormData = {
   topP: 1,
   isDefault: false,
   isCheap: false,
+  isDangerousCompatible: false,
   allowWebSearch: false,
   useNativeWebSearch: false,
   // OpenRouter-specific fields

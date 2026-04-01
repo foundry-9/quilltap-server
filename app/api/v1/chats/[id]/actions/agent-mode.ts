@@ -1,0 +1,74 @@
+/**
+ * Chats API v1 - Agent Mode Actions
+ *
+ * Handles toggle-agent-mode action
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { logger } from '@/lib/logger';
+import { notFound, forbidden, validationError, serverError, successResponse } from '@/lib/api/responses';
+import type { AuthenticatedContext } from '@/lib/api/middleware';
+
+/**
+ * Schema for toggle agent mode request
+ */
+const toggleAgentModeSchema = z.object({
+  enabled: z.boolean().nullable().optional(),
+});
+
+/**
+ * Toggle agent mode for a chat
+ *
+ * @param req - The request object containing optional { enabled: boolean | null }
+ * @param chatId - The ID of the chat
+ * @param context - The authenticated context with user and repos
+ */
+export async function handleToggleAgentMode(
+  req: NextRequest,
+  chatId: string,
+  { user, repos }: AuthenticatedContext
+): Promise<NextResponse> {
+  try {
+    const body = await req.json();
+    const validatedData = toggleAgentModeSchema.parse(body);
+
+    // Fetch the chat to verify it exists and user has access
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      return notFound('Chat');
+    }
+
+    if (chat.userId !== user.id) {
+      logger.warn('[Chats v1] Unauthorized agent mode toggle attempt', { chatId, userId: user.id });
+      return forbidden();
+    }
+
+    // Update the chat with new agent mode setting
+    const enabled = validatedData.enabled;
+    const updatedChat = await repos.chats.update(chatId, {
+      agentModeEnabled: enabled,
+    });
+
+    if (!updatedChat) {
+      return serverError('Failed to update chat');
+    }
+
+    logger.info('[Chats v1] Agent mode toggled', {
+      chatId,
+      agentModeEnabled: enabled,
+      chatTitle: updatedChat.title,
+    });
+
+    return successResponse({
+      agentModeEnabled: updatedChat.agentModeEnabled,
+      message: enabled === null ? 'Agent mode set to inherit' : enabled ? 'Agent mode enabled' : 'Agent mode disabled',
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+    logger.error('[Chats v1] Error toggling agent mode', { chatId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to toggle agent mode');
+  }
+}

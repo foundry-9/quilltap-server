@@ -5,12 +5,14 @@
  * context summary for a chat conversation.
  */
 
-import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
+import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { updateContextSummary, ChatMessage } from '@/lib/memory/cheap-llm-tasks';
+import { updateContextSummary, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { createContextSummaryEvent } from '@/lib/services/system-events.service';
+import { enqueueChatDangerClassification } from '../queue-service';
+import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import type { ContextSummaryPayload } from '../queue-service';
 
 /**
@@ -55,19 +57,9 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
     cheapLLMConfig,
     availableProfiles
   );
-  // Get all chat messages
+  // Get all chat messages and extract only visible conversation (USER/ASSISTANT, tool artifacts stripped)
   const allMessages = await repos.chats.getMessages(payload.chatId);
-
-  // Filter to only messages (not system events)
-  const messageEvents = allMessages.filter(
-    (m): m is MessageEvent => m.type === 'message'
-  );
-
-  // Convert to ChatMessage format for the LLM task
-  const chatMessages: ChatMessage[] = messageEvents.map((m) => ({
-    role: m.role as 'user' | 'assistant' | 'system',
-    content: m.content,
-  }));
+  const chatMessages = extractVisibleConversation(allMessages);
 
   // Get current context summary from chat
   const currentSummary = chat.contextSummary || '';
@@ -117,4 +109,26 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
     summaryLength: result.result?.length || 0,
     messagesProcessed: newMessages.length,
   });
+
+  // Chain: enqueue danger classification after successful summary update
+  try {
+    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+    if (dangerSettings.mode !== 'OFF') {
+      const chainResult = await enqueueChatDangerClassification(
+        job.userId,
+        {
+          chatId: payload.chatId,
+          connectionProfileId: payload.connectionProfileId,
+        },
+        { priority: -2 }
+      );
+    } else {
+    }
+  } catch (chainError) {
+    logger.warn('[ContextSummary] Failed to chain danger classification job', {
+      jobId: job.id,
+      chatId: payload.chatId,
+      error: chainError instanceof Error ? chainError.message : String(chainError),
+    });
+  }
 }

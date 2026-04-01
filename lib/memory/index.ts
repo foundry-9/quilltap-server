@@ -15,10 +15,12 @@ export {
   describeAttachment,
   batchExtractMemories,
   considerTitleUpdate,
+  deriveSceneContext,
   type MemoryCandidate,
   type ChatMessage,
   type Attachment,
   type CheapLLMTaskResult,
+  type DeriveSceneContextInput,
 } from './cheap-llm-tasks'
 
 // Memory Processor (Sprint 3: Auto-Memory Formation)
@@ -42,3 +44,17 @@ export {
   type HousekeepingResult,
   type HousekeepingDetail,
 } from './housekeeping'
+
+// Memory Gate (Pre-Write Similarity Check)
+export {
+  runMemoryGate,
+  reinforceMemory,
+  linkRelatedMemories,
+  extractNovelDetails,
+  calculateReinforcedImportance,
+  MERGE_THRESHOLD,
+  RELATED_THRESHOLD,
+  type GateDecision,
+  type GateResult,
+  type MemoryGateOutcome,
+} from './memory-gate'

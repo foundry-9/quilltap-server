@@ -11,7 +11,10 @@
 import { Memory, MemorySchema } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
-import { QueryFilter } from '../interfaces';
+import { TypedQueryFilter } from '../interfaces';
+
+/** Maximum allowed search query length to prevent ReDoS and excessive memory usage */
+const MAX_SEARCH_QUERY_LENGTH = 1000;
 
 /**
  * Memories Repository
@@ -46,21 +49,19 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory | null> The memory if found and belongs to character, null otherwise
    */
   async findByIdForCharacter(characterId: string, memoryId: string): Promise<Memory | null> {
-    try {
-      const memory = await this.findOneByFilter({
-        id: memoryId,
-        characterId,
-      } as QueryFilter);
+    return this.safeQuery(
+      async () => {
+        const memory = await this.findOneByFilter({
+          id: memoryId,
+          characterId,
+        });
 
-      return memory;
-    } catch (error) {
-      logger.error('Error finding memory by ID for character', {
-        characterId,
-        memoryId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
+        return memory;
+      },
+      'Error finding memory by ID for character',
+      { characterId, memoryId },
+      null
+    );
   }
 
   /**
@@ -69,16 +70,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory[]> Array of memories for the character
    */
   async findByCharacterId(characterId: string): Promise<Memory[]> {
-    try {
-      const memories = await this.findByFilter({ characterId } as QueryFilter);
-      return memories;
-    } catch (error) {
-      logger.error('Error finding memories by character ID', {
-        characterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter({ characterId });
+        return memories;
+      },
+      'Error finding memories by character ID',
+      { characterId },
+      []
+    );
   }
 
   /**
@@ -88,24 +88,22 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory[]> Array of memories containing any keyword
    */
   async findByKeywords(characterId: string, keywords: string[]): Promise<Memory[]> {
-    try {
-      if (keywords.length === 0) {
-        return [];
-      }
+    return this.safeQuery(
+      async () => {
+        if (keywords.length === 0) {
+          return [];
+        }
 
-      const memories = await this.findByFilter({
-        characterId,
-        keywords: { $in: keywords },
-      } as QueryFilter);
-      return memories;
-    } catch (error) {
-      logger.error('Error finding memories by keywords', {
-        characterId,
-        keywordCount: keywords.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const memories = await this.findByFilter({
+          characterId,
+          keywords: { $in: keywords },
+        });
+        return memories;
+      },
+      'Error finding memories by keywords',
+      { characterId, keywordCount: keywords.length },
+      []
+    );
   }
 
   /**
@@ -115,24 +113,30 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory[]> Array of memories matching the search query
    */
   async searchByContent(characterId: string, query: string): Promise<Memory[]> {
-    try {
-      // Escape special regex characters to treat query as literal text
-      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(escapedQuery, 'i'); // Case-insensitive regex search
+    return this.safeQuery(
+      async () => {
+        if (query.length > MAX_SEARCH_QUERY_LENGTH) {
+          logger.warn('Search query exceeds maximum length', {
+            characterId,
+            queryLength: query.length,
+            maxLength: MAX_SEARCH_QUERY_LENGTH,
+          });
+          return [];
+        }
+        // Escape special regex characters to treat query as literal text
+        const escapedQuery = this.escapeRegex(query);
+        const regex = new RegExp(escapedQuery, 'i'); // Case-insensitive regex search
 
-      const memories = await this.findByFilter({
-        characterId,
-        $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
-      } as QueryFilter);
-      return memories;
-    } catch (error) {
-      logger.error('Error searching memories by content', {
-        characterId,
-        queryLength: query.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const memories = await this.findByFilter({
+          characterId,
+          $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
+        });
+        return memories;
+      },
+      'Error searching memories by content',
+      { characterId, queryLength: query.length },
+      []
+    );
   }
 
   /**
@@ -142,25 +146,23 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory[]> Array of memories meeting importance threshold
    */
   async findByImportance(characterId: string, minImportance: number): Promise<Memory[]> {
-    try {
-      if (minImportance < 0 || minImportance > 1) {
-        logger.warn('Invalid importance threshold', { minImportance });
-        return [];
-      }
+    return this.safeQuery(
+      async () => {
+        if (minImportance < 0 || minImportance > 1) {
+          logger.warn('Invalid importance threshold', { minImportance });
+          return [];
+        }
 
-      const memories = await this.findByFilter({
-        characterId,
-        importance: { $gte: minImportance },
-      } as QueryFilter);
-      return memories;
-    } catch (error) {
-      logger.error('Error finding memories by importance', {
-        characterId,
-        minImportance,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const memories = await this.findByFilter({
+          characterId,
+          importance: { $gte: minImportance },
+        });
+        return memories;
+      },
+      'Error finding memories by importance',
+      { characterId, minImportance },
+      []
+    );
   }
 
   /**
@@ -170,20 +172,18 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory[]> Array of memories with the specified source
    */
   async findBySource(characterId: string, source: 'AUTO' | 'MANUAL'): Promise<Memory[]> {
-    try {
-      const memories = await this.findByFilter({
-        characterId,
-        source,
-      } as QueryFilter);
-      return memories;
-    } catch (error) {
-      logger.error('Error finding memories by source', {
-        characterId,
-        source,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter({
+          characterId,
+          source,
+        });
+        return memories;
+      },
+      'Error finding memories by source',
+      { characterId, source },
+      []
+    );
   }
 
   /**
@@ -193,23 +193,21 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory[]> Array of recent memories, sorted by creation date (newest first)
    */
   async findRecent(characterId: string, limit: number = 10): Promise<Memory[]> {
-    try {
-      const memories = await this.findByFilter(
-        { characterId } as QueryFilter,
-        {
-          sort: { createdAt: -1 },
-          limit,
-        }
-      );
-      return memories;
-    } catch (error) {
-      logger.error('Error finding recent memories', {
-        characterId,
-        limit,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter(
+          { characterId },
+          {
+            sort: { createdAt: -1 },
+            limit,
+          }
+        );
+        return memories;
+      },
+      'Error finding recent memories',
+      { characterId, limit },
+      []
+    );
   }
 
   /**
@@ -219,23 +217,21 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory[]> Array of important memories, sorted by importance (highest first)
    */
   async findMostImportant(characterId: string, limit: number = 10): Promise<Memory[]> {
-    try {
-      const memories = await this.findByFilter(
-        { characterId } as QueryFilter,
-        {
-          sort: { importance: -1 },
-          limit,
-        }
-      );
-      return memories;
-    } catch (error) {
-      logger.error('Error finding most important memories', {
-        characterId,
-        limit,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter(
+          { characterId },
+          {
+            sort: { importance: -1 },
+            limit,
+          }
+        );
+        return memories;
+      },
+      'Error finding most important memories',
+      { characterId, limit },
+      []
+    );
   }
 
   /**
@@ -248,16 +244,14 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     data: Omit<Memory, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<Memory> {
-    try {
-      const memory = await this._create(data, options);
-      return memory;
-    } catch (error) {
-      logger.error('Error creating memory', {
-        characterId: data.characterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const memory = await this._create(data, options);
+        return memory;
+      },
+      'Error creating memory',
+      { characterId: data.characterId }
+    );
   }
 
   /**
@@ -267,20 +261,14 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory | null> The updated memory if found, null otherwise
    */
   async update(id: string, data: Partial<Memory>): Promise<Memory | null> {
-    try {
-      const memory = await this._update(id, data);
-
-      if (memory) {
-      }
-
-      return memory;
-    } catch (error) {
-      logger.error('Error updating memory', {
-        memoryId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const memory = await this._update(id, data);
+        return memory;
+      },
+      'Error updating memory',
+      { memoryId: id }
+    );
   }
 
   /**
@@ -295,27 +283,24 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     memoryId: string,
     data: Partial<Memory>
   ): Promise<Memory | null> {
-    try {
-      const memory = await this.findById(memoryId);
-      if (!memory) {
-        logger.warn('Memory not found for update', { memoryId, characterId });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const memory = await this.findById(memoryId);
+        if (!memory) {
+          logger.warn('Memory not found for update', { memoryId, characterId });
+          return null;
+        }
 
-      if (memory.characterId !== characterId) {
-        logger.warn('Memory does not belong to character', { characterId, memoryId });
-        return null;
-      }
+        if (memory.characterId !== characterId) {
+          logger.warn('Memory does not belong to character', { characterId, memoryId });
+          return null;
+        }
 
-      return await this.update(memoryId, data);
-    } catch (error) {
-      logger.error('Error updating memory for character', {
-        characterId,
-        memoryId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return await this.update(memoryId, data);
+      },
+      'Error updating memory for character',
+      { characterId, memoryId }
+    );
   }
 
   /**
@@ -324,20 +309,14 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<boolean> True if memory was deleted, false if not found
    */
   async delete(id: string): Promise<boolean> {
-    try {
-      const result = await this._delete(id);
-
-      if (result) {
-      }
-
-      return result;
-    } catch (error) {
-      logger.error('Error deleting memory', {
-        memoryId: id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const result = await this._delete(id);
+        return result;
+      },
+      'Error deleting memory',
+      { memoryId: id }
+    );
   }
 
   /**
@@ -347,27 +326,24 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<boolean> True if memory was deleted, false if not found or doesn't belong to character
    */
   async deleteForCharacter(characterId: string, memoryId: string): Promise<boolean> {
-    try {
-      const memory = await this.findById(memoryId);
-      if (!memory) {
-        logger.warn('Memory not found for deletion', { memoryId, characterId });
-        return false;
-      }
+    return this.safeQuery(
+      async () => {
+        const memory = await this.findById(memoryId);
+        if (!memory) {
+          logger.warn('Memory not found for deletion', { memoryId, characterId });
+          return false;
+        }
 
-      if (memory.characterId !== characterId) {
-        logger.warn('Memory does not belong to character', { characterId, memoryId });
-        return false;
-      }
+        if (memory.characterId !== characterId) {
+          logger.warn('Memory does not belong to character', { characterId, memoryId });
+          return false;
+        }
 
-      return await this.delete(memoryId);
-    } catch (error) {
-      logger.error('Error deleting memory for character', {
-        characterId,
-        memoryId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        return await this.delete(memoryId);
+      },
+      'Error deleting memory for character',
+      { characterId, memoryId }
+    );
   }
 
   /**
@@ -377,24 +353,21 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<number> Number of memories successfully deleted
    */
   async bulkDelete(characterId: string, memoryIds: string[]): Promise<number> {
-    try {
-      if (memoryIds.length === 0) {
-        return 0;
-      }
+    return this.safeQuery(
+      async () => {
+        if (memoryIds.length === 0) {
+          return 0;
+        }
 
-      const deletedCount = await this.deleteMany({
-        characterId,
-        id: { $in: memoryIds },
-      } as QueryFilter);
-      return deletedCount;
-    } catch (error) {
-      logger.error('Error bulk deleting memories for character', {
-        characterId,
-        count: memoryIds.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const deletedCount = await this.deleteMany({
+          characterId,
+          id: { $in: memoryIds },
+        });
+        return deletedCount;
+      },
+      'Error bulk deleting memories for character',
+      { characterId, count: memoryIds.length }
+    );
   }
 
   /**
@@ -404,28 +377,25 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory | null> The updated memory if found, null otherwise
    */
   async updateAccessTime(characterId: string, memoryId: string): Promise<Memory | null> {
-    try {
-      const memory = await this.findById(memoryId);
-      if (!memory) {
-        logger.warn('Memory not found for access time update', { memoryId, characterId });
-        return null;
-      }
+    return this.safeQuery(
+      async () => {
+        const memory = await this.findById(memoryId);
+        if (!memory) {
+          logger.warn('Memory not found for access time update', { memoryId, characterId });
+          return null;
+        }
 
-      if (memory.characterId !== characterId) {
-        logger.warn('Memory does not belong to character', { characterId, memoryId });
-        return null;
-      }
+        if (memory.characterId !== characterId) {
+          logger.warn('Memory does not belong to character', { characterId, memoryId });
+          return null;
+        }
 
-      const now = this.getCurrentTimestamp();
-      return await this.update(memoryId, { lastAccessedAt: now });
-    } catch (error) {
-      logger.error('Error updating memory access time', {
-        characterId,
-        memoryId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const now = this.getCurrentTimestamp();
+        return await this.update(memoryId, { lastAccessedAt: now });
+      },
+      'Error updating memory access time',
+      { characterId, memoryId }
+    );
   }
 
   /**
@@ -434,16 +404,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<number> Number of memories for the character
    */
   async countByCharacterId(characterId: string): Promise<number> {
-    try {
-      const count = await this.count({ characterId } as QueryFilter);
-      return count;
-    } catch (error) {
-      logger.error('Error counting memories for character', {
-        characterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return 0;
-    }
+    return this.safeQuery(
+      async () => {
+        const count = await this.count({ characterId });
+        return count;
+      },
+      'Error counting memories for character',
+      { characterId },
+      0
+    );
   }
 
   /**
@@ -456,22 +425,20 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     characterId: string,
     aboutCharacterId: string
   ): Promise<Memory[]> {
-    try {
-      const memories = await this.findByFilter(
-        { characterId, aboutCharacterId } as QueryFilter,
-        {
-          sort: { importance: -1, createdAt: -1 },
-        }
-      );
-      return memories;
-    } catch (error) {
-      logger.error('Error finding memories about character', {
-        characterId,
-        aboutCharacterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter(
+          { characterId, aboutCharacterId },
+          {
+            sort: { importance: -1, createdAt: -1 },
+          }
+        );
+        return memories;
+      },
+      'Error finding memories about character',
+      { characterId, aboutCharacterId },
+      []
+    );
   }
 
   /**
@@ -484,29 +451,27 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     characterId: string,
     aboutCharacterIds: string[]
   ): Promise<Memory[]> {
-    try {
-      if (aboutCharacterIds.length === 0) {
-        return [];
-      }
-
-      const memories = await this.findByFilter(
-        {
-          characterId,
-          aboutCharacterId: { $in: aboutCharacterIds },
-        } as QueryFilter,
-        {
-          sort: { importance: -1, createdAt: -1 },
+    return this.safeQuery(
+      async () => {
+        if (aboutCharacterIds.length === 0) {
+          return [];
         }
-      );
-      return memories;
-    } catch (error) {
-      logger.error('Error finding memories about characters', {
-        characterId,
-        aboutCharacterCount: aboutCharacterIds.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+
+        const memories = await this.findByFilter(
+          {
+            characterId,
+            aboutCharacterId: { $in: aboutCharacterIds },
+          },
+          {
+            sort: { importance: -1, createdAt: -1 },
+          }
+        );
+        return memories;
+      },
+      'Error finding memories about characters',
+      { characterId, aboutCharacterCount: aboutCharacterIds.length },
+      []
+    );
   }
 
   /**
@@ -515,16 +480,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory[]> Array of memories associated with the chat
    */
   async findByChatId(chatId: string): Promise<Memory[]> {
-    try {
-      const memories = await this.findByFilter({ chatId } as QueryFilter);
-      return memories;
-    } catch (error) {
-      logger.error('Error finding memories by chat ID', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter({ chatId });
+        return memories;
+      },
+      'Error finding memories by chat ID',
+      { chatId },
+      []
+    );
   }
 
   /**
@@ -533,16 +497,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory[]> Array of memories created from the message
    */
   async findBySourceMessageId(sourceMessageId: string): Promise<Memory[]> {
-    try {
-      const memories = await this.findByFilter({ sourceMessageId } as QueryFilter);
-      return memories;
-    } catch (error) {
-      logger.error('Error finding memories by source message ID', {
-        sourceMessageId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter({ sourceMessageId });
+        return memories;
+      },
+      'Error finding memories by source message ID',
+      { sourceMessageId },
+      []
+    );
   }
 
   /**
@@ -551,16 +514,14 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<number> Number of memories deleted
    */
   async deleteBySourceMessageId(sourceMessageId: string): Promise<number> {
-    try {
-      const deletedCount = await this.deleteMany({ sourceMessageId } as QueryFilter);
-      return deletedCount;
-    } catch (error) {
-      logger.error('Error deleting memories by source message ID', {
-        sourceMessageId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const deletedCount = await this.deleteMany({ sourceMessageId });
+        return deletedCount;
+      },
+      'Error deleting memories by source message ID',
+      { sourceMessageId }
+    );
   }
 
   /**
@@ -569,22 +530,20 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<number> Number of memories deleted
    */
   async deleteBySourceMessageIds(sourceMessageIds: string[]): Promise<number> {
-    try {
-      if (sourceMessageIds.length === 0) {
-        return 0;
-      }
+    return this.safeQuery(
+      async () => {
+        if (sourceMessageIds.length === 0) {
+          return 0;
+        }
 
-      const deletedCount = await this.deleteMany({
-        sourceMessageId: { $in: sourceMessageIds },
-      } as QueryFilter);
-      return deletedCount;
-    } catch (error) {
-      logger.error('Error deleting memories by source message IDs', {
-        count: sourceMessageIds.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        const deletedCount = await this.deleteMany({
+          sourceMessageId: { $in: sourceMessageIds },
+        });
+        return deletedCount;
+      },
+      'Error deleting memories by source message IDs',
+      { count: sourceMessageIds.length }
+    );
   }
 
   /**
@@ -593,16 +552,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<number> Number of memories for the message
    */
   async countBySourceMessageId(sourceMessageId: string): Promise<number> {
-    try {
-      const count = await this.count({ sourceMessageId } as QueryFilter);
-      return count;
-    } catch (error) {
-      logger.error('Error counting memories for source message', {
-        sourceMessageId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return 0;
-    }
+    return this.safeQuery(
+      async () => {
+        const count = await this.count({ sourceMessageId });
+        return count;
+      },
+      'Error counting memories for source message',
+      { sourceMessageId },
+      0
+    );
   }
 
   /**
@@ -611,22 +569,21 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<number> Total number of memories
    */
   async countBySourceMessageIds(sourceMessageIds: string[]): Promise<number> {
-    try {
-      if (sourceMessageIds.length === 0) {
-        return 0;
-      }
+    return this.safeQuery(
+      async () => {
+        if (sourceMessageIds.length === 0) {
+          return 0;
+        }
 
-      const count = await this.count({
-        sourceMessageId: { $in: sourceMessageIds },
-      } as QueryFilter);
-      return count;
-    } catch (error) {
-      logger.error('Error counting memories for source messages', {
-        count: sourceMessageIds.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return 0;
-    }
+        const count = await this.count({
+          sourceMessageId: { $in: sourceMessageIds },
+        });
+        return count;
+      },
+      'Error counting memories for source messages',
+      { count: sourceMessageIds.length },
+      0
+    );
   }
 
   /**
@@ -635,16 +592,14 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<number> Number of memories deleted
    */
   async deleteByChatId(chatId: string): Promise<number> {
-    try {
-      const deletedCount = await this.deleteMany({ chatId } as QueryFilter);
-      return deletedCount;
-    } catch (error) {
-      logger.error('Error deleting memories by chat ID', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+    return this.safeQuery(
+      async () => {
+        const deletedCount = await this.deleteMany({ chatId });
+        return deletedCount;
+      },
+      'Error deleting memories by chat ID',
+      { chatId }
+    );
   }
 
   /**
@@ -653,16 +608,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<number> Number of memories for the chat
    */
   async countByChatId(chatId: string): Promise<number> {
-    try {
-      const count = await this.count({ chatId } as QueryFilter);
-      return count;
-    } catch (error) {
-      logger.error('Error counting memories for chat', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return 0;
-    }
+    return this.safeQuery(
+      async () => {
+        const count = await this.count({ chatId });
+        return count;
+      },
+      'Error counting memories for chat',
+      { chatId },
+      0
+    );
   }
 
   // ============================================================================
@@ -677,16 +631,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory[]> Array of memories associated with the persona
    */
   async findByPersonaId(personaId: string): Promise<Memory[]> {
-    try {
-      const memories = await this.findByFilter({ personaId } as QueryFilter);
-      return memories;
-    } catch (error) {
-      logger.error('Error finding memories by persona ID', {
-        personaId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter({ personaId });
+        return memories;
+      },
+      'Error finding memories by persona ID',
+      { personaId },
+      []
+    );
   }
 
   /**
@@ -698,26 +651,26 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory[]> Array of memories about the character
    */
   async findByAboutCharacterId(aboutCharacterId: string): Promise<Memory[]> {
-    try {
-      // Query both aboutCharacterId (new) and personaId (legacy, for backward compat)
-      const memories = await this.findByFilter({
-        $or: [
-          { aboutCharacterId },
-          { personaId: aboutCharacterId }, // Legacy support during migration
-        ],
-      } as QueryFilter);
-      return memories;
-    } catch (error) {
-      logger.error('Error finding memories by aboutCharacterId', {
-        aboutCharacterId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+    return this.safeQuery(
+      async () => {
+        // Query both aboutCharacterId (new) and personaId (legacy, for backward compat)
+        const memories = await this.findByFilter({
+          $or: [
+            { aboutCharacterId },
+            { personaId: aboutCharacterId }, // Legacy support during migration
+          ],
+        });
+        return memories;
+      },
+      'Error finding memories by aboutCharacterId',
+      { aboutCharacterId },
+      []
+    );
   }
 
   /**
    * Count memories containing specific text
+   * Searches in content, summary, and keywords fields
    * @param characterId Optional character ID filter
    * @param personaId Optional persona ID filter
    * @param chatId Optional chat ID filter
@@ -730,33 +683,43 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     chatId: string | null,
     searchText: string
   ): Promise<number> {
-    try {
-      const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    return this.safeQuery(
+      async () => {
+        if (searchText.length > MAX_SEARCH_QUERY_LENGTH) {
+          logger.warn('Search text exceeds maximum length', {
+            characterId,
+            queryLength: searchText.length,
+            maxLength: MAX_SEARCH_QUERY_LENGTH,
+          });
+          return 0;
+        }
+        const regex = new RegExp(this.escapeRegex(searchText), 'i');
 
-      // Build the query filter
-      const filter: QueryFilter = {
-        $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
-      };
+        // Build the query filter - search in content, summary, and keywords
+        const filter: TypedQueryFilter<Memory> = {
+          $or: [
+            { content: { $regex: regex } },
+            { summary: { $regex: regex } },
+            { keywords: { $regex: regex } },
+          ],
+        };
 
-      if (characterId) filter.characterId = characterId;
-      if (personaId) filter.personaId = personaId;
-      if (chatId) filter.chatId = chatId;
+        if (characterId) filter.characterId = characterId;
+        if (personaId) filter.personaId = personaId;
+        if (chatId) filter.chatId = chatId;
 
-      const count = await this.count(filter);
-      return count;
-    } catch (error) {
-      logger.error('Error counting memories with text', {
-        characterId,
-        personaId,
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return 0;
-    }
+        const count = await this.count(filter);
+        return count;
+      },
+      'Error counting memories with text',
+      { characterId, personaId, chatId },
+      0
+    );
   }
 
   /**
    * Find memories containing specific text
+   * Searches in content, summary, and keywords fields
    * @param characterId Optional character ID filter
    * @param personaId Optional persona ID filter
    * @param chatId Optional chat ID filter
@@ -769,33 +732,42 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     chatId: string | null,
     searchText: string
   ): Promise<Memory[]> {
-    try {
-      const regex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    return this.safeQuery(
+      async () => {
+        if (searchText.length > MAX_SEARCH_QUERY_LENGTH) {
+          logger.warn('Search text exceeds maximum length', {
+            characterId,
+            queryLength: searchText.length,
+            maxLength: MAX_SEARCH_QUERY_LENGTH,
+          });
+          return [];
+        }
+        const regex = new RegExp(this.escapeRegex(searchText), 'i');
 
-      // Build the query filter
-      const filter: QueryFilter = {
-        $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
-      };
+        // Build the query filter - search in content, summary, and keywords
+        const filter: TypedQueryFilter<Memory> = {
+          $or: [
+            { content: { $regex: regex } },
+            { summary: { $regex: regex } },
+            { keywords: { $regex: regex } },
+          ],
+        };
 
-      if (characterId) filter.characterId = characterId;
-      if (personaId) filter.personaId = personaId;
-      if (chatId) filter.chatId = chatId;
+        if (characterId) filter.characterId = characterId;
+        if (personaId) filter.personaId = personaId;
+        if (chatId) filter.chatId = chatId;
 
-      const memories = await this.findByFilter(filter);
-      return memories;
-    } catch (error) {
-      logger.error('Error finding memories with text', {
-        characterId,
-        personaId,
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const memories = await this.findByFilter(filter);
+        return memories;
+      },
+      'Error finding memories with text',
+      { characterId, personaId, chatId },
+      []
+    );
   }
 
   /**
-   * Replace text in memory content and summary for specific memories
+   * Replace text in memory content, summary, and keywords for specific memories
    * @param memoryIds Array of memory IDs to update
    * @param searchText Text to find
    * @param replaceText Text to replace with
@@ -806,57 +778,69 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     searchText: string,
     replaceText: string
   ): Promise<Memory[]> {
-    try {
-      if (memoryIds.length === 0) {
-        return [];
-      }
-
-      const updatedMemories: Memory[] = [];
-
-      for (const memoryId of memoryIds) {
-        const memory = await this.findById(memoryId);
-        if (!memory) {
-          logger.warn('Memory not found for replacement', { memoryId });
-          continue;
+    return this.safeQuery(
+      async () => {
+        if (memoryIds.length === 0) {
+          return [];
         }
 
-        let contentChanged = false;
-        let newContent = memory.content;
-        let newSummary = memory.summary;
+        const updatedMemories: Memory[] = [];
 
-        // Replace in content
-        if (memory.content.includes(searchText)) {
-          newContent = memory.content.split(searchText).join(replaceText);
-          contentChanged = true;
-        }
+        for (const memoryId of memoryIds) {
+          const memory = await this.findById(memoryId);
+          if (!memory) {
+            logger.warn('Memory not found for replacement', { memoryId });
+            continue;
+          }
 
-        // Replace in summary
-        if (memory.summary.includes(searchText)) {
-          newSummary = memory.summary.split(searchText).join(replaceText);
-          contentChanged = true;
-        }
+          let contentChanged = false;
+          let newContent = memory.content;
+          let newSummary = memory.summary;
+          let newKeywords = memory.keywords;
 
-        if (contentChanged) {
-          const updated = await this.update(memoryId, {
-            content: newContent,
-            summary: newSummary,
-          });
+          // Replace in content
+          if (memory.content.includes(searchText)) {
+            newContent = memory.content.split(searchText).join(replaceText);
+            contentChanged = true;
+          }
 
-          if (updated) {
-            updatedMemories.push(updated);
+          // Replace in summary
+          if (memory.summary.includes(searchText)) {
+            newSummary = memory.summary.split(searchText).join(replaceText);
+            contentChanged = true;
+          }
+
+          // Replace in keywords array
+          if (memory.keywords && memory.keywords.length > 0) {
+            const updatedKeywords = memory.keywords.map(keyword => {
+              if (keyword.includes(searchText)) {
+                contentChanged = true;
+                return keyword.split(searchText).join(replaceText);
+              }
+              return keyword;
+            });
+            newKeywords = updatedKeywords;
+          }
+
+          if (contentChanged) {
+            const updated = await this.update(memoryId, {
+              content: newContent,
+              summary: newSummary,
+              keywords: newKeywords,
+            });
+
+            if (updated) {
+              updatedMemories.push(updated);
+            }
           }
         }
-      }
 
-      logger.info('Replaced text in memories', { updatedCount: updatedMemories.length });
-      return updatedMemories;
-    } catch (error) {
-      logger.error('Error replacing text in memories', {
-        memoryCount: memoryIds.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
+        logger.info('Replaced text in memories', { updatedCount: updatedMemories.length });
+        return updatedMemories;
+      },
+      'Error replacing text in memories',
+      { memoryCount: memoryIds.length }
+    );
   }
 
   /**
@@ -871,25 +855,22 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     aboutCharacterId: string,
     query: string
   ): Promise<Memory[]> {
-    try {
-      // Escape special regex characters to treat query as literal text
-      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(escapedQuery, 'i');
+    return this.safeQuery(
+      async () => {
+        // Escape special regex characters to treat query as literal text
+        const escapedQuery = this.escapeRegex(query);
+        const regex = new RegExp(escapedQuery, 'i');
 
-      const memories = await this.findByFilter({
-        characterId,
-        aboutCharacterId,
-        $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
-      } as QueryFilter);
-      return memories;
-    } catch (error) {
-      logger.error('Error searching memories about character by content', {
-        characterId,
-        aboutCharacterId,
-        queryLength: query.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+        const memories = await this.findByFilter({
+          characterId,
+          aboutCharacterId,
+          $or: [{ content: { $regex: regex } }, { summary: { $regex: regex } }],
+        });
+        return memories;
+      },
+      'Error searching memories about character by content',
+      { characterId, aboutCharacterId, queryLength: query.length },
+      []
+    );
   }
 }

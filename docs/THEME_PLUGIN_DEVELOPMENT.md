@@ -25,12 +25,13 @@ If you prefer to set up manually or want to understand all the pieces, continue 
 4. [Required Files](#required-files)
 5. [Design Tokens](#design-tokens)
 6. [CSS Component Overrides](#css-component-overrides)
-7. [Custom Fonts](#custom-fonts)
-8. [Storybook Development](#storybook-development)
-9. [Building Your Plugin](#building-your-plugin)
-10. [Testing Your Theme](#testing-your-theme)
-11. [Publishing to npm](#publishing-to-npm)
-12. [Complete Example](#complete-example)
+7. [Subsystem Overrides](#subsystem-overrides)
+8. [Custom Fonts](#custom-fonts)
+9. [Storybook Development](#storybook-development)
+10. [Building Your Plugin](#building-your-plugin)
+11. [Testing Your Theme](#testing-your-theme)
+12. [Publishing to npm](#publishing-to-npm)
+13. [Complete Example](#complete-example)
 
 ---
 
@@ -612,6 +613,102 @@ Override these variables for consistent component styling:
 --qt-badge-padding-x
 --qt-badge-font-size
 --qt-badge-font-weight
+```
+
+---
+
+## Subsystem Overrides
+
+Themes can rename, re-describe, and replace images for any of the 9 Foundry subsystem pages. This is useful for themes that want plainer labels (e.g., "Image Generation" instead of "The Lantern") or custom artwork.
+
+### In index.ts (Module-Based Themes)
+
+Add the `subsystems` property to your `ThemePlugin` export:
+
+```typescript
+import type { ThemePlugin } from '@quilltap/plugin-types';
+
+export const plugin: ThemePlugin = {
+  metadata: { /* ... */ },
+  tokens: { /* ... */ },
+
+  subsystems: {
+    lantern: {
+      name: 'Image Generation',
+      description: 'Image profiles and story background settings',
+      thumbnail: 'images/my-lantern-thumb.jpg',   // relative to plugin root
+      backgroundImage: 'images/my-lantern-bg.png', // relative to plugin root
+    },
+    foundry: {
+      name: 'Settings',
+    },
+  },
+};
+```
+
+### In manifest.json (File-Based Themes)
+
+Add the `subsystems` field inside `themeConfig`:
+
+```json
+{
+  "themeConfig": {
+    "tokensPath": "tokens.json",
+    "supportsDarkMode": true,
+    "subsystems": {
+      "lantern": {
+        "name": "Image Generation"
+      },
+      "salon": {
+        "name": "Chat Settings"
+      }
+    }
+  }
+}
+```
+
+### Subsystem IDs
+
+| ID | Default Name |
+|----|-------------|
+| `foundry` | The Foundry |
+| `aurora` | Aurora |
+| `forge` | The Forge |
+| `salon` | The Salon |
+| `commonplace-book` | The Commonplace Book |
+| `prospero` | Prospero |
+| `dangermouse` | Dangermouse |
+| `calliope` | Calliope |
+| `lantern` | The Lantern |
+
+### Override Fields
+
+| Field | Description |
+|-------|-------------|
+| `name` | Display name shown in headings, breadcrumbs, and sidebar |
+| `description` | Short description shown below the heading |
+| `thumbnail` | Image on the Foundry hub card (URL, data URI, or relative path) |
+| `backgroundImage` | Full-page background on the subsystem page (URL, data URI, or relative path) |
+
+Relative image paths are automatically resolved to the theme's asset route (`/api/themes/assets/<pluginName>/<path>`). Include the image files in your plugin's `package.json` `files` array.
+
+### CSS Card Customization
+
+The Foundry hub cards also support CSS customization via the existing `cssOverrides` mechanism (Tier 3). Target these classes:
+
+- `.qt-foundry-card` --- the card container
+- `.qt-foundry-card-image` --- the thumbnail image area
+- `.qt-foundry-card-content` --- the text content area
+
+```css
+[data-theme="mytheme"] .qt-foundry-card {
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="mytheme"] .qt-foundry-card-image {
+  filter: sepia(0.3);
+}
 ```
 
 ---

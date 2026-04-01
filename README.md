@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.9.0-green.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-2.10.0-green.svg)](package.json)
 
 <p align="center">
   <img src="./website/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
@@ -23,6 +23,7 @@ No subscriptions. No data harvested. No forgetting everything between sessions.
 
 **For everyone else:** Use it as a private AI desktop. Connect to Claude, GPT, Gemini, Grok, or local models through Ollama. Your conversations stay on your machine. The AI builds long-term memory across sessions. You control everything.
 
+*"Business in the front, party in the back... literary salon on the veranda."*
 ---
 
 ## Why Not Just Use Claude or ChatGPT?
@@ -103,36 +104,47 @@ For production deployment with SSL, see the [Deployment Guide](docs/DEPLOYMENT.m
 
 ## Core Features
 
-### Projects & Files
+Quilltap's features are organized into named subsystems. Themes can customize these names and appearances.
+
+### Prospero — Projects & Files
 
 Organize your work the way your brain works:
 
 - **Project instructions** — Custom system prompts that apply to every chat in a project
 - **File management** — Upload documents, organize into folders, let the AI read them
 - **LLM file access** — AI can list, read, and write files with your permission
+- **Agent Mode** — Iterative tool use with self-correction, configurable max turns
 - **Semantic search** — Find things by meaning, not just keywords
 - **Markdown rendering** — Full GitHub-flavored Markdown with wikilink support
 - **Code highlighting** — Syntax highlighting for code files
 - **PDF viewer** — Built-in PDF.js for document preview
 
-### Characters & Roleplay
+### Aurora — Characters & Roleplay
 
 Create AI personalities that feel like collaborators:
 
 - **AI characters** — Detailed profiles with personality, backstory, and system prompts
 - **User characters** — Represent yourself however you want
+- **Character pronouns** — He/him, she/her, they/them, or custom pronouns
+- **Character aliases** — Alternate names for characters
+- **Clothing records** — Track outfits with usage contexts
 - **Multi-character chats** — Multiple AI characters in one conversation with turn management
+- **Turn-order sidebar** — Participant sidebar with status badges and per-card settings
+- **Identity reinforcement** — Characters maintain consistent identity through system prompt reinforcement
 - **Impersonation** — Take control of any character mid-scene
 - **Swipes** — Generate alternative responses when one doesn't land
 - **AI Wizard** — Generate character details automatically, with streaming progress and document upload support
 - **SillyTavern import** — Bring your existing characters and chats
 
-### Memory & Context
+### The Commonplace Book — Memory & Context
 
 An AI that actually remembers:
 
 - **Long-term memory** — Important details persist across conversations
 - **Semantic recall** — Find memories by meaning, not exact keywords
+- **Memory Gate** — Reinforcement and linking system: REINFORCE near-duplicates, LINK related memories, INSERT new ones
+- **Proactive recall** — Characters analyze recent conversation for relevant memories
+- **Memory deduplication** — Built-in tool to find and merge duplicate memories
 - **Context compression** — Automatic summarization for long conversations
 - **Full context reload** — AI can request complete context when needed
 
@@ -141,6 +153,16 @@ Quilltap uses a three-model architecture for optimal cost and performance:
 1. **Chat model** — Your primary AI for conversations (Claude, GPT-4, Gemini, etc.)
 2. **Cheap model** — Handles background tasks like memory extraction, titling, and image descriptions
 3. **Embedding model** — Powers semantic search for memories and files
+
+### The Salon — Chat & Conversation
+
+The chat interface where everything comes together:
+
+- **Tool palette** — Chat composer gutter tools for quick access to formatting, attachments, and actions
+- **Embedded tool messages** — Tool results displayed inline within message bubbles
+- **Server-side markdown** — Pre-rendered markdown for faster message display
+- **Queue status badges** — Live background job status in the toolbar
+- **Unified chat cards** — Consistent chat card component with story background thumbnails
 
 ### Gaming & Interactivity
 
@@ -153,6 +175,26 @@ Built-in mechanics for tabletop gaming, RPGs, and interactive fiction:
 - **Auto-detection** — Dice notation in messages executes automatically ("I roll 2d6" actually rolls)
 - **Cryptographically secure** — Fair, unpredictable random results
 
+### Dangermouse — Content Filtering
+
+Intelligent content classification and routing:
+
+- **Gatekeeper service** — Classifies messages for sensitive content
+- **Three modes** — Off, Detect Only, or Auto-Route to uncensored providers
+- **Chat-level classification** — Danger flags on chats with quick-hide integration
+- **Visual indicators** — DangerFlagBadge and DangerContentWrapper for clear content marking
+- **Startup scan** — Scheduled danger classification scan with context summary chaining
+
+### The Lantern — Story Backgrounds
+
+AI-generated atmospheric visuals for your stories:
+
+- **Story backgrounds** — AI-generated background images for chats based on scene context
+- **Context-aware appearance** — Character appearance resolution using clothing and physical descriptions
+- **Project backgrounds** — Story backgrounds on project detail pages
+- **Chat card thumbnails** — Chat cards display story background thumbnails
+- **Uncensored fallback** — Automatic routing for chats with dangerous content
+
 ### LLM Tools
 
 Your AI can do more than talk:
@@ -161,6 +203,7 @@ Your AI can do more than talk:
 - **Memory search** — Query past conversations
 - **Image generation** — Create images mid-conversation (OpenAI, Google Imagen, Grok)
 - **File management** — Read/write project files
+- **Agent Mode** — Iterative tool use with self-correction for complex multi-step tasks
 - **Help search** — AI can search Quilltap's documentation to help you use features
 - **MCP connector** — Connect to Model Context Protocol servers
 - **Custom tools** — Extend with plugins
@@ -185,11 +228,28 @@ For best results we recommend Ollama or OpenAI for embedding, a "nano" or "lite"
 
 ---
 
-## Customization
+## Calliope — Themes & Appearance
 
-### Themes
+Quilltap includes six bundled themes and supports custom theme plugins. Switch themes live without reloading.
 
-Quilltap includes three themes (Ocean, Earl Grey, Rains) and supports custom theme plugins. Switch themes live without reloading.
+| Theme | Style |
+| ----- | ----- |
+| **Professional Neutral** | Clean default look |
+| **Old School** | Classic serif typography |
+| **Art Deco** | Geometric elegance |
+| **The Great Estate** | Rich, estate-inspired design |
+| **Earl Grey** | Warm, tea-inspired palette |
+| **Rains** | Cool, atmospheric tones |
+
+Themes can override subsystem names and Foundry card images, letting each theme define its own personality for the application.
+
+## The Foundry — Settings & Architecture
+
+Unified hub for managing all of Quilltap's subsystems:
+
+- **Foundry Hub** — Navigate to all eight subsystems from `/foundry` with themed navigation cards
+- **Collapsed sidebar** — Direct navigation to any subsystem
+- **Plugin system** — Extend with themes, providers, templates, tools, and storage via npm packages
 
 ### Plugins
 
@@ -229,7 +289,7 @@ All Quilltap data (database, files, logs) is stored in a single directory:
 QUILLTAP_HOST_DATA_DIR=/mnt/data/quilltap docker-compose up
 ```
 
-**Non-Docker users:** Set `QUILTTAP_DATA_DIR` to override the default:
+**Non-Docker users:** Set `QUILLTAP_DATA_DIR` to override the default:
 
 ```bash
 QUILLTAP_DATA_DIR=/custom/path npm run dev
@@ -309,7 +369,7 @@ Copyright © 2025, 2026 Foundry-9 LLC
 - **Issues:** [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
 - **Author:** Charles Sebold
 - **Email:** <charles.sebold@foundry-9.com>
-- **Website:** [foundry-9.com](https://foundry-9.com)
+- **Website:** [quilltap.ai](https://quilltap.ai) | [foundry-9.com](https://foundry-9.com)
 
 ---
 

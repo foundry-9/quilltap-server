@@ -5,9 +5,12 @@
  * POST /api/v1/system/data-dir?action=open - Opens the data directory in the system file browser
  */
 
-import { exec } from 'child_process';
+import { NextRequest } from 'next/server';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { successResponse, errorResponse, badRequest } from '@/lib/api/responses';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
+import { withCollectionActionDispatch } from '@/lib/api/middleware/actions';
+import { successResponse, errorResponse } from '@/lib/api/responses';
 import {
   getBaseDataDirWithSource,
   getPlatform,
@@ -16,7 +19,7 @@ import {
 } from '@/lib/paths';
 import { logger } from '@/lib/logger';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /**
  * Response shape for data directory info
@@ -40,7 +43,7 @@ interface DataDirInfo {
  * GET /api/v1/system/data-dir
  * Returns information about the data directory location
  */
-export async function GET() {
+export const GET = createContextHandler(async () => {
   const dirInfo = getBaseDataDirWithSource();
   const platform = getPlatform();
   const isDocker = isDockerEnvironment();
@@ -51,30 +54,23 @@ export async function GET() {
     sourceDescription: dirInfo.sourceDescription,
     platform,
     isDocker,
-    // Can only open file browser on non-Docker systems
     canOpen: !isDocker,
   };
 
-  logger.debug('Data directory info requested', { response });
-
   return successResponse(response);
-}
+});
 
 /**
- * POST /api/v1/system/data-dir?action=open
+ * Handle POST ?action=open
  * Opens the data directory in the system file browser
  */
-export async function POST(request: Request) {
-  const url = new URL(request.url);
-  const action = url.searchParams.get('action');
-
-  if (action !== 'open') {
-    return badRequest('Invalid action. Supported actions: open');
-  }
-
+async function handleOpen(
+  _request: NextRequest,
+  _context: RequestContext,
+  _params: Record<string, never>,
+): Promise<ReturnType<typeof successResponse>> {
   const isDocker = isDockerEnvironment();
   if (isDocker) {
-    logger.debug('Cannot open file browser in Docker environment');
     return errorResponse(
       'Cannot open file browser in Docker environment. Access the data directory through your host system or container volume mounts.',
       400
@@ -85,30 +81,21 @@ export async function POST(request: Request) {
   const platform = getPlatform();
   const dirPath = dirInfo.path;
 
-  logger.debug('Attempting to open data directory', { platform, path: dirPath });
-
   try {
-    let command: string;
-
     switch (platform) {
       case 'darwin':
-        // macOS: use open command
-        command = `open "${dirPath}"`;
+        await execFileAsync('open', [dirPath]);
         break;
 
       case 'win32':
-        // Windows: use explorer command
-        command = `explorer "${dirPath}"`;
+        await execFileAsync('explorer', [dirPath]);
         break;
 
       case 'linux':
       default:
-        // Linux: try xdg-open (standard), fallback to common file managers
-        command = `xdg-open "${dirPath}" 2>/dev/null || nautilus "${dirPath}" 2>/dev/null || dolphin "${dirPath}" 2>/dev/null || thunar "${dirPath}" 2>/dev/null`;
+        await openLinuxFileBrowser(dirPath);
         break;
     }
-
-    await execAsync(command);
 
     logger.info('Opened data directory in file browser', { platform, path: dirPath });
 
@@ -125,4 +112,33 @@ export async function POST(request: Request) {
       500
     );
   }
+}
+
+/**
+ * POST /api/v1/system/data-dir?action=open
+ * Dispatches to action handlers
+ */
+export const POST = createContextHandler(
+  withCollectionActionDispatch({
+    open: handleOpen,
+  })
+);
+
+/**
+ * Try to open a file browser on Linux using common file manager commands.
+ * Uses execFile with sequential fallbacks (no shell chaining).
+ */
+async function openLinuxFileBrowser(dirPath: string): Promise<void> {
+  const commands = ['xdg-open', 'nautilus', 'dolphin', 'thunar'];
+
+  for (const cmd of commands) {
+    try {
+      await execFileAsync(cmd, [dirPath]);
+      return;
+    } catch {
+      logger.debug(`File manager '${cmd}' not available, trying next`, { dirPath });
+    }
+  }
+
+  throw new Error('No supported file manager found. Tried: ' + commands.join(', '));
 }

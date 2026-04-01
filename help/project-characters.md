@@ -1,6 +1,6 @@
 # Project Characters
 
-> **[Open this page in Quilltap](/projects)**
+> **[Open this page in Quilltap](/prospero)**
 
 Project characters are the cast of characters associated with a project. You can optionally control which characters can participate in project chats using the character roster feature.
 

@@ -59,9 +59,11 @@ export class OpenRouterEmbeddingProvider {
     });
 
     const response = await client.embeddings.generate({
-      input: text,
-      model,
-      dimensions: options?.dimensions,
+      requestBody: {
+        input: text,
+        model,
+        dimensions: options?.dimensions,
+      },
     });
 
     // Handle case where response is a string (error case)
@@ -124,9 +126,11 @@ export class OpenRouterEmbeddingProvider {
     });
 
     const response = await client.embeddings.generate({
-      input: texts,
-      model,
-      dimensions: options?.dimensions,
+      requestBody: {
+        input: texts,
+        model,
+        dimensions: options?.dimensions,
+      },
     });
 
     // Handle case where response is a string (error case)

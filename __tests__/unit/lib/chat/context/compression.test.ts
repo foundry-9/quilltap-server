@@ -335,14 +335,16 @@ describe('Context Compression', () => {
         'TestUser',
         3000,
         options.selection,
-        'test-user-id'
+        'test-user-id',
+        undefined
       )
 
       expect(mockCompressSystemPrompt).toHaveBeenCalledWith(
         systemPrompt,
         1500,
         options.selection,
-        'test-user-id'
+        'test-user-id',
+        undefined
       )
     })
   })

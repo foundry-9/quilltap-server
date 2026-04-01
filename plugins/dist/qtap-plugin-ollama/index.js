@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.17.0";
+var VERSION = "6.18.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -1280,6 +1280,10 @@ async function defaultParseResponse(client, props) {
     const mediaType = contentType?.split(";")[0]?.trim();
     const isJSON = mediaType?.includes("application/json") || mediaType?.endsWith("+json");
     if (isJSON) {
+      const contentLength = response.headers.get("content-length");
+      if (contentLength === "0") {
+        return void 0;
+      }
       const json = await response.json();
       return addRequestID(json, response);
     }
@@ -6626,7 +6630,7 @@ var OpenAI = class {
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
   getAPIList(path2, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path2, ...opts });
+    return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path2, ...opts2 })) : { method: "get", path: path2, ...opts });
   }
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
@@ -6634,9 +6638,10 @@ var OpenAI = class {
   }
   async fetchWithTimeout(url, init, ms, controller) {
     const { signal, method, ...options } = init || {};
+    const abort = this._makeAbort(controller);
     if (signal)
-      signal.addEventListener("abort", () => controller.abort());
-    const timeout = setTimeout(() => controller.abort(), ms);
+      signal.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(abort, ms);
     const isReadableBody = globalThis.ReadableStream && options.body instanceof globalThis.ReadableStream || typeof options.body === "object" && options.body !== null && Symbol.asyncIterator in options.body;
     const fetchOptions = {
       signal: controller.signal,
@@ -6747,6 +6752,9 @@ var OpenAI = class {
     ]);
     this.validateHeaders(headers);
     return headers.values;
+  }
+  _makeAbort(controller) {
+    return () => controller.abort();
   }
   buildBody({ options: { body, headers: rawHeaders } }) {
     if (!body) {
@@ -7156,12 +7164,6 @@ var OllamaEmbeddingProvider = class {
    * @returns The embedding result
    */
   async generateEmbedding(text, model, apiKey) {
-    logger2.debug("Generating Ollama embedding", {
-      context: "OllamaEmbeddingProvider.generateEmbedding",
-      model,
-      textLength: text.length,
-      baseUrl: this.baseUrl
-    });
     const requestPayload = {
       model,
       prompt: text
@@ -7188,11 +7190,6 @@ var OllamaEmbeddingProvider = class {
     if (!embedding) {
       throw new Error("No embedding returned from Ollama");
     }
-    logger2.debug("Ollama embedding generated successfully", {
-      context: "OllamaEmbeddingProvider.generateEmbedding",
-      model,
-      dimensions: embedding.length
-    });
     return {
       embedding,
       model,
@@ -7210,21 +7207,11 @@ var OllamaEmbeddingProvider = class {
    * @returns Array of embedding results
    */
   async generateBatchEmbeddings(texts, model, apiKey) {
-    logger2.debug("Generating batch Ollama embeddings", {
-      context: "OllamaEmbeddingProvider.generateBatchEmbeddings",
-      model,
-      count: texts.length
-    });
     const results = [];
     for (const text of texts) {
       const result = await this.generateEmbedding(text, model, apiKey);
       results.push(result);
     }
-    logger2.debug("Ollama batch embeddings generated successfully", {
-      context: "OllamaEmbeddingProvider.generateBatchEmbeddings",
-      model,
-      count: results.length
-    });
     return results;
   }
   /**

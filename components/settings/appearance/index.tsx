@@ -17,7 +17,6 @@
 
 import { useAppearanceSettings } from './hooks/useAppearanceSettings'
 import { DisplayOptions } from './DisplayOptions'
-import { SidebarWidthControl } from './SidebarWidthControl'
 import { ThemeSelector } from './ThemeSelector'
 import { DebugThemeInfo } from './components/DebugThemeInfo'
 
@@ -77,21 +76,16 @@ export default function AppearanceTab() {
 
   return (
     <div className="space-y-8">
-      {/* Display Options and Sidebar Width in responsive grid */}
-      <div className="qt-card-grid-auto">
-        <DisplayOptions
-          colorMode={colorMode}
-          resolvedColorMode={resolvedColorMode}
-          showNavThemeSelector={showNavThemeSelector}
-          isLoading={isLoading}
-          error={error}
-          onColorModeChange={handleColorModeChange}
-          onNavThemeSelectorChange={handleNavThemeSelectorChange}
-        />
-
-        {/* Sidebar Width */}
-        <SidebarWidthControl />
-      </div>
+      {/* Display Options */}
+      <DisplayOptions
+        colorMode={colorMode}
+        resolvedColorMode={resolvedColorMode}
+        showNavThemeSelector={showNavThemeSelector}
+        isLoading={isLoading}
+        error={error}
+        onColorModeChange={handleColorModeChange}
+        onNavThemeSelectorChange={handleNavThemeSelectorChange}
+      />
 
       {/* Theme Selector - full width with expandable previews */}
       <ThemeSelector

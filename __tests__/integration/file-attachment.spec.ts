@@ -18,7 +18,7 @@ test.describe('File Attachment', () => {
 
   const navigateToChatWithRetry = async (page: import('@playwright/test').Page) => {
     for (let attempt = 1; attempt <= 3; attempt += 1) {
-      await page.goto(`/chats/${testChatId}`)
+      await page.goto(`/salon/${testChatId}`)
       await page.waitForLoadState('networkidle')
       try {
         await page.waitForSelector('.qt-chat-composer', { state: 'visible', timeout: 15000 })

@@ -31,10 +31,21 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
 
   return (
     <Link
-      href={`/chats/${chat.id}`}
+      href={`/salon/${chat.id}`}
       className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
     >
-      <AvatarStack entities={characters} size="sm" maxDisplay={2} />
+      {/* Story background thumbnail (preferred) or Avatar stack */}
+      {chat.storyBackgroundUrl ? (
+        <div className="flex-shrink-0 w-16 h-11 rounded-md overflow-hidden bg-muted -my-1">
+          <img
+            src={chat.storyBackgroundUrl}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : (
+        <AvatarStack entities={characters} size="sm" maxDisplay={2} />
+      )}
       <div className="flex-1 min-w-0">
         <p className="qt-card-title truncate">
           {chat.title}
@@ -48,7 +59,7 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
           {formatMessageTime(chat.lastMessageAt ?? chat.updatedAt)}
         </span>
         <span className="qt-meta text-primary">
-          {chat._count.messages} msgs
+          {chat._count.messages} msgs{chat.isDangerousChat && <span className="qt-text-destructive" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>}
         </span>
       </div>
     </Link>

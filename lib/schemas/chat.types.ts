@@ -18,6 +18,27 @@ import { TimestampConfigSchema } from './settings.types';
 import { ControlledByEnum } from './character.types';
 
 // ============================================================================
+// DANGER FLAGS
+// ============================================================================
+
+export const DangerFlagSchema = z.object({
+  /** Category of dangerous content detected (e.g., 'nsfw', 'violence', 'hate_speech') */
+  category: z.string(),
+  /** Confidence score from 0 to 1 */
+  score: z.number().min(0).max(1),
+  /** Whether the user has manually overridden this flag (marked as not dangerous) */
+  userOverridden: z.boolean().default(false),
+  /** Whether the message was rerouted to an uncensored provider */
+  wasRerouted: z.boolean().default(false),
+  /** Provider name if rerouted */
+  reroutedProvider: z.string().nullable().optional(),
+  /** Model name if rerouted */
+  reroutedModel: z.string().nullable().optional(),
+});
+
+export type DangerFlag = z.infer<typeof DangerFlagSchema>;
+
+// ============================================================================
 // MESSAGE EVENTS
 // ============================================================================
 
@@ -49,6 +70,11 @@ export const MessageEventSchema = z.object({
   // 'content_limit' = LLM-generated recovery response for content limit errors (PDF pages, etc.)
   // 'content_limit_static' = Static fallback message when LLM recovery for content limit also failed
   recoveryType: z.enum(['token_limit', 'token_limit_static', 'content_limit', 'content_limit_static']).nullable().optional(),
+  // Server-side pre-rendered HTML for simple messages (no tools, no attachments)
+  // Used to avoid client-side markdown processing overhead on chat load
+  renderedHtml: z.string().nullable().optional(),
+  // Danger content flags from gatekeeper classification
+  dangerFlags: z.array(DangerFlagSchema).optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;
@@ -73,6 +99,7 @@ export const SystemEventTypeEnum = z.enum([
   'CONTEXT_SUMMARY',
   'IMAGE_PROMPT_CRAFTING',
   'CONTEXT_COMPRESSION',
+  'DANGER_CLASSIFICATION',
 ]);
 
 export type SystemEventType = z.infer<typeof SystemEventTypeEnum>;
@@ -253,6 +280,31 @@ export const ChatMetadataSchema = z.object({
   /** Cached compression result for context compression (persisted across restarts) */
   compressionCache: JsonSchema.nullable().optional(),
 
+  /** Whether agent mode is enabled for this chat (null = inherit from project/character/global) */
+  agentModeEnabled: z.boolean().nullable().optional(),
+
+  /** Current agent turn count within the current message processing (resets on new user message) */
+  agentTurnCount: z.number().default(0),
+
+  /** Story background image file ID (from file system) */
+  storyBackgroundImageId: UUIDSchema.nullable().optional(),
+  /** When the story background was last generated */
+  lastBackgroundGeneratedAt: TimestampSchema.nullable().optional(),
+
+  /** Image generation profile for this chat (shared by all participants) */
+  imageProfileId: UUIDSchema.nullable().optional(),
+
+  /** Whether this chat has been classified as dangerous (null = not yet classified) */
+  isDangerousChat: z.boolean().nullable().optional(),
+  /** Overall danger score for this chat (0-1), null = not yet classified */
+  dangerScore: z.number().min(0).max(1).nullable().optional(),
+  /** Categories of dangerous content detected at chat level (JSON array of strings) */
+  dangerCategories: z.array(z.string()).default([]),
+  /** When the chat danger classification last ran */
+  dangerClassifiedAt: TimestampSchema.nullable().optional(),
+  /** Message count at which danger was last classified (to detect changes for re-check) */
+  dangerClassifiedAtMessageCount: z.number().nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -325,6 +377,31 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Cached compression result for context compression (persisted across restarts) */
   compressionCache: JsonSchema.nullable().optional(),
+
+  /** Whether agent mode is enabled for this chat (null = inherit from project/character/global) */
+  agentModeEnabled: z.boolean().nullable().optional(),
+
+  /** Current agent turn count within the current message processing (resets on new user message) */
+  agentTurnCount: z.number().default(0),
+
+  /** Story background image file ID (from file system) */
+  storyBackgroundImageId: UUIDSchema.nullable().optional(),
+  /** When the story background was last generated */
+  lastBackgroundGeneratedAt: TimestampSchema.nullable().optional(),
+
+  /** Image generation profile for this chat (shared by all participants) */
+  imageProfileId: UUIDSchema.nullable().optional(),
+
+  /** Whether this chat has been classified as dangerous (null = not yet classified) */
+  isDangerousChat: z.boolean().nullable().optional(),
+  /** Overall danger score for this chat (0-1), null = not yet classified */
+  dangerScore: z.number().min(0).max(1).nullable().optional(),
+  /** Categories of dangerous content detected at chat level (JSON array of strings) */
+  dangerCategories: z.array(z.string()).default([]),
+  /** When the chat danger classification last ran */
+  dangerClassifiedAt: TimestampSchema.nullable().optional(),
+  /** Message count at which danger was last classified (to detect changes for re-check) */
+  dangerClassifiedAtMessageCount: z.number().nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

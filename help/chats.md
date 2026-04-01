@@ -1,6 +1,6 @@
 # Chats Overview
 
-> **[Open this page in Quilltap](/chats)**
+> **[Open this page in Quilltap](/salon)**
 
 Chats are the core of Quilltap. They're where you have conversations with AI characters, explore stories, collaborate on creative work, and interact with your configured AI assistants.
 
@@ -160,17 +160,18 @@ See [Message Actions](chat-message-actions.md) for complete details on editing, 
 
 Each chat can have its own configuration:
 
-- **Participants** — Who's in this conversation
-- **Connection Profiles** — Which LLM to use per participant
-- **Roleplay Template** — Formatting and style settings
+- **Roleplay Template** — Formatting and style settings (in chat settings modal)
+- **Image Generation** — Which image provider to use (in chat settings modal)
+- **Connection Profiles** — Which LLM to use per participant (on each participant card in the sidebar)
+- **System Prompt Overrides** — Custom context per participant (on each participant card in the sidebar)
 - **Tools** — Which AI tools are available
 - **Project** — Which project this chat belongs to
 
 ### Accessing Chat Settings
 
 1. Open the chat
-2. Click the **Settings** button (gear icon) in the header
-3. Or access via the **Action Menu** (three dots)
+2. Click the **Settings** button (gear icon) in the header or action menu to open the chat settings modal (roleplay template and image generation)
+3. In multi-character chats, use the **participant sidebar** to change connection profiles and per-participant settings directly on each card
 
 ## Managing Chats
 
@@ -276,7 +277,7 @@ See [Using Tools](tools-usage.md) for tool details.
 **Solutions:**
 
 - Check character's connection profile in settings
-- Verify API key in Settings > API Keys
+- Verify API key in The Forge > API Keys
 - Wait and try again if rate limited
 - Check internet connection
 

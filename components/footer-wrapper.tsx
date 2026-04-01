@@ -7,7 +7,7 @@ export default function FooterWrapper() {
   const pathname = usePathname();
 
   // Hide footer on chat pages - they have their own layout
-  const isChatPage = pathname?.match(/^\/chats\/[^/]+$/);
+  const isChatPage = pathname?.match(/^\/salon\/[^/]+$/);
 
   if (isChatPage) {
     return null;

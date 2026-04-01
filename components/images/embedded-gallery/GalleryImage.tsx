@@ -32,7 +32,7 @@ export function GalleryImage({
           onImageClick(index)
         }}
         className={`relative aspect-square w-full overflow-hidden rounded-lg bg-muted hover:ring-2 hover:ring-primary focus:outline-none focus:ring-2 focus:ring-ring transition-all ${
-          isAvatar ? 'ring-2 ring-green-500' : ''
+          isAvatar ? 'ring-2 ring-success' : ''
         } ${!isTagged ? 'opacity-60' : ''}`}
       >
         {isMissingImage ? (
@@ -56,15 +56,15 @@ export function GalleryImage({
 
         {/* Avatar Badge */}
         {isAvatar && (
-          <div className="absolute top-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded font-medium">
+          <div className="absolute top-1 left-1 bg-success text-success-foreground text-xs px-1.5 py-0.5 rounded font-medium">
             Avatar
           </div>
         )}
 
         {/* Tagged indicator */}
         {isTagged && !isAvatar && (
-          <div className="absolute top-1 left-1 bg-blue-500 rounded-full p-0.5">
-            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+          <div className="absolute top-1 left-1 bg-primary rounded-full p-0.5">
+            <svg className="w-3 h-3 text-primary-foreground" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
             </svg>
           </div>
@@ -79,7 +79,7 @@ export function GalleryImage({
             onToggleTag(e)
           }}
           disabled={isUpdating}
-          className={`p-1.5 rounded-full shadow-md transition-colors ${
+          className={`p-1.5 rounded-full qt-shadow-md transition-colors ${
             isTagged
               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
               : 'bg-card text-muted-foreground hover:bg-accent'
@@ -109,7 +109,7 @@ export function GalleryImage({
               onSetAvatar(e)
             }}
             disabled={isUpdating}
-            className={`p-1.5 rounded-full shadow-md bg-card text-muted-foreground hover:bg-green-500 hover:text-white transition-colors ${isUpdating ? 'opacity-50' : ''}`}
+            className={`p-1.5 rounded-full qt-shadow-md bg-card text-muted-foreground hover:bg-success hover:text-success-foreground transition-colors ${isUpdating ? 'opacity-50' : ''}`}
             title="Set as avatar"
           >
             {isDeletingImage ? (
@@ -132,10 +132,10 @@ export function GalleryImage({
               onDeleteImage(e)
             }}
             disabled={isDeletingImage}
-            className={`p-1.5 rounded-full shadow-md transition-colors ${
+            className={`p-1.5 rounded-full qt-shadow-md transition-colors ${
               isConfirmingDelete
-                ? 'bg-destructive text-white'
-                : 'bg-card text-muted-foreground hover:bg-destructive hover:text-white'
+                ? 'bg-destructive text-destructive-foreground'
+                : 'bg-card text-muted-foreground hover:bg-destructive hover:text-destructive-foreground'
             } ${isDeletingImage ? 'opacity-50' : ''}`}
             title={isConfirmingDelete ? 'Click again to confirm delete' : 'Delete image'}
           >

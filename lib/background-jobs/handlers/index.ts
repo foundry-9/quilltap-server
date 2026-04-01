@@ -13,6 +13,8 @@ import { handleLLMLogCleanup } from './llm-log-cleanup';
 import { handleEmbeddingGenerate } from './embedding-generate';
 import { handleEmbeddingRefit } from './embedding-refit';
 import { handleEmbeddingReindexAll } from './embedding-reindex';
+import { handleStoryBackgroundGeneration } from './story-background';
+import { handleChatDangerClassification } from './chat-danger-classification';
 
 /**
  * Job handler function type
@@ -31,6 +33,8 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   EMBEDDING_GENERATE: handleEmbeddingGenerate,
   EMBEDDING_REFIT: handleEmbeddingRefit,
   EMBEDDING_REINDEX_ALL: handleEmbeddingReindexAll,
+  STORY_BACKGROUND_GENERATION: handleStoryBackgroundGeneration,
+  CHAT_DANGER_CLASSIFICATION: handleChatDangerClassification,
 };
 
 /**
@@ -53,3 +57,5 @@ export { handleLLMLogCleanup };
 export { handleEmbeddingGenerate };
 export { handleEmbeddingRefit };
 export { handleEmbeddingReindexAll };
+export { handleStoryBackgroundGeneration };
+export { handleChatDangerClassification };

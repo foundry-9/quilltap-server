@@ -8,6 +8,7 @@
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
  * GET /api/v1/chats/[id]?action=get-state - Get chat state (merged with project)
+ * GET /api/v1/chats/[id]?action=get-background - Get story background URL
  * PUT /api/v1/chats/[id]?action=set-state - Set chat state
  * DELETE /api/v1/chats/[id]?action=reset-state - Reset chat state to empty
  * POST /api/v1/chats/[id]?action=regenerate-title - Regenerate chat title
@@ -26,6 +27,8 @@
  * POST /api/v1/chats/[id]?action=add-tool-result - Add tool result message
  * POST /api/v1/chats/[id]?action=queue-memories - Queue memory extraction jobs
  * POST /api/v1/chats/[id]?action=rng - Execute random number generator (dice, coin, bottle)
+ * POST /api/v1/chats/[id]?action=toggle-agent-mode - Toggle agent mode for this chat
+ * POST /api/v1/chats/[id]?action=reclassify-danger - Reset and re-queue danger classification
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)
  */
 

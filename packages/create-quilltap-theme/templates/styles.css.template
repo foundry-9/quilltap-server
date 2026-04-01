@@ -64,11 +64,11 @@
 }
 
 /* Chat bubble styling */
-[data-theme="{{THEME_ID}}"] .qt-chat-bubble-user {
+[data-theme="{{THEME_ID}}"] .qt-chat-message-user {
   border-radius: 1rem 1rem 0.25rem 1rem;
 }
 
-[data-theme="{{THEME_ID}}"] .qt-chat-bubble-assistant {
+[data-theme="{{THEME_ID}}"] .qt-chat-message-assistant {
   border-radius: 1rem 1rem 1rem 0.25rem;
 }
 

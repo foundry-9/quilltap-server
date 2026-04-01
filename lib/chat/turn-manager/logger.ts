@@ -11,6 +11,13 @@ const isClient = typeof window !== 'undefined';
  * Logger interface that works in both client and server environments
  */
 export const turnManagerLogger = {
+  debug: (message: string, data?: Record<string, unknown>) => {
+    if (isClient) {
+      // Debug logs are silent on the client side (too noisy for console)
+    } else {
+      // Debug logging disabled
+    }
+  },
   warn: (message: string, data?: Record<string, unknown>) => {
     if (isClient) {
       console.warn(`[Turn Manager] ${message}`, data);

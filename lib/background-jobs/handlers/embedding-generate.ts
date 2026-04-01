@@ -19,14 +19,6 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
   const payload = job.payload as unknown as EmbeddingGeneratePayload;
   const repos = getRepositories();
 
-  logger.debug('[EmbeddingGenerate] Processing job', {
-    context: 'handleEmbeddingGenerate',
-    jobId: job.id,
-    entityType: payload.entityType,
-    entityId: payload.entityId,
-    profileId: payload.profileId,
-  });
-
   // Currently only MEMORY is supported
   if (payload.entityType !== 'MEMORY') {
     throw new Error(`Unsupported entity type: ${payload.entityType}`);

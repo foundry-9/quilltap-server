@@ -69,12 +69,9 @@ export interface CheapLLMSelection {
 }
 
 /**
- * Mapping of providers to their cheapest models
- * Re-exported from fallback-data.ts for backward compatibility
- *
- * @deprecated Use getCheapModelConfig() from provider-registry instead
+ * Mapping of providers to their cheapest models (legacy fallback)
+ * @see getCheapModelConfig() from provider-registry for plugin-based resolution
  */
-const CHEAPEST_MODEL_MAP = LEGACY_CHEAPEST_MODEL_MAP
 
 /**
  * Models that are known to work well for cheap LLM tasks
@@ -104,7 +101,7 @@ export function getCheapestModel(provider: Provider): string {
   }
 
   // Fall back to hardcoded map
-  return CHEAPEST_MODEL_MAP[provider]
+  return LEGACY_CHEAPEST_MODEL_MAP[provider]
 }
 
 /**
@@ -219,12 +216,6 @@ export function getCheapLLMProvider(
   // For Ollama, always use the current profile's model - all local models are "free"
   // and we can't assume what models the user has installed
   if (currentProfile.provider === 'OLLAMA') {
-    logger.debug('[CheapLLM] Using current Ollama profile model (all local models are free)', {
-      context: 'getCheapLLMProvider',
-      provider: currentProfile.provider,
-      modelName: currentProfile.modelName,
-    })
-
     return {
       provider: currentProfile.provider,
       modelName: currentProfile.modelName,

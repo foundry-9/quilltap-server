@@ -1,6 +1,6 @@
 # Themes
 
-> **[Open this page in Quilltap](/settings?tab=appearance)**
+> **[Open this page in Quilltap](/foundry/calliope)**
 
 Themes control the overall look and feel of Quilltap, including colors, fonts, and visual styling. You can switch between the built-in default theme and custom themes installed as plugins, and customize your preferred color mode (light, dark, or system).
 
