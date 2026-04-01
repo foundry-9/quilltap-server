@@ -9,6 +9,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getHandler } from './handlers';
+import { getErrorMessage } from '@/lib/errors';
 
 /** Processor state */
 let processorRunning = false;
@@ -35,7 +36,7 @@ export function startProcessor(intervalMs: number = DEFAULT_POLL_INTERVAL): void
   processorInterval = setInterval(() => {
     processNextJob().catch((error) => {
       logger.error('[JobQueue] Error in processor interval', {
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       });
     });
   }, intervalMs);
@@ -45,7 +46,7 @@ export function startProcessor(intervalMs: number = DEFAULT_POLL_INTERVAL): void
   // Also reset any stuck jobs on startup
   resetStuckJobs().catch((error) => {
     logger.error('[JobQueue] Error resetting stuck jobs on startup', {
-      error: error instanceof Error ? error.message : String(error),
+      error: getErrorMessage(error),
     });
   });
 }
@@ -117,7 +118,7 @@ export async function processNextJob(): Promise<boolean> {
 
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       await repos.backgroundJobs.markFailed(job.id, errorMessage);
 
       logger.warn('[JobQueue] Job failed', {

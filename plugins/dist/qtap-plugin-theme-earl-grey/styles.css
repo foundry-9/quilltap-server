@@ -395,6 +395,183 @@
   --qt-rp-button-internal-fg: hsl(var(--oncolor-100));
   --qt-rp-button-ooc-bg: hsl(120 100% 20%);
   --qt-rp-button-ooc-fg: hsl(120 100% 75%);
+
+  /* ==========================================================================
+     TAB VARIABLES
+     ========================================================================== */
+  --qt-tab-radius: 0.5rem 0.5rem 0 0;
+  --qt-tab-padding-x: 1rem;
+  --qt-tab-padding-y: 0.625rem;
+  --qt-tab-gap: 0;
+  --qt-tab-group-gap: 0;
+
+  /* Inactive tab - muted blue-gray */
+  --qt-tab-bg: transparent;
+  --qt-tab-fg: hsl(var(--text-400));
+  --qt-tab-border: hsl(var(--border-300) / 0.2);
+  --qt-tab-hover-bg: hsl(var(--bg-200) / 0.5);
+  --qt-tab-hover-fg: hsl(var(--text-200));
+
+  /* Active tab - crisp highlight */
+  --qt-tab-active-bg: var(--surface-raised);
+  --qt-tab-active-fg: hsl(var(--accent-brand));
+  --qt-tab-active-border: hsl(var(--border-300) / 0.25);
+
+  /* Tab divider */
+  --qt-tab-divider-color: hsl(var(--border-300) / 0.2);
+
+  /* ==========================================================================
+     DEVCONSOLE VARIABLES
+     ========================================================================== */
+  --qt-devconsole-bg: hsl(var(--bg-100));
+  --qt-devconsole-header-bg: hsl(var(--bg-200));
+  --qt-devconsole-tabs-bg: hsl(var(--bg-300));
+  --qt-devconsole-content-bg: hsl(var(--bg-100));
+  --qt-devconsole-footer-bg: hsl(var(--bg-200));
+  --qt-devconsole-border: hsl(var(--border-300) / 0.25);
+
+  /* Log entry level colors */
+  --qt-log-error-bg: hsl(0 45% 12%);
+  --qt-log-error-fg: hsl(var(--danger-000));
+  --qt-log-error-border: hsl(var(--danger-100));
+  --qt-log-error-details-bg: hsl(0 40% 10%);
+  --qt-log-error-stack-fg: hsl(var(--danger-000) / 0.85);
+
+  --qt-log-warn-bg: hsl(45 45% 12%);
+  --qt-log-warn-fg: hsl(var(--warning-000));
+  --qt-log-warn-border: hsl(var(--warning-100));
+
+  --qt-log-info-bg: hsl(211 45% 12%);
+  --qt-log-info-fg: hsl(var(--accent-secondary-000));
+  --qt-log-info-border: hsl(var(--accent-secondary-100));
+
+  --qt-log-debug-bg: hsl(var(--bg-200));
+  --qt-log-debug-fg: hsl(var(--text-400));
+  --qt-log-debug-border: hsl(var(--border-300) / 0.4);
+
+  --qt-log-default-bg: hsl(var(--bg-200) / 0.5);
+  --qt-log-default-fg: hsl(var(--text-300));
+  --qt-log-default-border: hsl(var(--border-300) / 0.3);
+
+  /* Debug panel - entry cards */
+  --qt-debug-outgoing-bg: hsl(211 40% 14%);
+  --qt-debug-outgoing-border: hsl(var(--accent-secondary-100));
+  --qt-debug-outgoing-fg: hsl(var(--accent-secondary-000));
+  --qt-debug-incoming-bg: hsl(142 40% 12%);
+  --qt-debug-incoming-border: hsl(var(--success-100));
+  --qt-debug-incoming-fg: hsl(var(--success-000));
+
+  /* Debug panel - Cyan theme (LLM Request Details) */
+  --qt-debug-cyan-bg: hsl(190 40% 12%);
+  --qt-debug-cyan-fg: hsl(190 85% 70%);
+  --qt-debug-cyan-hover: hsl(190 40% 16%);
+  --qt-debug-cyan-border: hsl(190 45% 28%);
+  --qt-debug-cyan-content-bg: hsl(190 40% 9%);
+  --qt-debug-cyan-meta: hsl(190 85% 65%);
+
+  /* Debug panel - Violet theme (Context Management) */
+  --qt-debug-violet-bg: hsl(var(--accent-pro-900) / 0.8);
+  --qt-debug-violet-fg: hsl(var(--accent-pro-000));
+  --qt-debug-violet-hover: hsl(251 40% 18%);
+  --qt-debug-violet-border: hsl(251 45% 32%);
+  --qt-debug-violet-content-bg: hsl(251 40% 10%);
+  --qt-debug-violet-meta: hsl(var(--accent-pro-000) / 0.9);
+
+  /* Debug panel - Emerald theme (Stitched Response) */
+  --qt-debug-emerald-bg: hsl(152 40% 12%);
+  --qt-debug-emerald-fg: hsl(152 75% 65%);
+  --qt-debug-emerald-hover: hsl(152 40% 16%);
+  --qt-debug-emerald-border: hsl(152 45% 28%);
+  --qt-debug-emerald-content-bg: hsl(152 40% 9%);
+  --qt-debug-emerald-meta: hsl(152 75% 60%);
+
+  /* Debug panel - Amber theme (Final Response) */
+  --qt-debug-amber-bg: hsl(var(--warning-900) / 0.6);
+  --qt-debug-amber-fg: hsl(var(--warning-000));
+  --qt-debug-amber-hover: hsl(45 45% 16%);
+  --qt-debug-amber-border: hsl(45 50% 28%);
+  --qt-debug-amber-content-bg: hsl(45 40% 9%);
+  --qt-debug-amber-meta: hsl(var(--warning-000) / 0.9);
+
+  /* Debug panel - Purple theme (Tool Executions) */
+  --qt-debug-purple-bg: hsl(280 40% 14%);
+  --qt-debug-purple-fg: hsl(280 80% 75%);
+  --qt-debug-purple-hover: hsl(280 40% 18%);
+  --qt-debug-purple-border: hsl(280 45% 32%);
+  --qt-debug-purple-content-bg: hsl(280 40% 10%);
+  --qt-debug-purple-meta: hsl(280 80% 70%);
+
+  /* Debug panel - Indigo theme (Memory Extraction) */
+  --qt-debug-indigo-bg: hsl(239 40% 16%);
+  --qt-debug-indigo-fg: hsl(239 75% 78%);
+  --qt-debug-indigo-hover: hsl(239 40% 22%);
+  --qt-debug-indigo-border: hsl(239 50% 45%);
+  --qt-debug-indigo-content-bg: hsl(239 40% 11%);
+  --qt-debug-indigo-meta: hsl(239 75% 68%);
+
+  /* ==========================================================================
+     EXTENDED SIDEBAR VARIABLES
+     ========================================================================== */
+  --qt-sidebar-item-padding-x: 0.75rem;
+  --qt-sidebar-item-padding-y: 0.5rem;
+  --qt-sidebar-item-radius: 0.5rem;
+
+  /* ==========================================================================
+     AVATAR VARIABLES
+     ========================================================================== */
+  --qt-avatar-radius: 9999px;
+  --qt-avatar-size: 2.5rem;
+  --qt-avatar-size-sm: 2rem;
+  --qt-avatar-size-lg: 3rem;
+  --qt-avatar-size-xl: 4rem;
+  --qt-avatar-bg: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--pictogram-200)));
+  --qt-avatar-fg: hsl(var(--text-000));
+  --qt-avatar-border: hsl(var(--border-300) / 0.3);
+
+  /* ==========================================================================
+     CONTENT AREA VARIABLES
+     ========================================================================== */
+  --qt-content-bg: var(--surface-raised);
+  --qt-content-fg: hsl(var(--text-000));
+  --qt-content-scroll-bg: var(--surface-base);
+
+  /* ==========================================================================
+     TYPOGRAPHY VARIABLES
+     ========================================================================== */
+  --qt-text-secondary-fg: hsl(var(--text-300));
+
+  /* ==========================================================================
+     EMPTY STATE VARIABLES
+     ========================================================================== */
+  --qt-empty-state-icon-color: hsl(var(--text-400));
+  --qt-empty-state-title-color: hsl(var(--text-100));
+  --qt-empty-state-description-color: hsl(var(--text-300));
+
+  /* ==========================================================================
+     MOBILE TOOL PALETTE VARIABLES
+     ========================================================================== */
+  --qt-mobile-composer-input-min-height: 2.5rem;
+  --qt-mobile-tool-palette-max-height: 50vh;
+  --qt-mobile-tool-palette-bg: hsl(var(--bg-200));
+  --qt-mobile-tool-palette-border: hsl(var(--border-300) / 0.3);
+
+  /* ==========================================================================
+     LINK DECORATION VARIABLES
+     ========================================================================== */
+  --qt-link-decoration: none;
+  --qt-link-decoration-hover: underline;
+
+  /* ==========================================================================
+     EXTENDED PANEL/DIALOG/POPOVER VARIABLES
+     ========================================================================== */
+  --qt-panel-radius: 0.5rem;
+  --qt-dialog-radius: 0.75rem;
+  --qt-popover-radius: 0.5rem;
+
+  /* ==========================================================================
+     EXTENDED PARTICIPANT CARD VARIABLES
+     ========================================================================== */
+  --qt-participant-card-radius: 0.5rem;
 }
 
 /* Body/App Shell */
@@ -553,4 +730,316 @@
 
 [data-theme="earl-grey"] .message-enter {
   animation: earl-grey-fade-in 0.2s ease-out forwards;
+}
+
+/* ============================================================================
+   ENTITY CARDS - Character, Persona, Chat list cards
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-entity-card {
+  background-image: radial-gradient(circle at top left, hsl(var(--bg-200) / 0.95), hsl(var(--bg-100) / 0.8));
+  border-color: hsl(var(--border-300) / 0.2);
+  box-shadow: var(--chat-shadow);
+}
+
+[data-theme="earl-grey"] .qt-entity-card:hover {
+  border-color: hsl(var(--accent-brand) / 0.45);
+  box-shadow: 0 28px 70px -45px hsl(var(--always-black) / 0.85);
+}
+
+[data-theme="earl-grey"] .qt-entity-card-actions button {
+  border-color: hsl(var(--border-300) / 0.25);
+  background: hsl(var(--bg-200) / 0.8);
+  color: hsl(var(--text-200));
+}
+
+[data-theme="earl-grey"] .qt-entity-card-actions button:hover {
+  background: hsl(var(--bg-200));
+  border-color: hsl(var(--accent-brand) / 0.4);
+}
+
+/* ============================================================================
+   TAB STYLING - Enhanced tab appearance
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-tab {
+  border-bottom-color: transparent;
+}
+
+[data-theme="earl-grey"] .qt-tab:hover:not(.qt-tab-active) {
+  background: hsl(var(--bg-200) / 0.6);
+  border-color: hsl(var(--border-300) / 0.15);
+}
+
+[data-theme="earl-grey"] .qt-tab-active {
+  background: var(--surface-raised);
+  border-color: hsl(var(--border-300) / 0.2);
+  box-shadow: 0 -2px 12px -4px hsl(var(--always-black) / 0.3);
+}
+
+/* ============================================================================
+   NAVBAR ENHANCEMENTS
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-navbar {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+[data-theme="earl-grey"] .qt-navbar-link,
+[data-theme="earl-grey"] .qt-navbar-link-active {
+  color: hsl(var(--text-000));
+}
+
+[data-theme="earl-grey"] .qt-navbar-link:hover {
+  color: hsl(var(--text-000));
+  background: hsl(var(--bg-000) / 0.6);
+}
+
+[data-theme="earl-grey"] .qt-navbar-dropdown {
+  background: var(--surface-raised);
+  border-color: hsl(var(--border-300) / 0.25);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="earl-grey"] .qt-navbar-dropdown-item:hover {
+  background: hsl(var(--bg-200) / 0.65);
+}
+
+/* ============================================================================
+   FOOTER ENHANCEMENTS
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-footer {
+  background: hsl(var(--bg-200));
+  border-color: hsl(var(--border-300) / 0.2);
+}
+
+[data-theme="earl-grey"] .qt-footer-link {
+  color: hsl(var(--text-300));
+}
+
+[data-theme="earl-grey"] .qt-footer-link:hover {
+  color: hsl(var(--text-000));
+}
+
+/* ============================================================================
+   BRAND TEXT
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-font-brand {
+  color: hsl(var(--text-000));
+}
+
+/* ============================================================================
+   PARTICIPANT CARDS - Chat sidebar
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-participant-card {
+  background: hsl(var(--bg-200) / 0.8);
+  border-color: hsl(var(--border-300) / 0.2);
+}
+
+[data-theme="earl-grey"] .qt-participant-card:hover {
+  background: hsl(var(--bg-200));
+  border-color: hsl(var(--accent-brand) / 0.3);
+}
+
+[data-theme="earl-grey"] .qt-participant-card-active {
+  border-color: hsl(var(--accent-brand) / 0.6);
+  box-shadow: 0 0 15px hsl(var(--accent-brand) / 0.2);
+}
+
+/* ============================================================================
+   CHAT SIDEBAR
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-chat-sidebar {
+  background: hsl(var(--bg-100));
+  border-color: hsl(var(--border-300) / 0.2);
+}
+
+[data-theme="earl-grey"] .qt-chat-sidebar-header {
+  border-color: hsl(var(--border-300) / 0.15);
+}
+
+/* ============================================================================
+   EMPTY STATES
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-empty-state-icon {
+  color: hsl(var(--text-400));
+}
+
+[data-theme="earl-grey"] .qt-empty-state-title {
+  color: hsl(var(--text-100));
+}
+
+[data-theme="earl-grey"] .qt-empty-state-description {
+  color: hsl(var(--text-300));
+}
+
+/* ============================================================================
+   AVATARS - Gradient styling
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-avatar {
+  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.3), hsl(var(--pictogram-200)));
+  border-color: hsl(var(--border-300) / 0.3);
+}
+
+/* ============================================================================
+   INPUTS & TEXTAREAS - Enhanced focus states
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-input:focus,
+[data-theme="earl-grey"] .qt-textarea:focus,
+[data-theme="earl-grey"] .qt-select:focus {
+  border-color: hsl(var(--accent-secondary-100));
+  box-shadow: 0 0 0 3px hsl(var(--accent-secondary-000) / 0.25);
+}
+
+/* ============================================================================
+   POPOVERS & DROPDOWNS
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-popover,
+[data-theme="earl-grey"] .qt-dropdown {
+  background: var(--surface-raised);
+  border-color: hsl(var(--border-300) / 0.25);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="earl-grey"] .qt-dropdown-item:hover {
+  background: hsl(var(--bg-200) / 0.65);
+}
+
+/* ============================================================================
+   BADGES - Enhanced entity type badges
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-badge-character {
+  background: hsl(211 60% 18%);
+  color: hsl(211 90% 75%);
+}
+
+[data-theme="earl-grey"] .qt-badge-persona {
+  background: hsl(280 50% 18%);
+  color: hsl(280 85% 75%);
+}
+
+[data-theme="earl-grey"] .qt-badge-chat {
+  background: hsl(142 50% 15%);
+  color: hsl(142 80% 65%);
+}
+
+[data-theme="earl-grey"] .qt-badge-tag {
+  background: hsl(30 55% 18%);
+  color: hsl(30 90% 70%);
+}
+
+[data-theme="earl-grey"] .qt-badge-memory {
+  background: hsl(330 50% 18%);
+  color: hsl(330 80% 75%);
+}
+
+/* Dashboard entity badges */
+[data-theme="earl-grey"] .qt-badge-characters {
+  background: hsl(211 60% 18%);
+  color: hsl(211 90% 75%);
+}
+
+[data-theme="earl-grey"] .qt-badge-chats {
+  background: hsl(142 50% 15%);
+  color: hsl(142 80% 65%);
+}
+
+[data-theme="earl-grey"] .qt-badge-personas {
+  background: hsl(280 50% 18%);
+  color: hsl(280 85% 75%);
+}
+
+/* Status badges */
+[data-theme="earl-grey"] .qt-badge-enabled {
+  background: hsl(142 50% 15%);
+  color: hsl(142 80% 65%);
+}
+
+[data-theme="earl-grey"] .qt-badge-disabled {
+  background: hsl(var(--bg-200));
+  color: hsl(var(--text-400));
+}
+
+/* ============================================================================
+   CODE BLOCKS
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-code-block,
+[data-theme="earl-grey"] .qt-code-inline {
+  background: hsl(var(--pictogram-200));
+  border-color: hsl(var(--border-200) / 0.2);
+}
+
+[data-theme="earl-grey"] .qt-code-header {
+  background: hsl(var(--pictogram-300));
+  border-color: hsl(var(--border-200) / 0.15);
+}
+
+/* ============================================================================
+   MOBILE TOOL PALETTE
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-mobile-tool-palette {
+  background: hsl(var(--bg-200));
+  border-color: hsl(var(--border-300) / 0.3);
+}
+
+[data-theme="earl-grey"] .qt-mobile-tool-palette-button {
+  background: hsl(var(--bg-100));
+  border-color: hsl(var(--border-300) / 0.25);
+}
+
+[data-theme="earl-grey"] .qt-mobile-tool-palette-button:hover {
+  background: var(--surface-raised);
+  border-color: hsl(var(--accent-brand) / 0.4);
+}
+
+/* ============================================================================
+   CHAT TOOLBAR BUTTONS
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-chat-toolbar-button {
+  background: hsl(var(--bg-200));
+  border-color: hsl(var(--border-300) / 0.25);
+}
+
+[data-theme="earl-grey"] .qt-chat-toolbar-button:hover {
+  background: hsl(var(--bg-000) / 0.85);
+  border-color: hsl(var(--accent-brand) / 0.4);
+}
+
+/* ============================================================================
+   TOOLTIP
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-tooltip {
+  background: var(--surface-raised);
+  border-color: hsl(var(--border-300) / 0.3);
+  box-shadow: var(--card-shadow);
+}
+
+/* ============================================================================
+   MOBILE PARTICIPANT BAR
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-mobile-participant-bar {
+  background: hsl(var(--bg-200) / 0.95);
+  border-color: hsl(var(--border-300) / 0.2);
+}
+
+[data-theme="earl-grey"] .qt-mobile-participant-avatar-active {
+  border-color: hsl(var(--accent-brand));
+  box-shadow: 0 0 10px hsl(var(--accent-brand) / 0.4);
+}
+
+/* ============================================================================
+   MOBILE PARTICIPANT DROPDOWN
+   ============================================================================ */
+[data-theme="earl-grey"] .qt-mobile-participant-dropdown {
+  background: var(--surface-raised);
+  border-color: hsl(var(--border-300) / 0.25);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="earl-grey"] .qt-mobile-participant-dropdown-action-btn-primary {
+  background: linear-gradient(135deg, hsl(var(--accent-brand) / 0.95), hsl(var(--accent-main-000)));
+  color: hsl(var(--oncolor-100));
+}
+
+[data-theme="earl-grey"] .qt-mobile-participant-dropdown-action-btn-danger {
+  background: hsl(var(--danger-100));
+  color: hsl(var(--oncolor-100));
 }

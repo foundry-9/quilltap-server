@@ -238,7 +238,7 @@ describe('MemoryCard', () => {
 
       // Component should use semantic qt-* classes that work in both light and dark mode
       expect(container.innerHTML).toMatch(/qt-card/);
-      expect(container.innerHTML).toMatch(/text-foreground/);
+      expect(container.innerHTML).toMatch(/qt-text-label/);
       expect(container.innerHTML).toMatch(/border-border/);
     });
   });

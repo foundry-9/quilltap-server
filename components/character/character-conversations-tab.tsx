@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { TagDisplay } from '@/components/tags/tag-display'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 
 interface Message {
   id: string
@@ -48,6 +49,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
   const { shouldHideByIds } = useQuickHide()
+  const { formatPersonaName } = usePersonaDisplayName()
   const visibleChats = useMemo(
     () => chats.filter(chat => !shouldHideByIds((chat.tags || []).map(ct => ct.tag.id))),
     [chats, shouldHideByIds]
@@ -253,7 +255,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
               d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
             />
           </svg>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 qt-text-small">
             {searchQuery
               ? `No conversations found matching "${searchQuery}"`
               : `No conversations with ${characterName} yet`
@@ -280,23 +282,23 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
                 className="flex-1 min-w-0 block"
               >
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-medium text-foreground truncate">
+                  <h3 className="qt-text-primary truncate">
                     {chat.title || `Chat with ${characterName}`}
                   </h3>
                   <span className="inline-block bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full flex-shrink-0">
                     {chat._count?.messages ?? chat.messages.length}
                   </span>
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="qt-text-small">
                   {chat.persona && (
                     <>
-                      as {chat.persona.title ? `${chat.persona.name} (${chat.persona.title})` : chat.persona.name}
+                      with {formatPersonaName(chat.persona)}
                       {' \u2022 '}
                     </>
                   )}
                   {formatDate(chat.updatedAt)}
                 </p>
-                <p className="text-sm text-muted-foreground line-clamp-1 mt-2">
+                <p className="qt-text-small line-clamp-1 mt-2">
                   {getPreviewText(chat.messages)}
                 </p>
                 {chat.tags && chat.tags.length > 0 && (
@@ -340,7 +342,7 @@ export function CharacterConversationsTab({ characterId, characterName }: Charac
               </div>
             )}
             {!hasMore && visibleChats.length > 0 && (
-              <p className="text-center text-sm text-muted-foreground">
+              <p className="text-center qt-text-small">
                 No more conversations
               </p>
             )}

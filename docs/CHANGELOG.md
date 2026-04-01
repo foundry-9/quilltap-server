@@ -2,7 +2,426 @@
 
 ## Recent Changes
 
-### 2.3-dev
+### 2.4
+
+- doc: Major documentation refresh
+  - Updated `DEVELOPMENT.md` with accurate project structure, MongoDB/S3 requirements, and current development workflow
+  - Updated `docs/API.md` from v1.0 to v2.4 with all new endpoints (embedding profiles, image profiles, memories, templates, NPCs, background jobs, themes, etc.)
+  - Added all 8 LLM providers to API docs (OPENAI, ANTHROPIC, GOOGLE, GROK, GAB_AI, OLLAMA, OPENROUTER, OPENAI_COMPATIBLE)
+  - Updated About page with mobile-responsive feature and Google Gemini/Imagen 4 image generation
+  - Removed outdated references to JSON storage and added current MongoDB collections
+
+- feat: Provider models database caching system
+  - Added `modelType` field to ProviderModel schema to distinguish chat, image, and embedding models
+  - Updated MongoDB indexes to include modelType in unique constraint
+  - Chat models cached when fetched via /api/models endpoint
+  - Image models cached when fetched via /api/image-profiles/models endpoint
+  - Embedding models cached when fetched via /api/embedding-profiles/models endpoint
+  - Capabilities Report now uses cached models from database (falls back to API calls)
+  - Capabilities Report now reads plugin versions from package.json instead of manifest.json
+- feat: Add provider models to backup/restore system
+  - Provider models are now collected during backup creation from globalRepos.providerModels
+  - Added debug logging for provider model collection, counts, and archiving
+  - Provider models included in backup manifest counts for validation and progress tracking
+  - Provider models exported to data/provider-models.json in backup archives
+  - Restore system now imports provider models with proper error handling and warnings
+  - RestoreSummary now tracks count of restored provider models
+- fix: Improved SSE error handling for cleaner error messages
+  - Server now properly formats Zod validation errors (e.g., from provider SDKs)
+  - Client now shows full error details in toast messages instead of truncated JSON
+  - Suppressed noisy parse error logs for server-side error messages
+  - Added error handling for continue mode SSE streaming
+- fix: Avatar style change not applied until page refresh
+  - Settings page was updating API but not syncing to AvatarDisplayProvider context
+  - Added syncStyle function to AvatarDisplayProvider for local-only state updates
+  - useChatSettings now syncs the style to the global context after API update
+- fix: Suppress noisy "Failed to parse SSE data: {}" console errors
+  - Added more robust filtering for empty object SSE artifacts in chat streaming
+  - Now handles various whitespace variations and empty-ish JSON patterns
+- fix: Physical Descriptions tab API loop bug
+  - Clicking Physical Descriptions tab on character view or Settings → NPCs repeatedly hit the API in infinite loop
+  - Fixed by using refs in useListManager hook to prevent fetchFn recreation causing infinite loop
+- fix: Default Connection Profile dropdown empty on character edit page
+  - Profiles weren't mapping to correct structure, now explicitly maps to {id, name}
+- fix: Character editing error (setState during render)
+  - Moved debug logging from render to useEffect to avoid state updates during render
+- fix: Avatar display style (circular/rectangular) now applies via CSS variable
+  - AvatarDisplayProvider now sets --qt-avatar-radius CSS variable based on user preference
+  - Chat avatars now use this variable for consistent styling
+- fix: NPC view and edit pages now show "Back to NPCs" breadcrumb and navigate to Settings → NPCs
+- fix: Settings page now supports URL tab parameter (e.g., /settings?tab=npcs)
+- feat: Added "Convert to NPC" / "Convert to Character" toggle button on character view page
+
+- feat: Ad-hoc NPC character system
+  - Added `npc` boolean flag to Character schema for distinguishing NPCs from regular characters
+  - New CreateNPCDialog for quick NPC creation directly from chat character selection
+  - NPCs can be created with: name, description, physical description, scenario, system prompt, and avatar
+  - AddCharacterDialog now shows regular characters first, then NPCs, with "Create New NPC" option at bottom
+  - New Settings → NPCs tab for managing NPC characters (view, edit, delete, convert to regular character)
+  - Characters page now filters to show only non-NPCs
+  - API supports `?npc=true|false` query parameter for filtering characters
+
+- fix: OpenRouter plugin streaming error with tool calls (v1.0.5)
+  - Updated @openrouter/sdk to 0.3.1
+  - Added post-build patch for SDK bug where `tool_calls[].id` doesn't accept null values
+  - Some models return null for tool call IDs in streaming chunks, causing "Failed to parse SSE data" errors
+
+- fix: Avatar display style (circular/rectangular) now consistent across all avatars in chat
+  - Created AvatarDisplayProvider context to share avatar style setting globally
+  - Prevents race condition where different Avatar components could have different styles
+- fix: Chat gradual renaming now properly replaces generic titles like "Chat with [Name]"
+- fix: Restore sendMessage functionality after refactor (chat send button/enter key not working)
+- fix: Remove duplicate avatar display during waiting-for-response state
+- fix: Textarea auto-resize now properly shrinks when deleting content
+- fix: Roleplay bracket segments now render correctly when containing markdown (e.g., `[narration with *emphasis*]`)
+- fix: Remove duplicate attach file button from chat composer toolbar
+- refactor: Major component file breakup for maintainability
+  - Split 18 large components (500+ lines) into modular structures under 500 lines each
+  - Extracted types, hooks, and sub-components into dedicated files
+  - Original files converted to re-exports for backward compatibility
+  - Components refactored:
+    - `connection-profiles-tab.tsx` → `connection-profiles/` (types, hooks, components)
+    - `characters/[id]/view/page.tsx` → extracted hooks, components, types, constants
+    - `tasks-queue-card.tsx` → `tasks-queue/` module
+    - `characters/[id]/edit/page.tsx` → extracted hooks, components, types
+    - `SystemPromptsEditor.tsx` → `system-prompts-editor/` module
+    - `restore-dialog.tsx` → `restore/` module
+    - `appearance-tab.tsx` → `appearance/` module
+    - `DebugPanel.tsx` → extracted DebugEntryRow, DebugFilters, hooks, types, utilities
+    - `prompts-tab.tsx` → `prompts/` module
+    - `roleplay-templates-tab.tsx` → `roleplay-templates/` module
+    - `chat-settings-tab.tsx` → `chat-settings/` module
+    - `EmbeddedPhotoGallery.tsx` → `embedded-gallery/` module
+    - `embedding-profiles-tab.tsx` → `embedding-profiles/` module
+    - `ImageDetailModal.tsx` → `image-detail/` module
+    - `theme-provider.tsx` → `theme/` module
+    - `chats/[id]/page.tsx` → extracted hooks, components, types
+  - Architecture improvements: single responsibility, reusable hooks, clear type contracts
+  - All TypeScript compilation passes with zero errors
+- refactor: Major TSX component refactoring to reduce code duplication
+  - Created 3 new reusable hooks with comprehensive tests:
+    - `useAsyncOperation` - manages loading/error state for async operations
+    - `useListManager` - consolidates CRUD list state management
+    - `useFormState` - handles form data with automatic type conversion
+  - Created 6 new UI components with comprehensive tests:
+    - `DeleteConfirmPopover` - inline delete confirmation popover
+    - `EmptyState` - consistent empty state display with variants
+    - `SectionHeader` - header with title, count, and action button
+    - `LoadingState` - loading spinner/message display with variants
+    - `ErrorAlert` - error display with optional retry button
+    - `FormActions` - standardized Save/Cancel button pair
+  - Refactored 9 TSX components to use new hooks and utilities:
+    - `memory-list.tsx`, `memory-editor.tsx`
+    - `physical-description-list.tsx`, `physical-description-editor.tsx`
+    - `connection-profiles-tab.tsx`, `embedding-profiles-tab.tsx`
+    - `image-profiles-tab.tsx`, `api-keys-tab.tsx`, `prompts-tab.tsx`
+  - Key improvements across all refactored components:
+    - `fetchJson` helper used for consistent API error handling
+    - `getErrorMessage` utility for error message extraction
+    - `clientLogger` debug logging added throughout
+    - Standardized UI patterns for loading, error, empty, and form states
+  - All existing functionality preserved, 1330+ tests passing
+- fix: Add user-created prompt and roleplay templates to cloud backup/restore
+  - PromptTemplates and RoleplayTemplates (user-created, not built-in) are now included in backups
+  - Backwards compatible with older backups that don't have templates
+  - Templates are remapped correctly in new-account mode restore
+  - Delete-all-data feature now also deletes user-created templates
+  - Added templates count to backup manifest and restore summary
+- test: Expand coverage for template flows and pseudo-tools
+  - Added unit tests for pseudo-tool config/prompt/parser modules, TemplateDisplay UI, context manager template replacement, turn skip cycle resets, and delete-all preview template counts
+  - Added integration tests for `/api/characters/[id]/prompts`, `/api/prompt-templates`, and `/api/roleplay-templates` to exercise multi-system prompt workflows end-to-end
+- style: Major Earl Grey theme enhancement with full qt-* utility class support (v1.0.10)
+  - Added 140+ new CSS variable overrides for comprehensive theming
+  - Tabs: Full tab styling with transparent inactive states and raised active states
+  - DevConsole: Complete log level styling with blue-gray undertones (error, warning, info, debug)
+  - Debug panel: All six color themes (cyan, violet, emerald, amber, purple, indigo) for debug sections
+  - Badges: Enhanced entity type badges (character, persona, chat, tag, memory) with Earl Grey palette
+  - Navbar: Backdrop blur with gradient background and dropdown styling
+  - Sidebar: Extended padding/radius variables with brand-colored active states
+  - Dialog/Modal/Popover: Explicit radius and consistent surface styling
+  - Participant cards: Enhanced hover and active states with accent glow
+  - Chat sidebar: Cohesive background and border styling
+  - Empty states: Theme-aware icon, title, and description colors
+  - Footer: Consistent background and link hover states
+  - Avatars: Gradient background with accent colors
+  - Inputs: Enhanced focus states with accent ring
+  - Code blocks: Consistent pictogram-based styling
+  - Mobile tool palette: Full mobile button and palette styling
+  - Mobile participant bar/dropdown: Complete mobile chat styling
+  - Chat toolbar: Enhanced button hover states
+  - Link decoration: Clean underline-on-hover style
+  - Typography: Secondary text foreground variable
+  - Content area: Theme-aware background and scroll area colors
+- fix: Add template variable processing to LLM context building
+  - Fixed `{{char}}` and `{{user}}` template variables not being replaced in system prompts sent to LLMs
+  - Roleplay templates, character system prompts, personality, scenario, and example dialogues now have templates processed
+  - Template context built with character name and persona name (or "User" fallback)
+- style: Major Rains theme enhancement with full qt-* utility class support (v1.0.12)
+  - Added 100+ new CSS variable overrides for comprehensive theming
+  - Navbar: Warm backdrop blur styling with earthy gradients
+  - Badges: Full support for all badge variants (character, persona, chat, tag, memory, status, source types)
+  - DevConsole: Earthy log colors with warm undertones for error, warning, info, debug levels
+  - Sidebar: Warm gradient styling with brand-colored active states
+  - Dialog/Modal: Warm gradient backgrounds with deep shadows
+  - Popover/Dropdown: Consistent surface styling
+  - Participant cards: Brand-accented active states with glow effects
+  - Empty states: Theme-aware icon and text colors
+  - Footer: Earthy background with consistent borders
+  - Avatars: Gradient backgrounds with brand warmth
+  - Code blocks: Consistent monospace styling
+  - Inputs: Focus states with blue accent ring
+  - Alerts: Status-colored backgrounds with warm undertones
+  - Mobile tool palette: Full mobile styling support
+  - Skeleton loading: Warm shimmer animation
+  - Auth pages: Gradient backgrounds and styled cards
+- feat: Enhanced template display in character view mode
+  - Added `TemplateDisplay` component combining template replacement with hard-coded name detection
+  - `{{char}}` templates are replaced with character name (blue highlight, solid border)
+  - `{{user}}` templates are replaced with persona name or "USER" (green highlight, solid border)
+  - Hard-coded character/persona names are highlighted in amber/orange with dashed borders as warnings
+  - Keeps the auto-replace buttons to convert hard-coded names to template variables
+- refactor: Consolidate tab button styling into qt-tab utility classes
+  - Added CSS variables to `_variables.css`: `--qt-tab-*` for padding, colors, radius, transitions
+  - Added `qt-tab`, `qt-tab-active`, `qt-tab-group`, `qt-tab-divider`, `qt-tab-icon` classes to `_interactive.css`
+  - Updated `entity-tabs.tsx` to use new semantic classes instead of ~45 inline Tailwind classes
+  - Tabs are now fully theme-customizable via CSS variables
+- style: Rains theme tab styling (v1.0.11)
+  - Added unified tab strip appearance with consistent borders
+  - Inactive tabs blend together with transparent backgrounds
+  - Active tab stands out with raised surface and subtle shadow
+- refactor: Consolidate text styling and add new label utility classes
+  - Added `qt-text-label` (text-sm font-medium), `qt-text-label-xs` (text-xs font-medium), `qt-text-section` (text-lg font-medium) to `_content.css`
+  - Fixed redundant/conflicting class combinations (e.g., `text-xs qt-text-xs`, `text-sm font-medium qt-text-xs`)
+  - Consolidated ~60 instances of `text-sm font-medium` and `text-xs font-medium` patterns across 18 files
+  - Affected files: personas pages, settings tabs, memory components, tag-dropdown, physical-description-card, ToolMessage, and more
+- refactor: Remove redundant flex utilities from qt-button elements
+  - qt-button base class already includes `inline-flex items-center justify-center gap-2`
+  - Removed 14 redundant `flex items-center gap-2` / `inline-flex items-center gap-2` instances
+  - Affected 8 files: about page, backup/restore dialogs, tasks queue, chat dialogs, capabilities report
+- refactor: Consolidate primary text styling into qt-text-primary utility class
+  - Added `.qt-text-primary` class to `_content.css` with `font-medium` and themeable foreground color
+  - Replaced ~100 instances of `font-medium text-foreground` pattern across 39 component files
+  - Class uses CSS variable `--qt-text-primary-fg` for theme customization
+  - Affects labels, headings, emphasis text, and item titles throughout the application
+- feat: Added theme-overridable secondary text utility classes
+  - Added `--qt-text-secondary-fg` CSS variable to `_variables.css`
+  - Updated `qt-text-lead`, `qt-text-small`, `qt-text-muted` to use the variable
+  - Added new `qt-text-xs` class for extra-small secondary text
+  - Themes can now override secondary text color independently
+- feat: Updated OpenAI plugin with new GPT-Image models (v1.0.5)
+  - Added `gpt-image-1.5` (newest, recommended)
+  - Added `gpt-image-1-mini` (cost-effective option)
+  - Note: DALL-E 2 and DALL-E 3 are deprecated (support ends 05/12/2026)
+- refactor: Consolidated click-outside detection into `useClickOutside` hook
+  - Created `hooks/useClickOutside.ts` with options for `enabled`, `excludeRefs`, and `onEscape`
+  - Updated 14 components across search, tags, dashboard, chat, and settings
+  - Removed ~300 lines of repetitive event listener boilerplate
+  - Consistent behavior for dropdowns, modals, and palettes
+- refactor: Consolidated error message extraction into centralized `getErrorMessage` utility
+  - Added `getErrorMessage(error, fallback?)` function to `lib/errors.ts`
+  - Replaced ~50 instances of `error instanceof Error ? error.message : String(error)` pattern
+  - Updated 35+ files across lib/, app/api/, components/, and app/(authenticated)/
+  - Supports custom fallback messages: `getErrorMessage(err, 'Failed to load data')`
+  - Handles string errors, Error instances, and unknown types consistently
+- refactor: Consolidated avatar rendering into reusable components
+  - Created `components/ui/Avatar.tsx` - unified avatar component with size/style variants
+  - Created `components/ui/AvatarStack.tsx` - stacked avatar display for multi-character contexts
+  - Removed ~200 lines of duplicated avatar rendering code across 6 files
+  - Components automatically respect user's circular/rectangular avatar style preference
+  - Supports image source extraction from defaultImage, avatarUrl, or direct URL
+- fix: SillyTavern chat export now produces proper JSONL format
+  - Export now outputs true JSONL (one JSON object per line) matching SillyTavern's format
+  - First line contains header with user_name, character_name, create_date, chat_metadata
+  - Subsequent lines contain individual message objects
+  - Previously exported a single JSON object which was incompatible with SillyTavern
+  - Added `exportSTChatAsJSONL` function in `lib/sillytavern/chat.ts`
+  - Import parser also improved to auto-detect format (JSON vs JSONL) for backwards compatibility
+- feat: Per-user post-login migration for character system prompts
+  - Added signIn callback in NextAuth configuration to run migrations at login
+  - New `lib/auth/post-login-migrations.ts` module handles per-user data migrations
+  - Migrates characters with legacy `systemPrompt` field to new `systemPrompts` array
+  - Runs for each user at login to catch data that startup migrations may have missed
+  - Migration is idempotent and safe to run multiple times
+- fix: SystemPromptsEditor buttons causing form submission redirect
+  - Added `type="button"` to all buttons in SystemPromptsEditor component
+  - Buttons inside parent form no longer trigger form submission unexpectedly
+  - Updated all buttons and inputs to use qt-* theme utility classes for consistent theming
+  - Updated "Edit Prompts" button and "Default" badge on character view page to use qt-* classes
+- chore: Remove deprecated systemPrompt field from Character schema
+  - Characters now exclusively use `systemPrompts` array for system prompt storage
+  - Removed single `systemPrompt` field from Character type and schema
+  - Added migration `migrate-character-system-prompts-v1` to move existing systemPrompt values to the systemPrompts array
+  - Updated SillyTavern import/export to use systemPrompts array
+  - Updated template processor to accept systemPrompt as separate parameter
+  - Updated context-manager to not use legacy fallback
+  - Updated character rename route to process systemPrompts array
+  - Added "System Prompts" tab to character view page showing all prompts
+  - Details tab now shows compact indicator of active system prompt with link to full list
+- feat: Multiple system prompts per character
+  - Characters can now have multiple named system prompts with one marked as default
+  - New "System Prompts" tab on character edit page with SystemPromptsEditor component
+  - New "Prompts" tab in Settings for managing reusable prompt templates
+  - Sample prompts loaded from `prompts/` directory (read-only, can be imported)
+  - Prompt selection available at chat creation and in chat settings modal
+  - Context manager uses selected prompt with fallback chain: override > selected > default > legacy
+  - New API endpoints: `/api/prompt-templates`, `/api/characters/[id]/prompts`, `/api/sample-prompts`
+- fix: Balance chat composer vertical padding on desktop
+  - Reduced top padding and increased bottom padding for visual balance
+- chore: Remove obsolete Prisma/PostgreSQL artifacts
+  - Deleted `__mocks__/@auth/prisma-adapter.ts` (orphaned mock, nothing imported it)
+  - Deleted `docker/scripts/` directory containing PostgreSQL backup/restore scripts
+  - Project uses MongoDB with native driver, not Prisma or PostgreSQL
+- fix: ToolPalette toggle button on desktop now properly closes when clicked again
+  - Added `toggleButtonRef` prop to ToolPalette component (matching MobileToolPalette)
+  - Click outside handler now ignores clicks on the toggle button
+  - Previously clicking the button while palette was open would close then immediately reopen it
+- fix: Toolbar button icons now properly centered
+  - Added explicit `padding: 0` to `qt-chat-toolbar-button` CSS
+  - The `qt-button` class was adding padding that offset the icon from center
+- feat: Persist turn state in multi-character chats
+  - Added `lastTurnParticipantId` field to chat metadata
+  - Turn state is saved when it changes (whose turn it is)
+  - When returning to a chat, restores the turn state from when you left
+  - New PATCH `/api/chats/:id/turn` endpoint to persist turn state
+- fix: Participant sidebar now highlights correct character during streaming
+  - Was using `turnState.lastSpeakerId` (calculated from persisted messages)
+  - Now uses `respondingParticipantId` (set before streaming starts)
+  - Main chat window already showed correct character, sidebar was out of sync
+- feat: Stop streaming response button
+  - Desktop: Stop button appears to the left of the tool palette toggle when streaming
+  - Mobile: Stop button appears in the sticky streaming header to the right of the avatar
+  - Uses AbortController to cancel the fetch request cleanly
+  - In multi-character chats, stopping a response resets to user's turn
+  - Displays "Response stopped" toast when content was partially received
+- feat: Pseudo-tool support for models without native function calling
+  - Auto-detects when model doesn't support native tools (via OpenRouter pricing cache)
+  - Injects text-based tool instructions into system prompt using `[TOOL:name]...[/TOOL]` syntax
+  - Supported pseudo-tools: memory search, image generation, web search
+  - Parses markers from LLM responses and executes through existing tool pipeline
+  - Strips markers from displayed/stored response for clean output
+  - Continues conversation with tool results for natural flow
+  - New files: pseudo-tool-support.ts, pseudo-tool-prompt.ts, pseudo-tool-parser.ts
+- feat: OpenRouter custom model ID support
+  - Added "Use Custom Model ID" toggle in OpenRouter Options section
+  - When enabled, shows text input for arbitrary model IDs not in the fetched list
+  - Datalist autocomplete still shows fetched models as suggestions
+  - Existing "Test Message" button can be used to verify custom models work
+  - Custom model preference is saved with connection profile
+- fix: Skip button now properly advances turn in multi-character chats
+  - When user skips their turn, the cycle now resets so characters can speak again
+  - Added `resetCycleForUserSkip()` function to turn-manager
+  - Previously "Skip" would show "All characters have spoken" if cycle was complete
+- fix: OpenRouter fallback model limit validation
+  - Added max 2 fallback models limit in UI (OpenRouter supports 3 total: 1 primary + 2 fallbacks)
+  - Disabled checkboxes when limit reached with amber warning message
+  - Updated labels to show limit and count (e.g., "Selected fallbacks (2/2)")
+- fix: Duplicate name prefixes in multi-character chat messages
+  - Messages were showing repeated `[Name] [Name] [Name]` patterns
+  - formatMessagesForProvider now checks if content already has the name prefix before adding it
+  - Added debug logging when duplicate prefix is detected and skipped
+- fix: Reduced SSE parse error noise in console
+  - Better filtering of benign empty SSE data chunks
+  - Skip `[DONE]` markers sent by OpenAI-compatible APIs (OpenRouter)
+- feat: Unified desktop tool palette matching mobile design
+  - Simplified footer to single-line textarea with tool palette button (left) and send (right)
+  - New full-width tool palette bar above composer when opened
+  - Left section: Attach, Settings, Export, Gallery, Generate Image, Add Character
+  - Center section: Roleplay annotation buttons (no "Insert" label)
+  - Right section: Re-extract, Delete memories, Preview toggle
+  - Removed separate attach file, preview, and continue buttons from footer
+  - Continue/skip functionality moved to participant sidebar for user personas
+  - User participants now show "Queue" and "Skip" buttons side by side
+  - Skip button triggers continue mode (passes turn to next character)
+- feat: Mobile-responsive multi-character participant UI
+  - Participant avatar buttons integrated into mobile message header row
+  - Left side: sticky speaker avatar and name (per message)
+  - Right side: compact participant control buttons (32px avatars) + continue button
+  - Tap avatar to open dropdown with talkativeness slider, nudge/queue/dequeue, remove
+  - Continue button moved from footer to header on mobile (right edge)
+  - Green glow indicates active turn, badge shows queue position
+  - Desktop ParticipantSidebar hidden on mobile
+  - Viewport-aware dropdown positioning (uses right alignment)
+- fix: Persona display name disambiguation not working
+  - usePersonaDisplayName hook was expecting `data.personas` but API returns array directly
+  - Personas with duplicate names now correctly show titles in dropdowns
+- feat: Mobile-responsive chat footer with compact tool palette
+  - Reduced input textarea to single line initial height on mobile
+  - Simplified footer buttons: tool palette toggle (left), send + continue (right)
+  - New MobileToolPalette component: full-width drawer above footer
+  - Palette sections: Quick Actions (attach file, preview toggle), Chat Tools, Memory, RP Insert
+  - Attach file, preview toggle, and desktop tool palette hidden on mobile
+  - Roleplay annotation buttons moved into palette on mobile
+  - Textarea max height reserves space for palette even when closed
+  - Palette closes on toggle button click or tap outside
+- feat: Mobile-responsive chat conversation UI
+  - On mobile (< 768px), messages display with avatar/name header above message card
+  - Character messages: avatar on left, user messages: avatar on right
+  - Message cards stretch to 80% of screen width on mobile
+  - Replaced hover-based copy/view-source actions with persistent icon bar at bottom of messages
+  - Icon bar includes: copy, view source, edit (user only), delete, regenerate (assistant only), swipe controls
+  - Timestamp shown in action bar on mobile instead of separate line
+  - Desktop layout preserved with side-by-side avatar layout and hover actions
+- feat: Mobile-responsive dashboard for phone portrait mode
+  - Favorites section: header shows "Favorites" on mobile, compact 2-column horizontal cards
+  - Dashboard cards: Characters/Chats shown as compact 2-column grid, Personas hidden on mobile
+  - Recent Chats: compact horizontal cards with single avatar, no tags
+  - Section headers (Favorites, Recent Chats) right-aligned on mobile
+  - Full-page scrolling on mobile (nav/footer fixed, no separate scroll areas)
+- feat: Smart persona display name disambiguation
+  - New usePersonaDisplayName hook tracks duplicate persona names
+  - Persona titles only shown when needed to distinguish between personas with same name
+  - Applied across all persona dropdowns and chat displays
+- fix: Improved useAvatarDisplay hook error handling
+  - Network errors (offline, CORS) now logged at debug level instead of error
+  - JSON parse errors handled separately with graceful fallback
+  - Update function properly reverts to previous style on error instead of toggling
+  - Reduced console noise for expected error scenarios
+- fix: User menu mobile responsiveness
+  - Sign Out button now uses NavUserMenuItem with icon, shrinks to icon-only on mobile
+  - Dropdown auto-sizes to content on mobile instead of fixed 14rem width
+  - Header (name/email) truncates with ellipsis on mobile to prevent width overflow
+  - Submenus appear below trigger on mobile (< 768px) instead of flying off to the left
+  - Submenus align to right edge on mobile to stay within viewport
+  - Reduced padding on menu items for mobile
+- feat: Navbar restructuring - consolidate controls into User menu
+  - Moved Theme selector, Quick-hide, and DevConsole buttons into User menu dropdown as submenu items
+  - Theme and Quick-hide show flyout menus to the left with their respective options
+  - Added content width toggle button (expand/compress arrows) between search and user menu
+  - Content width toggle only visible on viewports >= 1000px, switches between 800px and full-width layouts
+  - Content width preference persisted in localStorage
+  - New components: NavUserMenu, NavUserMenuItem, NavUserMenuTheme, NavUserMenuQuickHide, NavContentWidthToggle
+  - New provider: ContentWidthProvider for managing width state and CSS variable injection
+  - Simplified nav.tsx by extracting functionality into dedicated components
+- fix: Anthropic provider not detecting tool_use blocks during streaming
+  - Tool calls (image generation, memory search, web search) were silently failing with Anthropic models
+  - Root cause: streaming code only captured text deltas, ignoring content_block_start events for tool_use
+  - Now properly tracks all content blocks including tool_use with input JSON parsing
+  - Added debug logging for tool use block start, input deltas, and parsed results
+- fix: Roleplay syntax styling now respects active template
+  - Standard template: `*actions*`, `"dialogue"`, `((OOC))`
+  - Quilltap RP template: `[actions]`, `{thoughts}`, `// OOC`
+  - Removed incorrect single-parentheses OOC styling
+- fix: ToolPalette viewport overflow - palette now detects viewport boundaries and adjusts position to stay on screen
+- fix: Pass cache usage stats from Anthropic to client in SSE response
+  - Added `cacheUsage` field to final streaming response with `cacheCreationInputTokens` and `cacheReadInputTokens`
+  - Now you can verify prompt caching is working by checking for these fields in the response
+- fix: Chat debug panel contrast issues in dark mode
+  - Added dark mode variants for role badges (system/user/assistant)
+  - Added dark mode variants for all colored debug badges
+  - Added dark mode variants for nested content containers
+  - Fixed inline style backgrounds that didn't respect dark mode
+  - Memory extraction logs now readable in all themes
+- feat: Enhanced Anthropic prompt caching with comprehensive support
+  - Added tool caching (cache_control on last tool in the tools array)
+  - Implemented `system_and_long_context` strategy for conversation history caching
+  - Added TTL configuration (5 minutes default, 1 hour optional) in UI
+  - Updated default cache strategy to `system_and_long_context` for better cost savings
+  - Cache reads cost 10% of base input tokens, potentially saving up to 90% on repeated context
+- feat: Add About page with project info, links, and tech stack; simplify footer to version and copyright
+- fix: Robust error extraction in useAvatarDisplay hook - handles unusual error types and logs error type for debugging
+- feat: Responsive navbar with dynamic collapse - menu items collapse into logo dropdown when space is limited
+
+### 2.3
 
 - feat: Add job-level controls to Tasks Queue - pause/resume, delete, and view buttons for each job with detail dialog
 - feat: Tasks Queue auto-start/stop - processor starts automatically when jobs are enqueued and stops when queue empties

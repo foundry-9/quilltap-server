@@ -10,6 +10,7 @@
 
 import { logger } from '@/lib/logger';
 import { providerRegistry, getConfigRequirements, getProvider } from './provider-registry';
+import { getErrorMessage } from '@/lib/errors';
 
 // ============================================================================
 // TYPES
@@ -204,7 +205,7 @@ export async function testProviderConnection(
       error: `Failed to validate connection to ${providerPlugin.metadata.displayName}`,
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = getErrorMessage(error);
     logger.error('Provider connection test error', {
       provider,
       error: errorMessage,

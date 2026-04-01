@@ -14,6 +14,7 @@ let mockCharactersRepo: { findById: jest.Mock }
 let mockPersonasRepo: { findById: jest.Mock }
 
 describe('buildChatContext', () => {
+  const now = new Date().toISOString()
   const mockCharacter = {
     id: 'char-1',
     name: 'Alice',
@@ -22,14 +23,21 @@ describe('buildChatContext', () => {
     scenario: 'You are helping a user with their tasks',
     firstMessage: 'Hello! How can I help you today?',
     exampleDialogues: 'User: Hi\nAlice: Hello there!',
-    systemPrompt: 'You are Alice, a helpful AI assistant.',
+    systemPrompts: [{
+      id: 'prompt-1',
+      name: 'Default',
+      content: 'You are Alice, a helpful AI assistant.',
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    }],
     personaLinks: [],
     tags: [],
     userId: 'user-1',
     isFavorite: false,
     defaultImageId: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
   }
 
   const mockPersona = {
@@ -183,7 +191,7 @@ describe('buildChatContext', () => {
       mockCharactersRepo.findById.mockResolvedValue({
         ...mockCharacter,
         exampleDialogues: null,
-        systemPrompt: null,
+        systemPrompts: [],
         personaLinks: [],
       })
 

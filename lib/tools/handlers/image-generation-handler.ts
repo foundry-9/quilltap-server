@@ -21,6 +21,7 @@ import { craftImagePrompt } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
+import { getErrorMessage } from '@/lib/errors';
 
 /**
  * Execution context for image generation tool
@@ -140,7 +141,7 @@ async function saveGeneratedImage(
     throw new ImageGenerationError(
       'STORAGE_ERROR',
       'Failed to save generated image',
-      error instanceof Error ? error.message : String(error)
+      getErrorMessage(error)
     );
   }
 }
@@ -226,7 +227,7 @@ async function loadAndValidateProfile(
     throw new ImageGenerationError(
       'DATABASE_ERROR',
       'Failed to load image profile',
-      error instanceof Error ? error.message : String(error)
+      getErrorMessage(error)
     );
   }
 }
@@ -256,7 +257,7 @@ async function generateImagesWithProvider(
     throw new ImageGenerationError(
       'ENCRYPTION_ERROR',
       'Failed to decrypt API key',
-      error instanceof Error ? error.message : String(error)
+      getErrorMessage(error)
     );
   }
 
@@ -284,7 +285,7 @@ async function generateImagesWithProvider(
   try {
     generationResponse = await provider.generateImage(mergedParams, decryptedKey);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('Image generation failed:', { errorMessage }, error as Error);
     throw new ImageGenerationError(
       'PROVIDER_ERROR',
@@ -313,7 +314,7 @@ async function generateImagesWithProvider(
     throw new ImageGenerationError(
       'STORAGE_ERROR',
       'Failed to save generated images',
-      error instanceof Error ? error.message : String(error)
+      getErrorMessage(error)
     );
   }
 }
@@ -485,7 +486,7 @@ export async function executeImageGenerationTool(
       expandedPrompt = expandResult.expandedPrompt;
     } catch (error) {
       // If expansion fails, just use the original prompt
-      logger.warn('Prompt expansion failed, using original prompt:', { errorMessage: error instanceof Error ? error.message : String(error) });
+      logger.warn('Prompt expansion failed, using original prompt:', { errorMessage: getErrorMessage(error) });
       expandedPrompt = toolInput.prompt;
     }
 
@@ -540,7 +541,7 @@ export async function executeImageGenerationTool(
     }
 
     // Unexpected error
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     errorResponse.message = `An unexpected error occurred: ${errorMessage}`;
     return errorResponse;
   }
@@ -591,7 +592,7 @@ export async function validateImageProfile(
   } catch (error) {
     return {
       valid: false,
-      error: error instanceof Error ? error.message : 'Database error',
+      error: getErrorMessage(error, 'Database error'),
     };
   }
 }

@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.10.0";
+var VERSION = "6.14.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -5811,10 +5811,12 @@ var Responses = class extends APIResource {
    *
    * @example
    * ```ts
-   * const compactedResponse = await client.responses.compact();
+   * const compactedResponse = await client.responses.compact({
+   *   model: 'gpt-5.2',
+   * });
    * ```
    */
-  compact(body = {}, options) {
+  compact(body, options) {
     return this._client.post("/responses/compact", { body, ...options });
   }
 };
@@ -7558,11 +7560,17 @@ var OpenAIProvider = class {
 var OpenAIImageProvider = class {
   constructor() {
     this.provider = "OPENAI";
-    this.supportedModels = ["gpt-image-1", "dall-e-3", "dall-e-2"];
+    this.supportedModels = ["gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini", "dall-e-3", "dall-e-2"];
+  }
+  /**
+   * Check if a model is a GPT-Image model (1.5, 1, or 1-mini)
+   */
+  isGptImageModel(model) {
+    return model.startsWith("gpt-image-");
   }
   /**
    * Validate and normalize size for OpenAI API
-   * gpt-image-1: 1024x1024, 1024x1536, 1536x1024, auto
+   * gpt-image models: 1024x1024, 1024x1536, 1536x1024, auto
    * dall-e-3: 1024x1024, 1024x1792, 1792x1024
    * dall-e-2: 256x256, 512x512, 1024x1024
    */
@@ -7570,13 +7578,12 @@ var OpenAIImageProvider = class {
     if (!size) {
       return "1024x1024";
     }
-    const isGptImage = model === "gpt-image-1";
-    if (isGptImage) {
+    if (this.isGptImageModel(model)) {
       const gptImageSizes = ["1024x1024", "1024x1536", "1536x1024", "auto"];
       if (gptImageSizes.includes(size)) {
         return size;
       }
-      logger.debug("Normalizing size for gpt-image-1", { context: "OpenAIImageProvider.validateAndNormalizeSize", originalSize: size, normalizedSize: "1024x1024" });
+      logger.debug("Normalizing size for gpt-image model", { context: "OpenAIImageProvider.validateAndNormalizeSize", model, originalSize: size, normalizedSize: "1024x1024" });
       return "1024x1024";
     }
     if (model === "dall-e-3") {
@@ -7602,7 +7609,7 @@ var OpenAIImageProvider = class {
       n: params.n ?? 1
     });
     const client = new OpenAI({ apiKey });
-    const isGptImage = params.model === "gpt-image-1";
+    const isGptImage = this.isGptImageModel(params.model ?? "");
     const requestParams = {
       model: params.model,
       prompt: params.prompt,

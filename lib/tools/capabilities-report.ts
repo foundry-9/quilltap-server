@@ -6,6 +6,8 @@
  */
 
 import crypto from 'crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { logger } from '@/lib/logger';
 import { getAllPlugins } from '@/lib/plugins/registry';
 import {
@@ -15,12 +17,14 @@ import {
   getConfigRequirements,
 } from '@/lib/plugins/provider-registry';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
+import { getRepositories } from '@/lib/repositories/factory';
 import { s3FileService } from '@/lib/s3/file-service';
 import { decryptApiKey } from '@/lib/encryption';
 import { getFileMetadata, listFiles } from '@/lib/s3/operations';
 import { validateS3Config } from '@/lib/s3/config';
 import type { LLMProviderPlugin } from '@/lib/plugins/interfaces/provider-plugin';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
+import { getErrorMessage } from '@/lib/errors';
 
 // Read version from package.json
 import packageJson from '@/package.json';
@@ -137,9 +141,25 @@ function getVersion(): string {
 }
 
 /**
+ * Read the version from a plugin's package.json file
+ * Falls back to manifest version if package.json is not available
+ */
+async function getPluginVersion(plugin: LoadedPlugin): Promise<string> {
+  try {
+    const packageJsonPath = path.join(plugin.pluginPath, 'package.json');
+    const content = await fs.readFile(packageJsonPath, 'utf-8');
+    const pkgJson = JSON.parse(content);
+    return pkgJson.version || plugin.manifest.version;
+  } catch {
+    // Fall back to manifest version if package.json can't be read
+    return plugin.manifest.version;
+  }
+}
+
+/**
  * Collect plugin information
  */
-function collectPluginInfo(): { enabled: PluginInfo[]; disabled: PluginInfo[] } {
+async function collectPluginInfo(): Promise<{ enabled: PluginInfo[]; disabled: PluginInfo[] }> {
   moduleLogger.info('Collecting plugin information');
 
   const allPlugins = getAllPlugins();
@@ -147,10 +167,13 @@ function collectPluginInfo(): { enabled: PluginInfo[]; disabled: PluginInfo[] } 
   const disabled: PluginInfo[] = [];
 
   for (const plugin of allPlugins) {
+    // Read version from package.json (more up-to-date than manifest)
+    const version = await getPluginVersion(plugin);
+
     const info: PluginInfo = {
       name: plugin.manifest.name,
       title: plugin.manifest.title,
-      version: plugin.manifest.version,
+      version,
       capabilities: plugin.capabilities,
       enabled: plugin.enabled,
     };
@@ -256,11 +279,13 @@ async function collectProviderInfo(userId: string): Promise<ProviderInfo[]> {
 
 /**
  * Fetch available models from each configured provider
+ * Uses cached models from the database when available, falls back to API calls
  */
 async function collectModels(userId: string): Promise<ModelInfo[]> {
   moduleLogger.info('Collecting models from providers', { userId });
 
   const repos = getUserRepositories(userId);
+  const globalRepos = getRepositories();
   const apiKeys = await repos.connections.getAllApiKeys();
   const connectionProfiles = await repos.connections.findAll();
   const modelsByProvider: ModelInfo[] = [];
@@ -289,7 +314,23 @@ async function collectModels(userId: string): Promise<ModelInfo[]> {
         continue;
       }
 
-      // Decrypt the API key
+      // First try to get cached models from the database
+      const cachedModels = await globalRepos.providerModels.findByProvider(providerName, 'chat');
+
+      if (cachedModels.length > 0) {
+        moduleLogger.info('Using cached models from database', {
+          providerName,
+          modelCount: cachedModels.length,
+        });
+        const models = cachedModels.map(m => m.modelId).sort((a, b) => a.localeCompare(b)).slice(0, 50);
+        modelsByProvider.push({
+          provider: providerName,
+          models,
+        });
+        continue;
+      }
+
+      // No cached models - fetch from provider
       const decryptedKey = decryptApiKey(
         apiKeyRecord.ciphertext,
         apiKeyRecord.iv,
@@ -301,7 +342,7 @@ async function collectModels(userId: string): Promise<ModelInfo[]> {
 
       // Fetch models
       if (provider.getAvailableModels) {
-        moduleLogger.info('Fetching models from provider', { providerName });
+        moduleLogger.info('Fetching models from provider (no cache available)', { providerName });
         const models = await provider.getAvailableModels(decryptedKey, baseUrl);
         // Sort models alphabetically and limit to 50
         const sortedModels = [...models].sort((a, b) => a.localeCompare(b)).slice(0, 50);
@@ -325,7 +366,7 @@ async function collectModels(userId: string): Promise<ModelInfo[]> {
         }
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       moduleLogger.warn('Failed to fetch models from provider', {
         providerName,
         error: errorMessage,
@@ -394,20 +435,36 @@ async function collectEmbeddingInfo(userId: string): Promise<EmbeddingInfo> {
 
 /**
  * Get image providers and their models
+ * Uses cached models from the database when available
  */
-function collectImageProviders(): ImageProviderInfo[] {
+async function collectImageProviders(): Promise<ImageProviderInfo[]> {
   moduleLogger.info('Collecting image providers');
 
+  const globalRepos = getRepositories();
   const imageProviders = getProvidersByCapability('imageGeneration');
   const result: ImageProviderInfo[] = [];
 
   for (const provider of imageProviders) {
-    const models: string[] = [];
+    let models: string[] = [];
 
-    // Get static image generation models if available
-    if (provider.getImageGenerationModels) {
-      const imageModels = provider.getImageGenerationModels();
-      models.push(...imageModels.map(m => m.id || m.name));
+    // First try to get cached image models from the database
+    const cachedModels = await globalRepos.providerModels.findByProvider(
+      provider.metadata.providerName,
+      'image'
+    );
+
+    if (cachedModels.length > 0) {
+      moduleLogger.debug('Using cached image models from database', {
+        provider: provider.metadata.providerName,
+        modelCount: cachedModels.length,
+      });
+      models = cachedModels.map(m => m.modelId);
+    } else {
+      // Fall back to static image generation models
+      if (provider.getImageGenerationModels) {
+        const imageModels = provider.getImageGenerationModels();
+        models = imageModels.map(m => m.id || m.name);
+      }
     }
 
     // Sort models alphabetically
@@ -433,20 +490,36 @@ function collectImageProviders(): ImageProviderInfo[] {
 
 /**
  * Get embedding providers and their models
+ * Uses cached models from the database when available
  */
-function collectEmbeddingProviders(): EmbeddingProviderInfo[] {
+async function collectEmbeddingProviders(): Promise<EmbeddingProviderInfo[]> {
   moduleLogger.info('Collecting embedding providers');
 
+  const globalRepos = getRepositories();
   const embeddingProviders = getProvidersByCapability('embeddings');
   const result: EmbeddingProviderInfo[] = [];
 
   for (const provider of embeddingProviders) {
-    const models: string[] = [];
+    let models: string[] = [];
 
-    // Get static embedding models if available
-    if (provider.getEmbeddingModels) {
-      const embeddingModels = provider.getEmbeddingModels();
-      models.push(...embeddingModels.map(m => m.id || m.name));
+    // First try to get cached embedding models from the database
+    const cachedModels = await globalRepos.providerModels.findByProvider(
+      provider.metadata.providerName,
+      'embedding'
+    );
+
+    if (cachedModels.length > 0) {
+      moduleLogger.debug('Using cached embedding models from database', {
+        provider: provider.metadata.providerName,
+        modelCount: cachedModels.length,
+      });
+      models = cachedModels.map(m => m.modelId);
+    } else {
+      // Fall back to static embedding models
+      if (provider.getEmbeddingModels) {
+        const embeddingModels = provider.getEmbeddingModels();
+        models = embeddingModels.map(m => m.id || m.name);
+      }
     }
 
     // Sort models alphabetically
@@ -579,14 +652,14 @@ export async function generateReportData(userId: string): Promise<CapabilitiesRe
     version: getVersion(),
     nodeEnv: process.env.NODE_ENV || 'development',
     generatedAt: new Date().toISOString(),
-    plugins: collectPluginInfo(),
+    plugins: await collectPluginInfo(),
     apiKeyTypes: collectApiKeyTypes(),
     providers: await collectProviderInfo(userId),
     modelsByProvider: await collectModels(userId),
     cheapLLM: await collectCheapLLMInfo(userId),
     embeddingProvider: await collectEmbeddingInfo(userId),
-    imageProviders: collectImageProviders(),
-    embeddingProviders: collectEmbeddingProviders(),
+    imageProviders: await collectImageProviders(),
+    embeddingProviders: await collectEmbeddingProviders(),
     databaseStats: await collectDatabaseStats(userId),
     storageStats: await collectStorageStats(userId),
   };

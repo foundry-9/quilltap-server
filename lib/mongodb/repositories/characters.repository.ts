@@ -5,7 +5,7 @@
  * Each character is stored as a document in the 'characters' MongoDB collection.
  */
 
-import { Character, CharacterInput, CharacterSchema, PhysicalDescription } from '@/lib/schemas/types';
+import { Character, CharacterInput, CharacterSchema, PhysicalDescription, CharacterSystemPrompt } from '@/lib/schemas/types';
 import { MongoBaseRepository } from './base.repository';
 import { logger } from '@/lib/logger';
 
@@ -608,6 +608,242 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
       return descriptions;
     } catch (error) {
       logger.error('Error getting physical descriptions', {
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  // ============================================================================
+  // SYSTEM PROMPT OPERATIONS
+  // ============================================================================
+
+  /**
+   * Add a system prompt to a character
+   * @param characterId The character ID
+   * @param data The system prompt data (without id, createdAt, updatedAt)
+   * @returns Promise<CharacterSystemPrompt | null> The added prompt if successful
+   */
+  async addSystemPrompt(
+    characterId: string,
+    data: Omit<CharacterSystemPrompt, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<CharacterSystemPrompt | null> {
+    logger.debug('Adding system prompt to character', { characterId, promptName: data.name });
+    try {
+      const character = await this.findById(characterId);
+      if (!character) {
+        logger.warn('Character not found for prompt addition', { characterId });
+        return null;
+      }
+
+      const now = this.getCurrentTimestamp();
+      const prompt: CharacterSystemPrompt = {
+        ...data,
+        id: this.generateId(),
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      // If this is the first prompt or isDefault is true, ensure only this one is default
+      const prompts = character.systemPrompts || [];
+      if (data.isDefault || prompts.length === 0) {
+        // Unset default on all existing prompts
+        prompts.forEach(p => p.isDefault = false);
+        prompt.isDefault = true;
+      }
+
+      prompts.push(prompt);
+
+      await this.update(characterId, { systemPrompts: prompts });
+
+      logger.debug('System prompt added successfully', {
+        characterId,
+        promptId: prompt.id,
+      });
+      return prompt;
+    } catch (error) {
+      logger.error('Error adding system prompt', {
+        characterId,
+        promptName: data.name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update a system prompt
+   */
+  async updateSystemPrompt(
+    characterId: string,
+    promptId: string,
+    data: Partial<Omit<CharacterSystemPrompt, 'id' | 'createdAt' | 'updatedAt'>>
+  ): Promise<CharacterSystemPrompt | null> {
+    logger.debug('Updating system prompt', { characterId, promptId });
+    try {
+      const character = await this.findById(characterId);
+      if (!character) {
+        logger.warn('Character not found for prompt update', { characterId });
+        return null;
+      }
+
+      const prompts = character.systemPrompts || [];
+      const index = prompts.findIndex(p => p.id === promptId);
+      if (index === -1) {
+        logger.warn('System prompt not found', { characterId, promptId });
+        return null;
+      }
+
+      const now = this.getCurrentTimestamp();
+      const updated: CharacterSystemPrompt = {
+        ...prompts[index],
+        ...data,
+        id: prompts[index].id,
+        createdAt: prompts[index].createdAt,
+        updatedAt: now,
+      };
+
+      // If setting as default, unset others
+      if (data.isDefault) {
+        prompts.forEach(p => p.isDefault = false);
+        updated.isDefault = true;
+      }
+
+      prompts[index] = updated;
+      await this.update(characterId, { systemPrompts: prompts });
+
+      logger.debug('System prompt updated successfully', { characterId, promptId });
+      return updated;
+    } catch (error) {
+      logger.error('Error updating system prompt', {
+        characterId,
+        promptId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a system prompt from a character
+   */
+  async deleteSystemPrompt(characterId: string, promptId: string): Promise<boolean> {
+    logger.debug('Deleting system prompt from character', { characterId, promptId });
+    try {
+      const character = await this.findById(characterId);
+      if (!character) {
+        logger.warn('Character not found for prompt deletion', { characterId });
+        return false;
+      }
+
+      const prompts = character.systemPrompts || [];
+      const filtered = prompts.filter(p => p.id !== promptId);
+
+      if (filtered.length === prompts.length) {
+        logger.warn('System prompt not found for deletion', { characterId, promptId });
+        return false;
+      }
+
+      // If we deleted the default, set first remaining as default
+      if (filtered.length > 0 && !filtered.some(p => p.isDefault)) {
+        filtered[0].isDefault = true;
+      }
+
+      await this.update(characterId, { systemPrompts: filtered });
+
+      logger.debug('System prompt deleted successfully', { characterId, promptId });
+      return true;
+    } catch (error) {
+      logger.error('Error deleting system prompt', {
+        characterId,
+        promptId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Set a system prompt as default
+   */
+  async setDefaultSystemPrompt(characterId: string, promptId: string): Promise<Character | null> {
+    logger.debug('Setting default system prompt', { characterId, promptId });
+    try {
+      const character = await this.findById(characterId);
+      if (!character) {
+        logger.warn('Character not found for setting default prompt', { characterId });
+        return null;
+      }
+
+      const prompts = character.systemPrompts || [];
+      const targetIndex = prompts.findIndex(p => p.id === promptId);
+
+      if (targetIndex === -1) {
+        logger.warn('System prompt not found', { characterId, promptId });
+        return null;
+      }
+
+      // Unset all defaults, set target as default
+      const now = this.getCurrentTimestamp();
+      prompts.forEach((p, i) => {
+        p.isDefault = i === targetIndex;
+        p.updatedAt = now;
+      });
+
+      const result = await this.update(characterId, { systemPrompts: prompts });
+
+      logger.debug('Default system prompt set successfully', { characterId, promptId });
+      return result;
+    } catch (error) {
+      logger.error('Error setting default system prompt', {
+        characterId,
+        promptId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get a single system prompt by ID
+   */
+  async getSystemPrompt(characterId: string, promptId: string): Promise<CharacterSystemPrompt | null> {
+    logger.debug('Getting system prompt', { characterId, promptId });
+    try {
+      const character = await this.findById(characterId);
+      if (!character) {
+        logger.warn('Character not found for prompt retrieval', { characterId });
+        return null;
+      }
+
+      const prompts = character.systemPrompts || [];
+      return prompts.find(p => p.id === promptId) || null;
+    } catch (error) {
+      logger.error('Error getting system prompt', {
+        characterId,
+        promptId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all system prompts for a character
+   */
+  async getSystemPrompts(characterId: string): Promise<CharacterSystemPrompt[]> {
+    logger.debug('Getting all system prompts for character', { characterId });
+    try {
+      const character = await this.findById(characterId);
+      if (!character) {
+        logger.warn('Character not found for prompts retrieval', { characterId });
+        return [];
+      }
+
+      return character.systemPrompts || [];
+    } catch (error) {
+      logger.error('Error getting system prompts', {
         characterId,
         error: error instanceof Error ? error.message : String(error),
       });

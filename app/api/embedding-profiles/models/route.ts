@@ -10,6 +10,7 @@ import { getServerSession } from '@/lib/auth/session'
 import { logger } from '@/lib/logger'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
+import { getRepositories } from '@/lib/repositories/factory'
 import {
   getEmbeddingProviders,
   getEmbeddingModels,
@@ -94,6 +95,33 @@ export async function GET(req: NextRequest) {
         context: 'GET /api/embedding-profiles/models',
       })
 
+      // Cache the fetched embedding models in the database
+      try {
+        const repos = getRepositories()
+        await repos.providerModels.upsertModelsForProvider(
+          provider,
+          models.map(m => ({
+            modelId: m.id,
+            displayName: m.name,
+          })),
+          'embedding', // Model type for embedding models
+          undefined // No baseUrl for embedding models
+        )
+        logger.debug('Cached embedding models in database', {
+          provider,
+          count: models.length,
+          modelType: 'embedding',
+          context: 'GET /api/embedding-profiles/models',
+        })
+      } catch (cacheError) {
+        // Don't fail the request if caching fails, just log
+        logger.warn('Failed to cache embedding models in database', {
+          provider,
+          error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+          context: 'GET /api/embedding-profiles/models',
+        })
+      }
+
       return NextResponse.json({
         provider,
         models,
@@ -106,6 +134,33 @@ export async function GET(req: NextRequest) {
       providerCount: Object.keys(allModels).length,
       context: 'GET /api/embedding-profiles/models',
     })
+
+    // Cache all embedding models in the database
+    try {
+      const repos = getRepositories()
+      for (const [providerName, models] of Object.entries(allModels)) {
+        await repos.providerModels.upsertModelsForProvider(
+          providerName,
+          models.map(m => ({
+            modelId: m.id,
+            displayName: m.name,
+          })),
+          'embedding', // Model type for embedding models
+          undefined // No baseUrl for embedding models
+        )
+      }
+      logger.debug('Cached all embedding models in database', {
+        providerCount: Object.keys(allModels).length,
+        modelType: 'embedding',
+        context: 'GET /api/embedding-profiles/models',
+      })
+    } catch (cacheError) {
+      // Don't fail the request if caching fails, just log
+      logger.warn('Failed to cache all embedding models in database', {
+        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+        context: 'GET /api/embedding-profiles/models',
+      })
+    }
 
     return NextResponse.json(allModels)
   } catch (error) {

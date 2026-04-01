@@ -9,7 +9,9 @@ import EmbeddingProfilesTab from '@/components/settings/embedding-profiles-tab'
 import PluginsTab from '@/components/settings/plugins-tab'
 import TagsTab from '@/components/settings/tags-tab'
 import AppearanceTab from '@/components/settings/appearance-tab'
-import RoleplayTemplatesTab from '@/components/settings/roleplay-templates-tab'
+import RoleplayTemplatesTab from '@/components/settings/roleplay-templates'
+import PromptsTab from '@/components/settings/prompts-tab'
+import NPCsTab from '@/components/settings/npcs-tab'
 import { EntityTabs, Tab } from '@/components/tabs'
 
 const SETTINGS_TABS: Tab[] = [
@@ -86,11 +88,29 @@ const SETTINGS_TABS: Tab[] = [
     ),
   },
   {
+    id: 'npcs',
+    label: 'NPCs',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+      </svg>
+    ),
+  },
+  {
     id: 'templates',
     label: 'RP Templates',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'prompts',
+    label: 'Prompts',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
       </svg>
     ),
   },
@@ -115,8 +135,12 @@ export default function SettingsPage() {
         return <PluginsTab />
       case 'tags':
         return <TagsTab />
+      case 'npcs':
+        return <NPCsTab />
       case 'templates':
         return <RoleplayTemplatesTab />
+      case 'prompts':
+        return <PromptsTab />
       default:
         return null
     }
@@ -130,7 +154,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <EntityTabs tabs={SETTINGS_TABS} defaultTab="keys" persistToUrl={false}>
+      <EntityTabs tabs={SETTINGS_TABS} defaultTab="keys">
         {renderTabContent}
       </EntityTabs>
 

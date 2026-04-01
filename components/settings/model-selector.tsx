@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 // Model warning types (matching server-side types)
 export interface ModelWarning {
@@ -91,21 +92,7 @@ export function ModelSelector({
     : sortedModels
 
   // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false)
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isOpen])
+  useClickOutside(containerRef, () => setIsOpen(false), { enabled: isOpen })
 
   // Focus search input when dropdown opens
   useEffect(() => {
@@ -272,7 +259,7 @@ export function ModelSelector({
               ))}
             </ul>
           ) : (
-            <div className="px-3 py-2 text-sm text-muted-foreground">
+            <div className="px-3 py-2 qt-text-small">
               No models match &quot;{searchInput}&quot;
             </div>
           )}
@@ -280,7 +267,7 @@ export function ModelSelector({
       )}
 
       {showFetchedCount && models.length > 0 && (
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="qt-text-xs mt-1">
           Showing {models.length} fetched models from provider
         </p>
       )}

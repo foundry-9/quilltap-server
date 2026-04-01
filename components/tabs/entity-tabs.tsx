@@ -49,27 +49,20 @@ export function EntityTabs({ tabs, defaultTab, persistToUrl = true, children }: 
     <div>
       {/* Tab Navigation */}
       <div className="mb-6">
-        <nav className="flex flex-wrap gap-1" aria-label="Tabs">
+        <nav className="qt-tab-group" aria-label="Tabs">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => handleTabChange(tab.id)}
-              className={`
-                flex items-center gap-2 px-4 py-2.5 text-sm font-medium
-                rounded-t-lg border border-b-0 transition-colors min-w-fit
-                ${activeTab === tab.id
-                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-gray-200 dark:border-slate-700 relative after:absolute after:bottom-[-1px] after:left-0 after:right-0 after:h-[1px] after:bg-white dark:after:bg-slate-800'
-                  : 'bg-gray-100 dark:bg-slate-700/50 text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-700'
-                }
-              `}
+              className={`qt-tab ${activeTab === tab.id ? 'qt-tab-active' : ''}`}
             >
-              <span className="flex-shrink-0">{tab.icon}</span>
+              <span className="qt-tab-icon">{tab.icon}</span>
               <span>{tab.label}</span>
             </button>
           ))}
         </nav>
-        <div className="border-b border-gray-200 dark:border-slate-700"></div>
+        <div className="qt-tab-divider"></div>
       </div>
 
       {/* Tab Content */}

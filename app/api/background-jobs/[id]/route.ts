@@ -10,6 +10,7 @@ import { getServerSession } from '@/lib/auth/session';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { ensureProcessorRunning } from '@/lib/background-jobs';
+import { getErrorMessage } from '@/lib/errors';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     return NextResponse.json(job);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('[BackgroundJobs API] Error in GET by ID', { error: errorMessage });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
@@ -91,7 +92,7 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     logger.info('[BackgroundJobs API] Job deleted', { jobId: id, userId: session.user.id });
     return NextResponse.json({ success: true, message: 'Job deleted' });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('[BackgroundJobs API] Error in DELETE', { error: errorMessage });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
@@ -172,7 +173,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     return NextResponse.json(updatedJob);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.error('[BackgroundJobs API] Error in PATCH', { error: errorMessage });
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

@@ -73,7 +73,8 @@ export default function CharactersPage() {
 
   const fetchCharacters = async () => {
     try {
-      const res = await fetch('/api/characters')
+      clientLogger.debug('Characters page: fetching non-NPC characters only')
+      const res = await fetch('/api/characters?npc=false')
       if (!res.ok) throw new Error('Failed to fetch characters')
       const data = await res.json()
       setCharacters(data.characters)
@@ -179,7 +180,7 @@ export default function CharactersPage() {
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setImportDialogOpen(true)}
-            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Import
           </button>
@@ -197,7 +198,7 @@ export default function CharactersPage() {
           <p className="mb-4 text-lg text-muted-foreground">No characters yet</p>
           <Link
             href="/characters/new"
-            className="font-medium text-primary hover:text-primary/80"
+            className="qt-text-primary hover:text-primary/80"
           >
             Create your first character
           </Link>
@@ -230,9 +231,9 @@ export default function CharactersPage() {
                   <div className="flex-grow">
                     <h2 className="text-xl font-semibold text-foreground">{character.name}</h2>
                     {character.title && (
-                      <p className="text-sm text-muted-foreground">{character.title}</p>
+                      <p className="qt-text-small">{character.title}</p>
                     )}
-                    <p className="text-sm text-muted-foreground">
+                    <p className="qt-text-small">
                       {character._count.chats} chat{character._count.chats !== 1 ? 's' : ''}
                     </p>
                   </div>
@@ -246,7 +247,7 @@ export default function CharactersPage() {
                 </button>
               </div>
 
-              <p className="line-clamp-3 text-sm text-muted-foreground">
+              <p className="line-clamp-3 qt-text-small">
                 {character.description}
               </p>
 
@@ -274,7 +275,7 @@ export default function CharactersPage() {
                 </Link>
                 <a
                   href={`/api/characters/${character.id}/export?format=json`}
-                  className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted"
+                  className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted"
                   title="Export character data"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,7 +306,7 @@ export default function CharactersPage() {
             </h3>
             <form onSubmit={handleImport}>
               <div className="mb-4">
-                <label className="mb-2 block text-sm font-medium text-foreground">
+                <label className="mb-2 block text-sm qt-text-primary">
                   Select SillyTavern character file (PNG or JSON)
                 </label>
                 <input
@@ -313,14 +314,14 @@ export default function CharactersPage() {
                   name="file"
                   accept=".png,.json"
                   required
-                  className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:bg-primary/30"
+                  className="block w-full qt-text-small file:mr-4 file:rounded-md file:border-0 file:bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:bg-primary/30"
                 />
               </div>
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => setImportDialogOpen(false)}
-                  className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted"
+                  className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm qt-text-primary shadow-sm hover:bg-muted"
                 >
                   Cancel
                 </button>

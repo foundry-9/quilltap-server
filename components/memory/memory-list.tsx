@@ -4,8 +4,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { MemoryCard } from './memory-card'
 import { MemoryEditor } from './memory-editor'
 import { HousekeepingDialog } from './housekeeping-dialog'
-import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { useListManager } from '@/hooks/useListManager'
+import { fetchJson } from '@/lib/fetch-helpers'
+import { getErrorMessage } from '@/lib/error-utils'
+import { clientLogger } from '@/lib/client-logger'
 import { showConfirmation } from '@/lib/alert'
+import { SectionHeader } from '@/components/ui/SectionHeader'
+import { LoadingState } from '@/components/ui/LoadingState'
+import { ErrorAlert } from '@/components/ui/ErrorAlert'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 interface Tag {
   id: string
@@ -34,120 +41,118 @@ type SortBy = 'createdAt' | 'updatedAt' | 'importance'
 type SortOrder = 'asc' | 'desc'
 
 export function MemoryList({ characterId }: MemoryListProps) {
-  const [memories, setMemories] = useState<Memory[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('createdAt')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [sourceFilter, setSourceFilter] = useState<'ALL' | 'AUTO' | 'MANUAL'>('ALL')
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [editingMemory, setEditingMemory] = useState<Memory | null>(null)
-  const [showEditor, setShowEditor] = useState(false)
   const [showHousekeeping, setShowHousekeeping] = useState(false)
 
-  const fetchMemories = useCallback(async () => {
+  // Build the fetch function with current filters
+  const fetchMemoriesWithFilters = useCallback(async (): Promise<Memory[]> => {
     try {
-      setLoading(true)
+      clientLogger.debug('MemoryList: Fetching memories with filters', {
+        search,
+        sortBy,
+        sortOrder,
+        sourceFilter,
+      })
+
       const params = new URLSearchParams()
       if (search) params.set('search', search)
       params.set('sortBy', sortBy)
       params.set('sortOrder', sortOrder)
       if (sourceFilter !== 'ALL') params.set('source', sourceFilter)
 
-      const res = await fetch(`/api/characters/${characterId}/memories?${params}`)
-      if (!res.ok) throw new Error('Failed to fetch memories')
-      const data = await res.json()
-      setMemories(data.memories)
-      setError(null)
+      const result = await fetchJson<{ memories: Memory[] }>(
+        `/api/characters/${characterId}/memories?${params}`
+      )
+
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to fetch memories')
+      }
+
+      clientLogger.debug('MemoryList: Memories fetched successfully', {
+        count: result.data?.memories.length || 0,
+      })
+
+      return result.data?.memories || []
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
+      const errorMessage = getErrorMessage(err, 'Failed to fetch memories')
+      clientLogger.error('MemoryList: Fetch failed', { error: errorMessage })
+      throw new Error(errorMessage)
     }
   }, [characterId, search, sortBy, sortOrder, sourceFilter])
 
+  // Use the list manager hook for core CRUD operations
+  const {
+    items: memories,
+    loading,
+    error,
+    deletingId,
+    editingItem: editingMemory,
+    showEditor,
+    refetch,
+    handleDelete,
+    handleEdit,
+    handleCreate,
+    handleEditorClose,
+    handleEditorSave,
+  } = useListManager<Memory>({
+    fetchFn: fetchMemoriesWithFilters,
+    deleteFn: async (memoryId: string) => {
+      clientLogger.debug('MemoryList: Deleting memory', { memoryId })
+      const result = await fetchJson(
+        `/api/characters/${characterId}/memories/${memoryId}`,
+        { method: 'DELETE' }
+      )
+
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to delete memory')
+      }
+
+      clientLogger.debug('MemoryList: Memory deleted successfully', { memoryId })
+    },
+    deleteConfirmMessage: 'Are you sure you want to delete this memory?',
+    deleteSuccessMessage: 'Memory deleted',
+  })
+
+  // Refetch when filters change
   useEffect(() => {
-    fetchMemories()
-  }, [fetchMemories])
-
-  const handleDelete = async (memoryId: string) => {
-    const confirmed = await showConfirmation('Are you sure you want to delete this memory?')
-    if (!confirmed) return
-
-    setDeletingId(memoryId)
-    try {
-      const res = await fetch(`/api/characters/${characterId}/memories/${memoryId}`, {
-        method: 'DELETE',
-      })
-      if (!res.ok) throw new Error('Failed to delete memory')
-      setMemories(memories.filter(m => m.id !== memoryId))
-      showSuccessToast('Memory deleted')
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to delete')
-    } finally {
-      setDeletingId(null)
-    }
-  }
-
-  const handleEdit = (memory: Memory) => {
-    setEditingMemory(memory)
-    setShowEditor(true)
-  }
-
-  const handleCreate = () => {
-    setEditingMemory(null)
-    setShowEditor(true)
-  }
-
-  const handleEditorClose = () => {
-    setShowEditor(false)
-    setEditingMemory(null)
-  }
-
-  const handleEditorSave = () => {
-    setShowEditor(false)
-    setEditingMemory(null)
-    fetchMemories()
-  }
+    refetch()
+  }, [search, sortBy, sortOrder, sourceFilter, refetch])
 
   const handleHousekeepingComplete = () => {
+    clientLogger.debug('MemoryList: Housekeeping complete, refetching')
     setShowHousekeeping(false)
-    fetchMemories()
+    refetch()
   }
 
+  // Show loading state when initially loading
   if (loading && memories.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <p className="text-muted-foreground">Loading memories...</p>
-      </div>
-    )
+    return <LoadingState message="Loading memories..." />
   }
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-foreground">
-          Memories ({memories.length})
-        </h3>
-        <div className="flex gap-2">
-          {memories.length > 0 && (
-            <button
-              onClick={() => setShowHousekeeping(true)}
-              className="px-3 py-1.5 bg-muted text-foreground text-sm rounded-lg hover:bg-accent"
-              title="Clean up old and low-importance memories"
-            >
-              Cleanup
-            </button>
-          )}
+      {/* Header with title and action buttons */}
+      <div className="flex items-center justify-between gap-4">
+        <SectionHeader
+          title="Memories"
+          count={memories.length}
+          action={{
+            label: 'Add Memory',
+            onClick: handleCreate,
+          }}
+        />
+        {memories.length > 0 && (
           <button
-            onClick={handleCreate}
-            className="px-3 py-1.5 bg-primary text-primary-foreground text-sm rounded-lg hover:bg-primary/90"
+            onClick={() => setShowHousekeeping(true)}
+            className="px-3 py-1.5 bg-muted text-foreground text-sm rounded-lg hover:bg-accent"
+            title="Clean up old and low-importance memories"
           >
-            Add Memory
+            Cleanup
           </button>
-        </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -190,37 +195,36 @@ export function MemoryList({ characterId }: MemoryListProps) {
 
       {/* Error State */}
       {error && (
-        <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded">
-          {error}
-        </div>
+        <ErrorAlert message={error} onRetry={refetch} />
       )}
 
       {/* Empty State */}
       {!loading && memories.length === 0 && (
-        <div className="text-center py-8 bg-muted/50 rounded-lg">
-          <p className="text-muted-foreground mb-2">
-            {search ? 'No memories match your search' : 'No memories yet'}
-          </p>
-          {!search && (
-            <p className="text-sm text-muted-foreground/70">
-              Memories will be created automatically during conversations, or you can add them manually.
-            </p>
-          )}
-        </div>
+        <EmptyState
+          title={search ? 'No memories match your search' : 'No memories yet'}
+          description={
+            !search
+              ? 'Memories will be created automatically during conversations, or you can add them manually.'
+              : undefined
+          }
+          variant="muted"
+        />
       )}
 
       {/* Memory Grid */}
-      <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
-        {memories.map((memory) => (
-          <MemoryCard
-            key={memory.id}
-            memory={memory}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            isDeleting={deletingId === memory.id}
-          />
-        ))}
-      </div>
+      {memories.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
+          {memories.map((memory) => (
+            <MemoryCard
+              key={memory.id}
+              memory={memory}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              isDeleting={deletingId === memory.id}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Memory Editor Modal */}
       {showEditor && (

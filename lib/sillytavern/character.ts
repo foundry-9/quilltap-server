@@ -48,6 +48,19 @@ export function importSTCharacter(stData: STCharacterV2 | STCharacterCard) {
       : data.mes_example
   }
 
+  // Build systemPrompts array from ST system_prompt if present
+  const now = new Date().toISOString()
+  const systemPrompts = data.system_prompt
+    ? [{
+        id: crypto.randomUUID(),
+        name: 'Default',
+        content: data.system_prompt,
+        isDefault: true,
+        createdAt: now,
+        updatedAt: now,
+      }]
+    : []
+
   return {
     name: data.name,
     title: data.title || null,
@@ -56,7 +69,7 @@ export function importSTCharacter(stData: STCharacterV2 | STCharacterCard) {
     scenario: data.scenario,
     firstMessage: data.first_mes,
     exampleDialogues,
-    systemPrompt: data.system_prompt || '',
+    systemPrompts,
     sillyTavernData: data, // Store original for full fidelity
   }
 }
@@ -65,6 +78,13 @@ export function importSTCharacter(stData: STCharacterV2 | STCharacterCard) {
  * Export internal character to SillyTavern format
  */
 export function exportSTCharacter(character: any): STCharacterCard {
+  // Get the default system prompt from the systemPrompts array
+  let systemPromptContent = ''
+  if (character.systemPrompts && character.systemPrompts.length > 0) {
+    const defaultPrompt = character.systemPrompts.find((p: { isDefault: boolean }) => p.isDefault)
+    systemPromptContent = defaultPrompt?.content || character.systemPrompts[0]?.content || ''
+  }
+
   // If we have original ST data, use it as base to preserve all fields
   const baseData: STCharacterV2 = character.sillyTavernData || {
     name: character.name,
@@ -89,7 +109,7 @@ export function exportSTCharacter(character: any): STCharacterCard {
     scenario: character.scenario,
     first_mes: character.firstMessage,
     mes_example: character.exampleDialogues || '',
-    system_prompt: character.systemPrompt || '',
+    system_prompt: systemPromptContent,
     title: character.title || undefined,
   }
 

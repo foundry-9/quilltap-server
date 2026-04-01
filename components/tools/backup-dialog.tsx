@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { getErrorMessage } from '@/lib/error-utils'
 
 interface BackupDialogProps {
   isOpen: boolean
@@ -77,7 +78,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
       // Close dialog
       onClose()
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create backup'
+      const errorMessage = getErrorMessage(err, 'Failed to create backup')
       setError(errorMessage)
       clientLogger.error('Backup creation failed', { error: errorMessage })
       showErrorToast(errorMessage)
@@ -120,7 +121,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                 </svg>
               </button>
             </div>
-            <p className="qt-dialog-description">
+            <p className="qt-dialog-description qt-text-small">
               Back up your data to restore it later
             </p>
           </div>
@@ -129,7 +130,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
           <div className="qt-dialog-body space-y-6">
             {/* Destination Selection */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-3">
+              <label className="block text-sm qt-text-primary mb-3">
                 Backup Destination
               </label>
               <div className="space-y-3">
@@ -149,10 +150,10 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                     className="w-4 h-4"
                   />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-foreground">
+                    <p className="text-sm qt-text-primary">
                       Download to Computer
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="qt-text-xs mt-0.5">
                       Save backup as a ZIP file to your device
                     </p>
                   </div>
@@ -173,10 +174,10 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                     className="w-4 h-4"
                   />
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-foreground">
+                    <p className="text-sm qt-text-primary">
                       Save to Cloud Storage (S3)
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="qt-text-xs mt-0.5">
                       Store backup in your configured cloud storage
                     </p>
                   </div>
@@ -187,7 +188,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
             {/* Filename Input (S3 only) */}
             {destination === 's3' && (
               <div>
-                <label htmlFor="filename" className="block text-sm font-medium text-foreground mb-2">
+                <label htmlFor="filename" className="block text-sm qt-text-primary mb-2">
                   Filename (optional)
                 </label>
                 <input
@@ -198,7 +199,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                   placeholder="backup-2025-12-07"
                   className="qt-input"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 qt-text-xs">
                   Leave empty to use default name with timestamp
                 </p>
               </div>
@@ -224,7 +225,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
             <button
               onClick={handleCreateBackup}
               disabled={loading}
-              className="qt-button qt-button-primary flex items-center gap-2"
+              className="qt-button qt-button-primary"
             >
               {loading && (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 
 interface Character {
@@ -20,6 +21,11 @@ interface Character {
     url?: string
   } | null
   defaultConnectionProfileId?: string | null
+  systemPrompts?: Array<{
+    id: string
+    name: string
+    isDefault: boolean
+  }>
 }
 
 interface ConnectionProfile {
@@ -46,11 +52,13 @@ interface SelectedCharacter {
   character: Character
   connectionProfileId: string
   imageProfileId?: string | null
+  selectedSystemPromptId?: string | null
 }
 
 export default function NewChatPage() {
   const router = useRouter()
   const { style } = useAvatarDisplay()
+  const { formatPersonaName } = usePersonaDisplayName()
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const [characters, setCharacters] = useState<Character[]>([])
@@ -142,13 +150,17 @@ export default function NewChatPage() {
     } else {
       const connectionProfileId =
         character.defaultConnectionProfileId || profiles[0]?.id || ''
+      // Find default or first system prompt
+      const defaultPrompt = character.systemPrompts?.find(p => p.isDefault) || character.systemPrompts?.[0]
+      const selectedSystemPromptId = defaultPrompt?.id || null
       clientLogger.debug('[NewChat] Selecting character', {
         characterId: character.id,
         connectionProfileId,
+        selectedSystemPromptId,
       })
       setSelectedCharacters((prev) => [
         ...prev,
-        { character, connectionProfileId, imageProfileId: null },
+        { character, connectionProfileId, imageProfileId: null, selectedSystemPromptId },
       ])
     }
   }
@@ -167,6 +179,15 @@ export default function NewChatPage() {
     setSelectedCharacters((prev) =>
       prev.map((sc) =>
         sc.character.id === characterId ? { ...sc, imageProfileId: profileId } : sc
+      )
+    )
+  }
+
+  const handleSystemPromptChange = (characterId: string, promptId: string | null) => {
+    clientLogger.debug('[NewChat] Changing system prompt', { characterId, promptId })
+    setSelectedCharacters((prev) =>
+      prev.map((sc) =>
+        sc.character.id === characterId ? { ...sc, selectedSystemPromptId: promptId } : sc
       )
     )
   }
@@ -217,11 +238,13 @@ export default function NewChatPage() {
         personaId?: string
         connectionProfileId?: string
         imageProfileId?: string
+        selectedSystemPromptId?: string
       }> = selectedCharacters.map((sc) => ({
         type: 'CHARACTER' as const,
         characterId: sc.character.id,
         connectionProfileId: sc.connectionProfileId,
         imageProfileId: sc.imageProfileId || undefined,
+        selectedSystemPromptId: sc.selectedSystemPromptId || undefined,
       }))
 
       if (selectedPersonaId) {
@@ -303,7 +326,7 @@ export default function NewChatPage() {
             </div>
             <div className="max-h-[500px] space-y-2 overflow-y-auto">
               {filteredCharacters.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">
+                <div className="py-8 text-center qt-text-small">
                   {searchQuery ? 'No characters match your search' : 'No characters available'}
                 </div>
               ) : (
@@ -325,8 +348,8 @@ export default function NewChatPage() {
                         </div>
                       )}
                       <div className="flex-1 text-left">
-                        <div className="font-medium text-foreground">{character.name}</div>
-                        {character.title && <div className="text-sm text-muted-foreground">{character.title}</div>}
+                        <div className="qt-text-primary">{character.name}</div>
+                        {character.title && <div className="qt-text-small">{character.title}</div>}
                       </div>
                       <div className={'flex h-6 w-6 items-center justify-center rounded-full border-2 ' + (isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground')}>
                         {isSelected && (
@@ -346,7 +369,7 @@ export default function NewChatPage() {
             <div className="rounded-xl border border-border bg-card p-6">
               <h2 className="mb-4 text-lg font-semibold">Selected Characters ({selectedCharacters.length})</h2>
               {selectedCharacters.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">Click on characters to add them to the chat</div>
+                <div className="py-8 text-center qt-text-small">Click on characters to add them to the chat</div>
               ) : (
                 <div className="space-y-4">
                   {selectedCharacters.map((sc, index) => {
@@ -364,12 +387,12 @@ export default function NewChatPage() {
                           )}
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium text-foreground">{sc.character.name}</span>
+                              <span className="qt-text-primary">{sc.character.name}</span>
                               {index === 0 && <span className="rounded bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">Speaks First</span>}
                             </div>
-                            {sc.character.title && <div className="text-sm text-muted-foreground">{sc.character.title}</div>}
+                            {sc.character.title && <div className="qt-text-small">{sc.character.title}</div>}
                             <div className="mt-3">
-                              <label className="mb-1 block text-xs font-medium text-muted-foreground">Connection Profile</label>
+                              <label className="mb-1 block text-xs font-medium qt-text-xs">Connection Profile</label>
                               <select
                                 value={sc.connectionProfileId}
                                 onChange={(e) => handleProfileChange(sc.character.id, e.target.value)}
@@ -385,7 +408,7 @@ export default function NewChatPage() {
                             </div>
                             {imageProfiles.length > 0 && (
                               <div className="mt-2">
-                                <label className="mb-1 block text-xs font-medium text-muted-foreground">Image Profile (Optional)</label>
+                                <label className="mb-1 block text-xs font-medium qt-text-xs">Image Profile (Optional)</label>
                                 <select
                                   value={sc.imageProfileId || ''}
                                   onChange={(e) => handleImageProfileChange(sc.character.id, e.target.value || null)}
@@ -394,6 +417,23 @@ export default function NewChatPage() {
                                   <option value="">No image profile</option>
                                   {imageProfiles.map((profile) => (
                                     <option key={profile.id} value={profile.id}>{profile.name} ({profile.provider})</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            {sc.character.systemPrompts && sc.character.systemPrompts.length > 0 && (
+                              <div className="mt-2">
+                                <label className="mb-1 block text-xs font-medium qt-text-xs">System Prompt</label>
+                                <select
+                                  value={sc.selectedSystemPromptId || ''}
+                                  onChange={(e) => handleSystemPromptChange(sc.character.id, e.target.value || null)}
+                                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                                >
+                                  <option value="">Use Default</option>
+                                  {sc.character.systemPrompts.map((prompt) => (
+                                    <option key={prompt.id} value={prompt.id}>
+                                      {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
+                                    </option>
                                   ))}
                                 </select>
                               </div>
@@ -415,7 +455,7 @@ export default function NewChatPage() {
             {personas.length > 0 && (
               <div className="rounded-xl border border-border bg-card p-6">
                 <h2 className="mb-4 text-lg font-semibold">Persona (Optional)</h2>
-                <p className="mb-3 text-sm text-muted-foreground">Select a persona to represent you in the conversation.</p>
+                <p className="mb-3 qt-text-small">Select a persona to represent you in the conversation.</p>
                 <select
                   value={selectedPersonaId}
                   onChange={(e) => setSelectedPersonaId(e.target.value)}
@@ -423,14 +463,14 @@ export default function NewChatPage() {
                 >
                   <option value="">No persona</option>
                   {personas.map((persona) => (
-                    <option key={persona.id} value={persona.id}>{persona.name}{persona.title ? ' (' + persona.title + ')' : ''}</option>
+                    <option key={persona.id} value={persona.id}>{formatPersonaName(persona)}</option>
                   ))}
                 </select>
               </div>
             )}
 
             <div className="flex justify-end gap-3">
-              <Link href="/chats" className="rounded-lg border border-border bg-card px-6 py-2 font-medium text-muted-foreground transition hover:bg-muted">Cancel</Link>
+              <Link href="/chats" className="rounded-lg border border-border bg-card px-6 py-2 font-medium qt-text-small transition hover:bg-muted">Cancel</Link>
               <button
                 onClick={handleCreateChat}
                 disabled={creating || selectedCharacters.length === 0 || profiles.length === 0 || selectedCharacters.some((sc) => !sc.connectionProfileId)}

@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
 import { logger } from '@/lib/logger';
 import { generateAndSaveReport } from '@/lib/tools/capabilities-report';
+import { getErrorMessage } from '@/lib/errors';
 
 const moduleLogger = logger.child({ module: 'api:capabilities-report:generate' });
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
       content: result.content,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     moduleLogger.error('Failed to generate capabilities report', { error: errorMessage }, error instanceof Error ? error : undefined);
     return NextResponse.json(
       { error: 'Failed to generate report', details: errorMessage },

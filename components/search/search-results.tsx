@@ -46,7 +46,7 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground truncate">
+            <span className="qt-text-primary truncate">
               {result.name}
             </span>
             {result.isFavorite && <span className="text-yellow-500">★</span>}
@@ -55,9 +55,9 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
             </span>
           </div>
           {result.title && (
-            <p className="text-xs text-muted-foreground truncate">{result.title}</p>
+            <p className="qt-text-xs truncate">{result.title}</p>
           )}
-          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+          <p className="qt-text-small mt-1 line-clamp-2">
             {result.matchedTag ? (
               <span>
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-tag">
@@ -100,7 +100,7 @@ function PersonaResultCard({ result, query, onResultClick }: { result: PersonaSe
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground truncate">
+            <span className="qt-text-primary truncate">
               {result.name}
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded qt-badge-persona">
@@ -108,9 +108,9 @@ function PersonaResultCard({ result, query, onResultClick }: { result: PersonaSe
             </span>
           </div>
           {result.title && (
-            <p className="text-xs text-muted-foreground truncate">{result.title}</p>
+            <p className="qt-text-xs truncate">{result.title}</p>
           )}
-          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+          <p className="qt-text-small mt-1 line-clamp-2">
             {result.matchedTag ? (
               <span>
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-tag">
@@ -146,7 +146,7 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-foreground truncate">
+            <span className="qt-text-primary truncate">
               {result.name}
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded qt-badge-chat">
@@ -158,7 +158,7 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 qt-text-xs">
             {result.characterNames && result.characterNames.length > 0 && (
               <span>with {result.characterNames.join(', ')}</span>
             )}
@@ -166,7 +166,7 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
               <span>• {result.messageCount} messages</span>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+          <p className="qt-text-small mt-1 line-clamp-2">
             {result.matchedTag ? (
               <span>
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-tag">
@@ -216,19 +216,19 @@ function TagResultCard({ result, query, onResultClick }: { result: TagSearchResu
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground">
+            <span className="qt-text-primary">
               <HighlightedText text={result.name} query={query} />
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded qt-badge-tag">
               {TYPE_LABELS.tags}
             </span>
             {result.quickHide && (
-              <span className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground rounded">
+              <span className="qt-text-xs px-1.5 py-0.5 bg-muted rounded">
                 Quick Hide
               </span>
             )}
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="qt-text-small mt-1">
             Used {result.usageCount} time{result.usageCount !== 1 ? 's' : ''} across characters, personas, and chats
           </p>
         </div>
@@ -253,7 +253,7 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground truncate">
+            <span className="qt-text-primary truncate">
               {result.name}
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded qt-badge-memory">
@@ -268,11 +268,11 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
             </span>
           </div>
           {result.characterName && (
-            <p className="text-xs text-muted-foreground">
+            <p className="qt-text-xs">
               Memory for {result.characterName}
             </p>
           )}
-          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+          <p className="qt-text-small mt-1 line-clamp-2">
             {result.matchedTag ? (
               <span>
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs mr-1 qt-badge-tag">
@@ -286,7 +286,7 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
           </p>
           <div className="flex items-center gap-2 mt-1">
             <div className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground">Importance:</span>
+              <span className="qt-text-xs">Importance:</span>
               <div className="w-16 h-1.5 bg-border rounded-full overflow-hidden">
                 <div
                   className="h-full bg-pink-500 rounded-full"
@@ -327,7 +327,7 @@ export function SearchResults({ results, query, isLoading, onResultClick }: Sear
     return (
       <div className="p-6 text-center">
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
-        <p className="mt-2 text-sm text-muted-foreground">Searching...</p>
+        <p className="mt-2 qt-text-small">Searching...</p>
       </div>
     )
   }
@@ -335,10 +335,10 @@ export function SearchResults({ results, query, isLoading, onResultClick }: Sear
   if (results.length === 0) {
     return (
       <div className="p-6 text-center">
-        <p className="text-muted-foreground">
+        <p className="qt-text-small">
           No results found for &quot;{query}&quot;
         </p>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="qt-text-xs mt-1">
           Try searching for characters, chats, personas, tags, or memories
         </p>
       </div>
@@ -358,7 +358,7 @@ export function SearchResults({ results, query, isLoading, onResultClick }: Sear
     <div className="divide-y divide-border">
       {Object.entries(groupedResults).map(([type, typeResults]) => (
         <div key={type} className="py-2">
-          <div className="px-3 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="px-3 py-1 qt-text-xs font-semibold uppercase tracking-wider">
             {TYPE_ICONS[type as SearchType]} {TYPE_LABELS_PLURAL[type as SearchType]} ({typeResults.length})
           </div>
           <div className="space-y-1">

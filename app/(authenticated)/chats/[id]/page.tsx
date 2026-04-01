@@ -4,9 +4,11 @@ import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
+import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
+import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
 import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import {
@@ -19,13 +21,13 @@ import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { clientLogger } from '@/lib/client-logger'
+import { getErrorMessage } from '@/lib/error-utils'
 import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
-import RoleplayAnnotationButtons from '@/components/chat/RoleplayAnnotationButtons'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
+import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import { useDebugOptional } from '@/components/providers/debug-provider'
-import type { TagVisualStyle } from '@/lib/schemas/types'
 import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
@@ -35,144 +37,58 @@ import {
   createInitialTurnState,
   calculateTurnStateFromHistory,
   selectNextSpeaker,
-  nudgeParticipant,
-  addToQueue,
-  removeFromQueue,
   findUserParticipant,
   isMultiCharacterChat,
+  getQueuePosition,
+  resetCycleForUserSkip,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 
-interface MessageAttachment {
-  id: string
-  filename: string
-  filepath: string
-  mimeType: string
-}
+// Import extracted hooks
+import {
+  useChatData,
+  useTurnManagement,
+  useMessageActions,
+  useFileAttachments,
+  type SwipeState,
+} from './hooks'
+import type { Chat, ChatSettings, Message, MessageAttachment, Participant, CharacterData } from './types'
+import {
+  StreamingMessage,
+  MessageRow,
+  ChatComposer,
+  PendingToolCalls,
+  EphemeralMessages as EphemeralMessagesComponent,
+} from './components'
 
-interface Message {
-  id: string
-  role: string
-  content: string
-  createdAt: string
-  swipeGroupId?: string | null
-  swipeIndex?: number | null
-  attachments?: MessageAttachment[]
-  debugMemoryLogs?: string[]
-  participantId?: string | null
-}
-
-interface CharacterData {
-  id: string
-  name: string
-  title?: string | null
-  avatarUrl?: string
-  defaultImageId?: string
-  defaultImage?: {
-    id: string
-    filepath: string
-    url?: string
-  } | null
-  talkativeness?: number
-}
-
-interface PersonaData {
-  id: string
-  name: string
-  title?: string | null
-  avatarUrl?: string
-  defaultImageId?: string
-  defaultImage?: {
-    id: string
-    filepath: string
-    url?: string
-  } | null
-}
-
-interface ConnectionProfileData {
-  id: string
-  name: string
-  provider?: string
-  modelName?: string
-  apiKey?: {
-    id: string
-    provider: string
-    label?: string
-  } | null
-}
-
-interface Participant {
-  id: string
-  type: 'CHARACTER' | 'PERSONA'
-  displayOrder: number
-  isActive: boolean
-  systemPromptOverride?: string | null
-  characterId?: string | null
-  personaId?: string | null
-  character?: CharacterData | null
-  persona?: PersonaData | null
-  connectionProfile?: ConnectionProfileData | null
-  imageProfile?: {
-    id: string
-    name: string
-    provider: string
-    modelName: string
-  } | null
-  // Multi-character chat fields
-  hasHistoryAccess?: boolean
-  joinScenario?: string | null
-  createdAt?: string
-  updatedAt?: string
-}
-
-interface Chat {
-  id: string
-  title: string
-  roleplayTemplateId?: string | null
-  participants: Participant[]
-  user: {
-    id: string
-    name?: string | null
-    image?: string | null
-  }
-  messages: Message[]
-}
-
-interface ChatSettings {
-  id: string
-  userId: string
-  avatarDisplayMode: 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
-  avatarDisplayStyle?: 'CIRCULAR' | 'RECTANGULAR'
-  tagStyles?: Record<string, TagVisualStyle>
-  createdAt: string
-  updatedAt: string
-}
+// Inline the large sendMessage and other complex functions that need to stay in page.tsx
+// These depend on too many page-level state variables to extract cleanly
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   useAvatarDisplay()
   const debug = useDebugOptional()
-  const [chat, setChat] = useState<Chat | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
+
+  // Use the extracted chat data hook
+  const chatDataHook = useChatData(id)
+  const { chat, messages, loading, error, chatSettings, swipeStates, chatPhotoCount, chatMemoryCount } = chatDataHook
+  const { setChat, setMessages, setSwipeStates } = chatDataHook
+  const { fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount, persistTurnState } = chatDataHook
+
+  // UI state
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [waitingForResponse, setWaitingForResponse] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
-  const [swipeStates, setSwipeStates] = useState<Record<string, { current: number; total: number; messages: Message[] }>>({})
   const [viewSourceMessageIds, setViewSourceMessageIds] = useState<Set<string>>(new Set())
-  const [chatSettings, setChatSettings] = useState<ChatSettings | null>(null)
-  const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; filename: string; filepath: string; mimeType: string; url: string }>>([])
-  const [uploadingFile, setUploadingFile] = useState(false)
   const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
-  const [chatPhotoCount, setChatPhotoCount] = useState(0)
-  const [chatMemoryCount, setChatMemoryCount] = useState(0)
+  const [roleplayTemplateName, setRoleplayTemplateName] = useState<string | null>(null)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
+  const [mobileToolPaletteOpen, setMobileToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
@@ -182,15 +98,26 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [showParticipantSidebar, setShowParticipantSidebar] = useState(true)
   const [turnState, setTurnState] = useState<TurnState>(createInitialTurnState())
   const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
-  // Phase 5: Ephemeral messages for nudge/queue notifications (session-only, not persisted)
   const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
-  // Track which participant is currently responding during streaming (for correct avatar display)
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
-  // Track the last auto-triggered participant to prevent duplicate triggers
+  const [mobileParticipantDropdownId, setMobileParticipantDropdownId] = useState<string | null>(null)
+
+  // Use the extracted file attachments hook
+  const fileHook = useFileAttachments(id)
+  const { attachedFiles, setAttachedFiles, uploadingFile } = fileHook
+  const { handleFileSelect, removeAttachedFile } = fileHook
+
+  // Refs
+  const mobileParticipantRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map())
   const lastAutoTriggeredRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
+  const desktopToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const userStoppedStreamRef = useRef<boolean>(false)
+  const hasRestoredTurnStateRef = useRef<boolean>(false)
+
   const chatContext = useChatContext()
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
   const quickHideActive = hiddenTagIds.size > 0
@@ -206,12 +133,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const getTextareaMaxHeight = useCallback(() => {
     if (typeof globalThis === 'undefined' || !globalThis.window) return 200
     const windowHeight = globalThis.window.innerHeight
-    const isMobilePortrait = globalThis.window.matchMedia('(max-width: 640px) and (orientation: portrait)').matches
-    return isMobilePortrait ? windowHeight / 2 : windowHeight / 3
+    const isMobile = globalThis.window.matchMedia('(max-width: 768px)').matches
+    if (isMobile) {
+      const navbarHeight = 64
+      const paletteReserved = windowHeight * 0.5
+      const composerChrome = 96
+      return Math.max(40, windowHeight - navbarHeight - paletteReserved - composerChrome)
+    }
+    return windowHeight / 3
   }, [])
 
   const resizeTextarea = useCallback((textarea: HTMLTextAreaElement) => {
-    textarea.style.height = 'auto'
+    // Set to 0 first to force browser to recalculate scrollHeight for shrinking
+    textarea.style.height = '0'
     const maxHeight = getTextareaMaxHeight()
     const newHeight = Math.min(textarea.scrollHeight, maxHeight)
     textarea.style.height = newHeight + 'px'
@@ -230,8 +164,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const getFirstPersona = () => getFirstPersonaParticipant()?.persona
   const getFirstConnectionProfile = () => getFirstCharacterParticipant()?.connectionProfile
 
-  // Get the character that is currently responding (for streaming avatar display)
-  // Falls back to first character if no responding participant is set
   const getRespondingCharacter = () => {
     if (respondingParticipantId) {
       const participant = chat?.participants.find(p => p.id === respondingParticipantId)
@@ -243,7 +175,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }
 
   // Multi-character chat helpers
-  // Convert Participant[] to ChatParticipantBase[] for turn manager functions
   const participantsAsBase = useMemo((): ChatParticipantBase[] => {
     if (!chat?.participants) return []
     return chat.participants.map(p => ({
@@ -274,27 +205,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return isMultiCharacterChat(participantsAsBase)
   }, [participantsAsBase])
 
-  // Phase 7: Track if there are any active characters (edge case handling)
   const hasActiveCharacters = useMemo(() => {
     return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length > 0
   }, [participantsAsBase])
 
-  // Single-character chat: exactly 1 active character (show "Add Character" in tool palette)
   const isSingleCharacterChat = useMemo(() => {
     return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length === 1
   }, [participantsAsBase])
 
-  // Build character map for turn selection
-  // The turn manager expects Character objects with at least id and talkativeness
   const charactersMap = useMemo((): Map<string, Character> => {
     const map = new Map<string, Character>()
     if (!chat?.participants) return map
     chat.participants.forEach(p => {
       if (p.type === 'CHARACTER' && p.character) {
-        // Create a minimal Character object with required fields
         map.set(p.character.id, {
           id: p.character.id,
-          userId: '', // Not needed for turn selection
+          userId: '',
           name: p.character.name,
           talkativeness: p.character.talkativeness ?? 0.5,
           isFavorite: false,
@@ -306,7 +232,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return map
   }, [chat?.participants])
 
-  // Convert participants to ParticipantData format for sidebar
   const participantData: ParticipantData[] = useMemo(() => {
     if (!chat?.participants) return []
     return chat.participants.map(p => ({
@@ -333,13 +258,44 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }))
   }, [chat?.participants])
 
-  // Get participant by ID for message avatar lookup
   const getParticipantById = useCallback((participantId: string | null | undefined) => {
     if (!participantId || !chat?.participants) return null
     return chat.participants.find(p => p.id === participantId) ?? null
   }, [chat?.participants])
 
-  // Calculate turn state when messages change
+  // Use the extracted message actions hook
+  const messageActions = useMessageActions(
+    messages,
+    setMessages,
+    setEditingMessageId,
+    setEditContent,
+    setViewSourceMessageIds,
+    editingMessageId,
+    editContent,
+    viewSourceMessageIds,
+    setInput,
+    setAttachedFiles,
+    inputRef as React.RefObject<HTMLTextAreaElement>,
+  )
+
+  // Use the extracted turn management hook
+  const turnManagement = useTurnManagement(
+    participantsAsBase,
+    charactersMap,
+    turnState,
+    userParticipantId,
+    participantData,
+    ephemeralMessages,
+    setTurnState,
+    setTurnSelectionResult,
+    setEphemeralMessages,
+    async (participantId: string) => {
+      // Trigger continue mode - implementation below
+      await triggerContinueMode(participantId)
+    },
+  )
+
+  // Calculate turn state when messages change - copied from original
   useEffect(() => {
     if (participantsAsBase.length === 0 || messages.length === 0) return
 
@@ -366,13 +322,45 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     setTurnState(newTurnState)
 
-    // Calculate next speaker
-    const result = selectNextSpeaker(
+    let result = selectNextSpeaker(
       participantsAsBase,
       charactersMap,
       newTurnState,
       userParticipantId
     )
+
+    if (!hasRestoredTurnStateRef.current && chat?.lastTurnParticipantId !== undefined) {
+      hasRestoredTurnStateRef.current = true
+      const persistedParticipantId = chat.lastTurnParticipantId
+
+      if (persistedParticipantId === null) {
+        if (result.nextSpeakerId !== null) {
+          clientLogger.debug('[Chat] Restoring persisted turn state: user\'s turn', {
+            calculatedNextSpeaker: result.nextSpeakerId,
+          })
+          result = {
+            ...result,
+            nextSpeakerId: null,
+            reason: 'user_turn',
+          }
+        }
+      } else {
+        const persistedParticipant = participantsAsBase.find(
+          p => p.id === persistedParticipantId && p.isActive
+        )
+        if (persistedParticipant && result.nextSpeakerId !== persistedParticipantId) {
+          clientLogger.debug('[Chat] Restoring persisted turn state', {
+            persistedParticipantId,
+            calculatedNextSpeaker: result.nextSpeakerId,
+          })
+          result = {
+            ...result,
+            nextSpeakerId: persistedParticipantId,
+            reason: 'queue',
+          }
+        }
+      }
+    }
 
     setTurnSelectionResult(result)
 
@@ -381,17 +369,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       reason: result.reason,
       cycleComplete: result.cycleComplete,
     })
-  }, [messages, participantsAsBase, userParticipantId, charactersMap])
+  }, [messages, participantsAsBase, userParticipantId, charactersMap, chat?.lastTurnParticipantId])
 
-  // Phase 5: Trigger character response without user message (for nudge action)
-  // Phase 7: Enhanced with edge case validation
+  // triggerContinueMode function - large streaming logic kept in place
   const triggerContinueMode = useCallback(async (participantId: string) => {
     if (streaming || waitingForResponse) {
       clientLogger.debug('[Chat] Skipping continue mode - already generating')
       return
     }
 
-    // Phase 7: Edge Case 5 - Validate that the participant still exists and is active
     const participant = participantsAsBase.find(p => p.id === participantId && p.isActive)
     if (!participant) {
       clientLogger.warn('[Chat] Cannot trigger continue mode - participant not found or inactive', {
@@ -401,8 +387,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       return
     }
 
-    // Phase 7: Edge Case 3 - Check if there are any eligible speakers
-    if (!hasActiveCharacters) {
+    if (!turnManagement.hasActiveCharacters) {
       clientLogger.warn('[Chat] No active characters available for continue mode')
       showErrorToast('No characters available. Add a character to continue the conversation.')
       return
@@ -413,11 +398,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setWaitingForResponse(true)
     setStreaming(false)
     setStreamingContent('')
-    // Set the responding participant for correct avatar display during streaming
     setRespondingParticipantId(participantId)
     clientLogger.debug('[Chat] Set responding participant for streaming', { participantId })
 
     try {
+      abortControllerRef.current = new AbortController()
+      const { signal } = abortControllerRef.current
+
       const res = await fetch(`/api/chats/${id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -425,6 +412,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           continueMode: true,
           respondingParticipantId: participantId,
         }),
+        signal,
       })
 
       if (!res.ok) {
@@ -432,7 +420,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         throw new Error(errorData.error || 'Failed to trigger response')
       }
 
-      // Handle streaming response
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
 
@@ -449,8 +436,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
+            const rawData = line.slice(6).trim()
+            if (!rawData || rawData === '[DONE]' || rawData === '{}') {
+              continue
+            }
             try {
-              const data = JSON.parse(line.slice(6))
+              const data = JSON.parse(rawData)
 
               if (data.content) {
                 fullContent += data.content
@@ -459,8 +450,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setStreamingContent(fullContent)
               }
 
+              if (data.error) {
+                // Include details in error message if available
+                const errorMsg = data.details
+                  ? `${data.error}: ${data.details}`
+                  : data.error
+                throw new Error(errorMsg)
+              }
+
               if (data.done) {
-                // Response complete - add message to state
                 if (fullContent.trim()) {
                   const newMessage: Message = {
                     id: data.messageId || `continue-${Date.now()}`,
@@ -472,72 +470,71 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   setMessages(prev => [...prev, newMessage])
                 }
 
-                // Clear ephemeral messages for this participant after response
                 setEphemeralMessages(prev =>
                   prev.filter(em => em.participantId !== participantId)
                 )
 
-                // Update turn state if provided
                 if (data.turn) {
                   clientLogger.debug('[Chat] Turn info from continue mode', data.turn)
                 }
               }
-            } catch {
-              // Ignore parse errors
+            } catch (parseError) {
+              // Rethrow actual errors (from data.error), ignore JSON parse errors
+              if (parseError instanceof Error && !parseError.message.includes('JSON')) {
+                throw parseError
+              }
+              // Ignore JSON parse errors (SSE chunking artifacts)
             }
           }
         }
       }
     } catch (err) {
-      clientLogger.error('[Chat] Continue mode error:', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-      showErrorToast(err instanceof Error ? err.message : 'Failed to generate response')
+      const isAbort = err instanceof Error && err.name === 'AbortError'
+      if (isAbort) {
+        clientLogger.debug('[Chat] Continue mode aborted by user')
+      } else {
+        clientLogger.error('[Chat] Continue mode error:', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+        showErrorToast(err instanceof Error ? err.message : 'Failed to generate response')
+      }
     } finally {
       setStreaming(false)
       setWaitingForResponse(false)
       setStreamingContent('')
       setRespondingParticipantId(null)
+      abortControllerRef.current = null
       scrollToBottom()
     }
-  }, [id, streaming, waitingForResponse, participantsAsBase, hasActiveCharacters])
+  }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages])
 
-  // Auto-trigger next character in multi-character mode when it's their turn
-  // This ensures characters who haven't spoken yet (including newly added ones) get their turn
+  // Auto-trigger next character in multi-character mode
   useEffect(() => {
-    // Only auto-trigger in multi-character mode
     if (!isMultiChar) {
       clientLogger.debug('[Chat] Auto-trigger skipped - not multi-character mode')
       return
     }
 
-    // Don't trigger if we're already generating or waiting
-    if (streaming || waitingForResponse) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - already generating', {
-        streaming,
-        waitingForResponse,
-      })
+    if (userStoppedStreamRef.current) {
+      clientLogger.debug('[Chat] Auto-trigger skipped - user stopped streaming')
       return
     }
 
-    // Don't trigger if there's no turn selection result yet
+    if (streaming || waitingForResponse) {
+      return
+    }
+
     if (!turnSelectionResult) {
       clientLogger.debug('[Chat] Auto-trigger skipped - no turn selection result')
       return
     }
 
-    // Don't trigger if it's the user's turn (nextSpeakerId is null)
     if (turnSelectionResult.nextSpeakerId === null) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - user\'s turn', {
-        reason: turnSelectionResult.reason,
-        cycleComplete: turnSelectionResult.cycleComplete,
-      })
-      // Reset the last auto-triggered ref when cycle completes
+      clientLogger.debug('[Chat] Auto-trigger skipped - user\'s turn')
       lastAutoTriggeredRef.current = null
       return
     }
 
-    // Don't trigger if the next speaker is the user participant
     if (turnSelectionResult.nextSpeakerId === userParticipantId) {
       clientLogger.debug('[Chat] Auto-trigger skipped - next speaker is user')
       return
@@ -545,24 +542,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     const nextSpeakerId = turnSelectionResult.nextSpeakerId
 
-    // Don't trigger the same participant twice in a row (prevents race condition loops)
     if (lastAutoTriggeredRef.current === nextSpeakerId) {
-      clientLogger.debug('[Chat] Auto-trigger skipped - same participant already triggered', {
-        nextSpeakerId,
-      })
+      clientLogger.debug('[Chat] Auto-trigger skipped - same participant already triggered')
       return
     }
 
-    // We have a character who should speak - trigger them
     clientLogger.info('[Chat] Auto-triggering next character in multi-character mode', {
       nextSpeakerId,
       reason: turnSelectionResult.reason,
     })
 
-    // Mark this participant as triggered before starting
     lastAutoTriggeredRef.current = nextSpeakerId
 
-    // Small delay to allow state to settle and prevent race conditions
     const timeoutId = setTimeout(() => {
       triggerContinueMode(nextSpeakerId)
     }, 100)
@@ -570,210 +561,119 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return () => clearTimeout(timeoutId)
   }, [isMultiChar, streaming, waitingForResponse, turnSelectionResult, userParticipantId, triggerContinueMode])
 
-  // Handle nudge action - Phase 5: Shows ephemeral message and triggers immediate response
-  const handleNudge = useCallback((participantId: string) => {
-    clientLogger.debug('[Chat] Nudging participant', { participantId })
+  // stopStreaming function
+  const stopStreaming = useCallback(() => {
+    clientLogger.debug('[Chat] Stopping streaming response')
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setStreaming(false)
+    setWaitingForResponse(false)
+    setSending(false)
+    setRespondingParticipantId(null)
+    setPendingToolCalls([])
+    setToolExecutionStatus(null)
+    if (isMultiChar) {
+      clientLogger.debug('[Chat] Setting userStoppedStreamRef to prevent auto-triggering')
+      userStoppedStreamRef.current = true
+    }
+    if (streamingContent) {
+      clientLogger.debug('[Chat] Streaming stopped with partial content', {
+        contentLength: streamingContent.length,
+      })
+      showInfoToast('Response stopped - your turn to speak')
+    }
+    setStreamingContent('')
+  }, [streamingContent, isMultiChar])
 
-    // Find participant name for ephemeral message
+  // Persist turn state effect
+  useEffect(() => {
+    if (!isMultiChar) return
+    if (streaming || waitingForResponse) return
+    if (turnSelectionResult === null) return
+
+    persistTurnState(turnSelectionResult.nextSpeakerId)
+  }, [isMultiChar, streaming, waitingForResponse, turnSelectionResult, persistTurnState])
+
+  // Character management handlers
+  const handleAddCharacter = useCallback(() => {
+    clientLogger.debug('[Chat] Opening add character dialog')
+    setAddCharacterDialogOpen(true)
+  }, [])
+
+  const handleCharacterAdded = useCallback(() => {
+    clientLogger.info('[Chat] Character added, refreshing chat data')
+    fetchChat()
+  }, [fetchChat])
+
+  const handleRemoveCharacter = useCallback(async (participantId: string) => {
     const participant = participantData.find(p => p.id === participantId)
-    const participantName = participant?.character?.name || participant?.persona?.name || 'Participant'
+    const characterName = participant?.character?.name || 'This character'
 
-    // Add ephemeral nudge notification
-    const ephemeral = createEphemeralMessage('nudge', participantId, participantName)
-    setEphemeralMessages(prev => [...prev, ephemeral])
+    clientLogger.debug('[Chat] Requesting character removal', {
+      participantId,
+      characterName,
+      isGenerating: streaming || waitingForResponse,
+      currentSpeakerId: turnState.lastSpeakerId,
+    })
 
-    // Update turn state
-    const newTurnState = nudgeParticipant(turnState, participantId)
-    setTurnState(newTurnState)
-
-    // Recalculate next speaker
-    if (participantsAsBase.length > 0) {
-      const result = selectNextSpeaker(
-        participantsAsBase,
-        charactersMap,
-        newTurnState,
-        userParticipantId
-      )
-      setTurnSelectionResult(result)
-    }
-
-    // Trigger immediate response generation (Phase 5 enhancement)
-    triggerContinueMode(participantId)
-  }, [turnState, participantsAsBase, charactersMap, userParticipantId, participantData, triggerContinueMode])
-
-  // Handle queue action
-  const handleQueue = useCallback((participantId: string) => {
-    clientLogger.debug('[Chat] Queueing participant', { participantId })
-    const newTurnState = addToQueue(turnState, participantId)
-    setTurnState(newTurnState)
-
-    // Recalculate next speaker
-    if (participantsAsBase.length > 0) {
-      const result = selectNextSpeaker(
-        participantsAsBase,
-        charactersMap,
-        newTurnState,
-        userParticipantId
-      )
-      setTurnSelectionResult(result)
-    }
-  }, [turnState, participantsAsBase, charactersMap, userParticipantId])
-
-  // Handle dequeue action
-  const handleDequeue = useCallback((participantId: string) => {
-    clientLogger.debug('[Chat] Dequeuing participant', { participantId })
-    const newTurnState = removeFromQueue(turnState, participantId)
-    setTurnState(newTurnState)
-
-    // Recalculate next speaker
-    if (participantsAsBase.length > 0) {
-      const result = selectNextSpeaker(
-        participantsAsBase,
-        charactersMap,
-        newTurnState,
-        userParticipantId
-      )
-      setTurnSelectionResult(result)
-    }
-  }, [turnState, participantsAsBase, charactersMap, userParticipantId])
-
-  // Handle talkativeness change (optimistic update - would need API for persistence)
-  const handleTalkativenessChange = useCallback((participantId: string, value: number) => {
-    clientLogger.debug('[Chat] Talkativeness change', { participantId, value })
-    // TODO: Persist this to the database via API
-    // For now, just log it - the local slider state handles display
-  }, [])
-
-  // Phase 5: Dismiss an ephemeral message
-  const handleDismissEphemeral = useCallback((ephemeralId: string) => {
-    clientLogger.debug('[Chat] Dismissing ephemeral message', { ephemeralId })
-    setEphemeralMessages(prev => prev.filter(em => em.id !== ephemeralId))
-  }, [])
-
-  // Phase 7: Continue button - User passes turn to next character
-  const handleContinue = useCallback(() => {
-    clientLogger.debug('[Chat] User passing turn via Continue button')
-
-    // Edge case: No active characters
-    if (!hasActiveCharacters) {
-      clientLogger.warn('[Chat] Cannot continue - no active characters')
-      showErrorToast('No characters available. Add a character to continue.')
+    if ((streaming || waitingForResponse) && turnState.lastSpeakerId === participantId) {
+      clientLogger.warn('[Chat] Cannot remove character while they are generating')
+      showErrorToast(`Cannot remove ${characterName} while they are generating a response. Please wait for them to finish.`)
       return
     }
 
-    // Get the next character to speak
-    const result = selectNextSpeaker(participantsAsBase, charactersMap, turnState, userParticipantId)
-    if (result.nextSpeakerId && result.nextSpeakerId !== userParticipantId) {
-      clientLogger.debug('[Chat] Selected next speaker for continue', {
-        participantId: result.nextSpeakerId,
-        reason: result.reason,
-      })
-      triggerContinueMode(result.nextSpeakerId)
-    } else {
-      clientLogger.warn('[Chat] Continue button clicked but no valid next speaker', {
-        nextSpeakerId: result.nextSpeakerId,
-        reason: result.reason,
-      })
-      // User-friendly message for edge case 3
-      showInfoToast('All characters have spoken. Send a message to continue the conversation.')
-    }
-  }, [participantsAsBase, charactersMap, turnState, userParticipantId, triggerContinueMode, hasActiveCharacters])
+    const confirmed = await showConfirmation(
+      `Remove ${characterName} from this chat? Their past messages will remain visible, but they will no longer participate in the conversation.`
+    )
 
-  const fetchChatSettings = useCallback(async () => {
+    if (!confirmed) {
+      clientLogger.debug('[Chat] Character removal cancelled by user')
+      return
+    }
+
     try {
-      const res = await fetch('/api/chat-settings')
+      const res = await fetch(`/api/chats/${id}/participants`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId }),
+      })
+
       if (!res.ok) {
-        const errorBody = await res.text().catch(() => 'Unable to read response body')
-        throw new Error(`Failed to fetch chat settings: ${res.status} ${res.statusText} - ${errorBody}`)
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to remove character')
       }
-      const data = await res.json()
-      setChatSettings(data)
+
+      clientLogger.info('[Chat] Character removed successfully', { participantId, characterName })
+      showSuccessToast(`${characterName} has been removed from the chat`)
+
+      setEphemeralMessages(prev => prev.filter(em => em.participantId !== participantId))
+      setTurnState(prev => ({
+        ...prev,
+        queue: prev.queue.filter(qId => qId !== participantId),
+      }))
+
+      await fetchChat()
+
+      const remainingCharacters = participantsAsBase.filter(
+        p => p.type === 'CHARACTER' && p.isActive && p.id !== participantId
+      )
+
+      if (remainingCharacters.length === 0) {
+        clientLogger.warn('[Chat] No active characters remain in chat')
+        showErrorToast('All characters have been removed. Add a character to continue the conversation.')
+      }
     } catch (err) {
-      clientLogger.error('Failed to fetch chat settings', {
+      clientLogger.error('[Chat] Error removing character', {
         error: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
+        participantId,
       })
-      // Use default settings if fetch fails
-      setChatSettings({ id: '', userId: '', avatarDisplayMode: 'ALWAYS', avatarDisplayStyle: 'CIRCULAR', tagStyles: {}, createdAt: '', updatedAt: '' })
+      showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
     }
-  }, [])
+  }, [id, participantData, fetchChat, streaming, waitingForResponse, turnState.lastSpeakerId, participantsAsBase])
 
-  const fetchChat = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/chats/${id}`)
-      if (!res.ok) throw new Error('Failed to fetch chat')
-      const data = await res.json()
-      setChat(data.chat)
-
-      const allMessages = data.chat.messages.filter((m: Message) => m.role !== 'SYSTEM')
-
-      // Organize swipe groups
-      const swipeGroups: Record<string, Message[]> = {}
-      const displayMessages: Message[] = []
-      const newSwipeStates: Record<string, { current: number; total: number; messages: Message[] }> = {}
-
-      allMessages.forEach((msg: Message) => {
-        if (msg.swipeGroupId) {
-          if (!swipeGroups[msg.swipeGroupId]) {
-            swipeGroups[msg.swipeGroupId] = []
-          }
-          swipeGroups[msg.swipeGroupId].push(msg)
-        } else {
-          displayMessages.push(msg)
-        }
-      })
-
-      // For each swipe group, show only the current swipe (index 0 by default)
-      Object.entries(swipeGroups).forEach(([groupId, groupMessages]) => {
-        const sorted = groupMessages.sort((a, b) => (a.swipeIndex || 0) - (b.swipeIndex || 0))
-        displayMessages.push(sorted[0])
-        newSwipeStates[groupId] = {
-          current: 0,
-          total: sorted.length,
-          messages: sorted
-        }
-      })
-
-      // Sort by creation time
-      displayMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-
-      setMessages(displayMessages)
-      setSwipeStates(newSwipeStates)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }, [id])
-
-  const fetchChatPhotoCount = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/chats/${id}/files`)
-      if (res.ok) {
-        const data = await res.json()
-        const imageCount = (data.files || []).filter((f: { mimeType: string }) => f.mimeType.startsWith('image/')).length
-        setChatPhotoCount(imageCount)
-      }
-    } catch (err) {
-      clientLogger.error('Failed to fetch chat photo count:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [id])
-
-  // Fetch memory count for this chat
-  const fetchChatMemoryCount = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/chats/${id}/memories`)
-      if (res.ok) {
-        const data = await res.json()
-        setChatMemoryCount(data.memoryCount || 0)
-        clientLogger.debug('[Chat] Fetched memory count', { chatId: id, memoryCount: data.memoryCount })
-      }
-    } catch (err) {
-      clientLogger.error('Failed to fetch chat memory count:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [id])
-
-  // Handle deleting all memories for this chat
+  // Handle memories
   const handleDeleteChatMemories = useCallback(async () => {
     if (chatMemoryCount === 0) {
       clientLogger.debug('[Chat] No memories to delete')
@@ -796,7 +696,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (res.ok) {
         const data = await res.json()
         clientLogger.info('[Chat] Chat memories deleted successfully', { deletedCount: data.deletedCount })
-        setChatMemoryCount(0)
+        chatDataHook.setChatMemoryCount(0)
         showSuccessToast(`Deleted ${data.deletedCount} memories`)
       } else {
         const errorData = await res.json()
@@ -807,11 +707,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       clientLogger.error('[Chat] Error deleting chat memories', { error: err instanceof Error ? err.message : String(err) })
       showErrorToast('Failed to delete memories')
     }
-  }, [id, chatMemoryCount])
+  }, [id, chatMemoryCount, chatDataHook])
 
-  // Handle re-extracting memories for this chat
   const handleReextractMemories = useCallback(async () => {
-    // Get the first character participant for queueing
     const characterParticipant = chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)
     if (!characterParticipant?.character || !characterParticipant.connectionProfile) {
       clientLogger.warn('[Chat] Cannot re-extract memories: no character or connection profile')
@@ -860,106 +758,43 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [id, chat])
 
-  // Phase 6: Handle adding a character to the chat
-  const handleAddCharacter = useCallback(() => {
-    clientLogger.debug('[Chat] Opening add character dialog')
-    setAddCharacterDialogOpen(true)
-  }, [])
-
-  // Phase 6: Handle character added callback - refresh chat data
-  const handleCharacterAdded = useCallback(() => {
-    clientLogger.info('[Chat] Character added, refreshing chat data')
-    fetchChat()
-  }, [fetchChat])
-
-  // Phase 6: Handle removing a character from the chat
-  // Phase 7: Enhanced with edge case handling
-  const handleRemoveCharacter = useCallback(async (participantId: string) => {
-    const participant = participantData.find(p => p.id === participantId)
-    const characterName = participant?.character?.name || 'This character'
-
-    clientLogger.debug('[Chat] Requesting character removal', {
-      participantId,
-      characterName,
-      isGenerating: streaming || waitingForResponse,
-      currentSpeakerId: turnState.lastSpeakerId,
-    })
-
-    // Edge Case 4: Check if this character is currently generating
-    if ((streaming || waitingForResponse) && turnState.lastSpeakerId === participantId) {
-      clientLogger.warn('[Chat] Cannot remove character while they are generating', {
-        participantId,
-        characterName,
-      })
-      showErrorToast(`Cannot remove ${characterName} while they are generating a response. Please wait for them to finish.`)
-      return
-    }
-
-    // Confirm with user
-    const confirmed = await showConfirmation(
-      `Remove ${characterName} from this chat? Their past messages will remain visible, but they will no longer participate in the conversation.`
-    )
-
-    if (!confirmed) {
-      clientLogger.debug('[Chat] Character removal cancelled by user')
-      return
-    }
-
-    try {
-      const res = await fetch(`/api/chats/${id}/participants`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participantId }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to remove character')
-      }
-
-      clientLogger.info('[Chat] Character removed successfully', {
-        participantId,
-        characterName,
-      })
-
-      showSuccessToast(`${characterName} has been removed from the chat`)
-
-      // Clear ephemeral messages for this participant
-      setEphemeralMessages(prev => prev.filter(em => em.participantId !== participantId))
-
-      // Remove from queue if they were queued
-      setTurnState(prev => ({
-        ...prev,
-        queue: prev.queue.filter(qId => qId !== participantId),
-      }))
-
-      // Refresh chat data
-      await fetchChat()
-
-      // Edge Case 1: Check if this was the last character
-      const remainingCharacters = participantsAsBase.filter(
-        p => p.type === 'CHARACTER' && p.isActive && p.id !== participantId
-      )
-
-      if (remainingCharacters.length === 0) {
-        clientLogger.warn('[Chat] No active characters remain in chat')
-        showErrorToast('All characters have been removed. Add a character to continue the conversation.')
-      }
-    } catch (err) {
-      clientLogger.error('[Chat] Error removing character', {
-        error: err instanceof Error ? err.message : String(err),
-        participantId,
-      })
-      showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
-    }
-  }, [id, participantData, fetchChat, streaming, waitingForResponse, turnState.lastSpeakerId, participantsAsBase])
-
+  // Initialization effects
   useEffect(() => {
     fetchChat()
     fetchChatSettings()
     fetchChatPhotoCount()
     fetchChatMemoryCount()
   }, [fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount])
+
+  useEffect(() => {
+    const fetchTemplateName = async () => {
+      if (!chat?.roleplayTemplateId) {
+        setRoleplayTemplateName(null)
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/roleplay-templates/${chat.roleplayTemplateId}`)
+        if (res.ok) {
+          const template = await res.json()
+          setRoleplayTemplateName(template.name)
+          clientLogger.debug('[Chat] Fetched roleplay template name', {
+            templateId: chat.roleplayTemplateId,
+            templateName: template.name,
+          })
+        } else {
+          setRoleplayTemplateName(null)
+        }
+      } catch (err) {
+        clientLogger.error('[Chat] Error fetching roleplay template', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+        setRoleplayTemplateName(null)
+      }
+    }
+
+    fetchTemplateName()
+  }, [chat?.roleplayTemplateId])
 
   useEffect(() => {
     scrollToBottom()
@@ -987,58 +822,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return () => globalThis.window?.removeEventListener('resize', handleResize)
   }, [resizeTextarea])
 
-  // Handle file selection
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setUploadingFile(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const res = await fetch(`/api/chats/${id}/files`, {
-        method: 'POST',
-        body: formData,
-      })
-
-      const data = await safeJsonParse<{ file?: { id: string; filepath: string; mimeType: string; url: string }; error?: string }>(res)
-
-      if (!res.ok || !data.file) {
-        throw new Error(data.error || 'Failed to upload file')
-      }
-      const uploadedFile = data.file
-      setAttachedFiles((prev) => [...prev, {
-        id: uploadedFile.id,
-        filename: file.name,
-        filepath: uploadedFile.filepath,
-        mimeType: uploadedFile.mimeType,
-        url: uploadedFile.url,
-      }])
-      showSuccessToast('File attached')
-    } catch (err) {
-      clientLogger.error('Error uploading file:', { error: err instanceof Error ? err.message : String(err) })
-      showErrorToast(err instanceof Error ? err.message : 'Failed to upload file')
-    } finally {
-      setUploadingFile(false)
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-    }
-  }
-
-  // Remove attached file
-  const removeAttachedFile = (fileId: string) => {
-    setAttachedFiles((prev) => prev.filter((f) => f.id !== fileId))
-  }
-
+  // Main sendMessage function
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if ((!input.trim() && attachedFiles.length === 0) || sending) return
 
     // Reset auto-trigger ref when user sends a message (new turn cycle starts)
     lastAutoTriggeredRef.current = null
+    // Clear the user-stopped flag - user is engaging, so auto-trigger can resume
+    userStoppedStreamRef.current = false
 
     const userMessage = input.trim()
     const fileIds = attachedFiles.map((f) => f.id)
@@ -1121,10 +913,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
 
     try {
+      // Create AbortController for this request
+      abortControllerRef.current = new AbortController()
+      const { signal } = abortControllerRef.current
+
       const res = await fetch(`/api/chats/${id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestPayload),
+        signal,
       })
 
       // Debug: Mark request as complete
@@ -1167,8 +964,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
+            const rawData = line.slice(6).trim()
+            // Skip SSE markers that aren't JSON (OpenAI/OpenRouter use [DONE] to signal end of stream)
+            if (!rawData || rawData === '[DONE]' || rawData === '{}') {
+              continue
+            }
             try {
-              const data = JSON.parse(line.slice(6))
+              const data = JSON.parse(rawData)
 
               if (data.content) {
                 fullContent += data.content
@@ -1295,256 +1097,97 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               }
 
               if (data.error) {
-                throw new Error(data.error)
+                // Include details in error message if available
+                const errorMsg = data.details
+                  ? `${data.error}: ${data.details}`
+                  : data.error
+                throw new Error(errorMsg)
               }
             } catch (parseError) {
-              // Only log if it's a real parse error, not an empty JSON object
-              const errorMessage = parseError instanceof Error ? parseError.message : String(parseError)
-              if (errorMessage && errorMessage !== 'undefined' && errorMessage !== '[object Object]') {
-                clientLogger.error('Failed to parse SSE data:', { error: errorMessage, raw: line.slice(6).substring(0, 100) })
+              // Only log if it's a real parse error, not noise from SSE chunking
+              // Note: rawData is already trimmed and we've skipped empty/[DONE]/{} before try block
+              const errorMessage = getErrorMessage(parseError)
+              // Skip logging for generic stringified objects, empty error messages,
+              // or errors that look like empty JSON objects (various SSE chunk artifacts)
+              const trimmedError = errorMessage.trim()
+              const trimmedRaw = rawData.trim()
+              const shouldSkip = !errorMessage ||
+                !trimmedError ||
+                trimmedError === 'undefined' ||
+                trimmedError === '[object Object]' ||
+                trimmedError === '{}' ||
+                trimmedError === '{ }' ||
+                /^\{\s*\}$/.test(trimmedError) ||
+                // Also skip if the raw data itself is empty-ish (shouldn't happen but defensive)
+                !trimmedRaw ||
+                trimmedRaw === '{}' ||
+                /^\{\s*\}$/.test(trimmedRaw) ||
+                // Skip if it's a server-side error message (already logged on server)
+                trimmedRaw.includes('"error":')
+              if (!shouldSkip) {
+                clientLogger.debug('SSE parse issue (may be chunking artifact):', { rawLength: rawData.length })
               }
             }
           }
         }
       }
     } catch (err) {
-      clientLogger.error('Error sending message:', { error: err instanceof Error ? err.message : String(err) })
-      showErrorToast(err instanceof Error ? err.message : 'Failed to send message')
+      // Check if this was an abort (user stopped the response)
+      const isAbort = err instanceof Error && err.name === 'AbortError'
 
-      // Debug: Mark entries as error
-      if (debug?.isDebugMode) {
-        if (debugEntryId) {
-          debug.updateEntry(debugEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+      if (isAbort) {
+        clientLogger.debug('[Chat] Streaming aborted by user')
+        // Debug: Mark entries as aborted
+        if (debug?.isDebugMode) {
+          if (debugEntryId) {
+            debug.updateEntry(debugEntryId, { status: 'complete', error: 'Aborted by user' })
+          }
+          if (responseEntryId) {
+            debug.updateEntry(responseEntryId, { status: 'complete', error: 'Aborted by user' })
+          }
         }
-        if (responseEntryId) {
-          debug.updateEntry(responseEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+        // Don't remove user message or show error for abort
+        setStreamingContent('')
+        setStreaming(false)
+        setWaitingForResponse(false)
+        setRespondingParticipantId(null)
+      } else {
+        clientLogger.error('Error sending message:', { error: err instanceof Error ? err.message : String(err) })
+        showErrorToast(err instanceof Error ? err.message : 'Failed to send message')
+
+        // Debug: Mark entries as error
+        if (debug?.isDebugMode) {
+          if (debugEntryId) {
+            debug.updateEntry(debugEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+          }
+          if (responseEntryId) {
+            debug.updateEntry(responseEntryId, { status: 'error', error: err instanceof Error ? err.message : 'Unknown error' })
+          }
         }
+
+        // Remove the temporary user message on error
+        setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
+        setStreamingContent('')
+        setStreaming(false)
+        setWaitingForResponse(false)
+        setRespondingParticipantId(null)
       }
-
-      // Remove the temporary user message on error
-      setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
-      setStreamingContent('')
-      setStreaming(false)
-      setWaitingForResponse(false)
-      setRespondingParticipantId(null)
     } finally {
       setSending(false)
+      abortControllerRef.current = null
       setTimeout(() => {
         inputRef.current?.focus()
       }, 0)
     }
   }
 
-  const startEdit = (message: Message) => {
-    setEditingMessageId(message.id)
-    setEditContent(message.content)
-  }
-
-  const cancelEdit = () => {
-    setEditingMessageId(null)
-    setEditContent('')
-  }
-
-  const saveEdit = async (messageId: string) => {
-    try {
-      const res = await fetch(`/api/messages/${messageId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editContent }),
-      })
-
-      if (!res.ok) throw new Error('Failed to update message')
-
-      const updated = await res.json()
-      setMessages(messages.map(m => m.id === messageId ? { ...m, content: updated.content } : m))
-      setEditingMessageId(null)
-      setEditContent('')
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to update message')
-    }
-  }
-
-  const deleteMessage = async (messageId: string) => {
-    if (!(await showConfirmation('Are you sure you want to delete this message?'))) return
-
-    try {
-      const res = await fetch(`/api/messages/${messageId}`, {
-        method: 'DELETE',
-      })
-
-      if (!res.ok) throw new Error('Failed to delete message')
-
-      // Remove message from display
-      setMessages(messages.filter(m => m.id !== messageId))
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to delete message')
-    }
-  }
-
-  // Check if a user message can be resent
-  // Returns true if: it's the last user message AND there are either no messages after it,
-  // or only blank/empty assistant messages after it
-  const canResendMessage = (messageId: string, messageIndex: number): boolean => {
-    const message = messages[messageIndex]
-    if (!message || message.role !== 'USER') return false
-
-    // Check all messages after this one
-    const messagesAfter = messages.slice(messageIndex + 1)
-
-    // If no messages after, can resend
-    if (messagesAfter.length === 0) return true
-
-    // Check if all messages after are blank assistant messages
-    // A message is considered "blank" if it has no content or only whitespace
-    for (const msg of messagesAfter) {
-      // Skip TOOL messages - they don't count as meaningful responses
-      if (msg.role === 'TOOL') continue
-
-      // If there's a non-blank assistant message, can't resend
-      if (msg.role === 'ASSISTANT' && msg.content && msg.content.trim().length > 0) {
-        return false
-      }
-
-      // If there's another user message after this, can't resend
-      if (msg.role === 'USER') {
-        return false
-      }
-    }
-
-    return true
-  }
-
-  // Resend a user message: delete blank responses after it, delete the message, then resend
-  const resendMessage = async (message: Message) => {
-    if (sending) return
-
-    // Extract the original content (strip [Attached: ...] suffix)
-    const originalContent = getDisplayContent(message.content)
-
-    // Get attachments from the original message
-    const originalAttachments = message.attachments || []
-
-    // Find the index of this message
-    const messageIndex = messages.findIndex(m => m.id === message.id)
-    if (messageIndex === -1) return
-
-    // Delete blank assistant messages after this one (from the server)
-    const messagesAfter = messages.slice(messageIndex + 1)
-    for (const msg of messagesAfter) {
-      if (msg.role === 'ASSISTANT' && (!msg.content || msg.content.trim().length === 0)) {
-        try {
-          await fetch(`/api/messages/${msg.id}`, { method: 'DELETE' })
-        } catch {
-          // Ignore errors deleting blank messages
-        }
-      }
-    }
-
-    // Delete the original user message from server
-    try {
-      const deleteRes = await fetch(`/api/messages/${message.id}`, { method: 'DELETE' })
-      if (!deleteRes.ok) {
-        throw new Error('Failed to delete original message')
-      }
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to resend message')
-      return
-    }
-
-    // Remove the message and any blank messages after it from the UI
-    setMessages(prev => {
-      const idx = prev.findIndex(m => m.id === message.id)
-      if (idx === -1) return prev
-      // Keep messages before this one
-      return prev.slice(0, idx)
-    })
-
-    // Set up the input and attachments for resending
-    setInput(originalContent)
-
-    // If there were attachments, we need to re-attach them
-    if (originalAttachments.length > 0) {
-      setAttachedFiles(originalAttachments.map(a => ({
-        id: a.id,
-        filename: a.filename,
-        filepath: a.filepath,
-        mimeType: a.mimeType,
-        size: 0, // Size not stored in message attachments
-        url: a.filepath.startsWith('/') ? a.filepath : `/${a.filepath}`,
-      })))
-    }
-
-    // Focus the input so user can see the restored message
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus()
-      }
-    }, 100)
-
-    showSuccessToast('Message restored to input. Press Enter to resend.')
-  }
-
-  const generateSwipe = async (messageId: string) => {
-    try {
-      const res = await fetch(`/api/messages/${messageId}/swipe`, {
-        method: 'POST',
-      })
-
-      if (!res.ok) throw new Error('Failed to generate alternative response')
-
-      const newSwipe = await res.json()
-
-      // Refresh chat to get updated swipe groups
-      await fetchChat()
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to generate alternative response')
-    }
-  }
-
-  const switchSwipe = (groupId: string, direction: 'prev' | 'next') => {
-    const state = swipeStates[groupId]
-    if (!state) return
-
-    const newIndex = direction === 'next'
-      ? Math.min(state.current + 1, state.total - 1)
-      : Math.max(state.current - 1, 0)
-
-    if (newIndex === state.current) return
-
-    const newMessage = state.messages[newIndex]
-    setMessages(messages.map(m =>
-      m.swipeGroupId === groupId ? newMessage : m
-    ))
-    setSwipeStates({
-      ...swipeStates,
-      [groupId]: { ...state, current: newIndex }
-    })
-  }
-
-  const copyMessageContent = (content: string) => {
-    navigator.clipboard.writeText(content)
-    showSuccessToast('Message copied to clipboard!')
-  }
-
-  const toggleSourceView = (messageId: string) => {
-    setViewSourceMessageIds(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(messageId)) {
-        newSet.delete(messageId)
-      } else {
-        newSet.add(messageId)
-      }
-      return newSet
-    })
-  }
-
+  // UI helper functions
   const shouldShowAvatars = () => {
-    if (!chatSettings) return true // Default to showing avatars
+    if (!chatSettings) return true
     return chatSettings.avatarDisplayMode === 'ALWAYS'
   }
 
   const getMessageAvatar = (message: Message) => {
-    // Multi-character support: use participantId if available
     if (message.participantId) {
       const participant = getParticipantById(message.participantId)
       if (participant) {
@@ -1566,9 +1209,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       }
     }
 
-    // Fallback to original logic for messages without participantId
     if (message.role === 'USER') {
-      // Use persona participant if available, otherwise fall back to user
       const persona = getFirstPersona()
       if (persona) {
         return {
@@ -1599,70 +1240,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return null
   }
 
-  const getAvatarSrc = (avatar: ReturnType<typeof getMessageAvatar>) => {
-    if (!avatar) return null
-    if (avatar.defaultImage) {
-      const filepath = avatar.defaultImage.url || avatar.defaultImage.filepath;
-      return filepath.startsWith('/') ? filepath : `/${filepath}`;
-    }
-    return avatar.avatarUrl || null
-  }
-
-  // Strip [Attached: ...] from message content for display
-  const getDisplayContent = (content: string) => {
-    return content.replace(/\n?\[Attached: [^\]]+\]$/, '').trim()
-  }
-
-  // Get image attachments from a message
   const getImageAttachments = (message: Message) => {
     return (message.attachments || []).filter(a => a.mimeType.startsWith('image/'))
-  }
-
-  const renderAvatar = (avatar: ReturnType<typeof getMessageAvatar>) => {
-    if (!avatar) return null
-
-    const avatarSrc = getAvatarSrc(avatar)
-    // 4:5 ratio: width 100px = height 125px, max height 200px = width 160px
-    // Using width 120px and height 150px as a good balance
-    const avatarWidth = 120
-    const avatarHeight = 150
-
-    return (
-      <div className="flex flex-col items-center flex-shrink-0 w-32 gap-1">
-        <div
-          className="bg-muted flex items-center justify-center overflow-hidden"
-          style={{
-            width: `${avatarWidth}px`,
-            height: `${avatarHeight}px`,
-          }}
-        >
-          {avatarSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={avatarSrc}
-              alt={avatar.name}
-              width={avatarWidth}
-              height={avatarHeight}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <span className="text-4xl font-bold text-muted-foreground">
-              {avatar.name.charAt(0).toUpperCase()}
-            </span>
-          )}
-        </div>
-        <div className="text-center">
-          <div className="text-sm font-semibold text-foreground line-clamp-2">
-            {avatar.name}
-          </div>
-          {avatar.title && (
-            <div className="text-xs italic text-muted-foreground line-clamp-2">
-              {avatar.title}
-            </div>
-          )}
-        </div>
-      </div>
-    )
   }
 
   if (awaitingTagInfo) {
@@ -1697,710 +1276,247 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     )
   }
 
-  // Show participant sidebar when:
-  // - Multi-character chat (2+ characters)
-  // - User hasn't hidden it
   const shouldShowParticipantSidebar = isMultiChar && showParticipantSidebar
 
   return (
     <div className="qt-chat-layout">
-      {/* Main chat area */}
       <div className="qt-chat-main">
+        <div className="qt-chat-messages">
+          <div className="qt-chat-messages-list">
+            {/* Messages rendering */}
+            {messages.map((message, messageIndex) => {
+              const isEditing = editingMessageId === message.id
+              const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
+              const showResendButton = messageActions.canResendMessage(message.id, messageIndex)
 
-      {/* Messages */}
-      <div className="qt-chat-messages">
-        <div className="qt-chat-messages-list">
-        {messages.map((message, messageIndex) => {
-          const isEditing = editingMessageId === message.id
-          const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
-          const showResendButton = canResendMessage(message.id, messageIndex)
-
-          // Render TOOL messages differently
-          if (message.role === 'TOOL') {
-            return (
-              <ToolMessage
-                key={message.id}
-                message={message}
-                character={getFirstCharacter() ?? undefined}
-                onImageClick={(filepath, filename, fileId) => {
-                  // filepath is already normalized by ToolMessage
-                  setModalImage({ src: filepath, filename, fileId })
-                }}
-              />
-            )
-          }
-
-        const messageAvatar = shouldShowAvatars() ? getMessageAvatar(message) : null
-        const messageRowClasses = ['qt-chat-message-row']
-        if (message.role === 'USER') {
-          messageRowClasses.push('qt-chat-message-row-user')
-        } else {
-          messageRowClasses.push('qt-chat-message-row-assistant')
-        }
-
-        return (
-          <div
-            key={message.id}
-            className={messageRowClasses.join(' ')}
-          >
-              {message.role === 'ASSISTANT' && shouldShowAvatars() && (
-                <div className="flex-shrink-0">
-                  {renderAvatar(messageAvatar)}
-                </div>
-              )}
-            <div className="qt-chat-message-body group">
-                <div
-                  className={`chat-message ${
-                    message.role === 'USER'
-                      ? 'qt-chat-message-user'
-                      : 'qt-chat-message-assistant'
-                  }`}
-                >
-                  {isEditing ? (
-                    <div className="space-y-2">
-                      <textarea
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        className="qt-textarea"
-                        rows={3}
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => saveEdit(message.id)}
-                          className="qt-button qt-button-primary qt-button-sm"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          className="qt-button qt-button-secondary qt-button-sm"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {viewSourceMessageIds.has(message.id) ? (
-                        <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
-                          {message.content}
-                        </div>
-                      ) : (
-                        <MessageContent content={getDisplayContent(message.content)} />
-                      )}
-                      {/* Image attachment thumbnails */}
-                      {getImageAttachments(message).length > 0 && (
-                        <div className="qt-chat-attachment-list">
-                          {getImageAttachments(message).map((attachment) => (
-                            <button
-                              key={attachment.id}
-                              onClick={() => setModalImage({
-                                src: attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`,
-                                filename: attachment.filename,
-                                fileId: attachment.id,
-                              })}
-                              type="button"
-                              className="qt-button qt-chat-attachment-button"
-                            >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
-                                alt={attachment.filename}
-                                width={80}
-                                height={80}
-                                className="qt-chat-attachment-image"
-                              />
-                              <div className="qt-chat-attachment-overlay">
-                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                                </svg>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <div className="text-xs text-muted-foreground mt-2">
-                        {formatMessageTime(message.createdAt)}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Hover action buttons */}
-                {!isEditing && (
-                  <div className="absolute -top-8 right-0 flex gap-1 bg-muted rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => copyMessageContent(message.content)}
-                      className="p-1 text-muted-foreground hover:text-foreground"
-                      title="Copy message"
-                    >
-                      📋
-                    </button>
-                    <button
-                      onClick={() => toggleSourceView(message.id)}
-                      className="p-1 text-muted-foreground hover:text-foreground"
-                      title={viewSourceMessageIds.has(message.id) ? 'View rendered' : 'View source'}
-                    >
-                      {viewSourceMessageIds.has(message.id) ? '👁️' : '</>'}
-                    </button>
-                  </div>
-                )}
-
-                {/* Message actions */}
-                {!isEditing && (
-                  <div className="flex gap-2 mt-1 text-sm">
-                    {message.role === 'USER' && (
-                      <>
-                        <button
-                          onClick={() => startEdit(message)}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => deleteMessage(message.id)}
-                          className="text-destructive hover:text-destructive/80"
-                        >
-                          Delete
-                        </button>
-                        {showResendButton && (
-                          <button
-                            onClick={() => resendMessage(message)}
-                            className="text-warning hover:text-warning/80"
-                            title="Resend this message (deletes blank responses and restores to input)"
-                          >
-                            ↻ Resend
-                          </button>
-                        )}
-                      </>
-                    )}
-
-                    {message.role === 'ASSISTANT' && (
-                      <>
-                        <button
-                          onClick={() => deleteMessage(message.id)}
-                          className="text-destructive hover:text-destructive/80"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          onClick={() => generateSwipe(message.id)}
-                          className="text-info hover:text-info/80"
-                        >
-                          🔄 Regenerate
-                        </button>
-
-                        {/* Swipe controls */}
-                        {swipeState && swipeState.total > 1 && (
-                          <div className="flex items-center gap-2 ml-2">
-                            <button
-                              onClick={() => switchSwipe(message.swipeGroupId!, 'prev')}
-                              disabled={swipeState.current === 0}
-                              className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                            >
-                              ←
-                            </button>
-                            <span className="text-muted-foreground text-xs">
-                              {swipeState.current + 1} / {swipeState.total}
-                            </span>
-                            <button
-                              onClick={() => switchSwipe(message.swipeGroupId!, 'next')}
-                              disabled={swipeState.current === swipeState.total - 1}
-                              className="text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
-                            >
-                              →
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-              {message.role === 'USER' && shouldShowAvatars() && (
-                <div className="flex-shrink-0">
-                  {renderAvatar(messageAvatar)}
-                </div>
-              )}
-            </div>
-          )
-        })}
-
-        {/* Waiting for response - show large quill animation */}
-        {waitingForResponse && !streaming && (
-          <div className="qt-chat-message-row qt-chat-message-row-assistant items-center">
-            {shouldShowAvatars() && (
-              <div className="flex-shrink-0">
-                {renderAvatar({
-                  name: getRespondingCharacter()?.name || 'AI',
-                  title: null,
-                  avatarUrl: getRespondingCharacter()?.avatarUrl,
-                  defaultImage: getRespondingCharacter()?.defaultImage,
-                })}
-              </div>
-            )}
-            <div className="text-muted-foreground">
-              <QuillAnimation size="lg" />
-            </div>
-          </div>
-        )}
-
-        {/* Pending tool calls - shown collapsed before streaming response */}
-        {pendingToolCalls.length > 0 && (
-          <div className="qt-chat-message-row qt-chat-message-row-assistant">
-            <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-muted text-lg">
-              {(() => {
-                if (pendingToolCalls.some(tc => tc.name === 'generate_image')) return '🎨'
-                if (pendingToolCalls.some(tc => tc.name === 'search_memories')) return '🧠'
-                if (pendingToolCalls.some(tc => tc.name === 'search_web')) return '🔍'
-                return '⚙️'
-              })()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <details className="group" open={pendingToolCalls.some(tc => tc.status === 'pending')}>
-                <summary className="px-4 py-2 rounded-lg bg-muted border border-border cursor-pointer list-none flex items-center gap-2">
-                  <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                  <span className="text-sm font-medium text-foreground">
-                    {pendingToolCalls.map(tc => {
-                      const displayNames: Record<string, string> = {
-                        'generate_image': 'Image Generation',
-                        'search_memories': 'Memory Search',
-                        'search_web': 'Web Search',
-                      }
-                      return displayNames[tc.name] || tc.name
-                    }).join(', ')}
-                  </span>
-                  {pendingToolCalls.some(tc => tc.status === 'pending') && (
-                    <QuillAnimation size="sm" className="ml-auto text-muted-foreground" />
-                  )}
-                  {pendingToolCalls.every(tc => tc.status === 'success') && (
-                    <span className="ml-auto text-xs px-2 py-0.5 bg-success/20 text-success rounded">
-                      Complete
-                    </span>
-                  )}
-                  {pendingToolCalls.some(tc => tc.status === 'error') && (
-                    <span className="ml-auto text-xs px-2 py-0.5 bg-destructive/20 text-destructive rounded">
-                      Error
-                    </span>
-                  )}
-                </summary>
-                <div className="mt-2 px-4 py-2 rounded-lg bg-muted border border-border">
-                  {pendingToolCalls.map((tc) => (
-                    <div key={tc.id} className="text-xs text-muted-foreground">
-                      <span className="font-medium">{tc.name}</span>
-                      {tc.arguments && Object.keys(tc.arguments).length > 0 && (
-                        <span className="ml-2 text-muted-foreground/70">
-                          ({Object.entries(tc.arguments).map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 50) : JSON.stringify(v)}`).join(', ')})
-                        </span>
-                      )}
-                      {tc.status === 'success' && <span className="ml-2 text-success">✓</span>}
-                      {tc.status === 'error' && <span className="ml-2 text-destructive">✗</span>}
-                    </div>
-                  ))}
-                </div>
-              </details>
-            </div>
-          </div>
-        )}
-
-        {/* Phase 5: Ephemeral messages (nudge notifications, etc.) */}
-        {ephemeralMessages.map((em) => (
-          <EphemeralMessage
-            key={em.id}
-            message={em}
-            onDismiss={handleDismissEphemeral}
-          />
-        ))}
-
-        {/* Streaming message */}
-        {streaming && streamingContent && (
-          <div className="qt-chat-message-row qt-chat-message-row-assistant">
-            {shouldShowAvatars() && (
-              <div className="flex-shrink-0">
-                {renderAvatar({
-                  name: getRespondingCharacter()?.name || 'AI',
-                  title: null,
-                  avatarUrl: getRespondingCharacter()?.avatarUrl,
-                  defaultImage: getRespondingCharacter()?.defaultImage,
-                })}
-              </div>
-            )}
-            <div className="flex-1 min-w-0 px-4 py-3 rounded-lg bg-card border border-border text-foreground">
-              <MessageContent content={streamingContent} />
-              <QuillAnimation size="sm" className="inline-block ml-2 text-muted-foreground" />
-            </div>
-          </div>
-        )}
-
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
-
-      {/* Input */}
-      <div className="qt-chat-composer">
-        {/* Phase 7: Edge Case 1 - No active characters warning */}
-        {!hasActiveCharacters && messages.length > 0 && (
-          <div className="qt-alert qt-alert-warning flex items-center gap-3">
-            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <div className="flex-1">
-              <p className="font-medium text-sm">No characters in this chat</p>
-              <p className="text-xs opacity-80 mt-0.5">
-                Add a character to continue the conversation.
-              </p>
-            </div>
-            {isMultiChar && (
-              <button
-                onClick={handleAddCharacter}
-                className="qt-button qt-button-secondary qt-button-sm"
-              >
-                Add Character
-              </button>
-            )}
-          </div>
-        )}
-        <div className="qt-chat-composer-content">
-          {/* Tool execution status indicator */}
-          {toolExecutionStatus && (
-            <div
-              className={`qt-alert flex items-center gap-2 ${
-                toolExecutionStatus.status === 'pending'
-                  ? 'qt-alert-info'
-                  : toolExecutionStatus.status === 'success'
-                    ? 'qt-alert-success'
-                    : 'qt-alert-error'
-              }`}
-            >
-              {toolExecutionStatus.status === 'pending' ? (
-                <svg className="w-5 h-5 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              ) : toolExecutionStatus.status === 'success' ? (
-                <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              )}
-              <span className="text-sm font-medium">{toolExecutionStatus.message}</span>
-            </div>
-          )}
-
-          {/* Attached files preview */}
-          {attachedFiles.length > 0 && (
-            <div className="qt-chat-attachment-list mb-2">
-              {attachedFiles.map((file) => (
-                <div
-                  key={file.id}
-                  className="qt-chat-attachment-chip"
-                >
-                  {file.mimeType.startsWith('image/') ? (
-                    <svg className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  ) : (
-                    <svg className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  )}
-                  <span className="text-foreground max-w-[150px] truncate">
-                    {file.filename}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeAttachedFile(file.id)}
-                    className="qt-chat-attachment-chip-remove"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {/* Roleplay annotation buttons */}
-          <RoleplayAnnotationButtons
-            roleplayTemplateId={chat?.roleplayTemplateId}
-            inputRef={inputRef}
-            input={input}
-            setInput={setInput}
-            disabled={sending || !hasActiveCharacters}
-          />
-          <form onSubmit={sendMessage} className="qt-chat-composer-inner">
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={handleFileSelect}
-              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/markdown,text/csv"
-              className="hidden"
-            />
-            {/* Buttons column */}
-            <div className="qt-chat-toolbar">
-              {/* Attach file button */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={sending || uploadingFile}
-                className="qt-button qt-chat-toolbar-button"
-                title="Attach file"
-              >
-                {uploadingFile ? (
-                  <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                  </svg>
-                )}
-              </button>
-              {/* Tools button - opens palette with gallery and settings */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setToolPaletteOpen(!toolPaletteOpen)
-                  }}
-                  className="qt-button qt-chat-toolbar-button"
-                  title="Tools menu"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
-                <ToolPalette
-                  isOpen={toolPaletteOpen}
-                  onClose={() => setToolPaletteOpen(false)}
-                  onGalleryClick={() => setGalleryOpen(true)}
-                  onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
-                  onSettingsClick={() => setChatSettingsModalOpen(true)}
-                  onAddCharacterClick={handleAddCharacter}
-                  onDeleteChatMemoriesClick={handleDeleteChatMemories}
-                  onReextractMemoriesClick={handleReextractMemories}
-                  chatPhotoCount={chatPhotoCount}
-                  hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
-                  showAddCharacter={isSingleCharacterChat}
-                  chatId={id}
-                  chatMemoryCount={chatMemoryCount}
-                />
-              </div>
-            </div>
-            {showPreview ? (
-              <div className="qt-chat-composer-input overflow-y-auto"
-                style={{
-                  lineHeight: '1.5'
-                }}
-              >
-                <MessageContent content={input} />
-              </div>
-            ) : (
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value)
-                  resizeTextarea(e.target)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.shiftKey) {
-                    // Shift+Enter: insert newline, don't submit
-                    e.preventDefault()
-                    const textarea = e.currentTarget
-                    const start = textarea.selectionStart
-                    const end = textarea.selectionEnd
-                    const newValue = input.substring(0, start) + '\n' + input.substring(end)
-                    setInput(newValue)
-                    // Move cursor after the inserted newline
-                    setTimeout(() => {
-                      textarea.selectionStart = textarea.selectionEnd = start + 1
-                      resizeTextarea(textarea)
-                    }, 0)
-                  } else if (e.key === 'Enter' && !e.shiftKey) {
-                    // Enter (without Shift): submit form
-                    e.preventDefault()
-                    if (input.trim() || attachedFiles.length > 0) {
-                      const form = e.currentTarget.form
-                      if (form) {
-                        form.dispatchEvent(new Event('submit', { bubbles: true }))
-                      }
-                    }
-                  }
-                }}
-                disabled={sending || !hasActiveCharacters}
-                rows={1}
-                placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
-                className="qt-chat-composer-input resize-none overflow-y-auto"
-                style={{
-                  lineHeight: '1.5'
-                }}
-              />
-            )}
-            {/* Buttons column - right side */}
-            <div className="qt-chat-toolbar">
-              {/* Send button */}
-              <button
-                type="submit"
-                disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
-                className="qt-chat-composer-send"
-                title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </button>
-              {/* Continue button - Phase 7: Pass turn to next character */}
-              {isMultiChar && hasActiveCharacters && (
-                <button
-                  type="button"
-                  onClick={handleContinue}
-                  disabled={
-                    streaming ||
-                    waitingForResponse ||
-                    turnSelectionResult?.nextSpeakerId !== null
-                  }
-                  className="qt-chat-toolbar-button qt-chat-continue-button"
-                  title={
-                    turnSelectionResult?.nextSpeakerId !== null
-                      ? "It's not your turn"
-                      : "Pass turn to next character"
-                  }
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-              )}
-              {/* Toggle Preview button */}
-              <button
-                type="button"
-                onClick={() => setShowPreview(!showPreview)}
-                className="qt-chat-toolbar-button"
-                title="Toggle preview"
-              >
-                {showPreview ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      {/* Image Modal */}
-      <ImageModal
-        isOpen={modalImage !== null}
-        onClose={() => setModalImage(null)}
-        src={modalImage?.src || ''}
-        filename={modalImage?.filename || ''}
-        fileId={modalImage?.fileId}
-        characterId={getFirstCharacter()?.id}
-        characterName={getFirstCharacter()?.name}
-        personaId={getFirstPersona()?.id}
-        personaName={getFirstPersona()?.name}
-        onDelete={() => {
-          // Refresh chat to update message attachments
-          fetchChat()
-        }}
-      />
-
-      {/* Photo Gallery Modal */}
-      <PhotoGalleryModal
-        mode="chat"
-        isOpen={galleryOpen}
-        onClose={() => setGalleryOpen(false)}
-        chatId={id}
-        characterId={getFirstCharacter()?.id}
-        characterName={getFirstCharacter()?.name}
-        personaId={getFirstPersona()?.id}
-        personaName={getFirstPersona()?.name}
-        onImageDeleted={(fileId) => {
-          // Update messages to show deleted indicator for this file
-          setMessages((prev) =>
-            prev.map((msg) => {
-              if (msg.attachments?.some((a) => a.id === fileId)) {
-                // Remove the attachment and add deleted indicator to content
-                const newAttachments = msg.attachments.filter((a) => a.id !== fileId)
-                const newContent = msg.content.includes('[attached photo deleted]')
-                  ? msg.content
-                  : `${msg.content} [attached photo deleted]`
-                return { ...msg, attachments: newAttachments, content: newContent }
+              if (message.role === 'TOOL') {
+                return (
+                  <ToolMessage
+                    key={message.id}
+                    message={message}
+                    character={getFirstCharacter() ?? undefined}
+                    onImageClick={(filepath, filename, fileId) => {
+                      setModalImage({ src: filepath, filename, fileId })
+                    }}
+                  />
+                )
               }
-              return msg
+
+              const messageAvatarData = shouldShowAvatars() ? getMessageAvatar(message) : null
+              const messageAvatar = messageAvatarData as any
+
+              return (
+                <MessageRow
+                  key={message.id}
+                  message={message}
+                  messageIndex={messageIndex}
+                  isEditing={isEditing}
+                  editContent={editContent}
+                  viewSourceMessageIds={viewSourceMessageIds}
+                  swipeState={swipeState}
+                  showResendButton={showResendButton}
+                  shouldShowAvatars={shouldShowAvatars()}
+                  messageAvatar={messageAvatar}
+                  roleplayTemplateName={roleplayTemplateName}
+                  isMultiChar={isMultiChar}
+                  participantData={participantData}
+                  turnState={turnState}
+                  streaming={streaming}
+                  waitingForResponse={waitingForResponse}
+                  mobileParticipantDropdownId={mobileParticipantDropdownId}
+                  mobileParticipantRefs={mobileParticipantRefs}
+                  userParticipantId={userParticipantId}
+                  onEditStart={messageActions.startEdit}
+                  onEditSave={messageActions.saveEdit}
+                  onEditCancel={messageActions.cancelEdit}
+                  onEditChange={setEditContent}
+                  onToggleSourceView={messageActions.toggleSourceView}
+                  onDelete={messageActions.deleteMessage}
+                  onGenerateSwipe={(msgId) => messageActions.generateSwipe(msgId, fetchChat)}
+                  onSwitchSwipe={(groupId, dir) => messageActions.switchSwipe(groupId, dir, swipeStates, setSwipeStates)}
+                  onCopyContent={messageActions.copyMessageContent}
+                  onResend={messageActions.resendMessage}
+                  onImageClick={(filepath, filename, fileId) => {
+                    setModalImage({ src: filepath, filename, fileId })
+                  }}
+                  onMobileParticipantDropdownChange={setMobileParticipantDropdownId}
+                  onHandleNudge={turnManagement.handleNudge}
+                  onHandleQueue={turnManagement.handleQueue}
+                  onHandleDequeue={turnManagement.handleDequeue}
+                  onHandleTalkativenessChange={(pId, value) => {
+                    // Handle talkativeness change - this would need to be implemented
+                    clientLogger.debug('[Chat] Talkativeness change requested', { participantId: pId, value })
+                  }}
+                  onHandleRemoveCharacter={handleRemoveCharacter}
+                  onHandleContinue={turnManagement.handleContinue}
+                />
+              )
+            })}
+
+            {/* Pending tool calls */}
+            <PendingToolCalls pendingToolCalls={pendingToolCalls} />
+
+            {/* Ephemeral messages */}
+            <EphemeralMessagesComponent
+              messages={ephemeralMessages}
+              onDismiss={turnManagement.handleDismissEphemeral}
+            />
+
+            {/* Streaming message - using extracted component */}
+            <StreamingMessage
+              streaming={streaming}
+              streamingContent={streamingContent}
+              waitingForResponse={waitingForResponse}
+              respondingCharacter={getRespondingCharacter() || undefined}
+              roleplayTemplateName={roleplayTemplateName}
+              shouldShowAvatars={shouldShowAvatars()}
+              onStopClick={stopStreaming}
+            />
+
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+
+        {/* Chat Composer - using extracted component */}
+        <ChatComposer
+          id={id}
+          input={input}
+          setInput={setInput}
+          attachedFiles={attachedFiles}
+          onRemoveAttachedFile={removeAttachedFile}
+          disabled={sending}
+          sending={sending}
+          hasActiveCharacters={hasActiveCharacters}
+          streaming={streaming}
+          waitingForResponse={waitingForResponse}
+          toolPaletteOpen={toolPaletteOpen}
+          setToolPaletteOpen={setToolPaletteOpen}
+          mobileToolPaletteOpen={mobileToolPaletteOpen}
+          setMobileToolPaletteOpen={setMobileToolPaletteOpen}
+          showPreview={showPreview}
+          setShowPreview={setShowPreview}
+          uploadingFile={uploadingFile}
+          toolExecutionStatus={toolExecutionStatus}
+          roleplayTemplateName={roleplayTemplateName}
+          chatPhotoCount={chatPhotoCount}
+          chatMemoryCount={chatMemoryCount}
+          hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
+          isSingleCharacterChat={isSingleCharacterChat}
+          roleplayTemplateId={chat?.roleplayTemplateId}
+          onSubmit={sendMessage}
+          onFileSelect={handleFileSelect}
+          onAttachFileClick={() => {
+            // File input ref will be created in component
+          }}
+          onGalleryClick={() => setGalleryOpen(true)}
+          onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
+          onAddCharacterClick={handleAddCharacter}
+          onSettingsClick={() => setChatSettingsModalOpen(true)}
+          onDeleteChatMemoriesClick={handleDeleteChatMemories}
+          onReextractMemoriesClick={handleReextractMemories}
+          onStopStreaming={stopStreaming}
+        />
+
+        {/* Modals */}
+        <ImageModal
+          isOpen={modalImage !== null}
+          onClose={() => setModalImage(null)}
+          src={modalImage?.src || ''}
+          filename={modalImage?.filename || ''}
+          fileId={modalImage?.fileId}
+          characterId={getFirstCharacter()?.id}
+          characterName={getFirstCharacter()?.name}
+          personaId={getFirstPersona()?.id}
+          personaName={getFirstPersona()?.name}
+          onDelete={() => {
+            fetchChat()
+          }}
+        />
+
+        <PhotoGalleryModal
+          mode="chat"
+          isOpen={galleryOpen}
+          onClose={() => setGalleryOpen(false)}
+          chatId={id}
+          characterId={getFirstCharacter()?.id}
+          characterName={getFirstCharacter()?.name}
+          personaId={getFirstPersona()?.id}
+          personaName={getFirstPersona()?.name}
+          onImageDeleted={(fileId) => {
+            setMessages((prev) =>
+              prev.map((msg) => {
+                if (msg.attachments?.some((a) => a.id === fileId)) {
+                  const newAttachments = msg.attachments.filter((a) => a.id !== fileId)
+                  const newContent = msg.content.includes('[attached photo deleted]')
+                    ? msg.content
+                    : `${msg.content} [attached photo deleted]`
+                  return { ...msg, attachments: newAttachments, content: newContent }
+                }
+                return msg
+              })
+            )
+            fetchChatPhotoCount()
+          }}
+        />
+
+        <ChatSettingsModal
+          isOpen={chatSettingsModalOpen}
+          onClose={() => setChatSettingsModalOpen(false)}
+          chatId={id}
+          participants={chat?.participants || []}
+          roleplayTemplateId={chat?.roleplayTemplateId}
+          onSuccess={fetchChat}
+        />
+
+        <GenerateImageDialog
+          isOpen={generateImageDialogOpen}
+          onClose={() => setGenerateImageDialogOpen(false)}
+          chatId={id}
+          participants={chat?.participants || []}
+          imageProfileId={chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)?.imageProfile?.id}
+          onImagesGenerated={(images, prompt) => {
+            fetch(`/api/chats/${id}/tool-results`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tool: 'generate_image',
+                initiatedBy: 'user',
+                prompt,
+                images: images.map(img => ({
+                  id: img.id,
+                  filename: img.filename,
+                })),
+              }),
             })
-          )
-          // Refresh photo count
-          fetchChatPhotoCount()
-        }}
-      />
+              .then((res) => res.json())
+              .then(() => {
+                fetchChat()
+              })
+              .catch((err) => clientLogger.error('Failed to save tool result:', { error: err instanceof Error ? err.message : String(err) }))
 
-      {/* Chat Settings Modal */}
-      <ChatSettingsModal
-        isOpen={chatSettingsModalOpen}
-        onClose={() => setChatSettingsModalOpen(false)}
-        chatId={id}
-        participants={chat?.participants || []}
-        roleplayTemplateId={chat?.roleplayTemplateId}
-        onSuccess={fetchChat}
-      />
-
-      {/* Generate Image Dialog */}
-      <GenerateImageDialog
-        isOpen={generateImageDialogOpen}
-        onClose={() => setGenerateImageDialogOpen(false)}
-        chatId={id}
-        participants={chat?.participants || []}
-        imageProfileId={chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)?.imageProfile?.id}
-        onImagesGenerated={(images, prompt) => {
-          // Save tool result message to chat
-          fetch(`/api/chats/${id}/tool-results`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tool: 'generate_image',
-              initiatedBy: 'user',
-              prompt,
-              images: images.map(img => ({
-                id: img.id,
-                filename: img.filename,
+            setAttachedFiles((prev) => [
+              ...prev,
+              ...images.map((img) => ({
+                ...img,
+                url: img.filepath.startsWith('/') ? img.filepath : `/${img.filepath}`,
               })),
-            }),
-          })
-            .then((res) => res.json())
-            .then(() => {
-              // Refresh chat to show the new tool message
-              fetchChat()
-            })
-            .catch((err) => clientLogger.error('Failed to save tool result:', { error: err instanceof Error ? err.message : String(err) }))
+            ])
+            fetchChatPhotoCount()
+          }}
+        />
 
-          // Attach generated images to the next message
-          setAttachedFiles((prev) => [
-            ...prev,
-            ...images.map((img) => ({
-              ...img,
-              url: img.filepath.startsWith('/') ? img.filepath : `/${img.filepath}`,
-            })),
-          ])
-          fetchChatPhotoCount()
-        }}
-      />
+        <AddCharacterDialog
+          isOpen={addCharacterDialogOpen}
+          onClose={() => setAddCharacterDialogOpen(false)}
+          chatId={id}
+          existingCharacterIds={chat?.participants
+            .filter(p => p.type === 'CHARACTER' && p.isActive)
+            .map(p => p.character?.id)
+            .filter((id): id is string => id !== null && id !== undefined) || []}
+          onCharacterAdded={handleCharacterAdded}
+        />
       </div>
 
-      {/* Participant Sidebar - shown for multi-character chats when debug mode is off */}
       {shouldShowParticipantSidebar && (
         <ParticipantSidebar
           participants={participantData}
@@ -2408,27 +1524,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           turnSelectionResult={turnSelectionResult}
           isGenerating={streaming || waitingForResponse}
           userParticipantId={userParticipantId}
-          onNudge={handleNudge}
-          onQueue={handleQueue}
-          onDequeue={handleDequeue}
-          onTalkativenessChange={handleTalkativenessChange}
+          respondingParticipantId={respondingParticipantId}
+          onNudge={turnManagement.handleNudge}
+          onQueue={turnManagement.handleQueue}
+          onDequeue={turnManagement.handleDequeue}
+          onSkip={turnManagement.handleContinue}
+          onTalkativenessChange={(pId, value) => {
+            clientLogger.debug('[Chat] Talkativeness change', { participantId: pId, value })
+          }}
           onAddCharacter={handleAddCharacter}
           onRemoveCharacter={handleRemoveCharacter}
         />
       )}
-
-      {/* Add Character Dialog - Phase 6 */}
-      <AddCharacterDialog
-        isOpen={addCharacterDialogOpen}
-        onClose={() => setAddCharacterDialogOpen(false)}
-        chatId={id}
-        existingCharacterIds={chat?.participants
-          .filter(p => p.type === 'CHARACTER' && p.isActive)
-          .map(p => p.character?.id)
-          .filter((id): id is string => id !== null && id !== undefined) || []}
-        onCharacterAdded={handleCharacterAdded}
-      />
-
     </div>
   )
 }

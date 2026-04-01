@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { BackupDialog } from './backup-dialog'
-import { RestoreDialog } from './restore-dialog'
+import { RestoreDialog } from './restore'
 
 interface BackupInfo {
   key: string
@@ -111,7 +111,7 @@ export default function BackupRestoreCard() {
           <h2 className="text-2xl font-bold text-foreground mb-1">
             Backup & Restore
           </h2>
-          <p className="text-muted-foreground">
+          <p className="qt-text-small">
             Export your data or restore from a previous backup
           </p>
         </div>
@@ -180,7 +180,7 @@ export default function BackupRestoreCard() {
             <svg className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
             </svg>
-            <p className="text-muted-foreground">No cloud backups yet. Create one to get started.</p>
+            <p className="qt-text-small">No cloud backups yet. Create one to get started.</p>
           </div>
         ) : (
           <div className="space-y-2 max-h-[180px] overflow-y-auto">
@@ -190,10 +190,10 @@ export default function BackupRestoreCard() {
                 className="qt-card p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-foreground truncate">
+                  <p className="qt-text-primary truncate">
                     {backup.filename}
                   </p>
-                  <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
+                  <div className="flex gap-4 mt-1 qt-text-small">
                     <span>{formatDate(backup.createdAt)}</span>
                     <span>{formatFileSize(backup.size)}</span>
                   </div>
@@ -201,7 +201,7 @@ export default function BackupRestoreCard() {
                 <div className="flex items-center gap-2 ml-4">
                   {confirmDeleteKey === backup.key ? (
                     <>
-                      <span className="text-sm text-muted-foreground">Delete?</span>
+                      <span className="qt-text-small">Delete?</span>
                       <button
                         onClick={() => handleDeleteBackup(backup.key)}
                         disabled={deletingKey === backup.key}

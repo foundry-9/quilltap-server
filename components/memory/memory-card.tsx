@@ -57,12 +57,12 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-foreground font-medium line-clamp-2">
+          <p className="qt-text-label line-clamp-2">
             {memory.summary}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className={`text-xs font-medium ${importanceColor}`} title={`Importance: ${(memory.importance * 100).toFixed(0)}%`}>
+          <span className={`qt-text-label-xs ${importanceColor}`} title={`Importance: ${(memory.importance * 100).toFixed(0)}%`}>
             {importanceLabel}
           </span>
           <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -77,7 +77,7 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
 
       {/* Content Preview / Full Content */}
       <div className="mb-3">
-        <p className={`text-sm text-muted-foreground ${expanded ? '' : 'line-clamp-3'}`}>
+        <p className={`qt-text-small ${expanded ? '' : 'line-clamp-3'}`}>
           {memory.content}
         </p>
         {memory.content.length > 150 && (
@@ -96,7 +96,7 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
           {memory.keywords.map((keyword, index) => (
             <span
               key={index}
-              className="text-xs px-2 py-0.5 bg-accent text-muted-foreground rounded"
+              className="qt-text-xs px-2 py-0.5 bg-accent rounded"
             >
               {keyword}
             </span>
@@ -115,7 +115,7 @@ export function MemoryCard({ memory, onEdit, onDelete, isDeleting = false }: Mem
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-2 border-t border-border">
-        <span className="text-xs text-muted-foreground">
+        <span className="qt-text-xs">
           {formatDate(memory.createdAt)}
         </span>
         <div className="flex gap-2">

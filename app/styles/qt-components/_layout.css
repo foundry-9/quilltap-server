@@ -122,10 +122,13 @@
 
   /**
    * Navbar dropdown/panel shell
+   * Responsive: compact on mobile, wider on desktop
    */
   .qt-navbar-dropdown {
     @apply absolute right-0 mt-2 z-50;
-    min-width: 14rem;
+    width: auto;
+    min-width: fit-content;
+    max-width: calc(100vw - 2rem);
     border-radius: var(--qt-popover-radius);
     background: var(--qt-popover-bg);
     color: var(--qt-popover-fg);
@@ -133,8 +136,23 @@
     box-shadow: var(--qt-popover-shadow);
   }
 
+  @media (min-width: 768px) {
+    .qt-navbar-dropdown {
+      min-width: 14rem;
+      max-width: none;
+    }
+  }
+
+  /**
+   * Left-aligned dropdown variant (for logo menu)
+   */
+  .qt-navbar-dropdown-left {
+    @apply left-0;
+    right: auto;
+  }
+
   .qt-navbar-dropdown-section {
-    @apply p-3 space-y-3;
+    @apply p-2 space-y-2 sm:p-3 sm:space-y-3;
   }
 
   .qt-navbar-dropdown-label {
@@ -146,6 +164,20 @@
 
   .qt-navbar-dropdown-header {
     @apply text-right text-sm font-medium;
+  }
+
+  .qt-navbar-dropdown-header p {
+    /* Truncate long names/emails on mobile */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 8rem;
+  }
+
+  @media (min-width: 768px) {
+    .qt-navbar-dropdown-header p {
+      max-width: none;
+    }
   }
 
   .qt-navbar-dropdown-subtext {
@@ -171,6 +203,110 @@
   .qt-navbar-dropdown-item-active {
     background: color-mix(in srgb, var(--color-primary) 12%, transparent);
     color: var(--color-primary);
+  }
+
+  /**
+   * Submenu - flyout positioned to the left of parent dropdown
+   * On mobile: appears below the trigger, aligned right
+   * On desktop (768px+): flies out to the left
+   */
+  .qt-navbar-submenu {
+    @apply absolute z-[60];
+    /* Mobile: position below, align to right edge */
+    left: auto;
+    right: 0;
+    top: 100%;
+    margin-top: 0.25rem;
+    min-width: fit-content;
+    max-width: calc(100vw - 2rem);
+    border-radius: var(--qt-popover-radius);
+    background: var(--qt-popover-bg);
+    color: var(--qt-popover-fg);
+    border: 1px solid var(--qt-popover-border);
+    box-shadow: var(--qt-popover-shadow);
+  }
+
+  @media (min-width: 768px) {
+    .qt-navbar-submenu {
+      /* Desktop: fly out to the left */
+      right: 100%;
+      top: 0;
+      margin-top: 0;
+      margin-right: 0.5rem;
+      min-width: 14rem;
+      max-width: none;
+    }
+  }
+
+  /**
+   * Submenu item - triggers a submenu flyout, shows arrow indicator
+   */
+  .qt-navbar-submenu-item {
+    @apply flex items-center gap-1;
+    @apply px-2 py-1.5 rounded-md text-sm;
+    /* On mobile: auto width, pack right. On desktop: full width, spread */
+    width: auto;
+    margin-left: auto;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  @media (min-width: 768px) {
+    .qt-navbar-submenu-item {
+      @apply gap-2 px-3 py-2;
+      width: 100%;
+      margin-left: 0;
+      justify-content: space-between;
+    }
+  }
+
+  .qt-navbar-submenu-item:hover {
+    background: var(--qt-navbar-link-hover-bg);
+  }
+
+  .qt-navbar-submenu-item-active {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+  }
+
+  /**
+   * Arrow indicator for submenu items (points left)
+   */
+  .qt-navbar-submenu-arrow {
+    @apply w-3 h-3 flex-shrink-0;
+    transform: rotate(90deg);
+  }
+
+  /**
+   * Menu item content with responsive icon/text behavior
+   */
+  .qt-navbar-menu-item-content {
+    @apply flex items-center gap-2;
+  }
+
+  .qt-navbar-menu-item-icon {
+    @apply w-4 h-4 flex-shrink-0;
+  }
+
+  /**
+   * Responsive text label visibility
+   * - >= 640px (sm): Show full text
+   * - 480-639px: Show short text only
+   * - < 480px: Hide text, show icon only
+   */
+  .qt-navbar-menu-item-label-full {
+    @apply hidden sm:inline;
+  }
+
+  .qt-navbar-menu-item-label-short {
+    @apply inline sm:hidden;
+  }
+
+  @media (max-width: 479px) {
+    .qt-navbar-menu-item-label-full,
+    .qt-navbar-menu-item-label-short {
+      @apply hidden;
+    }
   }
 
   /**
@@ -343,10 +479,24 @@
 
   /**
    * Card grid - responsive grid for cards
+   * Mobile: 2 cols (compact), sm+: 2 cols, lg: 3 cols
    */
   .qt-card-grid {
-    @apply grid gap-6;
-    @apply grid-cols-1 md:grid-cols-2 lg:grid-cols-3;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  @media (min-width: 640px) {
+    .qt-card-grid {
+      gap: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .qt-card-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
   }
 
   /**

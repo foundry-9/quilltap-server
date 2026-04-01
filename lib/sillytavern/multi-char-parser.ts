@@ -87,15 +87,40 @@ export interface ImportMappingConfig {
 
 /**
  * Parse a SillyTavern chat file (JSONL or JSON format)
+ *
+ * Detection strategy:
+ * 1. Try parsing as a single JSON object first
+ * 2. If that succeeds and looks like valid chat data, use it
+ * 3. Otherwise, fall back to JSONL (line-delimited) parsing
+ *
+ * This handles cases where files have incorrect extensions (e.g., .jsonl
+ * files that actually contain a single JSON object).
  */
 export function parseSTFile(content: string, filename: string): ParseResult {
   clientLogger.debug('[MultiCharParser] Parsing file', { filename, contentLength: content.length })
 
-  if (filename.endsWith('.jsonl')) {
-    return parseJSONL(content)
-  } else {
-    return parseJSON(content)
+  // Try JSON format first - handles both .json files and .jsonl files
+  // that are actually single JSON objects (like Quilltap exports)
+  try {
+    const data = JSON.parse(content)
+
+    // Check if this looks like valid JSON chat data:
+    // - It's an array of messages, OR
+    // - It's an object with a messages array
+    const hasMessages = Array.isArray(data) || (data && Array.isArray(data.messages))
+
+    if (hasMessages) {
+      clientLogger.debug('[MultiCharParser] Detected JSON format', { filename })
+      return parseJSON(content)
+    }
+  } catch {
+    // JSON parse failed, will try JSONL
+    clientLogger.debug('[MultiCharParser] JSON parse failed, trying JSONL', { filename })
   }
+
+  // Fall back to JSONL parsing
+  clientLogger.debug('[MultiCharParser] Using JSONL format', { filename })
+  return parseJSONL(content)
 }
 
 /**

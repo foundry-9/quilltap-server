@@ -7,6 +7,7 @@ import {
   removeFromQueue,
   popFromQueue,
   nudgeParticipant,
+  resetCycleForUserSkip,
   getQueuePosition,
   getSelectionExplanation,
   findUserParticipant,
@@ -27,7 +28,7 @@ const makeCharacter = (id: string, overrides: Partial<Character> = {}): Characte
   scenario: null,
   firstMessage: null,
   exampleDialogues: null,
-  systemPrompt: null,
+  systemPrompts: [],
   avatarUrl: null,
   defaultImageId: null,
   defaultConnectionProfileId: null,
@@ -192,6 +193,20 @@ describe('turn manager state', () => {
     expect(getQueuePosition(nudged, 'p2')).toBe(1)
 
     expect(getSelectionExplanation({ reason: 'queue', nextSpeakerId: 'p1', cycleComplete: false })).toContain('queue')
+  })
+
+  it('resets spoken state when user skips their turn without clearing the queue', () => {
+    const state = {
+      ...createInitialTurnState(),
+      queue: ['p1', 'p2'],
+      spokenSinceUserTurn: ['p1', 'p2'],
+      lastSpeakerId: 'p2',
+    }
+
+    const reset = resetCycleForUserSkip(state)
+    expect(reset.spokenSinceUserTurn).toEqual([])
+    expect(reset.queue).toEqual(['p1', 'p2'])
+    expect(reset.lastSpeakerId).toBe('p2')
   })
 
   it('finds user participant and active characters', () => {

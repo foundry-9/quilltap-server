@@ -77,7 +77,7 @@ describe('Chat GET API - Attachment Resolution', () => {
     scenario: 'Testing',
     firstMessage: 'Hello!',
     exampleDialogues: null,
-    systemPrompt: null,
+    systemPrompts: [],
     avatarUrl: null,
     defaultImageId: null,
     personaLinks: [],

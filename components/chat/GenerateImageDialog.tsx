@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface EntityOption {
   id: string
@@ -190,24 +191,9 @@ export default function GenerateImageDialog({
   }
 
   // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsDropdownOpen(false)
-      }
-    }
-
-    if (isDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isDropdownOpen])
+  useClickOutside(dropdownRef, () => setIsDropdownOpen(false), {
+    enabled: isDropdownOpen,
+  })
 
   if (!isOpen) return null
 
@@ -239,7 +225,7 @@ export default function GenerateImageDialog({
           <div className="flex gap-4">
             {/* Left side - Quick buttons */}
             <div className="w-48 flex-shrink-0 space-y-2">
-              <div className="text-sm font-medium text-muted-foreground mb-3">
+              <div className="qt-text-small font-medium mb-3">
                 Quick Insert
               </div>
 
@@ -312,7 +298,7 @@ export default function GenerateImageDialog({
                         </button>
                       ))}
                       {filteredEntities.length === 0 && (
-                        <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                        <div className="px-3 py-4 qt-text-small text-center">
                           No matches found
                         </div>
                       )}
@@ -324,7 +310,7 @@ export default function GenerateImageDialog({
 
             {/* Right side - Prompt input */}
             <div className="flex-1">
-              <label htmlFor="image-prompt" className="block text-sm font-medium text-foreground mb-2">
+              <label htmlFor="image-prompt" className="block text-sm qt-text-primary mb-2">
                 Image Prompt
               </label>
               <textarea
@@ -336,7 +322,7 @@ export default function GenerateImageDialog({
                 className="qt-textarea h-64"
                 disabled={isGenerating}
               />
-              <div className="mt-2 text-xs text-muted-foreground">
+              <div className="mt-2 qt-text-xs">
                 Click buttons on the left or type {'{{name}}'} to insert placeholders
               </div>
             </div>
@@ -361,7 +347,7 @@ export default function GenerateImageDialog({
           <button
             onClick={handleGenerate}
             disabled={isGenerating || !prompt.trim() || !imageProfileId}
-            className="qt-button qt-button-primary flex items-center gap-2"
+            className="qt-button qt-button-primary"
           >
             {isGenerating ? (
               <>

@@ -73,7 +73,7 @@ export function EphemeralMessage({ message, onDismiss }: EphemeralMessageProps) 
       <div
         className="
           inline-flex items-center gap-2 px-4 py-1.5
-          text-xs italic text-muted-foreground
+          qt-text-xs italic
           bg-muted/50 rounded-full
           animate-in fade-in slide-in-from-bottom-2 duration-300
         "

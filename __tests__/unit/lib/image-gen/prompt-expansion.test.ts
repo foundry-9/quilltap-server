@@ -44,7 +44,7 @@ const mockCharacter = {
   scenario: 'Adventure',
   firstMessage: '',
   exampleDialogues: null,
-  systemPrompt: null,
+  systemPrompts: [],
   avatarUrl: null,
   defaultImageId: null,
   personaLinks: [],

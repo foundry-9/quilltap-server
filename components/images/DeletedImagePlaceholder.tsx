@@ -69,7 +69,7 @@ export default function DeletedImagePlaceholder({
         Image Deleted
       </p>
       {!isCompact && (
-        <p className="text-muted-foreground text-xs text-center mb-4 break-words max-w-full">{filename}</p>
+        <p className="qt-text-xs text-center mb-4 break-words max-w-full">{filename}</p>
       )}
       <button
         onClick={handleCleanup}

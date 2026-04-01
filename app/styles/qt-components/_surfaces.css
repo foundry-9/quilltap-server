@@ -103,6 +103,23 @@
     @apply text-sm text-muted-foreground;
   }
 
+  /**
+   * Dashboard card - compact on mobile
+   */
+  @media (max-width: 639px) {
+    .dashboard-card {
+      padding: 0.75rem;
+    }
+
+    .dashboard-card .qt-card-header {
+      margin-bottom: 0;
+    }
+
+    .dashboard-card .qt-card-title {
+      font-size: 0.875rem;
+    }
+  }
+
   /* ==========================================================================
      PANELS - Shared base styles
      ========================================================================== */

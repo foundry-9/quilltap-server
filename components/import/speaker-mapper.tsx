@@ -85,10 +85,10 @@ export function SpeakerMapper({
           }`}>
             {isUser ? 'User' : 'AI'}
           </span>
-          <span className="font-medium text-foreground">
+          <span className="qt-text-primary">
             &ldquo;{speaker.name}&rdquo;
           </span>
-          <span className="text-sm text-muted-foreground">
+          <span className="qt-text-small">
             ({speaker.messageCount} message{speaker.messageCount !== 1 ? 's' : ''})
           </span>
         </div>
@@ -166,7 +166,7 @@ export function SpeakerMapper({
                   })}
                   className="mt-1"
                 />
-                <span className="text-sm text-muted-foreground">
+                <span className="qt-text-small">
                   Skip (messages will be imported without persona)
                 </span>
               </label>
@@ -211,7 +211,7 @@ export function SpeakerMapper({
                         ))}
                       </select>
                       <div className="mt-2">
-                        <span className="text-xs text-muted-foreground">
+                        <span className="qt-text-xs">
                           Connection Profile (optional override):
                         </span>
                         <select
@@ -250,7 +250,7 @@ export function SpeakerMapper({
                   </span>
                   {mapping.mappingType === 'create_character' && (
                     <div className="mt-2">
-                      <span className="text-xs text-muted-foreground">
+                      <span className="qt-text-xs">
                         Connection Profile:
                       </span>
                       <select
@@ -283,7 +283,7 @@ export function SpeakerMapper({
                   })}
                   className="mt-1"
                 />
-                <span className="text-sm text-muted-foreground">
+                <span className="qt-text-small">
                   Skip (messages from this speaker will be discarded)
                 </span>
               </label>
@@ -298,10 +298,10 @@ export function SpeakerMapper({
     <div className="space-y-6">
       {/* Default connection profile */}
       <div className="bg-accent rounded-lg p-4">
-        <label className="block text-sm font-medium text-foreground mb-2">
+        <label className="block text-sm qt-text-primary mb-2">
           Default Connection Profile
         </label>
-        <p className="text-xs text-muted-foreground mb-2">
+        <p className="qt-text-xs mb-2">
           This profile will be used for any characters that don&apos;t have a specific profile assigned.
         </p>
         <select
@@ -319,7 +319,7 @@ export function SpeakerMapper({
       {/* User/Persona speakers */}
       {userSpeakers.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium text-foreground mb-3">
+          <h4 className="text-sm qt-text-primary mb-3">
             User Speakers (map to Personas)
           </h4>
           <div className="space-y-3">
@@ -333,7 +333,7 @@ export function SpeakerMapper({
       {/* AI/Character speakers */}
       {aiSpeakers.length > 0 && (
         <div>
-          <h4 className="text-sm font-medium text-foreground mb-3">
+          <h4 className="text-sm qt-text-primary mb-3">
             AI Speakers (map to Characters)
           </h4>
           <div className="space-y-3">

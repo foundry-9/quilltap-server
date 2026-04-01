@@ -79,6 +79,7 @@ export function buildTemplateContext({
   character,
   persona,
   scenario,
+  systemPrompt,
 }: {
   character: {
     name: string
@@ -86,13 +87,13 @@ export function buildTemplateContext({
     personality?: string | null
     scenario?: string | null
     exampleDialogues?: string | null
-    systemPrompt?: string | null
   }
   persona?: {
     name: string
     description?: string | null
   } | null
   scenario?: string | null
+  systemPrompt?: string | null
 }): TemplateContext {
   return {
     // Character data
@@ -105,8 +106,8 @@ export function buildTemplateContext({
     user: persona?.name || 'User',
     persona: persona?.description || '',
 
-    // System prompt
-    system: character.systemPrompt || '',
+    // System prompt (passed separately, resolved from character.systemPrompts array by caller)
+    system: systemPrompt || '',
 
     // Example dialogues
     mesExamplesRaw: character.exampleDialogues || '',
@@ -125,11 +126,17 @@ export function buildTemplateContext({
 /**
  * Process all character fields that may contain template variables
  * This ensures consistency across all character data sent to the LLM
+ *
+ * @param character - Character data to process
+ * @param persona - Optional persona for {{user}} variable
+ * @param scenario - Optional custom scenario override
+ * @param systemPrompt - Optional system prompt content (resolved from character.systemPrompts array by caller)
  */
 export function processCharacterTemplates({
   character,
   persona,
   scenario,
+  systemPrompt,
 }: {
   character: {
     name: string
@@ -138,13 +145,13 @@ export function processCharacterTemplates({
     scenario?: string | null
     firstMessage?: string | null
     exampleDialogues?: string | null
-    systemPrompt?: string | null
   }
   persona?: {
     name: string
     description?: string | null
   } | null
   scenario?: string | null
+  systemPrompt?: string | null
 }): {
   description: string
   personality: string
@@ -153,7 +160,7 @@ export function processCharacterTemplates({
   exampleDialogues: string
   systemPrompt: string
 } {
-  const context = buildTemplateContext({ character, persona, scenario })
+  const context = buildTemplateContext({ character, persona, scenario, systemPrompt })
 
   return {
     description: processTemplate(character.description || '', context),
@@ -161,6 +168,6 @@ export function processCharacterTemplates({
     scenario: processTemplate(scenario || character.scenario || '', context),
     firstMessage: processTemplate(character.firstMessage || '', context),
     exampleDialogues: processTemplate(character.exampleDialogues || '', context),
-    systemPrompt: processTemplate(character.systemPrompt || '', context),
+    systemPrompt: processTemplate(systemPrompt || '', context),
   }
 }

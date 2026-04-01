@@ -12,6 +12,7 @@ import { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getRepositories } from '@/lib/repositories/factory'
 import { decryptApiKey } from '@/lib/encryption'
+import { getErrorMessage } from '@/lib/errors'
 
 /**
  * Candidate memory extracted from a conversation
@@ -165,7 +166,7 @@ async function executeCheapLLMTask<T>(
       }
     } catch (error) {
       // If temperature is not supported, cache it and retry with default temperature
-      const errorMessage = error instanceof Error ? error.message : ''
+      const errorMessage = getErrorMessage(error, '')
       if (errorMessage.includes('temperature') || errorMessage.includes('does not support')) {
         profilesWithoutCustomTemp.add(profileKey)
 
@@ -191,7 +192,7 @@ async function executeCheapLLMTask<T>(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: getErrorMessage(error),
     }
   }
 }
@@ -649,11 +650,10 @@ const CHAT_TITLE_CONSIDERATION_PROMPT = `You are a chat title evaluator. You wil
 2. A previous summary or title (if available)
 3. Recent messages from the chat
 
-Determine if the conversation has shifted topic significantly enough to warrant a new title.
-Consider:
-- Is the current title still accurate?
-- Has the main topic or focus changed?
-- Are they discussing something substantially different now?
+Determine if the chat needs a new title. Consider:
+- If the current title is generic (like "Chat with [Name]" or "New Chat"), it SHOULD be replaced with a descriptive title based on what the conversation is actually about
+- If the title is already descriptive, only suggest a change if the main topic has shifted significantly
+- A good title captures the essence of the conversation in a few words
 
 Respond with a JSON object:
 {

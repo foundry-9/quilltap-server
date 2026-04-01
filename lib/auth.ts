@@ -11,6 +11,7 @@ import { Adapter } from "next-auth/adapters";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { verifyPassword } from "@/lib/auth/password";
 import { isAuthDisabled } from "@/lib/auth/config";
+import { runPostLoginMigrations } from "@/lib/auth/post-login-migrations";
 import { logger } from "@/lib/logger";
 import { buildNextAuthProviders, getConfiguredAuthProviders } from "@/lib/plugins/auth-provider-registry";
 import { initializePlugins, isPluginSystemInitialized } from "@/lib/startup/plugin-initialization";
@@ -242,6 +243,23 @@ export async function buildAuthOptionsAsync(): Promise<NextAuthOptions> {
     adapter: getAdapter(),
     providers: buildProviders(),
     callbacks: {
+      async signIn({ user }) {
+        // Run post-login migrations for this user
+        // This handles per-user data migrations that may have been missed at startup
+        if (user?.id) {
+          try {
+            await runPostLoginMigrations(user.id);
+          } catch (error) {
+            // Log but don't block sign in if migrations fail
+            logger.error('Post-login migrations failed', {
+              context: 'signIn',
+              userId: user.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        return true;
+      },
       async jwt({ token, user }) {
         // On initial sign in, add user data to token
         if (user) {
@@ -303,6 +321,23 @@ export function getAuthOptions(): NextAuthOptions {
     adapter: getAdapter(),
     providers: buildProviders(),
     callbacks: {
+      async signIn({ user }) {
+        // Run post-login migrations for this user
+        // This handles per-user data migrations that may have been missed at startup
+        if (user?.id) {
+          try {
+            await runPostLoginMigrations(user.id);
+          } catch (error) {
+            // Log but don't block sign in if migrations fail
+            logger.error('Post-login migrations failed', {
+              context: 'signIn',
+              userId: user.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        return true;
+      },
       async jwt({ token, user }) {
         // On initial sign in, add user data to token
         if (user) {

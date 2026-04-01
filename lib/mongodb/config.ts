@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { MongoClient } from 'mongodb';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errors';
 
 /**
  * Zod schema for MongoDB configuration validation
@@ -121,7 +122,7 @@ export function validateMongoDBConfig(): MongoDBConfig {
         errors: validationErrors,
       });
     } else {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = getErrorMessage(error);
       errors.push(errorMessage);
       logger.error('MongoDB configuration validation error', {
         error: errorMessage,
@@ -209,7 +210,7 @@ export async function testMongoDBConnection(): Promise<{
     };
   } catch (error) {
     const latencyMs = Date.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = getErrorMessage(error);
 
     logger.error('MongoDB connection test failed', {
       uri: sanitizeURI(config.uri),
@@ -228,7 +229,7 @@ export async function testMongoDBConnection(): Promise<{
         await client.close();
         logger.debug('MongoDB client connection closed');
       } catch (error) {
-        const closeError = error instanceof Error ? error.message : 'Unknown error';
+        const closeError = getErrorMessage(error);
         logger.warn('Error closing MongoDB connection', {
           error: closeError,
         });

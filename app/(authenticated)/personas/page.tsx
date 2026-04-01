@@ -153,14 +153,14 @@ export default function PersonasPage() {
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
         <div>
           <h1 className="text-3xl font-semibold leading-tight">Personas</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 qt-text-small">
             Manage the user personas that represent you in conversations.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setImportDialogOpen(true)}
-            className="qt-button persona-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button persona-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Import
           </button>
@@ -195,7 +195,7 @@ export default function PersonasPage() {
             />
           </svg>
           <h3 className="mt-4 text-base font-semibold text-foreground">No personas yet</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 qt-text-small">
             Create a persona to represent yourself or import one from SillyTavern.
           </p>
           <div className="mt-6">
@@ -235,20 +235,20 @@ export default function PersonasPage() {
                   <div className="flex-grow">
                     <h2 className="text-xl font-semibold text-foreground">{persona.name}</h2>
                     {persona.title && (
-                      <p className="text-sm text-muted-foreground">{persona.title}</p>
+                      <p className="qt-text-small">{persona.title}</p>
                     )}
                   </div>
                 </div>
               </div>
 
               <div className="flex-grow">
-                <p className="mb-4 line-clamp-3 text-sm text-muted-foreground">
+                <p className="mb-4 line-clamp-3 qt-text-small">
                   {persona.description}
                 </p>
 
                 {persona.characters.length > 0 && (
                   <div className="mb-4">
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">Linked to:</p>
+                    <p className="mb-2 qt-text-primary">Linked to:</p>
                     <div className="flex flex-wrap gap-1">
                       {persona.characters.map((link) => (
                         <span
@@ -264,7 +264,7 @@ export default function PersonasPage() {
 
                 {persona.tags.length > 0 && (
                   <div className="mb-4">
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">Tags:</p>
+                    <p className="mb-2 qt-text-primary">Tags:</p>
                     <div className="flex flex-wrap gap-1">
                       {persona.tags.map((tagLink) => (
                         <TagBadge
@@ -287,7 +287,7 @@ export default function PersonasPage() {
                 </Link>
                 <button
                   onClick={() => setGalleryPersona({ id: persona.id, name: persona.name })}
-                  className="persona-card__action inline-flex items-center justify-center rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted"
+                  className="persona-card__action inline-flex items-center justify-center rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted"
                   title="Photos"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -296,7 +296,7 @@ export default function PersonasPage() {
                 </button>
                 <a
                   href={`/api/personas/${persona.id}/export`}
-                  className="persona-card__action inline-flex items-center justify-center rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-muted"
+                  className="persona-card__action inline-flex items-center justify-center rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted"
                   title="Export"
                 >
                   ↓
@@ -322,7 +322,7 @@ export default function PersonasPage() {
             </h3>
             <form onSubmit={handleImport}>
               <div className="mb-4">
-                <label className="mb-2 block text-sm font-medium text-foreground">
+                <label className="mb-2 block qt-text-label">
                   Select SillyTavern persona JSON file
                 </label>
                 <input
@@ -330,14 +330,14 @@ export default function PersonasPage() {
                   name="file"
                   accept=".json"
                   required
-                  className="block w-full text-sm text-muted-foreground file:mr-4 file:rounded-md file:border-0 file:bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:bg-primary/30"
+                  className="block w-full qt-text-small file:mr-4 file:rounded-md file:border-0 file:bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:bg-primary/30"
                 />
               </div>
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => setImportDialogOpen(false)}
-                  className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted"
+                  className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm qt-text-primary shadow-sm hover:bg-muted"
                 >
                   Cancel
                 </button>

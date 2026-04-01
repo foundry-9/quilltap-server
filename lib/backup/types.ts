@@ -16,6 +16,9 @@ import type {
   Memory,
   FileEntry,
   MessageEvent,
+  PromptTemplate,
+  RoleplayTemplate,
+  ProviderModel,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -64,6 +67,12 @@ export interface BackupManifest {
     memories: number;
     /** Number of FileEntry entities (file metadata, not the actual files) */
     files: number;
+    /** Number of PromptTemplate entities (user-created only) */
+    promptTemplates: number;
+    /** Number of RoleplayTemplate entities (user-created only) */
+    roleplayTemplates: number;
+    /** Number of ProviderModel entities */
+    providerModels: number;
   };
 }
 
@@ -108,6 +117,15 @@ export interface BackupData {
 
   /** Array of FileEntry entities (metadata only, not actual file contents) */
   files: FileEntry[];
+
+  /** Array of user-created PromptTemplate entities (excludes built-in templates) */
+  promptTemplates: PromptTemplate[];
+
+  /** Array of user-created RoleplayTemplate entities (excludes built-in templates) */
+  roleplayTemplates: RoleplayTemplate[];
+
+  /** Array of ProviderModel entities */
+  providerModels: ProviderModel[];
 }
 
 // ============================================================================
@@ -189,6 +207,17 @@ export interface RestoreSummary {
     /** Number of EmbeddingProfile entities restored */
     embedding: number;
   };
+
+  /** Counts for template types */
+  templates: {
+    /** Number of PromptTemplate entities restored */
+    prompt: number;
+    /** Number of RoleplayTemplate entities restored */
+    roleplay: number;
+  };
+
+  /** Number of ProviderModel entities restored */
+  providerModels: number;
 
   /**
    * Array of warning messages for issues that occurred during restore

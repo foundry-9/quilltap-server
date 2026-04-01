@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errors';
 
 /**
  * Zod schema for S3 configuration validation
@@ -284,7 +285,7 @@ export function validateS3Config(): S3Config {
         mode,
       });
     } else {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = getErrorMessage(error);
       errors.push(errorMessage);
       logger_inst.error('S3 configuration validation error', {
         error: errorMessage,
@@ -447,7 +448,7 @@ export async function testS3Connection(): Promise<{
       client.destroy();
     }
   } catch (error) {
-    const errorMsg = `Failed to initialize S3 client: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    const errorMsg = `Failed to initialize S3 client: ${getErrorMessage(error)}`;
     logger_inst.error(errorMsg, {}, error instanceof Error ? error : undefined);
     return {
       success: false,

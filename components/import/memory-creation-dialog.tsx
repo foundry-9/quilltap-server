@@ -155,11 +155,11 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
           </div>
 
           <div className="qt-dialog-body">
-            <p className="text-muted-foreground">
+            <p className="qt-text-small">
               {chat.memoryJobCount} message{chat.memoryJobCount === 1 ? '' : 's'} queued for memory analysis.
               Memories will be created in the background as each message is processed.
             </p>
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="qt-text-xs mt-2">
               You can check the status in the background jobs section.
             </p>
           </div>
@@ -192,16 +192,16 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
 
         <div className="qt-dialog-body">
           <div className="bg-muted/50 rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">
+            <p className="qt-text-small">
               This will analyze each message exchange using AI to extract meaningful memories,
               just like live chats. The analysis runs in the background.
             </p>
             {firstCharacter ? (
-              <p className="text-sm mt-2">
+              <p className="qt-text-small mt-2">
                 <strong>{messagePairCount}</strong> message pair{messagePairCount === 1 ? '' : 's'} will be analyzed for <strong>{firstCharacter.name}</strong>.
               </p>
             ) : (
-              <p className="text-sm text-destructive mt-2">
+              <p className="qt-text-small text-destructive mt-2">
                 No character with a connection profile found. Cannot analyze messages.
               </p>
             )}

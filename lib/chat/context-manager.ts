@@ -20,6 +20,7 @@ import { searchMemoriesSemantic, SemanticSearchResult } from '@/lib/memory/memor
 import { formatMessagesForProvider, buildMultiCharacterContextSection, type MultiCharacterMessage } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
+import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 
 /**
  * Message format expected by the context manager
@@ -153,6 +154,13 @@ export interface BuildContextOptions {
   participantPersonas?: Map<string, Persona>
   /** Extended messages with participantId for attribution */
   messagesWithParticipants?: MessageWithParticipant[]
+
+  // ============================================================================
+  // Pseudo-Tool Support (for models without native function calling)
+  // ============================================================================
+
+  /** Instructions for text-based pseudo-tools (when model doesn't support native tools) */
+  pseudoToolInstructions?: string
 }
 
 /**
@@ -186,6 +194,7 @@ export interface OtherParticipantInfo {
 /**
  * Build the system prompt for a character
  * Supports both single-character and multi-character scenarios
+ * Processes {{char}}, {{user}}, and other template variables in all prompts
  */
 export function buildSystemPrompt(
   character: Character,
@@ -194,38 +203,126 @@ export function buildSystemPrompt(
   /** For multi-character chats: info about other participants */
   otherParticipants?: OtherParticipantInfo[],
   /** Roleplay template to prepend (formatting instructions) */
-  roleplayTemplate?: { systemPrompt: string } | null
+  roleplayTemplate?: { systemPrompt: string } | null,
+  /** Pseudo-tool instructions for models without native function calling */
+  pseudoToolInstructions?: string,
+  /** Selected system prompt ID from character's systemPrompts array */
+  selectedSystemPromptId?: string | null
 ): string {
   const parts: string[] = []
 
+  // Build template context for {{char}}, {{user}}, etc. replacement
+  const templateContext: TemplateContext = {
+    char: character.name,
+    user: persona?.name || 'User',
+    description: character.description || '',
+    personality: character.personality || '',
+    scenario: character.scenario || '',
+    persona: persona?.description || '',
+  }
+
+  logger.debug('[ContextManager] Building system prompt with template context', {
+    characterName: templateContext.char,
+    userName: templateContext.user,
+  })
+
   // Roleplay template system prompt (formatting instructions) - prepended first
+  // Process templates to replace {{char}} and {{user}}
   if (roleplayTemplate?.systemPrompt) {
+    const processedRoleplayPrompt = processTemplate(roleplayTemplate.systemPrompt, templateContext)
     logger.debug('Prepending roleplay template to system prompt', {
       templatePromptLength: roleplayTemplate.systemPrompt.length,
+      processedLength: processedRoleplayPrompt.length,
+      hasTemplateVars: roleplayTemplate.systemPrompt.includes('{{'),
     })
-    parts.push(roleplayTemplate.systemPrompt)
+    parts.push(processedRoleplayPrompt)
   }
 
-  // Base system prompt from character or override
+  // Pseudo-tool instructions (for models without native function calling)
+  // Added after roleplay template so tool usage instructions are seen early
+  // Note: These typically don't contain {{char}}/{{user}} but process anyway for consistency
+  if (pseudoToolInstructions) {
+    const processedToolInstructions = processTemplate(pseudoToolInstructions, templateContext)
+    logger.debug('[ContextManager] Adding pseudo-tool instructions', {
+      instructionsLength: pseudoToolInstructions.length,
+    })
+    parts.push(processedToolInstructions)
+  }
+
+  // Base system prompt - priority: override > selected prompt > default systemPrompt
   if (systemPromptOverride) {
-    parts.push(systemPromptOverride)
-  } else if (character.systemPrompt) {
-    parts.push(character.systemPrompt)
+    const processedOverride = processTemplate(systemPromptOverride, templateContext)
+    logger.debug('[ContextManager] Using system prompt override', {
+      overrideLength: systemPromptOverride.length,
+      processedLength: processedOverride.length,
+    })
+    parts.push(processedOverride)
+  } else {
+    // Check for selected system prompt from character's prompts array
+    let systemPromptContent: string | null = null
+
+    if (selectedSystemPromptId && character.systemPrompts) {
+      const selectedPrompt = character.systemPrompts.find(p => p.id === selectedSystemPromptId)
+      if (selectedPrompt) {
+        systemPromptContent = selectedPrompt.content
+        logger.debug('[ContextManager] Using selected system prompt', {
+          characterId: character.id,
+          promptId: selectedSystemPromptId,
+          promptName: selectedPrompt.name,
+          contentLength: selectedPrompt.content.length,
+        })
+      } else {
+        logger.debug('[ContextManager] Selected system prompt not found in character prompts', {
+          characterId: character.id,
+          selectedPromptId: selectedSystemPromptId,
+          availablePromptCount: character.systemPrompts.length,
+        })
+      }
+    }
+
+    // Fall back to default prompt in array, then legacy systemPrompt field
+    if (!systemPromptContent && character.systemPrompts) {
+      const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
+      if (defaultPrompt) {
+        systemPromptContent = defaultPrompt.content
+        logger.debug('[ContextManager] Using default system prompt from array', {
+          characterId: character.id,
+          promptId: defaultPrompt.id,
+          promptName: defaultPrompt.name,
+          contentLength: defaultPrompt.content.length,
+        })
+      }
+    }
+
+    if (systemPromptContent) {
+      // Process templates in the system prompt content
+      const processedSystemPrompt = processTemplate(systemPromptContent, templateContext)
+      parts.push(processedSystemPrompt)
+    } else {
+      logger.debug('[ContextManager] No system prompt found for character', {
+        characterId: character.id,
+        selectedSystemPromptId,
+        hasSystemPrompts: !!(character.systemPrompts && character.systemPrompts.length > 0),
+      })
+    }
   }
 
-  // Character personality
+  // Character personality - process templates
   if (character.personality) {
-    parts.push(`\n## Character Personality\n${character.personality}`)
+    const processedPersonality = processTemplate(character.personality, templateContext)
+    parts.push(`\n## Character Personality\n${processedPersonality}`)
   }
 
-  // Scenario/setting
+  // Scenario/setting - process templates
   if (character.scenario) {
-    parts.push(`\n## Scenario\n${character.scenario}`)
+    const processedScenario = processTemplate(character.scenario, templateContext)
+    parts.push(`\n## Scenario\n${processedScenario}`)
   }
 
-  // Example dialogues for style reference
+  // Example dialogues for style reference - process templates
   if (character.exampleDialogues) {
-    parts.push(`\n## Example Dialogue Style\n${character.exampleDialogues}`)
+    const processedDialogues = processTemplate(character.exampleDialogues, templateContext)
+    parts.push(`\n## Example Dialogue Style\n${processedDialogues}`)
   }
 
   // Persona information if provided (single-character mode)
@@ -679,6 +776,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     participantCharacters,
     participantPersonas,
     messagesWithParticipants,
+    // Pseudo-tool support
+    pseudoToolInstructions,
   } = options
 
   const warnings: string[] = []
@@ -712,7 +811,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     )
   }
 
-  const systemPrompt = buildSystemPrompt(character, persona, systemPromptOverride, otherParticipantsInfo, roleplayTemplate)
+  // Get the selectedSystemPromptId from the responding participant
+  const selectedSystemPromptId = respondingParticipant?.selectedSystemPromptId
+
+  const systemPrompt = buildSystemPrompt(
+    character,
+    persona,
+    systemPromptOverride,
+    otherParticipantsInfo,
+    roleplayTemplate,
+    pseudoToolInstructions,
+    selectedSystemPromptId
+  )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 
   // Check if system prompt exceeds budget

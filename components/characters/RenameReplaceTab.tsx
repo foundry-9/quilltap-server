@@ -209,7 +209,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
     <div className="space-y-6">
       {/* Primary Name Change Section */}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4">
-        <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">
+        <h3 className="qt-text-section mb-4 text-gray-900 dark:text-white">
           Rename Character
         </h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
@@ -218,7 +218,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+            <label className="block qt-text-label mb-2 text-gray-700 dark:text-gray-300">
               Current Name
             </label>
             <input
@@ -229,7 +229,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+            <label className="block qt-text-label mb-2 text-gray-700 dark:text-gray-300">
               New Name
             </label>
             <input
@@ -257,7 +257,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+            <h3 className="qt-text-section text-gray-900 dark:text-white">
               Additional Replacements
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -289,7 +289,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
               >
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium mb-1 text-gray-600 dark:text-gray-400">
+                    <label className="block qt-text-label-xs mb-1 text-gray-600 dark:text-gray-400">
                       Find
                     </label>
                     <input
@@ -301,7 +301,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium mb-1 text-gray-600 dark:text-gray-400">
+                    <label className="block qt-text-label-xs mb-1 text-gray-600 dark:text-gray-400">
                       Replace with
                     </label>
                     <input
@@ -362,7 +362,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
       {/* Preview Results */}
       {preview && (
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4">
-          <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">
+          <h3 className="qt-text-section mb-4 text-gray-900 dark:text-white">
             Preview Results
           </h3>
 
@@ -397,7 +397,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
           {/* Detailed Replacements */}
           {preview.replacements.length > 0 ? (
             <div className="mb-4">
-              <h4 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+              <h4 className="qt-text-label mb-2 text-gray-700 dark:text-gray-300">
                 Replacements ({preview.replacements.length})
               </h4>
               <div className="max-h-80 overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-lg">
@@ -456,7 +456,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
 
       {/* Info Box */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
+        <h4 className="qt-text-label text-blue-800 dark:text-blue-200 mb-2">
           How this works
         </h4>
         <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-disc list-inside">

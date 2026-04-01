@@ -1,5 +1,6 @@
 import { Db } from 'mongodb';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errors';
 
 /**
  * Index definition interface for MongoDB indexes
@@ -144,6 +145,23 @@ export const INDEX_DEFINITIONS: Record<string, IndexDefinition[]> = {
       key: { sha256: 1 },
     },
   ],
+
+  // Provider models collection indexes (global cache of available models)
+  provider_models: [
+    {
+      key: { provider: 1 },
+    },
+    {
+      key: { modelType: 1 },
+    },
+    {
+      key: { provider: 1, modelType: 1, modelId: 1, baseUrl: 1 },
+      options: { unique: true, name: 'provider_models_provider_type_modelId_baseUrl_unique' },
+    },
+    {
+      key: { fetchedAt: 1 },
+    },
+  ],
 };
 
 /**
@@ -170,7 +188,7 @@ async function createCollectionIndexes(
       );
       indexCount++;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = getErrorMessage(error);
       logger.warn(
         `[MongoDB] Failed to create index for ${collectionName}`,
         { key: indexDef.key, error: errorMessage }
@@ -249,7 +267,7 @@ async function dropCollectionIndexes(
           );
           indexCount++;
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
+          const errorMessage = getErrorMessage(error);
           logger.warn(
             `[MongoDB] Failed to drop index for ${collectionName}`,
             { indexName: index.name, error: errorMessage }
@@ -259,7 +277,7 @@ async function dropCollectionIndexes(
       }
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = getErrorMessage(error);
     logger.warn(
       `[MongoDB] Failed to get indexes for ${collectionName}`,
       { error: errorMessage }

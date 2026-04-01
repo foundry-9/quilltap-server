@@ -34,9 +34,9 @@ const updateCharacterSchema = z.object({
   scenario: z.string().optional(),
   firstMessage: z.string().optional(),
   exampleDialogues: z.string().optional(),
-  systemPrompt: z.string().optional(),
   avatarUrl: z.string().url().optional().or(z.literal('')),
   defaultConnectionProfileId: z.string().uuid().optional().or(z.literal('').transform(() => undefined)),
+  npc: z.boolean().optional(),  // NPC flag for ad-hoc characters
 })
 
 // GET /api/characters/:id
