@@ -144,8 +144,8 @@ playwright-report/
 test-results/
 playwright/.cache/
 
-CLAUDE.md
-.claude
+.claude/*
+!.claude/commands
 certs
 next-env.d.ts
 .DS_Store

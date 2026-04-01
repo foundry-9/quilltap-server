@@ -23,13 +23,13 @@ import {
 } from '@/lib/sync/sync-service';
 import { SyncEntityDelta, SyncConflict, SyncableEntityType, SyncOperation } from '@/lib/sync/types';
 import { getRepositories } from '@/lib/mongodb/repositories';
-import { s3FileService } from '@/lib/s3/file-service';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { resolveConflictWithRecord } from '@/lib/sync/conflict-resolver';
 import { detectDeltas } from '@/lib/sync/delta-detector';
 
 // Mock dependencies
 jest.mock('@/lib/mongodb/repositories');
-jest.mock('@/lib/s3/file-service');
+jest.mock('@/lib/file-storage/manager');
 jest.mock('@/lib/sync/conflict-resolver');
 jest.mock('@/lib/sync/delta-detector');
 
@@ -52,7 +52,7 @@ jest.mock('@/lib/logger', () => {
 });
 
 const mockedGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>;
-const mockedS3FileService = s3FileService as jest.Mocked<typeof s3FileService>;
+const mockedFileStorageManager = fileStorageManager as jest.Mocked<typeof fileStorageManager>;
 const mockedResolveConflictWithRecord = resolveConflictWithRecord as jest.MockedFunction<
   typeof resolveConflictWithRecord
 >;
@@ -69,6 +69,8 @@ describe('Sync Service', () => {
   let mockRepos: {
     tags: any;
     files: any;
+    projects: any;
+    connections: any;
     personas: any;
     characters: any;
     roleplayTemplates: any;
@@ -92,6 +94,18 @@ describe('Sync Service', () => {
         delete: jest.fn(),
       },
       files: {
+        findById: jest.fn(),
+        createOrUpdate: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+      },
+      projects: {
+        findById: jest.fn(),
+        createOrUpdate: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+      },
+      connections: {
         findById: jest.fn(),
         createOrUpdate: jest.fn(),
         update: jest.fn(),
@@ -184,35 +198,6 @@ describe('Sync Service', () => {
         );
       });
 
-      it('should preserve remote ID and createdAt when creating entity', async () => {
-        const originalCreatedAt = '2025-01-01T00:00:00.000Z';
-        const delta: SyncEntityDelta = {
-          entityType: 'PERSONA',
-          id: 'persona-original-id',
-          createdAt: originalCreatedAt,
-          updatedAt: now.toISOString(),
-          isDeleted: false,
-          data: {
-            name: 'Test Persona',
-          },
-        };
-
-        mockRepos.personas.findById.mockResolvedValue(null);
-        mockRepos.personas.createOrUpdate.mockResolvedValue({
-          id: 'persona-original-id',
-          updatedAt: now.toISOString(),
-        });
-
-        const result = await applyRemoteDelta(userId, instanceId, delta);
-
-        expect(result.success).toBe(true);
-        expect(mockRepos.personas.createOrUpdate).toHaveBeenCalledWith(
-          'persona-original-id',
-          expect.any(Object),
-          { createdAt: originalCreatedAt }
-        );
-      });
-
       it('should create TAG entity successfully', async () => {
         const delta: SyncEntityDelta = {
           entityType: 'TAG',
@@ -297,6 +282,48 @@ describe('Sync Service', () => {
         expect(result.success).toBe(true);
         expect(result.isNewEntity).toBe(true);
       });
+
+      it('should create CONNECTION_PROFILE entity and strip _apiKeyLabel', async () => {
+        const delta: SyncEntityDelta = {
+          entityType: 'CONNECTION_PROFILE',
+          id: 'profile-1',
+          createdAt: earlier.toISOString(),
+          updatedAt: now.toISOString(),
+          isDeleted: false,
+          data: {
+            name: 'Test Profile',
+            provider: 'OPENAI',
+            modelName: 'gpt-4',
+            _apiKeyLabel: 'My API Key', // Should be stripped
+          },
+        };
+
+        mockRepos.connections.findById.mockResolvedValue(null);
+        mockRepos.connections.createOrUpdate.mockResolvedValue({
+          id: 'profile-1',
+          updatedAt: now.toISOString(),
+        });
+
+        const result = await applyRemoteDelta(userId, instanceId, delta);
+
+        expect(result.success).toBe(true);
+        expect(result.isNewEntity).toBe(true);
+        // Verify apiKeyId is set to null and _apiKeyLabel is stripped
+        expect(mockRepos.connections.createOrUpdate).toHaveBeenCalledWith(
+          'profile-1',
+          expect.objectContaining({
+            name: 'Test Profile',
+            provider: 'OPENAI',
+            modelName: 'gpt-4',
+            apiKeyId: null,
+            userId,
+          }),
+          { createdAt: earlier.toISOString() }
+        );
+        // _apiKeyLabel should not be in the call
+        const callArgs = mockRepos.connections.createOrUpdate.mock.calls[0][1];
+        expect(callArgs._apiKeyLabel).toBeUndefined();
+      });
     });
 
     describe('deleting entities', () => {
@@ -318,7 +345,7 @@ describe('Sync Service', () => {
         expect(mockRepos.characters.delete).toHaveBeenCalledWith('char-to-delete');
       });
 
-      it('should delete FILE and its S3 content when delta.isDeleted is true', async () => {
+      it('should delete FILE and its storage content when delta.isDeleted is true', async () => {
         const delta: SyncEntityDelta = {
           entityType: 'FILE',
           id: 'file-to-delete',
@@ -330,21 +357,19 @@ describe('Sync Service', () => {
 
         mockRepos.files.findById.mockResolvedValue({
           id: 'file-to-delete',
-          s3Key: 'users/user-123/attachments/file-to-delete/test.jpg',
+          storageKey: 'users/user-123/attachments/file-to-delete/test.jpg',
         });
-        mockedS3FileService.deleteByS3Key = jest.fn().mockResolvedValue(undefined);
+        mockedFileStorageManager.deleteFile = jest.fn().mockResolvedValue(undefined);
         mockRepos.files.delete.mockResolvedValue(true);
 
         const result = await applyRemoteDelta(userId, instanceId, delta);
 
         expect(result.success).toBe(true);
-        expect(mockedS3FileService.deleteByS3Key).toHaveBeenCalledWith(
-          'users/user-123/attachments/file-to-delete/test.jpg'
-        );
+        expect(mockedFileStorageManager.deleteFile).toHaveBeenCalled();
         expect(mockRepos.files.delete).toHaveBeenCalledWith('file-to-delete');
       });
 
-      it('should still delete file from database even if S3 deletion fails', async () => {
+      it('should still delete file from database even if storage deletion fails', async () => {
         const delta: SyncEntityDelta = {
           entityType: 'FILE',
           id: 'file-to-delete',
@@ -356,33 +381,15 @@ describe('Sync Service', () => {
 
         mockRepos.files.findById.mockResolvedValue({
           id: 'file-to-delete',
-          s3Key: 'users/user-123/attachments/file-to-delete/test.jpg',
+          storageKey: 'users/user-123/attachments/file-to-delete/test.jpg',
         });
-        mockedS3FileService.deleteByS3Key = jest.fn().mockRejectedValue(new Error('S3 error'));
+        mockedFileStorageManager.deleteFile = jest.fn().mockRejectedValue(new Error('Storage error'));
         mockRepos.files.delete.mockResolvedValue(true);
 
         const result = await applyRemoteDelta(userId, instanceId, delta);
 
         expect(result.success).toBe(true);
         expect(mockRepos.files.delete).toHaveBeenCalledWith('file-to-delete');
-      });
-
-      it('should delete PERSONA entity successfully', async () => {
-        const delta: SyncEntityDelta = {
-          entityType: 'PERSONA',
-          id: 'persona-1',
-          createdAt: earlier.toISOString(),
-          updatedAt: now.toISOString(),
-          isDeleted: true,
-          data: null,
-        };
-
-        mockRepos.personas.delete.mockResolvedValue(true);
-
-        const result = await applyRemoteDelta(userId, instanceId, delta);
-
-        expect(result.success).toBe(true);
-        expect(mockRepos.personas.delete).toHaveBeenCalledWith('persona-1');
       });
 
       it('should delete CHAT entity successfully', async () => {
@@ -401,6 +408,24 @@ describe('Sync Service', () => {
 
         expect(result.success).toBe(true);
         expect(mockRepos.chats.delete).toHaveBeenCalledWith('chat-1');
+      });
+
+      it('should delete CONNECTION_PROFILE entity successfully', async () => {
+        const delta: SyncEntityDelta = {
+          entityType: 'CONNECTION_PROFILE',
+          id: 'profile-1',
+          createdAt: earlier.toISOString(),
+          updatedAt: now.toISOString(),
+          isDeleted: true,
+          data: null,
+        };
+
+        mockRepos.connections.delete.mockResolvedValue(true);
+
+        const result = await applyRemoteDelta(userId, instanceId, delta);
+
+        expect(result.success).toBe(true);
+        expect(mockRepos.connections.delete).toHaveBeenCalledWith('profile-1');
       });
     });
 
@@ -473,24 +498,24 @@ describe('Sync Service', () => {
 
       it('should use timestamps for conflict resolution', async () => {
         const delta: SyncEntityDelta = {
-          entityType: 'PERSONA',
-          id: 'persona-1',
+          entityType: 'CHARACTER',
+          id: 'char-1',
           createdAt: earlier.toISOString(),
           updatedAt: later.toISOString(),
           isDeleted: false,
-          data: { name: 'Remote Persona' },
+          data: { name: 'Remote Character' },
         };
 
-        const localEntity = { id: 'persona-1', updatedAt: now.toISOString() };
-        mockRepos.personas.findById.mockResolvedValue(localEntity);
-        mockRepos.personas.update.mockResolvedValue(true);
+        const localEntity = { id: 'char-1', updatedAt: now.toISOString() };
+        mockRepos.characters.findById.mockResolvedValue(localEntity);
+        mockRepos.characters.update.mockResolvedValue(true);
 
         mockedResolveConflictWithRecord.mockReturnValue({
           resolution: 'REMOTE_WINS',
           conflict: {
-            entityType: 'PERSONA',
-            localId: 'persona-1',
-            remoteId: 'persona-1',
+            entityType: 'CHARACTER',
+            localId: 'char-1',
+            remoteId: 'char-1',
             resolution: 'REMOTE_WINS',
             localUpdatedAt: now.toISOString(),
             remoteUpdatedAt: later.toISOString(),
@@ -500,9 +525,9 @@ describe('Sync Service', () => {
         await applyRemoteDelta(userId, instanceId, delta);
 
         expect(mockedResolveConflictWithRecord).toHaveBeenCalledWith(
-          'PERSONA',
-          { id: 'persona-1', updatedAt: now.toISOString() },
-          'persona-1',
+          'CHARACTER',
+          { id: 'char-1', updatedAt: now.toISOString() },
+          'char-1',
           later.toISOString()
         );
       });
@@ -564,7 +589,7 @@ describe('Sync Service', () => {
     });
 
     describe('FILE entities', () => {
-      it('should save content to S3 when provided inline as base64', async () => {
+      it('should save content to storage when provided inline as base64', async () => {
         const fileContent = Buffer.from('test file content').toString('base64');
         const delta: SyncEntityDelta = {
           entityType: 'FILE',
@@ -583,20 +608,13 @@ describe('Sync Service', () => {
         mockRepos.files.findById.mockResolvedValue(null);
         mockRepos.files.createOrUpdate.mockResolvedValue({ id: 'file-1', updatedAt: now.toISOString() });
         mockRepos.files.update.mockResolvedValue(true);
-        mockedS3FileService.uploadUserFile = jest.fn().mockResolvedValue(undefined);
-        mockedS3FileService.generateS3Key = jest.fn().mockReturnValue('users/user-123/attachments/file-1/test.txt');
+        mockedFileStorageManager.uploadFile = jest.fn().mockResolvedValue({ storageKey: 'users/user-123/attachments/file-1/test.txt', mountPointId: 'mock-mount' });
+        mockedFileStorageManager.buildStorageKey = jest.fn().mockReturnValue('users/user-123/attachments/file-1/test.txt');
 
         const result = await applyRemoteDelta(userId, instanceId, delta);
 
         expect(result.success).toBe(true);
-        expect(mockedS3FileService.uploadUserFile).toHaveBeenCalledWith(
-          userId,
-          'file-1',
-          'test.txt',
-          'ATTACHMENT',
-          expect.any(Buffer),
-          'text/plain'
-        );
+        expect(mockedFileStorageManager.uploadFile).toHaveBeenCalled();
       });
 
       it('should mark file as requiresContentFetch when content not provided inline', async () => {
@@ -616,13 +634,14 @@ describe('Sync Service', () => {
 
         mockRepos.files.findById.mockResolvedValue(null);
         mockRepos.files.createOrUpdate.mockResolvedValue({ id: 'file-1', updatedAt: now.toISOString() });
+        mockedFileStorageManager.uploadFile = jest.fn();
 
         const result = await applyRemoteDelta(userId, instanceId, delta);
 
         expect(result.success).toBe(true);
         expect(result.isNewEntity).toBe(true);
-        // uploadUserFile should not be called since content is not provided
-        expect(mockedS3FileService.uploadUserFile).not.toHaveBeenCalled();
+        // uploadFile should not be called since content is not provided
+        expect(mockedFileStorageManager.uploadFile).not.toHaveBeenCalled();
       });
 
       it('should update file content when REMOTE_WINS', async () => {
@@ -652,7 +671,7 @@ describe('Sync Service', () => {
 
         mockRepos.files.findById.mockResolvedValue(existingFile);
         mockRepos.files.update.mockResolvedValue(true);
-        mockedS3FileService.uploadUserFile = jest.fn().mockResolvedValue(undefined);
+        mockedFileStorageManager.uploadFile = jest.fn().mockResolvedValue({ storageKey: 'mock-key', mountPointId: 'mock-mount' });
 
         mockedResolveConflictWithRecord.mockReturnValue({
           resolution: 'REMOTE_WINS',
@@ -669,7 +688,7 @@ describe('Sync Service', () => {
         const result = await applyRemoteDelta(userId, instanceId, delta);
 
         expect(result.success).toBe(true);
-        expect(mockedS3FileService.uploadUserFile).toHaveBeenCalled();
+        expect(mockedFileStorageManager.uploadFile).toHaveBeenCalled();
       });
     });
 
@@ -758,19 +777,19 @@ describe('Sync Service', () => {
           data: { name: 'Character 1' },
         },
         {
-          entityType: 'PERSONA',
-          id: 'persona-1',
+          entityType: 'TAG',
+          id: 'tag-1',
           createdAt: earlier.toISOString(),
           updatedAt: now.toISOString(),
           isDeleted: false,
-          data: { name: 'Persona 1' },
+          data: { name: 'Tag 1' },
         },
       ];
 
       mockRepos.characters.findById.mockResolvedValue(null);
       mockRepos.characters.createOrUpdate.mockResolvedValue({ id: 'char-1', updatedAt: now.toISOString() });
-      mockRepos.personas.findById.mockResolvedValue(null);
-      mockRepos.personas.createOrUpdate.mockResolvedValue({ id: 'persona-1', updatedAt: now.toISOString() });
+      mockRepos.tags.findById.mockResolvedValue(null);
+      mockRepos.tags.createOrUpdate.mockResolvedValue({ id: 'tag-1', updatedAt: now.toISOString() });
 
       const result = await processRemoteDeltas(userId, instanceId, deltas);
 
@@ -881,7 +900,7 @@ describe('Sync Service', () => {
 
       mockRepos.files.findById
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 'file-1', s3Key: 'users/user-123/files/file-1/large-file.zip' });
+        .mockResolvedValueOnce({ id: 'file-1', storageKey: 'users/user-123/files/file-1/large-file.zip' });
       mockRepos.files.createOrUpdate.mockResolvedValue({ id: 'file-1', updatedAt: now.toISOString() });
 
       const result = await processRemoteDeltas(userId, instanceId, deltas);
@@ -925,7 +944,7 @@ describe('Sync Service', () => {
       expect(mockedDetectDeltas).toHaveBeenCalledWith({
         userId,
         sinceTimestamp: earlier.toISOString(),
-        limit: 1000,
+        limit: 50000,
       });
       expect(result.deltas).toEqual(mockDeltas);
     });
@@ -977,8 +996,92 @@ describe('Sync Service', () => {
       expect(mockedDetectDeltas).toHaveBeenCalledWith({
         userId,
         sinceTimestamp: null,
-        limit: 1000,
+        limit: 50000,
       });
+    });
+
+    it('should paginate when hasMore is true', async () => {
+      const batch1Deltas: SyncEntityDelta[] = [
+        {
+          entityType: 'CHARACTER',
+          id: 'char-1',
+          createdAt: earlier.toISOString(),
+          updatedAt: earlier.toISOString(),
+          isDeleted: false,
+          data: { name: 'Character 1' },
+        },
+      ];
+      const batch2Deltas: SyncEntityDelta[] = [
+        {
+          entityType: 'CHARACTER',
+          id: 'char-2',
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+          isDeleted: false,
+          data: { name: 'Character 2' },
+        },
+      ];
+
+      mockedDetectDeltas
+        .mockResolvedValueOnce({
+          deltas: batch1Deltas,
+          hasMore: true,
+          oldestTimestamp: earlier.toISOString(),
+          newestTimestamp: earlier.toISOString(),
+        })
+        .mockResolvedValueOnce({
+          deltas: batch2Deltas,
+          hasMore: false,
+          oldestTimestamp: now.toISOString(),
+          newestTimestamp: now.toISOString(),
+        });
+
+      const result = await prepareLocalDeltasForPush(userId, instanceId, null);
+
+      expect(mockedDetectDeltas).toHaveBeenCalledTimes(2);
+      expect(mockedDetectDeltas).toHaveBeenNthCalledWith(1, {
+        userId,
+        sinceTimestamp: null,
+        limit: 50000,
+      });
+      expect(mockedDetectDeltas).toHaveBeenNthCalledWith(2, {
+        userId,
+        sinceTimestamp: earlier.toISOString(),
+        limit: 50000,
+      });
+      expect(result.deltas).toHaveLength(2);
+      expect(result.deltas[0].id).toBe('char-1');
+      expect(result.deltas[1].id).toBe('char-2');
+    });
+
+    it('should deduplicate deltas across pagination boundaries', async () => {
+      const duplicateDelta: SyncEntityDelta = {
+        entityType: 'CHARACTER',
+        id: 'char-1',
+        createdAt: earlier.toISOString(),
+        updatedAt: earlier.toISOString(),
+        isDeleted: false,
+        data: { name: 'Character 1' },
+      };
+
+      mockedDetectDeltas
+        .mockResolvedValueOnce({
+          deltas: [duplicateDelta],
+          hasMore: true,
+          oldestTimestamp: earlier.toISOString(),
+          newestTimestamp: earlier.toISOString(),
+        })
+        .mockResolvedValueOnce({
+          deltas: [duplicateDelta], // Same delta returned again
+          hasMore: false,
+          oldestTimestamp: earlier.toISOString(),
+          newestTimestamp: earlier.toISOString(),
+        });
+
+      const result = await prepareLocalDeltasForPush(userId, instanceId, null);
+
+      expect(result.deltas).toHaveLength(1); // Deduplicated
+      expect(result.deltas[0].id).toBe('char-1');
     });
   });
 
@@ -1355,12 +1458,12 @@ describe('Sync Service', () => {
           data: { name: 'Tag 1' },
         },
         {
-          entityType: 'PERSONA',
-          id: 'persona-1',
+          entityType: 'FILE',
+          id: 'file-1',
           createdAt: earlier.toISOString(),
           updatedAt: now.toISOString(),
           isDeleted: false,
-          data: { name: 'Persona 1' },
+          data: { name: 'File 1' },
         },
         {
           entityType: 'CHARACTER',
@@ -1382,8 +1485,8 @@ describe('Sync Service', () => {
 
       mockRepos.tags.findById.mockResolvedValue(null);
       mockRepos.tags.createOrUpdate.mockResolvedValue({ id: 'tag-1', updatedAt: now.toISOString() });
-      mockRepos.personas.findById.mockResolvedValue(null);
-      mockRepos.personas.createOrUpdate.mockResolvedValue({ id: 'persona-1', updatedAt: now.toISOString() });
+      mockRepos.files.findById.mockResolvedValue(null);
+      mockRepos.files.createOrUpdate.mockResolvedValue({ id: 'file-1', updatedAt: now.toISOString() });
       mockRepos.characters.findById.mockResolvedValue(null);
       mockRepos.characters.createOrUpdate.mockResolvedValue({ id: 'char-1', updatedAt: now.toISOString() });
       mockRepos.chats.findById.mockResolvedValue(null);

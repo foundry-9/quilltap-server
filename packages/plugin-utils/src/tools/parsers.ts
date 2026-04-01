@@ -41,15 +41,29 @@ export function parseOpenAIToolCalls(response: unknown): ToolCallRequest[] {
   try {
     const resp = response as Record<string, unknown>;
 
-    // Handle direct tool_calls array
+    // Handle direct tool_calls array (snake_case)
     let toolCallsArray = resp?.tool_calls as unknown[] | undefined;
 
-    // Check nested structure from streaming responses
+    // Handle direct toolCalls array (camelCase - some SDKs use this)
+    if (!toolCallsArray) {
+      toolCallsArray = (resp as Record<string, unknown>)?.toolCalls as unknown[] | undefined;
+    }
+
+    // Check nested structure from non-streaming responses: choices[0].message.tool_calls
     if (!toolCallsArray) {
       const choices = resp?.choices as
-        | Array<{ message?: { tool_calls?: unknown[] } }>
+        | Array<{ message?: { tool_calls?: unknown[]; toolCalls?: unknown[] } }>
         | undefined;
-      toolCallsArray = choices?.[0]?.message?.tool_calls;
+      toolCallsArray = choices?.[0]?.message?.tool_calls || choices?.[0]?.message?.toolCalls;
+    }
+
+    // Check nested structure from streaming responses: choices[0].delta.toolCalls
+    // OpenRouter SDK uses camelCase and puts tool calls in delta for streaming
+    if (!toolCallsArray) {
+      const choices = resp?.choices as
+        | Array<{ delta?: { tool_calls?: unknown[]; toolCalls?: unknown[] } }>
+        | undefined;
+      toolCallsArray = choices?.[0]?.delta?.tool_calls || choices?.[0]?.delta?.toolCalls;
     }
 
     if (toolCallsArray && Array.isArray(toolCallsArray) && toolCallsArray.length > 0) {
@@ -60,15 +74,32 @@ export function parseOpenAIToolCalls(response: unknown): ToolCallRequest[] {
         };
 
         if (tc.type === 'function' && tc.function) {
-          toolCalls.push({
-            name: tc.function.name,
-            arguments: JSON.parse(tc.function.arguments || '{}'),
-          });
+          const argsStr = tc.function.arguments || '{}';
+
+          // During streaming, arguments may be incomplete JSON.
+          // Check if the string looks like complete JSON before parsing.
+          // Skip incomplete tool calls - they'll be complete in the final response.
+          const trimmed = argsStr.trim();
+          if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+            // Incomplete JSON - skip this tool call for now
+            continue;
+          }
+
+          try {
+            toolCalls.push({
+              name: tc.function.name,
+              arguments: JSON.parse(argsStr),
+            });
+          } catch {
+            // JSON parse failed (e.g., incomplete JSON during streaming)
+            // This is expected during streaming - skip silently
+            continue;
+          }
         }
       }
     }
   } catch (error) {
-    // Log error but don't throw - return empty array
+    // Log error for unexpected parsing failures (not JSON parse errors)
     console.error('[plugin-utils] Error parsing OpenAI tool calls:', error);
   }
 
@@ -188,13 +219,23 @@ export function detectToolCallFormat(response: unknown): ToolCallFormat | null {
 
   const resp = response as Record<string, unknown>;
 
-  // OpenAI format: has tool_calls directly or in choices[0].message
+  // OpenAI format: has tool_calls/toolCalls directly or in choices[0].message or choices[0].delta
   if (resp.tool_calls && Array.isArray(resp.tool_calls)) {
     return 'openai';
   }
+  if (resp.toolCalls && Array.isArray(resp.toolCalls)) {
+    return 'openai';
+  }
 
-  const choices = resp.choices as Array<{ message?: { tool_calls?: unknown[] } }> | undefined;
-  if (choices?.[0]?.message?.tool_calls) {
+  const choices = resp.choices as Array<{
+    message?: { tool_calls?: unknown[]; toolCalls?: unknown[] };
+    delta?: { tool_calls?: unknown[]; toolCalls?: unknown[] };
+  }> | undefined;
+  if (choices?.[0]?.message?.tool_calls || choices?.[0]?.message?.toolCalls) {
+    return 'openai';
+  }
+  // Check delta for streaming responses (OpenRouter SDK uses this)
+  if (choices?.[0]?.delta?.tool_calls || choices?.[0]?.delta?.toolCalls) {
     return 'openai';
   }
 

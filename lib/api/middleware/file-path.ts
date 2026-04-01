@@ -5,7 +5,7 @@
  * Consolidates the getFilePath() function that was duplicated in 14+ route files.
  */
 
-import type { FileEntry, Character, Persona } from '@/lib/schemas/types';
+import type { FileEntry, Character } from '@/lib/schemas/types';
 
 /**
  * Get the filepath for a file based on storage type
@@ -21,15 +21,15 @@ import type { FileEntry, Character, Persona } from '@/lib/schemas/types';
  * const file = await repos.files.findById(character.defaultImageId);
  * if (file) {
  *   const filepath = getFilePath(file);
- *   // Returns '/api/files/{id}' for S3 files
- *   // Returns 'data/files/storage/{id}.ext' for legacy files
+ *   // Returns '/api/v1/files/{id}' for files with storageKey or s3Key
+ *   // Returns 'data/files/storage/{id}.ext' for legacy local files
  * }
  * ```
  */
 export function getFilePath(file: FileEntry): string {
-  // S3-backed files use the API route
-  if (file.s3Key) {
-    return `/api/files/${file.id}`;
+  // Files with storage keys (S3, mount points, etc.) use the API route
+  if (file.storageKey || file.s3Key) {
+    return `/api/v1/files/${file.id}`;
   }
 
   // Legacy local files - construct path with extension

@@ -21,7 +21,7 @@ export function QuillAnimation({ size = 'lg', className = '' }: QuillAnimationPr
         alt="Writing..."
         width={imageSize}
         height={imageSize}
-        className={`${sizeClasses} animate-quill-rock`}
+        className="animate-quill-rock"
       />
 
       <style jsx global>{`

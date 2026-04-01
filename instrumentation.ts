@@ -2,7 +2,13 @@
  * Next.js Instrumentation
  *
  * This file is automatically run by Next.js on server startup.
- * We use it to initialize the plugin system before handling any requests.
+ * We use it to:
+ * 1. Run migrations FIRST - before any requests can be served
+ * 2. Initialize the plugin system
+ * 3. Initialize file storage
+ *
+ * CRITICAL: Migrations MUST complete successfully before the server accepts requests.
+ * If migrations fail, the process exits with code 1 to prevent serving stale data.
  *
  * @see https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
  */
@@ -10,37 +16,133 @@
 export async function register() {
   // Only run in Node.js runtime (not Edge Runtime)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
-    // Set up stdout/stderr capture for DevConsole in development
-    // Use dynamic import to avoid Edge Runtime issues
-    if (process.env.NODE_ENV === 'development') {
-      const { setupStdoutCapture } = await import('./lib/dev/stdout-capture');
-      setupStdoutCapture();
-    }
+    // Use dynamic import for logger to avoid Edge Runtime issues
+    const { logger } = await import('./lib/logger');
+    const { startupState } = await import('./lib/startup/startup-state');
 
-    console.log('🚀 Server starting - initializing plugin system');
+    logger.info('Server starting - initializing services', {
+      context: 'instrumentation.register',
+      runtime: process.env.NEXT_RUNTIME,
+      nodeVersion: process.version,
+    });
 
     try {
-      // Dynamically import everything to avoid Edge Runtime issues
-      const { initializePlugins } = await import('./lib/startup/plugin-initialization');
+      // ================================================================
+      // PHASE 1: Run Migrations FIRST - before anything else
+      // ================================================================
+      // This ensures data compatibility before any API requests
+      startupState.setPhase('migrations');
 
+      const { MigrationRunner } = await import('./migrations');
+      const migrationRunner = new MigrationRunner();
+
+      logger.info('Running startup migrations', {
+        context: 'instrumentation.register',
+      });
+
+      const migrationResult = await migrationRunner.runMigrations();
+
+      if (!migrationResult.success) {
+        logger.error('Migrations failed - cannot start server', {
+          context: 'instrumentation.register',
+          failedMigrations: migrationResult.failed,
+          error: migrationResult.error,
+          migrationsRun: migrationResult.migrationsRun,
+          migrationsSkipped: migrationResult.migrationsSkipped,
+        });
+        // Exit with code 1 to prevent container from starting with incompatible data
+        process.exit(1);
+      }
+
+      logger.info('Migrations completed successfully', {
+        context: 'instrumentation.register',
+        migrationsRun: migrationResult.migrationsRun,
+        migrationsSkipped: migrationResult.migrationsSkipped,
+        totalDurationMs: migrationResult.totalDurationMs,
+      });
+
+      // Mark migrations as complete
+      startupState.markMigrationsComplete();
+
+      // Clean up migration runner's database connection
+      await migrationRunner.cleanup();
+
+      // ================================================================
+      // PHASE 2: Initialize MongoDB (for app use)
+      // ================================================================
+      const { initializeMongoDBIfNeeded } = await import('./lib/startup');
+      startupState.setPhase('mongodb');
+
+      const mongoResult = await initializeMongoDBIfNeeded();
+      if (mongoResult.initialized) {
+        logger.info('MongoDB initialized successfully', {
+          context: 'instrumentation.register',
+          latencyMs: mongoResult.latencyMs,
+        });
+      } else {
+        logger.info('MongoDB not enabled or not configured', {
+          context: 'instrumentation.register',
+          message: mongoResult.message,
+        });
+      }
+
+      // ================================================================
+      // PHASE 3: Initialize Plugins
+      // ================================================================
+      const { initializePlugins } = await import('./lib/startup/plugin-initialization');
+      startupState.setPhase('plugins');
       const result = await initializePlugins();
 
       if (result.success) {
-        console.log('✅ Plugin system initialized successfully', {
+        logger.info('Plugin system initialized successfully', {
+          context: 'instrumentation.register',
           total: result.stats.total,
           enabled: result.stats.enabled,
           disabled: result.stats.disabled,
           errors: result.stats.errors,
         });
       } else {
-        console.error('❌ Plugin system initialization failed', {
+        logger.error('Plugin system initialization failed', {
+          context: 'instrumentation.register',
           stats: result.stats,
           errors: result.errors,
         });
       }
+
+      // ================================================================
+      // PHASE 4: Initialize File Storage
+      // ================================================================
+      const { fileStorageManager } = await import('./lib/file-storage/manager');
+      startupState.setPhase('file-storage');
+      if (!fileStorageManager.isInitialized()) {
+        logger.info('Initializing file storage manager', {
+          context: 'instrumentation.register',
+        });
+        await fileStorageManager.initialize();
+        logger.info('File storage manager initialized', {
+          context: 'instrumentation.register',
+        });
+      }
+
+      // ================================================================
+      // PHASE 5: Mark startup complete
+      // ================================================================
+      startupState.setPhase('complete');
+      startupState.markReady();
+
+      logger.info('All services initialized successfully', {
+        context: 'instrumentation.register',
+        migrationsComplete: startupState.areMigrationsComplete(),
+      });
     } catch (error) {
-      console.error('❌ Fatal error initializing plugin system:', error);
-      // Don't throw - allow server to start even if plugins fail
+      logger.error('Fatal error initializing services', {
+        context: 'instrumentation.register',
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      // Mark startup as failed but allow server to start
+      startupState.setPhase('failed');
+      // Don't throw - allow server to start even if initialization fails
     }
   }
 }

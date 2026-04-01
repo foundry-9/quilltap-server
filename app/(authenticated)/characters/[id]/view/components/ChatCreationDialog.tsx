@@ -2,24 +2,24 @@
 
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
-import { ConnectionProfile, Persona } from '../types'
-import { usePersonaDisplayName } from '@/hooks/usePersonaDisplayName'
+import { ConnectionProfile, UserControlledCharacter } from '../types'
+import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
 
 interface ChatCreationDialogProps {
   characterId: string
   characterName: string | undefined
   profiles: ConnectionProfile[]
-  personas: Persona[]
+  userControlledCharacters: UserControlledCharacter[]
   selectedProfileId: string
-  selectedPersonaId: string
+  selectedUserCharacterId: string
   selectedImageProfileId: string | null
   scenario: string
   timestampConfig: TimestampConfig | null
   creatingChat: boolean
   openedFromQuery: boolean
   onProfileChange: (profileId: string) => void
-  onPersonaChange: (personaId: string) => void
+  onUserCharacterChange: (userCharacterId: string) => void
   onImageProfileChange: (profileId: string | null) => void
   onScenarioChange: (scenario: string) => void
   onTimestampConfigChange: (config: TimestampConfig) => void
@@ -31,23 +31,23 @@ export function ChatCreationDialog({
   characterId,
   characterName,
   profiles,
-  personas,
+  userControlledCharacters,
   selectedProfileId,
-  selectedPersonaId,
+  selectedUserCharacterId,
   selectedImageProfileId,
   scenario,
   timestampConfig,
   creatingChat,
   openedFromQuery,
   onProfileChange,
-  onPersonaChange,
+  onUserCharacterChange,
   onImageProfileChange,
   onScenarioChange,
   onTimestampConfigChange,
   onCancel,
   onCreateChat,
 }: ChatCreationDialogProps) {
-  const { formatPersonaName } = usePersonaDisplayName()
+  const { formatCharacterName } = useUserCharacterDisplayName()
 
   return (
     <div className="character-chat-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
@@ -80,22 +80,22 @@ export function ChatCreationDialog({
                 </select>
               </div>
 
-              {/* Persona Selection */}
-              {personas.length > 0 && (
+              {/* User Character Selection */}
+              {userControlledCharacters.length > 0 && (
                 <div>
-                  <label htmlFor="persona" className="mb-2 block text-sm qt-text-primary">
-                    Persona (Optional)
+                  <label htmlFor="userCharacter" className="mb-2 block text-sm qt-text-primary">
+                    Play As (Optional)
                   </label>
                   <select
-                    id="persona"
-                    value={selectedPersonaId}
-                    onChange={(e) => onPersonaChange(e.target.value)}
+                    id="userCharacter"
+                    value={selectedUserCharacterId}
+                    onChange={(e) => onUserCharacterChange(e.target.value)}
                     className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
-                    <option value="">Use character defaults</option>
-                    {personas.map((persona) => (
-                      <option key={persona.id} value={persona.id}>
-                        {formatPersonaName(persona)}
+                    <option value="">Chat as yourself</option>
+                    {userControlledCharacters.map((char) => (
+                      <option key={char.id} value={char.id}>
+                        {formatCharacterName(char)}
                       </option>
                     ))}
                   </select>
@@ -111,7 +111,7 @@ export function ChatCreationDialog({
                   value={selectedImageProfileId}
                   onChange={onImageProfileChange}
                   characterId={characterId}
-                  personaId={selectedPersonaId}
+                  personaId={selectedUserCharacterId}
                 />
               </div>
 

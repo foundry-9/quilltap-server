@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import ImageDetailModal from '../ImageDetailModal'
 import { ImageUploadDialog } from '../image-upload-dialog'
 import { GalleryControls } from './GalleryControls'
@@ -93,7 +92,7 @@ export function EmbeddedPhotoGallery({
     try {
       await handleClearAvatar(currentAvatarId, onAvatarChange)
     } catch (error) {
-      clientLogger.error('Error clearing avatar:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Error clearing avatar:', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useFormState } from '@/hooks/useFormState'
 import { PromptTemplate, INITIAL_FORM_DATA } from './types'
 import { usePrompts } from './hooks/usePrompts'
@@ -64,7 +63,6 @@ export default function PromptsTab() {
 
   const handleCopyAsNew = useCallback(
     (template: PromptTemplate) => {
-      clientLogger.debug('Copying template as new', { templateId: template.id })
       setEditingTemplate(null)
       form.setField('name', `${template.name} (Copy)`)
       form.setField('description', template.description || '')

@@ -14,12 +14,14 @@ import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
 import { OpenAIProvider } from './provider';
 import { OpenAIImageProvider } from './image-provider';
 import { OpenAIIcon } from './icon';
-import { logger } from '../../../lib/logger';
 import {
+  createPluginLogger,
   parseOpenAIToolCalls,
   type OpenAIToolDefinition,
   type ToolCallRequest,
-} from '../../../lib/llm/tool-formatting-utils';
+} from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-openai');
 
 /**
  * Plugin metadata configuration
@@ -63,6 +65,7 @@ const attachmentSupport = {
   supportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as string[],
   description: 'Images only (JPEG, PNG, GIF, WebP)',
   notes: 'Images are supported in vision-capable models like GPT-4V and GPT-4o',
+  maxBase64Size: 20 * 1024 * 1024, // 20MB - OpenAI's API limit for images
 };
 
 /**

@@ -1,9 +1,10 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v2.6.
+Complete API reference for Quilltap v2.7.
 
 ## Table of Contents
 
+- [API Versioning](#api-versioning)
 - [Authentication](#authentication)
 - [Rate Limiting](#rate-limiting)
 - [Error Handling](#error-handling)
@@ -18,17 +19,45 @@ Complete API reference for Quilltap v2.6.
   - [Characters](#characters)
   - [NPCs](#npcs)
   - [Chats](#chats)
-  - [Impersonation](#impersonation)
   - [Messages](#messages)
   - [Memories](#memories)
   - [Tags](#tags)
   - [Files & Images](#files--images)
+  - [Folders](#folders)
   - [Templates](#templates)
-  - [Tools & Backup](#tools--backup)
+  - [System & Backup](#system--backup)
   - [Themes](#themes)
   - [Search](#search)
-  - [Background Jobs](#background-jobs)
   - [Plugins](#plugins)
+
+## API Versioning
+
+As of v2.7, all core API endpoints use the `/api/v1/` prefix. This enables future versioning as the API evolves.
+
+### Route Structure
+
+The API follows a clean REST pattern:
+- **Collection endpoints**: `/api/v1/[entity]` (GET list, POST create)
+- **Individual endpoints**: `/api/v1/[entity]/[id]` (GET, PUT, DELETE)
+- **Actions via query param**: `POST /api/v1/[entity]/[id]?action=name`
+
+### Action Parameters
+
+Non-CRUD operations use the `?action=` query parameter:
+
+```
+POST /api/v1/characters/[id]?action=favorite  # Toggle favorite
+POST /api/v1/chats/[id]?action=regenerate-title  # Regenerate title
+GET /api/v1/characters/[id]?action=export  # Export character
+```
+
+### Backwards Compatibility
+
+Legacy routes (without `/v1/` prefix) are deprecated but still functional. They return:
+- `Deprecation` header with sunset date
+- `Link` header pointing to migration docs
+
+Legacy routes will be removed after 2026-04-15.
 
 ## Authentication
 
@@ -217,27 +246,30 @@ Returns updated profile with avatar URL.
 
 ### API Keys
 
-#### `GET /api/keys`
+#### `GET /api/v1/api-keys`
 
 List all API keys for authenticated user.
 
 **Response**: `200 OK`
 
 ```json
-[
-  {
-    "id": "key-uuid",
-    "provider": "OPENAI",
-    "label": "My OpenAI Key",
-    "keyMasked": "sk-...1234",
-    "isActive": true,
-    "lastUsed": "2025-01-19T10:00:00.000Z",
-    "createdAt": "2025-01-15T12:00:00.000Z"
-  }
-]
+{
+  "apiKeys": [
+    {
+      "id": "key-uuid",
+      "provider": "OPENAI",
+      "label": "My OpenAI Key",
+      "keyMasked": "sk-...1234",
+      "isActive": true,
+      "lastUsed": "2025-01-19T10:00:00.000Z",
+      "createdAt": "2025-01-15T12:00:00.000Z"
+    }
+  ],
+  "count": 1
+}
 ```
 
-#### `POST /api/keys`
+#### `POST /api/v1/api-keys`
 
 Create a new API key.
 
@@ -258,52 +290,84 @@ Create a new API key.
 
 **Response**: `201 Created`
 
-#### `GET /api/keys/[id]`
+#### `GET /api/v1/api-keys/[id]`
 
 Get a specific API key (masked).
 
-#### `PUT /api/keys/[id]`
+#### `PUT /api/v1/api-keys/[id]`
 
 Update an API key's label or active status.
 
-#### `DELETE /api/keys/[id]`
+#### `DELETE /api/v1/api-keys/[id]`
 
 Delete an API key.
 
-#### `POST /api/keys/[id]/test`
+#### `POST /api/v1/api-keys/[id]?action=test`
 
 Test an API key connection with the provider.
+
+#### `POST /api/v1/api-keys?action=auto-associate`
+
+Auto-associate API keys with connection profiles based on provider.
+
+#### `POST /api/v1/api-keys?action=export`
+
+Export all API keys (encrypted bundle for backup/transfer).
+
+#### `POST /api/v1/api-keys?action=import`
+
+Import API keys from an encrypted bundle.
+
+#### `POST /api/v1/api-keys?action=import-preview`
+
+Preview what keys would be imported without applying changes.
 
 ---
 
 ### Connection Profiles
 
-#### `GET /api/profiles`
+#### `GET /api/v1/connection-profiles`
 
 List all LLM connection profiles.
+
+**Query Parameters**:
+- `sortByCharacter` - Sort profiles by matching tags with character
+- `imageCapable=true` - Filter to image-capable providers only
 
 **Response**: `200 OK`
 
 ```json
-[
-  {
-    "id": "profile-uuid",
-    "name": "GPT-4 Profile",
-    "provider": "OPENAI",
-    "apiKeyId": "key-uuid",
-    "modelName": "gpt-4o",
-    "parameters": {
-      "temperature": 0.7,
-      "max_tokens": 4096
-    },
-    "isDefault": true,
-    "isCheap": false,
-    "createdAt": "2025-01-15T12:00:00.000Z"
-  }
-]
+{
+  "profiles": [
+    {
+      "id": "profile-uuid",
+      "name": "GPT-4 Profile",
+      "provider": "OPENAI",
+      "apiKeyId": "key-uuid",
+      "modelName": "gpt-4o",
+      "parameters": {
+        "temperature": 0.7,
+        "max_tokens": 4096
+      },
+      "isDefault": true,
+      "isCheap": false,
+      "allowWebSearch": false,
+      "useNativeWebSearch": false,
+      "apiKey": {
+        "id": "key-uuid",
+        "label": "My OpenAI Key",
+        "provider": "OPENAI",
+        "isActive": true
+      },
+      "tags": [],
+      "createdAt": "2025-01-15T12:00:00.000Z"
+    }
+  ],
+  "count": 1
+}
 ```
 
-#### `POST /api/profiles`
+#### `POST /api/v1/connection-profiles`
 
 Create a connection profile.
 
@@ -320,29 +384,56 @@ Create a connection profile.
     "max_tokens": 4096
   },
   "isDefault": false,
-  "isCheap": false
+  "isCheap": false,
+  "allowWebSearch": false,
+  "useNativeWebSearch": false
 }
 ```
 
-#### `GET /api/profiles/[id]`
+#### `GET /api/v1/connection-profiles/[id]`
 
 Get a specific profile.
 
-#### `PUT /api/profiles/[id]`
+#### `PUT /api/v1/connection-profiles/[id]`
 
 Update a profile.
 
-#### `DELETE /api/profiles/[id]`
+#### `DELETE /api/v1/connection-profiles/[id]`
 
 Delete a profile.
 
-#### `POST /api/profiles/test-connection`
+#### `POST /api/v1/connection-profiles?action=test-connection`
 
 Test a profile connection.
 
-#### `POST /api/profiles/test-message`
+**Request Body**:
+
+```json
+{
+  "provider": "OPENAI",
+  "apiKeyId": "key-uuid",
+  "baseUrl": "https://api.openai.com/v1"
+}
+```
+
+#### `POST /api/v1/connection-profiles?action=test-message`
 
 Send a test message using a profile.
+
+**Request Body**:
+
+```json
+{
+  "provider": "OPENAI",
+  "apiKeyId": "key-uuid",
+  "baseUrl": "https://api.openai.com/v1",
+  "modelName": "gpt-4o",
+  "parameters": {
+    "temperature": 0.7,
+    "max_tokens": 50
+  }
+}
+```
 
 ---
 
@@ -378,11 +469,11 @@ Get available embedding models for a provider.
 
 ### Image Profiles
 
-#### `GET /api/image-profiles`
+#### `GET /api/v1/image-profiles`
 
 List image generation profiles.
 
-#### `POST /api/image-profiles`
+#### `POST /api/v1/image-profiles`
 
 Create an image profile.
 
@@ -393,66 +484,136 @@ Create an image profile.
   "name": "DALL-E Profile",
   "provider": "OPENAI",
   "apiKeyId": "key-uuid",
-  "model": "gpt-image-1.5",
-  "settings": {
+  "modelName": "gpt-image-1",
+  "parameters": {
     "size": "1024x1024",
-    "quality": "high"
-  }
+    "quality": "hd"
+  },
+  "isDefault": false
 }
 ```
 
-#### `GET /api/image-profiles/[id]`
+#### `GET /api/v1/image-profiles?action=list-providers`
+
+List available image generation providers from the plugin registry.
+
+**Response**:
+
+```json
+{
+  "providers": [
+    {
+      "value": "OPENAI",
+      "label": "OpenAI (DALL-E / GPT Image)",
+      "defaultModels": ["gpt-image-1", "dall-e-3", "dall-e-2"],
+      "apiKeyProvider": "OPENAI"
+    },
+    {
+      "value": "ETERNAL_AI",
+      "label": "Eternal AI",
+      "defaultModels": ["black-forest-labs/FLUX.1-dev", "black-forest-labs/FLUX.1-schnell"],
+      "apiKeyProvider": "ETERNAL_AI"
+    }
+  ],
+  "count": 2
+}
+```
+
+#### `GET /api/v1/image-profiles?action=list-models`
+
+Get available image generation models for a provider.
+
+**Query Parameters**:
+- `provider` (required) - Provider name (e.g., "OPENAI", "ETERNAL_AI")
+- `apiKeyId` - API key ID to fetch models dynamically (optional)
+
+**Response**:
+
+```json
+{
+  "provider": "OPENAI",
+  "models": ["gpt-image-1", "dall-e-3", "dall-e-2"],
+  "supportedModels": ["gpt-image-1", "dall-e-3", "dall-e-2"]
+}
+```
+
+#### `POST /api/v1/image-profiles?action=validate-key`
+
+Validate an API key for image generation.
+
+**Request Body**:
+
+```json
+{
+  "provider": "OPENAI",
+  "apiKeyId": "key-uuid"
+}
+```
+
+**Response**:
+
+```json
+{
+  "valid": true,
+  "message": "API key is valid",
+  "modelCount": 3
+}
+```
+
+#### `GET /api/v1/image-profiles/[id]`
 
 Get a specific image profile.
 
-#### `PUT /api/image-profiles/[id]`
+#### `PUT /api/v1/image-profiles/[id]`
 
 Update an image profile.
 
-#### `DELETE /api/image-profiles/[id]`
+#### `DELETE /api/v1/image-profiles/[id]`
 
 Delete an image profile.
-
-#### `POST /api/image-profiles/[id]/generate`
-
-Generate an image using a profile.
-
-#### `GET /api/image-profiles/models`
-
-Get available image generation models for a provider.
 
 ---
 
 ### Characters
 
-#### `GET /api/characters`
+#### `GET /api/v1/characters`
 
 List all characters.
 
 **Query Parameters**:
 - `npc=true|false` - Filter by NPC status (omit for regular characters)
 - `controlledBy=llm|user` - Filter by control mode (LLM-controlled or user-controlled)
+- `tagId` - Filter by tag
 
 **Response**: `200 OK`
 
 ```json
-[
-  {
-    "id": "char-uuid",
-    "name": "Alice",
-    "title": "The Curious",
-    "description": "A friendly AI assistant",
-    "controlledBy": "llm",
-    "npc": false,
-    "isFavorite": true,
-    "chatCount": 5,
-    "avatarUrl": "/api/files/avatar-uuid",
-    "createdAt": "2025-01-15T12:00:00.000Z"
-  }
-]
+{
+  "characters": [
+    {
+      "id": "char-uuid",
+      "name": "Alice",
+      "title": "The Curious",
+      "description": "A friendly AI assistant",
+      "controlledBy": "llm",
+      "npc": false,
+      "isFavorite": true,
+      "defaultImage": {
+        "id": "file-uuid",
+        "filepath": "/api/files/file-uuid",
+        "url": null
+      },
+      "_count": {
+        "chats": 5
+      },
+      "createdAt": "2025-01-15T12:00:00.000Z"
+    }
+  ],
+  "count": 1
+}
 ```
 
-#### `POST /api/characters`
+#### `POST /api/v1/characters`
 
 Create a character.
 
@@ -481,44 +642,7 @@ Create a character.
 
 **Note**: Set `controlledBy` to `"user"` for user-controlled characters (replaces the legacy persona system).
 
-#### `GET /api/characters/[id]`
-
-Get a character.
-
-#### `PUT /api/characters/[id]`
-
-Update a character.
-
-#### `DELETE /api/characters/[id]`
-
-Delete a character.
-
-**Query Parameters**:
-- `deleteChats=true` - Also delete related chats
-- `deleteImages=true` - Also delete related images
-
-#### `POST /api/characters/[id]/favorite`
-
-Toggle character favorite status.
-
-#### `POST /api/characters/[id]/rename`
-
-Rename character and update references.
-
-**Request Body**:
-
-```json
-{
-  "newName": "Alice Updated",
-  "searchReplace": true
-}
-```
-
-#### `GET /api/characters/[id]/cascade-preview`
-
-Preview what will be deleted when cascading.
-
-#### `POST /api/characters/import`
+#### `POST /api/v1/characters?action=import`
 
 Import a SillyTavern character (JSON format only).
 
@@ -530,13 +654,97 @@ file: <character.json>
 
 **Note**: PNG character card format (JSON embedded in PNG) is not supported. Use JSON export format.
 
-#### `GET /api/characters/[id]/export`
+#### `POST /api/v1/characters?action=ai-wizard`
+
+Use AI to generate character details from a brief description.
+
+#### `POST /api/v1/characters?action=quick-create`
+
+Quick-create a minimal character.
+
+#### `GET /api/v1/characters/[id]`
+
+Get a character with enriched data.
+
+**Response**: `200 OK`
+
+```json
+{
+  "character": {
+    "id": "char-uuid",
+    "name": "Alice",
+    "defaultImage": {
+      "id": "file-uuid",
+      "filepath": "/api/files/file-uuid",
+      "url": null
+    },
+    "_count": {
+      "chats": 5
+    }
+  }
+}
+```
+
+#### `PUT /api/v1/characters/[id]`
+
+Update a character.
+
+#### `DELETE /api/v1/characters/[id]`
+
+Delete a character.
+
+**Query Parameters**:
+- `cascadeChats=true` - Also delete exclusive chats
+- `cascadeImages=true` - Also delete exclusive images
+
+#### `GET /api/v1/characters/[id]?action=export`
 
 Export character as SillyTavern-compatible JSON.
 
-#### `POST /api/characters/quick-create`
+**Query Parameters**:
+- `format=json|png` - Export format (PNG not yet implemented)
 
-Quick-create a minimal character.
+#### `POST /api/v1/characters/[id]?action=favorite`
+
+Toggle character favorite status.
+
+#### `POST /api/v1/characters/[id]?action=avatar`
+
+Set or clear character avatar.
+
+**Request Body**:
+
+```json
+{
+  "imageId": "file-uuid"
+}
+```
+
+To clear avatar, set `imageId` to `null`.
+
+#### `POST /api/v1/characters/[id]?action=add-tag`
+
+Add a tag to a character.
+
+**Request Body**:
+
+```json
+{
+  "tagId": "tag-uuid"
+}
+```
+
+#### `POST /api/v1/characters/[id]?action=remove-tag`
+
+Remove a tag from a character.
+
+**Request Body**:
+
+```json
+{
+  "tagId": "tag-uuid"
+}
+```
 
 ---
 
@@ -556,38 +764,45 @@ Create an NPC character.
 
 ### Chats
 
-#### `GET /api/chats`
+#### `GET /api/v1/chats`
 
 List all chats for authenticated user.
+
+**Query Parameters**:
+- `tagId` - Filter by tag
 
 **Response**: `200 OK`
 
 ```json
-[
-  {
-    "id": "chat-uuid",
-    "title": "Chat with Alice",
-    "characterId": "char-uuid",
-    "connectionProfileId": "profile-uuid",
-    "participants": [
-      {
-        "id": "participant-uuid",
-        "type": "CHARACTER",
-        "characterId": "char-uuid",
-        "controlledBy": "llm",
-        "connectionProfileId": "profile-uuid"
-      }
-    ],
-    "impersonatingParticipantIds": [],
-    "activeTypingParticipantId": null,
-    "allLLMPauseTurnCount": 0,
-    "createdAt": "2025-01-19T10:00:00.000Z",
-    "updatedAt": "2025-01-19T12:00:00.000Z"
-  }
-]
+{
+  "chats": [
+    {
+      "id": "chat-uuid",
+      "title": "Chat with Alice",
+      "characterId": "char-uuid",
+      "connectionProfileId": "profile-uuid",
+      "participants": [
+        {
+          "id": "participant-uuid",
+          "type": "CHARACTER",
+          "characterId": "char-uuid",
+          "controlledBy": "llm",
+          "connectionProfileId": "profile-uuid"
+        }
+      ],
+      "impersonatingParticipantIds": [],
+      "activeTypingParticipantId": null,
+      "allLLMPauseTurnCount": 0,
+      "tags": [],
+      "createdAt": "2025-01-19T10:00:00.000Z",
+      "updatedAt": "2025-01-19T12:00:00.000Z"
+    }
+  ],
+  "count": 1
+}
 ```
 
-#### `POST /api/chats`
+#### `POST /api/v1/chats`
 
 Create a new chat.
 
@@ -605,45 +820,175 @@ Create a new chat.
 
 **Note**: `userCharacterId` is optional - provide a user-controlled character ID to "play as" that character in the chat.
 
-#### `GET /api/chats/[id]`
-
-Get a chat with full message history.
-
-#### `PUT /api/chats/[id]`
-
-Update chat metadata.
-
-#### `DELETE /api/chats/[id]`
-
-Delete a chat (cascades to messages).
-
-#### `POST /api/chats/import`
+#### `POST /api/v1/chats?action=import`
 
 Import a SillyTavern chat (JSONL format).
 
-**Request**: `multipart/form-data`
+**Request Body**:
 
-```
-file: <chat.jsonl>
-characterId: <char-uuid>
-connectionProfileId: <profile-uuid>
+```json
+{
+  "chatData": {
+    "messages": [],
+    "chat_metadata": {},
+    "character_name": "Alice",
+    "user_name": "User",
+    "create_date": 1234567890
+  },
+  "mappings": [],
+  "defaultConnectionProfileId": "profile-uuid",
+  "triggerTitleGeneration": true,
+  "createMemories": false
+}
 ```
 
-#### `GET /api/chats/[id]/export`
+#### `GET /api/v1/chats/[id]`
+
+Get a chat with full message history.
+
+#### `PUT /api/v1/chats/[id]`
+
+Update chat metadata.
+
+#### `DELETE /api/v1/chats/[id]`
+
+Delete a chat (cascades to messages).
+
+#### `GET /api/v1/chats/[id]?action=export`
 
 Export chat as SillyTavern JSONL format.
 
-#### `GET /api/chats/[id]/participants`
+#### `GET /api/v1/chats/[id]?action=cost`
 
-Get/manage multi-character chat participants.
+Get detailed cost breakdown for a chat.
 
-#### `PATCH /api/chats/[id]/turn`
+**Response**: `200 OK`
+
+```json
+{
+  "chatId": "chat-uuid",
+  "costs": [
+    {
+      "participantId": "participant-uuid",
+      "characterId": "char-uuid",
+      "characterName": "Alice",
+      "provider": "ANTHROPIC",
+      "modelName": "claude-sonnet-4-20250514",
+      "totalPromptTokens": 15000,
+      "totalCompletionTokens": 5000,
+      "messageCount": 25
+    }
+  ],
+  "totalMessages": 50,
+  "totalPromptTokens": 30000,
+  "totalCompletionTokens": 10000
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=regenerate-title`
+
+Regenerate chat title using AI.
+
+#### `POST /api/v1/chats/[id]?action=add-tag`
+
+Add a tag to a chat.
+
+**Request Body**:
+
+```json
+{
+  "tagId": "tag-uuid"
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=remove-tag`
+
+Remove a tag from a chat.
+
+**Request Body**:
+
+```json
+{
+  "tagId": "tag-uuid"
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=add-participant`
+
+Add a character to the chat.
+
+**Request Body**:
+
+```json
+{
+  "characterId": "char-uuid",
+  "connectionProfileId": "profile-uuid"
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=update-participant`
+
+Update a participant's settings.
+
+**Request Body**:
+
+```json
+{
+  "participantId": "participant-uuid",
+  "connectionProfileId": "profile-uuid",
+  "imageProfileId": "image-profile-uuid",
+  "embeddingProfileId": "embedding-profile-uuid"
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=remove-participant`
+
+Remove a participant from the chat.
+
+**Request Body**:
+
+```json
+{
+  "participantId": "participant-uuid"
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=bulk-reattribute`
+
+Re-attribute multiple messages from one participant to another in a single operation. All memories associated with the affected messages are permanently deleted.
+
+**Request Body**:
+
+```json
+{
+  "sourceParticipantId": "participant-uuid" | null,  // null = unassigned messages
+  "targetParticipantId": "participant-uuid",
+  "roleFilter": "ASSISTANT" | "USER" | "both"  // Default: "both"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "messagesUpdated": 42,
+  "memoriesDeleted": 7
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=turn`
 
 Update turn state for multi-character chat.
 
-#### `POST /api/chats/[id]/queue-memories`
+**Request Body**:
 
-Queue memory extraction as background job.
+```json
+{
+  "action": "nudge" | "queue" | "dequeue" | "continue",
+  "participantId": "participant-uuid"
+}
+```
 
 ---
 
@@ -651,7 +996,7 @@ Queue memory extraction as background job.
 
 Impersonation allows users to take control of LLM-controlled characters mid-chat.
 
-#### `POST /api/chats/[id]/impersonate`
+#### `POST /api/v1/chats/[id]?action=impersonate`
 
 Start impersonating a character in the chat.
 
@@ -667,7 +1012,7 @@ Start impersonating a character in the chat.
 
 Returns updated chat metadata with `impersonatingParticipantIds` including the new participant.
 
-#### `DELETE /api/chats/[id]/impersonate`
+#### `POST /api/v1/chats/[id]?action=stop-impersonate`
 
 Stop impersonating a character.
 
@@ -682,20 +1027,7 @@ Stop impersonating a character.
 
 **Note**: `newConnectionProfileId` is required when the character doesn't have a default connection profile. This assigns the LLM profile that will control the character after you stop impersonating.
 
-#### `GET /api/chats/[id]/impersonate`
-
-Get current impersonation state.
-
-**Response**: `200 OK`
-
-```json
-{
-  "impersonatingParticipantIds": ["participant-uuid"],
-  "activeTypingParticipantId": "participant-uuid"
-}
-```
-
-#### `PUT /api/chats/[id]/active-speaker`
+#### `POST /api/v1/chats/[id]?action=set-active-speaker`
 
 Set the active speaker when impersonating multiple characters.
 
@@ -707,17 +1039,42 @@ Set the active speaker when impersonating multiple characters.
 }
 ```
 
-#### `GET /api/chats/[id]/active-speaker`
-
-Get the current active speaker.
-
 ---
 
 ### Messages
 
-#### `POST /api/chats/[id]/messages`
+#### `GET /api/v1/messages?chatId=[id]`
+
+Get messages for a chat.
+
+**Query Parameters**:
+- `chatId` (required) - Chat ID
+
+**Response**: `200 OK`
+
+```json
+{
+  "messages": [
+    {
+      "id": "msg-uuid",
+      "chatId": "chat-uuid",
+      "role": "assistant",
+      "content": "Hello! How can I help?",
+      "participantId": "participant-uuid",
+      "attachments": [],
+      "createdAt": "2025-01-19T10:00:00.000Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+#### `POST /api/v1/messages?chatId=[id]`
 
 Send a message and get streaming response.
+
+**Query Parameters**:
+- `chatId` (required) - Chat ID
 
 **Request Body**:
 
@@ -750,51 +1107,124 @@ data: {"type":"tool_call","name":"generate_image","arguments":{...}}
 data: {"type":"tool_result","name":"generate_image","result":{...}}
 ```
 
-#### `PUT /api/messages/[id]`
+#### `GET /api/v1/messages/[id]`
+
+Get a specific message.
+
+#### `PUT /api/v1/messages/[id]`
 
 Edit a message.
 
-#### `DELETE /api/messages/[id]`
+**Request Body**:
+
+```json
+{
+  "content": "Updated message content"
+}
+```
+
+#### `DELETE /api/v1/messages/[id]`
 
 Delete a message.
 
-#### `POST /api/messages/[id]/swipe`
+**Query Parameters**:
+- `deleteMemories=true` - Also delete associated memories
+
+#### `POST /api/v1/messages/[id]?action=swipe`
 
 Generate alternative response (swipe).
+
+#### `POST /api/v1/messages/[id]?action=reattribute`
+
+Reattribute a message to a different participant.
+
+**Request Body**:
+
+```json
+{
+  "newParticipantId": "participant-uuid"
+}
+```
 
 ---
 
 ### Memories
 
-#### `GET /api/characters/[id]/memories`
+Memories are accessed via query parameters to filter by character, chat, or message.
 
-Get all memories for a character.
+#### `GET /api/v1/memories`
 
-#### `POST /api/characters/[id]/memories`
+Get memories with filtering.
+
+**Query Parameters** (at least one required):
+- `characterId` - Filter by character
+- `chatId` - Filter by chat
+- `messageId` - Filter by message
+
+**Response**: `200 OK`
+
+```json
+{
+  "memories": [
+    {
+      "id": "memory-uuid",
+      "characterId": "char-uuid",
+      "content": "Alice likes tea",
+      "summary": "Preference for tea",
+      "importance": 0.8,
+      "hasEmbedding": true,
+      "createdAt": "2025-01-19T10:00:00.000Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+#### `POST /api/v1/memories`
 
 Create a memory.
+
+**Query Parameters**:
+- `characterId` (required) - Character to create memory for
 
 **Request Body**:
 
 ```json
 {
   "content": "Alice likes tea",
-  "importance": 0.8,
-  "tags": ["preference"]
+  "summary": "Preference for tea",
+  "importance": 0.8
 }
 ```
 
-#### `PUT /api/characters/[id]/memories/[memoryId]`
+#### `GET /api/v1/memories/[id]`
+
+Get a specific memory.
+
+#### `PUT /api/v1/memories/[id]`
 
 Update a memory.
 
-#### `DELETE /api/characters/[id]/memories/[memoryId]`
+**Request Body**:
+
+```json
+{
+  "content": "Alice loves tea",
+  "summary": "Strong preference for tea",
+  "importance": 0.9
+}
+```
+
+#### `DELETE /api/v1/memories/[id]`
 
 Delete a memory.
 
-#### `POST /api/characters/[id]/memories/search`
+#### `POST /api/v1/memories?action=search`
 
 Search memories (uses embeddings if available, falls back to keyword).
+
+**Query Parameters**:
+- `characterId` (required) - Character to search memories for
 
 **Request Body**:
 
@@ -805,13 +1235,54 @@ Search memories (uses embeddings if available, falls back to keyword).
 }
 ```
 
-#### `POST /api/characters/[id]/memories/housekeep`
+**Response**: `200 OK`
+
+```json
+{
+  "results": [
+    {
+      "memory": { ... },
+      "score": 0.95
+    }
+  ]
+}
+```
+
+#### `GET /api/v1/memories?action=housekeep`
+
+Preview housekeeping actions (dry run).
+
+**Query Parameters**:
+- `characterId` (required) - Character to preview housekeeping for
+- `maxMemories` - Maximum memories to keep (default: 1000)
+- `maxAgeMonths` - Maximum age in months (default: 6)
+- `minImportance` - Minimum importance threshold (default: 0.3)
+- `mergeSimilar` - Whether to merge similar memories (default: false)
+
+#### `POST /api/v1/memories?action=housekeep`
 
 Run housekeeping (deduplication, summarization) on memories.
 
-#### `POST /api/characters/[id]/memories/embeddings`
+**Query Parameters**:
+- `characterId` (required) - Character to housekeep memories for
 
-Generate embeddings for memories.
+**Request Body**:
+
+```json
+{
+  "maxMemories": 1000,
+  "maxAgeMonths": 6,
+  "minImportance": 0.3,
+  "mergeSimilar": true
+}
+```
+
+#### `POST /api/v1/memories?action=embeddings`
+
+Generate embeddings for memories missing them.
+
+**Query Parameters**:
+- `characterId` (required) - Character to generate embeddings for
 
 ---
 
@@ -885,6 +1356,119 @@ Generate an image using configured profile.
   "prompt": "A serene mountain landscape",
   "chatId": "chat-uuid",
   "characterId": "char-uuid"
+}
+```
+
+#### Folders
+
+Manage folder entities for file organization. Folders are first-class entities stored in the database.
+
+#### `GET /api/files/folders`
+
+List all folders for the authenticated user.
+
+**Query Parameters**:
+- `projectId` (optional) - Filter by project ID, or omit for general files
+
+**Response**:
+
+```json
+{
+  "folders": [
+    {
+      "id": "folder-uuid",
+      "path": "/documents/reports/",
+      "name": "reports",
+      "parentFolderId": "parent-folder-uuid",
+      "projectId": "project-uuid",
+      "createdAt": "2025-01-10T12:00:00.000Z",
+      "updatedAt": "2025-01-10T12:00:00.000Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+#### `POST /api/files/folders`
+
+Create a new folder.
+
+**Request Body**:
+
+```json
+{
+  "path": "/documents/reports/",
+  "projectId": "project-uuid"
+}
+```
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "folder": {
+    "id": "folder-uuid",
+    "path": "/documents/reports/",
+    "name": "reports",
+    "parentFolderId": "parent-folder-uuid",
+    "projectId": "project-uuid"
+  },
+  "alreadyExists": false,
+  "message": "Folder created successfully"
+}
+```
+
+#### `PATCH /api/files/folders`
+
+Rename a folder. Updates the folder entity and all affected file paths.
+
+**Request Body**:
+
+```json
+{
+  "path": "/documents/reports/",
+  "newName": "archived-reports",
+  "projectId": "project-uuid"
+}
+```
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "oldPath": "/documents/reports/",
+  "newPath": "/documents/archived-reports/",
+  "foldersUpdated": 3,
+  "filesUpdated": 15
+}
+```
+
+#### `DELETE /api/files/folders`
+
+Delete an empty folder. Returns error if folder contains files or subfolders.
+
+**Query Parameters**:
+- `path` (required) - Folder path to delete
+- `projectId` (optional) - Project ID if folder is in a project
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "message": "Folder deleted successfully",
+  "path": "/documents/reports/"
+}
+```
+
+**Error Response** (if folder not empty):
+
+```json
+{
+  "error": "Bad Request",
+  "message": "Folder contains 5 file(s) and cannot be deleted"
 }
 ```
 
@@ -1021,21 +1605,50 @@ Global search across characters and chats.
 
 ### Background Jobs
 
-#### `GET /api/background-jobs`
+#### `GET /api/v1/system/jobs`
 
 Get queue status and jobs.
 
-#### `POST /api/background-jobs/process`
+**Response**: `200 OK`
 
-Trigger job processing.
+```json
+{
+  "stats": {
+    "pending": 5,
+    "processing": 1,
+    "completed": 100,
+    "failed": 2,
+    "activeTotal": 6
+  },
+  "jobs": [
+    {
+      "id": "job-uuid",
+      "type": "MEMORY_EXTRACTION",
+      "status": "pending",
+      "priority": 1,
+      "estimatedTokens": 1500,
+      "createdAt": "2025-01-19T10:00:00.000Z"
+    }
+  ],
+  "totalEstimatedTokens": 15000
+}
+```
 
-#### `GET /api/background-jobs/[id]`
+#### `GET /api/v1/system/jobs/[id]`
 
 Get job details.
 
-#### `DELETE /api/background-jobs/[id]`
+#### `DELETE /api/v1/system/jobs/[id]`
 
 Delete a job.
+
+#### `POST /api/v1/system/jobs/[id]?action=pause`
+
+Pause a job.
+
+#### `POST /api/v1/system/jobs/[id]?action=resume`
+
+Resume a paused job.
 
 #### `GET /api/tools/tasks-queue`
 
@@ -1204,7 +1817,7 @@ Get all installed plugins with metadata.
 ```typescript
 // Send message with streaming
 async function sendMessage(chatId: string, content: string) {
-  const response = await fetch(`/api/chats/${chatId}/messages`, {
+  const response = await fetch(`/api/v1/messages?chatId=${chatId}`, {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -1238,6 +1851,15 @@ async function sendMessage(chatId: string, content: string) {
     }
   }
 }
+
+// Toggle character favorite
+async function toggleFavorite(characterId: string) {
+  const response = await fetch(`/api/v1/characters/${characterId}?action=favorite`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  return response.json();
+}
 ```
 
 ### Python
@@ -1247,15 +1869,18 @@ import requests
 
 # List characters
 response = requests.get(
-    'https://yourdomain.com/api/characters',
+    'https://yourdomain.com/api/v1/characters',
     cookies={'quilltap-session': 'your-session-cookie'}
 )
-characters = response.json()
+data = response.json()
+characters = data['characters']
 ```
 
 ## Versioning
 
-Current API version: **v2.6**
+Current API version: **v2.7**
+
+All core endpoints now use the `/api/v1/` prefix. Legacy routes (without prefix) are deprecated and will be removed after 2026-04-15.
 
 The API follows semantic versioning. Breaking changes are avoided where possible.
 

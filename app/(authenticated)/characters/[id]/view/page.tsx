@@ -4,7 +4,6 @@ import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { showErrorToast } from '@/lib/toast'
-import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
@@ -36,14 +35,13 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [showChatDialog, setShowChatDialog] = useState(false)
   const [showSearchReplaceModal, setShowSearchReplaceModal] = useState(false)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
-  const [selectedPersonaId, setSelectedPersonaId] = useState<string>('')
+  const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
   const [scenario, setScenario] = useState<string>('')
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const [defaultImageProfileId, setDefaultImageProfileId] = useState<string>('')
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
-  const [savingPersona, setSavingPersona] = useState(false)
   const [savingPartner, setSavingPartner] = useState(false)
 
   const {
@@ -51,8 +49,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     error,
     character,
     profiles,
-    personas,
-    defaultPersonaId,
     userControlledCharacters,
     defaultPartnerId,
     defaultPartnerName,
@@ -61,16 +57,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     replacingTemplate,
     fetchCharacter,
     fetchProfiles,
-    fetchPersonas,
-    fetchDefaultPersona,
     fetchUserControlledCharacters,
     fetchDefaultPartner,
     fetchImageProfiles,
     setCharacter,
-    setDefaultPersonaId,
     handleTemplateReplace,
     handleSaveConnectionProfile,
-    handleSaveDefaultPersona,
     handleSaveDefaultPartner,
     handleToggleNpc,
     handleToggleFavorite,
@@ -88,13 +80,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     fetchCharacter()
     fetchProfiles()
-    fetchPersonas()
-    fetchDefaultPersona()
     fetchUserControlledCharacters()
     fetchDefaultPartner()
     fetchImageProfiles()
-    clientLogger.debug('Character view page initialized', { characterId: id })
-  }, [fetchCharacter, fetchProfiles, fetchPersonas, fetchDefaultPersona, fetchUserControlledCharacters, fetchDefaultPartner, fetchImageProfiles, id])
+  }, [fetchCharacter, fetchProfiles, fetchUserControlledCharacters, fetchDefaultPartner, fetchImageProfiles, id])
 
   // Handle chat dialog opening from query params
   useEffect(() => {
@@ -109,32 +98,30 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         setSelectedProfileId(profiles[0].id)
       }
 
-      // Set default persona if available
-      if (defaultPersonaId) {
-        setSelectedPersonaId(defaultPersonaId)
+      // Set default user character if available
+      if (defaultPartnerId) {
+        setSelectedUserCharacterId(defaultPartnerId)
       }
     }
-  }, [searchParams, character?.defaultConnectionProfileId, profiles, defaultPersonaId])
+  }, [searchParams, character?.defaultConnectionProfileId, profiles, defaultPartnerId])
 
   const handleStartChat = () => {
     if (character?.defaultConnectionProfileId) {
       setSelectedProfileId(character.defaultConnectionProfileId)
     } else if (profiles.length === 0) {
       showErrorToast('No connection profiles available. Please set up a profile first.')
-      clientLogger.warn('Chat start attempted without available profiles', { characterId: id })
       return
     } else {
       setSelectedProfileId(profiles[0].id)
     }
 
-    if (defaultPersonaId) {
-      setSelectedPersonaId(defaultPersonaId)
+    if (defaultPartnerId) {
+      setSelectedUserCharacterId(defaultPartnerId)
     } else {
-      setSelectedPersonaId('')
+      setSelectedUserCharacterId('')
     }
 
     setShowChatDialog(true)
-    clientLogger.debug('Chat dialog opened', { characterId: id })
   }
 
   const handleCreateChatClick = async () => {
@@ -142,7 +129,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       characterId: id,
       characterName: character?.name,
       selectedProfileId,
-      selectedPersonaId,
+      selectedUserCharacterId,
       selectedImageProfileId,
       scenario,
       timestampConfig,
@@ -154,19 +141,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     setSavingConnectionProfile(true)
     try {
       await handleSaveConnectionProfile(profileId)
-      clientLogger.info('Connection profile saved', { profileId })
     } finally {
       setSavingConnectionProfile(false)
-    }
-  }
-
-  const handlePersonaSave = async (personaId: string) => {
-    setSavingPersona(true)
-    try {
-      await handleSaveDefaultPersona(personaId)
-      clientLogger.info('Default persona saved', { personaId })
-    } finally {
-      setSavingPersona(false)
     }
   }
 
@@ -174,7 +150,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     setSavingPartner(true)
     try {
       await handleSaveDefaultPartner(partnerId)
-      clientLogger.info('Default partner saved', { partnerId })
     } finally {
       setSavingPartner(false)
     }
@@ -324,16 +299,16 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           characterId={id}
           characterName={character?.name}
           profiles={profiles}
-          personas={personas}
+          userControlledCharacters={userControlledCharacters}
           selectedProfileId={selectedProfileId}
-          selectedPersonaId={selectedPersonaId}
+          selectedUserCharacterId={selectedUserCharacterId}
           selectedImageProfileId={selectedImageProfileId}
           scenario={scenario}
           timestampConfig={timestampConfig}
           creatingChat={creatingChat}
           openedFromQuery={openedFromQuery}
           onProfileChange={setSelectedProfileId}
-          onPersonaChange={setSelectedPersonaId}
+          onUserCharacterChange={setSelectedUserCharacterId}
           onImageProfileChange={setSelectedImageProfileId}
           onScenarioChange={setScenario}
           onTimestampConfigChange={setTimestampConfig}

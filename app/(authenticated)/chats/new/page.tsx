@@ -1,10 +1,9 @@
 'use client'
 
 import { useEffect, useState, useRef, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
@@ -60,10 +59,18 @@ interface SelectedCharacter {
 // Special value for "Play As (User)" option in connection profile dropdown
 const USER_CONTROLLED_PROFILE = '__USER_CONTROLLED__'
 
+interface Project {
+  id: string
+  name: string
+  color?: string | null
+}
+
 export default function NewChatPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const projectIdParam = searchParams.get('projectId')
   const { style } = useAvatarDisplay()
-  const { refreshChats } = useSidebarData()
+  const { refreshChats, refreshProjects } = useSidebarData()
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const [characters, setCharacters] = useState<Character[]>([])
@@ -77,18 +84,24 @@ export default function NewChatPage() {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [project, setProject] = useState<Project | null>(null)
 
   useEffect(() => {
-    clientLogger.debug('[NewChat] Component mounted')
-
     const fetchData = async () => {
-      clientLogger.debug('[NewChat] Fetching data')
       try {
-        const [charsRes, profilesRes, imageProfilesRes] = await Promise.all([
-          fetch('/api/characters'),
-          fetch('/api/profiles'),
-          fetch('/api/image-profiles'),
-        ])
+        const fetchPromises: Promise<Response>[] = [
+          fetch('/api/v1/characters'),
+          fetch('/api/v1/connection-profiles'),
+          fetch('/api/v1/image-profiles'),
+        ]
+
+        // Fetch project info if projectId is provided
+        if (projectIdParam) {
+          fetchPromises.push(fetch(`/api/v1/projects/${projectIdParam}`))
+        }
+
+        const responses = await Promise.all(fetchPromises)
+        const [charsRes, profilesRes, imageProfilesRes, projectRes] = responses
 
         if (charsRes.ok) {
           const data = await charsRes.json()
@@ -98,26 +111,27 @@ export default function NewChatPage() {
           const userControlled = allCharacters.filter(c => c.controlledBy === 'user')
           setCharacters(llmControlled)
           setUserControlledCharacters(userControlled)
-          clientLogger.debug('[NewChat] Loaded characters', {
-            total: allCharacters.length,
-            llmControlled: llmControlled.length,
-            userControlled: userControlled.length,
-          })
         }
 
         if (profilesRes.ok) {
           const data = await profilesRes.json()
-          setProfiles(data || [])
-          clientLogger.debug('[NewChat] Loaded profiles', { count: data?.length || 0 })
+          setProfiles(data.profiles || [])
         }
 
         if (imageProfilesRes.ok) {
           const data = await imageProfilesRes.json()
           setImageProfiles(data || [])
-          clientLogger.debug('[NewChat] Loaded image profiles', { count: data?.length || 0 })
+        }
+
+        // Handle project response
+        if (projectRes && projectRes.ok) {
+          const data = await projectRes.json()
+          setProject(data.project || data)
+        } else if (projectRes && !projectRes.ok) {
+          console.warn('[NewChat] Failed to load project', { projectId: projectIdParam, status: projectRes.status })
         }
       } catch (err) {
-        clientLogger.error('[NewChat] Error fetching data', {
+        console.error('[NewChat] Error fetching data', {
           error: err instanceof Error ? err.message : String(err),
         })
         showErrorToast('Failed to load data')
@@ -127,7 +141,7 @@ export default function NewChatPage() {
     }
 
     fetchData()
-  }, [])
+  }, [projectIdParam])
 
   useEffect(() => {
     if (!loading && searchInputRef.current) {
@@ -183,7 +197,6 @@ export default function NewChatPage() {
 
   const handleSelectCharacter = (character: Character) => {
     if (selectedCharacterIds.has(character.id)) {
-      clientLogger.debug('[NewChat] Deselecting character', { characterId: character.id })
       setSelectedCharacters((prev) =>
         prev.filter((sc) => sc.character.id !== character.id)
       )
@@ -193,11 +206,6 @@ export default function NewChatPage() {
       // Find default or first system prompt
       const defaultPrompt = character.systemPrompts?.find(p => p.isDefault) || character.systemPrompts?.[0]
       const selectedSystemPromptId = defaultPrompt?.id || null
-      clientLogger.debug('[NewChat] Selecting character', {
-        characterId: character.id,
-        connectionProfileId,
-        selectedSystemPromptId,
-      })
       setSelectedCharacters((prev) => [
         ...prev,
         { character, connectionProfileId, imageProfileId: null, selectedSystemPromptId, controlledBy: 'llm' },
@@ -207,7 +215,6 @@ export default function NewChatPage() {
 
   const handleProfileChange = (characterId: string, profileId: string) => {
     const isUserControlled = profileId === USER_CONTROLLED_PROFILE
-    clientLogger.debug('[NewChat] Changing connection profile', { characterId, profileId, isUserControlled })
     setSelectedCharacters((prev) =>
       prev.map((sc) =>
         sc.character.id === characterId
@@ -222,7 +229,6 @@ export default function NewChatPage() {
   }
 
   const handleImageProfileChange = (characterId: string, profileId: string | null) => {
-    clientLogger.debug('[NewChat] Changing image profile', { characterId, profileId })
     setSelectedCharacters((prev) =>
       prev.map((sc) =>
         sc.character.id === characterId ? { ...sc, imageProfileId: profileId } : sc
@@ -231,7 +237,6 @@ export default function NewChatPage() {
   }
 
   const handleSystemPromptChange = (characterId: string, promptId: string | null) => {
-    clientLogger.debug('[NewChat] Changing system prompt', { characterId, promptId })
     setSelectedCharacters((prev) =>
       prev.map((sc) =>
         sc.character.id === characterId ? { ...sc, selectedSystemPromptId: promptId } : sc
@@ -240,7 +245,6 @@ export default function NewChatPage() {
   }
 
   const handleRemoveCharacter = (characterId: string) => {
-    clientLogger.debug('[NewChat] Removing character', { characterId })
     setSelectedCharacters((prev) =>
       prev.filter((sc) => sc.character.id !== characterId)
     )
@@ -281,12 +285,6 @@ export default function NewChatPage() {
     }
 
     setCreating(true)
-    clientLogger.debug('[NewChat] Creating chat', {
-      characterCount: selectedCharacters.length,
-      hasUserCharacter: !!selectedUserCharacterId,
-      hasScenario: !!scenario,
-      hasTimestampConfig: !!timestampConfig,
-    })
 
     try {
       const participants: Array<{
@@ -327,7 +325,11 @@ export default function NewChatPage() {
         requestBody.timestampConfig = timestampConfig
       }
 
-      const res = await fetch('/api/chats', {
+      if (project?.id) {
+        requestBody.projectId = project.id
+      }
+
+      const res = await fetch('/api/v1/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
@@ -339,15 +341,17 @@ export default function NewChatPage() {
       }
 
       const data = await res.json()
-      clientLogger.info('[NewChat] Chat created successfully', { chatId: data.chat.id })
       showSuccessToast('Chat created!')
 
       // Refresh sidebar to show new chat
       refreshChats()
+      if (project) {
+        refreshProjects()
+      }
 
       router.push('/chats/' + data.chat.id)
     } catch (err) {
-      clientLogger.error('[NewChat] Failed to create chat', {
+      console.error('[NewChat] Failed to create chat', {
         error: err instanceof Error ? err.message : String(err),
       })
       showErrorToast(err instanceof Error ? err.message : 'Failed to create chat')
@@ -375,11 +379,30 @@ export default function NewChatPage() {
   return (
     <div className="qt-page-container min-h-screen text-foreground">
       <div>
-        <Link href="/chats" className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80">
-          ← Back to Chats
+        <Link href={project ? `/projects/${project.id}` : '/chats'} className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80">
+          ← Back to {project ? project.name : 'Chats'}
         </Link>
 
         <h1 className="mb-6 text-3xl font-semibold">New Chat</h1>
+
+        {project && (
+          <div className="mb-6 rounded-lg border border-border bg-card/50 p-4">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ backgroundColor: project.color || 'var(--muted)' }}
+              >
+                <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm qt-text-primary">Creating chat in project</p>
+                <p className="font-medium text-foreground">{project.name}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {profiles.length === 0 && (
           <div className="mb-6 rounded-lg border border-warning/50 bg-warning/10 p-4 text-warning">

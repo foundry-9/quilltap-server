@@ -10,12 +10,10 @@
  */
 
 import Link from 'next/link'
-import { useEffect } from 'react'
 import { SearchBar } from '@/components/search/search-bar'
 import { NavContentWidthToggle } from '@/components/dashboard/nav-content-width-toggle'
 import { useSidebarOptional } from '@/components/providers/sidebar-provider'
 import { BrandLogo } from '@/components/ui/brand-logo'
-import { clientLogger } from '@/lib/client-logger'
 
 /**
  * Hamburger menu icon
@@ -41,14 +39,9 @@ function HamburgerIcon({ className }: { className?: string }) {
 export function AppHeader() {
   const sidebar = useSidebarOptional()
 
-  useEffect(() => {
-    clientLogger.debug('AppHeader mounted')
-  }, [])
-
   const handleHamburgerClick = () => {
     if (sidebar) {
       sidebar.openMobile()
-      clientLogger.debug('Hamburger menu clicked, opening mobile sidebar')
     }
   }
 

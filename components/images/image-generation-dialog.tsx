@@ -77,7 +77,7 @@ export function ImageGenerationDialog({
     setLoadingProfiles(true);
     setError(null);
     try {
-      const response = await fetch('/api/profiles?imageCapable=true');
+      const response = await fetch('/api/v1/connection-profiles?imageCapable=true');
       if (!response.ok) {
         throw new Error('Failed to load profiles');
       }
@@ -141,7 +141,7 @@ export function ImageGenerationDialog({
         requestBody.options.aspectRatio = options.aspectRatio;
       }
 
-      const response = await fetch('/api/images/generate', {
+      const response = await fetch('/api/v1/images/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

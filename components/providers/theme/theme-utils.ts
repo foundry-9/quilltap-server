@@ -4,7 +4,6 @@
  * Utility functions for theme handling, DOM manipulation, and system preference detection.
  */
 
-import { clientLogger } from '@/lib/client-logger';
 import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens';
 import type { ThemeTokens, ColorMode } from '@/lib/themes/types';
 import type { ThemeSummary, ThemeTokensResponse, ThemesListResponse, ThemeFont } from './types';
@@ -95,7 +94,7 @@ export async function fetchThemeTokens(
   cssOverrides: string | undefined;
 } | null> {
   try {
-    const response = await fetch(`/api/themes/${themeId}/tokens`);
+    const response = await fetch(`/api/v1/themes/${themeId}?action=tokens`);
     if (response.ok) {
       const data: ThemeTokensResponse = await response.json();
       return {
@@ -104,14 +103,11 @@ export async function fetchThemeTokens(
         cssOverrides: data.cssOverrides || undefined,
       };
     } else if (response.status === 404) {
-      clientLogger.warn('Theme: theme not found, using default', { themeId });
       return null;
     } else {
       throw new Error(`Failed to load theme tokens: ${response.status}`);
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    clientLogger.warn('Theme: failed to load theme tokens', { themeId, error: message });
+  } catch {
     return null;
   }
 }
@@ -121,7 +117,7 @@ export async function fetchThemeTokens(
  */
 export async function fetchAvailableThemes(): Promise<ThemeSummary[]> {
   try {
-    const response = await fetch('/api/themes');
+    const response = await fetch('/api/v1/themes');
     if (response.ok) {
       const data: ThemesListResponse = await response.json();
       // Filter out the default theme since it's handled separately in the UI
@@ -129,9 +125,7 @@ export async function fetchAvailableThemes(): Promise<ThemeSummary[]> {
     } else {
       throw new Error(`Failed to load themes: ${response.status}`);
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    clientLogger.warn('Theme: failed to load available themes', { error: message });
+  } catch {
     // Return empty list on error - themes list is non-critical
     return [];
   }
@@ -146,9 +140,10 @@ export async function fetchThemePreference(): Promise<{
   showNavThemeSelector: boolean;
 } | null> {
   try {
-    const response = await fetch('/api/theme-preference');
+    const response = await fetch('/api/v1/user/profile?action=theme-preference');
     if (response.ok) {
-      const preference = await response.json();
+      const json = await response.json();
+      const preference = json.data || json;
       return {
         activeThemeId: preference.activeThemeId ?? null,
         colorMode: preference.colorMode ?? 'system',
@@ -161,8 +156,6 @@ export async function fetchThemePreference(): Promise<{
       throw new Error(`Failed to load preference: ${response.status}`);
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    clientLogger.warn('Theme: failed to load preference', { error: message });
     throw err;
   }
 }
@@ -178,7 +171,7 @@ export async function saveThemePreference(
   }>
 ): Promise<void> {
   try {
-    const response = await fetch('/api/theme-preference', {
+    const response = await fetch('/api/v1/user/profile?action=theme-preference', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(preference),
@@ -187,11 +180,7 @@ export async function saveThemePreference(
     if (!response.ok) {
       throw new Error(`Failed to save preference: ${response.status}`);
     }
-
-    clientLogger.info('Theme: preference saved', preference);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    clientLogger.warn('Theme: failed to save preference', { error: message });
     // Don't re-throw - preference will be saved on next attempt
   }
 }

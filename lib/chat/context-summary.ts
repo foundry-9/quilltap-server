@@ -13,6 +13,8 @@ import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { Provider, ConnectionProfile, CheapLLMSettings } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
+import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
+import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 
 /**
  * Calculates the number of interchanges in a chat
@@ -294,6 +296,28 @@ export async function generateContextSummary(
       }
       await repos.chats.addMessage(chatId, summaryEvent)
 
+      // Create system event for context summary token tracking
+      if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {
+        try {
+          const costResult = await estimateMessageCost(
+            cheapLLM.provider,
+            cheapLLM.modelName,
+            result.usage.promptTokens,
+            result.usage.completionTokens,
+            userId
+          )
+          await createContextSummaryEvent(
+            chatId,
+            result.usage,
+            cheapLLM.provider,
+            cheapLLM.modelName,
+            costResult.cost
+          )
+        } catch (e) {
+          logger.error('[Context Summary] Failed to create system event:', {}, e instanceof Error ? e : new Error(String(e)))
+        }
+      }
+
       // Generate a title from the summary using the cheap LLM
       try {
         const titleResult = await generateTitleFromSummary(result.summary, cheapLLM, userId)
@@ -303,6 +327,28 @@ export async function generateContextSummary(
             updatedAt: new Date().toISOString(),
           })
           logger.info(`[Context Summary] Generated title for chat ${chatId}: ${titleResult.result}`)
+
+          // Create system event for title generation token tracking
+          if (titleResult.usage && (titleResult.usage.promptTokens > 0 || titleResult.usage.completionTokens > 0)) {
+            try {
+              const titleCostResult = await estimateMessageCost(
+                cheapLLM.provider,
+                cheapLLM.modelName,
+                titleResult.usage.promptTokens,
+                titleResult.usage.completionTokens,
+                userId
+              )
+              await createTitleGenerationEvent(
+                chatId,
+                titleResult.usage,
+                cheapLLM.provider,
+                cheapLLM.modelName,
+                titleCostResult.cost
+              )
+            } catch (e) {
+              logger.error('[Context Summary] Failed to create title generation system event:', {}, e instanceof Error ? e : new Error(String(e)))
+            }
+          }
         } else {
           logger.warn(`[Context Summary] Failed to generate title for chat ${chatId}: ${titleResult.error}`)
         }
@@ -440,6 +486,28 @@ async function considerTitleUpdateAsync(
       const { needsNewTitle, reason, suggestedTitle } = considerationResult.result
 
       logger.info(`[Title Update] Chat ${chatId} - needsNewTitle: ${needsNewTitle}, reason: ${reason}`)
+
+      // Create system event for title consideration token tracking
+      if (considerationResult.usage && (considerationResult.usage.promptTokens > 0 || considerationResult.usage.completionTokens > 0)) {
+        try {
+          const costResult = await estimateMessageCost(
+            cheapLLM.provider,
+            cheapLLM.modelName,
+            considerationResult.usage.promptTokens,
+            considerationResult.usage.completionTokens,
+            userId
+          )
+          await createTitleGenerationEvent(
+            chatId,
+            considerationResult.usage,
+            cheapLLM.provider,
+            cheapLLM.modelName,
+            costResult.cost
+          )
+        } catch (e) {
+          logger.error('[Title Update] Failed to create system event:', {}, e instanceof Error ? e : new Error(String(e)))
+        }
+      }
 
       if (needsNewTitle && suggestedTitle) {
         // Update the chat title

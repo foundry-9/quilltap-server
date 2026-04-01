@@ -1,116 +1,12 @@
 /**
- * Image Provider Models Endpoint
- * Phase 6: API Endpoints
+ * DEPRECATED - Image Provider Models (Legacy Route)
+ * This route has been moved to /api/v1/image-profiles with action=list-models
  *
- * GET    /api/image-profiles/models  - Get available models for a provider
+ * 410 Gone - Endpoint permanently removed
  */
 
-import { NextResponse } from 'next/server'
-import { createAuthenticatedHandler } from '@/lib/api/middleware'
-import { createImageProvider } from '@/lib/llm/plugin-factory'
-import { decryptApiKey } from '@/lib/encryption'
-import { logger } from '@/lib/logger'
+import { movedToV1 } from '@/lib/api/responses'
 
-/**
- * GET /api/image-profiles/models
- * Get available models for an image generation provider
- *
- * Query params:
- *   - provider: ImageProvider (dynamic, depends on registered plugins)
- *   - apiKeyId: (optional) API key ID to use for validation
- */
-export const GET = createAuthenticatedHandler(async (request, { user, repos }) => {
-  try {
-    const { searchParams } = new URL(request.url)
-    const provider = searchParams.get('provider')
-    const apiKeyId = searchParams.get('apiKeyId')
-
-    if (!provider) {
-      return NextResponse.json(
-        { error: 'Provider is required' },
-        { status: 400 }
-      )
-    }
-
-    // Validate provider by attempting to get it
-    let imageProvider
-    try {
-      imageProvider = createImageProvider(provider)
-    } catch {
-      return NextResponse.json(
-        { error: `Provider ${provider} is not available` },
-        { status: 400 }
-      )
-    }
-
-    // Get available models
-    let models: string[] = []
-
-    if (apiKeyId) {
-      // Fetch the API key
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId)
-
-      if (!apiKey) {
-        return NextResponse.json(
-          { error: 'API key not found' },
-          { status: 404 }
-        )
-      }
-
-      try {
-        const decryptedKey = decryptApiKey(
-          apiKey.ciphertext,
-          apiKey.iv,
-          apiKey.authTag,
-          user.id
-        )
-        models = await imageProvider.getAvailableModels(decryptedKey)
-      } catch (error) {
-        logger.error('Failed to get models with API key', { context: 'GET /api/image-profiles/models', provider }, error instanceof Error ? error : undefined)
-        // Fall back to default models on error
-        models = imageProvider.supportedModels
-      }
-    } else {
-      // Return default models without API key validation
-      models = imageProvider.supportedModels
-    }
-
-    // Cache the fetched image models in the database
-    try {
-      await repos.providerModels.upsertModelsForProvider(
-        provider,
-        models.map(modelId => ({
-          modelId,
-          displayName: modelId,
-        })),
-        'image', // Model type for image generation models
-        undefined // No baseUrl for image models
-      )
-      logger.debug('Cached image models in database', {
-        provider,
-        count: models.length,
-        modelType: 'image',
-        context: 'GET /api/image-profiles/models',
-      })
-    } catch (cacheError) {
-      // Don't fail the request if caching fails, just log
-      logger.warn('Failed to cache image models in database', {
-        provider,
-        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
-        context: 'GET /api/image-profiles/models',
-      })
-    }
-
-    return NextResponse.json({
-      provider,
-      models,
-      supportedModels: imageProvider.supportedModels,
-    })
-  } catch (error) {
-    logger.error('Failed to fetch models', { context: 'GET /api/image-profiles/models' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to fetch models' },
-      { status: 500 }
-    )
-  }
-})
+export async function GET() {
+  return movedToV1('/api/v1/image-profiles', 'action=list-models')
+}

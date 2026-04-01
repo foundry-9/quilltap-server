@@ -50,6 +50,7 @@
     "node_modules",
     "packages",
     "playwright.config.ts",
-    "__tests__"
+    "__tests__",
+    "scripts"
   ]
 }

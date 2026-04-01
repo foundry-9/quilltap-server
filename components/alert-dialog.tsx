@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 
 interface AlertDialogProps {
   message: string
@@ -28,7 +27,7 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
       await navigator.clipboard.writeText(message)
       // Optional: You could add a visual feedback here
     } catch (err) {
-      clientLogger.error('Failed to copy to clipboard:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to copy to clipboard:', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -60,9 +59,9 @@ export function AlertDialog({ message, onClose, buttons, showCopy = true }: Aler
           {showCopy && (
             <button
               onClick={handleCopy}
-              className="qt-button qt-button-secondary"
+              className="qt-copy-button"
             >
-              Copy
+              📋 Copy
             </button>
           )}
           {dialogButtons.map((buttonLabel, index) => (

@@ -1,9 +1,9 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
-import { clientLogger } from '@/lib/client-logger'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import ErrorAlert from '@/components/ui/ErrorAlert'
@@ -34,32 +34,60 @@ interface ApiKeyModalProps {
   onSuccess: () => void
 }
 
-const PROVIDERS = [
-  { value: 'OPENAI', label: 'OpenAI' },
-  { value: 'ANTHROPIC', label: 'Anthropic' },
-  { value: 'GROK', label: 'Grok' },
-  { value: 'GOOGLE', label: 'Google' },
-  { value: 'OLLAMA', label: 'Ollama' },
-  { value: 'OPENROUTER', label: 'OpenRouter' },
-  { value: 'OPENAI_COMPATIBLE', label: 'OpenAI Compatible' },
-]
+interface ProviderOption {
+  value: string
+  label: string
+}
 
 export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
+  const [providers, setProviders] = useState<ProviderOption[]>([])
+  const [providersLoading, setProvidersLoading] = useState(true)
+
   const form = useFormState<ApiKeyFormData>({
     label: '',
-    provider: 'OPENAI',
+    provider: '',
     apiKey: '',
   })
+
+  // Fetch providers that require API keys
+  useEffect(() => {
+    const fetchProviders = async () => {
+      try {
+        const response = await fetch('/api/v1/providers')
+        const data = await response.json()
+
+        interface ProviderData {
+          name: string
+          displayName: string
+          configRequirements?: {
+            requiresApiKey?: boolean
+          }
+        }
+
+        const apiKeyProviders = (data.providers as ProviderData[])
+          .filter((p) => p.configRequirements?.requiresApiKey)
+          .map((p) => ({
+            value: p.name,
+            label: p.displayName,
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label))
+
+        setProviders(apiKeyProviders)
+      } catch (err) {
+        console.error('Failed to fetch providers for API key modal', { error: err })
+        // Fallback to empty - user will see an empty dropdown
+      } finally {
+        setProvidersLoading(false)
+      }
+    }
+    fetchProviders()
+  }, [])
 
   const createKey = useAsyncOperation<ApiKeyResponse>()
 
   const handleSubmit = async () => {
-    clientLogger.debug('Creating API key', {
-      provider: form.formData.provider,
-    })
-
     const result = await createKey.execute(async () => {
-      const response = await fetchJson<ApiKeyResponse>('/api/keys', {
+      const response = await fetchJson<{ apiKey: ApiKeyResponse }>('/api/v1/api-keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form.formData),
@@ -69,11 +97,7 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
         throw new Error(response.error || 'Failed to create API key')
       }
 
-      clientLogger.debug('API key created successfully', {
-        id: response.data?.id,
-        associations: response.data?.associations?.length || 0,
-      })
-      return response.data!
+      return response.data!.apiKey
     })
 
     if (result) {
@@ -99,7 +123,11 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
     onClose()
   }
 
-  const isValid = form.formData.label.trim() && form.formData.apiKey.trim()
+  const isValid =
+    !providersLoading &&
+    form.formData.label.trim() &&
+    form.formData.provider &&
+    form.formData.apiKey.trim()
 
   return (
     <BaseModal
@@ -148,12 +176,20 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
             value={form.formData.provider}
             onChange={form.handleChange}
             className="qt-select"
+            disabled={providersLoading}
           >
-            {PROVIDERS.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
+            {providersLoading ? (
+              <option value="">Loading providers...</option>
+            ) : (
+              <>
+                <option value="">Select a provider</option>
+                {providers.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </>
+            )}
           </select>
         </div>
 

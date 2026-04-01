@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface EntityOption {
   id: string
   name: string
-  type: 'character' | 'persona'
+  type: 'character'
 }
 
 interface Participant {
@@ -58,41 +57,28 @@ export default function GenerateImageDialog({
 
   const loadAllEntities = async () => {
     try {
-      const [charactersRes, personasRes] = await Promise.all([
-        fetch('/api/characters'),
-        fetch('/api/personas'),
-      ])
+      const charactersRes = await fetch('/api/v1/characters')
 
-      if (!charactersRes.ok || !personasRes.ok) {
-        throw new Error('Failed to load entities')
+      if (!charactersRes.ok) {
+        throw new Error('Failed to load characters')
       }
 
       const charactersData = await charactersRes.json()
-      const personasData = await personasRes.json()
-
       const characters = charactersData.characters || []
-      const personas = Array.isArray(personasData) ? personasData : personasData.personas || []
 
-      const entities: EntityOption[] = [
-        ...characters.map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          type: 'character' as const,
-        })),
-        ...personas.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          type: 'persona' as const,
-        })),
-      ]
+      const entities: EntityOption[] = characters.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        type: 'character' as const,
+      }))
 
       // Sort alphabetically
       entities.sort((a, b) => a.name.localeCompare(b.name))
 
       setAllEntities(entities)
     } catch (error) {
-      clientLogger.error('Error loading entities', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast('Failed to load characters and personas')
+      console.error('Error loading entities', { error: error instanceof Error ? error.message : String(error) })
+      showErrorToast('Failed to load characters')
     }
   }
 
@@ -141,7 +127,7 @@ export default function GenerateImageDialog({
     setIsGenerating(true)
 
     try {
-      const response = await fetch(`/api/image-profiles/${imageProfileId}/generate`, {
+      const response = await fetch(`/api/v1/image-profiles/${imageProfileId}?action=generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -182,7 +168,7 @@ export default function GenerateImageDialog({
       if (error instanceof Error) {
         showErrorToast(error.message)
       } else {
-        clientLogger.error('Unexpected error during image generation', { error: String(error) })
+        console.error('Unexpected error during image generation', { error: String(error) })
         showErrorToast('Failed to generate image')
       }
     } finally {

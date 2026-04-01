@@ -117,6 +117,26 @@ export type {
   RoleplayTemplatePluginExport,
 } from './plugins/roleplay-template';
 
+export type {
+  // Tool plugin types
+  ToolMetadata,
+  ToolExecutionContext,
+  ToolExecutionResult,
+  ToolPlugin,
+  ToolPluginExport,
+} from './plugins/tool';
+
+export type {
+  // File storage plugin types
+  FileBackendCapabilities,
+  FileBackendMetadata,
+  FileMetadata,
+  FileStorageBackend,
+  FileStorageConfigField,
+  FileStorageProviderPlugin,
+  FileStoragePluginExport,
+} from './plugins/file-storage';
+
 // ============================================================================
 // Common Types
 // ============================================================================
@@ -146,4 +166,4 @@ export { createConsoleLogger, createNoopLogger } from './common/logger';
  * Version of the plugin-types package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_TYPES_VERSION = '1.2.0';
+export const PLUGIN_TYPES_VERSION = '1.3.0';

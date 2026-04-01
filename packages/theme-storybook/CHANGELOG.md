@@ -2,6 +2,56 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.13] - 2026-01-23
+
+### Added
+- Alert CSS variables: `--qt-alert-success-*`, `--qt-alert-warning-*`, `--qt-alert-error-*`, `--qt-alert-info-*` for fully themeable alerts
+- Entity badge CSS variables: `--qt-badge-character-*`, `--qt-badge-persona-*`, `--qt-badge-chat-*`, `--qt-badge-tag-*`, `--qt-badge-memory-*`
+- Status badge CSS variables: `--qt-badge-enabled-*`, `--qt-badge-disabled-*`, `--qt-badge-related-*`, `--qt-badge-manual-*`, `--qt-badge-auto-*`
+- Plugin source badge CSS variables: `--qt-badge-source-included-*`, `--qt-badge-source-npm-*`, `--qt-badge-source-git-*`, `--qt-badge-source-manual-*`
+- Capability badge CSS variables: `--qt-badge-capability-*`
+- Warning button CSS variables: `--qt-button-warning-*`
+- Dark mode overrides for all new badge and alert variables with improved contrast
+
+## [1.0.12] - 2026-01-23
+
+### Added
+- Filter chip classes (`qt-filter-chip`, `qt-filter-chip-active`) for themeable search filter toggles
+- CSS variables: `--qt-filter-chip-radius`, `--qt-filter-chip-padding-x`, `--qt-filter-chip-padding-y`, `--qt-filter-chip-font-size`, `--qt-filter-chip-font-weight`, `--qt-filter-chip-transition`
+- Active state variables: `--qt-filter-chip-active-bg`, `--qt-filter-chip-active-fg`, `--qt-filter-chip-active-border`
+- Inactive state variables: `--qt-filter-chip-inactive-bg`, `--qt-filter-chip-inactive-fg`, `--qt-filter-chip-inactive-border`, `--qt-filter-chip-inactive-hover-bg`
+
+## [1.0.11] - 2026-01-23
+
+### Added
+- Search highlight class (`qt-highlight`) for consistent search result text highlighting
+- CSS variables: `--qt-highlight-bg`, `--qt-highlight-fg`, `--qt-highlight-radius`, `--qt-highlight-padding-x`, `--qt-highlight-font-weight`
+
+## [1.0.10] - 2026-01-16
+
+### Added
+- Collapsed navigation classes (`qt-collapsed-nav`, `qt-collapsed-nav-button`) for sidebar quick-access buttons when collapsed
+
+## [1.0.9] - 2026-01-10
+
+### Changed
+- Status badges (`qt-badge-success`, `qt-badge-warning`, `qt-badge-destructive`) now use `--qt-status-*` tokens for consistent theming
+- Badges use solid backgrounds with contrasting foreground colors for better readability in dark mode
+
+### Added
+- Status token CSS variables: `--qt-status-success-*`, `--qt-status-warning-*`, `--qt-status-info-*`, `--qt-status-danger-*`
+- `qt-badge-info` class using info status tokens
+
+## [1.0.5] - 2026-01-06
+
+### Added
+- File preview component classes (`qt-file-preview-scroll`, `qt-file-preview-panel`, `qt-file-preview-code`)
+- File preview state classes (`qt-file-preview-loading`, `qt-file-preview-loading-text`, `qt-file-preview-empty`, `qt-file-preview-empty-icon`)
+- Wikilink classes (`qt-wikilink`, `qt-wikilink-broken`) for internal document links
+- CSS variables: `--qt-file-preview-max-height`, `--qt-file-preview-min-height`, `--qt-file-preview-panel-bg`
+- CSS variables: `--qt-code-bg`, `--qt-code-fg`, `--qt-code-font`
+- FilePreview story component showcasing all file preview styles
+
 ## [1.0.4] - 2026-01-01
 
 ### Added

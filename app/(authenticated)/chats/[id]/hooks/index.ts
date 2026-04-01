@@ -7,3 +7,4 @@ export type { PendingToolCall, ToolExecutionStatus, StreamingState } from './use
 export { useMessageActions } from './useMessageActions'
 export { useFileAttachments } from './useFileAttachments'
 export type { AttachedFile } from './useFileAttachments'
+export { useAutoScroll } from './useAutoScroll'

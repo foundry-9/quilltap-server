@@ -311,6 +311,53 @@ The following API routes will need updates to use the new system:
 9. **Generation History**: Full metadata for AI-generated content
 10. **Scalable**: Ready for future enhancements (cloud storage, CDN, etc.)
 
+## S3 Storage Key Structure
+
+When S3 storage is enabled, files are stored using project-aware key paths:
+
+### Key Format
+
+| File Type | S3 Key Format |
+|-----------|---------------|
+| Project file at root | `{prefix}users/{userId}/{projectId}/{fileId}_{filename}` |
+| Project file in folder | `{prefix}users/{userId}/{projectId}/{folderPath}/{fileId}_{filename}` |
+| General file (no project) | `{prefix}users/{userId}/_general/{fileId}_{filename}` |
+
+### Examples
+
+```
+# Project file at root
+users/abc123/proj456/file789_report.pdf
+
+# Project file in subfolder
+users/abc123/proj456/documents/file789_report.pdf
+
+# General file (not in any project)
+users/abc123/_general/file789_avatar.png
+```
+
+### Key Generation
+
+The `buildS3Key()` function in `lib/s3/client.ts` generates keys using:
+
+```typescript
+import { buildS3Key } from '@/lib/s3/client';
+
+const s3Key = buildS3Key({
+  userId: 'user-123',
+  fileId: 'file-456',
+  filename: 'document.pdf',
+  projectId: 'proj-789',      // or null for general files
+  folderPath: '/documents/',  // or '/' for root
+});
+```
+
+### S3 Operations
+
+- **File Move**: When files are moved between folders or projects, the S3 object is physically moved (copy + delete)
+- **Listing**: Files can be listed by prefix for efficient project-level queries
+- **Migration**: The `restructure-s3-keys-v1` migration handles upgrading existing files to the new key format
+
 ## Future Enhancements
 
 The new system is designed to support:

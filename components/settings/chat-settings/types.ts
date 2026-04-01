@@ -11,6 +11,17 @@ export type TimestampMode = 'NONE' | 'START_ONLY' | 'EVERY_MESSAGE'
 export type TimestampFormat = 'ISO8601' | 'FRIENDLY' | 'DATE_ONLY' | 'TIME_ONLY' | 'CUSTOM'
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'
 
+/**
+ * Token Display Settings
+ * Controls visibility of token and cost information in the UI
+ */
+export interface TokenDisplaySettings {
+  showPerMessageTokens: boolean
+  showPerMessageCost: boolean
+  showChatTotals: boolean
+  showSystemEvents: boolean
+}
+
 export interface CheapLLMSettings {
   strategy: CheapLLMStrategy
   userDefinedProfileId?: string | null
@@ -18,6 +29,8 @@ export interface CheapLLMSettings {
   fallbackToLocal: boolean
   embeddingProvider: EmbeddingProvider
   embeddingProfileId?: string | null
+  /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
+  imagePromptProfileId?: string | null
 }
 
 export interface TimestampConfig {
@@ -44,6 +57,8 @@ export interface ChatSettings {
   imageDescriptionProfileId?: string | null
   defaultTimestampConfig?: TimestampConfig
   memoryCascadePreferences?: MemoryCascadePreferences
+  tokenDisplaySettings?: TokenDisplaySettings
+  contextCompressionSettings?: ContextCompressionSettings
   createdAt: string
   updatedAt: string
 }
@@ -226,3 +241,61 @@ export const DEFAULT_MEMORY_CASCADE_PREFERENCES: MemoryCascadePreferences = {
   onMessageDelete: 'ASK_EVERY_TIME',
   onSwipeRegenerate: 'DELETE_MEMORIES',
 }
+
+/**
+ * Default token display settings
+ */
+export const DEFAULT_TOKEN_DISPLAY_SETTINGS: TokenDisplaySettings = {
+  showPerMessageTokens: false,
+  showPerMessageCost: false,
+  showChatTotals: false,
+  showSystemEvents: false,
+}
+
+/**
+ * Context Compression Settings
+ * Controls how older messages are compressed to reduce token costs
+ */
+export interface ContextCompressionSettings {
+  enabled: boolean
+  windowSize: number
+  compressionTargetTokens: number
+  systemPromptTargetTokens: number
+}
+
+/**
+ * Default context compression settings
+ */
+export const DEFAULT_CONTEXT_COMPRESSION_SETTINGS: ContextCompressionSettings = {
+  enabled: true,
+  windowSize: 5,
+  compressionTargetTokens: 800,
+  systemPromptTargetTokens: 1500,
+}
+
+/**
+ * Token Display Options
+ * Defines the available token display toggles
+ */
+export const TOKEN_DISPLAY_OPTIONS = [
+  {
+    key: 'showPerMessageTokens' as const,
+    label: 'Show Token Count on Messages',
+    description: 'Display the number of prompt and completion tokens for each message',
+  },
+  {
+    key: 'showPerMessageCost' as const,
+    label: 'Show Cost Estimate on Messages',
+    description: 'Display estimated cost for each message (requires pricing data)',
+  },
+  {
+    key: 'showChatTotals' as const,
+    label: 'Show Chat Token Totals',
+    description: 'Display aggregate token counts and cost at the top of the chat',
+  },
+  {
+    key: 'showSystemEvents' as const,
+    label: 'Show System Events in Chat',
+    description: 'Display background LLM operations (memory extraction, summarization, etc.) in the chat timeline',
+  },
+] as const

@@ -19,12 +19,14 @@ import type {
 import { OpenRouterProvider } from './provider';
 import { OpenRouterEmbeddingProvider } from './embedding-provider';
 import { OpenRouterIcon } from './icon';
-import { logger } from '../../../lib/logger';
 import {
+  createPluginLogger,
   parseOpenAIToolCalls,
   type OpenAIToolDefinition,
   type ToolCallRequest,
-} from '../../../lib/llm/tool-formatting-utils';
+} from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-openrouter');
 
 /**
  * Plugin metadata configuration

@@ -1,27 +1,7 @@
-import { NextResponse } from 'next/server'
-import { createAuthenticatedHandler } from '@/lib/api/middleware'
-import { disableTOTP } from '@/lib/auth/totp'
-import { logger } from '@/lib/logger'
+/**
+ * DEPRECATED: This endpoint has been moved to /api/v1/auth/2fa/disable
+ */
 
-export const POST = createAuthenticatedHandler(async (req, { user }) => {
-  try {
-    const success = await disableTOTP(user.id)
+import { movedToV1 } from '@/lib/api/responses'
 
-    if (!success) {
-      return NextResponse.json(
-        { error: 'Failed to disable 2FA' },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json({
-      message: '2FA disabled successfully'
-    })
-  } catch (error) {
-    logger.error('Disable 2FA error', { context: 'POST /api/auth/2fa/disable' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to disable 2FA' },
-      { status: 500 }
-    )
-  }
-})
+export const POST = () => movedToV1('/api/v1/auth/2fa/disable')

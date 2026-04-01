@@ -8,7 +8,9 @@
 
 import { OpenRouter } from '@openrouter/sdk';
 import { Parameter } from '@openrouter/sdk/models';
-import { logger } from '../../../lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-openrouter');
 
 export interface ModelPricing {
   modelId: string;

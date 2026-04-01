@@ -154,7 +154,7 @@ describe('ImageGallery - Deleted Image Handling', () => {
 
       await waitFor(() => {
         // Should reload images after cleanup
-        expect(global.fetch).toHaveBeenCalledWith('/api/images?tagType=CHARACTER&tagId=char-1')
+        expect(global.fetch).toHaveBeenCalledWith('/api/v1/images?tagType=CHARACTER&tagId=char-1')
       })
     })
   })

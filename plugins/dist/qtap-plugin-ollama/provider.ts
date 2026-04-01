@@ -6,7 +6,9 @@
  */
 
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, ImageGenParams, ImageGenResponse } from './types';
-import { logger } from '../../../lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-ollama');
 
 export class OllamaProvider implements LLMProvider {
   readonly supportsFileAttachments = false;

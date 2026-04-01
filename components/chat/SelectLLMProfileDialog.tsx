@@ -10,7 +10,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import Avatar from '@/components/ui/Avatar'
@@ -62,7 +61,6 @@ export function SelectLLMProfileDialog({
     const fetchProfiles = async () => {
       try {
         setLoading(true)
-        clientLogger.debug('[SelectLLMProfileDialog] Fetching connection profiles')
 
         const res = await fetch('/api/settings/connection-profiles')
         if (!res.ok) {
@@ -78,13 +76,8 @@ export function SelectLLMProfileDialog({
         } else if (data.profiles?.length > 0) {
           setSelectedProfileId(data.profiles[0].id)
         }
-
-        clientLogger.debug('[SelectLLMProfileDialog] Loaded profiles', {
-          count: data.profiles?.length || 0,
-          preselected: character?.defaultConnectionProfileId || data.profiles?.[0]?.id,
-        })
       } catch (error) {
-        clientLogger.error('[SelectLLMProfileDialog] Failed to fetch profiles', {
+        console.error('[SelectLLMProfileDialog] Failed to fetch profiles', {
           error: error instanceof Error ? error.message : String(error),
         })
         showErrorToast('Failed to load connection profiles')
@@ -102,18 +95,11 @@ export function SelectLLMProfileDialog({
       return
     }
 
-    clientLogger.debug('[SelectLLMProfileDialog] Confirming', {
-      participantId,
-      connectionProfileId: selectedProfileId,
-      characterName: character?.name,
-    })
-
     onConfirm(participantId, selectedProfileId)
     onClose()
   }
 
   const handleCancel = () => {
-    clientLogger.debug('[SelectLLMProfileDialog] Cancelled')
     onCancel()
     onClose()
   }

@@ -58,12 +58,11 @@ export function RestoreProgress({
   loadingPreview,
 }: RestoreProgressProps) {
   // Preview mode (for displaying what will be restored)
-  // Note: Personas from old backups are restored as characters with controlledBy: 'user'
   if (preview && !restoring && !restoreSummary) {
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <PreviewCard label="Characters" value={preview.characters + (preview.personas || 0)} />
+          <PreviewCard label="Characters" value={preview.characters} />
           <PreviewCard label="Chats" value={preview.chats} />
           <PreviewCard label="Messages" value={preview.messages} />
           <PreviewCard label="Tags" value={preview.tags} />
@@ -98,7 +97,7 @@ export function RestoreProgress({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <PreviewCard label="Characters" value={restoreSummary.characters + (restoreSummary.personas || 0)} />
+          <PreviewCard label="Characters" value={restoreSummary.characters} />
           <PreviewCard label="Chats" value={restoreSummary.chats} />
           <PreviewCard label="Messages" value={restoreSummary.messages} />
           <PreviewCard

@@ -12,15 +12,6 @@ import {
   EphemeralMessageType,
 } from '@/components/chat/EphemeralMessage'
 
-// Mock the client logger to avoid issues with logging during tests
-jest.mock('@/lib/client-logger', () => ({
-  clientLogger: {
-    debug: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-  },
-}))
 
 describe('EphemeralMessage', () => {
   const baseMessage: EphemeralMessageData = {

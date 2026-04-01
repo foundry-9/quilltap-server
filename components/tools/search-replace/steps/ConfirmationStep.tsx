@@ -6,8 +6,6 @@
  * Step 3: Review and confirm the search/replace operation.
  */
 
-import { useEffect } from 'react';
-import { clientLogger } from '@/lib/client-logger';
 import type { SearchReplacePreview } from '../types';
 
 interface ConfirmationStepProps {
@@ -25,14 +23,6 @@ export function ConfirmationStep({
   confirmed,
   onConfirmedChange,
 }: ConfirmationStepProps) {
-  // Log on mount (intentionally captures initial values only)
-  useEffect(() => {
-    clientLogger.debug('[ConfirmationStep] Rendered', {
-      hasPreview: !!preview,
-      confirmed,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const totalMatches = (preview?.messageMatches || 0) + (preview?.memoryMatches || 0);
 

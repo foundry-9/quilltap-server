@@ -184,7 +184,7 @@ export async function remoteHandshake(
 
   const response = await makeRemoteRequest<SyncHandshakeResponse>(
     instance,
-    '/api/sync/handshake',
+    '/api/v1/sync?action=handshake',
     'POST',
     request
   );
@@ -221,7 +221,7 @@ export async function fetchRemoteDeltas(
 
   const response = await makeRemoteRequest<SyncDeltaResponse>(
     instance,
-    '/api/sync/delta',
+    '/api/v1/sync?action=delta',
     'POST',
     request,
     SYNC_TIMEOUT
@@ -258,7 +258,7 @@ export async function pushToRemote(
 
   const response = await makeRemoteRequest<SyncPushResponse>(
     instance,
-    '/api/sync/push',
+    '/api/v1/sync?action=push',
     'POST',
     request,
     SYNC_TIMEOUT
@@ -288,7 +288,7 @@ export async function fetchRemoteMappings(
 
   const response = await makeRemoteRequest<{ mappings: SyncMapping[] }>(
     instance,
-    `/api/sync/mappings?instanceId=${instance.id}`,
+    `/api/v1/sync?action=mappings&instanceId=${instance.id}`,
     'GET'
   );
 
@@ -309,7 +309,7 @@ export async function fetchRemoteFileContent(
   instance: SyncInstance,
   remoteFileId: string
 ): Promise<{ content: Buffer; sha256?: string; mimeType?: string; serverLogs?: unknown[] }> {
-  const url = new URL(`/api/sync/files/${remoteFileId}/content`, instance.url);
+  const url = new URL(`/api/v1/sync/files/${remoteFileId}`, instance.url);
   const apiKey = await getDecryptedApiKey(instance);
 
   logger.info('Fetching remote file content', {
@@ -441,7 +441,7 @@ export async function testRemoteConnection(
   };
 
   try {
-    const fullUrl = new URL('/api/sync/handshake', url);
+    const fullUrl = new URL('/api/v1/sync?action=handshake', url);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);

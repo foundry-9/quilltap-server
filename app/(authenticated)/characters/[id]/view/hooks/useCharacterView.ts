@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { countTemplateReplacements, replaceWithTemplate } from '@/components/characters/TemplateHighlighter'
 import { USER_CONTROLLED_PROFILE_ID } from '@/lib/constants/character'
@@ -9,7 +8,6 @@ import {
   Character,
   Tag,
   ConnectionProfile,
-  Persona,
   UserControlledCharacter,
   ImageProfile,
   TemplateCounts,
@@ -22,8 +20,6 @@ interface UseCharacterViewReturn {
   character: Character | null
   tags: Tag[]
   profiles: ConnectionProfile[]
-  personas: Persona[]
-  defaultPersonaId: string
   userControlledCharacters: UserControlledCharacter[]
   defaultPartnerId: string
   defaultPartnerName: string | null
@@ -37,19 +33,15 @@ interface UseCharacterViewReturn {
   fetchCharacter: () => Promise<void>
   fetchTags: () => Promise<void>
   fetchProfiles: () => Promise<void>
-  fetchPersonas: () => Promise<void>
-  fetchDefaultPersona: () => Promise<void>
   fetchUserControlledCharacters: () => Promise<void>
   fetchDefaultPartner: () => Promise<void>
   fetchImageProfiles: () => Promise<void>
   setCharacter: (char: Character | null) => void
-  setDefaultPersonaId: (id: string) => void
   setDefaultPartnerId: (id: string) => void
   setAvatarRefreshKey: (key: number) => void
   setImageProfiles: (profiles: ImageProfile[]) => void
   handleTemplateReplace: (type: 'char' | 'user') => Promise<void>
   handleSaveConnectionProfile: (profileId: string) => Promise<void>
-  handleSaveDefaultPersona: (personaId: string) => Promise<void>
   handleSaveDefaultPartner: (partnerId: string) => Promise<void>
   handleToggleNpc: () => Promise<void>
   handleToggleFavorite: () => Promise<void>
@@ -62,15 +54,12 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [character, setCharacter] = useState<Character | null>(null)
   const [tags, setTags] = useState<Tag[]>([])
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([])
-  const [personas, setPersonas] = useState<Persona[]>([])
-  const [defaultPersonaId, setDefaultPersonaId] = useState<string>('')
   const [userControlledCharacters, setUserControlledCharacters] = useState<UserControlledCharacter[]>([])
   const [defaultPartnerId, setDefaultPartnerId] = useState<string>('')
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
   const [avatarRefreshKey, setAvatarRefreshKey] = useState(0)
   const [replacingTemplate, setReplacingTemplate] = useState<'char' | 'user' | null>(null)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
-  const [savingPersona, setSavingPersona] = useState(false)
   const [savingPartner, setSavingPartner] = useState(false)
   const [togglingNpc, setTogglingNpc] = useState(false)
   const [togglingFavorite, setTogglingFavorite] = useState(false)
@@ -101,7 +90,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
   const fetchCharacter = useCallback(async () => {
     try {
-      const res = await fetch(`/api/characters/${characterId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
@@ -115,11 +104,10 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
         }
         return data.character
       })
-      clientLogger.debug('Character loaded', { characterId: data.character.id, name: data.character.name })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'An error occurred'
       setError(errorMsg)
-      clientLogger.error('Failed to fetch character', { error: errorMsg, characterId })
+      console.error('Failed to fetch character', { error: errorMsg, characterId })
     } finally {
       setLoading(false)
     }
@@ -127,74 +115,43 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
   const fetchTags = useCallback(async () => {
     try {
-      const res = await fetch(`/api/characters/${characterId}/tags`)
+      const res = await fetch(`/api/v1/characters/${characterId}?action=get-tags`)
       if (!res.ok) throw new Error('Failed to fetch tags')
       const data = await res.json()
       setTags(data.tags || [])
-      clientLogger.debug('Character tags loaded', { count: data.tags?.length || 0 })
     } catch (err) {
-      clientLogger.error('Failed to fetch tags:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch tags:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [characterId])
 
   const fetchProfiles = useCallback(async () => {
     try {
-      const res = await fetch('/api/profiles')
+      const res = await fetch('/api/v1/connection-profiles')
       if (res.ok) {
         const data = await res.json()
-        setProfiles(data.map((p: any) => ({ id: p.id, name: p.name })))
-        clientLogger.debug('Connection profiles loaded', { count: data.length })
+        const profiles = data.profiles || []
+        setProfiles(profiles.map((p: any) => ({ id: p.id, name: p.name })))
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch profiles:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch profiles:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [])
-
-  const fetchPersonas = useCallback(async () => {
-    try {
-      const res = await fetch('/api/personas')
-      if (res.ok) {
-        const data = await res.json()
-        setPersonas(data.map((p: any) => ({ id: p.id, name: p.name, title: p.title })))
-        clientLogger.debug('Personas loaded', { count: data.length })
-      }
-    } catch (err) {
-      clientLogger.error('Failed to fetch personas:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [])
-
-  const fetchDefaultPersona = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/characters/${characterId}/personas`)
-      if (res.ok) {
-        const data = await res.json()
-        const defaultPersona = data.find((cp: any) => cp.isDefault)
-        if (defaultPersona) {
-          setDefaultPersonaId(defaultPersona.personaId)
-          clientLogger.debug('Default persona loaded', { personaId: defaultPersona.personaId })
-        }
-      }
-    } catch (err) {
-      clientLogger.error('Failed to fetch default persona:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [characterId])
 
   const fetchImageProfiles = useCallback(async () => {
     try {
-      const res = await fetch('/api/image-profiles')
+      const res = await fetch('/api/v1/image-profiles')
       if (res.ok) {
         const data = await res.json()
         setImageProfiles(data)
-        clientLogger.debug('Image profiles loaded', { count: data.length })
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch image profiles:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch image profiles:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [])
 
   const fetchUserControlledCharacters = useCallback(async () => {
     try {
-      const res = await fetch('/api/characters?controlledBy=user')
+      const res = await fetch('/api/v1/characters?controlledBy=user')
       if (res.ok) {
         const data = await res.json()
         const characters = data.characters || []
@@ -203,25 +160,23 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
           name: c.name,
           title: c.title || null,
         })))
-        clientLogger.debug('User-controlled characters loaded', { count: characters.length })
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch user-controlled characters:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch user-controlled characters:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [])
 
   const fetchDefaultPartner = useCallback(async () => {
     try {
-      const res = await fetch(`/api/characters/${characterId}/default-partner`)
+      const res = await fetch(`/api/v1/characters/${characterId}?action=default-partner`)
       if (res.ok) {
         const data = await res.json()
         if (data.partnerId) {
           setDefaultPartnerId(data.partnerId)
-          clientLogger.debug('Default partner loaded', { partnerId: data.partnerId })
         }
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch default partner:', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to fetch default partner:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [characterId])
 
@@ -235,7 +190,6 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     if (!nameToReplace) return
 
     setReplacingTemplate(type)
-    clientLogger.debug('Starting template replacement', { type, nameToReplace, template })
 
     try {
       // Build update payload with replaced fields
@@ -267,7 +221,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
         return
       }
 
-      const res = await fetch(`/api/characters/${characterId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -280,10 +234,9 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
       await fetchCharacter()
       showSuccessToast(`Replaced ${type === 'char' ? 'character name' : 'persona name'} with ${template}`)
-      clientLogger.info('Template replacement completed', { type, fieldsUpdated: Object.keys(updates) })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to replace template')
-      clientLogger.error('Template replacement failed', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Template replacement failed', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setReplacingTemplate(null)
     }
@@ -304,7 +257,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
             defaultConnectionProfileId: profileId || undefined,
           }
 
-      const res = await fetch(`/api/characters/${characterId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatePayload),
@@ -312,55 +265,19 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
       if (!res.ok) throw new Error('Failed to update connection profile')
       await fetchCharacter()
       showSuccessToast(isUserControlled ? 'Character set to user-controlled' : 'Connection profile updated')
-      clientLogger.info('Connection profile saved', { profileId, isUserControlled })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to update connection profile')
-      clientLogger.error('Failed to save connection profile', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to save connection profile', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setSavingConnectionProfile(false)
-    }
-  }
-
-  const handleSaveDefaultPersona = async (personaId: string) => {
-    setSavingPersona(true)
-    try {
-      // First, remove the current default if there is one
-      if (defaultPersonaId) {
-        await fetch(`/api/characters/${characterId}/personas?personaId=${defaultPersonaId}`, {
-          method: 'DELETE',
-        })
-      }
-
-      // If a new persona is selected, link it as default
-      if (personaId) {
-        const res = await fetch(`/api/characters/${characterId}/personas`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            personaId,
-            isDefault: true,
-          }),
-        })
-        if (!res.ok) throw new Error('Failed to link persona')
-      }
-
-      setDefaultPersonaId(personaId)
-      showSuccessToast(personaId ? 'Default persona updated' : 'Default persona removed')
-      clientLogger.info('Default persona saved', { personaId })
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to update persona')
-      clientLogger.error('Failed to save default persona', { error: err instanceof Error ? err.message : String(err) })
-      await fetchDefaultPersona() // Revert to server state
-    } finally {
-      setSavingPersona(false)
     }
   }
 
   const handleSaveDefaultPartner = async (partnerId: string) => {
     setSavingPartner(true)
     try {
-      const res = await fetch(`/api/characters/${characterId}/default-partner`, {
-        method: 'PUT',
+      const res = await fetch(`/api/v1/characters/${characterId}?action=set-default-partner`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ partnerId: partnerId || null }),
       })
@@ -368,10 +285,9 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
 
       setDefaultPartnerId(partnerId)
       showSuccessToast(partnerId ? 'Default partner updated' : 'Default partner removed')
-      clientLogger.info('Default partner saved', { partnerId })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to update partner')
-      clientLogger.error('Failed to save default partner', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to save default partner', { error: err instanceof Error ? err.message : String(err) })
       await fetchDefaultPartner() // Revert to server state
     } finally {
       setSavingPartner(false)
@@ -383,7 +299,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     setTogglingNpc(true)
     try {
       const newNpcValue = !character.npc
-      const res = await fetch(`/api/characters/${characterId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ npc: newNpcValue }),
@@ -395,10 +311,9 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
       // Update local state
       setCharacter({ ...character, npc: newNpcValue })
       showSuccessToast(newNpcValue ? 'Converted to NPC' : 'Converted to Character')
-      clientLogger.info('Character NPC status toggled', { characterId, npc: newNpcValue })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle NPC status')
-      clientLogger.error('Failed to toggle NPC status', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to toggle NPC status', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setTogglingNpc(false)
     }
@@ -408,17 +323,16 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     if (!character) return
     setTogglingFavorite(true)
     try {
-      const res = await fetch(`/api/characters/${characterId}/favorite`, { method: 'PATCH' })
+      const res = await fetch(`/api/v1/characters/${characterId}?action=favorite`, { method: 'PATCH' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to toggle favorite')
       }
       const data = await res.json()
       setCharacter({ ...character, isFavorite: data.character.isFavorite })
-      clientLogger.info('Character favorite toggled', { characterId, isFavorite: data.character.isFavorite })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle favorite')
-      clientLogger.error('Failed to toggle favorite', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to toggle favorite', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setTogglingFavorite(false)
     }
@@ -428,17 +342,16 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     if (!character) return
     setTogglingControlledBy(true)
     try {
-      const res = await fetch(`/api/characters/${characterId}/controlled-by`, { method: 'PATCH' })
+      const res = await fetch(`/api/v1/characters/${characterId}?action=toggle-controlled-by`, { method: 'POST' })
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || 'Failed to toggle controlled-by')
       }
       const data = await res.json()
       setCharacter({ ...character, controlledBy: data.character.controlledBy })
-      clientLogger.info('Character controlledBy toggled', { characterId, controlledBy: data.character.controlledBy })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle controlled-by')
-      clientLogger.error('Failed to toggle controlled-by', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Failed to toggle controlled-by', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setTogglingControlledBy(false)
     }
@@ -450,8 +363,6 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     character,
     tags,
     profiles,
-    personas,
-    defaultPersonaId,
     userControlledCharacters,
     defaultPartnerId,
     defaultPartnerName,
@@ -465,19 +376,15 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     fetchCharacter,
     fetchTags,
     fetchProfiles,
-    fetchPersonas,
-    fetchDefaultPersona,
     fetchUserControlledCharacters,
     fetchDefaultPartner,
     fetchImageProfiles,
     setCharacter,
-    setDefaultPersonaId,
     setDefaultPartnerId,
     setAvatarRefreshKey,
     setImageProfiles,
     handleTemplateReplace,
     handleSaveConnectionProfile,
-    handleSaveDefaultPersona,
     handleSaveDefaultPartner,
     handleToggleNpc,
     handleToggleFavorite,

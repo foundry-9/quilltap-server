@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import type { ParticipantData } from './ParticipantCard'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
@@ -115,13 +114,6 @@ export default function MobileParticipantDropdown({
         top = viewportHeight - dropdownRect.height - padding
       }
 
-      clientLogger.debug('[MobileParticipantDropdown] Positioning', {
-        participantId: participant.id,
-        anchorRect: { top: anchorRect.top, right: anchorRect.right },
-        viewportWidth,
-        calculatedRight: right,
-      })
-
       setPosition({ top, right })
     })
   }, [isOpen, anchorRef, participant.id])
@@ -135,14 +127,6 @@ export default function MobileParticipantDropdown({
 
   // Handle action button click
   const handleActionClick = () => {
-    clientLogger.debug('[MobileParticipantDropdown] Action clicked', {
-      participantId: participant.id,
-      queuePosition,
-      isGenerating,
-      isCurrentTurn,
-      isCharacter,
-    })
-
     if (queuePosition > 0) {
       // Already in queue - dequeue
       onDequeue(participant.id)
@@ -165,11 +149,6 @@ export default function MobileParticipantDropdown({
     const value = parseFloat(e.target.value)
     setLocalTalkativeness(value)
 
-    clientLogger.debug('[MobileParticipantDropdown] Talkativeness changed', {
-      participantId: participant.id,
-      value,
-    })
-
     if (onTalkativenessChange) {
       onTalkativenessChange(participant.id, value)
     }
@@ -177,10 +156,6 @@ export default function MobileParticipantDropdown({
 
   // Handle remove button click
   const handleRemoveClick = () => {
-    clientLogger.debug('[MobileParticipantDropdown] Remove clicked', {
-      participantId: participant.id,
-      characterName: entity?.name,
-    })
     onRemove?.(participant.id)
     onClose()
   }

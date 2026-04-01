@@ -9,7 +9,7 @@ set -e
 
 LOG_GROUP="/ecs/quilltap-dev"
 REGION="us-east-1"
-LIMIT="${1:-100}"
+LIMIT="${1:-1000}"
 
 # Get the latest log stream name
 LATEST_STREAM=$(aws logs describe-log-streams \

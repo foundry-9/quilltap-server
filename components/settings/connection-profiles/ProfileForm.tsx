@@ -412,36 +412,37 @@ export function ProfileForm({
               Mark as cheap LLM (suitable for cost-effective tasks like memory extraction)
             </label>
           </div>
+          {/* Web Search Tool - available for all providers with tool support */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="allowWebSearch"
+              name="allowWebSearch"
+              checked={formData.allowWebSearch}
+              onChange={(e) => onFormChange('allowWebSearch', e.target.checked)}
+              className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
+            />
+            <label htmlFor="allowWebSearch" className="text-sm">
+              Allow web search tool
+            </label>
+          </div>
+          {/* Native Web Search - only shown when provider supports it */}
           {(() => {
-            const supportsWebSearch = getProviderRequirements(formData.provider).supportsWebSearch
+            const supportsNativeWebSearch = getProviderRequirements(formData.provider).supportsWebSearch
+            if (!supportsNativeWebSearch) return null
             return (
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  id="allowWebSearch"
-                  name="allowWebSearch"
-                  checked={formData.allowWebSearch}
-                  onChange={(e) => onFormChange('allowWebSearch', e.target.checked)}
-                  disabled={!supportsWebSearch}
-                  className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  id="useNativeWebSearch"
+                  name="useNativeWebSearch"
+                  checked={formData.useNativeWebSearch}
+                  onChange={(e) => onFormChange('useNativeWebSearch', e.target.checked)}
+                  className="w-4 h-4 rounded dark:bg-slate-800 dark:border-slate-600"
                 />
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor="allowWebSearch"
-                    className={`text-sm ${supportsWebSearch ? '' : 'text-muted-foreground'}`}
-                  >
-                    Allow Web Search
-                  </label>
-                  {supportsWebSearch ? (
-                    <p className="qt-text-xs">
-                      Enable the LLM to search the web for real-time information when responding to queries
-                    </p>
-                  ) : (
-                    <p className="qt-text-xs">
-                      This provider does not support web search
-                    </p>
-                  )}
-                </div>
+                <label htmlFor="useNativeWebSearch" className="text-sm">
+                  Use provider native web search
+                </label>
               </div>
             )
           })()}

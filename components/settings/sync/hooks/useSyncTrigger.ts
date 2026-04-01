@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import type { SyncDirection } from '@/lib/sync/types'
@@ -42,21 +41,20 @@ export function useSyncTrigger() {
       forceFull: boolean = false,
       direction: SyncDirection = 'BIDIRECTIONAL'
     ) => {
-      clientLogger.debug('Triggering manual sync', { instanceId, forceFull, direction })
       setSyncingInstanceId(instanceId)
       setActiveOperationId(null) // Reset for new sync
 
       const result = await syncOp.execute(async () => {
-        // Build URL with query parameters
+        // Build URL with action=sync parameter and other options
         const params = new URLSearchParams()
+        params.set('action', 'sync')
         if (forceFull) {
           params.set('forceFull', 'true')
         }
         if (direction !== 'BIDIRECTIONAL') {
           params.set('direction', direction)
         }
-        const queryString = params.toString()
-        const url = `/api/sync/instances/${instanceId}/sync${queryString ? `?${queryString}` : ''}`
+        const url = `/api/v1/sync/instances/${instanceId}?${params.toString()}`
 
         const response = await fetchJson<SyncResult>(url, {
           method: 'POST',
@@ -80,18 +78,8 @@ export function useSyncTrigger() {
       setSyncingInstanceId(null)
 
       if (result) {
-        clientLogger.info('Manual sync completed', {
-          instanceId,
-          forceFull,
-          direction,
-          operationId: result.operationId,
-          entityCounts: result.entityCounts,
-          conflictCount: result.conflicts?.length ?? 0,
-          errorCount: result.errors?.length ?? 0,
-          duration: result.duration,
-        })
       } else {
-        clientLogger.error('Manual sync failed', { instanceId, forceFull, direction })
+        console.error('Manual sync failed', { instanceId, forceFull, direction })
       }
 
       return result

@@ -3,9 +3,13 @@
 import { useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import ToolPalette from '@/components/chat/ToolPalette'
 import MobileToolPalette from '@/components/chat/MobileToolPalette'
+import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import MessageContent from '@/components/chat/MessageContent'
-import { clientLogger } from '@/lib/client-logger'
 import type { AttachedFile } from '../types'
+import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+
+// Platform detection for keyboard shortcuts
+const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
 
 // Use useLayoutEffect on client, useEffect on server (for SSR compatibility)
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
@@ -29,25 +33,36 @@ interface ChatComposerProps {
   setShowPreview: (show: boolean) => void
   uploadingFile: boolean
   toolExecutionStatus: { tool: string; status: 'pending' | 'success' | 'error'; message: string } | null
-  roleplayTemplateName: string | null
+  /** Patterns for styling roleplay text in preview */
+  renderingPatterns?: RenderingPattern[]
+  /** Optional dialogue detection for paragraph-level styling in preview */
+  dialogueDetection?: DialogueDetection | null
   chatPhotoCount: number
   chatMemoryCount: number
   hasImageProfile: boolean
   isSingleCharacterChat: boolean
   roleplayTemplateId?: string | null
+  /** Whether document editing mode is enabled */
+  documentEditingMode: boolean
+  /** Toggle document editing mode on/off */
+  onToggleDocumentEditingMode: () => void
 
   // Callbacks
   onSubmit: (e: React.FormEvent) => void
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
   onAttachFileClick?: () => void
+  onImagePaste: (file: File) => Promise<void>
   onGalleryClick: () => void
   onGenerateImageClick: () => void
   onAddCharacterClick: () => void
   onSettingsClick: () => void
   onRenameClick?: () => void
+  onProjectClick?: () => void
+  projectName?: string | null
   onDeleteChatMemoriesClick: () => void
   onReextractMemoriesClick: () => void
   onSearchReplaceClick?: () => void
+  onBulkCharacterReplaceClick?: () => void
   onStopStreaming: () => void
 }
 
@@ -90,23 +105,30 @@ export function ChatComposer({
   setShowPreview,
   uploadingFile,
   toolExecutionStatus,
-  roleplayTemplateName,
+  renderingPatterns,
+  dialogueDetection,
   chatPhotoCount,
   chatMemoryCount,
   hasImageProfile,
   isSingleCharacterChat,
   roleplayTemplateId,
+  documentEditingMode,
+  onToggleDocumentEditingMode,
   onSubmit,
   onFileSelect,
   onAttachFileClick,
+  onImagePaste,
   onGalleryClick,
   onGenerateImageClick,
   onAddCharacterClick,
   onSettingsClick,
   onRenameClick,
+  onProjectClick,
+  projectName,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
   onSearchReplaceClick,
+  onBulkCharacterReplaceClick,
   onStopStreaming,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -137,7 +159,6 @@ export function ChatComposer({
 
   // Handler that triggers the file input click - the file input lives in this component
   const handleAttachFileClick = () => {
-    clientLogger.debug('[ChatComposer] Triggering file input click')
     fileInputRef.current?.click()
     // Also call the parent's callback in case it needs to do something
     onAttachFileClick?.()
@@ -152,7 +173,6 @@ export function ChatComposer({
     // Only sync if parent cleared the input (input is now empty but textarea isn't)
     // This is the main case we need: after submission, parent sets input to ''
     if (input === '' && textarea.value !== '' && lastExternalInputRef.current !== '') {
-      clientLogger.debug('[ChatComposer] Parent cleared input, syncing textarea')
       textarea.value = ''
       resizeTextarea(textarea, maxHeightRef.current)
     }
@@ -186,53 +206,98 @@ export function ChatComposer({
     }, 16) // ~1 frame, enough to batch rapid keystrokes
   }, [setInput])
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && e.shiftKey) {
-      // Shift+Enter: insert newline, don't submit
-      e.preventDefault()
-      const textarea = e.currentTarget
-      const start = textarea.selectionStart
-      const end = textarea.selectionEnd
-      const currentValue = textarea.value
-      const newValue = currentValue.substring(0, start) + '\n' + currentValue.substring(end)
-      // Update the textarea directly (uncontrolled)
-      textarea.value = newValue
-      // Debounce the parent state update
+  // Helper to insert a newline at cursor position
+  const insertNewline = (textarea: HTMLTextAreaElement) => {
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const currentValue = textarea.value
+    const newValue = currentValue.substring(0, start) + '\n' + currentValue.substring(end)
+    textarea.value = newValue
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      setInput(newValue)
+    }, 16)
+    setTimeout(() => {
+      textarea.selectionStart = textarea.selectionEnd = start + 1
+      resizeTextarea(textarea, maxHeightRef.current)
+    }, 0)
+  }
+
+  // Helper to submit the form
+  const submitForm = (textarea: HTMLTextAreaElement) => {
+    const currentValue = textarea.value
+    if (currentValue.trim() || attachedFiles.length > 0) {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
       }
-      debounceTimerRef.current = setTimeout(() => {
-        setInput(newValue)
-      }, 16)
-      // Move cursor after the inserted newline
-      setTimeout(() => {
-        textarea.selectionStart = textarea.selectionEnd = start + 1
-        resizeTextarea(textarea, maxHeightRef.current)
-      }, 0)
-    } else if (e.key === 'Enter' && !e.shiftKey) {
-      // Enter (without Shift): submit form
-      e.preventDefault()
-      const textarea = e.currentTarget
-      const currentValue = textarea.value
-      if (currentValue.trim() || attachedFiles.length > 0) {
-        // Flush any pending debounced update and sync parent state immediately
-        if (debounceTimerRef.current) {
-          clearTimeout(debounceTimerRef.current)
-          debounceTimerRef.current = null
-        }
-        setInput(currentValue)
-        const form = textarea.form
-        if (form) {
-          // Use setTimeout to ensure React processes the setInput before form submit
+      setInput(currentValue)
+      const form = textarea.form
+      if (form) {
+        setTimeout(() => {
+          form.dispatchEvent(new Event('submit', { bubbles: true }))
           setTimeout(() => {
-            form.dispatchEvent(new Event('submit', { bubbles: true }))
-            // Re-focus textarea after form dispatch to prevent focus loss
-            setTimeout(() => {
-              textarea.focus({ preventScroll: true })
-              clientLogger.debug('[ChatComposer] Re-focused textarea after Enter submit')
-            }, 10)
-          }, 0)
+            textarea.focus({ preventScroll: true })
+          }, 10)
+        }, 0)
+      }
+    }
+  }
+
+  // Handle paste events to detect and upload images
+  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    // Check for image items in clipboard
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      if (item.type.startsWith('image/')) {
+        e.preventDefault() // Prevent default paste behavior for images
+        const file = item.getAsFile()
+        if (file) {
+          // Generate a unique filename with timestamp
+          const timestamp = Date.now()
+          const extension = file.type.split('/')[1] || 'png'
+          const filename = `pasted-image-${timestamp}.${extension}`
+          const renamedFile = new File([file], filename, { type: file.type })
+
+          // Upload the pasted image
+          await onImagePaste(renamedFile)
         }
+        return // Only handle the first image
+      }
+    }
+    // Allow normal text paste to proceed if no images found
+  }, [onImagePaste])
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const textarea = e.currentTarget
+
+    if (documentEditingMode) {
+      // Document mode: Enter = newline, Ctrl/Cmd+Enter = submit
+      const isSubmitShortcut = isMac
+        ? (e.metaKey && !e.ctrlKey && e.key === 'Enter')
+        : (e.ctrlKey && !e.metaKey && e.key === 'Enter')
+
+      if (isSubmitShortcut) {
+        e.preventDefault()
+        submitForm(textarea)
+      } else if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        // Plain Enter in document mode = newline
+        e.preventDefault()
+        insertNewline(textarea)
+      }
+    } else {
+      // Chat mode: Enter = submit, Shift+Enter = newline
+      if (e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault()
+        insertNewline(textarea)
+      } else if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        submitForm(textarea)
       }
     }
   }
@@ -256,14 +321,13 @@ export function ChatComposer({
         showAddCharacter={isSingleCharacterChat}
         onSettingsClick={onSettingsClick}
         onRenameClick={onRenameClick}
+        onProjectClick={onProjectClick}
+        projectName={projectName}
         chatId={id}
         onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
         onReextractMemoriesClick={onReextractMemoriesClick}
         chatMemoryCount={chatMemoryCount}
-        roleplayTemplateId={roleplayTemplateId}
-        inputRef={inputRef}
-        input={input}
-        setInput={setInput}
+        onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
         disabled={sending || !hasActiveCharacters}
       />
 
@@ -355,10 +419,13 @@ export function ChatComposer({
             onGenerateImageClick={onGenerateImageClick}
             onSettingsClick={onSettingsClick}
             onRenameClick={onRenameClick}
+            onProjectClick={onProjectClick}
+            projectName={projectName}
             onAddCharacterClick={onAddCharacterClick}
             onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
             onReextractMemoriesClick={onReextractMemoriesClick}
             onSearchReplaceClick={onSearchReplaceClick}
+            onBulkCharacterReplaceClick={onBulkCharacterReplaceClick}
             chatPhotoCount={chatPhotoCount}
             hasImageProfile={hasImageProfile}
             showAddCharacter={isSingleCharacterChat}
@@ -368,13 +435,20 @@ export function ChatComposer({
             uploadingFile={uploadingFile}
             showPreview={showPreview}
             onTogglePreview={() => setShowPreview(!showPreview)}
+            disabled={sending || !hasActiveCharacters}
+          />
+        </div>
+
+        {/* Formatting toolbar - shown above the form when document editing mode is enabled */}
+        {documentEditingMode && (
+          <FormattingToolbar
             roleplayTemplateId={roleplayTemplateId}
             inputRef={inputRef}
             input={input}
             setInput={setInput}
             disabled={sending || !hasActiveCharacters}
           />
-        </div>
+        )}
 
         <form onSubmit={onSubmit} className="qt-chat-composer-inner">
           {/* Hidden file input */}
@@ -388,23 +462,6 @@ export function ChatComposer({
 
           {/* Tool palette toggle button - left side */}
           <div className="qt-chat-toolbar">
-            {/* Desktop: Stop button - only shown during streaming/waiting */}
-            {(streaming || waitingForResponse) && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onStopStreaming()
-                }}
-                className="qt-chat-toolbar-button qt-chat-stop-button qt-desktop-only"
-                title="Stop generating"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="6" width="12" height="12" rx="1" />
-                </svg>
-              </button>
-            )}
-
             {/* Mobile: Tool palette toggle button */}
             <button
               ref={mobileToolPaletteToggleRef}
@@ -436,6 +493,23 @@ export function ChatComposer({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
+
+            {/* Document editing mode toggle button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleDocumentEditingMode()
+              }}
+              className={`qt-chat-toolbar-button ${documentEditingMode ? 'qt-chat-toolbar-button-active' : ''}`}
+              title={documentEditingMode
+                ? `Document mode (${isMac ? 'Cmd' : 'Ctrl'}+Enter to send)`
+                : `Chat mode (Enter to send)`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </button>
           </div>
 
           {showPreview ? (
@@ -444,7 +518,7 @@ export function ChatComposer({
                 lineHeight: '1.5'
               }}
             >
-              <MessageContent content={input} roleplayTemplateName={roleplayTemplateName} />
+              <MessageContent content={input} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} />
             </div>
           ) : (
             <textarea
@@ -452,6 +526,7 @@ export function ChatComposer({
               defaultValue={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               disabled={sending || !hasActiveCharacters}
               rows={1}
               placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
@@ -462,17 +537,35 @@ export function ChatComposer({
             />
           )}
 
-          {/* Send button - right side */}
-          <button
-            type="submit"
-            disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
-            className="qt-chat-composer-send"
-            title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          </button>
+          {/* Right side buttons */}
+          {(streaming || waitingForResponse) ? (
+            /* Stop button - shown during streaming/waiting */
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onStopStreaming()
+              }}
+              className="qt-chat-composer-send qt-chat-stop-button"
+              title="Stop generating"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="6" width="12" height="12" rx="1" />
+              </svg>
+            </button>
+          ) : (
+            /* Send button - right side */
+            <button
+              type="submit"
+              disabled={sending || (!input.trim() && attachedFiles.length === 0) || !hasActiveCharacters}
+              className="qt-chat-composer-send"
+              title={!hasActiveCharacters ? "Add a character to start chatting" : "Send message"}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
+          )}
         </form>
       </div>
     </div>

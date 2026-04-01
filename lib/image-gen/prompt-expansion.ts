@@ -93,9 +93,8 @@ export async function resolvePlaceholders(
       if (callingParticipantId && chat) {
         const participant = chat.participants.find(p => p.id === callingParticipantId);
         if (participant) {
-          // All participants are now CHARACTER type (personas migrated to characters with controlledBy: 'user')
-          // For legacy PERSONA participants, personaId === characterId after migration
-          const characterId = participant.characterId || participant.personaId;
+          // All participants are CHARACTER type
+          const characterId = participant.characterId;
           if (characterId) {
             const character = await repos.characters.findById(characterId);
             if (character) {
@@ -147,12 +146,12 @@ export async function resolvePlaceholders(
           if (callerParticipant) {
             // If caller is LLM-controlled, find user-controlled participant
             // If caller is user-controlled, find LLM-controlled participant
-            const callerIsUserControlled = callerParticipant.controlledBy === 'user' || callerParticipant.type === 'PERSONA';
+            const callerIsUserControlled = callerParticipant.controlledBy === 'user';
             otherParticipant = chat.participants.find(p =>
               p.id !== callingParticipantId &&
               (callerIsUserControlled
-                ? (p.controlledBy === 'llm' || p.controlledBy === undefined) && p.type !== 'PERSONA'
-                : p.controlledBy === 'user' || p.type === 'PERSONA')
+                ? (p.controlledBy === 'llm' || p.controlledBy === undefined)
+                : p.controlledBy === 'user')
             );
           }
         }
@@ -160,13 +159,13 @@ export async function resolvePlaceholders(
         // If no caller specified, find the first user-controlled participant
         if (!otherParticipant) {
           otherParticipant = chat.participants.find(p =>
-            p.controlledBy === 'user' || p.type === 'PERSONA'
+            p.controlledBy === 'user'
           );
         }
 
         if (otherParticipant) {
-          // All participants are characters now - personaId === characterId after migration
-          const characterId = otherParticipant.characterId || otherParticipant.personaId;
+          // All participants are characters
+          const characterId = otherParticipant.characterId;
           if (characterId) {
             const character = await repos.characters.findById(characterId);
             if (character) {

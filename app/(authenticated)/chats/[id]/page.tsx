@@ -1,19 +1,25 @@
 'use client'
 
 import { use, useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import ImageModal from '@/components/chat/ImageModal'
 import PhotoGalleryModal from '@/components/images/PhotoGalleryModal'
 import ToolPalette from '@/components/chat/ToolPalette'
 import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import ChatSettingsModal from '@/components/chat/ChatSettingsModal'
+import ChatProjectModal from '@/components/chat/ChatProjectModal'
 import ChatRenameModal from '@/components/chat/ChatRenameModal'
 import GenerateImageDialog from '@/components/chat/GenerateImageDialog'
 import ParticipantSidebar from '@/components/chat/ParticipantSidebar'
 import MobileParticipantDropdown from '@/components/chat/MobileParticipantDropdown'
 import AddCharacterDialog from '@/components/chat/AddCharacterDialog'
 import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog'
+import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
+import FileWriteApprovalModal from '@/components/chat/FileWriteApprovalModal'
+import FileWritePermissionPrompt from '@/components/chat/FileWritePermissionPrompt'
+import FileConflictDialog from '@/components/chat/FileConflictDialog'
 import { MemoryCascadeDialog } from '@/components/ui/MemoryCascadeDialog'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
 import SelectLLMProfileDialog from '@/components/chat/SelectLLMProfileDialog'
@@ -28,17 +34,17 @@ import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { safeJsonParse } from '@/lib/fetch-helpers'
-import { clientLogger } from '@/lib/client-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
+import { ChatCostSummary } from '@/components/chat/ChatCostSummary'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
-import { useDebugOptional } from '@/components/providers/debug-provider'
 import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
+import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import {
   type TurnState,
@@ -57,6 +63,7 @@ import {
   getNextPauseThreshold,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
+import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
 
 // Import extracted hooks
 import {
@@ -64,6 +71,7 @@ import {
   useTurnManagement,
   useMessageActions,
   useFileAttachments,
+  useAutoScroll,
   type SwipeState,
 } from './hooks'
 import type { Chat, ChatSettings, Message, MessageAttachment, Participant, CharacterData } from './types'
@@ -81,7 +89,6 @@ import {
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   useAvatarDisplay()
-  const debug = useDebugOptional()
 
   // Use the extracted chat data hook
   const chatDataHook = useChatData(id)
@@ -100,10 +107,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [viewSourceMessageIds, setViewSourceMessageIds] = useState<Set<string>>(new Set())
   const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
   const [roleplayTemplateName, setRoleplayTemplateName] = useState<string | null>(null)
+  const [roleplayRenderingPatterns, setRoleplayRenderingPatterns] = useState<RenderingPattern[] | undefined>(undefined)
+  const [roleplayDialogueDetection, setRoleplayDialogueDetection] = useState<DialogueDetection | null | undefined>(undefined)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [mobileToolPaletteOpen, setMobileToolPaletteOpen] = useState(false)
+  const [documentEditingMode, setDocumentEditingMode] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
+  const [chatProjectModalOpen, setChatProjectModalOpen] = useState(false)
   const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
@@ -113,6 +124,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     currentParticipantId: string | null
   } | null>(null)
   const [searchReplaceModalOpen, setSearchReplaceModalOpen] = useState(false)
+  const [bulkReplaceModalOpen, setBulkReplaceModalOpen] = useState(false)
   const [toolExecutionStatus, setToolExecutionStatus] = useState<{ tool: string; status: 'pending' | 'success' | 'error'; message: string } | null>(null)
   const [pendingToolCalls, setPendingToolCalls] = useState<Array<{ id: string; name: string; status: 'pending' | 'success' | 'error'; result?: unknown; arguments?: Record<string, unknown> }>>([])
   const [showPreview, setShowPreview] = useState(false)
@@ -129,6 +141,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [activeTypingParticipantId, setActiveTypingParticipantId] = useState<string | null>(null)
   const [allLLMPauseTurnCount, setAllLLMPauseTurnCount] = useState(0)
   const [allLLMPauseModalOpen, setAllLLMPauseModalOpen] = useState(false)
+  const [fileWriteApprovalState, setFileWriteApprovalState] = useState<{
+    isOpen: boolean
+    pendingWrite: {
+      filename: string
+      content?: string
+      mimeType?: string
+      folderPath: string
+      projectId: string | null
+    }
+    projectName?: string
+    /** The participant ID that made the write request, so we can trigger them to continue */
+    respondingParticipantId?: string
+  } | null>(null)
   const [selectLLMProfileDialogState, setSelectLLMProfileDialogState] = useState<{
     isOpen: boolean
     participantId: string
@@ -142,14 +167,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   } | null>(null)
 
   // Use the extracted file attachments hook
-  const fileHook = useFileAttachments(id)
+  const fileHook = useFileAttachments(id, chat?.projectId)
   const { attachedFiles, setAttachedFiles, uploadingFile } = fileHook
-  const { handleFileSelect, removeAttachedFile } = fileHook
+  const { handleFileSelect, removeAttachedFile, uploadFile } = fileHook
+  const { conflictInfo, isConflictDialogOpen, resolvingConflict, handleConflictResolution, cancelConflict } = fileHook
 
   // Refs
   const mobileParticipantRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map())
   const lastAutoTriggeredRef = useRef<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const mobileToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const desktopToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
@@ -162,6 +189,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const hasRestoredDraftRef = useRef<boolean>(false)
   // Ref for triggerContinueMode to break dependency cycle in auto-trigger useEffect
   const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
+
+  // Virtualizer for efficient message list rendering - must be defined before auto-scroll hook
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    getScrollElement: () => messagesContainerRef.current,
+    estimateSize: () => 150, // Estimated row height in pixels
+    overscan: 5, // Render 5 extra items above/below viewport for smooth scrolling
+  })
+
+  // Intelligent auto-scroll hook - handles settling, streaming, and user scroll intent
+  const {
+    scrollOnUserMessage,
+    scrollOnStreamComplete,
+    isAutoScrollEnabled,
+    isSettled,
+  } = useAutoScroll({
+    containerRef: messagesContainerRef,
+    endRef: messagesEndRef,
+    virtualizer,
+    messageCount: messages.length,
+    isStreaming: streaming,
+    isWaitingForResponse: waitingForResponse,
+    streamingContent,
+    isLoading: loading,
+  })
 
   // Draft persistence - localStorage key for this chat
   const draftStorageKey = `quilltap-draft-${id}`
@@ -177,8 +229,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setInput(savedDraft)
         lastSavedDraftRef.current = savedDraft
       }
-    } catch (err) {
-      clientLogger.warn('[Chat] Failed to restore draft from localStorage', { error: err })
+    } catch {
+      // Failed to restore draft from localStorage
     }
   }, [draftStorageKey])
 
@@ -203,8 +255,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           localStorage.removeItem(draftStorageKey)
           lastSavedDraftRef.current = ''
         }
-      } catch (err) {
-        clientLogger.warn('[Chat] Failed to save draft to localStorage', { error: err })
+      } catch {
+        // Failed to save draft to localStorage
       }
     }, 5000)
 
@@ -225,8 +277,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         clearTimeout(draftSaveTimerRef.current)
         draftSaveTimerRef.current = null
       }
-    } catch (err) {
-      clientLogger.warn('[Chat] Failed to clear draft from localStorage', { error: err })
+    } catch {
+      // Failed to clear draft from localStorage
     }
   }, [draftStorageKey])
 
@@ -234,7 +286,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
-        clientLogger.debug('[Chat] Cleanup: aborting pending request on unmount')
         abortControllerRef.current.abort()
         abortControllerRef.current = null
       }
@@ -248,10 +299,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     const pendingNav = getPendingMessageNavigation()
     if (pendingNav.scrollTo) {
-      clientLogger.debug('[Chat] Pending message navigation found', {
-        scrollTo: pendingNav.scrollTo,
-        highlight: pendingNav.highlight,
-      })
       // Wait a bit for DOM to be ready, then scroll
       setTimeout(() => {
         scrollToMessage(pendingNav.scrollTo!, {
@@ -271,9 +318,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const awaitingTagInfo = quickHideActive && isCurrentChat && !chatContext.tagsFetched
   const chatHidden = quickHideActive && isCurrentChat && chatContext.tagsFetched && shouldHideByIds(chatTags)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  // Legacy scrollToBottom for explicit programmatic scroll (e.g., after message navigation)
+  // Most auto-scroll logic is now handled by useAutoScroll hook
+  const scrollToBottom = useCallback(() => {
+    if (messages.length > 0) {
+      virtualizer.scrollToIndex(messages.length - 1, { align: 'end', behavior: 'smooth' })
+    }
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
+  }, [messages.length, virtualizer])
 
   const getTextareaMaxHeight = useCallback(() => {
     if (typeof globalThis === 'undefined' || !globalThis.window) return 200
@@ -322,22 +376,27 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Multi-character chat helpers
   const participantsAsBase = useMemo((): ChatParticipantBase[] => {
     if (!chat?.participants) return []
-    return chat.participants.map(p => ({
-      id: p.id,
-      type: p.type,
-      characterId: p.characterId ?? (p.character?.id ?? null),
-      personaId: p.personaId ?? (p.persona?.id ?? null),
-      controlledBy: p.controlledBy ?? (p.type === 'PERSONA' ? 'user' : 'llm'),
-      connectionProfileId: p.connectionProfile?.id ?? null,
-      imageProfileId: p.imageProfile?.id ?? null,
-      systemPromptOverride: p.systemPromptOverride ?? null,
-      displayOrder: p.displayOrder,
-      isActive: p.isActive,
-      hasHistoryAccess: p.hasHistoryAccess ?? false,
-      joinScenario: p.joinScenario ?? null,
-      createdAt: p.createdAt ?? new Date().toISOString(),
-      updatedAt: p.updatedAt ?? new Date().toISOString(),
-    }))
+    // Filter to CHARACTER type only (personas are no longer supported) and ensure characterId is present
+    return chat.participants
+      .filter(p => p.type === 'CHARACTER' && (p.characterId || p.character?.id))
+      .map(p => {
+        const characterId = p.characterId || p.character?.id
+        return {
+          id: p.id,
+          type: 'CHARACTER' as const,
+          characterId: characterId!,
+          controlledBy: p.controlledBy ?? 'llm',
+          connectionProfileId: p.connectionProfile?.id ?? null,
+          imageProfileId: p.imageProfile?.id ?? null,
+          systemPromptOverride: p.systemPromptOverride ?? null,
+          displayOrder: p.displayOrder,
+          isActive: p.isActive,
+          hasHistoryAccess: p.hasHistoryAccess ?? false,
+          joinScenario: p.joinScenario ?? null,
+          createdAt: p.createdAt ?? new Date().toISOString(),
+          updatedAt: p.updatedAt ?? new Date().toISOString(),
+        }
+      })
   }, [chat?.participants])
 
   const userParticipantId = useMemo(() => {
@@ -361,6 +420,56 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // Update browser tab title with chat name
   useDocumentTitle(chat?.title ?? null)
+
+  // Set project link and cost summary in toolbar
+  const { setLeftContent, setRightContent } = usePageToolbar()
+  useEffect(() => {
+    if (chat?.title) {
+      setLeftContent(
+        <div className="hidden md:flex items-center gap-2 text-sm min-w-0">
+          {chat.projectId && chat.projectName && (
+            <>
+              <a
+                href={`/projects/${chat.projectId}`}
+                className="inline-flex items-center gap-1.5 qt-text-secondary hover:text-foreground transition-colors flex-shrink-0"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                <span>{chat.projectName}</span>
+              </a>
+              <span className="qt-text-muted">/</span>
+            </>
+          )}
+          <span className="qt-text-primary truncate" title={chat.title}>
+            {chat.title}
+          </span>
+        </div>
+      )
+    } else {
+      setLeftContent(null)
+    }
+    // Clear on unmount
+    return () => setLeftContent(null)
+  }, [chat?.projectId, chat?.projectName, chat?.title, setLeftContent])
+
+  // Set cost summary in toolbar right section
+  useEffect(() => {
+    if (chatSettings?.tokenDisplaySettings?.showChatTotals) {
+      setRightContent(
+        <ChatCostSummary
+          chatId={id}
+          show={chatSettings.tokenDisplaySettings.showChatTotals}
+          variant="compact"
+          refreshKey={messages.length}
+        />
+      )
+    } else {
+      setRightContent(null)
+    }
+    // Clear on unmount
+    return () => setRightContent(null)
+  }, [id, chatSettings?.tokenDisplaySettings?.showChatTotals, setRightContent, messages.length])
 
   const charactersMap = useMemo((): Map<string, Character> => {
     const map = new Map<string, Character>()
@@ -517,16 +626,16 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setIsPaused(false)
     userStoppedStreamRef.current = false
     try {
-      const response = await fetch(`/api/chats/${id}`, {
+      const response = await fetch(`/api/v1/chats/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat: { isPaused: false } }),
       })
       if (!response.ok) {
-        clientLogger.error('[Chat] Failed to persist unpause state', { status: response.status })
+        console.error('[Chat] Failed to persist unpause state', response.status)
       }
     } catch (error) {
-      clientLogger.error('[Chat] Error persisting unpause state', { error })
+      console.error('[Chat] Error persisting unpause state', error)
     }
   }, [id])
 
@@ -627,14 +736,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [chat?.isPaused])
 
+  // Initialize documentEditingMode from chat data
+  useEffect(() => {
+    if (chat?.documentEditingMode !== undefined) {
+      setDocumentEditingMode(chat.documentEditingMode)
+    }
+  }, [chat?.documentEditingMode])
+
   // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
   // This prevents immediate re-pause when user clicks Resume after page refresh
   useEffect(() => {
     if (chat?.isPaused && isAllLLM && allLLMTurnCount > 0) {
       lastAllLLMPauseTurnCountRef.current = allLLMTurnCount
-      clientLogger.debug('[Chat] Initialized all-LLM pause count from persisted state', {
-        turnCount: allLLMTurnCount,
-      })
     }
   }, [chat?.isPaused, isAllLLM, allLLMTurnCount])
 
@@ -646,10 +759,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const pauseTurnCount = chat?.allLLMPauseTurnCount
 
     if (impersonatingIds && impersonatingIds.length > 0) {
-      clientLogger.debug('[Chat] Restoring impersonation state', {
-        impersonatingParticipantIds: impersonatingIds,
-        activeTypingParticipantId: activeTypingId,
-      })
       setImpersonatingParticipantIds(impersonatingIds)
       setActiveTypingParticipantId(activeTypingId ?? null)
     }
@@ -666,15 +775,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     const participant = participantsAsBase.find(p => p.id === participantId && p.isActive)
     if (!participant) {
-      clientLogger.warn('[Chat] Cannot trigger continue mode - participant not found or inactive', {
-        participantId,
-      })
       showErrorToast('This participant is no longer available in the chat.')
       return
     }
 
     if (!turnManagement.hasActiveCharacters) {
-      clientLogger.warn('[Chat] No active characters available for continue mode')
       showErrorToast('No characters available. Add a character to continue the conversation.')
       return
     }
@@ -695,7 +800,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       abortControllerRef.current = new AbortController()
       const { signal } = abortControllerRef.current
 
-      const res = await fetch(`/api/chats/${id}/messages`, {
+      const res = await fetch(`/api/v1/messages?chatId=${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -778,17 +883,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       const isAbort = err instanceof Error && err.name === 'AbortError'
       if (!isAbort) {
         // Extract error message, handling cases where message may be undefined
-        const errorMessage = err instanceof Error
-          ? (err.message || err.name || 'Unknown error')
-          : String(err) || 'Unknown error'
-        const errorName = err instanceof Error ? err.name : 'UnknownErrorType'
+        let errorMessage = 'Failed to generate response'
+        let errorName = 'UnknownErrorType'
 
-        clientLogger.error('[Chat] Continue mode error:', {
-          error: errorMessage,
-          errorName,
-          errorType: typeof err,
-        })
-        showErrorToast(errorMessage || 'Failed to generate response')
+        if (err instanceof Error) {
+          errorMessage = err.message || err.name || errorMessage
+          errorName = err.name
+        } else if (typeof err === 'string') {
+          errorMessage = err
+        } else if (err && typeof err === 'object') {
+          // Handle plain object errors (e.g., from API responses)
+          const errObj = err as Record<string, unknown>
+          if (typeof errObj.error === 'string') {
+            errorMessage = errObj.error
+          } else if (typeof errObj.message === 'string') {
+            errorMessage = errObj.message
+          }
+        }
+
+        showErrorToast(errorMessage)
       }
     } finally {
       setStreaming(false)
@@ -796,14 +909,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setStreamingContent('')
       setRespondingParticipantId(null)
       abortControllerRef.current = null
-      scrollToBottom()
+      scrollOnStreamComplete()
       // Return focus to input after AI response completes
       // Use longer timeout to let smooth scroll settle, and preventScroll to avoid conflicts
       setTimeout(() => {
         inputRef.current?.focus({ preventScroll: true })
       }, 150)
     }
-  }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages])
+  }, [id, streaming, waitingForResponse, participantsAsBase, turnManagement.hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete])
 
   // Keep the ref in sync with the current callback to break dependency cycle
   triggerContinueModeRef.current = triggerContinueMode
@@ -814,18 +927,37 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     userStoppedStreamRef.current = paused
 
     try {
-      const response = await fetch(`/api/chats/${id}`, {
+      const response = await fetch(`/api/v1/chats/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat: { isPaused: paused } }),
       })
       if (!response.ok) {
-        clientLogger.error('[Chat] Failed to persist pause state', { status: response.status })
+        console.error('[Chat] Failed to persist pause state', response.status)
       }
     } catch (error) {
-      clientLogger.error('[Chat] Error persisting pause state', { error })
+      console.error('[Chat] Error persisting pause state', error)
     }
   }, [id])
+
+  // Toggle document editing mode and persist to database
+  const handleToggleDocumentEditingMode = useCallback(async () => {
+    const newMode = !documentEditingMode
+    setDocumentEditingMode(newMode)
+
+    try {
+      const response = await fetch(`/api/v1/chats/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { documentEditingMode: newMode } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist document editing mode', response.status)
+      }
+    } catch (error) {
+      console.error('[Chat] Error persisting document editing mode', error)
+    }
+  }, [id, documentEditingMode])
 
   // Auto-trigger next character in multi-character mode
   useEffect(() => {
@@ -847,11 +979,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     // Check if we should pause for all-LLM chat threshold
     // Only pause if we've exceeded the last paused turn count (prevents immediate re-pause on resume)
     if (isAllLLM && shouldPauseForAllLLM(allLLMTurnCount) && allLLMTurnCount > lastAllLLMPauseTurnCountRef.current) {
-      clientLogger.info('[Chat] All-LLM pause threshold reached, auto-pausing', {
-        turnCount: allLLMTurnCount,
-        lastPausedAt: lastAllLLMPauseTurnCountRef.current,
-        nextThreshold: getNextPauseThreshold(allLLMTurnCount),
-      })
       // Track the turn count at which we paused
       lastAllLLMPauseTurnCountRef.current = allLLMTurnCount
       // Auto-pause the chat
@@ -861,13 +988,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
 
     if (lastAutoTriggeredRef.current === effectiveNextSpeakerId) return
-
-    clientLogger.info('[Chat] Auto-triggering next character in multi-character mode', {
-      nextSpeakerId: effectiveNextSpeakerId,
-      reason: turnSelectionResult.reason,
-      isAllLLM,
-      allLLMTurnCount,
-    })
 
     lastAutoTriggeredRef.current = effectiveNextSpeakerId
 
@@ -883,7 +1003,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Toggle pause state
   const togglePause = useCallback(async () => {
     const newPausedState = !isPaused
-    clientLogger.info('[Chat] Toggling pause state', { from: isPaused, to: newPausedState })
     await setPauseState(newPausedState)
     if (newPausedState) {
       showInfoToast('Auto-responses paused')
@@ -910,9 +1029,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setPauseState(true)
     }
     if (streamingContent) {
-      clientLogger.info('[Chat] Streaming stopped with partial content', {
-        contentLength: streamingContent.length,
-      })
       showInfoToast('Response stopped - chat paused')
     }
     setStreamingContent('')
@@ -938,17 +1054,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [])
 
   const handleCharacterAdded = useCallback(() => {
-    clientLogger.info('[Chat] Character added, refreshing chat data')
     fetchChat()
   }, [fetchChat])
 
   const handleReattribute = useCallback((messageId: string) => {
     const message = messages.find(m => m.id === messageId)
     if (message) {
-      clientLogger.debug('[Chat] Opening re-attribute dialog', { // Useful for debugging message re-attribution
-        messageId,
-        currentParticipantId: message.participantId,
-      })
       setReattributeDialogState({
         isOpen: true,
         messageId,
@@ -959,7 +1070,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const handleReattributed = useCallback(async () => {
     const messageId = reattributeDialogState?.messageId
-    clientLogger.info('[Chat] Message re-attributed, refreshing chat data', { messageId })
     setReattributeDialogState(null)
     await fetchChat()
     // Scroll to the reattributed message after refresh
@@ -968,7 +1078,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         const messageElement = document.getElementById(`message-${messageId}`)
         if (messageElement) {
           messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          clientLogger.debug('[Chat] Scrolled to reattributed message', { messageId })
         }
       }, 100) // Small delay to ensure DOM is updated
     }
@@ -978,15 +1087,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const participant = participantData.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'This character'
 
-    clientLogger.debug('[Chat] Requesting character removal', {
-      participantId,
-      characterName,
-      isGenerating: streaming || waitingForResponse,
-      currentSpeakerId: turnState.lastSpeakerId,
-    })
-
     if ((streaming || waitingForResponse) && turnState.lastSpeakerId === participantId) {
-      clientLogger.warn('[Chat] Cannot remove character while they are generating')
       showErrorToast(`Cannot remove ${characterName} while they are generating a response. Please wait for them to finish.`)
       return
     }
@@ -996,12 +1097,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     )
 
     if (!confirmed) {
-      clientLogger.debug('[Chat] Character removal cancelled by user')
       return
     }
 
     try {
-      const res = await fetch(`/api/chats/${id}/participants`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=remove-participant`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId }),
@@ -1012,7 +1112,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         throw new Error(errorData.error || 'Failed to remove character')
       }
 
-      clientLogger.info('[Chat] Character removed successfully', { participantId, characterName })
       showSuccessToast(`${characterName} has been removed from the chat`)
 
       setEphemeralMessages(prev => prev.filter(em => em.participantId !== participantId))
@@ -1028,14 +1127,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       )
 
       if (remainingCharacters.length === 0) {
-        clientLogger.warn('[Chat] No active characters remain in chat')
         showErrorToast('All characters have been removed. Add a character to continue the conversation.')
       }
     } catch (err) {
-      clientLogger.error('[Chat] Error removing character', {
-        error: err instanceof Error ? err.message : String(err),
-        participantId,
-      })
       showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
     }
   }, [id, participantData, fetchChat, streaming, waitingForResponse, turnState.lastSpeakerId, participantsAsBase])
@@ -1045,13 +1139,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const participant = participantData.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'Character'
 
-    clientLogger.info('[Chat] Starting impersonation', {
-      participantId,
-      characterName,
-    })
-
     try {
-      const res = await fetch(`/api/chats/${id}/impersonate`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=impersonate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId }),
@@ -1069,12 +1158,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setActiveTypingParticipantId(data.activeTypingParticipantId || participantId)
 
       showSuccessToast(`Now speaking as ${characterName}`)
-      clientLogger.info('[Chat] Impersonation started', { participantId, characterName })
     } catch (err) {
-      clientLogger.error('[Chat] Error starting impersonation', {
-        error: err instanceof Error ? err.message : String(err),
-        participantId,
-      })
       showErrorToast(err instanceof Error ? err.message : 'Failed to start impersonation')
     }
   }, [id, participantData])
@@ -1083,19 +1167,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const participant = participantData.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'Character'
 
-    clientLogger.info('[Chat] Stopping impersonation', {
-      participantId,
-      characterName,
-    })
-
     // Check if we need to show the LLM profile selection dialog
     // This is needed when the character doesn't have a default connection profile
     const character = participant?.character
     if (character && !participant?.connectionProfile) {
-      clientLogger.debug('[Chat] Character needs LLM profile, showing dialog', {
-        characterId: character.id,
-        characterName: character.name,
-      })
       setSelectLLMProfileDialogState({
         isOpen: true,
         participantId,
@@ -1112,7 +1187,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     // Otherwise, stop impersonation directly
     try {
-      const res = await fetch(`/api/chats/${id}/impersonate`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=stop-impersonate`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId }),
@@ -1130,12 +1205,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setActiveTypingParticipantId(data.activeTypingParticipantId || null)
 
       showSuccessToast(`Stopped speaking as ${characterName}`)
-      clientLogger.info('[Chat] Impersonation stopped', { participantId, characterName })
     } catch (err) {
-      clientLogger.error('[Chat] Error stopping impersonation', {
-        error: err instanceof Error ? err.message : String(err),
-        participantId,
-      })
       showErrorToast(err instanceof Error ? err.message : 'Failed to stop impersonation')
     }
   }, [id, participantData])
@@ -1144,13 +1214,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const participant = participantData.find(p => p.id === participantId)
     const characterName = participant?.character?.name || 'Character'
 
-    clientLogger.info('[Chat] Confirming stop impersonation with profile', {
-      participantId,
-      connectionProfileId,
-    })
-
     try {
-      const res = await fetch(`/api/chats/${id}/impersonate`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=stop-impersonate`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId, newConnectionProfileId: connectionProfileId }),
@@ -1168,24 +1233,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       setActiveTypingParticipantId(data.activeTypingParticipantId || null)
 
       showSuccessToast(`${characterName} is now controlled by AI`)
-      clientLogger.info('[Chat] Impersonation stopped with profile', { participantId, connectionProfileId })
 
       // Refresh chat to get updated participant connection profile
       await fetchChat()
     } catch (err) {
-      clientLogger.error('[Chat] Error stopping impersonation with profile', {
-        error: err instanceof Error ? err.message : String(err),
-        participantId,
-      })
       showErrorToast(err instanceof Error ? err.message : 'Failed to assign LLM profile')
     }
   }, [id, participantData, fetchChat])
 
   const handleSetActiveSpeaker = useCallback(async (participantId: string) => {
-    clientLogger.debug('[Chat] Setting active speaker', { participantId })
-
     try {
-      const res = await fetch(`/api/chats/${id}/active-speaker`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=set-active-speaker`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId }),
@@ -1204,29 +1262,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setImpersonatingParticipantIds(data.impersonatingParticipantIds)
       }
     } catch (err) {
-      clientLogger.error('[Chat] Error setting active speaker', {
-        error: err instanceof Error ? err.message : String(err),
-        participantId,
-      })
       showErrorToast(err instanceof Error ? err.message : 'Failed to set active speaker')
     }
   }, [id])
 
   // All-LLM pause handlers
-  const handleAllLLMContinue = useCallback((turnsToAdd: number) => {
-    clientLogger.debug('[Chat] All-LLM continue', { turnsToAdd })
+  const handleAllLLMContinue = useCallback(() => {
     setAllLLMPauseModalOpen(false)
     // The turn count will be incremented by the server after each message
   }, [])
 
   const handleAllLLMStop = useCallback(() => {
-    clientLogger.debug('[Chat] All-LLM stop')
     setAllLLMPauseModalOpen(false)
     setPauseState(true)
   }, [setPauseState])
 
   const handleAllLLMTakeOver = useCallback(async (participantId: string) => {
-    clientLogger.debug('[Chat] All-LLM take over', { participantId })
     setAllLLMPauseModalOpen(false)
     await handleStartImpersonation(participantId)
   }, [handleStartImpersonation])
@@ -1234,7 +1285,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Handle memories
   const handleDeleteChatMemories = useCallback(async () => {
     if (chatMemoryCount === 0) {
-      clientLogger.debug('[Chat] No memories to delete')
       return
     }
 
@@ -1243,35 +1293,29 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     )
 
     if (!confirmed) {
-      clientLogger.debug('[Chat] Memory deletion cancelled by user')
       return
     }
 
     try {
-      clientLogger.info('[Chat] Deleting chat memories', { chatId: id, memoryCount: chatMemoryCount })
-      const res = await fetch(`/api/chats/${id}/memories`, { method: 'DELETE' })
+      const res = await fetch(`/api/v1/memories?chatId=${id}`, { method: 'DELETE' })
 
       if (res.ok) {
         const data = await res.json()
-        clientLogger.info('[Chat] Chat memories deleted successfully', { deletedCount: data.deletedCount })
         chatDataHook.setChatMemoryCount(0)
         showSuccessToast(`Deleted ${data.deletedCount} memories`)
       } else {
         const errorData = await res.json()
-        clientLogger.error('[Chat] Failed to delete chat memories', { error: errorData.error })
         showErrorToast(`Failed to delete memories: ${errorData.error}`)
       }
-    } catch (err) {
-      clientLogger.error('[Chat] Error deleting chat memories', { error: err instanceof Error ? err.message : String(err) })
+    } catch {
       showErrorToast('Failed to delete memories')
     }
   }, [id, chatMemoryCount, chatDataHook])
 
   const handleReextractMemories = useCallback(async () => {
     const characterParticipant = chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)
-    if (!characterParticipant?.character || !characterParticipant.connectionProfile) {
-      clientLogger.warn('[Chat] Cannot re-extract memories: no character or connection profile')
-      showErrorToast('Cannot re-extract memories: no character or connection profile configured')
+    if (!characterParticipant?.character) {
+      showErrorToast('Cannot re-extract memories: no active character in chat')
       return
     }
 
@@ -1280,38 +1324,27 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     )
 
     if (!confirmed) {
-      clientLogger.debug('[Chat] Memory re-extraction cancelled by user')
       return
     }
 
     try {
-      clientLogger.info('[Chat] Queueing memory extraction', {
-        chatId: id,
-        characterId: characterParticipant.character.id,
-        characterName: characterParticipant.character.name,
-      })
-
-      const res = await fetch(`/api/chats/${id}/queue-memories`, {
+      const res = await fetch(`/api/v1/chats/${id}?action=queue-memories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           characterId: characterParticipant.character.id,
           characterName: characterParticipant.character.name,
-          connectionProfileId: characterParticipant.connectionProfile.id,
         }),
       })
 
       if (res.ok) {
         const data = await res.json()
-        clientLogger.info('[Chat] Memory extraction jobs queued', { jobCount: data.jobCount })
         showSuccessToast(`Queued ${data.jobCount} memory extraction jobs`)
       } else {
         const errorData = await res.json()
-        clientLogger.error('[Chat] Failed to queue memory extraction', { error: errorData.error })
         showErrorToast(`Failed to queue memory extraction: ${errorData.error}`)
       }
-    } catch (err) {
-      clientLogger.error('[Chat] Error queueing memory extraction', { error: err instanceof Error ? err.message : String(err) })
+    } catch {
       showErrorToast('Failed to queue memory extraction')
     }
   }, [id, chat])
@@ -1325,38 +1358,40 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount])
 
   useEffect(() => {
-    const fetchTemplateName = async () => {
+    const fetchTemplateData = async () => {
       if (!chat?.roleplayTemplateId) {
         setRoleplayTemplateName(null)
+        setRoleplayRenderingPatterns(undefined)
+        setRoleplayDialogueDetection(undefined)
         return
       }
 
       try {
-        const res = await fetch(`/api/roleplay-templates/${chat.roleplayTemplateId}`)
+        const res = await fetch(`/api/v1/roleplay-templates/${chat.roleplayTemplateId}`)
         if (res.ok) {
           const template = await res.json()
           setRoleplayTemplateName(template.name)
-          clientLogger.debug('[Chat] Fetched roleplay template name', {
-            templateId: chat.roleplayTemplateId,
-            templateName: template.name,
-          })
+          setRoleplayRenderingPatterns(template.renderingPatterns)
+          setRoleplayDialogueDetection(template.dialogueDetection)
         } else {
           setRoleplayTemplateName(null)
+          setRoleplayRenderingPatterns(undefined)
+          setRoleplayDialogueDetection(undefined)
         }
-      } catch (err) {
-        clientLogger.error('[Chat] Error fetching roleplay template', {
-          error: err instanceof Error ? err.message : String(err),
-        })
+      } catch {
         setRoleplayTemplateName(null)
+        setRoleplayRenderingPatterns(undefined)
+        setRoleplayDialogueDetection(undefined)
       }
     }
 
-    fetchTemplateName()
+    fetchTemplateData()
   }, [chat?.roleplayTemplateId])
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, streamingContent])
+  // Auto-scroll is now handled by useAutoScroll hook which:
+  // - Waits for page to settle after initial load before scrolling
+  // - Only scrolls on streaming completion, not every content chunk
+  // - Respects user scroll intent (disables auto-scroll if user scrolls up)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1448,58 +1483,23 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
     setMessages((prev) => [...prev, tempUserMessage])
 
+    // Scroll to show user message - this also re-enables auto-scroll
+    scrollOnUserMessage()
+
     // Debug: Log outgoing request
     const requestPayload = { content: userMessage || 'Please look at the attached file(s).', fileIds }
-    let debugEntryId: string | undefined
-    const connectionProfile = getFirstConnectionProfile()
-    const debugProviderName = connectionProfile?.name || 'LLM Provider'
-    const debugProviderType = (connectionProfile?.apiKey?.provider || 'UNKNOWN') as import('@/components/providers/debug-provider').LLMProviderType
-    const debugModel = connectionProfile?.modelName
-
-    if (debug?.isDebugMode) {
-      debugEntryId = debug.addEntry({
-        direction: 'outgoing',
-        provider: debugProviderName,
-        providerType: debugProviderType,
-        model: debugModel,
-        endpoint: `/api/chats/${id}/messages`,
-        status: 'pending',
-        data: JSON.stringify(requestPayload, null, 2),
-        contentType: 'application/json',
-      })
-    }
-
-    // Debug: Prepare response entry
-    let responseEntryId: string | undefined
-    if (debug?.isDebugMode) {
-      responseEntryId = debug.addEntry({
-        direction: 'incoming',
-        provider: debugProviderName,
-        providerType: debugProviderType,
-        model: debugModel,
-        endpoint: `/api/chats/${id}/messages`,
-        status: 'streaming',
-        data: '',
-        contentType: 'text/event-stream',
-      })
-    }
 
     try {
       // Create AbortController for this request
       abortControllerRef.current = new AbortController()
       const { signal } = abortControllerRef.current
 
-      const res = await fetch(`/api/chats/${id}/messages`, {
+      const res = await fetch(`/api/v1/messages?chatId=${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestPayload),
         signal,
       })
-
-      // Debug: Mark request as complete
-      if (debug?.isDebugMode && debugEntryId) {
-        debug.updateEntry(debugEntryId, { status: 'complete' })
-      }
 
       if (!res.ok) {
         // Try to get error details from response
@@ -1528,11 +1528,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         const chunk = decoder.decode(value)
         const lines = chunk.split('\n')
-
-        // Debug: Append raw chunk to response entry
-        if (debug?.isDebugMode && responseEntryId) {
-          debug.appendToEntry(responseEntryId, chunk)
-        }
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -1573,13 +1568,33 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
               // Handle tool results
               if (data.toolResult) {
-                const { index, name, success, result } = data.toolResult
+                const { index, name, success, result, requiresPermission, pendingWrite } = data.toolResult
+
                 // Update pending tool call status by index (more reliable) or fall back to name
                 setPendingToolCalls(prev => prev.map((tc, idx) =>
                   (index !== undefined && idx === index) || (index === undefined && tc.name === name)
                     ? { ...tc, status: success ? 'success' : 'error', result }
                     : tc
                 ))
+
+                // Handle file write permission requirement
+                if (requiresPermission && pendingWrite) {
+                  setFileWriteApprovalState({
+                    isOpen: false, // Start with modal closed; inline prompt shows first
+                    pendingWrite: {
+                      filename: pendingWrite.filename || 'unknown',
+                      content: pendingWrite.content,
+                      mimeType: pendingWrite.mimeType || 'text/plain',
+                      folderPath: pendingWrite.folderPath || '/',
+                      projectId: pendingWrite.projectId ?? chat?.projectId ?? null,
+                    },
+                    projectName: chat?.projectName ?? undefined,
+                    // Store the responding participant so we can trigger them to continue after approval
+                    respondingParticipantId: respondingParticipantId ?? undefined,
+                  })
+                  // Toast removed - inline prompt provides clear visual indication
+                }
+
                 // Only show toast/status for image generation
                 if (name === 'generate_image') {
                   if (success) {
@@ -1601,17 +1616,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 }
               }
 
-              // Handle memory debug logs (arrive after done event)
-              if (data.debugMemoryLogs && debug?.isDebugMode && responseEntryId) {
-                debug.updateEntry(responseEntryId, { debugMemoryLogs: data.debugMemoryLogs })
-              }
-
               if (data.done) {
-                // Debug: Finalize streaming entry with stitched content
-                if (debug?.isDebugMode && responseEntryId) {
-                  debug.finalizeStreamingEntry(responseEntryId)
-                }
-
                 // Check for empty response (known Gemini API issue)
                 if (data.emptyResponse) {
                   showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
@@ -1634,33 +1639,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setStreamingContent('')
                 setStreaming(false)
                 setRespondingParticipantId(null)
-                // Refresh chat to get tool messages and memory debug logs
+                // Scroll to bottom now that streaming is complete
+                scrollOnStreamComplete()
+                // Refresh chat to get tool messages
                 await fetchChat()
-                // Update debug entry with memory logs from the fetched chat (with polling)
-                if (debug?.isDebugMode && responseEntryId) {
-                  let pollCount = 0
-                  const maxPolls = 20 // Poll for up to 20 seconds (1 second intervals)
-                  const pollInterval = setInterval(async () => {
-                    pollCount++
-                    try {
-                      const chatRes = await fetch(`/api/chats/${id}`)
-                      if (chatRes.ok) {
-                        const chatData = await chatRes.json()
-                        const fetchedMessage = chatData.chat.messages.find((m: Message) => m.id === data.messageId)
-                        if (fetchedMessage?.debugMemoryLogs) {
-                          debug.updateEntry(responseEntryId, { debugMemoryLogs: fetchedMessage.debugMemoryLogs })
-                          clearInterval(pollInterval)
-                        } else if (pollCount >= maxPolls) {
-                          clearInterval(pollInterval)
-                        }
-                      }
-                    } catch {
-                      if (pollCount >= maxPolls) {
-                        clearInterval(pollInterval)
-                      }
-                    }
-                  }, 1000)
-                }
                 // Clear tool status after a short delay
                 setTimeout(() => {
                   setToolExecutionStatus(null)
@@ -1696,9 +1678,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 /^\{\s*\}$/.test(trimmedRaw) ||
                 // Skip if it's a server-side error message (already logged on server)
                 trimmedRaw.includes('"error":')
-              if (!shouldSkip) {
-                clientLogger.debug('SSE parse issue (may be chunking artifact):', { rawLength: rawData.length })
-              }
+              // Skip logging for SSE parse issues (chunking artifacts)
             }
           }
         }
@@ -1708,15 +1688,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       const isAbort = err instanceof Error && err.name === 'AbortError'
 
       if (isAbort) {
-        // Debug: Mark entries as aborted
-        if (debug?.isDebugMode) {
-          if (debugEntryId) {
-            debug.updateEntry(debugEntryId, { status: 'complete', error: 'Aborted by user' })
-          }
-          if (responseEntryId) {
-            debug.updateEntry(responseEntryId, { status: 'complete', error: 'Aborted by user' })
-          }
-        }
         // Don't remove user message or show error for abort
         setStreamingContent('')
         setStreaming(false)
@@ -1724,27 +1695,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setRespondingParticipantId(null)
       } else {
         // Extract error message, handling cases where message may be undefined
+        // Network errors (connection dropped, timeout) may have empty messages
         const errorMessage = err instanceof Error
           ? (err.message || err.name || 'Unknown error')
           : String(err) || 'Unknown error'
         const errorName = err instanceof Error ? err.name : 'UnknownErrorType'
 
-        clientLogger.error('Error sending message:', {
-          error: errorMessage,
-          errorName,
-          errorType: typeof err,
-        })
-        showErrorToast(errorMessage || 'Failed to send message')
-
-        // Debug: Mark entries as error
-        if (debug?.isDebugMode) {
-          if (debugEntryId) {
-            debug.updateEntry(debugEntryId, { status: 'error', error: errorMessage })
-          }
-          if (responseEntryId) {
-            debug.updateEntry(responseEntryId, { status: 'error', error: errorMessage })
-          }
-        }
+        // Show user-friendly message for common network errors
+        const displayMessage = errorMessage === 'Unknown error' || errorMessage === 'TypeError'
+          ? 'Connection lost. Please try again.'
+          : errorMessage
+        showErrorToast(displayMessage || 'Failed to send message')
 
         // Remove the temporary user message on error
         setMessages((prev) => prev.filter((m) => m.id !== tempUserMessageId))
@@ -1864,79 +1825,116 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   return (
     <div className="qt-chat-layout">
       <div className="qt-chat-main">
-        <div className="qt-chat-messages">
+        <div className="qt-chat-messages" ref={messagesContainerRef}>
           <div className="qt-chat-messages-list">
-            {/* Messages rendering */}
-            {messages.map((message, messageIndex) => {
-              const isEditing = editingMessageId === message.id
-              const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
-              const showResendButton = messageActions.canResendMessage(message.id, messageIndex)
+            {/* Virtualized messages rendering */}
+            <div
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const messageIndex = virtualRow.index
+                const message = messages[messageIndex]
+                const isEditing = editingMessageId === message.id
+                const swipeState = message.swipeGroupId ? swipeStates[message.swipeGroupId] : null
+                const showResendButton = messageActions.canResendMessage(message.id, messageIndex)
 
-              if (message.role === 'TOOL') {
+                if (message.role === 'TOOL') {
+                  return (
+                    <div
+                      key={message.id}
+                      data-index={virtualRow.index}
+                      ref={virtualizer.measureElement}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <ToolMessage
+                        message={message}
+                        character={getFirstCharacter() ?? undefined}
+                        onImageClick={(filepath, filename, fileId) => {
+                          setModalImage({ src: filepath, filename, fileId })
+                        }}
+                      />
+                    </div>
+                  )
+                }
+
+                const messageAvatarData = shouldShowAvatars() ? getMessageAvatar(message) : null
+                const messageAvatar = messageAvatarData as any
+
                 return (
-                  <ToolMessage
+                  <div
                     key={message.id}
-                    message={message}
-                    character={getFirstCharacter() ?? undefined}
-                    onImageClick={(filepath, filename, fileId) => {
-                      setModalImage({ src: filepath, filename, fileId })
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
                     }}
-                  />
+                  >
+                    <MessageRow
+                      message={message}
+                      messageIndex={messageIndex}
+                      isEditing={isEditing}
+                      editContent={editContent}
+                      viewSourceMessageIds={viewSourceMessageIds}
+                      swipeState={swipeState}
+                      showResendButton={showResendButton}
+                      shouldShowAvatars={shouldShowAvatars()}
+                      messageAvatar={messageAvatar}
+                      renderingPatterns={roleplayRenderingPatterns}
+                      dialogueDetection={roleplayDialogueDetection}
+                      forceRender={messageIndex >= messages.length - 5}
+                      isMultiChar={isMultiChar}
+                      participantData={participantData}
+                      turnState={turnState}
+                      streaming={streaming}
+                      waitingForResponse={waitingForResponse}
+                      mobileParticipantDropdownId={mobileParticipantDropdownId}
+                      mobileParticipantRefs={mobileParticipantRefs}
+                      userParticipantId={userParticipantId}
+                      isPaused={isPaused}
+                      onTogglePause={togglePause}
+                      tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
+                      onEditStart={messageActions.startEdit}
+                      onEditSave={messageActions.saveEdit}
+                      onEditCancel={messageActions.cancelEdit}
+                      onEditChange={setEditContent}
+                      onToggleSourceView={messageActions.toggleSourceView}
+                      onDelete={messageActions.deleteMessage}
+                      onGenerateSwipe={(msgId) => messageActions.generateSwipe(msgId, fetchChat)}
+                      onSwitchSwipe={(groupId, dir) => messageActions.switchSwipe(groupId, dir, swipeStates, setSwipeStates)}
+                      onCopyContent={messageActions.copyMessageContent}
+                      onResend={messageActions.resendMessage}
+                      onImageClick={(filepath, filename, fileId) => {
+                        setModalImage({ src: filepath, filename, fileId })
+                      }}
+                      onMobileParticipantDropdownChange={setMobileParticipantDropdownId}
+                      onHandleNudge={turnManagement.handleNudge}
+                      onHandleQueue={turnManagement.handleQueue}
+                      onHandleDequeue={turnManagement.handleDequeue}
+                      onHandleTalkativenessChange={(pId, value) => {
+                        // Handle talkativeness change - this would need to be implemented
+                      }}
+                      onHandleRemoveCharacter={handleRemoveCharacter}
+                      onHandleContinue={turnManagement.handleContinue}
+                      onReattribute={handleReattribute}
+                    />
+                  </div>
                 )
-              }
-
-              const messageAvatarData = shouldShowAvatars() ? getMessageAvatar(message) : null
-              const messageAvatar = messageAvatarData as any
-
-              return (
-                <MessageRow
-                  key={message.id}
-                  message={message}
-                  messageIndex={messageIndex}
-                  isEditing={isEditing}
-                  editContent={editContent}
-                  viewSourceMessageIds={viewSourceMessageIds}
-                  swipeState={swipeState}
-                  showResendButton={showResendButton}
-                  shouldShowAvatars={shouldShowAvatars()}
-                  messageAvatar={messageAvatar}
-                  roleplayTemplateName={roleplayTemplateName}
-                  isMultiChar={isMultiChar}
-                  participantData={participantData}
-                  turnState={turnState}
-                  streaming={streaming}
-                  waitingForResponse={waitingForResponse}
-                  mobileParticipantDropdownId={mobileParticipantDropdownId}
-                  mobileParticipantRefs={mobileParticipantRefs}
-                  userParticipantId={userParticipantId}
-                  isPaused={isPaused}
-                  onTogglePause={togglePause}
-                  onEditStart={messageActions.startEdit}
-                  onEditSave={messageActions.saveEdit}
-                  onEditCancel={messageActions.cancelEdit}
-                  onEditChange={setEditContent}
-                  onToggleSourceView={messageActions.toggleSourceView}
-                  onDelete={messageActions.deleteMessage}
-                  onGenerateSwipe={(msgId) => messageActions.generateSwipe(msgId, fetchChat)}
-                  onSwitchSwipe={(groupId, dir) => messageActions.switchSwipe(groupId, dir, swipeStates, setSwipeStates)}
-                  onCopyContent={messageActions.copyMessageContent}
-                  onResend={messageActions.resendMessage}
-                  onImageClick={(filepath, filename, fileId) => {
-                    setModalImage({ src: filepath, filename, fileId })
-                  }}
-                  onMobileParticipantDropdownChange={setMobileParticipantDropdownId}
-                  onHandleNudge={turnManagement.handleNudge}
-                  onHandleQueue={turnManagement.handleQueue}
-                  onHandleDequeue={turnManagement.handleDequeue}
-                  onHandleTalkativenessChange={(pId, value) => {
-                    // Handle talkativeness change - this would need to be implemented
-                  }}
-                  onHandleRemoveCharacter={handleRemoveCharacter}
-                  onHandleContinue={turnManagement.handleContinue}
-                  onReattribute={handleReattribute}
-                />
-              )
-            })}
+              })}
+            </div>
 
             {/* Pending tool calls */}
             <PendingToolCalls pendingToolCalls={pendingToolCalls} />
@@ -1947,13 +1945,61 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               onDismiss={turnManagement.handleDismissEphemeral}
             />
 
+            {/* Inline file write permission prompt */}
+            {fileWriteApprovalState && (
+              <FileWritePermissionPrompt
+                request={{
+                  filename: fileWriteApprovalState.pendingWrite.filename,
+                  content: fileWriteApprovalState.pendingWrite.content,
+                  mimeType: fileWriteApprovalState.pendingWrite.mimeType,
+                  folderPath: fileWriteApprovalState.pendingWrite.folderPath,
+                  projectId: fileWriteApprovalState.pendingWrite.projectId,
+                }}
+                projectName={fileWriteApprovalState.projectName}
+                chatId={id}
+                onApprove={async () => {
+                  // Store participant ID before clearing state
+                  const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
+                  setFileWriteApprovalState(null)
+                  // Refresh chat to show any new files/messages
+                  await fetchChat()
+                  // Trigger the LLM to continue and respond to the tool result
+                  if (participantToTrigger) {
+                    // Small delay to ensure the tool message is saved first
+                    setTimeout(() => {
+                      triggerContinueMode(participantToTrigger)
+                    }, 500)
+                  }
+                }}
+                onDeny={async () => {
+                  // Store participant ID before clearing state
+                  const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
+                  setFileWriteApprovalState(null)
+                  showInfoToast('File write denied.')
+                  // Refresh chat to show the denial tool message
+                  await fetchChat()
+                  // Trigger the LLM to continue and acknowledge the denial
+                  if (participantToTrigger) {
+                    setTimeout(() => {
+                      triggerContinueMode(participantToTrigger)
+                    }, 500)
+                  }
+                }}
+                onViewDetails={() => {
+                  // Open the modal for full details
+                  setFileWriteApprovalState(prev => prev ? { ...prev, isOpen: true } : null)
+                }}
+              />
+            )}
+
             {/* Streaming message - using extracted component */}
             <StreamingMessage
               streaming={streaming}
               streamingContent={streamingContent}
               waitingForResponse={waitingForResponse}
               respondingCharacter={getRespondingCharacter() || undefined}
-              roleplayTemplateName={roleplayTemplateName}
+              renderingPatterns={roleplayRenderingPatterns}
+              dialogueDetection={roleplayDialogueDetection}
               shouldShowAvatars={shouldShowAvatars()}
               onStopClick={stopStreaming}
             />
@@ -1994,25 +2040,42 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           setShowPreview={setShowPreview}
           uploadingFile={uploadingFile}
           toolExecutionStatus={toolExecutionStatus}
-          roleplayTemplateName={roleplayTemplateName}
+          renderingPatterns={roleplayRenderingPatterns}
+          dialogueDetection={roleplayDialogueDetection}
           chatPhotoCount={chatPhotoCount}
           chatMemoryCount={chatMemoryCount}
           hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
           isSingleCharacterChat={isSingleCharacterChat}
           roleplayTemplateId={chat?.roleplayTemplateId}
+          documentEditingMode={documentEditingMode}
+          onToggleDocumentEditingMode={handleToggleDocumentEditingMode}
           onSubmit={sendMessage}
           onFileSelect={handleFileSelect}
           onAttachFileClick={() => {
             // File input ref will be created in component
+          }}
+          onImagePaste={async (file: File) => {
+            // Upload pasted image using the existing upload logic
+            try {
+              const success = await uploadFile(file)
+              if (success) {
+                showSuccessToast('Image pasted and attached')
+              }
+            } catch (err) {
+              showErrorToast(err instanceof Error ? err.message : 'Failed to upload pasted image')
+            }
           }}
           onGalleryClick={() => setGalleryOpen(true)}
           onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
           onAddCharacterClick={handleAddCharacter}
           onSettingsClick={() => setChatSettingsModalOpen(true)}
           onRenameClick={handleRenameClick}
+          onProjectClick={() => setChatProjectModalOpen(true)}
+          projectName={chat?.projectName}
           onDeleteChatMemoriesClick={handleDeleteChatMemories}
           onReextractMemoriesClick={handleReextractMemories}
           onSearchReplaceClick={() => setSearchReplaceModalOpen(true)}
+          onBulkCharacterReplaceClick={() => setBulkReplaceModalOpen(true)}
           onStopStreaming={stopStreaming}
         />
 
@@ -2067,6 +2130,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onSuccess={fetchChat}
         />
 
+        <ChatProjectModal
+          isOpen={chatProjectModalOpen}
+          onClose={() => setChatProjectModalOpen(false)}
+          chatId={id}
+          projectId={chat?.projectId}
+          projectName={chat?.projectName}
+          onSuccess={fetchChat}
+        />
+
         <ChatRenameModal
           isOpen={renameModalOpen}
           onClose={() => setRenameModalOpen(false)}
@@ -2074,7 +2146,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           currentTitle={chat?.title || ''}
           isManuallyRenamed={chat?.isManuallyRenamed ?? false}
           onSuccess={(newTitle, isManuallyRenamed) => {
-            clientLogger.info('[Chat] Rename successful', { newTitle, isManuallyRenamed })
             // Update local chat state with new title
             if (chat) {
               setChat({ ...chat, title: newTitle, isManuallyRenamed })
@@ -2089,7 +2160,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           participants={chat?.participants || []}
           imageProfileId={chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)?.imageProfile?.id}
           onImagesGenerated={(images, prompt) => {
-            fetch(`/api/chats/${id}/tool-results`, {
+            fetch(`/api/v1/chats/${id}?action=add-tool-result`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -2106,7 +2177,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               .then(() => {
                 fetchChat()
               })
-              .catch((err) => clientLogger.error('Failed to save tool result:', { error: err instanceof Error ? err.message : String(err) }))
+              .catch((err) => console.error('Failed to save tool result:', err instanceof Error ? err.message : String(err)))
 
             setAttachedFiles((prev) => [
               ...prev,
@@ -2149,6 +2220,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           chatTitle={chat?.title}
         />
 
+        {/* Bulk Character Replace Modal */}
+        {chat && (
+          <BulkCharacterReplaceModal
+            isOpen={bulkReplaceModalOpen}
+            onClose={() => setBulkReplaceModalOpen(false)}
+            chatId={id}
+            participants={chat.participants}
+            messages={messages}
+            onSuccess={fetchChat}
+          />
+        )}
+
         {/* All-LLM Pause Modal */}
         <AllLLMPauseModal
           isOpen={allLLMPauseModalOpen}
@@ -2159,6 +2242,59 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onContinue={handleAllLLMContinue}
           onStop={handleAllLLMStop}
           onTakeOver={handleAllLLMTakeOver}
+        />
+
+        {/* File Write Approval Modal */}
+        {fileWriteApprovalState && (
+          <FileWriteApprovalModal
+            isOpen={fileWriteApprovalState.isOpen}
+            onClose={() => setFileWriteApprovalState(null)}
+            request={{
+              filename: fileWriteApprovalState.pendingWrite.filename,
+              content: fileWriteApprovalState.pendingWrite.content || '',
+              mimeType: fileWriteApprovalState.pendingWrite.mimeType || 'text/plain',
+              folderPath: fileWriteApprovalState.pendingWrite.folderPath,
+              projectId: fileWriteApprovalState.pendingWrite.projectId,
+              projectName: fileWriteApprovalState.projectName,
+            }}
+            chatId={id}
+            onApprove={async () => {
+              // Store participant ID before clearing state
+              const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
+              setFileWriteApprovalState(null)
+              // Refresh chat to show any new files/messages
+              await fetchChat()
+              // Trigger the LLM to continue and respond to the tool result
+              if (participantToTrigger) {
+                setTimeout(() => {
+                  triggerContinueMode(participantToTrigger)
+                }, 500)
+              }
+            }}
+            onDeny={async () => {
+              // Store participant ID before clearing state
+              const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
+              setFileWriteApprovalState(null)
+              showInfoToast('File write denied.')
+              // Refresh chat to show the denial tool message
+              await fetchChat()
+              // Trigger the LLM to continue and acknowledge the denial
+              if (participantToTrigger) {
+                setTimeout(() => {
+                  triggerContinueMode(participantToTrigger)
+                }, 500)
+              }
+            }}
+          />
+        )}
+
+        {/* File Conflict Dialog for duplicate detection */}
+        <FileConflictDialog
+          isOpen={isConflictDialogOpen}
+          onClose={cancelConflict}
+          conflict={conflictInfo}
+          onResolve={handleConflictResolution}
+          resolving={resolvingConflict}
         />
 
         {/* Select LLM Profile Dialog (for stopping impersonation) */}
@@ -2193,6 +2329,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           isGenerating={streaming || waitingForResponse}
           userParticipantId={userParticipantId}
           respondingParticipantId={respondingParticipantId}
+          waitingForResponse={waitingForResponse}
           isPaused={isPaused}
           onTogglePause={togglePause}
           onNudge={turnManagement.handleNudge}

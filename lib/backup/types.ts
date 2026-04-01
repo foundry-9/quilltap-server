@@ -7,7 +7,6 @@
 
 import type {
   Character,
-  Persona,
   ChatMetadata,
   Tag,
   ConnectionProfile,
@@ -19,6 +18,7 @@ import type {
   PromptTemplate,
   RoleplayTemplate,
   ProviderModel,
+  Project,
 } from '@/lib/schemas/types';
 
 // ============================================================================
@@ -49,8 +49,6 @@ export interface BackupManifest {
   counts: {
     /** Number of Character entities */
     characters: number;
-    /** Number of Persona entities */
-    personas: number;
     /** Number of Chat entities */
     chats: number;
     /** Total number of messages across all chats */
@@ -73,6 +71,8 @@ export interface BackupManifest {
     roleplayTemplates: number;
     /** Number of ProviderModel entities */
     providerModels: number;
+    /** Number of Project entities */
+    projects: number;
   };
 }
 
@@ -93,9 +93,6 @@ export interface BackupData {
 
   /** Array of Character entities */
   characters: Character[];
-
-  /** Array of Persona entities */
-  personas: Persona[];
 
   /** Array of Chat entities with all messages included */
   chats: ChatWithMessages[];
@@ -126,6 +123,9 @@ export interface BackupData {
 
   /** Array of ProviderModel entities */
   providerModels: ProviderModel[];
+
+  /** Array of Project entities */
+  projects: Project[];
 }
 
 // ============================================================================
@@ -180,9 +180,6 @@ export interface RestoreSummary {
   /** Number of Character entities restored */
   characters: number;
 
-  /** Number of Persona entities restored */
-  personas: number;
-
   /** Number of Chat entities restored */
   chats: number;
 
@@ -218,6 +215,9 @@ export interface RestoreSummary {
 
   /** Number of ProviderModel entities restored */
   providerModels: number;
+
+  /** Number of Project entities restored */
+  projects: number;
 
   /**
    * Array of warning messages for issues that occurred during restore

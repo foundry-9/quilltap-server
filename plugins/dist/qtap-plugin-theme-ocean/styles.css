@@ -177,6 +177,17 @@
   --qt-button-destructive-fg: hsl(var(--always-white));
   --qt-button-destructive-hover-bg: hsl(var(--danger-200));
 
+  /* Copy Button Variables - Glass bubble style */
+  --qt-copy-button-bg: hsl(200 50% 14% / 0.8);
+  --qt-copy-button-text: hsl(180 30% 92%);
+  --qt-copy-button-border: hsl(var(--accent-teal) / 0.3);
+  --qt-copy-button-hover-bg: hsl(200 50% 18% / 0.9);
+  --qt-copy-button-hover-text: hsl(var(--always-white));
+  --qt-copy-button-hover-border: hsl(var(--accent-teal) / 0.5);
+  --qt-copy-button-success-bg: hsl(var(--seaweed-green) / 0.9);
+  --qt-copy-button-success-text: hsl(var(--always-white));
+  --qt-copy-button-success-border: hsl(var(--seaweed-green) / 0.6);
+
   /* Status tokens */
   --qt-status-success-bg: hsl(var(--success-100) / 0.15);
   --qt-status-success-fg: hsl(var(--success-200));
@@ -312,6 +323,22 @@
   --qt-badge-outline-bg: transparent;
   --qt-badge-outline-fg: hsl(var(--text-000));
   --qt-badge-outline-border: hsl(var(--border-200));
+
+  /* Highlight Variables - Teal accent for search highlights */
+  --qt-highlight-bg: hsl(var(--accent-teal) / 0.25);
+  --qt-highlight-fg: hsl(var(--text-000));
+  --qt-highlight-radius: 0.125rem;
+  --qt-highlight-padding-x: 0.125rem;
+  --qt-highlight-font-weight: 500;
+
+  /* Filter Chip Variables - Coral accent for active state */
+  --qt-filter-chip-active-bg: hsl(var(--coral-pink));
+  --qt-filter-chip-active-fg: hsl(var(--always-white));
+  --qt-filter-chip-active-border: transparent;
+  --qt-filter-chip-inactive-bg: hsl(var(--bg-300));
+  --qt-filter-chip-inactive-fg: hsl(var(--text-100));
+  --qt-filter-chip-inactive-border: transparent;
+  --qt-filter-chip-inactive-hover-bg: hsl(var(--bg-400));
 
   /* Avatar Variables */
   --qt-avatar-radius: 9999px;
@@ -548,6 +575,17 @@
   --qt-rp-narration-bg: hsl(var(--bg-dark-300));
   --qt-rp-inner-monologue-bg: hsl(280 30% 18%);
   --qt-rp-ooc-bg: hsl(158 30% 15%);
+
+  /* Dark mode highlight - more vibrant on dark backgrounds */
+  --qt-highlight-bg: hsl(var(--accent-teal) / 0.35);
+  --qt-highlight-fg: hsl(var(--text-000));
+
+  /* Dark mode filter chips */
+  --qt-filter-chip-active-bg: hsl(var(--coral-pink));
+  --qt-filter-chip-active-fg: hsl(var(--always-white));
+  --qt-filter-chip-inactive-bg: hsl(var(--bg-dark-100));
+  --qt-filter-chip-inactive-fg: hsl(var(--text-000));
+  --qt-filter-chip-inactive-hover-bg: hsl(var(--bg-dark-000));
 }
 
 /* ============================================================================

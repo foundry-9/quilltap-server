@@ -11,7 +11,6 @@
  */
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { CleanupResult } from '../hooks'
 
 interface CleanupPanelProps {
@@ -37,11 +36,6 @@ export function CleanupPanel({
 
   // Log renders
   useEffect(() => {
-    clientLogger.debug('CleanupPanel: rendered', {
-      showConfirm,
-      hasResult: !!lastResult,
-      isExpanded,
-    })
   }, [showConfirm, lastResult, isExpanded])
 
   return (

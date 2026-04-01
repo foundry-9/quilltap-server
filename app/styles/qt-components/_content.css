@@ -322,6 +322,333 @@
   }
 
   /**
+   * Markdown content styling (for file preview)
+   * Provides typography styles without requiring Tailwind Typography plugin
+   */
+  .qt-markdown {
+    @apply text-sm leading-relaxed;
+    color: var(--color-foreground);
+  }
+
+  /* Headings */
+  .qt-markdown h1 {
+    @apply text-2xl font-bold mt-6 mb-4 pb-2 border-b border-border;
+  }
+
+  .qt-markdown h2 {
+    @apply text-xl font-semibold mt-5 mb-3 pb-1 border-b border-border;
+  }
+
+  .qt-markdown h3 {
+    @apply text-lg font-semibold mt-4 mb-2;
+  }
+
+  .qt-markdown h4 {
+    @apply text-base font-semibold mt-3 mb-2;
+  }
+
+  .qt-markdown h5,
+  .qt-markdown h6 {
+    @apply text-sm font-semibold mt-3 mb-2;
+  }
+
+  /* Paragraphs */
+  .qt-markdown p {
+    @apply my-3;
+  }
+
+  /* Links */
+  .qt-markdown a {
+    @apply text-primary underline underline-offset-2 hover:text-primary/80;
+  }
+
+  /* Lists */
+  .qt-markdown ul {
+    @apply my-3 ml-6 list-disc;
+  }
+
+  .qt-markdown ol {
+    @apply my-3 ml-6 list-decimal;
+  }
+
+  .qt-markdown li {
+    @apply my-1;
+  }
+
+  .qt-markdown li > ul,
+  .qt-markdown li > ol {
+    @apply my-1;
+  }
+
+  /* Task lists (GFM) */
+  .qt-markdown ul.contains-task-list {
+    @apply list-none ml-0;
+  }
+
+  .qt-markdown li.task-list-item {
+    @apply flex items-start gap-2;
+  }
+
+  .qt-markdown li.task-list-item input[type="checkbox"] {
+    @apply mt-1;
+  }
+
+  /* Blockquotes */
+  .qt-markdown blockquote {
+    @apply my-3 pl-4 border-l-4 border-muted-foreground/30 italic;
+    color: var(--color-muted-foreground);
+  }
+
+  /* Code */
+  .qt-markdown code {
+    @apply px-1.5 py-0.5 rounded text-sm font-mono;
+    background: var(--qt-code-bg, var(--color-muted));
+  }
+
+  .qt-markdown pre {
+    @apply my-3 p-4 rounded-lg overflow-x-auto;
+    background: var(--qt-code-bg, var(--color-muted));
+  }
+
+  .qt-markdown pre code {
+    @apply p-0 bg-transparent;
+  }
+
+  /* Tables */
+  .qt-markdown table {
+    @apply my-3 w-full border-collapse;
+  }
+
+  .qt-markdown th {
+    @apply px-3 py-2 text-left font-semibold border border-border;
+    background: var(--color-muted);
+  }
+
+  .qt-markdown td {
+    @apply px-3 py-2 border border-border;
+  }
+
+  .qt-markdown tr:nth-child(even) td {
+    background: var(--color-muted)/30;
+  }
+
+  /* Horizontal rule */
+  .qt-markdown hr {
+    @apply my-6 border-t border-border;
+  }
+
+  /* Images */
+  .qt-markdown img {
+    @apply my-3 max-w-full h-auto rounded;
+  }
+
+  /* Strong and emphasis */
+  .qt-markdown strong {
+    @apply font-semibold;
+  }
+
+  .qt-markdown em {
+    @apply italic;
+  }
+
+  /* Strikethrough (GFM) */
+  .qt-markdown del {
+    @apply line-through opacity-70;
+  }
+
+  /* Definition lists */
+  .qt-markdown dl {
+    @apply my-3;
+  }
+
+  .qt-markdown dt {
+    @apply font-semibold mt-2;
+  }
+
+  .qt-markdown dd {
+    @apply ml-4;
+  }
+
+  /**
+   * YAML Frontmatter styling
+   */
+  .qt-frontmatter {
+    @apply my-4 p-4 rounded-lg border border-border;
+    background: var(--color-muted)/50;
+  }
+
+  .qt-frontmatter-title {
+    @apply text-xs font-semibold uppercase tracking-wider mb-3;
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-frontmatter-table {
+    @apply w-full text-sm;
+  }
+
+  .qt-frontmatter-table tr {
+    @apply border-b border-border/50 last:border-0;
+  }
+
+  .qt-frontmatter-table th {
+    @apply py-1.5 pr-4 text-left font-medium align-top whitespace-nowrap;
+    color: var(--color-muted-foreground);
+    width: 30%;
+  }
+
+  .qt-frontmatter-table td {
+    @apply py-1.5;
+  }
+
+  /**
+   * Wikilink styling for markdown file preview
+   */
+  .qt-wikilink {
+    @apply text-primary font-medium no-underline;
+    @apply px-1 py-0.5 rounded;
+    @apply transition-colors duration-150;
+    background: var(--color-primary)/10;
+  }
+
+  .qt-wikilink:hover {
+    background: var(--color-primary)/20;
+    @apply underline;
+  }
+
+  .qt-wikilink-broken {
+    @apply text-muted-foreground no-underline cursor-not-allowed;
+    background: var(--color-muted);
+    @apply line-through opacity-70;
+  }
+
+  .qt-wikilink-broken:hover {
+    background: var(--color-muted);
+    @apply no-underline;
+  }
+
+  /* ==========================================================================
+     FILE PREVIEW COMPONENTS
+     ========================================================================== */
+
+  /**
+   * File preview scroll container
+   * Provides consistent scrollable area for file content
+   */
+  .qt-file-preview-scroll {
+    @apply w-full h-full overflow-auto;
+    max-height: var(--qt-file-preview-max-height, 70vh);
+  }
+
+  /**
+   * File preview content panel
+   * Background panel for rendered content (markdown, etc.)
+   */
+  .qt-file-preview-panel {
+    @apply p-4 rounded-lg;
+    background: var(--qt-file-preview-panel-bg, var(--color-muted)/30);
+  }
+
+  /**
+   * File preview code block
+   * For displaying plain text and code files with word wrap
+   */
+  .qt-file-preview-code {
+    @apply p-4 rounded-lg text-sm whitespace-pre-wrap break-all;
+    background: var(--qt-code-bg, var(--color-muted));
+    color: var(--qt-code-fg, var(--color-foreground));
+    font-family: var(--qt-code-font, ui-monospace, monospace);
+  }
+
+  /**
+   * File preview loading state
+   */
+  .qt-file-preview-loading {
+    @apply flex items-center justify-center w-full h-full;
+    min-height: var(--qt-file-preview-min-height, 300px);
+  }
+
+  .qt-file-preview-loading-text {
+    @apply animate-pulse;
+    color: var(--color-muted-foreground);
+  }
+
+  /**
+   * File preview empty/error state
+   */
+  .qt-file-preview-empty {
+    @apply flex flex-col items-center justify-center w-full h-full text-center;
+    min-height: var(--qt-file-preview-min-height, 300px);
+    color: var(--color-muted-foreground);
+  }
+
+  .qt-file-preview-empty-icon {
+    @apply text-4xl mb-2;
+  }
+
+  /**
+   * File preview text container
+   * Wrapper for text content with positioned copy button
+   */
+  .qt-file-preview-text-container {
+    @apply relative w-full h-full;
+  }
+
+  /**
+   * Copy button - base styles for all contexts
+   */
+  .qt-copy-button {
+    @apply flex items-center gap-1.5 px-2.5 py-1.5 rounded-md;
+    @apply text-xs font-medium transition-all duration-200;
+    background: var(--qt-copy-button-bg, rgba(0, 0, 0, 0.6));
+    color: var(--qt-copy-button-text, rgba(255, 255, 255, 0.9));
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--qt-copy-button-border, rgba(255, 255, 255, 0.1));
+  }
+
+  .qt-copy-button:hover {
+    background: var(--qt-copy-button-hover-bg, rgba(0, 0, 0, 0.8));
+    color: var(--qt-copy-button-hover-text, #fff);
+    border-color: var(--qt-copy-button-hover-border, rgba(255, 255, 255, 0.2));
+  }
+
+  .qt-copy-button-success,
+  .qt-copy-button.qt-copy-button-success:hover {
+    background: var(--qt-copy-button-success-bg, rgba(34, 197, 94, 0.8));
+    color: var(--qt-copy-button-success-text, #fff);
+    border-color: var(--qt-copy-button-success-border, rgba(34, 197, 94, 0.5));
+  }
+
+  /**
+   * Icon-only copy button variant
+   * Smaller padding for buttons with only an icon (no text)
+   */
+  .qt-copy-button-icon {
+    @apply p-2;
+    @apply gap-0;
+  }
+
+  .qt-copy-button-text {
+    @apply hidden sm:inline;
+  }
+
+  /**
+   * Copy button positioned for file preview overlay
+   * Use within .qt-file-preview-text-container
+   */
+  .qt-file-preview-text-container .qt-copy-button {
+    @apply absolute top-2 right-2 z-10;
+  }
+
+  /**
+   * Copy button positioned for code blocks in chat messages
+   * Use within .qt-code-block-container
+   */
+  .qt-code-block-container .qt-copy-button,
+  .qt-code-block-copy {
+    @apply absolute top-2 right-2 z-10;
+  }
+
+  /**
    * Heading styles
    */
   .qt-heading-1 {
@@ -397,6 +724,67 @@
   .qt-text-section {
     @apply text-lg font-medium;
     color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  /* ==========================================================================
+     SEARCH HIGHLIGHT
+     ========================================================================== */
+
+  /**
+   * Search result text highlight
+   * Used to highlight matching search terms in results
+   * Designed for high contrast in both light and dark themes
+   */
+  .qt-highlight {
+    background-color: var(--qt-highlight-bg);
+    color: var(--qt-highlight-fg);
+    border-radius: var(--qt-highlight-radius);
+    padding-left: var(--qt-highlight-padding-x);
+    padding-right: var(--qt-highlight-padding-x);
+    font-weight: var(--qt-highlight-font-weight);
+  }
+
+  /* ==========================================================================
+     FILTER CHIPS (Search filter toggles)
+     ========================================================================== */
+
+  /**
+   * Base filter chip styles
+   * Used for toggling search result filters
+   */
+  .qt-filter-chip {
+    @apply inline-flex items-center justify-center cursor-pointer;
+    padding: var(--qt-filter-chip-padding-y) var(--qt-filter-chip-padding-x);
+    border-radius: var(--qt-filter-chip-radius);
+    font-size: var(--qt-filter-chip-font-size);
+    font-weight: var(--qt-filter-chip-font-weight);
+    transition: var(--qt-filter-chip-transition);
+    border: 1px solid var(--qt-filter-chip-inactive-border);
+    background: var(--qt-filter-chip-inactive-bg);
+    color: var(--qt-filter-chip-inactive-fg);
+  }
+
+  .qt-filter-chip:hover {
+    background: var(--qt-filter-chip-inactive-hover-bg);
+  }
+
+  /**
+   * Active filter chip (filter is enabled, showing results)
+   */
+  .qt-filter-chip-active {
+    @apply inline-flex items-center justify-center cursor-pointer;
+    padding: var(--qt-filter-chip-padding-y) var(--qt-filter-chip-padding-x);
+    border-radius: var(--qt-filter-chip-radius);
+    font-size: var(--qt-filter-chip-font-size);
+    font-weight: var(--qt-filter-chip-font-weight);
+    transition: var(--qt-filter-chip-transition);
+    border: 1px solid var(--qt-filter-chip-active-border);
+    background: var(--qt-filter-chip-active-bg);
+    color: var(--qt-filter-chip-active-fg);
+  }
+
+  .qt-filter-chip-active:hover {
+    opacity: 0.9;
   }
 
   /* ==========================================================================
@@ -534,32 +922,36 @@
    * Success alert
    */
   .qt-alert-success {
-    @apply border-green-200 bg-green-50 text-green-800;
-    @apply dark:border-green-900/50 dark:bg-green-900/20 dark:text-green-200;
+    background-color: var(--qt-alert-success-bg);
+    color: var(--qt-alert-success-fg);
+    border-color: var(--qt-alert-success-border);
   }
 
   /**
    * Warning alert
    */
   .qt-alert-warning {
-    @apply border-amber-200 bg-amber-50 text-amber-800;
-    @apply dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200;
+    background-color: var(--qt-alert-warning-bg);
+    color: var(--qt-alert-warning-fg);
+    border-color: var(--qt-alert-warning-border);
   }
 
   /**
    * Error alert
    */
   .qt-alert-error {
-    @apply border-red-200 bg-red-50 text-red-800;
-    @apply dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-200;
+    background-color: var(--qt-alert-error-bg);
+    color: var(--qt-alert-error-fg);
+    border-color: var(--qt-alert-error-border);
   }
 
   /**
    * Info alert
    */
   .qt-alert-info {
-    @apply border-blue-200 bg-blue-50 text-blue-800;
-    @apply dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-200;
+    background-color: var(--qt-alert-info-bg);
+    color: var(--qt-alert-info-fg);
+    border-color: var(--qt-alert-info-border);
   }
 
   /* ==========================================================================
@@ -571,35 +963,40 @@
    * Character badge (blue)
    */
   .qt-badge-character {
-    @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
+    background-color: var(--qt-badge-character-bg);
+    color: var(--qt-badge-character-fg);
   }
 
   /**
    * Persona badge (purple)
    */
   .qt-badge-persona {
-    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+    background-color: var(--qt-badge-persona-bg);
+    color: var(--qt-badge-persona-fg);
   }
 
   /**
    * Chat badge (green)
    */
   .qt-badge-chat {
-    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+    background-color: var(--qt-badge-chat-bg);
+    color: var(--qt-badge-chat-fg);
   }
 
   /**
    * Tag badge (orange)
    */
   .qt-badge-tag {
-    @apply bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400;
+    background-color: var(--qt-badge-tag-bg);
+    color: var(--qt-badge-tag-fg);
   }
 
   /**
    * Memory badge (pink)
    */
   .qt-badge-memory {
-    @apply bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400;
+    background-color: var(--qt-badge-memory-bg);
+    color: var(--qt-badge-memory-fg);
   }
 
   /* ==========================================================================
@@ -611,21 +1008,24 @@
    * Characters badge (blue) - for dashboard character count
    */
   .qt-badge-characters {
-    @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400;
+    background-color: var(--qt-badge-character-bg);
+    color: var(--qt-badge-character-fg);
   }
 
   /**
    * Chats badge (green) - for dashboard chat count
    */
   .qt-badge-chats {
-    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+    background-color: var(--qt-badge-chat-bg);
+    color: var(--qt-badge-chat-fg);
   }
 
   /**
    * Personas badge (purple) - for dashboard persona count
    */
   .qt-badge-personas {
-    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+    background-color: var(--qt-badge-persona-bg);
+    color: var(--qt-badge-persona-fg);
   }
 
   /* ==========================================================================
@@ -636,35 +1036,40 @@
    * Enabled status badge (green)
    */
   .qt-badge-enabled {
-    @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+    background-color: var(--qt-badge-enabled-bg);
+    color: var(--qt-badge-enabled-fg);
   }
 
   /**
    * Disabled status badge (muted)
    */
   .qt-badge-disabled {
-    @apply bg-muted text-muted-foreground;
+    background-color: var(--qt-badge-disabled-bg);
+    color: var(--qt-badge-disabled-fg);
   }
 
   /**
    * Related badge (purple)
    */
   .qt-badge-related {
-    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+    background-color: var(--qt-badge-related-bg);
+    color: var(--qt-badge-related-fg);
   }
 
   /**
    * Manual badge (purple)
    */
   .qt-badge-manual {
-    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+    background-color: var(--qt-badge-manual-bg);
+    color: var(--qt-badge-manual-fg);
   }
 
   /**
    * Auto badge (muted)
    */
   .qt-badge-auto {
-    @apply bg-muted text-muted-foreground;
+    background-color: var(--qt-badge-auto-bg);
+    color: var(--qt-badge-auto-fg);
   }
 
   /* ==========================================================================
@@ -675,28 +1080,32 @@
    * Included plugin source badge (purple)
    */
   .qt-badge-source-included {
-    @apply bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400;
+    background-color: var(--qt-badge-source-included-bg);
+    color: var(--qt-badge-source-included-fg);
   }
 
   /**
    * NPM plugin source badge (red)
    */
   .qt-badge-source-npm {
-    @apply bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400;
+    background-color: var(--qt-badge-source-npm-bg);
+    color: var(--qt-badge-source-npm-fg);
   }
 
   /**
    * Git plugin source badge (orange)
    */
   .qt-badge-source-git {
-    @apply bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400;
+    background-color: var(--qt-badge-source-git-bg);
+    color: var(--qt-badge-source-git-fg);
   }
 
   /**
    * Manual plugin source badge (muted)
    */
   .qt-badge-source-manual {
-    @apply bg-muted text-muted-foreground;
+    background-color: var(--qt-badge-source-manual-bg);
+    color: var(--qt-badge-source-manual-fg);
   }
 
   /* ==========================================================================
@@ -707,13 +1116,15 @@
    * Capability badge (blue)
    */
   .qt-badge-capability {
-    @apply bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400;
+    background-color: var(--qt-badge-capability-bg);
+    color: var(--qt-badge-capability-fg);
   }
 
   /**
    * Version badge (muted)
    */
   .qt-badge-version {
-    @apply bg-muted text-muted-foreground;
+    background-color: var(--qt-badge-disabled-bg);
+    color: var(--qt-badge-disabled-fg);
   }
 }

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import {
   CharacterSystemPrompt,
   PromptTemplate,
@@ -86,15 +85,14 @@ export function useSystemPrompts(
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch(`/api/characters/${characterId}/prompts`)
+      const res = await fetch(`/api/v1/characters/${characterId}/prompts`)
       if (!res.ok) throw new Error('Failed to fetch prompts')
       const data = await res.json()
-      setPrompts(data)
-      clientLogger.debug('Fetched character system prompts', { count: data.length })
+      setPrompts(data.prompts || [])
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      clientLogger.error('Error fetching character prompts', { error: message })
+      console.error('Error fetching character prompts', { error: message })
     } finally {
       setLoading(false)
     }
@@ -104,8 +102,8 @@ export function useSystemPrompts(
     try {
       setLoadingTemplates(true)
       const [templatesRes, samplesRes] = await Promise.all([
-        fetch('/api/prompt-templates'),
-        fetch('/api/sample-prompts'),
+        fetch('/api/v1/prompt-templates'),
+        fetch('/api/v1/sample-prompts'),
       ])
 
       if (templatesRes.ok) {
@@ -118,7 +116,7 @@ export function useSystemPrompts(
         setSamplePrompts(data)
       }
     } catch (err) {
-      clientLogger.error('Error fetching templates', {
+      console.error('Error fetching templates', {
         error: err instanceof Error ? err.message : String(err),
       })
     } finally {
@@ -175,7 +173,7 @@ export function useSystemPrompts(
 
       if (editingPrompt) {
         // Update existing prompt
-        const res = await fetch(`/api/characters/${characterId}/prompts/${editingPrompt.id}`, {
+        const res = await fetch(`/api/v1/characters/${characterId}/prompts/${editingPrompt.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -187,10 +185,9 @@ export function useSystemPrompts(
         }
 
         setSuccess('Prompt updated successfully')
-        clientLogger.info('Character prompt updated', { promptId: editingPrompt.id })
       } else {
         // Create new prompt
-        const res = await fetch(`/api/characters/${characterId}/prompts`, {
+        const res = await fetch(`/api/v1/characters/${characterId}/prompts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(formData),
@@ -202,7 +199,6 @@ export function useSystemPrompts(
         }
 
         setSuccess('Prompt created successfully')
-        clientLogger.info('Character prompt created')
       }
 
       closeModal()
@@ -212,7 +208,7 @@ export function useSystemPrompts(
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      clientLogger.error('Error saving prompt', { error: message })
+      console.error('Error saving prompt', { error: message })
     } finally {
       setSaving(false)
     }
@@ -223,7 +219,7 @@ export function useSystemPrompts(
       setSaving(true)
       setError(null)
 
-      const res = await fetch(`/api/characters/${characterId}/prompts/${promptId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}/prompts/${promptId}`, {
         method: 'DELETE',
       })
 
@@ -250,7 +246,7 @@ export function useSystemPrompts(
       setSaving(true)
       setError(null)
 
-      const res = await fetch(`/api/characters/${characterId}/prompts/${promptId}`, {
+      const res = await fetch(`/api/v1/characters/${characterId}?action=update-prompt&promptId=${promptId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isDefault: true }),

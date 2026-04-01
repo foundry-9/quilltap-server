@@ -53,9 +53,22 @@ export const ConnectionProfileSchema = z.object({
   isDefault: z.boolean().default(false),
   /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
   isCheap: z.boolean().default(false),
-  /** Whether web search is allowed for this profile (only if provider supports it) */
+  /** Whether the search_web tool is enabled for this profile */
   allowWebSearch: z.boolean().default(false),
+  /** Whether to use the provider's native web search integration (if supported) */
+  useNativeWebSearch: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
+
+  // Token usage tracking (persisted, incremented after each message)
+  /** Total tokens used through this profile */
+  totalTokens: z.number().default(0),
+  /** Total prompt/input tokens used through this profile */
+  totalPromptTokens: z.number().default(0),
+  /** Total completion/output tokens used through this profile */
+  totalCompletionTokens: z.number().default(0),
+  /** Total messages sent through this profile */
+  messageCount: z.number().default(0),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

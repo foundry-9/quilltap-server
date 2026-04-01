@@ -23,6 +23,183 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 // In-memory cache
 let pricingCache: PricingCache | null = null
 
+// OpenRouter public pricing cache (no auth required)
+let openRouterPublicCache: {
+  models: ModelPricing[]
+  fetchedAt: number
+} | null = null
+
+/**
+ * Mapping from Quilltap provider names to OpenRouter provider slugs
+ * Used to look up pricing for non-OpenRouter providers via OpenRouter's public API
+ */
+const PROVIDER_TO_OPENROUTER_SLUG: Partial<Record<Provider, string>> = {
+  OPENAI: 'openai',
+  ANTHROPIC: 'anthropic',
+  GOOGLE: 'google',
+  GROK: 'x-ai',
+  // OPENROUTER: not needed - already uses OpenRouter format
+  // OLLAMA: not applicable - local/free
+  // OPENAI_COMPATIBLE: not applicable - unknown provider
+}
+
+/**
+ * Fetch pricing from OpenRouter's public API (no authentication required)
+ * This provides pricing data for models from all major providers
+ */
+async function fetchOpenRouterPublicPricing(): Promise<ModelPricing[]> {
+  try {
+    logger.debug('Fetching OpenRouter public pricing', { context: 'fetchOpenRouterPublicPricing' })
+
+    const response = await fetch('https://openrouter.ai/api/v1/models', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`OpenRouter API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    const models: ModelPricing[] = []
+
+    for (const model of data.data || []) {
+      // Parse pricing (OpenRouter returns costs per token as strings)
+      const promptCost = parseFloat(String(model.pricing?.prompt || '0'))
+      const completionCost = parseFloat(String(model.pricing?.completion || '0'))
+
+      // Convert from per-token to per-1M tokens
+      const promptCostPer1M = promptCost * 1_000_000
+      const completionCostPer1M = completionCost * 1_000_000
+
+      models.push({
+        modelId: model.id,
+        provider: 'OPENROUTER', // All models stored as OPENROUTER provider
+        name: model.name || model.id,
+        promptCostPer1M,
+        completionCostPer1M,
+        contextLength: model.context_length ?? null,
+        supportsVision: model.architecture?.modality?.includes('image') || false,
+        supportsTools: Array.isArray(model.supported_parameters) &&
+          model.supported_parameters.some((p: string) => p === 'tools' || p === 'tool_choice'),
+        fetchedAt: new Date().toISOString(),
+      })
+    }
+
+    logger.debug('Fetched OpenRouter public pricing', {
+      context: 'fetchOpenRouterPublicPricing',
+      modelCount: models.length
+    })
+
+    return models
+  } catch (error) {
+    logger.error('Failed to fetch OpenRouter public pricing',
+      { context: 'fetchOpenRouterPublicPricing' },
+      error instanceof Error ? error : undefined
+    )
+    return []
+  }
+}
+
+/**
+ * Get cached OpenRouter public pricing, refreshing if stale
+ */
+async function getOpenRouterPublicPricing(): Promise<ModelPricing[]> {
+  // Check if cache is fresh
+  if (openRouterPublicCache) {
+    const cacheAge = Date.now() - openRouterPublicCache.fetchedAt
+    if (cacheAge < CACHE_TTL_MS) {
+      return openRouterPublicCache.models
+    }
+  }
+
+  // Fetch and cache
+  const models = await fetchOpenRouterPublicPricing()
+  if (models.length > 0) {
+    openRouterPublicCache = {
+      models,
+      fetchedAt: Date.now(),
+    }
+  }
+
+  return models
+}
+
+/**
+ * Look up pricing for a model from any provider using OpenRouter's public data
+ *
+ * @param provider The Quilltap provider (OPENAI, ANTHROPIC, etc.)
+ * @param modelId The model ID as used by the provider (e.g., 'gpt-5-nano')
+ * @returns ModelPricing if found, null otherwise
+ */
+export async function getOpenRouterPricingForModel(
+  provider: Provider,
+  modelId: string
+): Promise<ModelPricing | null> {
+  // Get the OpenRouter slug for this provider
+  const openRouterSlug = PROVIDER_TO_OPENROUTER_SLUG[provider]
+  if (!openRouterSlug) {
+    logger.debug('No OpenRouter slug mapping for provider', {
+      context: 'getOpenRouterPricingForModel',
+      provider
+    })
+    return null
+  }
+
+  // Get cached OpenRouter pricing
+  const models = await getOpenRouterPublicPricing()
+  if (models.length === 0) {
+    return null
+  }
+
+  // Build the expected OpenRouter model ID
+  const openRouterModelId = `${openRouterSlug}/${modelId}`
+
+  // Try exact match first
+  let match = models.find(m => m.modelId === openRouterModelId)
+  if (match) {
+    logger.debug('Found exact OpenRouter pricing match', {
+      context: 'getOpenRouterPricingForModel',
+      provider,
+      modelId,
+      openRouterModelId,
+      promptCostPer1M: match.promptCostPer1M,
+      completionCostPer1M: match.completionCostPer1M,
+    })
+    return match
+  }
+
+  // Try fuzzy matching - model might have version suffix or prefix differences
+  // e.g., 'gpt-4o-2024-11-20' should match 'openai/gpt-4o'
+  match = models.find(m => {
+    if (!m.modelId.startsWith(`${openRouterSlug}/`)) return false
+    const openRouterModelName = m.modelId.slice(openRouterSlug.length + 1)
+    return modelId.includes(openRouterModelName) || openRouterModelName.includes(modelId)
+  })
+
+  if (match) {
+    logger.debug('Found fuzzy OpenRouter pricing match', {
+      context: 'getOpenRouterPricingForModel',
+      provider,
+      modelId,
+      matchedModelId: match.modelId,
+      promptCostPer1M: match.promptCostPer1M,
+      completionCostPer1M: match.completionCostPer1M,
+    })
+    return match
+  }
+
+  logger.debug('No OpenRouter pricing found for model', {
+    context: 'getOpenRouterPricingForModel',
+    provider,
+    modelId,
+    openRouterModelId,
+  })
+  return null
+}
+
 /**
  * Get unique providers from connection profiles
  */
@@ -331,6 +508,7 @@ export async function findCheapestAvailableModel(
  */
 export function clearPricingCache(): void {
   pricingCache = null
+  openRouterPublicCache = null
 }
 
 /**

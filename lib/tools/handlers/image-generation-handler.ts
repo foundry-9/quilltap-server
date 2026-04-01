@@ -5,8 +5,7 @@
 
 import { createHash } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
-import { uploadFile as uploadS3File } from '@/lib/s3/operations';
-import { buildS3Key } from '@/lib/s3/client';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 import { decryptApiKey } from '@/lib/encryption';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
@@ -18,7 +17,8 @@ import {
 } from '@/lib/tools/image-generation-tool';
 import { preparePromptExpansion } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt } from '@/lib/memory/cheap-llm-tasks';
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm';
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { getErrorMessage } from '@/lib/errors';
@@ -81,16 +81,22 @@ async function saveGeneratedImage(
     // Generate a new file ID
     const fileId = crypto.randomUUID();
 
-    // Upload to S3
-    const s3Key = buildS3Key(userId, fileId, originalFilename, category);
-    await uploadS3File(s3Key, buffer, mimeType, {
+    // Upload to file storage
+    const uploadResult = await fileStorageManager.uploadFile({
       userId,
       fileId,
-      category,
       filename: originalFilename,
-      sha256,
+      content: buffer,
+      contentType: mimeType,
+      projectId: null,
+      folderPath: '/',
     });
-    logger.debug('Uploaded generated image to S3', { fileId, s3Key, size: buffer.length });
+    logger.debug('Uploaded generated image to file storage', {
+      fileId,
+      storageKey: uploadResult.storageKey,
+      mountPointId: uploadResult.mountPointId,
+      size: buffer.length,
+    });
 
     // Inherit tags from linked entities (e.g., the chat)
     const inheritedTags = await getInheritedTags(linkedTo, userId);
@@ -103,6 +109,7 @@ async function saveGeneratedImage(
     });
 
     // Create metadata in repository
+    // IMPORTANT: Pass the fileId to ensure metadata matches storage path
     const fileEntry = await repos.files.create({
       userId,
       sha256,
@@ -119,15 +126,16 @@ async function saveGeneratedImage(
       generationRevisedPrompt: metadata.revisedPrompt || null,
       description: null,
       tags: inheritedTags,
-      s3Key,
-    });
+      storageKey: uploadResult.storageKey,
+      mountPointId: uploadResult.mountPointId,
+    }, { id: fileId });
 
     // Always use API route for S3-backed files
-    const filepath = `/api/files/${fileEntry.id}`;
+    const filepath = `/api/v1/files/${fileEntry.id}`;
 
     return {
       id: fileEntry.id,
-      url: `/api/images/${fileEntry.id}`,
+      url: `/api/v1/images/${fileEntry.id}`,
       filename: fileEntry.originalFilename,
       revisedPrompt: metadata.revisedPrompt,
       filepath,
@@ -343,7 +351,8 @@ async function expandPromptWithDescriptions(
   userId: string,
   provider: string,
   chatId?: string,
-  callingParticipantId?: string
+  callingParticipantId?: string,
+  cheapLLMSettings?: CheapLLMSettings
 ): Promise<{ expandedPrompt: string; wasExpanded: boolean }> {
   try {
     // Map ImageProvider string to the enum type
@@ -369,26 +378,72 @@ async function expandPromptWithDescriptions(
     // Get cheap LLM selection
     const repos = getRepositories();
     const allProfiles = await repos.connections.findByUserId(userId);
-    const cheapLLMConfig = DEFAULT_CHEAP_LLM_CONFIG;
 
-    // For now, use a simple default profile selection
-    // In production, you might want to pass the current connection profile
-    const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-
-    if (!defaultProfile) {
-      // No profiles available, return original prompt
-      return {
-        expandedPrompt: originalPrompt,
-        wasExpanded: false,
-      };
+    // Check if user has a specific image prompt profile override
+    let cheapLLMSelection: CheapLLMSelection | null = null;
+    if (cheapLLMSettings?.imagePromptProfileId) {
+      const imagePromptProfile = allProfiles.find(p => p.id === cheapLLMSettings.imagePromptProfileId);
+      if (imagePromptProfile) {
+        logger.debug('[Image Generation] Using dedicated image prompt LLM override', {
+          context: 'llm-api',
+          profileId: imagePromptProfile.id,
+          profileName: imagePromptProfile.name,
+          provider: imagePromptProfile.provider,
+          model: imagePromptProfile.modelName,
+        });
+        // Create a direct selection from the override profile
+        const isLocal = imagePromptProfile.provider === 'OLLAMA';
+        cheapLLMSelection = {
+          provider: imagePromptProfile.provider,
+          modelName: imagePromptProfile.modelName,
+          connectionProfileId: imagePromptProfile.id,
+          baseUrl: isLocal ? (imagePromptProfile.baseUrl || 'http://localhost:11434') : undefined,
+          isLocal,
+        };
+      } else {
+        logger.warn('[Image Generation] Image prompt profile not found, falling back to global cheap LLM', {
+          context: 'llm-api',
+          configuredProfileId: cheapLLMSettings.imagePromptProfileId,
+        });
+      }
     }
 
-    const cheapLLMSelection = getCheapLLMProvider(
-      defaultProfile,
-      cheapLLMConfig,
-      allProfiles,
-      false // ollamaAvailable - could be detected
-    );
+    // If no override selection, use the standard cheap LLM logic
+    if (!cheapLLMSelection) {
+      // Build config from user settings if provided, otherwise use defaults
+      const cheapLLMConfig: CheapLLMConfig = cheapLLMSettings ? {
+        strategy: cheapLLMSettings.strategy,
+        userDefinedProfileId: cheapLLMSettings.userDefinedProfileId ?? undefined,
+        defaultCheapProfileId: cheapLLMSettings.defaultCheapProfileId ?? undefined,
+        fallbackToLocal: cheapLLMSettings.fallbackToLocal,
+      } : DEFAULT_CHEAP_LLM_CONFIG;
+
+      // For now, use a simple default profile selection
+      // In production, you might want to pass the current connection profile
+      const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
+
+      if (!defaultProfile) {
+        // No profiles available, return original prompt
+        return {
+          expandedPrompt: originalPrompt,
+          wasExpanded: false,
+        };
+      }
+
+      cheapLLMSelection = getCheapLLMProvider(
+        defaultProfile,
+        cheapLLMConfig,
+        allProfiles,
+        false // ollamaAvailable - could be detected
+      );
+
+      logger.debug('[Image Generation] Using global cheap LLM for prompt expansion', {
+        context: 'llm-api',
+        provider: cheapLLMSelection.provider,
+        model: cheapLLMSelection.modelName,
+        isLocal: cheapLLMSelection.isLocal,
+      });
+    }
 
     // Craft the image prompt using cheap LLM
     logger.debug('[Image Generation] Cheap LLM Input for prompt expansion', {
@@ -491,7 +546,23 @@ export async function executeImageGenerationTool(
       };
     }
 
-    // 4. Expand prompt with character/persona descriptions if needed
+    // 4. Fetch user's chat settings for cheap LLM configuration
+    const repos = getRepositories();
+    let chatSettings;
+    try {
+      chatSettings = await repos.chatSettings.findByUserId(context.userId);
+      logger.debug('[Image Generation] Loaded chat settings for prompt expansion', {
+        context: 'llm-api',
+        hasChatSettings: !!chatSettings,
+        hasImagePromptOverride: !!chatSettings?.cheapLLMSettings?.imagePromptProfileId,
+      });
+    } catch (error) {
+      logger.warn('[Image Generation] Failed to load chat settings, using defaults', {
+        errorMessage: getErrorMessage(error),
+      });
+    }
+
+    // 5. Expand prompt with character/persona descriptions if needed
     let expandedPrompt = toolInput.prompt;
     try {
       const expandResult = await expandPromptWithDescriptions(
@@ -499,7 +570,8 @@ export async function executeImageGenerationTool(
         context.userId,
         imageProfile.provider,
         context.chatId,
-        context.callingParticipantId
+        context.callingParticipantId,
+        chatSettings?.cheapLLMSettings
       );
       expandedPrompt = expandResult.expandedPrompt;
     } catch (error) {

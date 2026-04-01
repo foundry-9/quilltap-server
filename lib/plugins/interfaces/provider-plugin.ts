@@ -62,6 +62,15 @@ export interface AttachmentSupport {
 
   /** Additional notes about attachment support or limitations */
   notes?: string;
+
+  /** Maximum file size in bytes (raw, before encoding) */
+  maxFileSize?: number;
+
+  /** Maximum base64-encoded size in bytes (for API limits like Anthropic's 5MB) */
+  maxBase64Size?: number;
+
+  /** Maximum number of files per request */
+  maxFiles?: number;
 }
 
 /**

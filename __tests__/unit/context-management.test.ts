@@ -38,7 +38,7 @@ import {
   buildContext,
   type MessageWithParticipant,
 } from '@/lib/chat/context-manager'
-import type { ChatParticipantBase, Character, Persona, Memory } from '@/lib/schemas/types'
+import type { ChatParticipantBase, Character, Memory } from '@/lib/schemas/types'
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { getRepositories } from '@/lib/repositories/factory'
 
@@ -578,7 +578,7 @@ describe('Context Manager', () => {
       id: 'p-char',
       type: 'CHARACTER',
       characterId: 'char-1',
-      personaId: null,
+      controlledBy: 'llm',
       connectionProfileId: null,
       imageProfileId: null,
       systemPromptOverride: null,
@@ -590,11 +590,11 @@ describe('Context Manager', () => {
       updatedAt: createdAt,
     }
     const otherCharParticipant: ChatParticipantBase = { ...charParticipant, id: 'p-char-2', characterId: 'char-2' }
-    const personaParticipant: ChatParticipantBase = {
+    const userCharParticipant: ChatParticipantBase = {
       id: 'p-user',
-      type: 'PERSONA',
-      personaId: 'persona-1',
-      characterId: null,
+      type: 'CHARACTER',
+      characterId: 'char-user',
+      controlledBy: 'user',
       connectionProfileId: null,
       imageProfileId: null,
       systemPromptOverride: null,
@@ -655,33 +655,38 @@ describe('Context Manager', () => {
         createdAt,
         updatedAt: createdAt,
       }],
-    ])
-    const personaMap = new Map<string, Persona>([[
-      'persona-1',
-      {
-        id: 'persona-1',
+      ['char-user', {
+        id: 'char-user',
         userId: 'user',
         name: 'Alex',
         title: null,
         description: 'Curious human',
-        personalityTraits: null,
+        personality: null,
+        scenario: null,
+        firstMessage: null,
+        exampleDialogues: null,
+        systemPrompts: [],
         avatarUrl: null,
         defaultImageId: null,
+        defaultConnectionProfileId: null,
         sillyTavernData: null,
-        characterLinks: [],
+        isFavorite: false,
+        talkativeness: 0.5,
+        personaLinks: [],
         tags: [],
+        avatarOverrides: [],
         physicalDescriptions: [],
         createdAt,
         updatedAt: createdAt,
-      },
-    ]])
+      }],
+    ])
 
-    const allParticipants = [charParticipant, otherCharParticipant, personaParticipant]
+    const allParticipants = [charParticipant, otherCharParticipant, userCharParticipant]
 
-    it('returns friendly names for both characters and personas', () => {
-      expect(getParticipantName('p-char', characterMap, personaMap, allParticipants)).toBe('Lyra')
-      expect(getParticipantName('p-user', characterMap, personaMap, allParticipants)).toBe('Alex')
-      expect(getParticipantName('missing', characterMap, personaMap, allParticipants)).toBeUndefined()
+    it('returns friendly names for all character participants', () => {
+      expect(getParticipantName('p-char', characterMap, allParticipants)).toBe('Lyra')
+      expect(getParticipantName('p-user', characterMap, allParticipants)).toBe('Alex')
+      expect(getParticipantName('missing', characterMap, allParticipants)).toBeUndefined()
     })
 
     it('attributes messages to the responding character perspective', () => {
@@ -691,17 +696,17 @@ describe('Context Manager', () => {
         { role: 'ASSISTANT', content: 'My turn', participantId: 'p-char' },
       ]
 
-      const attributed = attributeMessagesForCharacter(messages, 'p-char', characterMap, personaMap, allParticipants)
+      const attributed = attributeMessagesForCharacter(messages, 'p-char', characterMap, allParticipants)
       expect(attributed[0]).toMatchObject({ role: 'user', name: 'Alex' })
       expect(attributed[1]).toMatchObject({ role: 'user', name: 'Iris' })
       expect(attributed[2]).toMatchObject({ role: 'assistant', name: 'Lyra' })
     })
 
     it('describes other participants for the system prompt', () => {
-      const info = buildOtherParticipantsInfo('p-char', allParticipants, characterMap, personaMap)
+      const info = buildOtherParticipantsInfo('p-char', allParticipants, characterMap)
       expect(info).toEqual([
         expect.objectContaining({ name: 'Iris', type: 'CHARACTER' }),
-        expect.objectContaining({ name: 'Alex', type: 'PERSONA' }),
+        expect.objectContaining({ name: 'Alex', type: 'CHARACTER' }),
       ])
     })
   })
@@ -746,7 +751,7 @@ describe('Context Manager', () => {
       id: 'participant-a',
       type: 'CHARACTER',
       characterId: 'char-a',
-      personaId: null,
+      controlledBy: 'llm',
       connectionProfileId: null,
       imageProfileId: null,
       systemPromptOverride: null,
@@ -758,11 +763,11 @@ describe('Context Manager', () => {
       updatedAt: timestamp,
     }
     const participantB: ChatParticipantBase = { ...participantA, id: 'participant-b', characterId: 'char-b' }
-    const personaParticipant: ChatParticipantBase = {
+    const userParticipant: ChatParticipantBase = {
       id: 'participant-user',
-      type: 'PERSONA',
-      characterId: null,
-      personaId: 'persona-1',
+      type: 'CHARACTER',
+      characterId: 'char-user',
+      controlledBy: 'user',
       connectionProfileId: null,
       imageProfileId: null,
       systemPromptOverride: null,
@@ -806,18 +811,26 @@ describe('Context Manager', () => {
       updatedAt: timestamp,
     }
     const characterB: Character = { ...characterA, id: 'char-b', name: 'Iris', talkativeness: 0.4 }
-    const persona: Persona = {
-      id: 'persona-1',
+    const characterUser: Character = {
+      id: 'char-user',
       userId: 'user',
       name: 'Alex',
       title: null,
       description: 'Curious',
-      personalityTraits: null,
+      personality: null,
+      scenario: null,
+      firstMessage: null,
+      exampleDialogues: null,
+      systemPrompts: [],
       avatarUrl: null,
       defaultImageId: null,
+      defaultConnectionProfileId: null,
       sillyTavernData: null,
-      characterLinks: [],
+      isFavorite: false,
+      talkativeness: 0.5,
+      personaLinks: [],
       tags: [],
+      avatarOverrides: [],
       physicalDescriptions: [],
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -826,9 +839,9 @@ describe('Context Manager', () => {
     const participantCharacters = new Map<string, Character>([
       ['char-a', characterA],
       ['char-b', characterB],
+      ['char-user', characterUser],
     ])
-    const participantPersonas = new Map<string, Persona>([['persona-1', persona]])
-    const allParticipants = [participantA, participantB, personaParticipant]
+    const allParticipants = [participantA, participantB, userParticipant]
 
     const memory: Memory = {
       id: 'mem-1',
@@ -896,11 +909,10 @@ describe('Context Manager', () => {
         respondingParticipant: participantA,
         allParticipants,
         participantCharacters,
-        participantPersonas,
         messagesWithParticipants,
       })
 
-      expect(repoMock.memories.findByCharacterAboutCharacters).toHaveBeenCalledWith('char-a', ['char-b'])
+      expect(repoMock.memories.findByCharacterAboutCharacters).toHaveBeenCalledWith('char-a', expect.arrayContaining(['char-b', 'char-user']))
       expect(result.messages[0].content).toContain('## Memories About Other Characters')
     })
   })

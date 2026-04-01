@@ -199,6 +199,17 @@
   --qt-button-destructive-fg: hsl(var(--oncolor-100));
   --qt-button-destructive-hover-bg: hsl(var(--danger-000));
 
+  /* Copy Button Variables - Warm grey style */
+  --qt-copy-button-bg: hsl(var(--bg-100) / 0.9);
+  --qt-copy-button-text: hsl(var(--text-200));
+  --qt-copy-button-border: hsl(var(--border-300) / 0.2);
+  --qt-copy-button-hover-bg: hsl(var(--bg-000));
+  --qt-copy-button-hover-text: hsl(var(--text-000));
+  --qt-copy-button-hover-border: hsl(var(--border-300) / 0.3);
+  --qt-copy-button-success-bg: hsl(var(--success-100) / 0.9);
+  --qt-copy-button-success-text: hsl(var(--oncolor-100));
+  --qt-copy-button-success-border: hsl(var(--success-100) / 0.5);
+
   /* Status tokens */
   --qt-status-success-bg: hsl(var(--success-900) / 0.35);
   --qt-status-success-fg: hsl(var(--success-000));
@@ -334,6 +345,22 @@
   --qt-badge-outline-bg: transparent;
   --qt-badge-outline-fg: hsl(var(--text-100));
   --qt-badge-outline-border: hsl(var(--border-300) / 0.5);
+
+  /* Highlight Variables - Clay/orange accent for search highlights */
+  --qt-highlight-bg: hsl(var(--accent-brand) / 0.3);
+  --qt-highlight-fg: hsl(var(--text-000));
+  --qt-highlight-radius: 0.125rem;
+  --qt-highlight-padding-x: 0.125rem;
+  --qt-highlight-font-weight: 500;
+
+  /* Filter Chip Variables - Clay/orange accent for active state */
+  --qt-filter-chip-active-bg: hsl(var(--accent-brand));
+  --qt-filter-chip-active-fg: hsl(var(--oncolor-100));
+  --qt-filter-chip-active-border: transparent;
+  --qt-filter-chip-inactive-bg: hsl(var(--bg-100));
+  --qt-filter-chip-inactive-fg: hsl(var(--text-200));
+  --qt-filter-chip-inactive-border: transparent;
+  --qt-filter-chip-inactive-hover-bg: hsl(var(--bg-000));
 
   /* Avatar Variables */
   --qt-avatar-radius: 9999px;
@@ -748,6 +775,26 @@
 [data-theme="rains"] .qt-select:focus {
   border-color: hsl(var(--accent-secondary-100));
   box-shadow: 0 0 0 2px hsl(var(--accent-secondary-000) / 0.15);
+}
+
+/* Wikilinks - Clay/orange accent matching theme */
+[data-theme="rains"] .qt-wikilink {
+  color: hsl(var(--accent-brand));
+  background: hsl(var(--accent-brand) / 0.12);
+}
+
+[data-theme="rains"] .qt-wikilink:hover {
+  background: hsl(var(--accent-brand) / 0.22);
+}
+
+[data-theme="rains"] .qt-wikilink-broken {
+  color: hsl(var(--text-400));
+  background: hsl(var(--bg-300));
+}
+
+/* File preview panel - Warm grey for consistency */
+[data-theme="rains"] .qt-file-preview-panel {
+  background: hsl(var(--bg-300) / 0.5);
 }
 
 /* ============================================================================

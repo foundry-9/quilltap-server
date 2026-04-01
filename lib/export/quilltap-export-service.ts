@@ -16,25 +16,24 @@ import type {
   QuilltapExport,
   QuilltapExportManifest,
   ExportedCharacter,
-  ExportedPersona,
   ExportedChat,
   ExportedRoleplayTemplate,
+  ExportedProject,
   SanitizedConnectionProfile,
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
   CharactersExportData,
-  PersonasExportData,
   ChatsExportData,
   RoleplayTemplatesExportData,
   ConnectionProfilesExportData,
   ImageProfilesExportData,
   EmbeddingProfilesExportData,
   TagsExportData,
+  ProjectsExportData,
   MemoryCollection,
 } from './types';
 import type {
   Character,
-  Persona,
   ChatMetadata,
   Memory,
   MessageEvent,
@@ -115,28 +114,6 @@ async function collectCharacterMemories(
     return await repos.memories.findByCharacterId(characterId);
   } catch (error) {
     logger.debug('Error collecting character memories', { characterId, error: error instanceof Error ? error.message : String(error) });
-    return [];
-  }
-}
-
-/**
- * Collect all memories for a persona
- * Note: Memories are stored per character, so we check the personaId field
- */
-async function collectPersonaMemories(
-  repos: ReturnType<typeof getUserRepositories>,
-  personaId: string
-): Promise<Memory[]> {
-  try {
-    // Get all characters and collect their memories filtered by personaId
-    const characters = await repos.characters.findAll();
-    const memoriesArrays = await Promise.all(
-      characters.map(char => repos.memories.findByCharacterId(char.id))
-    );
-    const allMemories = memoriesArrays.flat();
-    return allMemories.filter(m => m.personaId === personaId);
-  } catch (error) {
-    logger.debug('Error collecting persona memories', { personaId, error: error instanceof Error ? error.message : String(error) });
     return [];
   }
 }
@@ -234,18 +211,10 @@ export async function exportCharacters(
     const character = await repos.characters.findById(id);
     if (character) {
       const tagNames = await resolveTagNames(repos, character.tags);
-      const linkedPersonaIds = character.personaLinks?.map(p => p.personaId) ?? [];
-      const linkedPersonaNames: string[] = [];
-
-      for (const personaId of linkedPersonaIds) {
-        const persona = await repos.personas.findById(personaId);
-        if (persona) linkedPersonaNames.push(persona.name);
-      }
 
       characters.push({
         ...character,
         ...(tagNames.length > 0 && { _tagNames: tagNames }),
-        ...(linkedPersonaNames.length > 0 && { _linkedPersonaNames: linkedPersonaNames }),
       });
     }
   }
@@ -264,57 +233,6 @@ export async function exportCharacters(
 
   return {
     characters,
-    ...(memories && { memories }),
-  };
-}
-
-/**
- * Export personas with optional memories
- */
-export async function exportPersonas(
-  userId: string,
-  personaIds: string[],
-  includeMemories: boolean
-): Promise<PersonasExportData> {
-  logger.debug('Exporting personas', { userId, personaCount: personaIds.length, includeMemories });
-
-  const repos = getUserRepositories(userId);
-
-  // Fetch personas
-  const personas: ExportedPersona[] = [];
-  for (const id of personaIds) {
-    const persona = await repos.personas.findById(id);
-    if (persona) {
-      const tagNames = await resolveTagNames(repos, persona.tags);
-      const linkedCharacterNames: string[] = [];
-
-      for (const characterId of persona.characterLinks ?? []) {
-        const character = await repos.characters.findById(characterId);
-        if (character) linkedCharacterNames.push(character.name);
-      }
-
-      personas.push({
-        ...persona,
-        ...(tagNames.length > 0 && { _tagNames: tagNames }),
-        ...(linkedCharacterNames.length > 0 && { _linkedCharacterNames: linkedCharacterNames }),
-      });
-    }
-  }
-
-  logger.debug('Exported personas', { count: personas.length });
-
-  // Collect memories if requested
-  let memories: Memory[] | undefined;
-  if (includeMemories) {
-    const memoriesArrays = await Promise.all(
-      personaIds.map(id => collectPersonaMemories(repos, id))
-    );
-    memories = memoriesArrays.flat();
-    logger.debug('Collected persona memories', { count: memories.length });
-  }
-
-  return {
-    personas,
     ...(memories && { memories }),
   };
 }
@@ -347,20 +265,15 @@ export async function exportChats(
       const participantInfo = await Promise.all(
         chat.participants.map(async (p) => {
           let characterName: string | undefined;
-          let personaName: string | undefined;
 
           if (p.type === 'CHARACTER' && p.characterId) {
             const char = await repos.characters.findById(p.characterId);
             characterName = char?.name;
-          } else if (p.type === 'PERSONA' && p.personaId) {
-            const persona = await repos.personas.findById(p.personaId);
-            personaName = persona?.name;
           }
 
           return {
             participantId: p.id,
             characterName,
-            personaName,
             type: p.type,
           };
         })
@@ -552,6 +465,54 @@ export async function exportTags(
   };
 }
 
+/**
+ * Export projects with resolved relationships
+ */
+export async function exportProjects(
+  userId: string,
+  projectIds: string[]
+): Promise<ProjectsExportData> {
+  logger.debug('Exporting projects', { userId, projectCount: projectIds.length });
+
+  const repos = getUserRepositories(userId);
+
+  // Fetch projects
+  const projects: ExportedProject[] = [];
+  for (const id of projectIds) {
+    const project = await repos.projects.findById(id);
+    if (project) {
+      // Resolve character roster names
+      const characterRosterNames: string[] = [];
+      for (const characterId of project.characterRoster ?? []) {
+        const character = await repos.characters.findById(characterId);
+        if (character) characterRosterNames.push(character.name);
+      }
+
+      // Count chats and files associated with this project
+      const allChats = await repos.chats.findAll();
+      const projectChats = allChats.filter(c => c.projectId === id);
+      const chatCount = projectChats.length;
+
+      const allFiles = await repos.files.findAll();
+      const projectFiles = allFiles.filter(f => f.linkedTo?.includes(id));
+      const fileCount = projectFiles.length;
+
+      projects.push({
+        ...project,
+        ...(characterRosterNames.length > 0 && { _characterRosterNames: characterRosterNames }),
+        _chatCount: chatCount,
+        _fileCount: fileCount,
+      });
+    }
+  }
+
+  logger.debug('Exported projects', { count: projects.length });
+
+  return {
+    projects,
+  };
+}
+
 // ============================================================================
 // PUBLIC API FUNCTIONS
 // ============================================================================
@@ -588,20 +549,6 @@ export async function createExport(
 
         data = await exportCharacters(userId, ids, options.includeMemories ?? false);
         entityCount = data.characters.length;
-        memoryCount = data.memories?.length ?? 0;
-        break;
-      }
-
-      case 'personas': {
-        const allPersonas = options.scope === 'all'
-          ? await repos.personas.findAll()
-          : [];
-        const ids = options.scope === 'all'
-          ? allPersonas.map(p => p.id)
-          : entityIds;
-
-        data = await exportPersonas(userId, ids, options.includeMemories ?? false);
-        entityCount = data.personas.length;
         memoryCount = data.memories?.length ?? 0;
         break;
       }
@@ -688,6 +635,19 @@ export async function createExport(
         break;
       }
 
+      case 'projects': {
+        const allProjects = options.scope === 'all'
+          ? await repos.projects.findAll()
+          : [];
+        const ids = options.scope === 'all'
+          ? allProjects.map(p => p.id)
+          : entityIds;
+
+        data = await exportProjects(userId, ids);
+        entityCount = data.projects.length;
+        break;
+      }
+
       default:
         throw new Error(`Unknown export type: ${options.type}`);
     }
@@ -750,27 +710,6 @@ export async function previewExport(
             entities.push({ id: char.id, name: char.name });
             if (options.includeMemories) {
               const memories = await collectCharacterMemories(repos, id);
-              memoryCount += memories.length;
-            }
-          }
-        }
-        break;
-      }
-
-      case 'personas': {
-        const allPersonas = options.scope === 'all'
-          ? await repos.personas.findAll()
-          : [];
-        const ids = options.scope === 'all'
-          ? allPersonas.map(p => p.id)
-          : entityIds;
-
-        for (const id of ids) {
-          const persona = await repos.personas.findById(id);
-          if (persona) {
-            entities.push({ id: persona.id, name: persona.name });
-            if (options.includeMemories) {
-              const memories = await collectPersonaMemories(repos, id);
               memoryCount += memories.length;
             }
           }
@@ -882,6 +821,23 @@ export async function previewExport(
           const tag = await repos.tags.findById(id);
           if (tag) {
             entities.push({ id: tag.id, name: tag.name });
+          }
+        }
+        break;
+      }
+
+      case 'projects': {
+        const allProjects = options.scope === 'all'
+          ? await repos.projects.findAll()
+          : [];
+        const ids = options.scope === 'all'
+          ? allProjects.map(p => p.id)
+          : entityIds;
+
+        for (const id of ids) {
+          const project = await repos.projects.findById(id);
+          if (project) {
+            entities.push({ id: project.id, name: project.name });
           }
         }
         break;

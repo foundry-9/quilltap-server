@@ -16,6 +16,13 @@ import type { LLMProviderPlugin, ProviderMetadata, AttachmentSupport, ProviderCo
 import type { LLMProvider } from '@/lib/llm/base';
 import type { ImageGenProvider } from '@/lib/image-gen/base';
 import { getErrorMessage } from '@/lib/errors';
+import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
+import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+
+// Create a require function for dynamic plugin loading
+const dynamicRequire = createRequire(import.meta.url || __filename);
 
 // ============================================================================
 // TYPES
@@ -462,6 +469,95 @@ class ProviderRegistry {
   }
 
   /**
+   * Hot-load a provider plugin from disk after installation
+   *
+   * Loads a provider plugin module and registers it with the registry
+   * without requiring a full server restart.
+   *
+   * @param pluginPath Path to the installed plugin directory
+   * @param manifest The validated plugin manifest
+   * @returns true if provider was loaded and registered, false otherwise
+   */
+  hotLoadProviderPlugin(pluginPath: string, manifest: PluginManifest): boolean {
+    // Only handle LLM_PROVIDER plugins
+    if (!manifest.capabilities.includes('LLM_PROVIDER')) {
+      this.logger.debug('Plugin is not an LLM_PROVIDER, skipping hot-load', {
+        plugin: manifest.name,
+        capabilities: manifest.capabilities,
+      });
+      return false;
+    }
+
+    try {
+      const mainFile = manifest.main || 'index.js';
+      const modulePath = resolve(pluginPath, mainFile);
+
+      if (!existsSync(modulePath)) {
+        this.logger.error('Provider plugin main file not found', {
+          plugin: manifest.name,
+          expectedPath: modulePath,
+        });
+        return false;
+      }
+
+      this.logger.debug('Hot-loading provider plugin module', {
+        plugin: manifest.name,
+        path: modulePath,
+      });
+
+      // Clear require cache to ensure fresh load
+      // Use dynamicRequire to avoid webpack static analysis issues
+      try {
+        const resolvedPath = dynamicRequire.resolve(modulePath);
+        delete dynamicRequire.cache[resolvedPath];
+      } catch {
+        // Module may not be in cache yet, that's fine
+      }
+
+      // Load the plugin module
+      const pluginModule = dynamicRequire(modulePath);
+
+      // Extract the provider plugin object
+      const providerPlugin = pluginModule?.plugin || pluginModule?.default?.plugin;
+
+      if (!providerPlugin?.metadata?.providerName) {
+        this.logger.warn('Provider plugin module does not export a valid plugin object', {
+          plugin: manifest.name,
+          exports: Object.keys(pluginModule || {}),
+        });
+        return false;
+      }
+
+      // Check if already registered (e.g., from a previous hot-load or startup)
+      if (this.state.providers.has(providerPlugin.metadata.providerName)) {
+        this.logger.info('Provider already registered, skipping', {
+          plugin: manifest.name,
+          provider: providerPlugin.metadata.providerName,
+        });
+        return true; // Already available, consider it success
+      }
+
+      // Register the provider
+      this.registerProvider(providerPlugin);
+      this.logger.info('Provider plugin hot-loaded successfully', {
+        plugin: manifest.name,
+        provider: providerPlugin.metadata.providerName,
+        displayName: providerPlugin.metadata.displayName,
+      });
+
+      return true;
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      this.logger.error('Failed to hot-load provider plugin', {
+        plugin: manifest.name,
+        error: errorMessage,
+      });
+      this.state.errors.set(manifest.name, errorMessage);
+      return false;
+    }
+  }
+
+  /**
    * Export registry state for debugging/admin UI
    *
    * @returns Complete registry state
@@ -766,4 +862,15 @@ export function getDefaultContextWindow(name: string): number {
  */
 export function getModelPricing(providerName: string, modelId: string): { input: number; output: number } | null {
   return providerRegistry.getModelPricing(providerName, modelId);
+}
+
+/**
+ * Hot-load a provider plugin from disk after installation
+ *
+ * @param pluginPath Path to the installed plugin directory
+ * @param manifest The validated plugin manifest
+ * @returns true if provider was loaded and registered
+ */
+export function hotLoadProviderPlugin(pluginPath: string, manifest: PluginManifest): boolean {
+  return providerRegistry.hotLoadProviderPlugin(pluginPath, manifest);
 }

@@ -6,6 +6,7 @@
  *
  * Right-side panel showing all participants in a multi-character chat.
  * Features:
+ * - Collapsed/expanded state with localStorage persistence
  * - List of participant cards with turn indicators
  * - Queue management
  * - Nudge functionality
@@ -13,10 +14,20 @@
  * - Add character button (placeholder for Phase 6)
  */
 
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { ParticipantCard, type ParticipantData } from './ParticipantCard'
+import { Avatar } from '@/components/ui/Avatar'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition } from '@/lib/chat/turn-manager'
+
+const STORAGE_KEY = 'quilltap.participant-sidebar.collapsed'
+
+/** Get initial collapsed state from localStorage (with SSR safety) */
+function getInitialCollapsedState(): boolean {
+  if (typeof window === 'undefined') return true // SSR fallback
+  const stored = localStorage.getItem(STORAGE_KEY)
+  return stored !== null ? stored === 'true' : true // Default to collapsed
+}
 
 interface ParticipantSidebarProps {
   participants: ParticipantData[]
@@ -25,6 +36,7 @@ interface ParticipantSidebarProps {
   isGenerating: boolean
   userParticipantId: string | null
   respondingParticipantId?: string | null // The participant currently streaming a response
+  waitingForResponse?: boolean // Whether we're waiting for an LLM response (used for streaming indicator)
   isPaused?: boolean // Whether auto-responses are paused
   onTogglePause?: () => void // Toggle pause state
   onNudge: (participantId: string) => void
@@ -49,6 +61,7 @@ export function ParticipantSidebar({
   isGenerating,
   userParticipantId,
   respondingParticipantId,
+  waitingForResponse = false,
   isPaused = false,
   onTogglePause,
   onNudge,
@@ -64,6 +77,24 @@ export function ParticipantSidebar({
   onStopImpersonate,
   className = '',
 }: ParticipantSidebarProps) {
+  // Collapsed state with localStorage persistence (default: collapsed)
+  const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState)
+
+  // Toggle collapsed state and persist to localStorage
+  const toggleCollapsed = useCallback(() => {
+    setIsCollapsed(prev => {
+      const newValue = !prev
+      localStorage.setItem(STORAGE_KEY, String(newValue))
+      return newValue
+    })
+  }, [])
+
+  // Expand sidebar (used when clicking avatars in collapsed mode)
+  const expandSidebar = useCallback(() => {
+    setIsCollapsed(false)
+    localStorage.setItem(STORAGE_KEY, 'false')
+  }, [])
+
   // Sort participants: personas first (the user), then characters by displayOrder
   const sortedParticipants = useMemo(() => {
     return [...participants]
@@ -99,21 +130,124 @@ export function ParticipantSidebar({
   }, [participants])
 
 
-  // Include qt-desktop-only to hide sidebar on mobile (mobile uses inline participant controls in message header)
-  const sidebarClasses = ['qt-chat-sidebar', 'qt-desktop-only']
+  // Build class list based on collapsed state
+  const baseClasses = ['qt-desktop-only']
   if (className) {
-    sidebarClasses.push(className)
+    baseClasses.push(className)
   }
 
+  // Collapsed view: narrow strip with mini avatars
+  if (isCollapsed) {
+    return (
+      <div className={['qt-chat-sidebar-collapsed', ...baseClasses].join(' ')}>
+        {/* Toggle button to expand */}
+        <button
+          onClick={toggleCollapsed}
+          className="qt-chat-sidebar-toggle"
+          title="Expand participant sidebar"
+          aria-label="Expand participant sidebar"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        {/* Icon-only pause button */}
+        {onTogglePause && (
+          <button
+            onClick={onTogglePause}
+            className={`qt-chat-sidebar-collapsed-pause ${isPaused ? 'qt-chat-sidebar-collapsed-pause-paused' : ''}`}
+            title={isPaused ? 'Resume auto-responses' : 'Pause auto-responses'}
+            aria-label={isPaused ? 'Resume auto-responses' : 'Pause auto-responses'}
+          >
+            {isPaused ? (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+              </svg>
+            )}
+          </button>
+        )}
+
+        {/* Vertical list of mini avatars */}
+        <div className="qt-chat-sidebar-collapsed-avatars">
+          {sortedParticipants.map((participant) => {
+            const isUserParticipant = participant.id === userParticipantId
+            // It's this participant's turn if they're the selected next speaker,
+            // OR if it's the user's turn (nextSpeakerId is null) and this is the user's avatar
+            const isUserTurn = turnSelectionResult?.nextSpeakerId === null && !isGenerating
+            const isCurrentTurn = currentSpeakerId === participant.id || (isUserParticipant && isUserTurn)
+            // Show pulsating animation during both waiting-for-response AND streaming phases
+            const isActivelyGenerating = currentSpeakerId === participant.id && isGenerating
+            const queuePos = getQueuePosition(turnState, participant.id)
+
+            // Get participant name and avatar from character or persona
+            const name = participant.character?.name || participant.persona?.name || 'Unknown'
+            const avatarUrl = participant.character?.avatarUrl || participant.persona?.avatarUrl || null
+            const defaultImage = participant.character?.defaultImage || participant.persona?.defaultImage || null
+
+            // Build avatar wrapper classes
+            const avatarClasses = ['qt-chat-sidebar-collapsed-avatar']
+            if (isCurrentTurn || isActivelyGenerating) {
+              avatarClasses.push('qt-chat-sidebar-collapsed-avatar-active')
+            }
+            if (isActivelyGenerating) {
+              avatarClasses.push('qt-chat-sidebar-collapsed-avatar-streaming')
+            }
+
+            return (
+              <button
+                key={participant.id}
+                onClick={expandSidebar}
+                className={avatarClasses.join(' ')}
+                title={`${name}${isCurrentTurn ? ' (current turn)' : ''}${queuePos ? ` (queue #${queuePos})` : ''}`}
+                aria-label={`${name} - click to expand sidebar`}
+              >
+                <Avatar
+                  name={name}
+                  src={avatarUrl ? { avatarUrl } : defaultImage ? { defaultImage } : undefined}
+                  size="sm"
+                />
+                {/* Queue position badge */}
+                {queuePos > 0 && (
+                  <span className="qt-chat-sidebar-collapsed-queue-badge">
+                    {queuePos}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // Expanded view: full sidebar with participant cards
   return (
-    <div className={sidebarClasses.join(' ')}>
+    <div className={['qt-chat-sidebar', ...baseClasses].join(' ')}>
       {/* Header */}
       <div className="qt-chat-sidebar-header">
         <div className="flex items-center justify-between">
           <h3 className="qt-chat-sidebar-heading">Participants</h3>
-          <span className="qt-chat-sidebar-meta">
-            {activeCharacterCount} character{activeCharacterCount !== 1 ? 's' : ''}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="qt-chat-sidebar-meta">
+              {activeCharacterCount} character{activeCharacterCount !== 1 ? 's' : ''}
+            </span>
+            {/* Toggle button to collapse */}
+            <button
+              onClick={toggleCollapsed}
+              className="qt-chat-sidebar-toggle"
+              title="Collapse participant sidebar"
+              aria-label="Collapse participant sidebar"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Turn status indicator - Phase 7: Enhanced with edge case handling */}

@@ -8,7 +8,7 @@
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/mongodb/repositories';
 import { SyncableEntityType, SyncEntityDelta, FILE_CONTENT_SIZE_THRESHOLD } from './types';
-import { s3FileService } from '@/lib/s3/file-service';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
 /**
  * Options for delta detection
@@ -63,24 +63,6 @@ async function getEntityDeltas(
               updatedAt: char.updatedAt,
               isDeleted: false,
               data: char as unknown as Record<string, unknown>,
-            });
-          }
-          if (deltas.length >= limit) break;
-        }
-        break;
-      }
-
-      case 'PERSONA': {
-        const personas = await repos.personas.findByUserId(userId);
-        for (const persona of personas) {
-          if (!sinceTimestamp || persona.updatedAt > sinceTimestamp) {
-            deltas.push({
-              entityType: 'PERSONA',
-              id: persona.id,
-              createdAt: persona.createdAt,
-              updatedAt: persona.updatedAt,
-              isDeleted: false,
-              data: persona as unknown as Record<string, unknown>,
             });
           }
           if (deltas.length >= limit) break;
@@ -168,21 +150,19 @@ async function getEntityDeltas(
             // Prepare file data for sync
             const fileData: Record<string, unknown> = {
               ...file,
-              // Don't sync S3-specific references - let local instance manage storage
+              // Don't sync storage-specific references - let local instance manage storage
+              storageKey: undefined,
+              mountPointId: undefined,
+              // Strip legacy S3 fields as well
               s3Key: undefined,
               s3Bucket: undefined,
             };
 
             // For small files, include base64 content inline
             // For large files, set flag for separate content fetch
-            if (file.size < FILE_CONTENT_SIZE_THRESHOLD && file.s3Key) {
+            if (file.size < FILE_CONTENT_SIZE_THRESHOLD && file.storageKey) {
               try {
-                const content = await s3FileService.downloadUserFile(
-                  file.userId,
-                  file.id,
-                  file.originalFilename,
-                  file.category
-                );
+                const content = await fileStorageManager.downloadFile(file);
                 fileData.content = content.toString('base64');
                 fileData.requiresContentFetch = false;
                 logger.debug('Added file delta with inline content', {
@@ -217,6 +197,59 @@ async function getEntityDeltas(
               updatedAt: file.updatedAt,
               isDeleted: false,
               data: fileData,
+            });
+          }
+          if (deltas.length >= limit) break;
+        }
+        break;
+      }
+
+      case 'PROJECT': {
+        const projects = await repos.projects.findByUserId(userId);
+        for (const project of projects) {
+          if (!sinceTimestamp || project.updatedAt > sinceTimestamp) {
+            deltas.push({
+              entityType: 'PROJECT',
+              id: project.id,
+              createdAt: project.createdAt,
+              updatedAt: project.updatedAt,
+              isDeleted: false,
+              data: project as unknown as Record<string, unknown>,
+            });
+          }
+          if (deltas.length >= limit) break;
+        }
+        break;
+      }
+
+      case 'CONNECTION_PROFILE': {
+        const profiles = await repos.connections.findByUserId(userId);
+        for (const profile of profiles) {
+          if (!sinceTimestamp || profile.updatedAt > sinceTimestamp) {
+            // Strip apiKeyId and add _apiKeyLabel for reference
+            // API keys are instance-specific (different encryption) so can't be synced
+            const { apiKeyId, ...profileData } = profile;
+            let apiKeyLabel: string | undefined;
+            if (apiKeyId) {
+              const apiKey = await repos.connections.findApiKeyById(apiKeyId);
+              apiKeyLabel = apiKey?.label;
+            }
+            deltas.push({
+              entityType: 'CONNECTION_PROFILE',
+              id: profile.id,
+              createdAt: profile.createdAt,
+              updatedAt: profile.updatedAt,
+              isDeleted: false,
+              data: {
+                ...profileData,
+                _apiKeyLabel: apiKeyLabel,
+              } as unknown as Record<string, unknown>,
+            });
+            logger.debug('Added connection profile delta', {
+              context: 'sync:delta-detector',
+              profileId: profile.id,
+              profileName: profile.name,
+              hasApiKeyLabel: !!apiKeyLabel,
             });
           }
           if (deltas.length >= limit) break;
@@ -292,7 +325,7 @@ export async function detectDeltas(options: DeltaDetectionOptions): Promise<Delt
   const {
     userId,
     // Enforced sync order - entities with dependencies come after their dependencies
-    entityTypes = ['TAG', 'FILE', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
+    entityTypes = ['TAG', 'FILE', 'PROJECT', 'CONNECTION_PROFILE', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
     sinceTimestamp = null,
     limit = 100,
   } = options;
@@ -369,7 +402,7 @@ export async function countDeltas(options: DeltaDetectionOptions): Promise<Recor
   const {
     userId,
     // Enforced sync order - entities with dependencies come after their dependencies
-    entityTypes = ['TAG', 'FILE', 'PERSONA', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
+    entityTypes = ['TAG', 'FILE', 'PROJECT', 'CONNECTION_PROFILE', 'CHARACTER', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'CHAT', 'MEMORY'],
     sinceTimestamp = null,
   } = options;
 
@@ -421,9 +454,6 @@ export async function getMostRecentUpdate(userId: string): Promise<string | null
     const characters = await repos.characters.findByUserId(userId);
     characters.forEach((c) => checkTimestamp(c.updatedAt));
 
-    const personas = await repos.personas.findByUserId(userId);
-    personas.forEach((p) => checkTimestamp(p.updatedAt));
-
     const chats = await repos.chats.findByUserId(userId);
     chats.forEach((c) => checkTimestamp(c.updatedAt));
 
@@ -438,6 +468,12 @@ export async function getMostRecentUpdate(userId: string): Promise<string | null
 
     const files = await repos.files.findByUserId(userId);
     files.forEach((f) => checkTimestamp(f.updatedAt));
+
+    const projects = await repos.projects.findByUserId(userId);
+    projects.forEach((p) => checkTimestamp(p.updatedAt));
+
+    const connectionProfiles = await repos.connections.findByUserId(userId);
+    connectionProfiles.forEach((c) => checkTimestamp(c.updatedAt));
 
     const roleplayTemplates = await repos.roleplayTemplates.findByUserId(userId);
     roleplayTemplates.forEach((r) => checkTimestamp(r.updatedAt));

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
 import DeletedImagePlaceholder from '../DeletedImagePlaceholder'
 import { ImageActions } from './ImageActions'
@@ -34,16 +33,15 @@ export default function ImageDetailModal({
   useEffect(() => {
     const loadEntities = async () => {
       try {
-        clientLogger.debug('Loading characters')
         setLoadingEntities(true)
-        const charsRes = await fetch('/api/characters')
+        const charsRes = await fetch('/api/v1/characters')
 
         if (charsRes.ok) {
           const charsData = await charsRes.json()
           setCharacters(charsData.characters || [])
         }
       } catch (error) {
-        clientLogger.error('Failed to load entities:', {
+        console.error('Failed to load entities:', {
           error: error instanceof Error ? error.message : String(error),
         })
       } finally {
@@ -84,7 +82,6 @@ export default function ImageDetailModal({
     onClose,
     onPrev,
     onNext,
-    logContext: 'ImageDetailModal',
   })
 
   if (!isOpen) return null

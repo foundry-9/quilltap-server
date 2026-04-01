@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -20,7 +19,7 @@ export function useConnectionProfiles() {
 
   const fetchOp = useAsyncOperation<ConnectionProfile[]>()
   const deleteOp = useAsyncOperation<any>()
-  const triggerAutoAssociate = useAutoAssociate('connection-profiles')
+  const triggerAutoAssociate = useAutoAssociate()
 
   const countMessagesPerProfile = useCallback(
     async (profilesList: ConnectionProfile[]) => {
@@ -32,22 +31,24 @@ export function useConnectionProfiles() {
         })
 
         // Fetch all chats to analyze message usage
-        const chatsRes = await fetch('/api/chats')
+        const chatsRes = await fetch('/api/v1/chats')
         if (!chatsRes.ok) return messageCounts
 
-        const chats = await chatsRes.json()
+        const chatsData = await chatsRes.json()
+        const chats = chatsData.chats || []
         if (!Array.isArray(chats)) return messageCounts
 
         // For each chat, count messages by profile
         await Promise.all(
           chats.map(async (chat: any) => {
             try {
-              // Get messages for this chat
-              const messagesRes = await fetch(`/api/chats/${chat.id}/messages`)
-              if (!messagesRes.ok) return
+              // Get chat with messages from v1 API
+              const chatRes = await fetch(`/api/v1/chats/${chat.id}`)
+              if (!chatRes.ok) return
 
-              const messages = await messagesRes.json()
-              if (!Array.isArray(messages.messages)) return
+              const chatData = await chatRes.json()
+              const messages = chatData.chat?.messages
+              if (!Array.isArray(messages)) return
 
               // Get CHARACTER participants with their connection profiles
               const characterParticipants = (chat.participants || []).filter(
@@ -58,7 +59,7 @@ export function useConnectionProfiles() {
 
               // Count ASSISTANT messages
               // Distribute messages among character participants based on conversation flow
-              const assistantMessages = messages.messages.filter((m: any) => m.role === 'ASSISTANT')
+              const assistantMessages = messages.filter((m: any) => m.role === 'ASSISTANT')
 
               if (assistantMessages.length === 0) return
 
@@ -80,14 +81,14 @@ export function useConnectionProfiles() {
                 })
               }
             } catch (err) {
-              clientLogger.error(`Error processing chat ${chat.id}`, { error: getErrorMessage(err) })
+              console.error(`Error processing chat ${chat.id}`, { error: getErrorMessage(err) })
             }
           })
         )
 
         return messageCounts
       } catch (err) {
-        clientLogger.error('Error counting messages per profile', { error: getErrorMessage(err) })
+        console.error('Error counting messages per profile', { error: getErrorMessage(err) })
         return {}
       }
     },
@@ -96,9 +97,8 @@ export function useConnectionProfiles() {
 
   const fetchProfiles = useCallback(async () => {
     return await fetchOp.execute(async () => {
-      clientLogger.debug('Fetching connection profiles')
       // Add cache busting timestamp to force fresh data
-      const result = await fetchJson<ConnectionProfile[]>(`/api/profiles?t=${Date.now()}`, {
+      const result = await fetchJson<{ profiles: ConnectionProfile[], count: number }>(`/api/v1/connection-profiles?t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -110,12 +110,11 @@ export function useConnectionProfiles() {
         throw new Error(result.error || 'Failed to fetch profiles')
       }
 
-      const data = result.data || []
+      const data = result.data?.profiles || []
 
       // Tags are already included in the profile response from /api/profiles
       // No need to fetch them separately
       setProfiles(data)
-      clientLogger.debug('Profiles loaded successfully', { count: data.length })
       return data
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,56 +122,47 @@ export function useConnectionProfiles() {
 
   const fetchApiKeys = useCallback(async () => {
     try {
-      clientLogger.debug('Fetching API keys')
-      const result = await fetchJson<ApiKey[]>('/api/keys')
+      const result = await fetchJson<{ apiKeys: ApiKey[], count: number }>('/api/v1/api-keys')
       if (result.ok) {
-        setApiKeys(result.data || [])
-        clientLogger.debug('API keys loaded', { count: result.data?.length })
+        setApiKeys(result.data?.apiKeys || [])
       } else {
         throw new Error(result.error)
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch API keys', { error: getErrorMessage(err) })
+      console.error('Failed to fetch API keys', { error: getErrorMessage(err) })
     }
   }, [])
 
   const fetchProviders = useCallback(async () => {
     try {
-      clientLogger.debug('Fetching providers configuration')
-      const result = await fetchJson<{ providers: ProviderConfig[] }>('/api/providers')
+      const result = await fetchJson<{ providers: ProviderConfig[], count: number }>('/api/v1/providers')
       if (result.ok) {
         const providerList = result.data?.providers || []
         setProviders(providerList)
-        clientLogger.debug('Providers loaded', {
-          count: providerList.length,
-          providers: providerList.map((p: ProviderConfig) => p.name),
-        })
       } else {
         throw new Error(result.error)
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch providers', { error: getErrorMessage(err) })
+      console.error('Failed to fetch providers', { error: getErrorMessage(err) })
     }
   }, [])
 
   const fetchChatSettings = useCallback(async () => {
     try {
-      const result = await fetchJson<any>('/api/chat-settings')
+      const result = await fetchJson<any>('/api/v1/settings/chat')
       if (result.ok) {
         setCheapDefaultProfileId(result.data?.cheapLLMSettings?.defaultCheapProfileId || null)
       }
     } catch (err) {
-      clientLogger.error('Error fetching chat settings', { error: getErrorMessage(err) })
+      console.error('Error fetching chat settings', { error: getErrorMessage(err) })
     }
   }, [])
 
   const handleDelete = useCallback(
     async (id: string) => {
       const result = await deleteOp.execute(async () => {
-        clientLogger.debug('Deleting connection profile', { profileId: id })
-        const fetchResult = await fetchJson(`/api/profiles/${id}`, { method: 'DELETE' })
+        const fetchResult = await fetchJson(`/api/v1/connection-profiles/${id}`, { method: 'DELETE' })
         if (!fetchResult.ok) throw new Error(fetchResult.error || 'Failed to delete profile')
-        clientLogger.debug('Profile deleted successfully', { profileId: id })
         return fetchResult.data
       })
 

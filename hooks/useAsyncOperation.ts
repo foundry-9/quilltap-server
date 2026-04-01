@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from 'react';
 import { getErrorMessage } from '@/lib/error-utils';
-import { clientLogger } from '@/lib/client-logger';
 
 /**
  * Result type returned by the execute function
@@ -37,12 +36,10 @@ export function useAsyncOperation<T>(): UseAsyncOperationResult<T> {
   const [error, setErrorState] = useState<string | null>(null);
 
   const clearError = useCallback(() => {
-    clientLogger.debug('Clearing error state');
     setErrorState(null);
   }, []);
 
   const setError = useCallback((msg: string) => {
-    clientLogger.debug('Setting error state', { message: msg });
     setErrorState(msg);
   }, []);
 
@@ -50,34 +47,16 @@ export function useAsyncOperation<T>(): UseAsyncOperationResult<T> {
     async (operation: () => Promise<T>): Promise<T | null> => {
       try {
         // Clear any previous error when starting a new operation
-        clientLogger.debug('Starting async operation');
         setErrorState(null);
         setLoading(true);
 
         const result = await operation();
-        clientLogger.debug('Async operation completed successfully');
         setLoading(false);
         return result;
       } catch (err) {
         const errorMessage = getErrorMessage(err, 'Operation failed');
-        const errorType = err instanceof Error ? 'Error' : typeof err;
-        const errorName = err instanceof Error ? err.name : 'Unknown';
-        const stackTrace = err instanceof Error && err.stack
-          ? err.stack.split('\n').slice(0, 3).join('\n')
-          : undefined;
 
-        // Build error details object with only defined values
-        const errorDetails: Record<string, string> = {
-          message: errorMessage,
-          type: errorType,
-          name: errorName,
-        };
-        if (stackTrace) {
-          errorDetails.stack = stackTrace;
-        }
-
-        // Log with explicit values to ensure proper capture in console
-        clientLogger.error('Async operation failed', errorDetails);
+        console.error('Async operation failed', { message: errorMessage });
 
         setErrorState(errorMessage);
         setLoading(false);

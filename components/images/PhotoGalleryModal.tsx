@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { clientLogger } from '@/lib/client-logger'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
 import ChatGalleryImageViewModal from '@/components/chat/ChatGalleryImageViewModal'
 import ImageDetailModal from './ImageDetailModal'
@@ -107,7 +106,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     try {
       setLoading(true)
       if (mode === 'chat' && chatId) {
-        const response = await fetch(`/api/chats/${chatId}/files`)
+        const response = await fetch(`/api/v1/chats/${chatId}/files`)
         const data = await response.json()
 
         if (!response.ok) {
@@ -121,7 +120,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
           tagType: mode === 'character' ? 'CHARACTER' : 'PERSONA',
           tagId: mode === 'character' ? (characterId as string) : (personaId as string),
         })
-        const response = await fetch(`/api/images?${params.toString()}`)
+        const response = await fetch(`/api/v1/images?${params.toString()}`)
         const data = await response.json()
 
         if (!response.ok) {
@@ -131,7 +130,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
         setItems((data.data || []).map((image: GalleryImage) => ({ kind: 'image', data: image })))
       }
     } catch (error) {
-      clientLogger.error('Failed to load gallery items:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to load gallery items:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to load gallery items')
     } finally {
       setLoading(false)
@@ -156,7 +155,6 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     isOpen,
     onClose,
     handleEscape: selectedIndex === -1, // Only close gallery when no detail view is open
-    logContext: 'PhotoGalleryModal',
   })
 
   const handleZoomIn = () => {
@@ -181,7 +179,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
 
   const handleDeleteChatFile = async (fileId: string) => {
     try {
-      const response = await fetch(`/api/chat-files/${fileId}`, {
+      const response = await fetch(`/api/v1/chat-files/${fileId}`, {
         method: 'DELETE',
       })
 
@@ -197,7 +195,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
         props.onImageDeleted?.(fileId)
       }
     } catch (error) {
-      clientLogger.error('Failed to delete image:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to delete image:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to delete image')
     }
   }

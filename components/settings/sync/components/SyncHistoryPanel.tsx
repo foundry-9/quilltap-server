@@ -12,7 +12,6 @@
 import { useState, useEffect } from 'react';
 import { SyncOperationDisplay } from '../types';
 import { SyncStatusBadge } from './SyncStatusBadge';
-import { clientLogger } from '@/lib/client-logger';
 
 interface SyncHistoryPanelProps {
   operations: SyncOperationDisplay[];
@@ -117,11 +116,6 @@ export function SyncHistoryPanel({ operations, isLoading }: SyncHistoryPanelProp
 
   // Log render in useEffect to avoid state updates during render
   useEffect(() => {
-    clientLogger.debug('SyncHistoryPanel: rendered', {
-      operationCount: operations.length,
-      isLoading,
-      isExpanded,
-    });
   }, [operations.length, isLoading, isExpanded]);
 
   return (

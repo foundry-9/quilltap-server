@@ -14,10 +14,14 @@
 
 import { logger } from '@/lib/logger';
 import { getProvider, getImageProviderConstraints } from '@/lib/plugins/provider-registry';
+import { toolRegistry } from '@/lib/plugins/tool-registry';
 import {
   imageGenerationToolDefinition,
   memorySearchToolDefinition,
   webSearchToolDefinition,
+  projectInfoToolDefinition,
+  fileManagementToolDefinition,
+  requestFullContextToolDefinition,
 } from '@/lib/tools';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
@@ -81,6 +85,21 @@ export interface BuildToolsOptions {
 
   /** Whether to enable web search tool */
   webSearch?: boolean;
+
+  /** Whether to enable project info tool */
+  projectInfo?: boolean;
+
+  /** Whether to enable file management tool (always enabled by default) */
+  fileManagement?: boolean;
+
+  /** Whether to enable request_full_context tool (enabled when context compression is active) */
+  requestFullContext?: boolean;
+
+  /** Whether to include tools from the tool registry (plugin tools) */
+  includePluginTools?: boolean;
+
+  /** Tool configurations for plugin tools (keyed by tool name) */
+  toolConfigs?: Map<string, Record<string, unknown>>;
 }
 
 /**
@@ -106,10 +125,10 @@ export interface BuildToolsOptions {
  * });
  * ```
  */
-export function buildToolsForProvider(
+export async function buildToolsForProvider(
   providerName: string,
   options: BuildToolsOptions
-): unknown[] {
+): Promise<unknown[]> {
   const logger_ = logger.child({
     module: 'plugin-tool-builder',
     provider: providerName,
@@ -145,6 +164,39 @@ export function buildToolsForProvider(
   if (options.webSearch) {
     universalTools.push(webSearchToolDefinition as UniversalTool);
     logger_.debug('Added web search tool');
+  }
+
+  // Add project info tool if enabled
+  if (options.projectInfo) {
+    universalTools.push(projectInfoToolDefinition as UniversalTool);
+    logger_.debug('Added project info tool');
+  }
+
+  // Add file management tool if enabled (defaults to true when not specified)
+  if (options.fileManagement !== false) {
+    universalTools.push(fileManagementToolDefinition as UniversalTool);
+    logger_.debug('Added file management tool');
+  }
+
+  // Add request_full_context tool if enabled (for context compression bypass)
+  if (options.requestFullContext) {
+    universalTools.push(requestFullContextToolDefinition as UniversalTool);
+    logger_.debug('Added request_full_context tool');
+  }
+
+  // Add plugin tools if enabled (defaults to true when not specified)
+  if (options.includePluginTools !== false) {
+    // Get configured tool definitions from the tool registry (async for multi-tool plugins)
+    const toolConfigs = options.toolConfigs || new Map();
+    const pluginToolDefs = await toolRegistry.getConfiguredToolDefinitions(toolConfigs);
+
+    if (pluginToolDefs.length > 0) {
+      universalTools.push(...pluginToolDefs);
+      logger_.debug('Added plugin tools', {
+        count: pluginToolDefs.length,
+        tools: pluginToolDefs.map(t => t.function.name),
+      });
+    }
   }
 
   // If no tools are enabled, return empty array

@@ -64,6 +64,7 @@ export function SidebarHeader() {
           width={24}
           height={24}
           className="qt-left-sidebar-brand-icon"
+          style={{ width: 'auto', height: 'auto' }}
           aria-hidden="true"
         />
       ) : (

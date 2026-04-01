@@ -5,7 +5,6 @@ import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { FormActions } from '@/components/ui/FormActions'
-import { clientLogger } from '@/lib/client-logger'
 
 interface Tag {
   id: string
@@ -50,18 +49,13 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
     clearError()
 
     await execute(async () => {
-      clientLogger.debug('Memory editor submitting form', {
-        isEditing,
-        characterId,
-        memoryId: memory?.id,
-      })
-
       const keywords = form.formData.keywords
         .split(',')
         .map(k => k.trim())
         .filter(k => k.length > 0)
 
       const payload = {
+        characterId,
         content: form.formData.content,
         summary: form.formData.summary,
         keywords,
@@ -70,8 +64,8 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
       }
 
       const url = isEditing
-        ? `/api/characters/${characterId}/memories/${memory.id}`
-        : `/api/characters/${characterId}/memories`
+        ? `/api/v1/memories/${memory.id}`
+        : `/api/v1/memories`
 
       const result = await fetchJson<{ id: string }>(url, {
         method: isEditing ? 'PUT' : 'POST',
@@ -80,17 +74,12 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
       })
 
       if (!result.ok) {
-        clientLogger.error('Failed to save memory', {
+        console.error('Failed to save memory', {
           status: result.status,
           error: result.error,
         })
         throw new Error(result.error || 'Failed to save memory')
       }
-
-      clientLogger.debug('Memory saved successfully', {
-        isEditing,
-        memoryId: result.data?.id,
-      })
 
       showSuccessToast(isEditing ? 'Memory updated' : 'Memory created')
       onSave()

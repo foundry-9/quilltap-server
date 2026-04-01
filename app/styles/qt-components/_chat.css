@@ -94,6 +94,18 @@
   .qt-chat-message-content {
     @apply max-w-none w-full;
     overflow: hidden;
+    /* Override Tailwind prose body color to use full foreground instead of muted gray */
+    --tw-prose-body: var(--color-foreground);
+    --tw-prose-invert-body: var(--color-foreground);
+    /* Direct color override - prose plugin applies color via specificity, so we need to be explicit */
+    color: var(--color-foreground);
+  }
+
+  /* Ensure prose elements inherit foreground color from message content */
+  .qt-chat-message-content p,
+  .qt-chat-message-content li,
+  .qt-chat-message-content blockquote {
+    color: inherit;
   }
 
   /**
@@ -284,7 +296,7 @@
    * Positioned absolutely above the composer inner form
    */
   .qt-tool-palette-bar {
-    @apply flex items-center gap-2;
+    @apply flex items-center justify-center gap-2;
     padding: 0.5rem 0.75rem;
     background: var(--qt-chat-composer-bg);
     border-bottom: 1px solid var(--qt-chat-composer-border);
@@ -330,6 +342,90 @@
 
   .qt-tool-palette-button-danger:hover:not(:disabled) {
     background: color-mix(in srgb, var(--qt-status-danger-bg) 50%, transparent);
+  }
+
+  /* ==========================================================================
+     FORMATTING TOOLBAR (Document Editing Mode)
+     ========================================================================== */
+
+  /**
+   * Formatting toolbar container - shown above textarea in document editing mode
+   */
+  .qt-formatting-toolbar {
+    @apply flex items-center justify-center gap-2;
+    padding: 0.375rem 0.5rem;
+    background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.5rem;
+  }
+
+  /**
+   * Section groups buttons together
+   */
+  .qt-formatting-toolbar-section {
+    @apply flex items-center gap-1;
+  }
+
+  /**
+   * Vertical divider between sections
+   */
+  .qt-formatting-toolbar-divider {
+    @apply h-5 mx-1;
+    width: 1px;
+    background: var(--color-border);
+  }
+
+  /**
+   * Base formatting button style
+   */
+  .qt-formatting-button {
+    @apply inline-flex items-center justify-center;
+    @apply text-xs font-medium;
+    @apply transition-colors duration-150;
+    min-width: 1.75rem;
+    height: 1.75rem;
+    padding: 0 0.375rem;
+    border-radius: var(--radius-sm);
+    background: var(--qt-content-bg);
+    color: var(--color-foreground);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+  }
+
+  .qt-formatting-button:hover:not(:disabled) {
+    background: var(--qt-content-bg-hover);
+    border-color: var(--color-foreground);
+  }
+
+  .qt-formatting-button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  /**
+   * Bold button - use heavier font weight
+   */
+  .qt-formatting-button-bold {
+    font-weight: 700;
+  }
+
+  /**
+   * Italic button - use italic style
+   */
+  .qt-formatting-button-italic {
+    font-style: italic;
+  }
+
+  /**
+   * Active state for toggle buttons (e.g., document editing mode toggle)
+   */
+  .qt-chat-toolbar-button-active {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    border-color: var(--color-primary);
+  }
+
+  .qt-chat-toolbar-button-active:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-primary) 85%, black);
   }
 
   /* ==========================================================================
@@ -397,8 +493,9 @@
 
   /**
    * Dialogue text styling
+   * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
-  .qt-chat-dialogue {
+  .qt-chat-message-content .qt-chat-dialogue {
     color: var(--qt-rp-dialogue-color);
     background: var(--qt-rp-dialogue-bg);
   }
@@ -406,8 +503,9 @@
   /**
    * Narration/action text styling
    * Dark background for contrast on any message bubble
+   * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
-  .qt-chat-narration {
+  .qt-chat-message-content .qt-chat-narration {
     color: var(--qt-rp-narration-color);
     background: var(--qt-rp-narration-bg);
     font-style: var(--qt-rp-narration-style);
@@ -419,8 +517,9 @@
   /**
    * Internal monologue text styling - italic purple
    * Dark background for contrast on any message bubble
+   * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
-  .qt-chat-inner-monologue {
+  .qt-chat-message-content .qt-chat-inner-monologue {
     color: var(--qt-rp-inner-monologue-color);
     background: var(--qt-rp-inner-monologue-bg);
     font-style: var(--qt-rp-inner-monologue-style);
@@ -432,8 +531,9 @@
   /**
    * Out of Character (OOC) text styling
    * Terminal-style bright green on black
+   * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
-  .qt-chat-ooc {
+  .qt-chat-message-content .qt-chat-ooc {
     color: var(--qt-rp-ooc-color);
     background: var(--qt-rp-ooc-bg);
     font-family: var(--qt-rp-ooc-font);
@@ -941,6 +1041,147 @@
     padding: 1rem;
     color: var(--qt-chat-sidebar-muted);
     @apply text-xs;
+  }
+
+  /* ==========================================================================
+     COLLAPSED SIDEBAR STYLES
+     ========================================================================== */
+
+  /**
+   * Collapsed sidebar state - narrow width with mini avatars
+   */
+  .qt-chat-sidebar-collapsed {
+    width: var(--qt-chat-sidebar-collapsed-width);
+    border-left: 1px solid var(--qt-chat-sidebar-border);
+    background: var(--qt-chat-sidebar-bg);
+    @apply flex flex-col items-center py-3 gap-3;
+  }
+
+  /**
+   * Toggle button for expand/collapse
+   */
+  .qt-chat-sidebar-toggle {
+    @apply flex items-center justify-center;
+    @apply transition-colors duration-150;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-muted-foreground);
+    border: none;
+    cursor: pointer;
+  }
+
+  .qt-chat-sidebar-toggle:hover {
+    background: var(--color-muted);
+    color: var(--color-foreground);
+  }
+
+  /**
+   * Icon-only pause button in collapsed sidebar
+   */
+  .qt-chat-sidebar-collapsed-pause {
+    @apply flex items-center justify-center;
+    @apply transition-colors duration-150;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    background: var(--qt-content-bg);
+    border: 1px solid var(--qt-chat-sidebar-border);
+    color: var(--qt-chat-sidebar-heading);
+    cursor: pointer;
+  }
+
+  .qt-chat-sidebar-collapsed-pause:hover {
+    background: var(--qt-content-bg-hover);
+  }
+
+  .qt-chat-sidebar-collapsed-pause-paused {
+    background: var(--qt-status-warning-bg);
+    border-color: var(--qt-status-warning-border);
+    color: var(--qt-status-warning-fg);
+  }
+
+  .qt-chat-sidebar-collapsed-pause-paused:hover {
+    filter: brightness(0.95);
+  }
+
+  /**
+   * Scrollable avatar container
+   */
+  .qt-chat-sidebar-collapsed-avatars {
+    @apply flex-1 flex flex-col items-center gap-3 w-full;
+    @apply overflow-y-auto overflow-x-hidden;
+    /* Padding to prevent glow/scale animation from being clipped */
+    padding: 0.75rem 0.75rem;
+    /* Hide scrollbar but allow scrolling */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .qt-chat-sidebar-collapsed-avatars::-webkit-scrollbar {
+    display: none;
+  }
+
+  /**
+   * Avatar button wrapper in collapsed sidebar
+   */
+  .qt-chat-sidebar-collapsed-avatar {
+    @apply relative flex-shrink-0;
+    @apply transition-transform duration-150;
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: var(--qt-avatar-radius);
+  }
+
+  .qt-chat-sidebar-collapsed-avatar:hover {
+    transform: scale(1.05);
+  }
+
+  /**
+   * Active turn indicator - solid green border
+   */
+  .qt-chat-sidebar-collapsed-avatar-active {
+    border-color: var(--qt-status-success-fg);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--qt-status-success-fg) 40%, transparent);
+  }
+
+  /**
+   * Streaming indicator - pulsating green border/glow
+   * Uses scale + intense glow for high visibility
+   */
+  .qt-chat-sidebar-collapsed-avatar-streaming {
+    animation: qt-avatar-pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes qt-avatar-pulse {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow:
+        0 0 8px var(--qt-status-success-fg),
+        0 0 16px color-mix(in srgb, var(--qt-status-success-fg) 50%, transparent);
+    }
+    50% {
+      transform: scale(1.08);
+      box-shadow:
+        0 0 12px var(--qt-status-success-fg),
+        0 0 24px var(--qt-status-success-fg),
+        0 0 36px color-mix(in srgb, var(--qt-status-success-fg) 60%, transparent);
+    }
+  }
+
+  /**
+   * Queue position badge for collapsed avatars
+   */
+  .qt-chat-sidebar-collapsed-queue-badge {
+    @apply absolute -top-1 -right-1;
+    @apply w-5 h-5 text-xs font-bold;
+    @apply flex items-center justify-center;
+    @apply rounded-full;
+    background: var(--qt-status-info-bg);
+    color: var(--qt-status-info-fg);
+    border: 1px solid var(--qt-status-info-border);
+    z-index: 10;
   }
 
   /* ==========================================================================

@@ -10,7 +10,6 @@
  */
 
 import { useTheme, type ThemeSummary } from '@/components/providers/theme-provider'
-import { clientLogger } from '@/lib/client-logger'
 import { DEFAULT_THEME_TOKENS } from '@/lib/themes/default-tokens'
 
 // Default theme preview colors
@@ -126,7 +125,6 @@ export function NavUserMenuThemeContent({ onThemeSelected }: NavUserMenuThemeCon
   const themes = Array.isArray(availableThemes) ? availableThemes : []
 
   const handleThemeSelect = async (themeId: string | null) => {
-    clientLogger.info('NavUserMenuTheme: selecting theme', { themeId })
     await setTheme(themeId)
     onThemeSelected?.()
   }

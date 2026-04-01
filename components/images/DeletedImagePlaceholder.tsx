@@ -30,7 +30,7 @@ export default function DeletedImagePlaceholder({
     }
 
     try {
-      const response = await fetch(`/api/images/${imageId}`, {
+      const response = await fetch(`/api/v1/images/${imageId}`, {
         method: 'DELETE',
       })
 

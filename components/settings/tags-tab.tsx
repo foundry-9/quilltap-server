@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useTagStyles } from '@/components/providers/tag-style-provider'
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles'
 import type { TagVisualStyle } from '@/lib/schemas/types'
@@ -31,7 +30,7 @@ export default function TagsTab() {
     const requestId = ++tagFetchIdRef.current
     setLoading(true)
     try {
-      const res = await fetch('/api/tags', { cache: 'no-store' })
+      const res = await fetch('/api/v1/tags', { cache: 'no-store' })
       if (!res.ok) {
         throw new Error('Failed to load tags')
       }
@@ -45,7 +44,7 @@ export default function TagsTab() {
         })))
       }
     } catch (err) {
-      clientLogger.error('Error loading tags', { error: err instanceof Error ? err.message : String(err) })
+      console.error('Error loading tags', { error: err instanceof Error ? err.message : String(err) })
       showErrorToast('Failed to load tags')
     } finally {
       setLoading(false)
@@ -60,7 +59,7 @@ export default function TagsTab() {
     setTagSaving(tagId)
 
     try {
-      const res = await fetch(`/api/tags/${tagId}`, {
+      const res = await fetch(`/api/v1/tags/${tagId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ visualStyle }),
@@ -170,7 +169,7 @@ export default function TagsTab() {
     async (tagId: string, nextValue: boolean) => {
       setQuickHideSavingId(tagId)
       try {
-        const res = await fetch(`/api/tags/${tagId}`, {
+        const res = await fetch(`/api/v1/tags/${tagId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ quickHide: nextValue }),
@@ -189,7 +188,7 @@ export default function TagsTab() {
         await refreshQuickHideTags()
         showSuccessToast('Quick-hide setting saved')
       } catch (err) {
-        clientLogger.error('Error toggling quick-hide', { error: err instanceof Error ? err.message : String(err) })
+        console.error('Error toggling quick-hide', { error: err instanceof Error ? err.message : String(err) })
         showErrorToast(err instanceof Error ? err.message : 'Failed to update quick-hide')
       } finally {
         setQuickHideSavingId(current => (current === tagId ? null : current))

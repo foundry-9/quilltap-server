@@ -41,7 +41,7 @@ export function useMessageActions(
 
   const saveEdit = async (messageId: string) => {
     try {
-      const res = await fetch(`/api/messages/${messageId}`, {
+      const res = await fetch(`/api/v1/messages/${messageId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: editContent }),
@@ -73,7 +73,7 @@ export function useMessageActions(
 
     try {
       const res = await fetch(
-        `/api/messages/${messageId}?memoryAction=${memoryAction}&skipConfirmation=true`,
+        `/api/v1/messages/${messageId}?memoryAction=${memoryAction}&skipConfirmation=true`,
         { method: 'DELETE' }
       )
 
@@ -122,7 +122,7 @@ export function useMessageActions(
     // If user wants to remember, update settings
     if (rememberChoice) {
       try {
-        await fetch('/api/settings/chat', {
+        await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -172,7 +172,7 @@ export function useMessageActions(
       }
 
       // Otherwise, check if there are memories first
-      const res = await fetch(`/api/messages/${messageId}`, {
+      const res = await fetch(`/api/v1/messages/${messageId}`, {
         method: 'DELETE',
       })
 
@@ -257,7 +257,7 @@ export function useMessageActions(
     for (const msg of messagesAfter) {
       if (msg.role === 'ASSISTANT' && (!msg.content || msg.content.trim().length === 0)) {
         try {
-          await fetch(`/api/messages/${msg.id}`, { method: 'DELETE' })
+          await fetch(`/api/v1/messages/${msg.id}`, { method: 'DELETE' })
         } catch {
           // Ignore errors deleting blank messages
         }
@@ -266,7 +266,7 @@ export function useMessageActions(
 
     // Delete the original user message from server
     try {
-      const deleteRes = await fetch(`/api/messages/${message.id}`, { method: 'DELETE' })
+      const deleteRes = await fetch(`/api/v1/messages/${message.id}`, { method: 'DELETE' })
       if (!deleteRes.ok) {
         throw new Error('Failed to delete original message')
       }
@@ -308,7 +308,7 @@ export function useMessageActions(
 
   const generateSwipe = async (messageId: string, fetchChat: () => Promise<void>) => {
     try {
-      const res = await fetch(`/api/messages/${messageId}/swipe`, {
+      const res = await fetch(`/api/v1/messages/${messageId}?action=swipe`, {
         method: 'POST',
       })
 

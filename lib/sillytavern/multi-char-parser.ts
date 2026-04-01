@@ -3,12 +3,8 @@
  *
  * Parses SillyTavern JSONL/JSON chat files and extracts unique speakers
  * for mapping to Quilltap characters and personas.
- *
- * Note: This module is used by both client and server code, so it uses
- * the client logger for browser compatibility.
  */
 
-import { clientLogger } from '@/lib/client-logger'
 import type { STMessage } from './chat'
 
 /**
@@ -107,8 +103,6 @@ export interface ImportMappingConfig {
  * files that actually contain a single JSON object).
  */
 export function parseSTFile(content: string, filename: string): ParseResult {
-  clientLogger.debug('[MultiCharParser] Parsing file', { filename, contentLength: content.length })
-
   // Try JSON format first - handles both .json files and .jsonl files
   // that are actually single JSON objects (like Quilltap exports)
   try {
@@ -120,16 +114,13 @@ export function parseSTFile(content: string, filename: string): ParseResult {
     const hasMessages = Array.isArray(data) || (data && Array.isArray(data.messages))
 
     if (hasMessages) {
-      clientLogger.debug('[MultiCharParser] Detected JSON format', { filename })
       return parseJSON(content)
     }
   } catch {
     // JSON parse failed, will try JSONL
-    clientLogger.debug('[MultiCharParser] JSON parse failed, trying JSONL', { filename })
   }
 
   // Fall back to JSONL parsing
-  clientLogger.debug('[MultiCharParser] Using JSONL format', { filename })
   return parseJSONL(content)
 }
 
@@ -169,10 +160,7 @@ function parseJSONL(content: string): ParseResult {
         }
       }
     } catch (parseError) {
-      clientLogger.warn('[MultiCharParser] Skipped invalid JSON line', {
-        linePreview: line.substring(0, 50),
-        error: String(parseError)
-      })
+      // Skipped invalid JSON line
     }
   }
 
@@ -181,13 +169,6 @@ function parseJSONL(content: string): ParseResult {
   }
 
   const speakers = extractUniqueSpeakers(messages)
-
-  clientLogger.info('[MultiCharParser] Parsed JSONL file', {
-    messageCount: messages.length,
-    speakerCount: speakers.length,
-    isGroupChat,
-    speakers: speakers.map(s => ({ name: s.name, isUser: s.isUser, count: s.messageCount }))
-  })
 
   return { speakers, messages, metadata, isGroupChat }
 }
@@ -214,13 +195,6 @@ function parseJSON(content: string): ParseResult {
 
   const isGroupChat = messages.some(msg => msg.is_group === true)
   const speakers = extractUniqueSpeakers(messages)
-
-  clientLogger.info('[MultiCharParser] Parsed JSON file', {
-    messageCount: messages.length,
-    speakerCount: speakers.length,
-    isGroupChat,
-    speakers: speakers.map(s => ({ name: s.name, isUser: s.isUser, count: s.messageCount }))
-  })
 
   return { speakers, messages, metadata, isGroupChat }
 }

@@ -13,13 +13,20 @@ interface ApiKey {
 interface ImageProfile {
   id: string
   name: string
-  provider: 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN'
+  provider: string
   apiKeyId?: string
   baseUrl?: string
   modelName: string
   parameters: Record<string, any>
   isDefault: boolean
   apiKey?: ApiKey | null
+}
+
+interface ImageProviderInfo {
+  value: string
+  label: string
+  defaultModels: string[]
+  apiKeyProvider: string
 }
 
 interface ImageProfileFormProps {
@@ -29,17 +36,12 @@ interface ImageProfileFormProps {
   onCancel?: () => void
 }
 
-const IMAGE_PROVIDERS = [
-  { value: 'OPENAI', label: 'OpenAI (DALL-E / GPT Image)' },
-  { value: 'GROK', label: 'Grok (xAI)' },
-  { value: 'GOOGLE_IMAGEN', label: 'Google Imagen' },
+// Fallback providers when API is unavailable
+const FALLBACK_PROVIDERS: ImageProviderInfo[] = [
+  { value: 'OPENAI', label: 'OpenAI (DALL-E / GPT Image)', defaultModels: ['gpt-image-1', 'dall-e-3', 'dall-e-2'], apiKeyProvider: 'OPENAI' },
+  { value: 'GROK', label: 'Grok (xAI)', defaultModels: ['grok-2-image'], apiKeyProvider: 'GROK' },
+  { value: 'GOOGLE_IMAGEN', label: 'Google Imagen', defaultModels: ['imagen-4.0-generate-001', 'imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'], apiKeyProvider: 'GOOGLE' },
 ]
-
-const PROVIDER_MODELS: Record<string, string[]> = {
-  OPENAI: ['gpt-image-1', 'dall-e-3', 'dall-e-2'],
-  GROK: ['grok-2-image'],
-  GOOGLE_IMAGEN: ['imagen-4.0-generate-001', 'imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'],
-}
 
 export function ImageProfileForm({
   profile,
@@ -64,13 +66,39 @@ export function ImageProfileForm({
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [isValidatingKey, setIsValidatingKey] = useState(false)
   const [keyValidationStatus, setKeyValidationStatus] = useState<string | null>(null)
+  const [imageProviders, setImageProviders] = useState<ImageProviderInfo[]>(FALLBACK_PROVIDERS)
+  const [isFetchingProviders, setIsFetchingProviders] = useState(true)
+
+  // Fetch available image providers on mount
+  useEffect(() => {
+    const fetchProviders = async () => {
+      try {
+        setIsFetchingProviders(true)
+        const res = await fetch('/api/v1/image-profiles?action=list-providers')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.providers && data.providers.length > 0) {
+            setImageProviders(data.providers)
+          }
+        }
+      } catch (err) {
+        // Keep fallback providers on error
+        console.error('Failed to fetch image providers:', err)
+      } finally {
+        setIsFetchingProviders(false)
+      }
+    }
+
+    fetchProviders()
+  }, [])
 
   // Fetch available models when provider or API key changes
   useEffect(() => {
     const fetchModels = async () => {
       try {
         setIsFetchingModels(true)
-        const url = new URL('/api/image-profiles/models', window.location.origin)
+        const url = new URL('/api/v1/image-profiles', window.location.origin)
+        url.searchParams.set('action', 'list-models')
         url.searchParams.set('provider', formData.provider)
         if (formData.apiKeyId) {
           url.searchParams.set('apiKeyId', formData.apiKeyId)
@@ -81,19 +109,21 @@ export function ImageProfileForm({
           const data = await res.json()
           setAvailableModels(data.models)
         } else {
-          // Fall back to default models
-          setAvailableModels(PROVIDER_MODELS[formData.provider] || [])
+          // Fall back to default models from provider info
+          const providerInfo = imageProviders.find(p => p.value === formData.provider)
+          setAvailableModels(providerInfo?.defaultModels || [])
         }
       } catch (err) {
         // Fall back to default models on error
-        setAvailableModels(PROVIDER_MODELS[formData.provider] || [])
+        const providerInfo = imageProviders.find(p => p.value === formData.provider)
+        setAvailableModels(providerInfo?.defaultModels || [])
       } finally {
         setIsFetchingModels(false)
       }
     }
 
     fetchModels()
-  }, [formData.provider, formData.apiKeyId])
+  }, [formData.provider, formData.apiKeyId, imageProviders])
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {}
@@ -120,12 +150,15 @@ export function ImageProfileForm({
 
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newProvider = e.target.value
+    const providerInfo = imageProviders.find(p => p.value === newProvider)
     setFormData(prev => ({
       ...prev,
-      provider: newProvider as 'OPENAI' | 'GROK' | 'GOOGLE_IMAGEN',
-      modelName: PROVIDER_MODELS[newProvider]?.[0] || '',
+      provider: newProvider,
+      modelName: providerInfo?.defaultModels?.[0] || '',
+      apiKeyId: '', // Reset API key when switching providers
       parameters: {}, // Reset parameters when switching providers
     }))
+    setKeyValidationStatus(null)
   }
 
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -141,7 +174,7 @@ export function ImageProfileForm({
 
     try {
       setIsValidatingKey(true)
-      const res = await fetch('/api/image-profiles/validate-key', {
+      const res = await fetch('/api/v1/image-profiles?action=validate-key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -182,8 +215,8 @@ export function ImageProfileForm({
 
     try {
       const url = profile
-        ? `/api/image-profiles/${profile.id}`
-        : '/api/image-profiles'
+        ? `/api/v1/image-profiles/${profile.id}`
+        : '/api/v1/image-profiles'
 
       const method = profile ? 'PUT' : 'POST'
 
@@ -207,12 +240,15 @@ export function ImageProfileForm({
   }
 
   const getAvailableApiKeys = () => {
+    const providerInfo = imageProviders.find(p => p.value === formData.provider)
+    const expectedKeyProvider = providerInfo?.apiKeyProvider || formData.provider
+
     return apiKeys.filter(key => {
-      // OPENAI and GROK can use OPENAI/GROK API keys
-      if (formData.provider === 'OPENAI' && key.provider === 'OPENAI') return true
-      if (formData.provider === 'GROK' && key.provider === 'GROK') return true
-      // Google Imagen can use any provider key (generic API keys)
-      if (formData.provider === 'GOOGLE_IMAGEN') return true
+      // Match API keys by the provider's expected key provider
+      // (e.g., GOOGLE_IMAGEN uses GOOGLE keys)
+      if (key.provider === expectedKeyProvider) return true
+      // Also accept keys that exactly match the provider name
+      if (key.provider === formData.provider) return true
       return false
     })
   }
@@ -251,8 +287,9 @@ export function ImageProfileForm({
           value={formData.provider}
           onChange={handleProviderChange}
           className="qt-select"
+          disabled={isFetchingProviders}
         >
-          {IMAGE_PROVIDERS.map(p => (
+          {imageProviders.map(p => (
             <option key={p.value} value={p.value}>
               {p.label}
             </option>
@@ -311,7 +348,7 @@ export function ImageProfileForm({
           disabled={isFetchingModels}
           className="qt-select"
         >
-          {(availableModels.length > 0 ? availableModels : PROVIDER_MODELS[formData.provider] || []).map(
+          {(availableModels.length > 0 ? availableModels : (imageProviders.find(p => p.value === formData.provider)?.defaultModels || [])).map(
             model => (
               <option key={model} value={model}>
                 {model}

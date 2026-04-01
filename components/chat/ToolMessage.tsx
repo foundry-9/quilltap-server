@@ -94,6 +94,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🔍',
       bgColor: 'bg-muted border border-border',
     },
+    project_info: {
+      displayName: 'Project Info',
+      icon: '📋',
+      bgColor: 'bg-muted border border-border',
+    },
+    file_management: {
+      displayName: 'File Management',
+      icon: '📁',
+      bgColor: 'bg-muted border border-border',
+    },
   }
 
   const info = toolInfo[toolData.toolName!] || {
@@ -307,7 +317,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                             filename={attachment.filename}
                             onCleanup={async () => {
                               try {
-                                const response = await fetch(`/api/chat-files/${attachment.id}`, {
+                                const response = await fetch(`/api/v1/chat-files/${attachment.id}`, {
                                   method: 'DELETE',
                                 })
 

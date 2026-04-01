@@ -40,6 +40,9 @@ export {
   convertToolTo,
   convertToolsTo,
   applyDescriptionLimit,
+  // Backward-compatible aliases
+  convertOpenAIToAnthropicFormat,
+  convertOpenAIToGoogleFormat,
 } from './converters';
 
 export type { ToolConvertTarget } from './converters';

@@ -17,6 +17,12 @@ export interface Message {
   attachments?: MessageAttachment[]
   debugMemoryLogs?: string[]
   participantId?: string | null
+  /** Input/prompt tokens for this message */
+  promptTokens?: number | null
+  /** Output/completion tokens for this message */
+  completionTokens?: number | null
+  /** Total tokens (promptTokens + completionTokens) */
+  tokenCount?: number | null
 }
 
 export interface CharacterData {
@@ -106,6 +112,12 @@ export interface Chat {
   activeTypingParticipantId?: string | null
   /** Turns since last user input or pause (for all-LLM pause logic) */
   allLLMPauseTurnCount?: number
+  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  documentEditingMode?: boolean
+  /** Project ID this chat belongs to (if any) */
+  projectId?: string | null
+  /** Project name for display purposes */
+  projectName?: string | null
 }
 
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'
@@ -115,6 +127,13 @@ export interface MemoryCascadePreferences {
   onSwipeRegenerate: MemoryCascadeAction
 }
 
+export interface TokenDisplaySettings {
+  showPerMessageTokens: boolean
+  showPerMessageCost: boolean
+  showChatTotals: boolean
+  showSystemEvents: boolean
+}
+
 export interface ChatSettings {
   id: string
   userId: string
@@ -122,6 +141,7 @@ export interface ChatSettings {
   avatarDisplayStyle?: 'CIRCULAR' | 'RECTANGULAR'
   tagStyles?: Record<string, TagVisualStyle>
   memoryCascadePreferences?: MemoryCascadePreferences
+  tokenDisplaySettings?: TokenDisplaySettings
   createdAt: string
   updatedAt: string
 }

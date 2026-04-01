@@ -1,7 +1,6 @@
 'use client'
 
 import type { GalleryImageProps } from './types'
-import { clientLogger } from '@/lib/client-logger'
 
 export function GalleryImage({
   image,
@@ -30,7 +29,6 @@ export function GalleryImage({
     <div className="relative group">
       <button
         onClick={() => {
-          clientLogger.debug('Gallery image clicked', { imageId: image.id, index })
           onImageClick(index)
         }}
         className={`relative aspect-square w-full overflow-hidden rounded-lg bg-muted hover:ring-2 hover:ring-primary focus:outline-none focus:ring-2 focus:ring-ring transition-all ${
@@ -50,7 +48,7 @@ export function GalleryImage({
             alt={image.filename}
             className="absolute inset-0 w-full h-full object-cover"
             onError={() => {
-              clientLogger.warn('Image failed to load in gallery', { imageId: image.id })
+              console.warn('Image failed to load in gallery', { imageId: image.id })
               onImageError()
             }}
           />
@@ -78,7 +76,6 @@ export function GalleryImage({
         {/* Tag/Untag button */}
         <button
           onClick={(e) => {
-            clientLogger.debug('Tag button clicked', { imageId: image.id, isTagged })
             onToggleTag(e)
           }}
           disabled={isUpdating}
@@ -109,7 +106,6 @@ export function GalleryImage({
         {!isAvatar && (
           <button
             onClick={(e) => {
-              clientLogger.debug('Set avatar button clicked', { imageId: image.id })
               onSetAvatar(e)
             }}
             disabled={isUpdating}
@@ -133,7 +129,6 @@ export function GalleryImage({
         {(!isAvatar || isMissingImage) && (
           <button
             onClick={(e) => {
-              clientLogger.debug('Delete button clicked', { imageId: image.id, isConfirming: isConfirmingDelete })
               onDeleteImage(e)
             }}
             disabled={isDeletingImage}

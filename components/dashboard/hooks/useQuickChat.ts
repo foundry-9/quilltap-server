@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { clientLogger } from '@/lib/client-logger'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { TimestampConfig } from '@/lib/schemas/types'
 
@@ -59,34 +58,41 @@ export function useQuickChat(): UseQuickChatReturn {
 
   const fetchData = useCallback(async (characterId: string) => {
     setLoading(true)
-    clientLogger.debug('Fetching quick chat data', { characterId })
 
     try {
       // Fetch profiles, user-controlled characters, character details, and default partner in parallel
       const [profilesRes, userCharsRes, characterRes, defaultPartnerRes] = await Promise.all([
-        fetch('/api/profiles'),
-        fetch('/api/characters?controlledBy=user'),
-        fetch(`/api/characters/${characterId}`),
-        fetch(`/api/characters/${characterId}/default-partner`),
+        fetch('/api/v1/connection-profiles'),
+        fetch('/api/v1/characters?controlledBy=user'),
+        fetch(`/api/v1/characters/${characterId}`),
+        fetch(`/api/v1/characters/${characterId}?action=default-partner`),
       ])
 
       let fetchedProfiles: ConnectionProfile[] = []
       if (profilesRes.ok) {
         const data = await profilesRes.json()
-        fetchedProfiles = data.map((p: any) => ({ id: p.id, name: p.name }))
+        const profiles = data.profiles || []
+        fetchedProfiles = profiles.map((p: any) => ({ id: p.id, name: p.name }))
         setProfiles(fetchedProfiles)
-        clientLogger.debug('Quick chat profiles loaded', { count: fetchedProfiles.length })
       }
 
       if (userCharsRes.ok) {
         const data = await userCharsRes.json()
         const characters = data.characters || []
+        console.debug('[useQuickChat] User-controlled characters fetched', {
+          count: characters.length,
+          characters: characters.map((c: any) => ({ id: c.id, name: c.name })),
+        })
         setUserControlledCharacters(characters.map((c: any) => ({
           id: c.id,
           name: c.name,
           title: c.title || null,
         })))
-        clientLogger.debug('Quick chat user-controlled characters loaded', { count: characters.length })
+      } else {
+        console.warn('[useQuickChat] Failed to fetch user-controlled characters', {
+          status: userCharsRes.status,
+          statusText: userCharsRes.statusText,
+        })
       }
 
       // Set default profile from character or first available
@@ -94,10 +100,8 @@ export function useQuickChat(): UseQuickChatReturn {
         const { character } = await characterRes.json()
         if (character.defaultConnectionProfileId) {
           setSelectedProfileId(character.defaultConnectionProfileId)
-          clientLogger.debug('Using character default connection profile', { profileId: character.defaultConnectionProfileId })
         } else if (fetchedProfiles.length > 0) {
           setSelectedProfileId(fetchedProfiles[0].id)
-          clientLogger.debug('Using first available profile as default', { profileId: fetchedProfiles[0].id })
         }
       }
 
@@ -106,11 +110,10 @@ export function useQuickChat(): UseQuickChatReturn {
         const data = await defaultPartnerRes.json()
         if (data.partnerId) {
           setSelectedPartnerId(data.partnerId)
-          clientLogger.debug('Using character default partner', { partnerId: data.partnerId })
         }
       }
     } catch (err) {
-      clientLogger.error('Failed to fetch quick chat data', {
+      console.error('Failed to fetch quick chat data', {
         error: err instanceof Error ? err.message : String(err),
         characterId,
       })
@@ -122,18 +125,11 @@ export function useQuickChat(): UseQuickChatReturn {
   const handleCreateChat = useCallback(async (characterId: string, characterName: string) => {
     if (!selectedProfileId) {
       showErrorToast('Please select a connection profile')
-      clientLogger.warn('Quick chat creation attempted without profile selection', { characterId })
+      console.warn('Quick chat creation attempted without profile selection', { characterId })
       return
     }
 
     setCreatingChat(true)
-    clientLogger.debug('Starting quick chat creation', {
-      characterId,
-      profileId: selectedProfileId,
-      partnerId: selectedPartnerId,
-      hasScenario: !!scenario,
-      hasTimestampConfig: !!timestampConfig,
-    })
 
     try {
       const participants: any[] = [
@@ -154,7 +150,7 @@ export function useQuickChat(): UseQuickChatReturn {
         })
       }
 
-      const res = await fetch('/api/chats', {
+      const res = await fetch('/api/v1/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -172,12 +168,11 @@ export function useQuickChat(): UseQuickChatReturn {
 
       const data = await res.json()
       showSuccessToast('Chat created successfully')
-      clientLogger.info('Quick chat created successfully', { chatId: data.chat.id, characterId })
       router.push(`/chats/${data.chat.id}`)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to start chat'
       showErrorToast(errorMsg)
-      clientLogger.error('Failed to create quick chat', {
+      console.error('Failed to create quick chat', {
         error: errorMsg,
         characterId,
       })

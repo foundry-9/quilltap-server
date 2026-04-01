@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
       'coverage/**',
       // Bundled plugin JavaScript files (source is in TypeScript)
       'plugins/dist/**/*.js',
+      // PDF.js worker file (third-party, copied from node_modules)
+      'public/pdf.worker.mjs',
     ],
   },
   {

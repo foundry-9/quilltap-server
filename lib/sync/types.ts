@@ -31,18 +31,19 @@ export const FILE_CONTENT_SIZE_THRESHOLD = 1024 * 1024; // 1MB
 
 /**
  * Entity types that can be synchronized between instances.
- * Profiles are excluded as they contain sensitive API keys.
+ * Connection profiles sync metadata only (API keys are stripped, replaced with _apiKeyLabel).
  */
 export const SyncableEntityTypeEnum = z.enum([
   // Sync order is enforced - entities with dependencies come after their dependencies
   'TAG', // No dependencies
   'FILE', // Depends on TAG (for tags[])
-  'PERSONA', // Depends on TAG
-  'CHARACTER', // Depends on TAG, FILE (for defaultImageId), PERSONA (for personaLinks)
+  'PROJECT', // No dependencies (characterRoster reconciled after CHARACTER)
+  'CONNECTION_PROFILE', // Depends on TAG (for tags[]); apiKeyId stripped, _apiKeyLabel added
+  'CHARACTER', // Depends on TAG, FILE (for defaultImageId)
   'ROLEPLAY_TEMPLATE', // Depends on TAG
   'PROMPT_TEMPLATE', // Depends on TAG
-  'CHAT', // Depends on CHARACTER, PERSONA, TAG, FILE, ROLEPLAY_TEMPLATE
-  'MEMORY', // Depends on CHARACTER, PERSONA, CHAT, TAG
+  'CHAT', // Depends on CHARACTER, TAG, FILE, ROLEPLAY_TEMPLATE, PROJECT
+  'MEMORY', // Depends on CHARACTER, CHAT, TAG
 ]);
 export type SyncableEntityType = z.infer<typeof SyncableEntityTypeEnum>;
 
@@ -174,7 +175,7 @@ export type SyncPhase = z.infer<typeof SyncPhaseEnum>;
 export const SyncProgressSchema = z.object({
   phase: SyncPhaseEnum,
   currentEntity: SyncableEntityTypeEnum.optional(), // Entity type being synced
-  currentItemName: z.string().optional(), // Name/title of current item
+  currentItemName: z.string().nullish(), // Name/title of current item (can be null/undefined)
   pulled: z.number().default(0),
   pushed: z.number().default(0),
   filesFetched: z.number().default(0),

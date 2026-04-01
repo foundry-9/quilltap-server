@@ -31,7 +31,7 @@ describe('Sync System Zod Schemas', () => {
       appVersion: '2.5.0',
       schemaVersion: SCHEMA_VERSION,
       syncProtocolVersion: SYNC_PROTOCOL_VERSION,
-      supportedEntityTypes: ['CHARACTER', 'PERSONA', 'CHAT'],
+      supportedEntityTypes: ['CHARACTER', 'CHAT', 'TAG'],
     };
 
     it('should validate valid version info', () => {
@@ -105,7 +105,7 @@ describe('Sync System Zod Schemas', () => {
     it('should validate with all entity types', () => {
       const valid = {
         ...validVersionInfo,
-        supportedEntityTypes: ['CHARACTER', 'PERSONA', 'CHAT', 'MEMORY', 'TAG', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE'],
+        supportedEntityTypes: ['CHARACTER', 'CHAT', 'MEMORY', 'TAG', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'FILE', 'PROJECT', 'CONNECTION_PROFILE'],
       };
       const result = SyncVersionInfoSchema.safeParse(valid);
       expect(result.success).toBe(true);
@@ -122,7 +122,7 @@ describe('Sync System Zod Schemas', () => {
         appVersion: '2.5.0',
         schemaVersion: SCHEMA_VERSION,
         syncProtocolVersion: SYNC_PROTOCOL_VERSION,
-        supportedEntityTypes: ['CHARACTER', 'PERSONA'],
+        supportedEntityTypes: ['CHARACTER', 'CHAT', 'TAG'],
       },
       email: 'test@example.com',
       password: 'secure-password',
@@ -195,7 +195,7 @@ describe('Sync System Zod Schemas', () => {
         appVersion: '2.5.0',
         schemaVersion: SCHEMA_VERSION,
         syncProtocolVersion: SYNC_PROTOCOL_VERSION,
-        supportedEntityTypes: ['CHARACTER', 'PERSONA'],
+        supportedEntityTypes: ['CHARACTER', 'CHAT', 'TAG'],
       },
       sessionToken: 'session-token-12345',
       remoteUserId: '550e8400-e29b-41d4-a716-446655440000',
@@ -272,7 +272,7 @@ describe('Sync System Zod Schemas', () => {
   describe('SyncDeltaRequestSchema', () => {
     const validDeltaRequest = {
       instanceId: '550e8400-e29b-41d4-a716-446655440000',
-      entityTypes: ['CHARACTER', 'PERSONA'],
+      entityTypes: ['CHARACTER', 'CHAT', 'TAG'],
       sinceTimestamp: '2025-01-01T00:00:00.000Z',
       limit: 50,
       cursor: 'cursor-token-12345',
@@ -449,12 +449,12 @@ describe('Sync System Zod Schemas', () => {
             data: { name: 'Character 1' },
           },
           {
-            entityType: 'PERSONA',
+            entityType: 'TAG',
             id: '550e8400-e29b-41d4-a716-446655440002',
             createdAt: '2025-01-01T10:30:00.000Z',
             updatedAt: '2025-01-01T11:30:00.000Z',
             isDeleted: false,
-            data: { name: 'Persona 1' },
+            data: { name: 'Tag 1' },
           },
         ],
       };
@@ -584,7 +584,7 @@ describe('Sync System Zod Schemas', () => {
     });
 
     it('should validate all entity types', () => {
-      const entityTypes = ['CHARACTER', 'PERSONA', 'CHAT', 'MEMORY', 'TAG', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE'];
+      const entityTypes = ['CHARACTER', 'CHAT', 'MEMORY', 'TAG', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'FILE', 'PROJECT', 'CONNECTION_PROFILE'];
 
       entityTypes.forEach(entityType => {
         const valid = { ...validEntityDelta, entityType };
@@ -695,7 +695,7 @@ describe('Sync System Zod Schemas', () => {
     });
 
     it('should validate all entity types', () => {
-      const entityTypes = ['CHARACTER', 'PERSONA', 'CHAT', 'MEMORY', 'TAG', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE'];
+      const entityTypes = ['CHARACTER', 'CHAT', 'MEMORY', 'TAG', 'ROLEPLAY_TEMPLATE', 'PROMPT_TEMPLATE', 'FILE', 'PROJECT', 'CONNECTION_PROFILE'];
 
       entityTypes.forEach(entityType => {
         const valid = { ...validConflict, entityType };
@@ -737,7 +737,7 @@ describe('Sync System Zod Schemas', () => {
           appVersion: '2.5.0',
           schemaVersion: '2.5.0',
           syncProtocolVersion: '1.0',
-          supportedEntityTypes: ['CHARACTER', 'PERSONA'],
+          supportedEntityTypes: ['CHARACTER', 'CHAT', 'TAG'],
         },
         apiKey: 'test-key',
       };
@@ -749,7 +749,7 @@ describe('Sync System Zod Schemas', () => {
           appVersion: '2.6.0',
           schemaVersion: '2.6.0',
           syncProtocolVersion: '1.0',
-          supportedEntityTypes: ['CHARACTER', 'PERSONA', 'CHAT'],
+          supportedEntityTypes: ['CHARACTER', 'CHAT', 'TAG', 'FILE'],
         },
       };
 
@@ -770,12 +770,12 @@ describe('Sync System Zod Schemas', () => {
             data: { name: 'Character' },
           },
           {
-            entityType: 'PERSONA',
+            entityType: 'TAG',
             id: '550e8400-e29b-41d4-a716-446655440002',
             createdAt: '2025-01-01T10:30:00.000Z',
             updatedAt: '2025-01-01T11:30:00.000Z',
             isDeleted: false,
-            data: { name: 'Persona' },
+            data: { name: 'Tag' },
           },
           {
             entityType: 'CHAT',

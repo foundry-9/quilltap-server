@@ -1,40 +1,46 @@
 /**
- * Image Generation API Tests
- * Phase 3: Image Generation Endpoint
+ * Image Generation API Tests (v1)
+ * Tests POST /api/v1/images?action=generate
  */
 
-import { POST } from '@/app/api/images/generate/route'
+import { POST } from '@/app/api/v1/images/route'
 import { getServerSession } from '@/lib/auth/session'
 import { decryptApiKey } from '@/lib/encryption'
 import { createLLMProvider } from '@/lib/llm'
-import { getRepositories } from '@/lib/repositories/factory'
-import { uploadFile as uploadS3File } from '@/lib/s3/operations'
+import { getRepositories, getRepositoriesSafe } from '@/lib/repositories/factory'
+import { fileStorageManager } from '@/lib/file-storage/manager'
 import { getInheritedTags } from '@/lib/files/tag-inheritance'
 import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories'
+import { NextRequest } from 'next/server'
 
 // Create mock repos before jest.mock
 const mockRepos = createMockRepositoryContainer()
 
 // Note: Mocks for next-auth, @/lib/encryption, @/lib/llm, @/lib/repositories/factory,
-// @/lib/s3/operations, @/lib/s3/client, and @/lib/files/tag-inheritance are defined in jest.setup.ts
+// @/lib/file-storage/manager, and @/lib/files/tag-inheritance are defined in jest.setup.ts
 
 const mockGetServerSession = jest.mocked(getServerSession)
 const mockDecryptApiKey = jest.mocked(decryptApiKey)
 const mockCreateLLMProvider = jest.mocked(createLLMProvider)
 const mockGetRepositories = jest.mocked(getRepositories)
-const mockUploadS3File = jest.mocked(uploadS3File)
+const mockGetRepositoriesSafe = jest.mocked(getRepositoriesSafe)
+const mockFileStorageManager = jest.mocked(fileStorageManager)
 const mockGetInheritedTags = jest.mocked(getInheritedTags)
 
-// Helper to create a mock NextRequest
+// Helper to create a mock NextRequest with action=generate query parameter
 function createMockRequest(body: any) {
+  const url = new URL('http://localhost:3000/api/v1/images?action=generate')
   return {
     json: jest.fn().mockResolvedValue(body),
-  } as any
+    nextUrl: url,
+    url: url.toString(),
+    headers: new Headers({ 'Content-Type': 'application/json' }),
+  } as unknown as NextRequest
 }
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000'
 
-describe('POST /api/images/generate', () => {
+describe('POST /api/v1/images?action=generate', () => {
   let mockConnectionsRepo: any
   let mockImagesRepo: any
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>
@@ -43,8 +49,9 @@ describe('POST /api/images/generate', () => {
     jest.clearAllMocks()
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
 
-    // Setup getRepositories to return mockRepos
+    // Setup getRepositories and getRepositoriesSafe to return mockRepos
     mockGetRepositories.mockReturnValue(mockRepos)
+    mockGetRepositoriesSafe.mockResolvedValue(mockRepos)
 
     // Setup auth mocks with the user ID used by these tests
     setupAuthMocks(mockGetServerSession as jest.Mock, mockRepos, {
@@ -81,8 +88,8 @@ describe('POST /api/images/generate', () => {
     mockRepos.images = mockImagesRepo as any
     mockRepos.files = mockImagesRepo as any
 
-    // Setup S3 and tag inheritance mocks (base mocks are in jest.setup.ts, but reset here)
-    mockUploadS3File.mockResolvedValue(undefined)
+    // Setup file storage and tag inheritance mocks (base mocks are in jest.setup.ts, but reset here)
+    mockFileStorageManager.uploadFile.mockResolvedValue({ storageKey: 'mock-storage-key', mountPointId: 'mock-mount-point' })
     mockGetInheritedTags.mockResolvedValue([])
   })
 
@@ -116,7 +123,7 @@ describe('POST /api/images/generate', () => {
     expect(response.status).toBe(400)
   })
 
-  it('should return 404 if connection profile not found', async () => {
+  it('should return 400 if connection profile not found', async () => {
     mockGetServerSession.mockResolvedValueOnce({
       user: { id: 'test-user-id', email: 'test@example.com' },
     } as any)
@@ -129,7 +136,7 @@ describe('POST /api/images/generate', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(400)
   })
 
   it('should return 400 if provider does not support image generation', async () => {
@@ -242,21 +249,23 @@ describe('POST /api/images/generate', () => {
     const response = await POST(request)
     const data = await response.json()
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(201)
     expect(data.data).toBeDefined()
     expect(data.data).toHaveLength(1)
     expect(data.metadata.prompt).toBe('a beautiful landscape')
     expect(data.metadata.provider).toBe('OPENAI')
     expect(mockProvider.generateImage).toHaveBeenCalled()
-    expect(mockUploadS3File).toHaveBeenCalled()
+    expect(mockFileStorageManager.uploadFile).toHaveBeenCalled()
 
-    // Verify new Phase 4 fields are set correctly
-    expect(mockImagesRepo.create).toHaveBeenCalledWith(
+    // Verify fields are set correctly
+    // Second argument is { id: fileId } to ensure metadata ID matches S3 path
+    expect(mockRepos.files.create).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'GENERATED',
         generationPrompt: 'a beautiful landscape',
         generationModel: 'dall-e-3',
-      })
+      }),
+      expect.objectContaining({ id: expect.any(String) })
     )
   })
 
@@ -343,7 +352,7 @@ describe('POST /api/images/generate', () => {
     const response = await POST(request)
     const data = await response.json()
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(201)
     expect(data.data[0].tags).toHaveLength(1)
     expect(data.data[0].tags[0].tagType).toBe('CHARACTER')
   })
@@ -426,7 +435,7 @@ describe('POST /api/images/generate', () => {
 
     const response = await POST(request)
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(201)
     expect(mockProvider.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: 'a test image',

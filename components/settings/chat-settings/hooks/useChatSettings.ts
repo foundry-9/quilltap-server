@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import {
   ChatSettings,
@@ -11,7 +10,11 @@ import {
   AvatarDisplayStyle,
   CheapLLMSettings,
   MemoryCascadePreferences,
+  TokenDisplaySettings,
+  ContextCompressionSettings,
   DEFAULT_MEMORY_CASCADE_PREFERENCES,
+  DEFAULT_TOKEN_DISPLAY_SETTINGS,
+  DEFAULT_CONTEXT_COMPRESSION_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -29,6 +32,8 @@ interface UseChatSettingsReturn {
   handleCheapLLMUpdate: (updates: Partial<CheapLLMSettings>) => Promise<void>
   handleImageDescriptionProfileChange: (profileId: string | null) => Promise<void>
   handleMemoryCascadeUpdate: (updates: Partial<MemoryCascadePreferences>) => Promise<void>
+  handleTokenDisplayChange: (key: keyof TokenDisplaySettings, value: boolean) => Promise<void>
+  handleContextCompressionUpdate: (updates: Partial<ContextCompressionSettings>) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -48,7 +53,6 @@ export function useChatSettings(): UseChatSettingsReturn {
    * Fetch chat settings from the API
    */
   const fetchSettings = useCallback(async () => {
-    clientLogger.debug('Fetching chat settings')
     setLoading(true)
     setError(null)
 
@@ -57,10 +61,9 @@ export function useChatSettings(): UseChatSettingsReturn {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        const res = await fetch('/api/chat-settings')
+        const res = await fetch('/api/v1/settings/chat')
         if (!res.ok) throw new Error('Failed to fetch chat settings')
         const data = await res.json()
-        clientLogger.debug('Chat settings loaded', { settingsId: data.id })
         setSettings(data)
         lastError = null
         break
@@ -74,7 +77,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     }
 
     if (lastError) {
-      clientLogger.error('Error fetching chat settings', { error: lastError })
+      console.error('Error fetching chat settings', { error: lastError })
       setError(lastError)
     }
 
@@ -86,16 +89,17 @@ export function useChatSettings(): UseChatSettingsReturn {
    */
   const fetchConnectionProfiles = useCallback(async () => {
     try {
-      clientLogger.debug('Fetching connection profiles')
       setLoadingProfiles(true)
-      const res = await fetch('/api/profiles')
+      const res = await fetch('/api/v1/connection-profiles')
       if (!res.ok) throw new Error('Failed to fetch profiles')
       const data = await res.json()
-      clientLogger.debug('Connection profiles loaded', { count: data.length })
-      setConnectionProfiles(data)
+      const profiles = data.profiles || []
+      setConnectionProfiles(profiles)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
-      clientLogger.error('Error loading connection profiles', { error: errorMsg })
+      console.error('Error loading connection profiles', { error: errorMsg })
+      // Set empty array on error to prevent map errors
+      setConnectionProfiles([])
     } finally {
       setLoadingProfiles(false)
     }
@@ -106,15 +110,16 @@ export function useChatSettings(): UseChatSettingsReturn {
    */
   const fetchEmbeddingProfiles = useCallback(async () => {
     try {
-      clientLogger.debug('Fetching embedding profiles')
-      const res = await fetch('/api/embedding-profiles')
+      const res = await fetch('/api/v1/embedding-profiles')
       if (!res.ok) throw new Error('Failed to fetch embedding profiles')
       const data = await res.json()
-      clientLogger.debug('Embedding profiles loaded', { count: data.length })
-      setEmbeddingProfiles(data)
+      const profiles = data.profiles || []
+      setEmbeddingProfiles(profiles)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
-      clientLogger.error('Error loading embedding profiles', { error: errorMsg })
+      console.error('Error loading embedding profiles', { error: errorMsg })
+      // Set empty array on error to prevent map errors
+      setEmbeddingProfiles([])
     }
   }, [])
 
@@ -144,12 +149,11 @@ export function useChatSettings(): UseChatSettingsReturn {
       if (!settings) return
 
       try {
-        clientLogger.debug('Updating avatar display mode', { mode })
         setSaving(true)
         setError(null)
         setSuccess(false)
 
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ avatarDisplayMode: mode }),
@@ -161,12 +165,11 @@ export function useChatSettings(): UseChatSettingsReturn {
         }
 
         const updatedSettings = await res.json()
-        clientLogger.info('Avatar display mode updated successfully', { mode })
         setSettings(updatedSettings)
         showSuccess()
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        clientLogger.error('Failed to update avatar display mode', { error: errorMsg })
+        console.error('Failed to update avatar display mode', { error: errorMsg })
         setError(errorMsg)
       } finally {
         setSaving(false)
@@ -183,12 +186,11 @@ export function useChatSettings(): UseChatSettingsReturn {
       if (!settings) return
 
       try {
-        clientLogger.debug('Updating avatar display style', { style })
         setSaving(true)
         setError(null)
         setSuccess(false)
 
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ avatarDisplayStyle: style }),
@@ -200,7 +202,6 @@ export function useChatSettings(): UseChatSettingsReturn {
         }
 
         const updatedSettings = await res.json()
-        clientLogger.info('Avatar display style updated successfully', { style })
         setSettings(updatedSettings)
 
         // Sync the style to the global AvatarDisplayProvider context
@@ -210,7 +211,7 @@ export function useChatSettings(): UseChatSettingsReturn {
         showSuccess()
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        clientLogger.error('Failed to update avatar display style', { error: errorMsg })
+        console.error('Failed to update avatar display style', { error: errorMsg })
         setError(errorMsg)
       } finally {
         setSaving(false)
@@ -227,12 +228,11 @@ export function useChatSettings(): UseChatSettingsReturn {
       if (!settings) return
 
       try {
-        clientLogger.debug('Updating cheap LLM settings', { updates })
         setSaving(true)
         setError(null)
         setSuccess(false)
 
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cheapLLMSettings: { ...settings.cheapLLMSettings, ...updates } }),
@@ -244,12 +244,11 @@ export function useChatSettings(): UseChatSettingsReturn {
         }
 
         const updatedSettings = await res.json()
-        clientLogger.info('Cheap LLM settings updated successfully', { updates })
         setSettings(updatedSettings)
         showSuccess()
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        clientLogger.error('Failed to update cheap LLM settings', { error: errorMsg })
+        console.error('Failed to update cheap LLM settings', { error: errorMsg })
         setError(errorMsg)
       } finally {
         setSaving(false)
@@ -264,11 +263,10 @@ export function useChatSettings(): UseChatSettingsReturn {
   const handleImageDescriptionProfileChange = useCallback(
     async (profileId: string | null) => {
       try {
-        clientLogger.debug('Updating image description profile', { profileId })
         setSaving(true)
         setError(null)
 
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageDescriptionProfileId: profileId }),
@@ -276,12 +274,11 @@ export function useChatSettings(): UseChatSettingsReturn {
 
         if (!res.ok) throw new Error('Failed to update settings')
 
-        clientLogger.info('Image description profile updated successfully', { profileId })
         await fetchSettings()
         showSuccess()
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to save'
-        clientLogger.error('Failed to update image description profile', { error: errorMsg })
+        console.error('Failed to update image description profile', { error: errorMsg })
         setError(errorMsg)
       } finally {
         setSaving(false)
@@ -298,13 +295,12 @@ export function useChatSettings(): UseChatSettingsReturn {
       if (!settings) return
 
       try {
-        clientLogger.debug('Updating memory cascade preferences', { updates })
         setSaving(true)
         setError(null)
         setSuccess(false)
 
         const currentPrefs = settings.memoryCascadePreferences || DEFAULT_MEMORY_CASCADE_PREFERENCES
-        const res = await fetch('/api/chat-settings', {
+        const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -318,12 +314,91 @@ export function useChatSettings(): UseChatSettingsReturn {
         }
 
         const updatedSettings = await res.json()
-        clientLogger.info('Memory cascade preferences updated successfully', { updates })
         setSettings(updatedSettings)
         showSuccess()
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        clientLogger.error('Failed to update memory cascade preferences', { error: errorMsg })
+        console.error('Failed to update memory cascade preferences', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
+  /**
+   * Update token display settings
+   */
+  const handleTokenDisplayChange = useCallback(
+    async (key: keyof TokenDisplaySettings, value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const currentSettings = settings.tokenDisplaySettings || DEFAULT_TOKEN_DISPLAY_SETTINGS
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tokenDisplaySettings: { ...currentSettings, [key]: value },
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update token display settings')
+        }
+
+        const updatedSettings = await res.json()
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update token display settings', { error: errorMsg })
+        setError(errorMsg)
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, showSuccess]
+  )
+
+  /**
+   * Update context compression settings
+   */
+  const handleContextCompressionUpdate = useCallback(
+    async (updates: Partial<ContextCompressionSettings>) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+        setError(null)
+        setSuccess(false)
+
+        const currentSettings = settings.contextCompressionSettings || DEFAULT_CONTEXT_COMPRESSION_SETTINGS
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contextCompressionSettings: { ...currentSettings, ...updates },
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update context compression settings')
+        }
+
+        const updatedSettings = await res.json()
+        setSettings(updatedSettings)
+        showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update context compression settings', { error: errorMsg })
         setError(errorMsg)
       } finally {
         setSaving(false)
@@ -347,5 +422,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleCheapLLMUpdate,
     handleImageDescriptionProfileChange,
     handleMemoryCascadeUpdate,
+    handleTokenDisplayChange,
+    handleContextCompressionUpdate,
   }
 }

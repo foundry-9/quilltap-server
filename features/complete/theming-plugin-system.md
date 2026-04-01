@@ -1044,7 +1044,6 @@ Components updated (~50+ files, ~1800+ color class replacements):
 - ✅ Import/character components (import-wizard, speaker-mapper, character-conversations-tab, favorite-characters)
 - ✅ Gallery components (EmbeddedPhotoGallery, avatar-selector, image-gallery, DeletedImagePlaceholder)
 - ✅ Tag components (tag-dropdown, tag-editor)
-- ✅ Debug components (DebugPanel, ServerLogsTab, BrowserConsoleTab, DevConsolePanel, DevConsoleLayout)
 
 ### Step 8: Documentation & Polish
 

@@ -86,6 +86,7 @@ export {
   TimestampModeEnum,
   TimestampFormatEnum,
   TimestampConfigSchema,
+  TokenDisplaySettingsSchema,
   ChatSettingsSchema,
   GeneralSettingsSchema,
 } from './settings.types';
@@ -97,9 +98,17 @@ export type {
   TimestampMode,
   TimestampFormat,
   TimestampConfig,
+  TokenDisplaySettings,
   ChatSettings,
   GeneralSettings,
 } from './settings.types';
+
+// ============================================================================
+// PLUGIN CONFIGURATION TYPES
+// ============================================================================
+export { PluginConfigSchema, PluginConfigInputSchema } from './plugin-config.types';
+
+export type { PluginConfig, PluginConfigInput } from './plugin-config.types';
 
 // ============================================================================
 // PROFILE TYPES
@@ -141,22 +150,13 @@ export type {
 } from './character.types';
 
 // ============================================================================
-// PERSONA TYPES
-// ============================================================================
-export {
-  PersonaSchema,
-} from './persona.types';
-
-export type {
-  Persona,
-} from './persona.types';
-
-// ============================================================================
 // CHAT TYPES
 // ============================================================================
 export {
   MessageEventSchema,
   ContextSummaryEventSchema,
+  SystemEventTypeEnum,
+  SystemEventSchema,
   ChatEventSchema,
   ParticipantTypeEnum,
   ChatParticipantSchema,
@@ -169,6 +169,8 @@ export {
 export type {
   MessageEvent,
   ContextSummaryEvent,
+  SystemEventType,
+  SystemEvent,
   ChatEvent,
   ParticipantType,
   ChatParticipant,
@@ -198,6 +200,30 @@ export type {
 } from './file.types';
 
 // ============================================================================
+// FOLDER TYPES
+// ============================================================================
+export { FolderSchema } from './folder.types';
+
+export type { Folder, FolderInput } from './folder.types';
+
+// ============================================================================
+// FILE WRITE PERMISSION TYPES
+// ============================================================================
+export {
+  FileWritePermissionScopeEnum,
+  FileWritePermissionSchema,
+  CreateFileWritePermissionSchema,
+  UpdateFileWritePermissionSchema,
+} from './file-permissions.types';
+
+export type {
+  FileWritePermissionScope,
+  FileWritePermission,
+  CreateFileWritePermission,
+  UpdateFileWritePermission,
+} from './file-permissions.types';
+
+// ============================================================================
 // TAG TYPES
 // ============================================================================
 export {
@@ -224,6 +250,20 @@ export type {
   Memory,
   MemoriesFile,
 } from './memory.types';
+
+// ============================================================================
+// PROJECT TYPES
+// ============================================================================
+export {
+  ProjectSchema,
+  ProjectContextSchema,
+} from './project.types';
+
+export type {
+  Project,
+  ProjectInput,
+  ProjectContext,
+} from './project.types';
 
 // ============================================================================
 // TEMPLATE TYPES

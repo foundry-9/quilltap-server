@@ -10,12 +10,6 @@ export interface ConnectionProfile {
   name: string
 }
 
-export interface Persona {
-  id: string
-  name: string
-  title: string | null
-}
-
 export interface UserControlledCharacter {
   id: string
   name: string

@@ -2,8 +2,8 @@
  * Chat Enrichment Service
  *
  * Consolidates duplicated enrichment functions from:
- * - app/api/chats/route.ts (getCharacterSummary, getPersonaSummary, enrichParticipantSummary)
- * - app/api/chats/[id]/route.ts (getEnrichedCharacter, getEnrichedPersona, enrichParticipant)
+ * - app/api/chats/route.ts (getCharacterSummary, enrichParticipantSummary)
+ * - app/api/chats/[id]/route.ts (getEnrichedCharacter, enrichParticipant)
  *
  * Provides unified enrichment for chat participants with options for different view modes.
  */
@@ -52,29 +52,6 @@ export interface EnrichedCharacterSummary extends EnrichedCharacterBase {
  */
 export type EnrichedCharacterDetail = EnrichedCharacterBase
 
-/**
- * Base persona info shared between summary and detailed views
- */
-export interface EnrichedPersonaBase {
-  id: string
-  name: string
-  title: string | null
-  avatarUrl: string | null
-  defaultImageId: string | null
-  defaultImage: EnrichedImage | null
-}
-
-/**
- * Persona info for list/summary view (includes tags)
- */
-export interface EnrichedPersonaSummary extends EnrichedPersonaBase {
-  tags: string[]
-}
-
-/**
- * Persona info for detail view (no tags, used with full participant)
- */
-export type EnrichedPersonaDetail = EnrichedPersonaBase
 
 /**
  * Connection profile info for detailed participant view
@@ -106,11 +83,10 @@ export interface EnrichedImageProfile {
  */
 export interface EnrichedParticipantSummary {
   id: string
-  type: 'CHARACTER' | 'PERSONA'
+  type: 'CHARACTER'
   displayOrder: number
   isActive: boolean
   character: EnrichedCharacterSummary | null
-  persona: EnrichedPersonaSummary | null
 }
 
 /**
@@ -118,13 +94,12 @@ export interface EnrichedParticipantSummary {
  */
 export interface EnrichedParticipantDetail {
   id: string
-  type: 'CHARACTER' | 'PERSONA'
+  type: 'CHARACTER'
   controlledBy: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
   systemPromptOverride: string | null
   character: EnrichedCharacterDetail | null
-  persona: EnrichedPersonaDetail | null
   connectionProfile: EnrichedConnectionProfile | null
   imageProfile: EnrichedImageProfile | null
   createdAt: string
@@ -142,6 +117,15 @@ export interface EnrichedTag {
 }
 
 /**
+ * Project info for enriched chats
+ */
+export interface EnrichedProject {
+  id: string
+  name: string
+  color: string | null
+}
+
+/**
  * Enriched chat for list view
  */
 export interface EnrichedChatSummary {
@@ -152,6 +136,7 @@ export interface EnrichedChatSummary {
   updatedAt: string
   participants: EnrichedParticipantSummary[]
   tags: EnrichedTag[]
+  project: EnrichedProject | null
   _count: { messages: number }
   _allTagIds: string[] // Internal field for filtering
 }
@@ -223,72 +208,6 @@ export async function getCharacterDetail(
   }
 }
 
-// ============================================================================
-// Persona Enrichment
-// ============================================================================
-
-/**
- * Get enriched persona info for list/summary view (includes tags)
- */
-export async function getPersonaSummary(
-  personaId: string,
-  repos: Repos
-): Promise<EnrichedPersonaSummary | null> {
-  const persona = await repos.personas.findById(personaId)
-  if (!persona) {
-    logger.debug('Persona not found for enrichment', { personaId })
-    return null
-  }
-
-  let defaultImage: EnrichedImage | null = null
-  if (persona.defaultImageId) {
-    const fileEntry = await repos.files.findById(persona.defaultImageId)
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
-    }
-  }
-
-  return {
-    id: persona.id,
-    name: persona.name,
-    title: persona.title ?? null,
-    avatarUrl: persona.avatarUrl ?? null,
-    defaultImageId: persona.defaultImageId ?? null,
-    defaultImage,
-    tags: persona.tags || [],
-  }
-}
-
-/**
- * Get enriched persona info for detail view (no tags)
- */
-export async function getPersonaDetail(
-  personaId: string,
-  repos: Repos
-): Promise<EnrichedPersonaDetail | null> {
-  const persona = await repos.personas.findById(personaId)
-  if (!persona) {
-    logger.debug('Persona not found for enrichment', { personaId })
-    return null
-  }
-
-  let defaultImage: EnrichedImage | null = null
-  if (persona.defaultImageId) {
-    const fileEntry = await repos.files.findById(persona.defaultImageId)
-    if (fileEntry) {
-      defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
-    }
-  }
-
-  return {
-    id: persona.id,
-    name: persona.name,
-    title: persona.title ?? null,
-    avatarUrl: persona.avatarUrl ?? null,
-    defaultImageId: persona.defaultImageId ?? null,
-    defaultImage,
-  }
-}
 
 // ============================================================================
 // Profile Enrichment (for detail view)
@@ -360,17 +279,12 @@ export async function enrichParticipantSummary(
     ? await getCharacterSummary(participant.characterId, repos)
     : null
 
-  const persona = participant.type === 'PERSONA' && participant.personaId
-    ? await getPersonaSummary(participant.personaId, repos)
-    : null
-
   return {
     id: participant.id,
     type: participant.type,
     displayOrder: participant.displayOrder,
     isActive: participant.isActive,
     character,
-    persona,
   }
 }
 
@@ -385,10 +299,6 @@ export async function enrichParticipantDetail(
     ? await getCharacterDetail(participant.characterId, repos)
     : null
 
-  const persona = participant.type === 'PERSONA' && participant.personaId
-    ? await getPersonaDetail(participant.personaId, repos)
-    : null
-
   const connectionProfile = participant.connectionProfileId
     ? await getConnectionProfile(participant.connectionProfileId, repos)
     : null
@@ -400,12 +310,11 @@ export async function enrichParticipantDetail(
   return {
     id: participant.id,
     type: participant.type,
-    controlledBy: participant.controlledBy || (participant.type === 'PERSONA' ? 'user' : 'llm'),
+    controlledBy: participant.controlledBy || 'llm',
     displayOrder: participant.displayOrder,
     isActive: participant.isActive,
     systemPromptOverride: participant.systemPromptOverride ?? null,
     character,
-    persona,
     connectionProfile,
     imageProfile,
     createdAt: participant.createdAt,
@@ -468,14 +377,24 @@ export async function enrichChatForList(
   // Get message count
   const messageCount = await repos.chats.getMessageCount(chat.id)
 
-  // Collect all tag IDs from chat, characters, and personas for filtering
+  // Get project info if chat belongs to a project
+  let project: EnrichedProject | null = null
+  if (chat.projectId) {
+    const projectData = await repos.projects.findById(chat.projectId)
+    if (projectData) {
+      project = {
+        id: projectData.id,
+        name: projectData.name,
+        color: projectData.color ?? null,
+      }
+    }
+  }
+
+  // Collect all tag IDs from chat and characters for filtering
   const allTagIds: string[] = [...chat.tags]
   for (const participant of participants) {
     if (participant.character?.tags) {
       allTagIds.push(...participant.character.tags)
-    }
-    if (participant.persona?.tags) {
-      allTagIds.push(...participant.persona.tags)
     }
   }
 
@@ -487,6 +406,7 @@ export async function enrichChatForList(
     updatedAt: chat.updatedAt,
     participants,
     tags,
+    project,
     _count: { messages: messageCount },
     _allTagIds: allTagIds,
   }

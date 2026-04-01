@@ -51,19 +51,6 @@ export async function getInheritedTags(
         continue;
       }
 
-      // Try persona
-      const persona = await repos.personas.findById(entityId);
-      if (persona && persona.userId === userId) {
-        persona.tags?.forEach(tag => allTags.add(tag));
-        checkedEntities.push(`persona:${entityId}`);
-        logger.debug('Inherited tags from persona', {
-          context: 'tag-inheritance',
-          personaId: entityId,
-          tagCount: persona.tags?.length ?? 0,
-        });
-        continue;
-      }
-
       // Try chat
       const chat = await repos.chats.findById(entityId);
       if (chat && chat.userId === userId) {

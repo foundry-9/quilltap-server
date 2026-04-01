@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { ProfileList } from './ProfileList'
@@ -83,7 +82,6 @@ export default function ConnectionProfilesTab() {
 
   const handleEdit = useCallback(
     (profile: ConnectionProfile) => {
-      clientLogger.debug('Opening edit modal for profile', { profileId: profile.id })
       loadProfileIntoForm(profile)
       setEditingProfile(profile)
       setIsModalOpen(true)
@@ -92,21 +90,18 @@ export default function ConnectionProfilesTab() {
   )
 
   const handleOpenModal = useCallback(() => {
-    clientLogger.debug('Opening new profile modal')
     resetForm()
     setEditingProfile(null)
     setIsModalOpen(true)
   }, [resetForm])
 
   const handleCloseModal = useCallback(() => {
-    clientLogger.debug('Closing profile modal')
     setIsModalOpen(false)
     setEditingProfile(null)
     resetForm()
   }, [resetForm])
 
   const handleModalSuccess = useCallback(() => {
-    clientLogger.debug('Profile saved via modal')
     fetchProfiles()
     fetchApiKeys()
   }, [fetchProfiles, fetchApiKeys])

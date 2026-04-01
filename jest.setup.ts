@@ -3,6 +3,9 @@ import fetchMock from 'jest-fetch-mock'
 
 fetchMock.enableMocks()
 
+// Polyfill setImmediate for Node.js APIs used in archiver
+global.setImmediate = global.setImmediate || ((fn: (...args: any[]) => void, ...args: any[]) => global.setTimeout(fn, 0, ...args))
+
 const shouldSilenceConsole = process.env.ENABLE_TEST_LOGS !== 'true'
 
 if (shouldSilenceConsole) {
@@ -45,6 +48,15 @@ jest.mock('@/lib/auth/session', () => ({
     }
     return session.user.id
   }),
+}))
+
+// Mock startup state to avoid waiting for server initialization in tests
+jest.mock('@/lib/startup/startup-state', () => ({
+  startupState: {
+    isReady: jest.fn().mockReturnValue(true),
+    waitForReady: jest.fn().mockResolvedValue(true),
+    getPhase: jest.fn().mockReturnValue('complete'),
+  },
 }))
 
 // Mock session provider for tests
@@ -166,18 +178,33 @@ if (!(globalThis as any).Cookies) {
 // Mock next/server Response
 jest.mock('next/server', () => {
   const actual = jest.requireActual('next/server')
-  const jsonMock = jest.fn((data: any, init?: any) => ({
-    status: init?.status || 200,
-    json: async () => data,
-    headers: new Map(),
-  }))
+  
+  class MockNextResponse {
+    status: number
+    statusText: string
+    body: any
+    headers: Headers
+
+    constructor(body?: any, init?: ResponseInit & { statusText?: string }) {
+      this.body = body
+      this.status = init?.status || 200
+      this.statusText = init?.statusText || ''
+      this.headers = init?.headers ? new Headers(init.headers) : new Headers()
+    }
+
+    async json() {
+      return this.body
+    }
+
+    static json = jest.fn((data: any, init?: ResponseInit) => {
+      const response = new MockNextResponse(data, init)
+      return response
+    })
+  }
 
   return {
     ...actual,
-    NextResponse: {
-      ...actual.NextResponse,
-      json: jsonMock,
-    },
+    NextResponse: MockNextResponse,
   }
 })
 
@@ -225,32 +252,66 @@ jest.mock('@/lib/files/tag-inheritance', () => ({
 // Mock Repositories
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
+  getRepositoriesSafe: jest.fn(),
   getUserRepositories: jest.fn(),
   resetRepositories: jest.fn(),
   clearUserRepositoryCache: jest.fn(),
 }))
 
-// Mock S3 operations - used by cascade-delete and other modules
-jest.mock('@/lib/s3/operations', () => ({
-  uploadFile: jest.fn().mockResolvedValue(undefined),
-  downloadFile: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
-  deleteFile: jest.fn().mockResolvedValue(undefined),
-  fileExists: jest.fn().mockResolvedValue(true),
-  getPresignedUrl: jest.fn().mockResolvedValue('https://mock-s3.com/presigned-url'),
-  getPresignedUploadUrl: jest.fn().mockResolvedValue('https://mock-s3.com/presigned-upload-url'),
-  getPublicUrl: jest.fn().mockResolvedValue('https://mock-s3.com/public-url'),
-  getFileMetadata: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg', lastModified: new Date() }),
-  listFiles: jest.fn().mockResolvedValue([]),
-}))
+// Mock file storage manager - used by cascade-delete and other modules
+jest.mock('@/lib/file-storage/manager', () => {
+  const mockBackend = {
+    getMetadata: jest.fn().mockReturnValue({
+      providerId: 'local',
+      displayName: 'Local Storage',
+      description: 'Mock local storage',
+      capabilities: {
+        presignedUrls: false,
+        publicUrls: false,
+        streamingUpload: true,
+        streamingDownload: true,
+        copy: true,
+        list: true,
+        metadata: true,
+      },
+    }),
+    testConnection: jest.fn().mockResolvedValue({ success: true, message: 'Mock connection OK', latencyMs: 1 }),
+    upload: jest.fn().mockResolvedValue(undefined),
+    download: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
+    delete: jest.fn().mockResolvedValue(undefined),
+    exists: jest.fn().mockResolvedValue(true),
+    copy: jest.fn().mockResolvedValue(undefined),
+    getFileMetadata: jest.fn().mockResolvedValue({ size: 1024, contentType: 'image/jpeg', lastModified: new Date() }),
+    list: jest.fn().mockResolvedValue([]),
+    getProxyUrl: jest.fn().mockImplementation((key: string) => `/api/files/proxy/${key}`),
+  }
 
-// Mock S3 client module
-jest.mock('@/lib/s3/client', () => ({
-  getS3Client: jest.fn().mockReturnValue({}),
-  getS3Bucket: jest.fn().mockReturnValue('mock-bucket'),
-  buildS3Key: jest.fn().mockImplementation((userId: string, fileId: string, filename: string, category: string) => {
-    return `users/${userId}/${category.toLowerCase()}s/${fileId}/${filename}`
-  }),
-}))
+  return {
+    fileStorageManager: {
+      initialize: jest.fn().mockResolvedValue(undefined),
+      isInitialized: jest.fn().mockReturnValue(true),
+      registerProviderPlugin: jest.fn(),
+      getBackend: jest.fn().mockReturnValue(mockBackend),
+      getDefaultBackend: jest.fn().mockReturnValue(mockBackend),
+      getBackendForFile: jest.fn().mockReturnValue(mockBackend),
+      getBackendForProject: jest.fn().mockReturnValue(mockBackend),
+      uploadFile: jest.fn().mockResolvedValue({ storageKey: 'mock-storage-key', mountPointId: 'mock-mount-point' }),
+      downloadFile: jest.fn().mockResolvedValue(Buffer.from('mock file content')),
+      deleteFile: jest.fn().mockResolvedValue(undefined),
+      getFileUrl: jest.fn().mockResolvedValue('http://localhost:3000/api/files/proxy/mock-key'),
+      fileExists: jest.fn().mockResolvedValue(true),
+      buildStorageKey: jest.fn().mockImplementation((params: { userId: string; fileId: string; filename: string; projectId?: string | null; folderPath?: string }) => {
+        const { userId, fileId, filename, projectId, folderPath } = params;
+        if (projectId) {
+          const normalizedFolder = folderPath && folderPath !== '/' ? folderPath.replace(/^\//, '') : '';
+          return `users/${userId}/${projectId}/${normalizedFolder}${fileId}_${filename}`;
+        }
+        return `users/${userId}/_general/${fileId}_${filename}`;
+      }),
+    },
+    FileStorageManager: jest.fn(),
+  }
+})
 
 // Mock vector store for embedding operations
 jest.mock('@/lib/embedding/vector-store', () => ({

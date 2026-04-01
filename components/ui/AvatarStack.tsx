@@ -134,10 +134,12 @@ export function AvatarStack({
   }
 
   // Multi-entity: stacked/overlapping avatars
+  // Use same height as single avatar, calculate width to maintain aspect ratio
   const displayEntities = entities.slice(0, maxDisplay)
-  const stackWidth = config.stackWidth
-  const stackHeight = style === 'CIRCULAR' ? stackWidth : Math.round(stackWidth * 1.25)
-  const overlapOffset = style === 'CIRCULAR' ? config.overlapOffset : config.overlapOffset + 2
+  const stackHeight = style === 'CIRCULAR' ? config.circularHeight : config.height
+  // For rectangular (4:5 ratio), width = height * 0.8; for circular, width = height
+  const stackWidth = style === 'CIRCULAR' ? stackHeight : Math.round(stackHeight * 0.8)
+  const overlapOffset = style === 'CIRCULAR' ? config.overlapOffset : Math.round(stackWidth * -0.25)
 
   return (
     <div

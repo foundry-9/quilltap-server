@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { fetchJson } from '@/lib/fetch-helpers'
-import { clientLogger } from '@/lib/client-logger'
 import SectionHeader from '@/components/ui/SectionHeader'
 import LoadingState from '@/components/ui/LoadingState'
 import ErrorAlert from '@/components/ui/ErrorAlert'
@@ -38,12 +37,11 @@ export default function ApiKeysTab() {
   const loadKeys = useAsyncOperation<ApiKey[]>()
   const deleteKey = useAsyncOperation<void>()
   const testKey = useAsyncOperation<{ valid: boolean; error?: string }>()
-  const triggerAutoAssociate = useAutoAssociate('api-keys')
+  const triggerAutoAssociate = useAutoAssociate()
 
   const fetchApiKeysData = async () => {
-    clientLogger.debug('Fetching API keys')
     const result = await loadKeys.execute(async () => {
-      const response = await fetchJson<ApiKey[]>('/api/keys', {
+      const response = await fetchJson<{ apiKeys: ApiKey[]; count: number }>('/api/v1/api-keys', {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
       })
@@ -52,10 +50,7 @@ export default function ApiKeysTab() {
         throw new Error(response.error || 'Failed to fetch API keys')
       }
 
-      clientLogger.debug('API keys fetched successfully', {
-        count: response.data?.length || 0,
-      })
-      return response.data || []
+      return response.data?.apiKeys || []
     })
 
     if (result) {
@@ -70,35 +65,29 @@ export default function ApiKeysTab() {
 
   // Load API keys on mount
   useEffect(() => {
-    clientLogger.debug('ApiKeysTab mounted, fetching API keys')
     fetchApiKeysData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleDeleteClick = (id: string) => {
-    clientLogger.debug('Delete confirmation requested for API key', { id })
     setDeleteConfirmId(id)
   }
 
   const handleDeleteCancel = () => {
-    clientLogger.debug('Delete confirmation cancelled')
     setDeleteConfirmId(null)
   }
 
   const handleDeleteConfirm = async () => {
     if (!deleteConfirmId) return
 
-    clientLogger.debug('Deleting API key', { id: deleteConfirmId })
     const result = await deleteKey.execute(async () => {
-      const response = await fetchJson<void>(`/api/keys/${deleteConfirmId}`, {
+      const response = await fetchJson<void>(`/api/v1/api-keys/${deleteConfirmId}`, {
         method: 'DELETE',
       })
 
       if (!response.ok) {
         throw new Error(response.error || 'Failed to delete API key')
       }
-
-      clientLogger.debug('API key deleted successfully', { id: deleteConfirmId })
     })
 
     if (result !== null) {
@@ -108,13 +97,12 @@ export default function ApiKeysTab() {
   }
 
   const handleTest = async (id: string) => {
-    clientLogger.debug('Testing API key', { id })
     setTestingKeyId(id)
     setTestResults({})
 
     const result = await testKey.execute(async () => {
       const response = await fetchJson<{ valid: boolean; error?: string }>(
-        `/api/keys/${id}/test`,
+        `/api/v1/api-keys/${id}?action=test`,
         { method: 'POST' }
       )
 
@@ -128,56 +116,46 @@ export default function ApiKeysTab() {
     if (result) {
       if (result.valid) {
         setTestResults({ [id]: '✓ Key is valid' })
-        clientLogger.debug('API key test passed', { id })
       } else {
         setTestResults({ [id]: `✗ ${result.error || 'Key is invalid'}` })
-        clientLogger.debug('API key test failed', { id, error: result.error })
       }
     } else {
       setTestResults({ [id]: 'Connection failed' })
-      clientLogger.error('API key test connection failed', { id })
+      console.error('API key test connection failed', { id })
     }
 
     setTestingKeyId(null)
   }
 
   const handleOpenModal = () => {
-    clientLogger.debug('Add API key modal opened')
     setIsModalOpen(true)
   }
 
   const handleCloseModal = () => {
-    clientLogger.debug('Add API key modal closed')
     setIsModalOpen(false)
   }
 
   const handleModalSuccess = () => {
-    clientLogger.debug('API key created via modal')
     fetchApiKeysData()
   }
 
   const handleOpenExportDialog = () => {
-    clientLogger.debug('Export keys dialog opened')
     setIsExportDialogOpen(true)
   }
 
   const handleCloseExportDialog = () => {
-    clientLogger.debug('Export keys dialog closed')
     setIsExportDialogOpen(false)
   }
 
   const handleOpenImportDialog = () => {
-    clientLogger.debug('Import keys dialog opened')
     setIsImportDialogOpen(true)
   }
 
   const handleCloseImportDialog = () => {
-    clientLogger.debug('Import keys dialog closed')
     setIsImportDialogOpen(false)
   }
 
   const handleImportSuccess = () => {
-    clientLogger.debug('API keys imported successfully')
     fetchApiKeysData()
   }
 

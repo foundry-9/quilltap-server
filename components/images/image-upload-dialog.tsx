@@ -47,7 +47,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
           formData.append('tags', JSON.stringify([{ tagType: contextType, tagId: contextId }]));
         }
 
-        const response = await fetch('/api/images', {
+        const response = await fetch('/api/v1/images', {
           method: 'POST',
           body: formData,
         });
@@ -65,7 +65,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
 
         const tags = contextType && contextId ? [{ tagType: contextType, tagId: contextId }] : undefined;
 
-        const response = await fetch('/api/images', {
+        const response = await fetch('/api/v1/images', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
