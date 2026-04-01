@@ -23,10 +23,11 @@ export default function PromptsTab() {
   const form = useFormState(INITIAL_FORM_DATA)
   const prompts = usePrompts()
 
-  // Fetch templates on mount
+  // Fetch templates on mount only
   useEffect(() => {
     prompts.fetchTemplates()
-  }, [prompts])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only fetch once on mount - fetchTemplates is stable
 
   const openCreateModal = useCallback(() => {
     setEditingTemplate(null)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -22,6 +22,7 @@ export function usePrompts() {
 
   /**
    * Fetch all prompt templates from the server
+   * Note: Empty dependency array since fetchOp.execute is stable
    */
   const fetchTemplates = useCallback(async () => {
     clientLogger.debug('Fetching prompt templates')
@@ -36,7 +37,8 @@ export function usePrompts() {
       setTemplates(result)
       clientLogger.debug('Fetched prompt templates', { count: result.length })
     }
-  }, [fetchOp])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // fetchOp.execute is stable (empty deps in useAsyncOperation)
 
   /**
    * Save a template (create or update)
@@ -110,11 +112,13 @@ export function usePrompts() {
 
       return null
     },
-    [saveOp]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [] // saveOp.execute is stable (empty deps in useAsyncOperation)
   )
 
   /**
    * Delete a template
+   * Note: Empty dependency array since deleteOp.execute is stable
    */
   const deleteTemplate = useCallback(
     async (templateId: string) => {
@@ -138,7 +142,8 @@ export function usePrompts() {
         setTimeout(() => setSuccess(null), 3000)
       }
     },
-    [deleteOp]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [] // deleteOp.execute is stable (empty deps in useAsyncOperation)
   )
 
   /**
@@ -164,20 +169,37 @@ export function usePrompts() {
     setSuccess(null)
   }, [])
 
-  return {
-    templates,
-    success,
-    copiedId,
-    deleteConfirm,
-    fetchOp,
-    saveOp,
-    deleteOp,
-    fetchTemplates,
-    saveTemplate,
-    deleteTemplate,
-    copyToClipboard,
-    clearSuccess,
-    setDeleteConfirm,
-    setCopiedId,
-  }
+  // Memoize the return value to prevent unnecessary re-renders
+  return useMemo(
+    () => ({
+      templates,
+      success,
+      copiedId,
+      deleteConfirm,
+      fetchOp,
+      saveOp,
+      deleteOp,
+      fetchTemplates,
+      saveTemplate,
+      deleteTemplate,
+      copyToClipboard,
+      clearSuccess,
+      setDeleteConfirm,
+      setCopiedId,
+    }),
+    [
+      templates,
+      success,
+      copiedId,
+      deleteConfirm,
+      fetchOp,
+      saveOp,
+      deleteOp,
+      fetchTemplates,
+      saveTemplate,
+      deleteTemplate,
+      copyToClipboard,
+      clearSuccess,
+    ]
+  )
 }

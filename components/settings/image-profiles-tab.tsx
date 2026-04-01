@@ -58,7 +58,7 @@ export default function ImageProfilesTab() {
     error: apiKeysError,
   } = useAsyncOperation<ApiKey[]>()
 
-  // Fetch profiles on mount
+  // Fetch profiles on mount only
   useEffect(() => {
     const loadProfiles = async () => {
       clientLogger.debug('Loading image profiles')
@@ -76,7 +76,8 @@ export default function ImageProfilesTab() {
     }
 
     loadProfiles()
-  }, [executeLoadProfiles])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // executeLoadProfiles is stable
 
   // Fetch API keys on mount
   useEffect(() => {

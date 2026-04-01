@@ -116,7 +116,8 @@ export function useConnectionProfiles() {
       clientLogger.debug('Profiles loaded successfully', { count: data.length })
       return data
     })
-  }, [fetchOp])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // fetchOp.execute is stable (empty deps in useAsyncOperation)
 
   const fetchApiKeys = useCallback(async () => {
     try {
@@ -179,7 +180,8 @@ export function useConnectionProfiles() {
 
       return result
     },
-    [deleteOp, fetchProfiles]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [] // deleteOp.execute and fetchProfiles are stable
   )
 
   return {
