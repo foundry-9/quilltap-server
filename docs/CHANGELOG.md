@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- chore: reduce Commonplace Book memory recap limits from 50/20/10 to 20/10/5 (high/medium/low importance tiers)
 - chore: tag-for-release command now uses linear strategy exclusively — removed merge-back strategy and all strategy selection logic
 - chore: add `--linear` strategy option to tag-for-release command — tree-copy approach that keeps main linear by skipping merge-back from release; default behavior unchanged
 - fix: character optimizer "Refine from Memories" UI — frequency badges in behavioral tendencies now wrap instead of overflowing the dialog; textarea in edit mode is taller and resizable, filling available space

@@ -39,8 +39,8 @@ export interface MemoryRecapResult {
 /**
  * Generate a memory recap for a character at the start of a conversation.
  *
- * Fetches the last 50 high-importance, 20 medium-importance, and 10 low-importance
- * memories, sends them to the cheap LLM for narrative summarization, and returns
+ * Fetches recent memories across importance tiers (limits defined in
+ * findRecentByImportanceTier), sends them to the cheap LLM for narrative summarization, and returns
  * formatted content ready for injection into the system prompt.
  *
  * For dangerous chats or when the cheap LLM refuses to process the memories,
