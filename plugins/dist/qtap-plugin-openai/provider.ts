@@ -18,6 +18,15 @@ const OPENAI_SUPPORTED_MIME_TYPES = [
   'image/webp',
 ];
 
+// Reasoning models don't support temperature, top_p, and other sampling parameters
+// See: https://platform.openai.com/docs/guides/reasoning
+const REASONING_MODEL_PREFIXES = ['o1', 'o3', 'o4', 'gpt-5'];
+
+function isReasoningModel(model: string): boolean {
+  const modelLower = model.toLowerCase();
+  return REASONING_MODEL_PREFIXES.some(prefix => modelLower.startsWith(prefix));
+}
+
 type OpenAIMessageContent = string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } }>;
 
 interface OpenAIMessage {
@@ -92,7 +101,8 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    logger.debug('OpenAI sendMessage called', { context: 'OpenAIProvider.sendMessage', model: params.model });
+    const isReasoning = isReasoningModel(params.model);
+    logger.debug('OpenAI sendMessage called', { context: 'OpenAIProvider.sendMessage', model: params.model, isReasoningModel: isReasoning });
 
     const client = new OpenAI({
       apiKey,
@@ -105,13 +115,20 @@ export class OpenAIProvider implements LLMProvider {
       model: params.model,
       messages: messages as ChatCompletionMessageParam[],
       max_completion_tokens: params.maxTokens ?? 1000,
-      top_p: params.topP ?? 1,
-      stop: params.stop,
     };
 
-    // Only include temperature if explicitly provided - some models don't support custom values
-    if (params.temperature !== undefined) {
-      requestParams.temperature = params.temperature;
+    // Reasoning models (o1, o3, o4, gpt-5) don't support temperature, top_p, or other sampling parameters
+    // See: https://platform.openai.com/docs/guides/reasoning
+    if (!isReasoning) {
+      requestParams.top_p = params.topP ?? 1;
+      requestParams.stop = params.stop;
+
+      // Only include temperature if explicitly provided - some models don't support custom values
+      if (params.temperature !== undefined) {
+        requestParams.temperature = params.temperature;
+      }
+    } else {
+      logger.debug('Skipping sampling parameters for reasoning model', { context: 'OpenAIProvider.sendMessage', model: params.model });
     }
 
     // Add tools if provided
@@ -154,7 +171,8 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
-    logger.debug('OpenAI streamMessage called', { context: 'OpenAIProvider.streamMessage', model: params.model });
+    const isReasoning = isReasoningModel(params.model);
+    logger.debug('OpenAI streamMessage called', { context: 'OpenAIProvider.streamMessage', model: params.model, isReasoningModel: isReasoning });
 
     const client = new OpenAI({
       apiKey,
@@ -167,14 +185,21 @@ export class OpenAIProvider implements LLMProvider {
       model: params.model,
       messages: messages as ChatCompletionMessageParam[],
       max_completion_tokens: params.maxTokens ?? 1000,
-      top_p: params.topP ?? 1,
       stream: true,
       stream_options: { include_usage: true },
     };
 
-    // Only include temperature if explicitly provided - some models don't support custom values
-    if (params.temperature !== undefined) {
-      requestParams.temperature = params.temperature;
+    // Reasoning models (o1, o3, o4, gpt-5) don't support temperature, top_p, or other sampling parameters
+    // See: https://platform.openai.com/docs/guides/reasoning
+    if (!isReasoning) {
+      requestParams.top_p = params.topP ?? 1;
+
+      // Only include temperature if explicitly provided - some models don't support custom values
+      if (params.temperature !== undefined) {
+        requestParams.temperature = params.temperature;
+      }
+    } else {
+      logger.debug('Skipping sampling parameters for reasoning model', { context: 'OpenAIProvider.streamMessage', model: params.model });
     }
 
     // Add tools if provided

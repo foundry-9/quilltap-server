@@ -155,13 +155,19 @@ export class GrokProvider implements LLMProvider {
 
     // Add native live search if enabled
     // Uses Grok's Live Search API (searches web, X/Twitter, news)
+    // Note: Live Search API will be deprecated December 15, 2025 in favor of Agent Tools API
     if (params.webSearchEnabled) {
       logger.debug('Web search enabled', { context: 'GrokProvider.sendMessage' });
       requestParams.search_parameters = {
         mode: 'auto', // Model decides when to search
         return_citations: true,
         max_search_results: 20,
-        sources: ['web', 'x', 'news'],
+        // Sources must be objects with a "type" field, not plain strings
+        sources: [
+          { type: 'web' },
+          { type: 'x' },
+          { type: 'news' },
+        ],
       };
     }
 
@@ -222,13 +228,19 @@ export class GrokProvider implements LLMProvider {
     }
 
     // Add native live search if enabled
+    // Note: Live Search API will be deprecated December 15, 2025 in favor of Agent Tools API
     if (params.webSearchEnabled) {
       logger.debug('Web search enabled for stream', { context: 'GrokProvider.streamMessage' });
       requestParams.search_parameters = {
         mode: 'auto',
         return_citations: true,
         max_search_results: 20,
-        sources: ['web', 'x', 'news'],
+        // Sources must be objects with a "type" field, not plain strings
+        sources: [
+          { type: 'web' },
+          { type: 'x' },
+          { type: 'news' },
+        ],
       };
     }
 
