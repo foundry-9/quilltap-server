@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, RefObject } from 'react';
-import { clientLogger } from '@/lib/client-logger';
 
 export interface UseClickOutsideOptions {
   /**
@@ -77,10 +76,6 @@ export function useClickOutside(
       }
 
       // Click is outside all tracked elements
-      clientLogger.debug('Click outside detected', {
-        hasRef: !!ref.current,
-        excludeCount: excludeRefs.length,
-      });
       onClickOutside();
     };
 

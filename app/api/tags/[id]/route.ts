@@ -3,8 +3,8 @@
 // DELETE /api/tags/[id] - Delete a tag
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
+import { badRequest, forbidden, notFound, serverError, validationError } from '@/lib/api/responses'
 import { z } from 'zod'
 import type { Tag } from '@/lib/schemas/types'
 import { TagVisualStyleSchema } from '@/lib/schemas/types'
@@ -23,35 +23,20 @@ const updateTagSchema = z
   )
 
 // PUT /api/tags/[id] - Update tag name
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
   try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     const tagId = id
 
     // Verify tag exists and belongs to user
     const existingTag = await repos.tags.findById(tagId)
 
     if (!existingTag) {
-      return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+      return notFound('Tag')
     }
 
     if (existingTag.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+      return forbidden()
     }
 
     const body = await req.json()
@@ -69,10 +54,7 @@ export async function PUT(
       )
 
       if (duplicateTag) {
-        return NextResponse.json(
-          { error: 'A tag with this name already exists' },
-          { status: 400 }
-        )
+        return badRequest('A tag with this name already exists')
       }
 
       updateData.name = validatedData.name
@@ -92,50 +74,29 @@ export async function PUT(
     return NextResponse.json({ tag })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
+      return validationError(error)
     }
 
     logger.error('Error updating tag:', error as Error)
-    return NextResponse.json(
-      { error: 'Failed to update tag' },
-      { status: 500 }
-    )
+    return serverError('Failed to update tag')
   }
-}
+})
 
 // DELETE /api/tags/[id] - Delete a tag
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
   try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-    const user = await repos.users.findById(session.user.id)
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
     const tagId = id
 
     // Verify tag exists and belongs to user
     const existingTag = await repos.tags.findById(tagId)
 
     if (!existingTag) {
-      return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+      return notFound('Tag')
     }
 
     if (existingTag.userId !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+      return forbidden()
     }
 
     // Delete the tag (cascade will remove all junction table entries)
@@ -144,9 +105,6 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     logger.error('Error deleting tag:', error as Error)
-    return NextResponse.json(
-      { error: 'Failed to delete tag' },
-      { status: 500 }
-    )
+    return serverError('Failed to delete tag')
   }
-}
+})

@@ -11,8 +11,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/repositories/factory';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 
 interface DeleteAccountResponse {
@@ -20,36 +19,19 @@ interface DeleteAccountResponse {
   error?: string;
 }
 
-export async function DELETE(): Promise<NextResponse<DeleteAccountResponse>> {
+export const DELETE = createAuthenticatedHandler(async (req, { user, repos }): Promise<NextResponse<DeleteAccountResponse>> => {
   try {
-    const session = await getServerSession();
-
-    if (!session?.user?.id) {
-      logger.warn('Unauthenticated delete account attempt', {
-        context: 'delete-account.DELETE',
-      });
-      return NextResponse.json(
-        { success: false, error: 'Not authenticated' },
-        { status: 401 }
-      );
-    }
-
-    const userId = session.user.id;
+    const userId = user.id;
 
     logger.info('Deleting user account', {
       context: 'delete-account.DELETE',
       userId,
     });
 
-    const repos = getRepositories();
-
     // Delete chat settings first
-    const chatSettingsCollection = await repos.users.getChatSettings(userId);
+    const chatSettingsCollection = await repos.chatSettings.findByUserId(userId);
     if (chatSettingsCollection) {
-      // Need to delete chat settings via MongoDB directly since no dedicated method exists
-      const { getMongoDatabase } = await import('@/lib/mongodb/client');
-      const db = await getMongoDatabase();
-      await db.collection('chat_settings').deleteOne({ userId });
+      await repos.chatSettings.delete(chatSettingsCollection.id);
       logger.debug('Deleted user chat settings', {
         context: 'delete-account.DELETE',
         userId,
@@ -88,4 +70,4 @@ export async function DELETE(): Promise<NextResponse<DeleteAccountResponse>> {
       { status: 500 }
     );
   }
-}
+});

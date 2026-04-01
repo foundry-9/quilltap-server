@@ -4,8 +4,8 @@
  * POST /api/tools/quilltap-import/execute - Execute the actual import operation
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { executeImport, type ConflictStrategy } from '@/lib/import/quilltap-import-service';
@@ -45,23 +45,15 @@ export const maxDuration = 300;
  *   warnings: string[]
  * }
  */
-export async function POST(request: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Quilltap import execute attempted without authentication', {
-        context: 'POST /api/tools/quilltap-import/execute',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
+    const body = await req.json();
     const { exportData, options } = body;
 
     if (!exportData) {
       logger.warn('Quilltap import execute missing exportData', {
         context: 'POST /api/tools/quilltap-import/execute',
-        userId: session.user.id,
+        userId: user.id,
       });
       return NextResponse.json(
         { error: 'Missing required field: exportData' },
@@ -72,7 +64,7 @@ export async function POST(request: NextRequest) {
     if (!options) {
       logger.warn('Quilltap import execute missing options', {
         context: 'POST /api/tools/quilltap-import/execute',
-        userId: session.user.id,
+        userId: user.id,
       });
       return NextResponse.json(
         { error: 'Missing required field: options' },
@@ -85,7 +77,7 @@ export async function POST(request: NextRequest) {
     if (!conflictStrategy || !['skip', 'replace', 'duplicate'].includes(conflictStrategy)) {
       logger.warn('Quilltap import execute invalid conflict strategy', {
         context: 'POST /api/tools/quilltap-import/execute',
-        userId: session.user.id,
+        userId: user.id,
         conflictStrategy,
       });
       return NextResponse.json(
@@ -105,14 +97,14 @@ export async function POST(request: NextRequest) {
 
     logger.info('Starting Quilltap import execution', {
       context: 'POST /api/tools/quilltap-import/execute',
-      userId: session.user.id,
+      userId: user.id,
       exportType: manifest.exportType,
       conflictStrategy: mappedConflictStrategy,
       importMemories: importMemories || false,
     });
 
     const result = await executeImport(
-      session.user.id,
+      user.id,
       exportData,
       {
         conflictStrategy: mappedConflictStrategy,
@@ -124,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     logger.info('Quilltap import completed', {
       context: 'POST /api/tools/quilltap-import/execute',
-      userId: session.user.id,
+      userId: user.id,
       success: result.success,
       imported: result.imported,
       skipped: result.skipped,
@@ -143,4 +135,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

@@ -16,6 +16,12 @@ export interface Persona {
   title: string | null
 }
 
+export interface UserControlledCharacter {
+  id: string
+  name: string
+  title: string | null
+}
+
 export interface ImageProfile {
   id: string
   name: string
@@ -46,6 +52,8 @@ export interface Character {
   avatarUrl?: string
   defaultImageId?: string
   defaultConnectionProfileId?: string
+  controlledBy?: 'llm' | 'user'
+  isFavorite?: boolean
   npc?: boolean
   defaultImage?: {
     id: string

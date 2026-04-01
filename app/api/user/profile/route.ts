@@ -5,11 +5,11 @@
  * PUT /api/user/profile - Update current user's profile
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/repositories/factory';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 
 // Validation schema for profile updates
 const updateProfileSchema = z.object({
@@ -21,27 +21,8 @@ const updateProfileSchema = z.object({
  * GET /api/user/profile
  * Returns the current user's profile information
  */
-export async function GET() {
+export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Profile fetch attempted without authentication', {
-        context: 'GET /api/user/profile',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const repos = getRepositories();
-    const user = await repos.users.findById(session.user.id);
-
-    if (!user) {
-      logger.warn('User not found for profile fetch', {
-        context: 'GET /api/user/profile',
-        userId: session.user.id,
-      });
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
     // Get 2FA status
     const totpEnabled = user.totp?.enabled ?? false;
 
@@ -68,45 +49,29 @@ export async function GET() {
       { context: 'GET /api/user/profile' },
       error instanceof Error ? error : new Error(String(error))
     );
-    return NextResponse.json(
-      { error: 'Failed to fetch profile' },
-      { status: 500 }
-    );
+    return serverError('Failed to fetch profile');
   }
-}
+});
 
 /**
  * PUT /api/user/profile
  * Updates the current user's profile information
  */
-export async function PUT(req: NextRequest) {
+export const PUT = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Profile update attempted without authentication', {
-        context: 'PUT /api/user/profile',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const body = await req.json();
     const validationResult = updateProfileSchema.safeParse(body);
 
     if (!validationResult.success) {
       logger.warn('Invalid profile update data', {
         context: 'PUT /api/user/profile',
-        userId: session.user.id,
+        userId: user.id,
         errors: validationResult.error.errors,
       });
-      return NextResponse.json(
-        { error: 'Invalid data', details: validationResult.error.errors },
-        { status: 400 }
-      );
+      return validationError(validationResult.error);
     }
 
     const { email, name } = validationResult.data;
-
-    const repos = getRepositories();
 
     // Build update object with only provided fields
     const updateData: { email?: string | null; name?: string | null } = {};
@@ -115,18 +80,18 @@ export async function PUT(req: NextRequest) {
 
     logger.debug('Updating user profile', {
       context: 'PUT /api/user/profile',
-      userId: session.user.id,
+      userId: user.id,
       fields: Object.keys(updateData),
     });
 
-    const updatedUser = await repos.users.update(session.user.id, updateData);
+    const updatedUser = await repos.users.update(user.id, updateData);
 
     if (!updatedUser) {
       logger.warn('User not found during profile update', {
         context: 'PUT /api/user/profile',
-        userId: session.user.id,
+        userId: user.id,
       });
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return notFound('User');
     }
 
     // Get 2FA status
@@ -155,9 +120,6 @@ export async function PUT(req: NextRequest) {
       { context: 'PUT /api/user/profile' },
       error instanceof Error ? error : new Error(String(error))
     );
-    return NextResponse.json(
-      { error: 'Failed to update profile' },
-      { status: 500 }
-    );
+    return serverError('Failed to update profile');
   }
-}
+});

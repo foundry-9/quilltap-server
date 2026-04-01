@@ -4,21 +4,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { importSTPersona, isMultiPersonaBackup, convertMultiPersonaBackup } from '@/lib/sillytavern/persona'
 import { logger } from '@/lib/logger'
 
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
   try {
-    const session = await getServerSession()
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const repos = getRepositories()
-
     const body = await req.json()
     const { personaData } = body
 
@@ -46,7 +37,7 @@ export async function POST(req: NextRequest) {
         personasArray.map(async (personaItem) => {
           const importedData = importSTPersona(personaItem)
           const persona = await repos.personas.create({
-            userId: session.user.id,
+            userId: user.id,
             ...importedData,
             tags: [] as string[],
             characterLinks: [] as string[],
@@ -90,7 +81,7 @@ export async function POST(req: NextRequest) {
 
       // Create persona in database
       const persona = await repos.personas.create({
-        userId: session.user.id,
+        userId: user.id,
         ...importedData,
         tags: [] as string[],
         characterLinks: [] as string[],
@@ -128,4 +119,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

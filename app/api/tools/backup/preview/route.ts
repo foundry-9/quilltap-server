@@ -13,8 +13,8 @@
  * }
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { previewRestore } from '@/lib/backup/restore-service'
 import { downloadBackupFromS3 } from '@/lib/backup/backup-service'
 import { logger } from '@/lib/logger'
@@ -23,20 +23,11 @@ import { logger } from '@/lib/logger'
 export const maxDuration = 300 // 5 minutes
 export const dynamic = 'force-dynamic'
 
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession()
-
-    if (!session?.user?.id) {
-      logger.warn('Preview backup attempted without authentication', {
-        context: 'POST /api/tools/backup/preview',
-      })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     logger.debug('Preview backup request received', {
       context: 'POST /api/tools/backup/preview',
-      userId: session.user.id,
+      userId: user.id,
     })
 
     const formData = await req.formData()
@@ -48,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (file) {
       logger.debug('Preview from uploaded file', {
         context: 'POST /api/tools/backup/preview',
-        userId: session.user.id,
+        userId: user.id,
         fileName: file.name,
         fileSize: file.size,
       })
@@ -56,7 +47,7 @@ export async function POST(req: NextRequest) {
     } else if (s3Key) {
       logger.debug('Preview from S3 backup', {
         context: 'POST /api/tools/backup/preview',
-        userId: session.user.id,
+        userId: user.id,
         s3Key,
       })
       zipBuffer = await downloadBackupFromS3(s3Key)
@@ -65,7 +56,7 @@ export async function POST(req: NextRequest) {
     if (!zipBuffer) {
       logger.warn('No backup source provided', {
         context: 'POST /api/tools/backup/preview',
-        userId: session.user.id,
+        userId: user.id,
       })
       return NextResponse.json(
         { error: 'No file or s3Key provided' },
@@ -75,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     logger.debug('Generating preview', {
       context: 'POST /api/tools/backup/preview',
-      userId: session.user.id,
+      userId: user.id,
       bufferSize: zipBuffer.length,
     })
 
@@ -83,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     logger.info('Preview generated successfully', {
       context: 'POST /api/tools/backup/preview',
-      userId: session.user.id,
+      userId: user.id,
       preview,
     })
 
@@ -96,7 +87,6 @@ export async function POST(req: NextRequest) {
       'Preview backup failed',
       {
         context: 'POST /api/tools/backup/preview',
-        userId: (await getServerSession())?.user?.id,
         errorMessage: error instanceof Error ? error.message : String(error),
       },
       error instanceof Error ? error : undefined
@@ -106,4 +96,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

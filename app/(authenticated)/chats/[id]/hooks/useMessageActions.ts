@@ -1,9 +1,16 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import type { Message } from '../types'
+import type { Message, MemoryCascadeAction, ChatSettings } from '../types'
+
+/** Info returned when delete requires memory cascade confirmation */
+export interface MemoryCascadeConfirmation {
+  messageId: string
+  memoryCount: number
+  isSwipeGroup: boolean
+}
 
 export function useMessageActions(
   messages: Message[],
@@ -17,7 +24,11 @@ export function useMessageActions(
   setInput: (value: string) => void,
   setAttachedFiles: (value: any[] | ((prev: any[]) => any[])) => void,
   inputRef: React.RefObject<HTMLTextAreaElement>,
+  messagesEndRef: React.RefObject<HTMLDivElement>,
+  chatSettings?: ChatSettings | null,
 ) {
+  // State for memory cascade dialog
+  const [memoryCascadeConfirmation, setMemoryCascadeConfirmation] = useState<MemoryCascadeConfirmation | null>(null)
   const startEdit = (message: Message) => {
     setEditingMessageId(message.id)
     setEditContent(message.content)
@@ -47,18 +58,159 @@ export function useMessageActions(
     }
   }
 
-  const deleteMessage = async (messageId: string) => {
-    if (!(await showConfirmation('Are you sure you want to delete this message?'))) return
+  /**
+   * Complete the message deletion with a specific memory action
+   */
+  const completeDeleteWithMemoryAction = async (
+    messageId: string,
+    memoryAction: MemoryCascadeAction
+  ) => {
+    // Find the index of the message being deleted to determine scroll target
+    const messageIndex = messages.findIndex(m => m.id === messageId)
+    const nextMessage = messageIndex >= 0 && messageIndex < messages.length - 1
+      ? messages[messageIndex + 1]
+      : null
 
     try {
+      const res = await fetch(
+        `/api/messages/${messageId}?memoryAction=${memoryAction}&skipConfirmation=true`,
+        { method: 'DELETE' }
+      )
+
+      if (!res.ok) throw new Error('Failed to delete message')
+
+      const result = await res.json()
+
+      // Remove message from display (handle swipe groups too)
+      const messageToDelete = messages.find(m => m.id === messageId)
+      if (messageToDelete?.swipeGroupId) {
+        setMessages(messages.filter(m => m.swipeGroupId !== messageToDelete.swipeGroupId))
+      } else {
+        setMessages(messages.filter(m => m.id !== messageId))
+      }
+
+      // Show success message if memories were deleted
+      if (result.memoriesDeleted > 0) {
+        showSuccessToast(`Deleted message and ${result.memoriesDeleted} ${result.memoriesDeleted === 1 ? 'memory' : 'memories'}`)
+      }
+
+      // Scroll to next message or bottom after deletion
+      setTimeout(() => {
+        if (nextMessage) {
+          const nextMessageElement = document.getElementById(`message-${nextMessage.id}`)
+          if (nextMessageElement) {
+            nextMessageElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        } else {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }
+      }, 100)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to delete message')
+    }
+  }
+
+  /**
+   * Handle memory cascade confirmation dialog result
+   */
+  const handleMemoryCascadeConfirm = async (
+    action: MemoryCascadeAction,
+    rememberChoice: boolean
+  ) => {
+    if (!memoryCascadeConfirmation) return
+
+    // If user wants to remember, update settings
+    if (rememberChoice) {
+      try {
+        await fetch('/api/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            memoryCascadePreferences: {
+              onMessageDelete: action,
+              onSwipeRegenerate: chatSettings?.memoryCascadePreferences?.onSwipeRegenerate || 'DELETE_MEMORIES',
+            },
+          }),
+        })
+      } catch {
+        // Don't fail if settings update fails
+      }
+    }
+
+    // Complete the deletion with the chosen action
+    await completeDeleteWithMemoryAction(memoryCascadeConfirmation.messageId, action)
+
+    // Close the dialog
+    setMemoryCascadeConfirmation(null)
+  }
+
+  /**
+   * Cancel the memory cascade dialog
+   */
+  const cancelMemoryCascadeConfirmation = () => {
+    setMemoryCascadeConfirmation(null)
+  }
+
+  const deleteMessage = async (messageId: string) => {
+    // First confirm they want to delete
+    if (!(await showConfirmation('Are you sure you want to delete this message?'))) return
+
+    // Get the user's default cascade preference
+    const defaultAction = chatSettings?.memoryCascadePreferences?.onMessageDelete || 'ASK_EVERY_TIME'
+
+    // Find the index of the message being deleted to determine scroll target
+    const messageIndex = messages.findIndex(m => m.id === messageId)
+    const nextMessage = messageIndex >= 0 && messageIndex < messages.length - 1
+      ? messages[messageIndex + 1]
+      : null
+
+    try {
+      // If user has a saved preference (not ASK_EVERY_TIME), use it directly
+      if (defaultAction !== 'ASK_EVERY_TIME') {
+        await completeDeleteWithMemoryAction(messageId, defaultAction)
+        return
+      }
+
+      // Otherwise, check if there are memories first
       const res = await fetch(`/api/messages/${messageId}`, {
         method: 'DELETE',
       })
 
+      const result = await res.json()
+
+      // If confirmation is required (memories exist), show the dialog
+      if (result.requiresConfirmation) {
+        setMemoryCascadeConfirmation({
+          messageId,
+          memoryCount: result.memoryCount,
+          isSwipeGroup: result.isSwipeGroup,
+        })
+        return
+      }
+
+      // No memories - just delete
       if (!res.ok) throw new Error('Failed to delete message')
 
       // Remove message from display
-      setMessages(messages.filter(m => m.id !== messageId))
+      const messageToDelete = messages.find(m => m.id === messageId)
+      if (messageToDelete?.swipeGroupId) {
+        setMessages(messages.filter(m => m.swipeGroupId !== messageToDelete.swipeGroupId))
+      } else {
+        setMessages(messages.filter(m => m.id !== messageId))
+      }
+
+      // Scroll to next message or bottom after deletion
+      setTimeout(() => {
+        if (nextMessage) {
+          const nextMessageElement = document.getElementById(`message-${nextMessage.id}`)
+          if (nextMessageElement) {
+            nextMessageElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        } else {
+          // No next message, scroll to bottom
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }
+      }, 100)
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to delete message')
     }
@@ -223,5 +375,9 @@ export function useMessageActions(
     copyMessageContent,
     toggleSourceView,
     getDisplayContent,
+    // Memory cascade dialog state and handlers
+    memoryCascadeConfirmation,
+    handleMemoryCascadeConfirm,
+    cancelMemoryCascadeConfirmation,
   }
 }

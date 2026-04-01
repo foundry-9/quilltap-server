@@ -5,9 +5,8 @@
  * POST   /api/image-profiles/validate-key  - Validate an API key for image generation
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
@@ -29,16 +28,8 @@ import { logger } from '@/lib/logger'
  *   models?: string[]
  * }
  */
-export async function POST(request: NextRequest) {
+export const POST = createAuthenticatedHandler(async (request, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     const body = await request.json()
     const { provider, apiKeyId, apiKey } = body
 
@@ -64,8 +55,6 @@ export async function POST(request: NextRequest) {
 
     // Get the API key to validate
     if (apiKeyId) {
-      const repos = getRepositories()
-
       // Fetch from stored keys
       const storedKey = await repos.connections.findApiKeyById(apiKeyId)
 
@@ -81,7 +70,7 @@ export async function POST(request: NextRequest) {
           storedKey.ciphertext,
           storedKey.iv,
           storedKey.authTag,
-          session.user.id
+          user.id
         )
       } catch (error) {
         logger.error('Failed to decrypt API key', { context: 'validate-key' }, error instanceof Error ? error : undefined)
@@ -142,4 +131,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

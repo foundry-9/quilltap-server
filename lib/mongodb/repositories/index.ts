@@ -30,6 +30,7 @@ export { SyncInstancesRepository } from './sync-instances.repository';
 export { SyncMappingsRepository } from './sync-mappings.repository';
 export { SyncOperationsRepository } from './sync-operations.repository';
 export { UserSyncApiKeysRepository } from './user-sync-api-keys.repository';
+export { ChatSettingsRepository } from './chat-settings.repository';
 
 // Import all repository classes
 import { MongoBaseRepository } from './base.repository';
@@ -51,6 +52,7 @@ import { SyncInstancesRepository } from './sync-instances.repository';
 import { SyncMappingsRepository } from './sync-mappings.repository';
 import { SyncOperationsRepository } from './sync-operations.repository';
 import { UserSyncApiKeysRepository } from './user-sync-api-keys.repository';
+import { ChatSettingsRepository } from './chat-settings.repository';
 
 /**
  * Container interface for all repository instances.
@@ -77,6 +79,8 @@ export interface RepositoryContainer {
   syncMappings: SyncMappingsRepository;
   syncOperations: SyncOperationsRepository;
   userSyncApiKeys: UserSyncApiKeysRepository;
+  // Chat settings repository
+  chatSettings: ChatSettingsRepository;
 }
 
 /**
@@ -115,6 +119,8 @@ export function createRepositories(): RepositoryContainer {
       syncMappings: new SyncMappingsRepository(),
       syncOperations: new SyncOperationsRepository(),
       userSyncApiKeys: new UserSyncApiKeysRepository(),
+      // Chat settings repository
+      chatSettings: new ChatSettingsRepository(),
     };
 
     logger.debug('Repository container created successfully', {

@@ -38,6 +38,10 @@
   --qt-button-destructive-fg: var(--color-destructive-foreground);
   --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 90%, black);
 
+  --qt-button-success-bg: var(--color-success);
+  --qt-button-success-fg: hsl(0 0% 10%); /* Dark text for contrast on bright green */
+  --qt-button-success-hover-bg: color-mix(in srgb, var(--color-success) 85%, black);
+
   /* ==========================================================================
      STATUS TOKENS
      ========================================================================== */
@@ -113,6 +117,7 @@
   /* ==========================================================================
      TYPOGRAPHY VARIABLES
      ========================================================================== */
+  --qt-heading-font: var(--font-sans);
   --qt-text-secondary-fg: var(--color-muted-foreground);
 
   /* ==========================================================================
@@ -128,6 +133,40 @@
   --qt-sidebar-item-hover-bg: var(--color-muted);
   --qt-sidebar-item-active-bg: color-mix(in srgb, var(--color-primary) 10%, transparent);
   --qt-sidebar-item-active-border: var(--color-primary);
+
+  /* ==========================================================================
+     LEFT SIDEBAR VARIABLES (App Navigation)
+     ========================================================================== */
+  --qt-left-sidebar-width: 16rem;
+  --qt-left-sidebar-min-width: 16rem;
+  --qt-left-sidebar-max-width: 32rem;
+  --qt-left-sidebar-collapsed-width: 4rem;
+  --qt-left-sidebar-resize-handle-width: 4px;
+  --qt-left-sidebar-bg: var(--color-background);
+  --qt-left-sidebar-border: var(--color-border);
+  --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;
+
+  --qt-left-sidebar-header-height: 4rem;
+  --qt-left-sidebar-footer-height: auto;
+
+  --qt-left-sidebar-section-padding: 0.75rem;
+  --qt-left-sidebar-section-gap: 0.25rem;
+  --qt-left-sidebar-section-title-fg: var(--color-muted-foreground);
+
+  --qt-left-sidebar-item-gap: 0.5rem;
+  --qt-left-sidebar-item-icon-size: 1.25rem;
+
+  --qt-left-sidebar-overlay-bg: rgb(0 0 0 / 0.5);
+  --qt-left-sidebar-overlay-z: 40;
+  --qt-left-sidebar-z: 50;
+
+  /* ==========================================================================
+     APP HEADER VARIABLES
+     ========================================================================== */
+  --qt-app-header-height: 4rem;
+  --qt-app-header-bg: var(--color-background);
+  --qt-app-header-border: var(--color-border);
+  --qt-app-header-blur: blur(8px);
 
   /* ==========================================================================
      PANEL/DIALOG/POPOVER VARIABLES
@@ -183,6 +222,9 @@
   --qt-chat-attachment-overlay: rgb(0 0 0 / 0.25);
 
   --qt-chat-message-row-max-width: 800px;
+
+  /* Page container width - respects content width toggle */
+  --qt-page-max-width: 64rem;
 
   --qt-chat-sidebar-width: 20rem;
   --qt-chat-sidebar-bg: var(--color-card);

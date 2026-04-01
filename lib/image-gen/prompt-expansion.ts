@@ -16,8 +16,8 @@ export interface PlaceholderInfo {
   placeholder: string;
   /** Entity name (e.g., "Mirel") */
   name: string;
-  /** Entity type (character, persona, or user) */
-  type: 'character' | 'persona' | 'user';
+  /** Entity type - 'character' for all characters (LLM or user-controlled), 'user' for unknown/default */
+  type: 'character' | 'user';
   /** Entity ID if found */
   entityId?: string;
   /** All available physical descriptions for this entity */
@@ -82,32 +82,27 @@ export async function resolvePlaceholders(
   for (const { placeholder, name } of placeholders) {
     const lowerName = name.toLowerCase();
 
-    // {{me}}, {{I}}, or {{char}} = the caller (character when assistant calls, persona when user calls)
+    // {{me}}, {{I}}, or {{char}} = the caller (character when assistant calls, user-controlled character when user calls)
     if (lowerName === 'me' || lowerName === 'i' || lowerName === 'char') {
       let descriptions: PhysicalDescription[] = [];
       let entityId: string | undefined;
-      let entityType: 'character' | 'persona' | 'user' = 'user';
+      let entityType: 'character' | 'user' = 'user';
       let resolvedName = name;
 
       // If we have a calling participant, use that
       if (callingParticipantId && chat) {
         const participant = chat.participants.find(p => p.id === callingParticipantId);
         if (participant) {
-          if (participant.type === 'CHARACTER' && participant.characterId) {
-            const character = await repos.characters.findById(participant.characterId);
+          // All participants are now CHARACTER type (personas migrated to characters with controlledBy: 'user')
+          // For legacy PERSONA participants, personaId === characterId after migration
+          const characterId = participant.characterId || participant.personaId;
+          if (characterId) {
+            const character = await repos.characters.findById(characterId);
             if (character) {
               descriptions = character.physicalDescriptions || [];
               entityId = character.id;
               entityType = 'character';
               resolvedName = character.name;
-            }
-          } else if (participant.type === 'PERSONA' && participant.personaId) {
-            const persona = await repos.personas.findById(participant.personaId);
-            if (persona) {
-              descriptions = persona.physicalDescriptions || [];
-              entityId = persona.id;
-              entityType = 'persona';
-              resolvedName = persona.name;
             }
           }
         }
@@ -135,44 +130,51 @@ export async function resolvePlaceholders(
       continue;
     }
 
-    // {{user}} = the OTHER participant (persona when character calls, character when user calls)
+    // {{user}} = the OTHER participant (user-controlled character when LLM calls, LLM character when user calls)
     if (lowerName === 'user') {
       let descriptions: PhysicalDescription[] = [];
       let entityId: string | undefined;
-      let entityType: 'character' | 'persona' | 'user' = 'persona';
+      let entityType: 'character' | 'user' = 'character';
       let resolvedName = name;
 
       if (chat) {
-        // Determine who the "other" participant is based on the caller
-        let otherParticipantType: 'CHARACTER' | 'PERSONA' = 'PERSONA';
+        // Find the "other" participant - the one with different controlledBy or the user-controlled one
+        // After migration, all participants are CHARACTER type with controlledBy: 'llm' or 'user'
+        let otherParticipant = null;
 
         if (callingParticipantId) {
           const callerParticipant = chat.participants.find(p => p.id === callingParticipantId);
-          // If caller is a character, {{user}} means persona; if caller is persona, {{user}} means character
-          if (callerParticipant?.type === 'CHARACTER') {
-            otherParticipantType = 'PERSONA';
-          } else if (callerParticipant?.type === 'PERSONA') {
-            otherParticipantType = 'CHARACTER';
+          if (callerParticipant) {
+            // If caller is LLM-controlled, find user-controlled participant
+            // If caller is user-controlled, find LLM-controlled participant
+            const callerIsUserControlled = callerParticipant.controlledBy === 'user' || callerParticipant.type === 'PERSONA';
+            otherParticipant = chat.participants.find(p =>
+              p.id !== callingParticipantId &&
+              (callerIsUserControlled
+                ? (p.controlledBy === 'llm' || p.controlledBy === undefined) && p.type !== 'PERSONA'
+                : p.controlledBy === 'user' || p.type === 'PERSONA')
+            );
           }
         }
 
-        const otherParticipant = chat.participants.find(p => p.type === otherParticipantType);
+        // If no caller specified, find the first user-controlled participant
+        if (!otherParticipant) {
+          otherParticipant = chat.participants.find(p =>
+            p.controlledBy === 'user' || p.type === 'PERSONA'
+          );
+        }
 
-        if (otherParticipantType === 'PERSONA' && otherParticipant?.personaId) {
-          const persona = await repos.personas.findById(otherParticipant.personaId);
-          if (persona) {
-            descriptions = persona.physicalDescriptions || [];
-            entityId = persona.id;
-            entityType = 'persona';
-            resolvedName = persona.name;
-          }
-        } else if (otherParticipantType === 'CHARACTER' && otherParticipant?.characterId) {
-          const character = await repos.characters.findById(otherParticipant.characterId);
-          if (character) {
-            descriptions = character.physicalDescriptions || [];
-            entityId = character.id;
-            entityType = 'character';
-            resolvedName = character.name;
+        if (otherParticipant) {
+          // All participants are characters now - personaId === characterId after migration
+          const characterId = otherParticipant.characterId || otherParticipant.personaId;
+          if (characterId) {
+            const character = await repos.characters.findById(characterId);
+            if (character) {
+              descriptions = character.physicalDescriptions || [];
+              entityId = character.id;
+              entityType = 'character';
+              resolvedName = character.name;
+            }
           }
         }
       }
@@ -187,7 +189,7 @@ export async function resolvePlaceholders(
       continue;
     }
 
-    // Try to find a character by name
+    // Try to find a character by name (includes former personas which are now characters with controlledBy: 'user')
     const characters = await repos.characters.findByUserId(userId);
     const character = characters.find(c => c.name.toLowerCase() === lowerName);
 
@@ -198,21 +200,6 @@ export async function resolvePlaceholders(
         type: 'character',
         entityId: character.id,
         descriptions: character.physicalDescriptions || [],
-      });
-      continue;
-    }
-
-    // Try to find a persona by name
-    const personas = await repos.personas.findByUserId(userId);
-    const persona = personas.find(p => p.name.toLowerCase() === lowerName);
-
-    if (persona) {
-      resolved.push({
-        placeholder,
-        name: persona.name,
-        type: 'persona',
-        entityId: persona.id,
-        descriptions: persona.physicalDescriptions || [],
       });
       continue;
     }

@@ -14,7 +14,6 @@ export type LLMProviderType =
   | 'OLLAMA'
   | 'OPENAI_COMPATIBLE'
   | 'GOOGLE'
-  | 'GAB_AI'
   | 'UNKNOWN';
 
 export interface DebugEntry {

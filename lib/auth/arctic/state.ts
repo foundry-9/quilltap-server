@@ -108,7 +108,7 @@ export interface OAuthState {
  */
 export function generateOAuthState(
   response: NextResponse,
-  callbackUrl: string = '/dashboard'
+  callbackUrl: string = '/'
 ): OAuthState {
   const state = generateState();
   const codeVerifier = generateCodeVerifier();
@@ -152,7 +152,7 @@ export function retrieveOAuthState(
 
   const storedState = decryptValue(stateCookie.value);
   const codeVerifier = decryptValue(verifierCookie.value);
-  const callbackUrl = callbackCookie?.value ? decryptValue(callbackCookie.value) : '/dashboard';
+  const callbackUrl = callbackCookie?.value ? decryptValue(callbackCookie.value) : '/';
 
   if (!storedState || !codeVerifier) {
     logger.debug('Failed to decrypt OAuth state', {
@@ -174,7 +174,7 @@ export function retrieveOAuthState(
     callbackUrl,
   });
 
-  return { codeVerifier, callbackUrl: callbackUrl || '/dashboard' };
+  return { codeVerifier, callbackUrl: callbackUrl || '/' };
 }
 
 /**

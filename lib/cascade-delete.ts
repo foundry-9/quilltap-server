@@ -89,6 +89,7 @@ export async function findExclusiveChatsForCharacter(
 /**
  * Find images that are exclusively associated with a character.
  * "Exclusive" means the image is only linked to this character and nothing else.
+ * Uses batched queries to avoid N+1 patterns.
  */
 export async function findExclusiveImagesForCharacter(
   characterId: string
@@ -111,13 +112,15 @@ export async function findExclusiveImagesForCharacter(
         (image.linkedTo.length === 1 && image.linkedTo[0] === characterId)
 
       if (isExclusive) {
-        // Additional check: make sure no other character or persona uses this as default
-        const allCharacters = await repos.characters.findAll()
-        const allPersonas = await repos.personas.findAll()
+        // Use targeted queries instead of findAll() + filter
+        const [charsUsingAsDefault, personasUsingAsDefault] = await Promise.all([
+          repos.characters.findByDefaultImageId(image.id),
+          repos.personas.findByDefaultImageId(image.id),
+        ])
 
         const usedElsewhere =
-          allCharacters.some(c => c.id !== characterId && c.defaultImageId === image.id) ||
-          allPersonas.some(p => p.defaultImageId === image.id)
+          charsUsingAsDefault.some(c => c.id !== characterId) ||
+          personasUsingAsDefault.length > 0
 
         if (!usedElsewhere) {
           exclusiveImages.push(image)
@@ -126,22 +129,32 @@ export async function findExclusiveImagesForCharacter(
     }
   }
 
-  // Check avatar overrides
-  for (const override of character.avatarOverrides || []) {
-    if (override.imageId) {
-      const image = await repos.files.findById(override.imageId)
-      if (image && !exclusiveImages.find(i => i.id === image.id)) {
-        // Check if this image is only used by this character's overrides
-        const allCharacters = await repos.characters.findAll()
-        const usedElsewhere = allCharacters.some(c => {
-          if (c.id === characterId) return false
-          if (c.defaultImageId === image.id) return true
-          return c.avatarOverrides?.some(o => o.imageId === image.id)
-        })
+  // Collect all avatar override image IDs and fetch in batch
+  const overrideImageIds = (character.avatarOverrides || [])
+    .map(o => o.imageId)
+    .filter((id): id is string => !!id)
 
-        if (!usedElsewhere) {
-          exclusiveImages.push(image)
-        }
+  if (overrideImageIds.length > 0) {
+    const overrideImages = await repos.files.findByIds(overrideImageIds)
+
+    for (const image of overrideImages) {
+      // Skip if already added
+      if (exclusiveImages.find(i => i.id === image.id)) {
+        continue
+      }
+
+      // Use targeted queries to check usage
+      const [charsUsingAsDefault, charsUsingInOverrides] = await Promise.all([
+        repos.characters.findByDefaultImageId(image.id),
+        repos.characters.findByAvatarOverrideImageId(image.id),
+      ])
+
+      const usedElsewhere =
+        charsUsingAsDefault.some(c => c.id !== characterId) ||
+        charsUsingInOverrides.some(c => c.id !== characterId)
+
+      if (!usedElsewhere) {
+        exclusiveImages.push(image)
       }
     }
   }
@@ -152,6 +165,7 @@ export async function findExclusiveImagesForCharacter(
 /**
  * Find images that are exclusively associated with a set of chats.
  * These are images attached to messages in those chats that aren't used elsewhere.
+ * Uses batched and targeted queries to avoid N+1 patterns.
  */
 export async function findExclusiveImagesForChats(
   chatIds: string[]
@@ -162,7 +176,7 @@ export async function findExclusiveImagesForChats(
 
   const repos = getRepositories()
   const exclusiveImages: FileEntry[] = []
-  const seenImageIds = new Set<string>()
+  const chatIdSet = new Set(chatIds)
 
   // Collect all image IDs from messages in these chats
   const imageIdsInChats = new Set<string>()
@@ -178,45 +192,33 @@ export async function findExclusiveImagesForChats(
     }
   }
 
-  // For each image, check if it's exclusively used by these chats
-  for (const imageId of imageIdsInChats) {
-    if (seenImageIds.has(imageId)) continue
-    seenImageIds.add(imageId)
+  if (imageIdsInChats.size === 0) {
+    return []
+  }
 
-    const image = await repos.files.findById(imageId)
-    if (!image) continue
+  // Fetch all images in batch
+  const images = await repos.files.findByIds(Array.from(imageIdsInChats))
 
-    // Check if this image is used in any other chats
-    const allChats = await repos.chats.findAll()
-    let usedElsewhere = false
-
-    for (const chat of allChats) {
-      if (chatIds.includes(chat.id)) continue // Skip the chats being deleted
-
-      const messages = await repos.chats.getMessages(chat.id)
-      for (const message of messages) {
-        if (message.type === 'message' && message.attachments?.includes(imageId)) {
-          usedElsewhere = true
-          break
-        }
-      }
-      if (usedElsewhere) break
+  for (const image of images) {
+    // Check if image is linked to other entities (not being deleted)
+    const linkedToOthers = image.linkedTo.some(entityId => !chatIdSet.has(entityId))
+    if (linkedToOthers) {
+      continue
     }
 
-    // Also check if used as character/persona default or avatar override
-    if (!usedElsewhere) {
-      const allCharacters = await repos.characters.findAll()
-      const allPersonas = await repos.personas.findAll()
+    // Use targeted queries to check if used as character/persona default or override
+    const [charsUsingAsDefault, charsUsingInOverrides, personasUsingAsDefault] = await Promise.all([
+      repos.characters.findByDefaultImageId(image.id),
+      repos.characters.findByAvatarOverrideImageId(image.id),
+      repos.personas.findByDefaultImageId(image.id),
+    ])
 
-      usedElsewhere =
-        allCharacters.some(c =>
-          c.defaultImageId === imageId ||
-          c.avatarOverrides?.some(o => o.imageId === imageId)
-        ) ||
-        allPersonas.some(p => p.defaultImageId === imageId)
-    }
+    const usedByCharOrPersona =
+      charsUsingAsDefault.length > 0 ||
+      charsUsingInOverrides.length > 0 ||
+      personasUsingAsDefault.length > 0
 
-    if (!usedElsewhere) {
+    if (!usedByCharOrPersona) {
       exclusiveImages.push(image)
     }
   }

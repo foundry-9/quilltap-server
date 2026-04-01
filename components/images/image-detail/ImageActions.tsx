@@ -1,6 +1,6 @@
 'use client'
 
-import { Character, Persona } from './types'
+// Note: Character and Persona imports were removed - this component doesn't use entity types
 
 interface ImageActionsProps {
   handleDownload: () => void

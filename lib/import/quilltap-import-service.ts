@@ -1056,10 +1056,18 @@ async function importMemories(
         continue;
       }
 
-      // Remap persona ID if present
+      // Remap persona ID if present (legacy, for backwards compatibility)
       let newPersonaId = memory.personaId;
       if (memory.personaId) {
         newPersonaId = idMaps.personas.get(memory.personaId) || null;
+      }
+
+      // Remap aboutCharacterId if present (Characters Not Personas: who the memory is about)
+      let newAboutCharacterId = memory.aboutCharacterId;
+      if (memory.aboutCharacterId) {
+        // Try to map as a character first, then as a persona (for migrated data)
+        newAboutCharacterId = idMaps.characters.get(memory.aboutCharacterId) ||
+                              idMaps.personas.get(memory.aboutCharacterId) || null;
       }
 
       // Remap chat ID if present
@@ -1073,6 +1081,7 @@ async function importMemories(
         ...memoryData,
         characterId: newCharacterId,
         personaId: newPersonaId,
+        aboutCharacterId: newAboutCharacterId,
         chatId: newChatId,
       });
       imported++;
@@ -1134,6 +1143,15 @@ async function reconcileRelationships(
         const remappedTags = remapIdArray(character.tags, idMaps.tags);
         if (remappedTags.length > 0) {
           updates.tags = remappedTags;
+          hasUpdates = true;
+        }
+      }
+
+      // Remap defaultPartnerId (Characters Not Personas: default user-controlled character to pair with)
+      if (character.defaultPartnerId) {
+        const newPartnerId = remapId(character.defaultPartnerId, idMaps.characters);
+        if (newPartnerId) {
+          updates.defaultPartnerId = newPartnerId;
           hasUpdates = true;
         }
       }

@@ -1,0 +1,134 @@
+/**
+ * Profile Type Definitions
+ *
+ * Contains schemas for API keys, connection profiles, image profiles,
+ * and embedding profiles.
+ *
+ * @module schemas/profile.types
+ */
+
+import { z } from 'zod';
+import {
+  UUIDSchema,
+  TimestampSchema,
+  JsonSchema,
+  ProviderEnum,
+  ImageProviderEnum,
+  EmbeddingProfileProviderEnum,
+} from './common.types';
+
+// ============================================================================
+// API KEYS
+// ============================================================================
+
+export const ApiKeySchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  label: z.string(),
+  provider: ProviderEnum,
+  ciphertext: z.string(),
+  iv: z.string(),
+  authTag: z.string(),
+  isActive: z.boolean().default(true),
+  lastUsed: TimestampSchema.nullable().optional(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type ApiKey = z.infer<typeof ApiKeySchema>;
+
+// ============================================================================
+// CONNECTION PROFILES
+// ============================================================================
+
+export const ConnectionProfileSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  name: z.string(),
+  provider: ProviderEnum,
+  apiKeyId: UUIDSchema.nullable().optional(),
+  baseUrl: z.string().nullable().optional(),
+  modelName: z.string(),
+  parameters: JsonSchema.default({}),
+  isDefault: z.boolean().default(false),
+  /** Whether this profile is suitable for use as a "cheap" LLM (low-cost tasks) */
+  isCheap: z.boolean().default(false),
+  /** Whether web search is allowed for this profile (only if provider supports it) */
+  allowWebSearch: z.boolean().default(false),
+  tags: z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type ConnectionProfile = z.infer<typeof ConnectionProfileSchema>;
+
+export const ConnectionProfilesFileSchema = z.object({
+  version: z.number().default(1),
+  apiKeys: z.array(ApiKeySchema).default([]),
+  llmProfiles: z.array(ConnectionProfileSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type ConnectionProfilesFile = z.infer<typeof ConnectionProfilesFileSchema>;
+
+// ============================================================================
+// IMAGE PROFILES
+// ============================================================================
+
+export const ImageProfileSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  name: z.string(),
+  provider: ImageProviderEnum,
+  apiKeyId: UUIDSchema.nullable().optional(),
+  baseUrl: z.string().nullable().optional(),
+  modelName: z.string(),
+  parameters: JsonSchema.default({}),
+  isDefault: z.boolean().default(false),
+  tags: z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type ImageProfile = z.infer<typeof ImageProfileSchema>;
+
+export const ImageProfilesFileSchema = z.object({
+  version: z.number().default(1),
+  profiles: z.array(ImageProfileSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type ImageProfilesFile = z.infer<typeof ImageProfilesFileSchema>;
+
+// ============================================================================
+// EMBEDDING PROFILES
+// ============================================================================
+
+export const EmbeddingProfileSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  name: z.string(),
+  provider: EmbeddingProfileProviderEnum,
+  apiKeyId: UUIDSchema.nullable().optional(),
+  baseUrl: z.string().nullable().optional(),
+  modelName: z.string(),
+  /** Embedding dimension size (provider-specific) */
+  dimensions: z.number().nullable().optional(),
+  isDefault: z.boolean().default(false),
+  tags: z.array(UUIDSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type EmbeddingProfile = z.infer<typeof EmbeddingProfileSchema>;
+
+export const EmbeddingProfilesFileSchema = z.object({
+  version: z.number().default(1),
+  profiles: z.array(EmbeddingProfileSchema).default([]),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type EmbeddingProfilesFile = z.infer<typeof EmbeddingProfilesFileSchema>;

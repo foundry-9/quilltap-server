@@ -300,10 +300,17 @@ describe('Cascade Delete Utilities', () => {
 
       const charsRepo = {
         findById: jest.fn().mockResolvedValue(character),
+        findByDefaultImageId: jest.fn().mockResolvedValue([]),
+        findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
+      }
+
+      const filesRepo = {
+        findByIds: jest.fn().mockResolvedValue([]),
       }
 
       mockGetRepositories.mockReturnValue({
         characters: charsRepo as any,
+        files: filesRepo as any,
       } as any)
 
       const result = await findExclusiveImagesForCharacter('char-1')
@@ -316,15 +323,17 @@ describe('Cascade Delete Utilities', () => {
 
       const charsRepo = {
         findById: jest.fn().mockResolvedValue(character),
-        findAll: jest.fn().mockResolvedValue([character]),
+        findByDefaultImageId: jest.fn().mockResolvedValue([]),
+        findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
       }
 
       const personasRepo = {
-        findAll: jest.fn().mockResolvedValue([]),
+        findByDefaultImageId: jest.fn().mockResolvedValue([]),
       }
 
       const filesRepo = {
         findById: jest.fn().mockResolvedValue(null),
+        findByIds: jest.fn().mockResolvedValue([]),
       }
 
       mockGetRepositories.mockReturnValue({
@@ -383,16 +392,16 @@ describe('Cascade Delete Utilities', () => {
       const chatsRepo = {
         findByCharacterId: jest.fn().mockResolvedValue([]),
         getMessages: jest.fn().mockResolvedValue([]),
-        findAll: jest.fn().mockResolvedValue([]),
       }
 
       const charsRepo = {
         findById: jest.fn().mockResolvedValue(character),
-        findAll: jest.fn().mockResolvedValue([character]),
+        findByDefaultImageId: jest.fn().mockResolvedValue([]),
+        findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
       }
 
       const personasRepo = {
-        findAll: jest.fn().mockResolvedValue([]),
+        findByDefaultImageId: jest.fn().mockResolvedValue([]),
       }
 
       const memoriesRepo = {
@@ -401,6 +410,7 @@ describe('Cascade Delete Utilities', () => {
 
       const filesRepo = {
         findById: jest.fn().mockResolvedValue(null),
+        findByIds: jest.fn().mockResolvedValue([]),
       }
 
       mockGetRepositories.mockReturnValue({
@@ -426,16 +436,16 @@ describe('Cascade Delete Utilities', () => {
       const chatsRepo = {
         findByCharacterId: jest.fn().mockResolvedValue([]),
         getMessages: jest.fn().mockResolvedValue([]),
-        findAll: jest.fn().mockResolvedValue([]),
       }
 
       const charsRepo = {
         findById: jest.fn().mockResolvedValue(character),
-        findAll: jest.fn().mockResolvedValue([character]),
+        findByDefaultImageId: jest.fn().mockResolvedValue([]),
+        findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
       }
 
       const personasRepo = {
-        findAll: jest.fn().mockResolvedValue([]),
+        findByDefaultImageId: jest.fn().mockResolvedValue([]),
       }
 
       const memoriesRepo = {
@@ -444,6 +454,7 @@ describe('Cascade Delete Utilities', () => {
 
       const filesRepo = {
         findById: jest.fn().mockResolvedValue(null),
+        findByIds: jest.fn().mockResolvedValue([]),
       }
 
       mockGetRepositories.mockReturnValue({
@@ -491,17 +502,17 @@ describe('Cascade Delete Utilities', () => {
       const chatsRepo = {
         findByCharacterId: jest.fn().mockResolvedValue([]),
         getMessages: jest.fn().mockResolvedValue([]),
-        findAll: jest.fn().mockResolvedValue([]),
       }
 
       const charsRepo = {
         findById: jest.fn().mockResolvedValue(character),
-        findAll: jest.fn().mockResolvedValue([character]),
+        findByDefaultImageId: jest.fn().mockResolvedValue([]),
+        findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue(undefined),
       }
 
       const personasRepo = {
-        findAll: jest.fn().mockResolvedValue([]),
+        findByDefaultImageId: jest.fn().mockResolvedValue([]),
       }
 
       const memoriesRepo = {
@@ -512,6 +523,7 @@ describe('Cascade Delete Utilities', () => {
 
       const filesRepo = {
         findById: jest.fn().mockResolvedValue(null),
+        findByIds: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue(true),
       }
 
@@ -543,17 +555,17 @@ describe('Cascade Delete Utilities', () => {
       const chatsRepo = {
         findByCharacterId: jest.fn().mockResolvedValue([]),
         getMessages: jest.fn().mockResolvedValue([]),
-        findAll: jest.fn().mockResolvedValue([]),
       }
 
       const charsRepo = {
         findById: jest.fn().mockResolvedValue(character),
-        findAll: jest.fn().mockResolvedValue([character]),
+        findByDefaultImageId: jest.fn().mockResolvedValue([]),
+        findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue(undefined),
       }
 
       const personasRepo = {
-        findAll: jest.fn().mockResolvedValue([]),
+        findByDefaultImageId: jest.fn().mockResolvedValue([]),
       }
 
       const memoriesRepo = {
@@ -564,6 +576,7 @@ describe('Cascade Delete Utilities', () => {
 
       const filesRepo = {
         findById: jest.fn().mockResolvedValue(null),
+        findByIds: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue(true),
       }
 

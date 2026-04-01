@@ -10,10 +10,8 @@
  * @module components/settings/appearance/DisplayOptions
  */
 
-import { useEffect } from 'react'
 import type { ColorMode } from '@/lib/themes/types'
 import { BrandName } from '@/components/ui/brand-name'
-import { clientLogger } from '@/lib/client-logger'
 import { ColorModeSelector } from './components/ColorModeSelector'
 
 interface DisplayOptionsProps {
@@ -38,17 +36,6 @@ export function DisplayOptions({
   onColorModeChange,
   onNavThemeSelectorChange,
 }: DisplayOptionsProps) {
-  // Log render in useEffect
-  useEffect(() => {
-    clientLogger.debug('DisplayOptions: rendered', {
-      colorMode,
-      resolvedColorMode,
-      showNavThemeSelector,
-      isLoading,
-      hasError: !!error,
-    })
-  }, [colorMode, resolvedColorMode, showNavThemeSelector, isLoading, error])
-
   return (
     <div className="space-y-8">
       {/* Error Display */}

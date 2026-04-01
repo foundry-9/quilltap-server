@@ -48,6 +48,9 @@ interface AddCharacterDialogProps {
   onCharacterAdded: () => void // Callback to refresh chat data
 }
 
+// Special constant for user impersonation selection
+const USER_IMPERSONATION_VALUE = '__user_impersonation__'
+
 export default function AddCharacterDialog({
   isOpen,
   onClose,
@@ -58,6 +61,7 @@ export default function AddCharacterDialog({
   const [characters, setCharacters] = useState<CharacterOption[]>([])
   const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
+  // This can be a profile ID or USER_IMPERSONATION_VALUE for user control
   const [selectedConnectionProfileId, setSelectedConnectionProfileId] = useState<string | null>(null)
   const [hasHistoryAccess, setHasHistoryAccess] = useState(false)
   const [joinScenario, setJoinScenario] = useState('')
@@ -186,29 +190,44 @@ export default function AddCharacterDialog({
       return
     }
 
+    const isUserImpersonation = selectedConnectionProfileId === USER_IMPERSONATION_VALUE
+
     setIsAdding(true)
     clientLogger.debug('[AddCharacterDialog] Adding character to chat', {
       chatId,
       characterId: selectedCharacterId,
-      connectionProfileId: selectedConnectionProfileId,
+      connectionProfileId: isUserImpersonation ? null : selectedConnectionProfileId,
+      controlledBy: isUserImpersonation ? 'user' : 'llm',
       hasHistoryAccess,
       joinScenario: joinScenario || null,
     })
 
     try {
+      // Build participant data - only include connectionProfileId for LLM-controlled characters
+      const participantData: Record<string, unknown> = {
+        type: 'CHARACTER',
+        characterId: selectedCharacterId,
+        controlledBy: isUserImpersonation ? 'user' : 'llm',
+        hasHistoryAccess,
+      }
+
+      // Only include connectionProfileId for LLM control (schema doesn't accept null)
+      if (!isUserImpersonation) {
+        participantData.connectionProfileId = selectedConnectionProfileId
+      }
+
+      // Only include joinScenario if provided
+      if (joinScenario.trim()) {
+        participantData.joinScenario = joinScenario.trim()
+      }
+
       const response = await fetch(`/api/chats/${chatId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          addParticipant: {
-            type: 'CHARACTER',
-            characterId: selectedCharacterId,
-            connectionProfileId: selectedConnectionProfileId,
-            hasHistoryAccess,
-            joinScenario: joinScenario.trim() || null,
-          },
+          addParticipant: participantData,
         }),
       })
 
@@ -456,7 +475,7 @@ export default function AddCharacterDialog({
               {selectedCharacterId && (
                 <div>
                   <label className="block text-sm qt-text-primary mb-2">
-                    LLM Backend
+                    Controlled By
                   </label>
                   <select
                     value={selectedConnectionProfileId || ''}
@@ -464,16 +483,21 @@ export default function AddCharacterDialog({
                     className="qt-select"
                     disabled={isAdding}
                   >
-                    <option value="">Select a connection profile...</option>
-                    {connectionProfiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.name} ({profile.provider}: {profile.modelName})
-                      </option>
-                    ))}
+                    <option value="">Select who controls this character...</option>
+                    <option value={USER_IMPERSONATION_VALUE}>
+                      User (you will type for this character)
+                    </option>
+                    <optgroup label="LLM Backends">
+                      {connectionProfiles.map((profile) => (
+                        <option key={profile.id} value={profile.id}>
+                          {profile.name} ({profile.provider}: {profile.modelName})
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                   {connectionProfiles.length === 0 && (
                     <p className="text-sm text-warning mt-1">
-                      No connection profiles available. Please create one in Settings.
+                      No connection profiles available. Create one in Settings to use LLM control.
                     </p>
                   )}
                 </div>

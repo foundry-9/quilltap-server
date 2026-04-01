@@ -7,9 +7,9 @@
  * Used after migrating to ID preservation to clean up legacy mapping data.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { getServerSession } from '@/lib/auth/session';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { cleanSyncData } from '@/lib/sync/sync-service';
 
 /**
@@ -24,30 +24,22 @@ import { cleanSyncData } from '@/lib/sync/sync-service';
  * - operationsDeleted: number - Count of deleted sync operations
  * - instancesReset: number - Count of reset sync instances
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   const startTime = Date.now();
 
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Sync cleanup requested without authentication', {
-        context: 'api:sync:cleanup',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     logger.info('Starting sync data cleanup', {
       context: 'api:sync:cleanup',
-      userId: session.user.id,
+      userId: user.id,
     });
 
-    const result = await cleanSyncData(session.user.id);
+    const result = await cleanSyncData(user.id);
 
     const duration = Date.now() - startTime;
 
     logger.info('Sync cleanup complete', {
       context: 'api:sync:cleanup',
-      userId: session.user.id,
+      userId: user.id,
       mappingsDeleted: result.mappingsDeleted,
       operationsDeleted: result.operationsDeleted,
       instancesReset: result.instancesReset,
@@ -72,4 +64,4 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

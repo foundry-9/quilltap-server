@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyPassword } from '@/lib/auth/password';
 import { getRepositories } from '@/lib/repositories/factory';
 import { createSessionToken, setSessionCookie } from '@/lib/auth/session';
-import { runPostLoginMigrations } from '@/lib/auth/post-login-migrations';
+import { runPostLoginMigrations } from '@/lib/auth/user-migrations';
 import { logger } from '@/lib/logger';
 
 interface LoginRequest {

@@ -1,0 +1,89 @@
+# {{DISPLAY_NAME}} Theme for Quilltap
+
+{{DESCRIPTION}}
+
+## Installation
+
+In Quilltap, go to **Settings > Plugins** and search for `{{PACKAGE_NAME}}`, then click Install.
+
+Or install via npm:
+
+```bash
+npm install {{PACKAGE_NAME}}
+```
+
+## Features
+
+- Light and dark mode support
+- Custom color palette
+- Component-level CSS overrides
+- Customized typography and spacing
+
+## Customization
+
+### Colors
+
+Edit `tokens.json` to customize the color palette. The theme uses HSL colors for easy adjustment:
+
+```json
+{
+  "colors": {
+    "light": {
+      "primary": "hsl(220 90% 50%)",
+      ...
+    }
+  }
+}
+```
+
+### Component Styles
+
+Edit `styles.css` to customize component appearance:
+
+```css
+[data-theme="{{THEME_ID}}"] .qt-button-primary {
+  /* Your custom styles */
+}
+```
+
+## Development
+
+### Prerequisites
+
+- Node.js 18+
+- npm 8+
+
+### Setup
+
+```bash
+npm install
+npm run build
+```
+
+### Preview with Storybook
+
+```bash
+npm run storybook
+```
+
+### Test locally in Quilltap
+
+1. Build the plugin: `npm run build`
+2. Symlink to Quilltap's plugin directory
+3. Restart Quilltap
+4. Select the theme in Settings > Appearance
+
+## Publishing
+
+```bash
+npm version patch  # or minor, major
+npm publish --access public
+```
+
+## License
+
+MIT
+
+## Author
+
+{{AUTHOR_NAME}} <{{AUTHOR_EMAIL}}>

@@ -7,9 +7,8 @@
  * DELETE /api/profiles/[id]  - Delete a profile
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { logger } from '@/lib/logger'
 
 // Disable caching for this route
@@ -20,56 +19,45 @@ export const revalidate = 0
  * GET /api/profiles/[id]
  * Get a specific connection profile
  */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+export const GET = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      const profile = await repos.connections.findById(id)
 
-    const repos = getRepositories()
-    const profile = await repos.connections.findById(id)
+      if (!profile || profile.userId !== user.id) {
+        return NextResponse.json(
+          { error: 'Connection profile not found' },
+          { status: 404 }
+        )
+      }
 
-    if (!profile || profile.userId !== session.user.id) {
-      return NextResponse.json(
-        { error: 'Connection profile not found' },
-        { status: 404 }
-      )
-    }
-
-    // Get associated API key if present
-    let apiKey = null
-    if (profile.apiKeyId) {
-      const key = await repos.connections.findApiKeyById(profile.apiKeyId)
-      if (key) {
-        apiKey = {
-          id: key.id,
-          label: key.label,
-          provider: key.provider,
-          isActive: key.isActive,
+      // Get associated API key if present
+      let apiKey = null
+      if (profile.apiKeyId) {
+        const key = await repos.connections.findApiKeyById(profile.apiKeyId)
+        if (key) {
+          apiKey = {
+            id: key.id,
+            label: key.label,
+            provider: key.provider,
+            isActive: key.isActive,
+          }
         }
       }
-    }
 
-    return NextResponse.json({
-      ...profile,
-      apiKey,
-    })
-  } catch (error) {
-    logger.error('Failed to fetch connection profile', { context: 'GET /api/profiles/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to fetch connection profile' },
-      { status: 500 }
-    )
+      return NextResponse.json({
+        ...profile,
+        apiKey,
+      })
+    } catch (error) {
+      logger.error('Failed to fetch connection profile', { context: 'GET /api/profiles/:id' }, error instanceof Error ? error : undefined)
+      return NextResponse.json(
+        { error: 'Failed to fetch connection profile' },
+        { status: 500 }
+      )
+    }
   }
-}
+)
 
 /**
  * PUT /api/profiles/[id]
@@ -85,229 +73,205 @@ export async function GET(
  *   isCheap?: boolean
  * }
  */
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      // Verify ownership
+      const existingProfile = await repos.connections.findById(id)
 
-    const repos = getRepositories()
-
-    // Verify ownership
-    const existingProfile = await repos.connections.findById(id)
-
-    if (!existingProfile || existingProfile.userId !== session.user.id) {
-      return NextResponse.json(
-        { error: 'Connection profile not found' },
-        { status: 404 }
-      )
-    }
-
-    const body = await req.json()
-    const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault, isCheap, allowWebSearch } = body
-
-    // Build update data
-    const updateData: any = {}
-
-    if (name !== undefined) {
-      if (typeof name !== 'string' || name.trim().length === 0) {
+      if (!existingProfile || existingProfile.userId !== user.id) {
         return NextResponse.json(
-          { error: 'Name must be a non-empty string' },
-          { status: 400 }
+          { error: 'Connection profile not found' },
+          { status: 404 }
         )
       }
-      updateData.name = name.trim()
-    }
 
-    if (provider !== undefined) {
-      if (typeof provider !== 'string' || provider.trim().length === 0) {
-        return NextResponse.json(
-          { error: 'Provider must be a non-empty string' },
-          { status: 400 }
-        )
-      }
-      updateData.provider = provider
-    }
+      const body = await req.json()
+      const { name, provider, apiKeyId, baseUrl, modelName, parameters, isDefault, isCheap, allowWebSearch } = body
 
-    if (apiKeyId !== undefined) {
-      if (apiKeyId === null) {
-        updateData.apiKeyId = null
-      } else {
-        // Validate the API key exists
-        const apiKey = await repos.connections.findApiKeyById(apiKeyId)
+      // Build update data
+      const updateData: any = {}
 
-        if (!apiKey) {
+      if (name !== undefined) {
+        if (typeof name !== 'string' || name.trim().length === 0) {
           return NextResponse.json(
-            { error: 'API key not found' },
-            { status: 404 }
+            { error: 'Name must be a non-empty string' },
+            { status: 400 }
           )
         }
+        updateData.name = name.trim()
+      }
 
-        // Ensure provider matches - use new provider if being updated, otherwise use existing
-        const providerToCheck = provider !== undefined ? provider : existingProfile.provider
-        if (apiKey.provider !== providerToCheck) {
+      if (provider !== undefined) {
+        if (typeof provider !== 'string' || provider.trim().length === 0) {
           return NextResponse.json(
-            { error: 'API key provider does not match profile provider' },
+            { error: 'Provider must be a non-empty string' },
+            { status: 400 }
+          )
+        }
+        updateData.provider = provider
+      }
+
+      if (apiKeyId !== undefined) {
+        if (apiKeyId === null) {
+          updateData.apiKeyId = null
+        } else {
+          // Validate the API key exists
+          const apiKey = await repos.connections.findApiKeyById(apiKeyId)
+
+          if (!apiKey) {
+            return NextResponse.json(
+              { error: 'API key not found' },
+              { status: 404 }
+            )
+          }
+
+          // Ensure provider matches - use new provider if being updated, otherwise use existing
+          const providerToCheck = provider !== undefined ? provider : existingProfile.provider
+          if (apiKey.provider !== providerToCheck) {
+            return NextResponse.json(
+              { error: 'API key provider does not match profile provider' },
+              { status: 400 }
+            )
+          }
+
+          updateData.apiKeyId = apiKeyId
+        }
+      }
+
+      if (baseUrl !== undefined) {
+        updateData.baseUrl = baseUrl || null
+      }
+
+      if (modelName !== undefined) {
+        if (typeof modelName !== 'string' || modelName.trim().length === 0) {
+          return NextResponse.json(
+            { error: 'Model name must be a non-empty string' },
+            { status: 400 }
+          )
+        }
+        updateData.modelName = modelName.trim()
+      }
+
+      if (parameters !== undefined) {
+        if (typeof parameters !== 'object' || Array.isArray(parameters)) {
+          return NextResponse.json(
+            { error: 'Parameters must be an object' },
+            { status: 400 }
+          )
+        }
+        updateData.parameters = parameters
+      }
+
+      if (isDefault !== undefined) {
+        if (typeof isDefault !== 'boolean') {
+          return NextResponse.json(
+            { error: 'isDefault must be a boolean' },
             { status: 400 }
           )
         }
 
-        updateData.apiKeyId = apiKeyId
+        // If setting as default, unset other defaults
+        if (isDefault) {
+          const allProfiles = await repos.connections.findByUserId(user.id)
+          for (const profile of allProfiles) {
+            if (profile.isDefault && profile.id !== id) {
+              await repos.connections.update(profile.id, { isDefault: false })
+            }
+          }
+        }
+
+        updateData.isDefault = isDefault
       }
-    }
 
-    if (baseUrl !== undefined) {
-      updateData.baseUrl = baseUrl || null
-    }
+      if (isCheap !== undefined) {
+        if (typeof isCheap !== 'boolean') {
+          return NextResponse.json(
+            { error: 'isCheap must be a boolean' },
+            { status: 400 }
+          )
+        }
+        updateData.isCheap = isCheap
+      }
 
-    if (modelName !== undefined) {
-      if (typeof modelName !== 'string' || modelName.trim().length === 0) {
+      if (allowWebSearch !== undefined) {
+        if (typeof allowWebSearch !== 'boolean') {
+          return NextResponse.json(
+            { error: 'allowWebSearch must be a boolean' },
+            { status: 400 }
+          )
+        }
+        updateData.allowWebSearch = allowWebSearch
+      }
+
+      // Update the profile
+      const updatedProfile = await repos.connections.update(id, updateData)
+
+      if (!updatedProfile) {
         return NextResponse.json(
-          { error: 'Model name must be a non-empty string' },
-          { status: 400 }
+          { error: 'Failed to update connection profile' },
+          { status: 500 }
         )
       }
-      updateData.modelName = modelName.trim()
-    }
 
-    if (parameters !== undefined) {
-      if (typeof parameters !== 'object' || Array.isArray(parameters)) {
-        return NextResponse.json(
-          { error: 'Parameters must be an object' },
-          { status: 400 }
-        )
-      }
-      updateData.parameters = parameters
-    }
-
-    if (isDefault !== undefined) {
-      if (typeof isDefault !== 'boolean') {
-        return NextResponse.json(
-          { error: 'isDefault must be a boolean' },
-          { status: 400 }
-        )
-      }
-
-      // If setting as default, unset other defaults
-      if (isDefault) {
-        const allProfiles = await repos.connections.findByUserId(session.user.id)
-        for (const profile of allProfiles) {
-          if (profile.isDefault && profile.id !== id) {
-            await repos.connections.update(profile.id, { isDefault: false })
+      // Get associated API key if present
+      let apiKey = null
+      if (updatedProfile.apiKeyId) {
+        const key = await repos.connections.findApiKeyById(updatedProfile.apiKeyId)
+        if (key) {
+          apiKey = {
+            id: key.id,
+            label: key.label,
+            provider: key.provider,
+            isActive: key.isActive,
           }
         }
       }
 
-      updateData.isDefault = isDefault
-    }
-
-    if (isCheap !== undefined) {
-      if (typeof isCheap !== 'boolean') {
-        return NextResponse.json(
-          { error: 'isCheap must be a boolean' },
-          { status: 400 }
-        )
-      }
-      updateData.isCheap = isCheap
-    }
-
-    if (allowWebSearch !== undefined) {
-      if (typeof allowWebSearch !== 'boolean') {
-        return NextResponse.json(
-          { error: 'allowWebSearch must be a boolean' },
-          { status: 400 }
-        )
-      }
-      updateData.allowWebSearch = allowWebSearch
-    }
-
-    // Update the profile
-    const updatedProfile = await repos.connections.update(id, updateData)
-
-    if (!updatedProfile) {
+      return NextResponse.json({
+        ...updatedProfile,
+        apiKey,
+      })
+    } catch (error) {
+      logger.error('Failed to update connection profile', { context: 'PUT /api/profiles/:id' }, error instanceof Error ? error : undefined)
       return NextResponse.json(
         { error: 'Failed to update connection profile' },
         { status: 500 }
       )
     }
-
-    // Get associated API key if present
-    let apiKey = null
-    if (updatedProfile.apiKeyId) {
-      const key = await repos.connections.findApiKeyById(updatedProfile.apiKeyId)
-      if (key) {
-        apiKey = {
-          id: key.id,
-          label: key.label,
-          provider: key.provider,
-          isActive: key.isActive,
-        }
-      }
-    }
-
-    return NextResponse.json({
-      ...updatedProfile,
-      apiKey,
-    })
-  } catch (error) {
-    logger.error('Failed to update connection profile', { context: 'PUT /api/profiles/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to update connection profile' },
-      { status: 500 }
-    )
   }
-}
+)
 
 /**
  * DELETE /api/profiles/[id]
  * Delete a connection profile
  */
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
+export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      // Verify ownership
+      const existingProfile = await repos.connections.findById(id)
+
+      if (!existingProfile || existingProfile.userId !== user.id) {
+        return NextResponse.json(
+          { error: 'Connection profile not found' },
+          { status: 404 }
+        )
+      }
+
+      // Delete the profile
+      await repos.connections.delete(id)
+
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { message: 'Connection profile deleted successfully' },
+        { status: 200 }
+      )
+    } catch (error) {
+      logger.error('Failed to delete connection profile', { context: 'DELETE /api/profiles/:id' }, error instanceof Error ? error : undefined)
+      return NextResponse.json(
+        { error: 'Failed to delete connection profile' },
+        { status: 500 }
       )
     }
-
-    const repos = getRepositories()
-
-    // Verify ownership
-    const existingProfile = await repos.connections.findById(id)
-
-    if (!existingProfile || existingProfile.userId !== session.user.id) {
-      return NextResponse.json(
-        { error: 'Connection profile not found' },
-        { status: 404 }
-      )
-    }
-
-    // Delete the profile
-    await repos.connections.delete(id)
-
-    return NextResponse.json(
-      { message: 'Connection profile deleted successfully' },
-      { status: 200 }
-    )
-  } catch (error) {
-    logger.error('Failed to delete connection profile', { context: 'DELETE /api/profiles/:id' }, error instanceof Error ? error : undefined)
-    return NextResponse.json(
-      { error: 'Failed to delete connection profile' },
-      { status: 500 }
-    )
   }
-}
+)

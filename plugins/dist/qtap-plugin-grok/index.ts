@@ -76,6 +76,24 @@ const attachmentSupport = {
 };
 
 /**
+ * Message format support for multi-character chats
+ * Grok uses OpenAI-compatible format, supports name field
+ */
+const messageFormat = {
+  supportsNameField: true,
+  supportedRoles: ['user', 'assistant'] as ('user' | 'assistant')[],
+  maxNameLength: 64,
+};
+
+/**
+ * Cheap model configuration for background tasks
+ */
+const cheapModels = {
+  defaultModel: 'grok-2-mini',
+  recommendedModels: ['grok-2-mini'],
+};
+
+/**
  * The Grok Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
@@ -87,6 +105,13 @@ export const plugin: LLMProviderPlugin = {
   capabilities,
 
   attachmentSupport,
+
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: 'openai', // Grok uses OpenAI-compatible format
+  cheapModels,
+  defaultContextWindow: 131072,
 
   /**
    * Factory method to create a Grok LLM provider instance

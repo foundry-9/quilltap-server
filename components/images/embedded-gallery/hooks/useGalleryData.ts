@@ -37,26 +37,34 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
   }
 
   const isImageTagged = (image: GalleryImage) => {
-    return image.tags?.some(tag => tag.tagId === entityId && tag.tagType === entityType.toUpperCase()) ?? false
+    // Check for both CHARACTER and legacy PERSONA tags (for backwards compatibility after migration)
+    // After migration, personas become characters with the same ID, so we check both tag types
+    return image.tags?.some(tag =>
+      tag.tagId === entityId && (tag.tagType === 'CHARACTER' || tag.tagType === 'PERSONA')
+    ) ?? false
   }
 
   const handleToggleTag = async (image: GalleryImage, entityName: string) => {
-    const tagType = entityType === 'character' ? 'CHARACTER' : 'PERSONA'
-    const isTagged = isImageTagged(image)
+    // Find existing tag for this entity (could be CHARACTER or legacy PERSONA)
+    const existingTag = image.tags?.find(tag =>
+      tag.tagId === entityId && (tag.tagType === 'CHARACTER' || tag.tagType === 'PERSONA')
+    )
+    const isTagged = !!existingTag
 
     try {
       clientLogger.debug('Toggle tag action started', { imageId: image.id, isTagged, entityType })
 
-      if (isTagged) {
-        // Remove tag
-        const res = await fetch(`/api/images/${image.id}/tags?tagType=${tagType}&tagId=${entityId}`, {
+      if (isTagged && existingTag) {
+        // Remove the existing tag (use its actual tagType for the API call)
+        const res = await fetch(`/api/images/${image.id}/tags?tagType=${existingTag.tagType}&tagId=${entityId}`, {
           method: 'DELETE',
         })
         if (!res.ok) throw new Error('Failed to remove tag')
         showSuccessToast(`Removed from ${entityName}`)
         clientLogger.debug('Tag removed successfully', { imageId: image.id })
       } else {
-        // Add tag
+        // Add new tag - always use CHARACTER for new tags
+        const tagType = 'CHARACTER'
         const res = await fetch(`/api/images/${image.id}/tags`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -71,11 +79,11 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
       setAllImages(prev => prev.map(img => {
         if (img.id !== image.id) return img
         const currentTags = img.tags || []
-        const newTag = { tagId: entityId, tagType: tagType }
+        const newTag = { tagId: entityId, tagType: 'CHARACTER' }
         return {
           ...img,
           tags: isTagged
-            ? currentTags.filter(t => t.tagId !== entityId || t.tagType !== tagType)
+            ? currentTags.filter(t => t.tagId !== entityId || (t.tagType !== 'CHARACTER' && t.tagType !== 'PERSONA'))
             : [...currentTags, newTag]
         }
       }))
@@ -90,9 +98,8 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
     try {
       clientLogger.debug('Setting avatar', { imageId: image.id, entityType })
 
-      const endpoint = entityType === 'character'
-        ? `/api/characters/${entityId}/avatar`
-        : `/api/personas/${entityId}/avatar`
+      // All entities are now characters (personas migrated to characters with controlledBy: 'user')
+      const endpoint = `/api/characters/${entityId}/avatar`
 
       const res = await fetch(endpoint, {
         method: 'PATCH',
@@ -117,9 +124,8 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
     try {
       clientLogger.debug('Clearing avatar', { entityType })
 
-      const endpoint = entityType === 'character'
-        ? `/api/characters/${entityId}/avatar`
-        : `/api/personas/${entityId}/avatar`
+      // All entities are now characters (personas migrated to characters with controlledBy: 'user')
+      const endpoint = `/api/characters/${entityId}/avatar`
 
       const res = await fetch(endpoint, {
         method: 'PATCH',
@@ -145,9 +151,8 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
       // If this is the current avatar (especially for missing images), clear it first
       const isCurrentAvatar = currentAvatarId === image.id
       if (isCurrentAvatar && onAvatarChange) {
-        const endpoint = entityType === 'character'
-          ? `/api/characters/${entityId}/avatar`
-          : `/api/personas/${entityId}/avatar`
+        // All entities are now characters (personas migrated to characters with controlledBy: 'user')
+        const endpoint = `/api/characters/${entityId}/avatar`
 
         const clearRes = await fetch(endpoint, {
           method: 'PATCH',

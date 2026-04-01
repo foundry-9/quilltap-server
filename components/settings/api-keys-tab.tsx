@@ -2,17 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { clientLogger } from '@/lib/client-logger'
 import SectionHeader from '@/components/ui/SectionHeader'
 import LoadingState from '@/components/ui/LoadingState'
 import ErrorAlert from '@/components/ui/ErrorAlert'
 import EmptyState from '@/components/ui/EmptyState'
-import DeleteConfirmPopover from '@/components/ui/DeleteConfirmPopover'
+import { ProfileCard } from '@/components/ui/ProfileCard'
 import { ApiKeyModal } from './api-keys/ApiKeyModal'
 import { ExportKeysDialog } from './api-keys/ExportKeysDialog'
 import { ImportKeysDialog } from './api-keys/ImportKeysDialog'
-import { showSuccessToast } from '@/lib/toast'
 
 interface ApiKey {
   id: string
@@ -38,6 +38,7 @@ export default function ApiKeysTab() {
   const loadKeys = useAsyncOperation<ApiKey[]>()
   const deleteKey = useAsyncOperation<void>()
   const testKey = useAsyncOperation<{ valid: boolean; error?: string }>()
+  const triggerAutoAssociate = useAutoAssociate('api-keys')
 
   const fetchApiKeysData = async () => {
     clientLogger.debug('Fetching API keys')
@@ -64,31 +65,8 @@ export default function ApiKeysTab() {
 
   // Trigger auto-association on mount (fire and forget)
   useEffect(() => {
-    const triggerAutoAssociate = async () => {
-      clientLogger.debug('Triggering auto-association on API keys tab mount')
-      try {
-        const response = await fetchJson<{
-          success: boolean
-          associations: Array<{ profileName: string; keyLabel: string }>
-        }>('/api/keys/auto-associate', { method: 'POST' })
-        if (response.ok && response.data?.associations?.length) {
-          clientLogger.info('Auto-associated profiles with API keys', {
-            count: response.data.associations.length,
-          })
-          // Show toast for each association
-          response.data.associations.forEach((assoc) => {
-            showSuccessToast(
-              `${assoc.profileName} linked to API key "${assoc.keyLabel}"`,
-              4000
-            )
-          })
-        }
-      } catch (error) {
-        clientLogger.debug('Auto-association failed (non-critical)', { error })
-      }
-    }
     triggerAutoAssociate()
-  }, [])
+  }, [triggerAutoAssociate])
 
   // Load API keys on mount
   useEffect(() => {
@@ -273,62 +251,47 @@ export default function ApiKeysTab() {
         ) : (
           <div className="space-y-3">
             {sortedKeys.map((key) => (
-              <div
+              <ProfileCard
                 key={key.id}
-                className="relative border border-border rounded-lg p-4 flex items-center justify-between bg-card hover:bg-accent/50"
+                title={key.label}
+                subtitle={`${key.provider} • ${key.keyPreview}`}
+                actions={[
+                  {
+                    label: 'Test',
+                    onClick: () => handleTest(key.id),
+                    variant: 'secondary',
+                    loading: testingKeyId === key.id,
+                    loadingLabel: 'Testing...',
+                  },
+                ]}
+                deleteConfig={{
+                  isConfirming: deleteConfirmId === key.id,
+                  onConfirmChange: (confirming) => confirming ? handleDeleteClick(key.id) : handleDeleteCancel(),
+                  onConfirm: handleDeleteConfirm,
+                  message: 'Delete this API key?',
+                  isDeleting: deleteKey.loading,
+                }}
               >
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <p className="qt-text-primary">{key.label}</p>
-                      <p className="qt-text-small">
-                        {key.provider} • {key.keyPreview}
-                      </p>
-                      {key.lastUsed && (
-                        <p className="qt-text-xs">
-                          Last used:{' '}
-                          {new Date(key.lastUsed).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {testResults[key.id] && (
-                    <p
-                      className={`text-sm mt-2 ${
-                        testResults[key.id].startsWith('✓')
-                          ? 'text-green-600'
-                          : 'text-destructive/80'
-                      }`}
-                    >
-                      {testResults[key.id]}
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleTest(key.id)}
-                    disabled={testingKeyId === key.id}
-                    className="px-3 py-1 text-sm bg-muted text-foreground rounded hover:bg-accent disabled:bg-muted"
-                  >
-                    {testingKeyId === key.id ? 'Testing...' : 'Test'}
-                  </button>
-                  <button
-                    onClick={() => handleDeleteClick(key.id)}
-                    className="px-3 py-1 text-sm bg-destructive/10 text-destructive rounded hover:bg-destructive/20"
-                  >
-                    Delete
-                  </button>
+                {/* Last used date */}
+                {key.lastUsed && (
+                  <p className="qt-text-xs">
+                    Last used: {new Date(key.lastUsed).toLocaleDateString()}
+                  </p>
+                )}
 
-                  {/* Delete confirmation popover */}
-                  <DeleteConfirmPopover
-                    isOpen={deleteConfirmId === key.id}
-                    onCancel={handleDeleteCancel}
-                    onConfirm={handleDeleteConfirm}
-                    message="Delete this API key?"
-                    isDeleting={deleteKey.loading}
-                  />
-                </div>
-              </div>
+                {/* Test results */}
+                {testResults[key.id] && (
+                  <p
+                    className={`text-sm mt-2 ${
+                      testResults[key.id].startsWith('✓')
+                        ? 'text-green-600'
+                        : 'text-destructive/80'
+                    }`}
+                  >
+                    {testResults[key.id]}
+                  </p>
+                )}
+              </ProfileCard>
             ))}
           </div>
         )}

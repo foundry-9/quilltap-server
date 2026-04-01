@@ -1,8 +1,8 @@
 /**
  * MongoDB Users Repository
  *
- * Handles CRUD operations for User and ChatSettings entities.
- * Manages two collections: 'users' and 'chat_settings'.
+ * Handles CRUD operations for User entities.
+ * Manages the 'users' MongoDB collection.
  * Provides compound operations for GeneralSettings (user + chat settings).
  */
 
@@ -10,23 +10,20 @@ import { Collection } from 'mongodb';
 import {
   User,
   UserSchema,
-  ChatSettings,
-  ChatSettingsSchema,
   GeneralSettings,
   GeneralSettingsSchema
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getMongoDatabase } from '../client';
+import { getRepositories } from './index';
 
 /**
  * MongoDB Users Repository
- * Manages users and their associated chat settings across two collections
+ * Manages users in the 'users' collection
  */
 export class UsersRepository {
   private usersCollectionName = 'users';
-  private chatSettingsCollectionName = 'chat_settings';
   private userSchema = UserSchema;
-  private chatSettingsSchema = ChatSettingsSchema;
   private generalSettingsSchema = GeneralSettingsSchema;
 
   /**
@@ -44,31 +41,10 @@ export class UsersRepository {
   }
 
   /**
-   * Get the chat_settings MongoDB collection
-   */
-  private async getChatSettingsCollection(): Promise<Collection> {
-    const db = await getMongoDatabase();
-    const collection = db.collection(this.chatSettingsCollectionName);
-
-    logger.debug('Retrieved MongoDB chat_settings collection', {
-      collectionName: this.chatSettingsCollectionName,
-    });
-
-    return collection;
-  }
-
-  /**
    * Validate user data against schema
    */
   private validateUser(data: unknown): User {
     return this.userSchema.parse(data) as User;
-  }
-
-  /**
-   * Validate chat settings data against schema
-   */
-  private validateChatSettings(data: unknown): ChatSettings {
-    return this.chatSettingsSchema.parse(data) as ChatSettings;
   }
 
   /**
@@ -87,21 +63,6 @@ export class UsersRepository {
       return { success: true, data: validated };
     } catch (error: any) {
       logger.warn('User validation failed', {
-        error: error.message,
-      });
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Safely validate chat settings data without throwing
-   */
-  private validateChatSettingsSafe(data: unknown): { success: boolean; data?: ChatSettings; error?: string } {
-    try {
-      const validated = this.validateChatSettings(data);
-      return { success: true, data: validated };
-    } catch (error: any) {
-      logger.warn('ChatSettings validation failed', {
         error: error.message,
       });
       return { success: false, error: error.message };
@@ -486,210 +447,6 @@ export class UsersRepository {
   }
 
   // ============================================================================
-  // CHAT SETTINGS OPERATIONS
-  // ============================================================================
-
-  /**
-   * Get chat settings for a user
-   */
-  async getChatSettings(userId: string): Promise<ChatSettings | null> {
-    const collection = await this.getChatSettingsCollection();
-
-    logger.debug('Getting chat settings for user', {
-      userId,
-    });
-
-    try {
-      const chatSettings = await collection.findOne({ userId });
-
-      if (!chatSettings) {
-        logger.debug('Chat settings not found for user', {
-          userId,
-        });
-        return null;
-      }
-
-      // Remove MongoDB's _id field before validation
-      const { _id, ...settingsData } = chatSettings as any;
-
-      const validationResult = this.validateChatSettingsSafe(settingsData);
-      if (!validationResult.success) {
-        logger.warn('ChatSettings validation failed', {
-          userId,
-          error: validationResult.error,
-        });
-        return null;
-      }
-
-      logger.debug('Chat settings retrieved for user', {
-        userId,
-      });
-
-      return validationResult.data || null;
-    } catch (error) {
-      logger.error('Error getting chat settings', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Create chat settings for a user
-   */
-  async createChatSettings(userId: string, data: Omit<ChatSettings, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<ChatSettings> {
-    const collection = await this.getChatSettingsCollection();
-    const id = this.generateId();
-    const now = this.getCurrentTimestamp();
-
-    logger.debug('Creating chat settings for user', {
-      userId,
-    });
-
-    try {
-      const chatSettings: ChatSettings = {
-        ...data,
-        id,
-        userId,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      const validated = this.validateChatSettings(chatSettings);
-
-      // Insert into MongoDB
-      const result = await collection.insertOne(validated as any);
-
-      logger.info('Chat settings created successfully', {
-        chatSettingsId: id,
-        userId,
-        insertedId: result.insertedId.toString(),
-      });
-
-      return validated;
-    } catch (error) {
-      logger.error('Error creating chat settings', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Update chat settings for a user (creates if not exists)
-   */
-  async updateChatSettings(userId: string, data: Partial<ChatSettings>): Promise<ChatSettings | null> {
-    const collection = await this.getChatSettingsCollection();
-    const now = this.getCurrentTimestamp();
-
-    logger.debug('Updating chat settings for user', {
-      userId,
-    });
-
-    try {
-      // Check if settings exist
-      const existing = await this.getChatSettings(userId);
-
-      if (!existing) {
-        // Create new settings with defaults
-        logger.debug('Chat settings not found, creating new settings for user', { userId });
-
-        // Try to get the "Standard" roleplay template ID for default
-        let defaultRoleplayTemplateId: string | null = null;
-        try {
-          const db = await getMongoDatabase();
-          const templatesCollection = db.collection('roleplay_templates');
-          const standardTemplate = await templatesCollection.findOne({
-            name: 'Standard',
-            isBuiltIn: true,
-          });
-          if (standardTemplate) {
-            defaultRoleplayTemplateId = (standardTemplate as any).id;
-            logger.debug('Setting Standard template as default for new user', {
-              userId,
-              templateId: defaultRoleplayTemplateId,
-            });
-          }
-        } catch (templateError) {
-          logger.warn('Could not load default roleplay template', {
-            userId,
-            error: templateError instanceof Error ? templateError.message : String(templateError),
-          });
-        }
-
-        const defaultSettings: Omit<ChatSettings, 'id' | 'userId' | 'createdAt' | 'updatedAt'> = {
-          avatarDisplayMode: 'ALWAYS',
-          avatarDisplayStyle: 'CIRCULAR',
-          tagStyles: {},
-          cheapLLMSettings: {
-            strategy: 'PROVIDER_CHEAPEST',
-            fallbackToLocal: true,
-            embeddingProvider: 'OPENAI',
-          },
-          themePreference: {
-            activeThemeId: null,
-            colorMode: 'system',
-            showNavThemeSelector: false,
-          },
-          defaultRoleplayTemplateId,
-          ...data,
-        };
-        return await this.createChatSettings(userId, defaultSettings);
-      }
-
-      // Prepare update data
-      const updateData: any = {
-        ...data,
-        updatedAt: now,
-      };
-
-      // Remove id, userId, and createdAt to prevent accidental overwrites
-      delete updateData.id;
-      delete updateData.userId;
-      delete updateData.createdAt;
-
-      const result = await collection.findOneAndUpdate(
-        { userId },
-        { $set: updateData },
-        { returnDocument: 'after' }
-      );
-
-      if (!result) {
-        logger.warn('Chat settings not found during update', {
-          userId,
-        });
-        return null;
-      }
-
-      // Remove MongoDB's _id field before validation
-      const { _id, ...settingsData } = result as any;
-
-      const validationResult = this.validateChatSettingsSafe(settingsData);
-      if (!validationResult.success) {
-        logger.warn('Updated chat settings validation failed', {
-          userId,
-          error: validationResult.error,
-        });
-        return null;
-      }
-
-      logger.info('Chat settings updated successfully', {
-        userId,
-      });
-
-      return validationResult.data || null;
-    } catch (error) {
-      logger.error('Error updating chat settings', {
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  // ============================================================================
   // GENERAL SETTINGS COMPOUND OPERATIONS
   // ============================================================================
 
@@ -703,10 +460,12 @@ export class UsersRepository {
     });
 
     try {
+      const chatSettingsRepo = getRepositories().chatSettings;
+
       // Fetch user and chat settings in parallel
       const [user, chatSettings] = await Promise.all([
         this.findById(userId),
-        this.getChatSettings(userId),
+        chatSettingsRepo.findByUserId(userId),
       ]);
 
       if (!user) {
@@ -766,6 +525,8 @@ export class UsersRepository {
     });
 
     try {
+      const chatSettingsRepo = getRepositories().chatSettings;
+
       // Update user if provided
       if (data.user) {
         logger.debug('Updating user from general settings', {
@@ -785,7 +546,7 @@ export class UsersRepository {
         logger.debug('Updating chat settings from general settings', {
           userId,
         });
-        const updatedChatSettings = await this.updateChatSettings(userId, data.chatSettings);
+        const updatedChatSettings = await chatSettingsRepo.updateForUser(userId, data.chatSettings);
         if (!updatedChatSettings) {
           logger.error('Failed to update chat settings during general settings update', {
             userId,

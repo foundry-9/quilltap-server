@@ -6,8 +6,8 @@
  * POST   /api/keys       - Create a new API key
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { getUserRepositories } from '@/lib/repositories/factory'
 import { encryptApiKey, maskApiKey } from '@/lib/encryption'
 import { Provider } from '@/lib/schemas/types'
@@ -20,17 +20,9 @@ import { autoAssociateApiKeys } from '@/lib/api-keys/auto-associate'
  * List all API keys for the authenticated user
  * Returns masked keys for security
  */
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    const repos = getUserRepositories(session.user.id)
+    const repos = getUserRepositories(user.id)
     const apiKeys = await repos.connections.getAllApiKeys()
 
     // Sort by creation date
@@ -61,7 +53,7 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 /**
  * POST /api/keys
@@ -73,16 +65,8 @@ export async function GET(req: NextRequest) {
  *   apiKey: string
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     const body = await req.json()
     const { provider, label, apiKey } = body
 
@@ -116,9 +100,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Encrypt the API key
-    const encrypted = encryptApiKey(apiKey, session.user.id)
+    const encrypted = encryptApiKey(apiKey, user.id)
 
-    const repos = getUserRepositories(session.user.id)
+    const repos = getUserRepositories(user.id)
 
     // Store in database - userId is automatically set by user-scoped repository
     const newKey = await repos.connections.createApiKey({
@@ -137,7 +121,7 @@ export async function POST(req: NextRequest) {
       provider: newKey.provider,
     })
 
-    const associationResult = await autoAssociateApiKeys(session.user.id, [newKey.id])
+    const associationResult = await autoAssociateApiKeys(user.id, [newKey.id])
 
     logger.info('API key created', {
       context: 'keys-POST',
@@ -162,4 +146,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

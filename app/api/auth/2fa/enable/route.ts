@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { enableTOTP } from '@/lib/auth/totp'
 import { z } from 'zod'
 import { logger } from '@/lib/logger'
@@ -11,20 +11,14 @@ const EnableTOTPSchema = z.object({
   verificationCode: z.string().length(6)
 })
 
-export async function POST(req: NextRequest) {
-  const session = await getServerSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
     const body = await req.json()
     const { encryptedSecret, encryptedIv, encryptedAuthTag, verificationCode } =
       EnableTOTPSchema.parse(body)
 
     const result = await enableTOTP(
-      session.user.id,
+      user.id,
       encryptedSecret,
       encryptedIv,
       encryptedAuthTag,
@@ -56,4 +50,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

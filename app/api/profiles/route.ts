@@ -6,9 +6,8 @@
  * POST   /api/profiles   - Create a new connection profile
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { supportsImageGeneration } from '@/lib/llm/image-capable'
 import { logger } from '@/lib/logger'
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup'
@@ -26,25 +25,15 @@ export const revalidate = 0
  *   - sortByPersona: Persona ID to sort profiles by matching tags (used with sortByCharacter)
  *   - imageCapable: 'true' to filter only image-generation-capable providers
  */
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     const { searchParams } = new URL(req.url)
     const sortByCharacter = searchParams.get('sortByCharacter')
     const sortByPersona = searchParams.get('sortByPersona')
     const imageCapable = searchParams.get('imageCapable') === 'true'
 
-    const repos = getRepositories()
-
     // Get all connection profiles for user
-    let profiles = await repos.connections.findByUserId(session.user.id)
+    let profiles = await repos.connections.findByUserId(user.id)
 
     // Enrich with API key info and tags
     let enrichedProfiles = await Promise.all(
@@ -141,7 +130,7 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})
 
 /**
  * POST /api/profiles
@@ -162,16 +151,8 @@ export async function GET(req: NextRequest) {
  *   isDefault?: boolean
  * }
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     const body = await req.json()
     const {
       name,
@@ -206,8 +187,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       )
     }
-
-    const repos = getRepositories()
 
     // Ensure plugin system is initialized
     const pluginSystemInitialized = isPluginSystemInitialized()
@@ -273,7 +252,7 @@ export async function POST(req: NextRequest) {
 
     // If setting as default, unset other defaults
     if (isDefault) {
-      const existingProfiles = await repos.connections.findByUserId(session.user.id)
+      const existingProfiles = await repos.connections.findByUserId(user.id)
       for (const existingProfile of existingProfiles) {
         if (existingProfile.isDefault) {
           await repos.connections.update(existingProfile.id, { isDefault: false })
@@ -283,7 +262,7 @@ export async function POST(req: NextRequest) {
 
     // Create profile
     const profile = await repos.connections.create({
-      userId: session.user.id,
+      userId: user.id,
       name: name.trim(),
       provider: provider,
       apiKeyId: apiKeyId || null,
@@ -318,4 +297,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

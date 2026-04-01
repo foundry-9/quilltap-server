@@ -4,10 +4,10 @@
  * GET /api/sync/operations - List sync operations for user
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/repositories/factory';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { notFound, serverError } from '@/lib/api/responses';
 
 /**
  * GET /api/sync/operations
@@ -18,18 +18,10 @@ import { getRepositories } from '@/lib/repositories/factory';
  * - instanceId?: string - Filter by instance ID
  * - limit?: number - Maximum number of operations (default 50, max 100)
  */
-export async function GET(req: NextRequest) {
+export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
   const startTime = Date.now();
 
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.warn('Sync operations GET requested without authentication', {
-        context: 'api:sync:operations',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     // Get query params
     const { searchParams } = new URL(req.url);
     const instanceId = searchParams.get('instanceId');
@@ -38,40 +30,39 @@ export async function GET(req: NextRequest) {
 
     logger.debug('Getting sync operations', {
       context: 'api:sync:operations',
-      userId: session.user.id,
+      userId: user.id,
       instanceId,
       limit,
     });
 
-    const repos = getRepositories();
     let operations;
 
     if (instanceId) {
       // Verify instance ownership
       const instance = await repos.syncInstances.findById(instanceId);
-      if (!instance || instance.userId !== session.user.id) {
+      if (!instance || instance.userId !== user.id) {
         logger.warn('Sync operations requested for non-owned instance', {
           context: 'api:sync:operations',
-          userId: session.user.id,
+          userId: user.id,
           instanceId,
         });
-        return NextResponse.json({ error: 'Instance not found' }, { status: 404 });
+        return notFound('Instance');
       }
 
       operations = await repos.syncOperations.findByInstanceId(
-        session.user.id,
+        user.id,
         instanceId,
         limit
       );
     } else {
-      operations = await repos.syncOperations.findByUserId(session.user.id, limit);
+      operations = await repos.syncOperations.findByUserId(user.id, limit);
     }
 
     const duration = Date.now() - startTime;
 
     logger.info('Sync operations GET complete', {
       context: 'api:sync:operations',
-      userId: session.user.id,
+      userId: user.id,
       instanceId,
       operationCount: operations.length,
       durationMs: duration,
@@ -87,6 +78,6 @@ export async function GET(req: NextRequest) {
       durationMs: duration,
     });
 
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return serverError();
   }
-}
+});

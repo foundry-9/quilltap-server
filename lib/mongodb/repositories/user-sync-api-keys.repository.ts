@@ -5,7 +5,6 @@
  * Manages API keys for authenticating sync requests from remote instances.
  */
 
-import { Collection } from 'mongodb';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { logger } from '@/lib/logger';
@@ -17,7 +16,7 @@ import {
   API_KEY_PREFIX,
   API_KEY_RANDOM_LENGTH,
 } from '@/lib/sync/user-api-keys';
-import { getMongoDatabase } from '../client';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
 
 // Number of bcrypt rounds for hashing
 const BCRYPT_ROUNDS = 12;
@@ -26,60 +25,9 @@ const BCRYPT_ROUNDS = 12;
  * MongoDB User Sync API Keys Repository
  * Implements CRUD operations for user sync API keys
  */
-export class UserSyncApiKeysRepository {
-  private collectionName = 'user_sync_api_keys';
-  private schema = UserSyncApiKeySchema;
-
-  /**
-   * Get the MongoDB collection
-   */
-  private async getCollection(): Promise<Collection> {
-    const db = await getMongoDatabase();
-    const collection = db.collection(this.collectionName);
-
-    logger.debug('Retrieved MongoDB user_sync_api_keys collection', {
-      context: 'user-sync-api-keys-repo',
-      collectionName: this.collectionName,
-    });
-
-    return collection;
-  }
-
-  /**
-   * Validate data against schema
-   */
-  private validate(data: unknown): UserSyncApiKey {
-    return this.schema.parse(data) as UserSyncApiKey;
-  }
-
-  /**
-   * Safely validate without throwing
-   */
-  private validateSafe(data: unknown): { success: boolean; data?: UserSyncApiKey; error?: string } {
-    try {
-      const validated = this.validate(data);
-      return { success: true, data: validated };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Generate UUID v4
-   */
-  private generateId(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
-
-  /**
-   * Get current ISO timestamp
-   */
-  private getCurrentTimestamp(): string {
-    return new Date().toISOString();
+export class UserSyncApiKeysRepository extends MongoBaseRepository<UserSyncApiKey> {
+  constructor() {
+    super('user_sync_api_keys', UserSyncApiKeySchema);
   }
 
   /**
@@ -273,6 +221,48 @@ export class UserSyncApiKeysRepository {
   }
 
   /**
+   * Find all API keys
+   */
+  async findAll(): Promise<UserSyncApiKey[]> {
+    const collection = await this.getCollection();
+
+    logger.debug('Finding all user sync API keys', {
+      context: 'user-sync-api-keys-repo',
+    });
+
+    try {
+      const keys = await collection.find({}).sort({ createdAt: -1 }).toArray();
+
+      logger.debug('Retrieved all user sync API keys', {
+        context: 'user-sync-api-keys-repo',
+        count: keys.length,
+      });
+
+      const validatedKeys: UserSyncApiKey[] = [];
+      for (const key of keys) {
+        const { _id, ...keyData } = key as any;
+        const validationResult = this.validateSafe(keyData);
+        if (validationResult.success && validationResult.data) {
+          validatedKeys.push(validationResult.data);
+        } else {
+          logger.warn('Skipping invalid user sync API key during findAll', {
+            context: 'user-sync-api-keys-repo',
+            error: validationResult.error,
+          });
+        }
+      }
+
+      return validatedKeys;
+    } catch (error) {
+      logger.error('Error finding all user sync API keys', {
+        context: 'user-sync-api-keys-repo',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Find all active API keys (for auth validation)
    * Used when checking if a Bearer token matches any valid key
    */
@@ -311,10 +301,61 @@ export class UserSyncApiKeysRepository {
   }
 
   /**
+   * Create a new API key entity (implements abstract method)
+   * Note: For normal API key creation, use createApiKey() which returns the plaintext key
+   */
+  async create(
+    data: Omit<UserSyncApiKey, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
+  ): Promise<UserSyncApiKey> {
+    const collection = await this.getCollection();
+    const id = options?.id || this.generateId();
+    const now = this.getCurrentTimestamp();
+    const createdAt = options?.createdAt || now;
+
+    logger.debug('Creating user sync API key via standard create', {
+      context: 'user-sync-api-keys-repo',
+      userId: data.userId,
+      name: data.name,
+    });
+
+    try {
+      const key: UserSyncApiKey = {
+        ...data,
+        id,
+        createdAt,
+        updatedAt: now,
+      };
+
+      const validated = this.validate(key);
+
+      await collection.insertOne(validated as any);
+
+      logger.info('User sync API key created successfully', {
+        context: 'user-sync-api-keys-repo',
+        keyId: id,
+        userId: data.userId,
+        name: data.name,
+        keyPrefix: data.keyPrefix,
+      });
+
+      return validated;
+    } catch (error) {
+      logger.error('Error creating user sync API key', {
+        context: 'user-sync-api-keys-repo',
+        userId: data.userId,
+        name: data.name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Create a new API key for a user
    * Returns both the stored key data and the plaintext key (only shown once)
    */
-  async create(userId: string, name: string): Promise<CreateApiKeyResponse> {
+  async createApiKey(userId: string, name: string): Promise<CreateApiKeyResponse> {
     const collection = await this.getCollection();
     const id = this.generateId();
     const now = this.getCurrentTimestamp();

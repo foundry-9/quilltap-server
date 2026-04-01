@@ -7,7 +7,9 @@
  * @module qtap-plugin-theme-rains
  */
 
-import { logger } from '@/lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
+
+const logger = createPluginLogger('qtap-plugin-theme-rains');
 
 /**
  * Plugin initialization
@@ -16,8 +18,7 @@ import { logger } from '@/lib/logger';
  */
 export function initialize(): void {
   logger.debug('Rains theme plugin loaded', {
-    plugin: 'qtap-plugin-theme-rains',
-    version: '1.0.0',
+    version: '1.1.1',
   });
 }
 
@@ -26,7 +27,7 @@ export function initialize(): void {
  */
 export const metadata = {
   name: 'qtap-plugin-theme-rains',
-  version: '1.0.0',
+  version: '1.1.1',
   type: 'THEME',
 } as const;
 

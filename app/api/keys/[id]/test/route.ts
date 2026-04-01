@@ -5,9 +5,8 @@
  * POST /api/keys/[id]/test - Test if an API key is valid
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
-import { getRepositories } from '@/lib/repositories/factory'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedParamsHandler } from '@/lib/api/middleware'
 import { decryptApiKey } from '@/lib/encryption'
 import { logger } from '@/lib/logger'
 import { Provider } from '@/lib/schemas/types'
@@ -54,78 +53,66 @@ async function testProviderApiKey(
  *   baseUrl?: string  // Optional, required for Ollama/OpenAI-compatible
  * }
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    // Ensure plugin system is initialized (idempotent)
-    await initializePlugins()
+export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+  async (req, { user, repos }, { id }) => {
+    try {
+      // Ensure plugin system is initialized (idempotent)
+      await initializePlugins()
 
-    const { id } = await params
-    const session = await getServerSession()
-    if (!session?.user?.id) {
+      // Get the API key (verify ownership)
+      const apiKey = await repos.connections.findApiKeyByIdAndUserId(id, user.id)
+
+      if (!apiKey) {
+        return NextResponse.json(
+          { error: 'API key not found' },
+          { status: 404 }
+        )
+      }
+
+      // Decrypt the API key
+      const decryptedKey = decryptApiKey(
+        apiKey.ciphertext,
+        apiKey.iv,
+        apiKey.authTag,
+        user.id
+      )
+
+      // Get optional baseUrl from request body
+      const body = await req.json().catch(() => ({}))
+      const { baseUrl } = body
+
+      // Test the key
+      const result = await testProviderApiKey(
+        apiKey.provider as Provider,
+        decryptedKey,
+        baseUrl
+      )
+
+      if (result.valid) {
+        // Update lastUsed timestamp
+        await repos.connections.recordApiKeyUsage(id)
+
+        return NextResponse.json({
+          valid: true,
+          provider: apiKey.provider,
+          message: 'API key is valid',
+        })
+      }
+
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        {
+          valid: false,
+          provider: apiKey.provider,
+          error: result.error,
+        },
+        { status: 400 }
+      )
+    } catch (error) {
+      logger.error('Failed to test API key:', {}, error as Error)
+      return NextResponse.json(
+        { error: 'Failed to test API key' },
+        { status: 500 }
       )
     }
-
-    const repos = getRepositories()
-
-    // Get the API key (verify ownership)
-    const apiKey = await repos.connections.findApiKeyByIdAndUserId(id, session.user.id)
-
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'API key not found' },
-        { status: 404 }
-      )
-    }
-
-    // Decrypt the API key
-    const decryptedKey = decryptApiKey(
-      apiKey.ciphertext,
-      apiKey.iv,
-      apiKey.authTag,
-      session.user.id
-    )
-
-    // Get optional baseUrl from request body
-    const body = await req.json().catch(() => ({}))
-    const { baseUrl } = body
-
-    // Test the key
-    const result = await testProviderApiKey(
-      apiKey.provider as Provider,
-      decryptedKey,
-      baseUrl
-    )
-
-    if (result.valid) {
-      // Update lastUsed timestamp
-      await repos.connections.recordApiKeyUsage(id)
-
-      return NextResponse.json({
-        valid: true,
-        provider: apiKey.provider,
-        message: 'API key is valid',
-      })
-    }
-
-    return NextResponse.json(
-      {
-        valid: false,
-        provider: apiKey.provider,
-        error: result.error,
-      },
-      { status: 400 }
-    )
-  } catch (error) {
-    logger.error('Failed to test API key:', {}, error as Error)
-    return NextResponse.json(
-      { error: 'Failed to test API key' },
-      { status: 500 }
-    )
   }
-}
+)

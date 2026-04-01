@@ -27,11 +27,6 @@ export async function GET(): Promise<NextResponse<SessionResponse>> {
       });
     }
 
-    logger.debug('Session fetched', {
-      context: 'session.GET',
-      userId: session.user.id,
-    });
-
     return NextResponse.json({
       user: session.user,
       expires: session.expires,

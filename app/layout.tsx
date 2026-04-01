@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers/session-provider";
-import NavWrapper from "@/components/nav-wrapper";
-import FooterWrapper from "@/components/footer-wrapper";
 import { PluginInitializer } from "@/components/startup";
-import { DevConsoleLayout } from "@/components/debug/DevConsole";
+import { AppLayout } from "@/components/layout/app-layout";
 
 export const metadata: Metadata = {
   title: "Quilltap - AI Chat Platform",
@@ -21,15 +19,9 @@ export default function RootLayout({
       <body className="font-sans" suppressHydrationWarning>
         <Providers>
           <PluginInitializer />
-          <div className="flex flex-col h-screen">
-            <NavWrapper />
-            <main className="flex-1 min-h-0 overflow-auto sm:overflow-hidden">
-              <DevConsoleLayout>
-                {children}
-              </DevConsoleLayout>
-            </main>
-            <FooterWrapper />
-          </div>
+          <AppLayout>
+            {children}
+          </AppLayout>
         </Providers>
       </body>
     </html>

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 
 export type DevConsoleTab = 'server' | 'console' | 'chat-debug';
@@ -128,6 +128,25 @@ export function DevConsoleProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [togglePanel]);
 
+  // Buffer for batching console log captures to prevent render loops
+  const pendingLogsRef = useRef<ConsoleLogEntry[]>([]);
+  const flushTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Flush pending logs to state (batched)
+  // Use a ref to hold the flush function to avoid dependency issues in useEffect
+  const flushPendingLogsRef = useRef<() => void>(() => {});
+  flushPendingLogsRef.current = () => {
+    if (pendingLogsRef.current.length === 0) return;
+
+    const logsToAdd = pendingLogsRef.current;
+    pendingLogsRef.current = [];
+
+    setConsoleLogs(prev => {
+      const updated = [...prev, ...logsToAdd];
+      return updated.slice(-500);
+    });
+  };
+
   // Setup browser console capture
   useEffect(() => {
     if (!isDevelopmentClient()) return;
@@ -145,18 +164,22 @@ export function DevConsoleProvider({ children }: { children: ReactNode }) {
         // Call original
         originalConsole[level](...args);
 
-        // Capture for DevConsole
-        setConsoleLogs(prev => {
-          const newEntry: ConsoleLogEntry = {
-            id: `console-${++consoleLogIdCounter}-${Date.now()}`,
-            timestamp: new Date(),
-            level,
-            args,
-          };
-          // Keep last 500 entries
-          const updated = [...prev, newEntry];
-          return updated.slice(-500);
-        });
+        // Add to pending buffer instead of updating state directly
+        const newEntry: ConsoleLogEntry = {
+          id: `console-${++consoleLogIdCounter}-${Date.now()}`,
+          timestamp: new Date(),
+          level,
+          args,
+        };
+        pendingLogsRef.current.push(newEntry);
+
+        // Schedule flush if not already scheduled
+        if (!flushTimeoutRef.current) {
+          flushTimeoutRef.current = setTimeout(() => {
+            flushTimeoutRef.current = null;
+            flushPendingLogsRef.current();
+          }, 100); // Batch logs every 100ms
+        }
       };
     };
 
@@ -172,8 +195,14 @@ export function DevConsoleProvider({ children }: { children: ReactNode }) {
       console.warn = originalConsole.warn;
       console.error = originalConsole.error;
       console.debug = originalConsole.debug;
+
+      // Clear any pending flush timeout
+      if (flushTimeoutRef.current) {
+        clearTimeout(flushTimeoutRef.current);
+        flushTimeoutRef.current = null;
+      }
     };
-  }, []);
+  }, []); // Empty deps - only run once on mount
 
   // Setup server log SSE connection
   useEffect(() => {

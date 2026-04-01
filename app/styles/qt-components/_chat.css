@@ -1271,6 +1271,50 @@
   .qt-mobile-participant-dropdown-action-btn svg {
     @apply w-4 h-4;
   }
+
+  /* ==========================================================================
+     MEMORY SOURCE HIGHLIGHT
+     Applied when scrolling to a message from memory provenance link
+     ========================================================================== */
+
+  /**
+   * Highlight animation for message when navigated from memory source link
+   */
+  .qt-memory-source-highlight {
+    animation: memory-highlight-pulse 1s ease-in-out 2;
+    position: relative;
+  }
+
+  .qt-memory-source-highlight::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border: 2px solid var(--qt-primary);
+    border-radius: var(--qt-chat-message-radius);
+    pointer-events: none;
+    animation: memory-highlight-border 3s ease-out forwards;
+  }
+
+  @keyframes memory-highlight-pulse {
+    0%, 100% {
+      background-color: transparent;
+    }
+    50% {
+      background-color: hsl(var(--primary) / 0.1);
+    }
+  }
+
+  @keyframes memory-highlight-border {
+    0% {
+      opacity: 1;
+    }
+    80% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
 }
 
 /* ==========================================================================

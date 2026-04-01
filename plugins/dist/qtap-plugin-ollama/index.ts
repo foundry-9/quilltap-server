@@ -66,6 +66,23 @@ const attachmentSupport = {
 };
 
 /**
+ * Message format support for multi-character chats
+ * Ollama is conservative - name support varies by model
+ */
+const messageFormat = {
+  supportsNameField: false,
+  supportedRoles: [] as ('user' | 'assistant')[],
+};
+
+/**
+ * Cheap model configuration for background tasks
+ */
+const cheapModels = {
+  defaultModel: 'llama3.2:3b',
+  recommendedModels: ['llama3.2:3b', 'llama3.2:1b', 'phi3:mini', 'mistral:7b', 'gemma2:2b'],
+};
+
+/**
  * The Ollama Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
@@ -77,6 +94,13 @@ export const plugin: LLMProviderPlugin = {
   capabilities,
 
   attachmentSupport,
+
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: 'openai', // Ollama uses OpenAI-compatible format
+  cheapModels,
+  defaultContextWindow: 8192, // Conservative default for local models
 
   /**
    * Factory method to create an Ollama LLM provider instance

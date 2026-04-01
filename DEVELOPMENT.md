@@ -7,7 +7,7 @@ This document covers the development setup and project structure for Quilltap.
 ```text
 quilltap/
 ├── app/                      # Next.js App Router entry point
-│   ├── (authenticated)/      # Protected routes (characters, chats, personas, settings, about, tools)
+│   ├── (authenticated)/      # Protected routes (characters, chats, settings, about, tools)
 │   ├── api/                  # API route handlers (auth, chats, characters, providers, backups, etc.)
 │   ├── auth/                 # Auth flows (sign-in, OAuth callbacks, session)
 │   ├── dashboard/            # Dashboard page
@@ -16,9 +16,8 @@ quilltap/
 │   ├── layout.tsx            # Root layout (providers, themes, fonts)
 │   └── page.tsx              # Public landing page
 ├── components/               # Reusable UI components
-│   ├── chat/                 # Chat-related components
+│   ├── chat/                 # Chat-related components (including impersonation UI)
 │   ├── character/            # Character management components
-│   ├── persona/              # Persona management components
 │   ├── memory/               # Memory system components
 │   ├── settings/             # Settings tab components
 │   ├── tags/                 # Tag system components
@@ -39,6 +38,11 @@ quilltap/
 ├── plugins/                  # Plugin source code
 │   ├── dist/                 # Built plugins (loaded at runtime)
 │   └── src/                  # Plugin source files
+├── packages/                 # Published npm packages for plugin development
+│   ├── plugin-types/         # TypeScript types (@quilltap/plugin-types)
+│   ├── plugin-utils/         # Plugin utilities (@quilltap/plugin-utils)
+│   ├── theme-storybook/      # Storybook preset for theme development (@quilltap/theme-storybook)
+│   └── create-quilltap-theme/ # Scaffolding CLI for new themes
 ├── prompts/                  # Sample system prompt templates
 ├── hooks/                    # Custom React hooks
 ├── types/                    # TypeScript type augmentations
@@ -68,7 +72,7 @@ quilltap/
 
 ### Prerequisites
 
-- **Node.js 20+**
+- **Node.js 22+**
 - **MongoDB** (local or via Docker)
 - **MinIO or S3-compatible storage** (embedded MinIO for development)
 
@@ -164,12 +168,11 @@ All application data is stored in MongoDB:
 
 - **users** - User accounts and authentication
 - **api_keys** - Encrypted provider API keys
-- **characters** - Character definitions and metadata
-- **personas** - User persona definitions
-- **chats** - Chat metadata and message history
+- **characters** - Character definitions and metadata (includes `controlledBy: 'llm' | 'user'` for control mode)
+- **chats** - Chat metadata, message history, and impersonation state
 - **files** - File metadata (actual files in S3)
 - **tags** - Tag definitions
-- **memories** - Character memory data
+- **memories** - Character memory data with inter-character relationships (`aboutCharacterId`)
 - **connectionProfiles** - LLM connection configurations
 - **embeddingProfiles** - Embedding provider configurations
 - **imageProfiles** - Image generation configurations
@@ -197,6 +200,18 @@ Plugins are self-contained modules in `plugins/src/` that provide:
 - **Upgrade Scripts** - Data migration utilities
 
 See [plugins/README.md](plugins/README.md) for the plugin developer guide.
+
+For theme plugin development, use the scaffolding CLI and Storybook:
+
+```bash
+# Create a new theme plugin
+npm init quilltap-theme my-theme
+
+# Run Storybook to preview theme changes
+npm run storybook
+```
+
+See [docs/THEME_PLUGIN_DEVELOPMENT.md](docs/THEME_PLUGIN_DEVELOPMENT.md) for the complete theme development guide.
 
 ## Logging
 

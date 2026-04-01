@@ -7,8 +7,8 @@
  * any profiles without valid API keys get associated with matching keys.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { autoAssociateAllKeys } from '@/lib/api-keys/auto-associate'
 import { logger } from '@/lib/logger'
 
@@ -16,26 +16,18 @@ import { logger } from '@/lib/logger'
  * POST /api/keys/auto-associate
  * Trigger auto-association of API keys with profiles that need them
  */
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     logger.debug('Auto-association triggered via API', {
       context: 'keys-auto-associate-POST',
-      userId: session.user.id,
+      userId: user.id,
     })
 
-    const result = await autoAssociateAllKeys(session.user.id)
+    const result = await autoAssociateAllKeys(user.id)
 
     logger.info('Auto-association completed via API', {
       context: 'keys-auto-associate-POST',
-      userId: session.user.id,
+      userId: user.id,
       associations: result.associations.length,
       errors: result.errors.length,
     })
@@ -54,4 +46,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

@@ -1,0 +1,103 @@
+import React, { useEffect } from 'react';
+import type { Decorator } from '@storybook/react';
+import tokens from '../tokens.json';
+
+type TokenColors = typeof tokens.colors.light;
+type TokenTypography = typeof tokens.typography;
+type TokenSpacing = typeof tokens.spacing;
+type TokenEffects = typeof tokens.effects;
+
+// Convert camelCase to kebab-case
+function toKebab(str: string): string {
+  return str.replace(/([A-Z])/g, '-$1').toLowerCase();
+}
+
+// Convert tokens to CSS variables
+function tokensToCSSVariables(mode: 'light' | 'dark'): string {
+  const vars: string[] = [];
+  const colors = tokens.colors[mode] as TokenColors;
+
+  // Color tokens
+  for (const [key, value] of Object.entries(colors)) {
+    vars.push(`--theme-${toKebab(key)}: ${value};`);
+  }
+
+  // Typography tokens
+  if (tokens.typography) {
+    for (const [key, value] of Object.entries(tokens.typography as TokenTypography)) {
+      vars.push(`--theme-${toKebab(key)}: ${value};`);
+    }
+  }
+
+  // Spacing tokens
+  if (tokens.spacing) {
+    for (const [key, value] of Object.entries(tokens.spacing as TokenSpacing)) {
+      vars.push(`--theme-${toKebab(key)}: ${value};`);
+    }
+  }
+
+  // Effects tokens
+  if (tokens.effects) {
+    for (const [key, value] of Object.entries(tokens.effects as TokenEffects)) {
+      vars.push(`--theme-${toKebab(key)}: ${value};`);
+    }
+  }
+
+  return vars.join('\n  ');
+}
+
+export const withTheme: Decorator = (Story, context) => {
+  const theme = context.globals.theme || 'default';
+  const colorMode = context.globals.colorMode || 'light';
+  const isDark = colorMode === 'dark';
+
+  useEffect(() => {
+    const root = document.documentElement;
+
+    if (theme === '{{THEME_ID}}') {
+      root.setAttribute('data-theme', '{{THEME_ID}}');
+
+      // Inject CSS variables
+      let styleEl = document.getElementById('{{THEME_ID}}-theme-vars');
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = '{{THEME_ID}}-theme-vars';
+        document.head.appendChild(styleEl);
+      }
+      styleEl.textContent = `:root {\n  ${tokensToCSSVariables(isDark ? 'dark' : 'light')}\n}`;
+    } else {
+      root.removeAttribute('data-theme');
+      const styleEl = document.getElementById('{{THEME_ID}}-theme-vars');
+      if (styleEl) {
+        styleEl.remove();
+      }
+    }
+
+    if (isDark) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+
+    return () => {
+      root.removeAttribute('data-theme');
+      root.classList.remove('dark');
+    };
+  }, [theme, colorMode, isDark]);
+
+  return (
+    <div
+      data-theme={theme === '{{THEME_ID}}' ? '{{THEME_ID}}' : undefined}
+      className={isDark ? 'dark' : ''}
+      style={{
+        backgroundColor: 'var(--theme-background, #fff)',
+        color: 'var(--theme-foreground, #000)',
+        padding: '2rem',
+        minHeight: '100vh',
+        transition: 'background-color 0.2s, color 0.2s',
+      }}
+    >
+      <Story />
+    </div>
+  );
+};

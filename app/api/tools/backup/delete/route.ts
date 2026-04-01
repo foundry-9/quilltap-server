@@ -13,43 +13,35 @@
  * }
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { deleteBackupFromS3 } from '@/lib/backup/backup-service'
 import { logger } from '@/lib/logger'
+import { badRequest, forbidden, serverError } from '@/lib/api/responses'
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession()
-
-    if (!session?.user?.id) {
-      logger.warn('Delete backup attempted without authentication', {
-        context: 'DELETE /api/tools/backup/delete',
-      })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const body = await req.json()
     const { s3Key } = body
 
     if (!s3Key || typeof s3Key !== 'string') {
-      return NextResponse.json({ error: 'Missing s3Key parameter' }, { status: 400 })
+      return badRequest('Missing s3Key parameter')
     }
 
     // Security check: ensure the backup key belongs to this user
-    const expectedPrefix = `users/${session.user.id}/backups/`
+    const expectedPrefix = `users/${user.id}/backups/`
     if (!s3Key.startsWith(expectedPrefix)) {
       logger.warn('Attempted to delete backup from another user', {
         context: 'DELETE /api/tools/backup/delete',
-        userId: session.user.id,
+        userId: user.id,
         s3Key,
       })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+      return forbidden()
     }
 
     logger.debug('Deleting backup from S3', {
       context: 'DELETE /api/tools/backup/delete',
-      userId: session.user.id,
+      userId: user.id,
       s3Key,
     })
 
@@ -57,7 +49,7 @@ export async function DELETE(req: NextRequest) {
 
     logger.info('Backup deleted', {
       context: 'DELETE /api/tools/backup/delete',
-      userId: session.user.id,
+      userId: user.id,
       s3Key,
     })
 
@@ -68,9 +60,6 @@ export async function DELETE(req: NextRequest) {
       { context: 'DELETE /api/tools/backup/delete' },
       error instanceof Error ? error : undefined
     )
-    return NextResponse.json(
-      { error: 'Failed to delete backup' },
-      { status: 500 }
-    )
+    return serverError('Failed to delete backup')
   }
-}
+})

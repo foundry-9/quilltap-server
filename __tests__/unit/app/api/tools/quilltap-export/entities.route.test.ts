@@ -6,16 +6,47 @@
 import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
 import { NextRequest } from 'next/server';
 import { getServerSession } from '@/lib/auth/session';
-import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
+import { createMockRepositoryContainer, setupAuthMocks, type MockRepositoryContainer } from '@/__tests__/unit/lib/fixtures/mock-repositories';
+
+// Create mock repos before jest.mock
+const mockRepos = createMockRepositoryContainer();
 
 // Mock dependencies
 jest.mock('@/lib/auth/session', () => ({
   getServerSession: jest.fn(),
 }));
 
+// Create mock user repos
+const mockUserRepos = {
+  characters: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+  personas: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+  chats: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+  tags: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+  memories: {
+    findByCharacterId: jest.fn().mockResolvedValue([]),
+  },
+  connections: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+  imageProfiles: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+  embeddingProfiles: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+};
+
 jest.mock('@/lib/repositories/factory', () => ({
-  getUserRepositories: jest.fn(),
-  getRepositories: jest.fn(),
+  getRepositories: jest.fn(() => mockRepos),
+  getUserRepositories: jest.fn(() => mockUserRepos),
 }));
 
 jest.mock('@/lib/logger', () => ({
@@ -34,64 +65,20 @@ jest.mock('@/lib/logger', () => ({
 }));
 
 const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
-const mockGetUserRepositories = getUserRepositories as jest.MockedFunction<typeof getUserRepositories>;
-const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>;
 
 let GET: typeof import('@/app/api/tools/quilltap-export/entities/route').GET;
 
 describe('Quilltap Export Entities API Route', () => {
-  let mockUserRepos: any;
-  let mockGlobalRepos: any;
-
   beforeEach(() => {
     jest.clearAllMocks();
-
-    // Setup mock repositories
-    mockUserRepos = {
-      characters: {
-        findAll: jest.fn().mockResolvedValue([]),
-      },
-      personas: {
-        findAll: jest.fn().mockResolvedValue([]),
-      },
-      chats: {
-        findAll: jest.fn().mockResolvedValue([]),
-      },
-      tags: {
-        findAll: jest.fn().mockResolvedValue([]),
-      },
-      memories: {
-        findByCharacterId: jest.fn().mockResolvedValue([]),
-      },
-      connections: {
-        findAll: jest.fn().mockResolvedValue([]),
-      },
-      imageProfiles: {
-        findAll: jest.fn().mockResolvedValue([]),
-      },
-      embeddingProfiles: {
-        findAll: jest.fn().mockResolvedValue([]),
-      },
-    };
-
-    mockGlobalRepos = {
-      roleplayTemplates: {
-        findAll: jest.fn().mockResolvedValue([]),
-      },
-    };
-
-    mockGetUserRepositories.mockReturnValue(mockUserRepos);
-    mockGetRepositories.mockReturnValue(mockGlobalRepos as any);
 
     jest.isolateModules(() => {
       const routesModule = require('@/app/api/tools/quilltap-export/entities/route');
       GET = routesModule.GET;
     });
 
-    // Default authenticated session
-    mockGetServerSession.mockResolvedValue({
-      user: { id: 'user-123', email: 'test@example.com' },
-    } as any);
+    // Setup auth mocks
+    setupAuthMocks(mockGetServerSession, mockRepos);
   });
 
   afterEach(() => {
@@ -169,10 +156,10 @@ describe('Quilltap Export Entities API Route', () => {
       ];
       const memoriesChar2 = [{ id: 'mem-3', characterId: 'char-2' }];
 
-      mockUserRepos.characters.findAll.mockResolvedValue(characters);
+      mockUserRepos.characters.findAll.mockResolvedValue(characters as any);
       mockUserRepos.memories.findByCharacterId
-        .mockResolvedValueOnce(memoriesChar1)
-        .mockResolvedValueOnce(memoriesChar2);
+        .mockResolvedValueOnce(memoriesChar1 as any)
+        .mockResolvedValueOnce(memoriesChar2 as any);
 
       const request = createGetRequest({ type: 'characters' });
       const response = await GET(request);
@@ -214,9 +201,9 @@ describe('Quilltap Export Entities API Route', () => {
         { id: 'mem-3', personaId: 'persona-2' },
       ];
 
-      mockUserRepos.personas.findAll.mockResolvedValue(personas);
-      mockUserRepos.characters.findAll.mockResolvedValue(characters);
-      mockUserRepos.memories.findByCharacterId.mockResolvedValue(memories);
+      mockUserRepos.personas.findAll.mockResolvedValue(personas as any);
+      mockUserRepos.characters.findAll.mockResolvedValue(characters as any);
+      mockUserRepos.memories.findByCharacterId.mockResolvedValue(memories as any);
 
       const request = createGetRequest({ type: 'personas' });
       const response = await GET(request);
@@ -245,9 +232,9 @@ describe('Quilltap Export Entities API Route', () => {
         { id: 'mem-3', chatId: 'chat-2' },
       ];
 
-      mockUserRepos.chats.findAll.mockResolvedValue(chats);
-      mockUserRepos.characters.findAll.mockResolvedValue(characters);
-      mockUserRepos.memories.findByCharacterId.mockResolvedValue(memories);
+      mockUserRepos.chats.findAll.mockResolvedValue(chats as any);
+      mockUserRepos.characters.findAll.mockResolvedValue(characters as any);
+      mockUserRepos.memories.findByCharacterId.mockResolvedValue(memories as any);
 
       const request = createGetRequest({ type: 'chats' });
       const response = await GET(request);
@@ -270,7 +257,7 @@ describe('Quilltap Export Entities API Route', () => {
         { id: 'tag-2', name: 'Tag 2' },
       ];
 
-      mockUserRepos.tags.findAll.mockResolvedValue(tags);
+      mockUserRepos.tags.findAll.mockResolvedValue(tags as any);
 
       const request = createGetRequest({ type: 'tags' });
       const response = await GET(request);
@@ -293,7 +280,7 @@ describe('Quilltap Export Entities API Route', () => {
         { id: 'conn-2', name: 'Connection 2' },
       ];
 
-      mockUserRepos.connections.findAll.mockResolvedValue(profiles);
+      mockUserRepos.connections.findAll.mockResolvedValue(profiles as any);
 
       const request = createGetRequest({ type: 'connection-profiles' });
       const response = await GET(request);
@@ -315,7 +302,7 @@ describe('Quilltap Export Entities API Route', () => {
         { id: 'img-2', name: 'Image Profile 2' },
       ];
 
-      mockUserRepos.imageProfiles.findAll.mockResolvedValue(profiles);
+      mockUserRepos.imageProfiles.findAll.mockResolvedValue(profiles as any);
 
       const request = createGetRequest({ type: 'image-profiles' });
       const response = await GET(request);
@@ -337,7 +324,7 @@ describe('Quilltap Export Entities API Route', () => {
         { id: 'emb-2', name: 'Embedding Profile 2' },
       ];
 
-      mockUserRepos.embeddingProfiles.findAll.mockResolvedValue(profiles);
+      mockUserRepos.embeddingProfiles.findAll.mockResolvedValue(profiles as any);
 
       const request = createGetRequest({ type: 'embedding-profiles' });
       const response = await GET(request);
@@ -361,7 +348,7 @@ describe('Quilltap Export Entities API Route', () => {
         { id: 'rt-4', name: 'Other User Template', isBuiltIn: false, pluginName: null, userId: 'other-user' },
       ];
 
-      mockGlobalRepos.roleplayTemplates.findAll.mockResolvedValue(templates);
+      mockRepos.roleplayTemplates.findAll.mockResolvedValue(templates as any);
 
       const request = createGetRequest({ type: 'roleplay-templates' });
       const response = await GET(request);
@@ -377,7 +364,7 @@ describe('Quilltap Export Entities API Route', () => {
         { id: 'rt-1', name: 'Built-in Template', isBuiltIn: true, pluginName: null, userId: null },
       ];
 
-      mockGlobalRepos.roleplayTemplates.findAll.mockResolvedValue(templates);
+      mockRepos.roleplayTemplates.findAll.mockResolvedValue(templates as any);
 
       const request = createGetRequest({ type: 'roleplay-templates' });
       const response = await GET(request);

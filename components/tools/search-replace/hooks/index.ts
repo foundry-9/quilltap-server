@@ -1,0 +1,1 @@
+export { useSearchReplace } from './useSearchReplace';

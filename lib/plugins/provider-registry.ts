@@ -12,7 +12,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import type { LLMProviderPlugin, ProviderMetadata, AttachmentSupport, ProviderConfigRequirements, ImageProviderConstraints } from './interfaces/provider-plugin';
+import type { LLMProviderPlugin, ProviderMetadata, AttachmentSupport, ProviderConfigRequirements, ImageProviderConstraints, MessageFormatSupport, CheapModelConfig, ToolFormatType } from './interfaces/provider-plugin';
 import type { LLMProvider } from '@/lib/llm/base';
 import type { ImageGenProvider } from '@/lib/image-gen/base';
 import { getErrorMessage } from '@/lib/errors';
@@ -286,6 +286,92 @@ class ProviderRegistry {
     }
 
     return null;
+  }
+
+  // =========================================================================
+  // Runtime Configuration Query Methods
+  // =========================================================================
+
+  /**
+   * Get message format support for a provider
+   *
+   * Returns the provider's configuration for handling the 'name' field
+   * in messages (used for multi-character chats).
+   *
+   * @param name The provider name
+   * @returns MessageFormatSupport or default (no name support) if not found
+   */
+  getMessageFormat(name: string): MessageFormatSupport {
+    const plugin = this.getProvider(name);
+    return plugin?.messageFormat ?? { supportsNameField: false, supportedRoles: [] };
+  }
+
+  /**
+   * Get token estimation multiplier for a provider
+   *
+   * Returns characters-per-token ratio for estimating token counts.
+   *
+   * @param name The provider name
+   * @returns Characters per token (default: 3.5)
+   */
+  getCharsPerToken(name: string): number {
+    const plugin = this.getProvider(name);
+    return plugin?.charsPerToken ?? 3.5;
+  }
+
+  /**
+   * Get tool format type for a provider
+   *
+   * Returns the tool format this provider expects.
+   *
+   * @param name The provider name
+   * @returns Tool format type (default: 'openai')
+   */
+  getToolFormat(name: string): ToolFormatType {
+    const plugin = this.getProvider(name);
+    return plugin?.toolFormat ?? 'openai';
+  }
+
+  /**
+   * Get cheap model configuration for a provider
+   *
+   * Returns the recommended models for cheap/background tasks.
+   *
+   * @param name The provider name
+   * @returns CheapModelConfig or null if not configured
+   */
+  getCheapModelConfig(name: string): CheapModelConfig | null {
+    const plugin = this.getProvider(name);
+    return plugin?.cheapModels ?? null;
+  }
+
+  /**
+   * Get default context window for a provider
+   *
+   * Returns the fallback context window when model is unknown.
+   *
+   * @param name The provider name
+   * @returns Default context window (default: 8192)
+   */
+  getDefaultContextWindow(name: string): number {
+    const plugin = this.getProvider(name);
+    return plugin?.defaultContextWindow ?? 8192;
+  }
+
+  /**
+   * Get model pricing from plugin's getModelInfo()
+   *
+   * Queries the plugin's model info for pricing data.
+   *
+   * @param providerName The provider name
+   * @param modelId The model identifier
+   * @returns Pricing object or null if not found
+   */
+  getModelPricing(providerName: string, modelId: string): { input: number; output: number } | null {
+    const plugin = this.getProvider(providerName);
+    const models = plugin?.getModelInfo?.() ?? [];
+    const model = models.find(m => m.id === modelId);
+    return model?.pricing ?? null;
   }
 
   /**
@@ -615,4 +701,69 @@ export function getProviderRegistryErrors() {
  */
 export function isProviderRegistryInitialized(): boolean {
   return providerRegistry.isInitialized();
+}
+
+// ============================================================================
+// RUNTIME CONFIGURATION CONVENIENCE FUNCTIONS
+// ============================================================================
+
+/**
+ * Get message format support for a provider
+ *
+ * @param name The provider name
+ * @returns MessageFormatSupport or default (no name support)
+ */
+export function getMessageFormat(name: string): MessageFormatSupport {
+  return providerRegistry.getMessageFormat(name);
+}
+
+/**
+ * Get token estimation multiplier for a provider
+ *
+ * @param name The provider name
+ * @returns Characters per token (default: 3.5)
+ */
+export function getCharsPerToken(name: string): number {
+  return providerRegistry.getCharsPerToken(name);
+}
+
+/**
+ * Get tool format type for a provider
+ *
+ * @param name The provider name
+ * @returns Tool format type (default: 'openai')
+ */
+export function getToolFormat(name: string): ToolFormatType {
+  return providerRegistry.getToolFormat(name);
+}
+
+/**
+ * Get cheap model configuration for a provider
+ *
+ * @param name The provider name
+ * @returns CheapModelConfig or null
+ */
+export function getCheapModelConfig(name: string): CheapModelConfig | null {
+  return providerRegistry.getCheapModelConfig(name);
+}
+
+/**
+ * Get default context window for a provider
+ *
+ * @param name The provider name
+ * @returns Default context window (default: 8192)
+ */
+export function getDefaultContextWindow(name: string): number {
+  return providerRegistry.getDefaultContextWindow(name);
+}
+
+/**
+ * Get model pricing from plugin's getModelInfo()
+ *
+ * @param providerName The provider name
+ * @param modelId The model identifier
+ * @returns Pricing object or null
+ */
+export function getModelPricing(providerName: string, modelId: string): { input: number; output: number } | null {
+  return providerRegistry.getModelPricing(providerName, modelId);
 }

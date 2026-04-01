@@ -3,45 +3,33 @@
 import { useState, useCallback } from 'react'
 import { clientLogger } from '@/lib/client-logger'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import type { ImageData, Character, Persona, EntityType } from '../types'
+import type { ImageData, Character, EntityType } from '../types'
 
 interface UseImageActionsReturn {
   taggedCharacterIds: Set<string>
-  taggedPersonaIds: Set<string>
   taggingInProgress: Set<string>
   settingAvatar: Set<string>
   toggleCharacterTag: (characterId: string) => Promise<void>
-  togglePersonaTag: (personaId: string) => Promise<void>
   setAsAvatar: (entityType: EntityType, entityId: string) => Promise<void>
   handleDownload: () => Promise<void>
   updateTaggedCharacters: (charIds: Set<string>) => void
-  updateTaggedPersonas: (personaIds: Set<string>) => void
   setCharacters: (characters: Character[]) => void
-  setPersonas: (personas: Persona[]) => void
 }
 
 export function useImageActions(
   image: ImageData,
   characters: Character[],
-  personas: Persona[],
   onAvatarSet?: () => void
-): Omit<UseImageActionsReturn, 'setCharacters' | 'setPersonas'> & {
+): Omit<UseImageActionsReturn, 'setCharacters'> & {
   setCharacters: (fn: (prev: Character[]) => Character[]) => void
-  setPersonas: (fn: (prev: Persona[]) => Persona[]) => void
 } {
   const [taggedCharacterIds, setTaggedCharacterIds] = useState<Set<string>>(new Set())
-  const [taggedPersonaIds, setTaggedPersonaIds] = useState<Set<string>>(new Set())
   const [taggingInProgress, setTaggingInProgress] = useState<Set<string>>(new Set())
   const [settingAvatar, setSettingAvatar] = useState<Set<string>>(new Set())
   const [internalCharacters, setInternalCharacters] = useState<Character[]>(characters)
-  const [internalPersonas, setInternalPersonas] = useState<Persona[]>(personas)
 
   const updateTaggedCharacters = useCallback((charIds: Set<string>) => {
     setTaggedCharacterIds(charIds)
-  }, [])
-
-  const updateTaggedPersonas = useCallback((personaIds: Set<string>) => {
-    setTaggedPersonaIds(personaIds)
   }, [])
 
   const toggleCharacterTag = useCallback(
@@ -54,14 +42,18 @@ export function useImageActions(
         clientLogger.debug('Toggling character tag', { characterId, isTagged, imageId: image.id })
 
         if (isTagged) {
-          // Remove tag
-          const params = new URLSearchParams({
-            tagType: 'CHARACTER',
-            tagId: characterId,
-          })
-          const response = await fetch(`/api/images/${image.id}/tags?${params.toString()}`, {
+          // Remove tag - try both CHARACTER and PERSONA for backwards compatibility
+          // First try CHARACTER (the new type)
+          let response = await fetch(`/api/images/${image.id}/tags?tagType=CHARACTER&tagId=${characterId}`, {
             method: 'DELETE',
           })
+
+          // If CHARACTER tag doesn't exist, try PERSONA (legacy)
+          if (!response.ok) {
+            response = await fetch(`/api/images/${image.id}/tags?tagType=PERSONA&tagId=${characterId}`, {
+              method: 'DELETE',
+            })
+          }
 
           if (!response.ok) {
             const data = await response.json()
@@ -76,7 +68,7 @@ export function useImageActions(
           showSuccessToast('Removed from character gallery')
           clientLogger.debug('Character tag removed successfully', { characterId })
         } else {
-          // Add tag
+          // Add tag - always use CHARACTER for new tags
           const response = await fetch(`/api/images/${image.id}/tags`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -110,72 +102,6 @@ export function useImageActions(
     [image.id, taggedCharacterIds]
   )
 
-  const togglePersonaTag = useCallback(
-    async (personaId: string) => {
-      const isTagged = taggedPersonaIds.has(personaId)
-      const key = `persona-${personaId}`
-
-      try {
-        setTaggingInProgress((prev) => new Set(prev).add(key))
-        clientLogger.debug('Toggling persona tag', { personaId, isTagged, imageId: image.id })
-
-        if (isTagged) {
-          // Remove tag
-          const params = new URLSearchParams({
-            tagType: 'PERSONA',
-            tagId: personaId,
-          })
-          const response = await fetch(`/api/images/${image.id}/tags?${params.toString()}`, {
-            method: 'DELETE',
-          })
-
-          if (!response.ok) {
-            const data = await response.json()
-            throw new Error(data.error || 'Failed to remove tag')
-          }
-
-          setTaggedPersonaIds((prev) => {
-            const newSet = new Set(prev)
-            newSet.delete(personaId)
-            return newSet
-          })
-          showSuccessToast('Removed from persona gallery')
-          clientLogger.debug('Persona tag removed successfully', { personaId })
-        } else {
-          // Add tag
-          const response = await fetch(`/api/images/${image.id}/tags`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tagType: 'PERSONA',
-              tagId: personaId,
-            }),
-          })
-
-          if (!response.ok) {
-            const data = await response.json()
-            throw new Error(data.error || 'Failed to add tag')
-          }
-
-          setTaggedPersonaIds((prev) => new Set(prev).add(personaId))
-          showSuccessToast('Added to persona gallery')
-          clientLogger.debug('Persona tag added successfully', { personaId })
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Failed to update tag'
-        clientLogger.error('Persona tag toggle failed', { personaId, error: errorMessage })
-        showErrorToast(errorMessage)
-      } finally {
-        setTaggingInProgress((prev) => {
-          const newSet = new Set(prev)
-          newSet.delete(key)
-          return newSet
-        })
-      }
-    },
-    [image.id, taggedPersonaIds]
-  )
-
   const setAsAvatar = useCallback(
     async (entityType: EntityType, entityId: string) => {
       const key = `${entityType}-${entityId}-avatar`
@@ -184,10 +110,8 @@ export function useImageActions(
         setSettingAvatar((prev) => new Set(prev).add(key))
         clientLogger.debug('Setting avatar', { entityType, entityId, imageId: image.id })
 
-        const endpoint =
-          entityType === 'character'
-            ? `/api/characters/${entityId}/avatar`
-            : `/api/personas/${entityId}/avatar`
+        // All entities are now characters (personas migrated to characters with controlledBy: 'user')
+        const endpoint = `/api/characters/${entityId}/avatar`
 
         const response = await fetch(endpoint, {
           method: 'PATCH',
@@ -201,21 +125,13 @@ export function useImageActions(
         }
 
         // Update local state
-        if (entityType === 'character') {
-          setInternalCharacters((prev) =>
-            prev.map((char) =>
-              char.id === entityId ? { ...char, defaultImageId: image.id } : char
-            )
+        setInternalCharacters((prev) =>
+          prev.map((char) =>
+            char.id === entityId ? { ...char, defaultImageId: image.id } : char
           )
-        } else {
-          setInternalPersonas((prev) =>
-            prev.map((persona) =>
-              persona.id === entityId ? { ...persona, defaultImageId: image.id } : persona
-            )
-          )
-        }
+        )
 
-        showSuccessToast(`Set as avatar for ${entityType}`)
+        showSuccessToast('Set as avatar for character')
         onAvatarSet?.()
         clientLogger.debug('Avatar set successfully', { entityType, entityId })
       } catch (error) {
@@ -257,16 +173,12 @@ export function useImageActions(
 
   return {
     taggedCharacterIds,
-    taggedPersonaIds,
     taggingInProgress,
     settingAvatar,
     toggleCharacterTag,
-    togglePersonaTag,
     setAsAvatar,
     handleDownload,
     updateTaggedCharacters,
-    updateTaggedPersonas,
     setCharacters: setInternalCharacters,
-    setPersonas: setInternalPersonas,
   }
 }

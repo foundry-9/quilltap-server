@@ -1,0 +1,327 @@
+'use client'
+
+/**
+ * Sidebar Provider
+ *
+ * Manages the left sidebar state (collapsed/expanded, mobile open/closed).
+ * Persists collapsed preference to localStorage.
+ *
+ * @module components/providers/sidebar-provider
+ */
+
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { clientLogger } from '@/lib/client-logger'
+
+const API_DEBOUNCE_MS = 500
+
+/** Default sidebar width in pixels */
+export const DEFAULT_SIDEBAR_WIDTH = 256
+/** Minimum sidebar width in pixels */
+export const MIN_SIDEBAR_WIDTH = 256
+/** Maximum sidebar width in pixels */
+export const MAX_SIDEBAR_WIDTH = 512
+
+interface SidebarContextValue {
+  /** Whether the sidebar is collapsed (desktop) */
+  isCollapsed: boolean
+  /** Whether the sidebar is open on mobile */
+  isMobileOpen: boolean
+  /** Current sidebar width in pixels */
+  width: number
+  /** Toggle collapsed state (desktop) */
+  toggleCollapse: () => void
+  /** Set collapsed state explicitly */
+  setCollapsed: (collapsed: boolean) => void
+  /** Open sidebar on mobile */
+  openMobile: () => void
+  /** Close sidebar on mobile */
+  closeMobile: () => void
+  /** Whether we're on a mobile viewport */
+  isMobile: boolean
+  /** Set sidebar width (clamped to min/max) */
+  setWidth: (width: number) => void
+  /** Reset sidebar width to default */
+  resetWidth: () => void
+}
+
+const STORAGE_KEY = 'quilltap.sidebar.collapsed'
+const WIDTH_STORAGE_KEY = 'quilltap.sidebar.width'
+const MOBILE_BREAKPOINT = 768
+
+const SidebarContext = createContext<SidebarContextValue | null>(null)
+
+export function SidebarProvider({ children }: { children: React.ReactNode }) {
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [storageReady, setStorageReady] = useState(false)
+  const [width, setWidthState] = useState(DEFAULT_SIDEBAR_WIDTH)
+
+  // Load collapsed state and width from localStorage on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY)
+      if (raw === 'true') {
+        setIsCollapsed(true)
+        clientLogger.debug('Loaded sidebar collapsed preference from localStorage', { isCollapsed: true })
+      }
+
+      const widthRaw = window.localStorage.getItem(WIDTH_STORAGE_KEY)
+      if (widthRaw) {
+        const parsedWidth = parseInt(widthRaw, 10)
+        if (!isNaN(parsedWidth) && parsedWidth >= MIN_SIDEBAR_WIDTH && parsedWidth <= MAX_SIDEBAR_WIDTH) {
+          setWidthState(parsedWidth)
+          clientLogger.debug('Loaded sidebar width from localStorage', { width: parsedWidth })
+        }
+      }
+    } catch (error) {
+      clientLogger.warn('Unable to load sidebar preferences', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      setStorageReady(true)
+    }
+  }, [])
+
+  // Persist collapsed state to localStorage when changed
+  useEffect(() => {
+    if (!storageReady || typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(STORAGE_KEY, String(isCollapsed))
+      clientLogger.debug('Persisted sidebar collapsed preference', { isCollapsed })
+    } catch (error) {
+      clientLogger.warn('Unable to persist sidebar collapsed preference', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }, [isCollapsed, storageReady])
+
+  // Persist width to localStorage when changed
+  useEffect(() => {
+    if (!storageReady || typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(WIDTH_STORAGE_KEY, String(width))
+      clientLogger.debug('Persisted sidebar width to localStorage', { width })
+    } catch (error) {
+      clientLogger.warn('Unable to persist sidebar width', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }, [width, storageReady])
+
+  // Debounced API persistence for sidebar width
+  const apiDebounceRef = useRef<NodeJS.Timeout | null>(null)
+  const lastApiWidthRef = useRef<number>(DEFAULT_SIDEBAR_WIDTH)
+
+  // Fetch initial width from API on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const fetchFromApi = async () => {
+      try {
+        const response = await fetch('/api/chat-settings')
+        if (response.ok) {
+          const settings = await response.json()
+          if (settings.sidebarWidth && settings.sidebarWidth !== width) {
+            const apiWidth = settings.sidebarWidth
+            if (apiWidth >= MIN_SIDEBAR_WIDTH && apiWidth <= MAX_SIDEBAR_WIDTH) {
+              setWidthState(apiWidth)
+              lastApiWidthRef.current = apiWidth
+              clientLogger.debug('Loaded sidebar width from API', { width: apiWidth })
+            }
+          }
+        }
+      } catch (error) {
+        clientLogger.debug('Could not fetch sidebar width from API (may not be authenticated)', {
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }
+
+    // Small delay to avoid race with other initialization
+    const timeout = setTimeout(fetchFromApi, 100)
+    return () => clearTimeout(timeout)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Debounced save to API when width changes
+  useEffect(() => {
+    if (!storageReady || typeof window === 'undefined') return
+    if (width === lastApiWidthRef.current) return
+
+    // Clear any existing debounce
+    if (apiDebounceRef.current) {
+      clearTimeout(apiDebounceRef.current)
+    }
+
+    apiDebounceRef.current = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/chat-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sidebarWidth: width }),
+        })
+        if (response.ok) {
+          lastApiWidthRef.current = width
+          clientLogger.debug('Persisted sidebar width to API', { width })
+        }
+      } catch (error) {
+        clientLogger.debug('Could not save sidebar width to API', {
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }, API_DEBOUNCE_MS)
+
+    return () => {
+      if (apiDebounceRef.current) {
+        clearTimeout(apiDebounceRef.current)
+      }
+    }
+  }, [width, storageReady])
+
+  // Cross-tab sync via storage event
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY && event.newValue !== null) {
+        const newValue = event.newValue === 'true'
+        clientLogger.debug('Sidebar collapsed preference changed in another tab', { isCollapsed: newValue })
+        setIsCollapsed(newValue)
+      } else if (event.key === WIDTH_STORAGE_KEY && event.newValue !== null) {
+        const parsedWidth = parseInt(event.newValue, 10)
+        if (!isNaN(parsedWidth) && parsedWidth >= MIN_SIDEBAR_WIDTH && parsedWidth <= MAX_SIDEBAR_WIDTH) {
+          clientLogger.debug('Sidebar width changed in another tab', { width: parsedWidth })
+          setWidthState(parsedWidth)
+        }
+      }
+    }
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }, [])
+
+  // Track viewport width for mobile detection
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const mediaQuery = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+
+    const updateMobile = () => {
+      const mobile = mediaQuery.matches
+      setIsMobile(mobile)
+      // Close mobile menu when switching to desktop
+      if (!mobile) {
+        setIsMobileOpen(false)
+      }
+      clientLogger.debug('Viewport mobile check', { isMobile: mobile, viewportWidth: window.innerWidth })
+    }
+
+    updateMobile()
+    mediaQuery.addEventListener('change', updateMobile)
+    return () => mediaQuery.removeEventListener('change', updateMobile)
+  }, [])
+
+  // Close mobile sidebar when pressing Escape
+  useEffect(() => {
+    if (!isMobileOpen) return
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMobileOpen(false)
+        clientLogger.debug('Closed mobile sidebar via Escape key')
+      }
+    }
+
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [isMobileOpen])
+
+  // Prevent body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (isMobileOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isMobileOpen])
+
+  const toggleCollapse = useCallback(() => {
+    setIsCollapsed(prev => {
+      const next = !prev
+      queueMicrotask(() => {
+        clientLogger.info('Toggled sidebar collapse', { from: prev, to: next })
+      })
+      return next
+    })
+  }, [])
+
+  const setCollapsed = useCallback((collapsed: boolean) => {
+    queueMicrotask(() => {
+      clientLogger.info('Set sidebar collapsed', { collapsed })
+    })
+    setIsCollapsed(collapsed)
+  }, [])
+
+  const openMobile = useCallback(() => {
+    setIsMobileOpen(true)
+    clientLogger.debug('Opened mobile sidebar')
+  }, [])
+
+  const closeMobile = useCallback(() => {
+    setIsMobileOpen(false)
+    clientLogger.debug('Closed mobile sidebar')
+  }, [])
+
+  const setWidth = useCallback((newWidth: number) => {
+    const clampedWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, newWidth))
+    setWidthState(clampedWidth)
+    clientLogger.debug('Set sidebar width', { width: clampedWidth })
+  }, [])
+
+  const resetWidth = useCallback(() => {
+    setWidthState(DEFAULT_SIDEBAR_WIDTH)
+    clientLogger.info('Reset sidebar width to default', { width: DEFAULT_SIDEBAR_WIDTH })
+  }, [])
+
+  const value = useMemo<SidebarContextValue>(
+    () => ({
+      isCollapsed,
+      isMobileOpen,
+      width,
+      toggleCollapse,
+      setCollapsed,
+      openMobile,
+      closeMobile,
+      isMobile,
+      setWidth,
+      resetWidth,
+    }),
+    [isCollapsed, isMobileOpen, width, toggleCollapse, setCollapsed, openMobile, closeMobile, isMobile, setWidth, resetWidth]
+  )
+
+  return (
+    <SidebarContext.Provider value={value}>
+      {children}
+    </SidebarContext.Provider>
+  )
+}
+
+export function useSidebar() {
+  const ctx = useContext(SidebarContext)
+  if (!ctx) {
+    throw new Error('useSidebar must be used within a SidebarProvider')
+  }
+  return ctx
+}
+
+/**
+ * Optional hook that returns null if used outside provider context.
+ * Useful for components that may be rendered before provider is mounted.
+ */
+export function useSidebarOptional() {
+  return useContext(SidebarContext)
+}

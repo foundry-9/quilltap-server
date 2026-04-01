@@ -66,6 +66,23 @@ const attachmentSupport = {
 };
 
 /**
+ * Message format support for multi-character chats
+ */
+const messageFormat = {
+  supportsNameField: true,
+  supportedRoles: ['user', 'assistant'] as ('user' | 'assistant')[],
+  maxNameLength: 64,
+};
+
+/**
+ * Cheap model configuration for background tasks
+ */
+const cheapModels = {
+  defaultModel: 'gpt-4o-mini',
+  recommendedModels: ['gpt-4o-mini', 'gpt-3.5-turbo'],
+};
+
+/**
  * The OpenAI Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
@@ -77,6 +94,13 @@ export const plugin: LLMProviderPlugin = {
   capabilities,
 
   attachmentSupport,
+
+  // Runtime configuration
+  messageFormat,
+  charsPerToken: 3.5,
+  toolFormat: 'openai',
+  cheapModels,
+  defaultContextWindow: 128000,
 
   /**
    * Factory method to create an OpenAI LLM provider instance

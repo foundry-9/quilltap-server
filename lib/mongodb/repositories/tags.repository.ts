@@ -5,70 +5,17 @@
  * Provides tag management with case-insensitive search capabilities.
  */
 
-import { Collection, ObjectId } from 'mongodb';
-import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { Tag, TagSchema } from '@/lib/schemas/types';
-import { getMongoDatabase } from '../client';
-import { CreateOptions } from './base.repository';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
 
 /**
  * MongoDB Tags Repository
  * Implements CRUD operations for tags with the same API as the JSON repository
  */
-export class MongoTagsRepository {
-  private collectionName = 'tags';
-  private schema = TagSchema;
-
-  /**
-   * Get the MongoDB collection
-   */
-  private async getCollection(): Promise<Collection> {
-    const db = await getMongoDatabase();
-    const collection = db.collection(this.collectionName);
-
-    logger.debug('Retrieved MongoDB tags collection', {
-      collectionName: this.collectionName,
-    });
-
-    return collection;
-  }
-
-  /**
-   * Validate data against schema
-   */
-  private validate(data: unknown): Tag {
-    return this.schema.parse(data) as Tag;
-  }
-
-  /**
-   * Safely validate without throwing
-   */
-  private validateSafe(data: unknown): { success: boolean; data?: Tag; error?: string } {
-    try {
-      const validated = this.validate(data);
-      return { success: true, data: validated };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Generate UUID v4
-   */
-  private generateId(): string {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  }
-
-  /**
-   * Get current ISO timestamp
-   */
-  private getCurrentTimestamp(): string {
-    return new Date().toISOString();
+export class MongoTagsRepository extends MongoBaseRepository<Tag> {
+  constructor() {
+    super('tags', TagSchema);
   }
 
   /**
@@ -77,17 +24,11 @@ export class MongoTagsRepository {
   async findById(id: string): Promise<Tag | null> {
     const collection = await this.getCollection();
 
-    logger.debug('Finding tag by ID', {
-      tagId: id,
-    });
-
     try {
       const tag = await collection.findOne({ id });
 
       if (!tag) {
-        logger.debug('Tag not found', {
-          tagId: id,
-        });
+        logger.debug('Tag not found', { tagId: id });
         return null;
       }
 
@@ -102,10 +43,6 @@ export class MongoTagsRepository {
         });
         return null;
       }
-
-      logger.debug('Tag found by ID', {
-        tagId: id,
-      });
 
       return validationResult.data || null;
     } catch (error) {
@@ -123,14 +60,8 @@ export class MongoTagsRepository {
   async findAll(): Promise<Tag[]> {
     const collection = await this.getCollection();
 
-    logger.debug('Finding all tags');
-
     try {
       const tags = await collection.find({}).toArray();
-
-      logger.debug('Retrieved all tags', {
-        count: tags.length,
-      });
 
       // Map MongoDB documents to Tag objects, removing _id field
       const validatedTags: Tag[] = [];
@@ -161,17 +92,8 @@ export class MongoTagsRepository {
   async findByUserId(userId: string): Promise<Tag[]> {
     const collection = await this.getCollection();
 
-    logger.debug('Finding tags by user ID', {
-      userId,
-    });
-
     try {
       const tags = await collection.find({ userId }).toArray();
-
-      logger.debug('Retrieved tags by user ID', {
-        userId,
-        count: tags.length,
-      });
 
       // Map MongoDB documents to Tag objects, removing _id field
       const validatedTags: Tag[] = [];
@@ -199,17 +121,50 @@ export class MongoTagsRepository {
   }
 
   /**
+   * Find multiple tags by their IDs in a single query
+   * @param ids Array of tag IDs
+   * @returns Promise<Tag[]> Array of found tags (may be shorter than input if some IDs don't exist)
+   */
+  async findByIds(ids: string[]): Promise<Tag[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const collection = await this.getCollection();
+
+    try {
+      const tags = await collection.find({ id: { $in: ids } }).toArray();
+
+      const validatedTags: Tag[] = [];
+      for (const tag of tags) {
+        const { _id, ...tagData } = tag as any;
+        const validationResult = this.validateSafe(tagData);
+        if (validationResult.success && validationResult.data) {
+          validatedTags.push(validationResult.data);
+        } else {
+          logger.warn('Skipping invalid tag during findByIds', {
+            error: validationResult.error,
+          });
+        }
+      }
+
+      logger.debug('Found tags by IDs', { requestedCount: ids.length, foundCount: validatedTags.length });
+      return validatedTags;
+    } catch (error) {
+      logger.error('Error finding tags by IDs', {
+        idCount: ids.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Find tag by name (case-insensitive)
    */
   async findByName(userId: string, name: string): Promise<Tag | null> {
     const collection = await this.getCollection();
     const nameLower = name.toLowerCase();
-
-    logger.debug('Finding tag by name', {
-      userId,
-      name,
-      nameLower,
-    });
 
     try {
       const tag = await collection.findOne({
@@ -218,11 +173,6 @@ export class MongoTagsRepository {
       });
 
       if (!tag) {
-        logger.debug('Tag not found by name', {
-          userId,
-          name,
-          nameLower,
-        });
         return null;
       }
 
@@ -238,11 +188,6 @@ export class MongoTagsRepository {
         });
         return null;
       }
-
-      logger.debug('Tag found by name', {
-        userId,
-        name,
-      });
 
       return validationResult.data || null;
     } catch (error) {
@@ -268,11 +213,6 @@ export class MongoTagsRepository {
     const id = options?.id || this.generateId();
     const now = this.getCurrentTimestamp();
     const createdAt = options?.createdAt || now;
-
-    logger.debug('Creating new tag', {
-      userId: data.userId,
-      name: data.name,
-    });
 
     try {
       // Auto-generate nameLower from name if not provided
@@ -317,10 +257,6 @@ export class MongoTagsRepository {
     const collection = await this.getCollection();
     const now = this.getCurrentTimestamp();
 
-    logger.debug('Updating tag', {
-      tagId: id,
-    });
-
     try {
       // Prepare update data
       const updateData: any = {
@@ -331,11 +267,6 @@ export class MongoTagsRepository {
       // If name is being updated, update nameLower as well
       if (data.name) {
         updateData.nameLower = data.name.toLowerCase();
-        logger.debug('Tag name being updated, recalculating nameLower', {
-          tagId: id,
-          newName: data.name,
-          newNameLower: updateData.nameLower,
-        });
       }
 
       // Remove id and createdAt to prevent accidental overwrites
@@ -387,10 +318,6 @@ export class MongoTagsRepository {
   async delete(id: string): Promise<boolean> {
     const collection = await this.getCollection();
 
-    logger.debug('Deleting tag', {
-      tagId: id,
-    });
-
     try {
       const result = await collection.deleteOne({ id });
 
@@ -416,30 +343,4 @@ export class MongoTagsRepository {
     }
   }
 
-  /**
-   * Create or update a tag by ID.
-   * Used for sync operations where the ID is known (from remote instance).
-   * @param id The tag ID
-   * @param data The tag data
-   * @param options Options including original createdAt timestamp
-   */
-  async createOrUpdate(
-    id: string,
-    data: Omit<Tag, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: { createdAt?: string }
-  ): Promise<Tag> {
-    const existing = await this.findById(id);
-
-    if (existing) {
-      logger.debug('Tag exists, updating via createOrUpdate', { tagId: id });
-      const updated = await this.update(id, data);
-      if (!updated) {
-        throw new Error(`Failed to update tag ${id}`);
-      }
-      return updated;
-    }
-
-    logger.debug('Tag does not exist, creating via createOrUpdate', { tagId: id });
-    return this.create(data, { id, createdAt: options?.createdAt });
-  }
 }

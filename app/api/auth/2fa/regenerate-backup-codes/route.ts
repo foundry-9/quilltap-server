@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { regenerateBackupCodes } from '@/lib/auth/totp'
 import { logger } from '@/lib/logger'
 
@@ -7,15 +7,9 @@ import { logger } from '@/lib/logger'
  * POST /api/auth/2fa/regenerate-backup-codes
  * Regenerate backup codes for a user with 2FA enabled
  */
-export async function POST() {
-  const session = await getServerSession()
-
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const result = await regenerateBackupCodes(session.user.id)
+    const result = await regenerateBackupCodes(user.id)
 
     if (!result.success) {
       return NextResponse.json(
@@ -26,7 +20,7 @@ export async function POST() {
 
     logger.debug('Backup codes regenerated via API', {
       context: 'POST /api/auth/2fa/regenerate-backup-codes',
-      userId: session.user.id,
+      userId: user.id,
     })
 
     return NextResponse.json({
@@ -44,4 +38,4 @@ export async function POST() {
       { status: 500 }
     )
   }
-}
+})

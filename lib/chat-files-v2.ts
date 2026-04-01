@@ -58,7 +58,7 @@ function getExtension(filename: string): string {
 /**
  * Get the filepath for a file - always returns API path for S3-backed files
  */
-function getFilePath(fileId: string): string {
+function getFileApiPath(fileId: string): string {
   return `/api/files/${fileId}`;
 }
 
@@ -118,7 +118,7 @@ export async function uploadChatFile(
         return {
           id: updated.id,
           filename: updated.originalFilename,
-          filepath: getFilePath(updated.id),
+          filepath: getFileApiPath(updated.id),
           mimeType: updated.mimeType,
           size: updated.size,
           sha256: updated.sha256,
@@ -131,7 +131,7 @@ export async function uploadChatFile(
     return {
       id: existing.id,
       filename: existing.originalFilename,
-      filepath: getFilePath(existing.id),
+      filepath: getFileApiPath(existing.id),
       mimeType: existing.mimeType,
       size: existing.size,
       sha256: existing.sha256,
@@ -189,7 +189,7 @@ export async function uploadChatFile(
   return {
     id: fileEntry.id,
     filename: fileEntry.originalFilename,
-    filepath: getFilePath(fileEntry.id),
+    filepath: getFileApiPath(fileEntry.id),
     mimeType: fileEntry.mimeType,
     size: fileEntry.size,
     sha256: fileEntry.sha256,
@@ -243,7 +243,7 @@ export async function loadChatFilesForLLM(
 
       attachments.push({
         id: fileEntry.id,
-        filepath: getFilePath(fileEntry.id),
+        filepath: getFileApiPath(fileEntry.id),
         filename: fileEntry.originalFilename,
         mimeType: fileEntry.mimeType,
         size: fileEntry.size,

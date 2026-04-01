@@ -55,11 +55,13 @@ const mockCharacter = {
   physicalDescriptions: [mockDescription],
 }
 
-const mockPersona = {
-  id: 'persona-1',
+// User-controlled character (formerly persona) - after migration, personas become characters with controlledBy: 'user'
+const mockUserCharacter = {
+  id: 'user-char-1',
   userId,
   name: 'Aurora',
-  description: 'Persona description',
+  description: 'User character description',
+  controlledBy: 'user',
   tags: [],
   createdAt: now,
   updatedAt: now,
@@ -72,9 +74,10 @@ const mockChat = {
   participants: [
     {
       id: 'participant-1',
-      type: 'PERSONA',
-      personaId: mockPersona.id,
-      characterId: null,
+      type: 'CHARACTER',
+      characterId: mockUserCharacter.id,
+      personaId: null,
+      controlledBy: 'user',
       connectionProfileId: null,
       imageProfileId: null,
       systemPromptOverride: null,
@@ -88,6 +91,7 @@ const mockChat = {
       type: 'CHARACTER',
       personaId: null,
       characterId: mockCharacter.id,
+      controlledBy: 'llm',
       connectionProfileId: 'profile-1',
       imageProfileId: null,
       systemPromptOverride: null,
@@ -114,9 +118,6 @@ const mockRepos = {
   },
   characters: {
     findByUserId: jest.fn(),
-  },
-  personas: {
-    findByUserId: jest.fn(),
     findById: jest.fn(),
   },
 }
@@ -126,9 +127,14 @@ describe('image prompt expansion utilities', () => {
     jest.clearAllMocks()
     mockGetRepositories.mockReturnValue(mockRepos as any)
     mockRepos.chats.findById.mockResolvedValue(mockChat)
-    mockRepos.characters.findByUserId.mockResolvedValue([mockCharacter])
-    mockRepos.personas.findByUserId.mockResolvedValue([mockPersona])
-    mockRepos.personas.findById.mockResolvedValue(mockPersona)
+    // All characters including user-controlled ones (formerly personas)
+    mockRepos.characters.findByUserId.mockResolvedValue([mockCharacter, mockUserCharacter])
+    // findById returns the appropriate character based on ID
+    mockRepos.characters.findById.mockImplementation((id: string) => {
+      if (id === mockCharacter.id) return Promise.resolve(mockCharacter)
+      if (id === mockUserCharacter.id) return Promise.resolve(mockUserCharacter)
+      return Promise.resolve(null)
+    })
   })
 
   it('parses placeholder tokens from prompts', () => {
@@ -148,12 +154,13 @@ describe('image prompt expansion utilities', () => {
       'participant-1'
     )
 
-    expect(resolved[0].type).toBe('persona')
-    expect(resolved[0].entityId).toBe(mockPersona.id)
+    // All participants are now CHARACTER type (personas migrated to characters with controlledBy: 'user')
+    expect(resolved[0].type).toBe('character')
+    expect(resolved[0].entityId).toBe(mockUserCharacter.id)
     expect(resolved[0].descriptions?.[0].shortPrompt).toBe('short desc')
   })
 
-  it('matches characters and personas by name', async () => {
+  it('matches characters by name (including user-controlled characters)', async () => {
     const resolved = await resolvePlaceholders(
       [
         { placeholder: '{{mirel}}', name: 'mirel' },
@@ -164,10 +171,13 @@ describe('image prompt expansion utilities', () => {
       mockChat.id
     )
 
+    // LLM-controlled character
     expect(resolved[0].type).toBe('character')
     expect(resolved[0].descriptions?.length).toBeGreaterThan(0)
-    expect(resolved[1].type).toBe('persona')
+    // User-controlled character (formerly persona)
+    expect(resolved[1].type).toBe('character')
     expect(resolved[1].descriptions?.length).toBeGreaterThan(0)
+    // Unknown placeholder
     expect(resolved[2].descriptions).toEqual([])
   })
 

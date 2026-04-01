@@ -20,6 +20,11 @@ import { migrateCharacterSystemPromptsMigration } from './migrate-character-syst
 import { migrateTagStylesToTagsMigration } from './migrate-tag-styles-to-tags';
 // Plugin system migrations
 import { removeQuilltapRPBuiltinMigration } from './remove-quilltap-rp-builtin';
+// Personas-to-characters migration
+import { migratePersonasToCharactersMigration } from './migrate-personas-to-characters';
+// Multi-character chat migrations (moved from lib/mongodb/migrations/)
+import { addMultiCharacterFieldsMigration } from './add-multi-character-fields';
+import { addInterCharacterMemoryFieldsMigration } from './add-inter-character-memory-fields';
 
 /**
  * All available migrations.
@@ -40,6 +45,11 @@ export const migrations: Migration[] = [
   migrateTagStylesToTagsMigration,
   // Plugin system migrations
   removeQuilltapRPBuiltinMigration,
+  // Character unification
+  migratePersonasToCharactersMigration,
+  // Multi-character chat migrations (moved from lib/mongodb/migrations/)
+  addMultiCharacterFieldsMigration,
+  addInterCharacterMemoryFieldsMigration,
 ];
 
 export {
@@ -57,4 +67,9 @@ export {
   migrateTagStylesToTagsMigration,
   // Plugin system migrations
   removeQuilltapRPBuiltinMigration,
+  // Character unification
+  migratePersonasToCharactersMigration,
+  // Multi-character chat migrations (moved from lib/mongodb/migrations/)
+  addMultiCharacterFieldsMigration,
+  addInterCharacterMemoryFieldsMigration,
 };

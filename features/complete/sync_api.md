@@ -56,10 +56,9 @@ The Sync API has been fully implemented with the following components:
 - **Sync Direction**: Bidirectional - both instances can push and pull changes
 - **Conflict Resolution**: Last-write-wins (most recent `updatedAt` timestamp wins)
 - **Sync Scope**: All user data EXCEPT profiles:
-  - Characters
-  - Personas
-  - Chats (including messages)
-  - Memories
+  - Characters (including user-controlled characters, formerly "personas")
+  - Chats (including messages and impersonation state)
+  - Memories (including inter-character relationships)
   - Tags
   - Roleplay Templates
   - Prompt Templates
@@ -115,8 +114,7 @@ interface SyncMapping {
 }
 
 type SyncableEntityType =
-  | 'CHARACTER'
-  | 'PERSONA'
+  | 'CHARACTER'  // Includes both LLM-controlled and user-controlled (formerly "personas")
   | 'CHAT'
   | 'MEMORY'
   | 'TAG'
@@ -372,12 +370,12 @@ Chats can have thousands of messages. Mitigation:
 - Consider message-level timestamps for granular sync
 
 ### File References
-Characters/personas reference avatar images. Options:
+Characters reference avatar images. Options:
 - **Phase 1**: Exclude file references, avatars become null on sync
 - **Future**: Add file sync capability with deduplication via SHA256
 
 ### Circular References
-Characters link to personas, personas link to characters. Handling:
+Characters may reference other characters (e.g., `defaultPartnerId`). Handling:
 - Import all entities first with placeholder references
 - Reconcile references after all entities imported
 - Use existing `IdMappingState` pattern from import service

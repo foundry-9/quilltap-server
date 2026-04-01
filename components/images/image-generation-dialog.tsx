@@ -367,7 +367,7 @@ export function ImageGenerationDialog({
                 <div className="grid grid-cols-2 gap-3">
                   {previewImages.map((img) => (
                     <div key={img.id} className="qt-card">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      { }
                       <img
                         src={img.data}
                         alt="Generated"

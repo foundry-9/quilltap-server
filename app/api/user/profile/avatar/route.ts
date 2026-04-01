@@ -4,19 +4,13 @@
  * PATCH /api/user/profile/avatar - Set or clear user's profile image
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/repositories/factory';
+import { NextResponse } from 'next/server';
+import { createAuthenticatedHandler } from '@/lib/api/middleware';
+import { getFilePath } from '@/lib/api/middleware/file-path';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 import type { FileEntry } from '@/lib/schemas/types';
-
-/**
- * Get the filepath for a file - always returns API path for S3-backed files
- */
-function getFilePath(file: FileEntry): string {
-  return `/api/files/${file.id}`;
-}
 
 const avatarSchema = z.object({
   imageId: z.string().nullable(),
@@ -31,18 +25,9 @@ const avatarSchema = z.object({
  * - Belong to the authenticated user
  * - Have category 'IMAGE' or 'AVATAR'
  */
-export async function PATCH(request: NextRequest) {
+export const PATCH = createAuthenticatedHandler(async (request, { user, repos }) => {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      logger.debug('Unauthorized profile avatar update - no session', {
-        context: 'PATCH /api/user/profile/avatar',
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const userId = session.user.id;
-    const repos = getRepositories();
+    const userId = user.id;
 
     logger.debug('Processing profile avatar update', {
       context: 'PATCH /api/user/profile/avatar',
@@ -69,7 +54,7 @@ export async function PATCH(request: NextRequest) {
           fileId: imageId,
           userId,
         });
-        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        return notFound('File');
       }
 
       // Verify file belongs to user
@@ -80,7 +65,7 @@ export async function PATCH(request: NextRequest) {
           fileOwnerId: fileEntry.userId,
           userId,
         });
-        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+        return notFound('File');
       }
 
       // Verify file category is valid for avatar
@@ -91,9 +76,8 @@ export async function PATCH(request: NextRequest) {
           fileId: imageId,
           category: fileEntry.category,
         });
-        return NextResponse.json(
-          { error: `Invalid file category. Expected IMAGE or AVATAR, got ${fileEntry.category}` },
-          { status: 400 }
+        return badRequest(
+          `Invalid file category. Expected IMAGE or AVATAR, got ${fileEntry.category}`
         );
       }
 
@@ -119,7 +103,7 @@ export async function PATCH(request: NextRequest) {
         context: 'PATCH /api/user/profile/avatar',
         userId,
       });
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return notFound('User');
     }
 
     logger.info('Profile avatar updated successfully', {
@@ -166,7 +150,7 @@ export async function PATCH(request: NextRequest) {
         context: 'PATCH /api/user/profile/avatar',
         errors: error.errors,
       });
-      return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
+      return validationError(error);
     }
 
     logger.error(
@@ -175,9 +159,6 @@ export async function PATCH(request: NextRequest) {
       error instanceof Error ? error : new Error(String(error))
     );
 
-    return NextResponse.json(
-      { error: 'Failed to update profile avatar' },
-      { status: 500 }
-    );
+    return serverError('Failed to update profile avatar');
   }
-}
+});

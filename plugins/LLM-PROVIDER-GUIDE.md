@@ -754,8 +754,8 @@ Study these existing plugins for patterns:
 
 | Plugin | Complexity | Features |
 |--------|------------|----------|
-| `qtap-plugin-gab-ai` | Simple | Text-only chat, minimal config |
 | `qtap-plugin-ollama` | Simple | Local provider, requires base URL |
+| `qtap-plugin-openai-compatible` | Simple | Generic OpenAI-compatible APIs |
 | `qtap-plugin-openai` | Full | Chat, images, attachments, tools |
 | `qtap-plugin-anthropic` | Full | Chat, PDFs, vision, tools |
 | `qtap-plugin-openrouter` | Advanced | Pricing sync, model aggregation |

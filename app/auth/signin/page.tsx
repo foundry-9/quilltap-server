@@ -48,10 +48,10 @@ function SignInForm() {
           const data = await response.json();
           setAuthStatus(data);
 
-          // If auth is completely disabled, redirect to dashboard automatically
+          // If auth is completely disabled, redirect to home automatically
           // The session will be created with the unauthenticated user
           if (data.authDisabled) {
-            router.push('/dashboard');
+            router.push('/');
             return;
           }
         }
@@ -114,7 +114,7 @@ function SignInForm() {
             console.error('Failed to create trusted device:', deviceErr);
           }
         }
-        router.push("/dashboard");
+        router.push("/");
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, "An error occurred"));
@@ -125,7 +125,7 @@ function SignInForm() {
 
   function handleOAuthSignIn(providerId: string) {
     // Redirect to Arctic OAuth authorization endpoint
-    const callbackUrl = encodeURIComponent("/dashboard");
+    const callbackUrl = encodeURIComponent("/");
     window.location.href = `/api/auth/oauth/${providerId}/authorize?callbackUrl=${callbackUrl}`;
   }
 

@@ -35,7 +35,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
 
   constructor() {
     super('chats', ChatMetadataBaseSchema);
-    logger.debug('Initialized MongoChatsRepository');
   }
 
   /**
@@ -45,9 +44,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
     try {
       const db = await (this as any).getCollection(); // Reuse parent's getCollection pattern
       const dbInstance = (await (this as any).getCollection()).db;
-      logger.debug('Retrieved chat messages collection', {
-        collection: this.messagesCollectionName
-      });
       return dbInstance.collection(this.messagesCollectionName);
     } catch (error) {
       logger.error('Failed to get chat messages collection', {
@@ -63,7 +59,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findById(id: string): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Finding chat by ID', { chatId: id });
       const collection = await (this as any).getCollection();
       const chat = await collection.findOne({ id });
 
@@ -72,9 +67,7 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         return null;
       }
 
-      const validated = this.validate(chat);
-      logger.debug('Chat found and validated', { chatId: id });
-      return validated;
+      return this.validate(chat);
     } catch (error) {
       logger.error('Failed to find chat by ID', {
         chatId: id,
@@ -89,13 +82,9 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findAll(): Promise<ChatMetadata[]> {
     try {
-      logger.debug('Finding all chats');
       const collection = await (this as any).getCollection();
       const chats = await collection.find({}).toArray();
-
-      const validated = chats.map((chat: unknown) => this.validate(chat));
-      logger.debug('Found all chats', { count: validated.length });
-      return validated;
+      return chats.map((chat: unknown) => this.validate(chat));
     } catch (error) {
       logger.error('Failed to find all chats', {
         error: error instanceof Error ? error.message : String(error),
@@ -109,13 +98,9 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findByUserId(userId: string): Promise<ChatMetadata[]> {
     try {
-      logger.debug('Finding chats by user ID', { userId });
       const collection = await (this as any).getCollection();
       const chats = await collection.find({ userId }).toArray();
-
-      const validated = chats.map((chat: unknown) => this.validate(chat));
-      logger.debug('Found chats for user', { userId, count: validated.length });
-      return validated;
+      return chats.map((chat: unknown) => this.validate(chat));
     } catch (error) {
       logger.error('Failed to find chats by user ID', {
         userId,
@@ -130,16 +115,12 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findByCharacterId(characterId: string): Promise<ChatMetadata[]> {
     try {
-      logger.debug('Finding chats by character ID', { characterId });
       const collection = await (this as any).getCollection();
       const chats = await collection.find({
         'participants.type': 'CHARACTER',
         'participants.characterId': characterId,
       }).toArray();
-
-      const validated = chats.map((chat: unknown) => this.validate(chat));
-      logger.debug('Found chats with character', { characterId, count: validated.length });
-      return validated;
+      return chats.map((chat: unknown) => this.validate(chat));
     } catch (error) {
       logger.error('Failed to find chats by character ID', {
         characterId,
@@ -154,16 +135,12 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findByPersonaId(personaId: string): Promise<ChatMetadata[]> {
     try {
-      logger.debug('Finding chats by persona ID', { personaId });
       const collection = await (this as any).getCollection();
       const chats = await collection.find({
         'participants.type': 'PERSONA',
         'participants.personaId': personaId,
       }).toArray();
-
-      const validated = chats.map((chat: unknown) => this.validate(chat));
-      logger.debug('Found chats with persona', { personaId, count: validated.length });
-      return validated;
+      return chats.map((chat: unknown) => this.validate(chat));
     } catch (error) {
       logger.error('Failed to find chats by persona ID', {
         personaId,
@@ -178,13 +155,9 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async findByTag(tagId: string): Promise<ChatMetadata[]> {
     try {
-      logger.debug('Finding chats by tag', { tagId });
       const collection = await (this as any).getCollection();
       const chats = await collection.find({ tags: tagId }).toArray();
-
-      const validated = chats.map((chat: unknown) => this.validate(chat));
-      logger.debug('Found chats with tag', { tagId, count: validated.length });
-      return validated;
+      return chats.map((chat: unknown) => this.validate(chat));
     } catch (error) {
       logger.error('Failed to find chats by tag', {
         tagId,
@@ -204,7 +177,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
     options?: CreateOptions
   ): Promise<ChatMetadata> {
     try {
-      logger.debug('Creating new chat', { userId: data.userId, title: data.title });
 
       const id = options?.id || (this as any).generateId();
       const now = (this as any).getCurrentTimestamp();
@@ -256,7 +228,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async update(id: string, data: Partial<ChatMetadata>): Promise<ChatMetadata | null> {
     try {
-      logger.debug('Updating chat', { chatId: id });
 
       const now = (this as any).getCurrentTimestamp();
       const collection = await (this as any).getCollection();
@@ -281,9 +252,7 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         return null;
       }
 
-      const validated = this.validate(result);
-      logger.debug('Chat updated successfully', { chatId: id });
-      return validated;
+      return this.validate(result);
     } catch (error) {
       logger.error('Failed to update chat', {
         chatId: id,
@@ -298,8 +267,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async delete(id: string): Promise<boolean> {
     try {
-      logger.debug('Deleting chat', { chatId: id });
-
       const collection = await (this as any).getCollection();
       const result = await collection.deleteOne({ id } as Filter<ChatMetadata>);
 
@@ -313,7 +280,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         const messagesCollection = await (this as any).getCollection();
         const msgDb = messagesCollection.db;
         await msgDb.collection(this.messagesCollectionName).deleteOne({ chatId: id });
-        logger.debug('Chat messages deleted', { chatId: id });
       } catch (error) {
         logger.warn('Failed to delete chat messages', {
           chatId: id,
@@ -321,7 +287,7 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         });
       }
 
-      logger.info('Chat deleted successfully', { chatId: id });
+      logger.info('Chat deleted', { chatId: id });
       return true;
     } catch (error) {
       logger.error('Failed to delete chat', {
@@ -429,7 +395,29 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
       const newParticipant = ChatParticipantBaseSchema.parse(participantInput);
 
       const participants = [...chat.participants, newParticipant];
-      return await this.update(chatId, { participants });
+
+      // If adding a user-controlled participant, automatically add to impersonating array
+      const updateData: Partial<ChatMetadata> = { participants };
+      if (newParticipant.controlledBy === 'user') {
+        const impersonatingIds = [...(chat.impersonatingParticipantIds || [])];
+        if (!impersonatingIds.includes(newParticipant.id)) {
+          impersonatingIds.push(newParticipant.id);
+        }
+        updateData.impersonatingParticipantIds = impersonatingIds;
+
+        // If no active typing participant, set this one
+        if (!chat.activeTypingParticipantId) {
+          updateData.activeTypingParticipantId = newParticipant.id;
+        }
+
+        logger.debug('Auto-adding user-controlled participant to impersonation', {
+          chatId,
+          participantId: newParticipant.id,
+          impersonatingCount: impersonatingIds.length,
+        });
+      }
+
+      return await this.update(chatId, updateData);
     } catch (error) {
       logger.error('Failed to add participant to chat', {
         chatId,
@@ -555,6 +543,205 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
     return chat.participants.filter(p => p.isActive);
   }
 
+  /**
+   * Get LLM-controlled participants (controlledBy === 'llm')
+   */
+  getLLMControlledParticipants(chat: ChatMetadata): ChatParticipantBase[] {
+    const participants = chat.participants.filter(p => p.controlledBy === 'llm');
+    logger.debug('Getting LLM-controlled participants', {
+      chatId: chat.id,
+      count: participants.length,
+    });
+    return participants;
+  }
+
+  /**
+   * Get user-controlled participants (controlledBy === 'user')
+   */
+  getUserControlledParticipants(chat: ChatMetadata): ChatParticipantBase[] {
+    const participants = chat.participants.filter(p => p.controlledBy === 'user');
+    logger.debug('Getting user-controlled participants', {
+      chatId: chat.id,
+      count: participants.length,
+    });
+    return participants;
+  }
+
+  // ============================================================================
+  // IMPERSONATION OPERATIONS
+  // ============================================================================
+
+  /**
+   * Add impersonation for a participant
+   * @param chatId The chat ID
+   * @param participantId The participant ID to impersonate
+   * @returns Updated chat metadata
+   */
+  async addImpersonation(chatId: string, participantId: string): Promise<ChatMetadata | null> {
+    try {
+      logger.debug('Adding impersonation', { chatId, participantId });
+
+      const chat = await this.findById(chatId);
+      if (!chat) {
+        logger.debug('Chat not found for impersonation', { chatId });
+        return null;
+      }
+
+      // Verify participant exists
+      const participant = chat.participants.find(p => p.id === participantId);
+      if (!participant) {
+        logger.debug('Participant not found for impersonation', { chatId, participantId });
+        return null;
+      }
+
+      // Add to impersonating array if not already there
+      const impersonatingIds = chat.impersonatingParticipantIds || [];
+      if (!impersonatingIds.includes(participantId)) {
+        impersonatingIds.push(participantId);
+      }
+
+      // Set as active typing participant if none set
+      const activeTyping = chat.activeTypingParticipantId || participantId;
+
+      return await this.update(chatId, {
+        impersonatingParticipantIds: impersonatingIds,
+        activeTypingParticipantId: activeTyping,
+      });
+    } catch (error) {
+      logger.error('Failed to add impersonation', {
+        chatId,
+        participantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Remove impersonation for a participant
+   * @param chatId The chat ID
+   * @param participantId The participant ID to stop impersonating
+   * @returns Updated chat metadata
+   */
+  async removeImpersonation(chatId: string, participantId: string): Promise<ChatMetadata | null> {
+    try {
+      logger.debug('Removing impersonation', { chatId, participantId });
+
+      const chat = await this.findById(chatId);
+      if (!chat) {
+        logger.debug('Chat not found for impersonation removal', { chatId });
+        return null;
+      }
+
+      // Remove from impersonating array
+      const impersonatingIds = (chat.impersonatingParticipantIds || []).filter(id => id !== participantId);
+
+      // Clear active typing if it was this participant
+      let activeTyping = chat.activeTypingParticipantId;
+      if (activeTyping === participantId) {
+        activeTyping = impersonatingIds.length > 0 ? impersonatingIds[0] : null;
+      }
+
+      return await this.update(chatId, {
+        impersonatingParticipantIds: impersonatingIds,
+        activeTypingParticipantId: activeTyping,
+      });
+    } catch (error) {
+      logger.error('Failed to remove impersonation', {
+        chatId,
+        participantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get impersonated participant IDs
+   * @param chatId The chat ID
+   * @returns Array of participant IDs being impersonated
+   */
+  async getImpersonatedParticipantIds(chatId: string): Promise<string[]> {
+    try {
+      logger.debug('Getting impersonated participant IDs', { chatId });
+
+      const chat = await this.findById(chatId);
+      if (!chat) {
+        logger.debug('Chat not found', { chatId });
+        return [];
+      }
+
+      return chat.impersonatingParticipantIds || [];
+    } catch (error) {
+      logger.error('Failed to get impersonated participant IDs', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Set the active typing participant (for multi-character impersonation)
+   * @param chatId The chat ID
+   * @param participantId The participant ID (or null to clear)
+   * @returns Updated chat metadata
+   */
+  async setActiveTypingParticipant(chatId: string, participantId: string | null): Promise<ChatMetadata | null> {
+    try {
+      logger.debug('Setting active typing participant', { chatId, participantId });
+
+      const chat = await this.findById(chatId);
+      if (!chat) {
+        logger.debug('Chat not found', { chatId });
+        return null;
+      }
+
+      // Verify participant is being impersonated if setting a value
+      if (participantId) {
+        const impersonatingIds = chat.impersonatingParticipantIds || [];
+        if (!impersonatingIds.includes(participantId)) {
+          logger.warn('Participant not being impersonated', { chatId, participantId });
+          return null;
+        }
+      }
+
+      return await this.update(chatId, {
+        activeTypingParticipantId: participantId,
+      });
+    } catch (error) {
+      logger.error('Failed to set active typing participant', {
+        chatId,
+        participantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update the all-LLM pause turn count
+   * @param chatId The chat ID
+   * @param count The turn count
+   * @returns Updated chat metadata
+   */
+  async updateAllLLMPauseTurnCount(chatId: string, count: number): Promise<ChatMetadata | null> {
+    try {
+      logger.debug('Updating all-LLM pause turn count', { chatId, count });
+
+      return await this.update(chatId, {
+        allLLMPauseTurnCount: count,
+      });
+    } catch (error) {
+      logger.error('Failed to update all-LLM pause turn count', {
+        chatId,
+        count,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
   // ============================================================================
   // MESSAGE OPERATIONS
   // ============================================================================
@@ -564,8 +751,6 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async getMessages(chatId: string): Promise<ChatEvent[]> {
     try {
-      logger.debug('Getting messages for chat', { chatId });
-
       const collection = await (this as any).getCollection();
       const msgDb = collection.db;
       const messagesCollection = msgDb.collection(this.messagesCollectionName);
@@ -573,14 +758,11 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
       const messagesDoc = await messagesCollection.findOne({ chatId });
 
       if (!messagesDoc) {
-        logger.debug('No messages document found', { chatId });
         return [];
       }
 
       const messages = (messagesDoc as any).messages || [];
-      const validated = messages.map((msg: any) => ChatEventSchema.parse(msg));
-      logger.debug('Retrieved messages for chat', { chatId, count: validated.length });
-      return validated;
+      return messages.map((msg: any) => ChatEventSchema.parse(msg));
     } catch (error) {
       logger.error('Failed to get messages for chat', {
         chatId,
@@ -743,10 +925,7 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
    */
   async getMessageCount(chatId: string): Promise<number> {
     try {
-      logger.debug('Getting message count for chat', { chatId });
-
       const messages = await this.getMessages(chatId);
-      logger.debug('Retrieved message count', { chatId, count: messages.length });
       return messages.length;
     } catch (error) {
       logger.error('Failed to get message count for chat', {
@@ -754,6 +933,151 @@ export class MongoChatsRepository extends MongoBaseRepository<ChatMetadata> {
         error: error instanceof Error ? error.message : String(error),
       });
       return 0;
+    }
+  }
+
+  // ============================================================================
+  // SEARCH AND REPLACE OPERATIONS
+  // ============================================================================
+
+  /**
+   * Count messages containing specific text in a chat
+   * @param chatId The chat ID
+   * @param searchText Text to search for
+   * @returns Number of messages containing the text
+   */
+  async countMessagesWithText(chatId: string, searchText: string): Promise<number> {
+    try {
+      logger.debug('Counting messages with text', { chatId, searchTextLength: searchText.length });
+
+      const messages = await this.getMessages(chatId);
+      let count = 0;
+
+      for (const msg of messages) {
+        if (msg.type === 'message' && msg.content.includes(searchText)) {
+          count++;
+        }
+      }
+
+      logger.debug('Counted messages with text', { chatId, count });
+      return count;
+    } catch (error) {
+      logger.error('Failed to count messages with text', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Find messages containing specific text in a chat
+   * @param chatId The chat ID
+   * @param searchText Text to search for
+   * @returns Array of matching messages with their IDs and content
+   */
+  async findMessagesWithText(
+    chatId: string,
+    searchText: string
+  ): Promise<Array<{ messageId: string; content: string; chatId: string }>> {
+    try {
+      logger.debug('Finding messages with text', { chatId, searchTextLength: searchText.length });
+
+      const messages = await this.getMessages(chatId);
+      const matches: Array<{ messageId: string; content: string; chatId: string }> = [];
+
+      for (const msg of messages) {
+        if (msg.type === 'message' && msg.content.includes(searchText)) {
+          matches.push({
+            messageId: msg.id,
+            content: msg.content,
+            chatId,
+          });
+        }
+      }
+
+      logger.debug('Found messages with text', { chatId, matchCount: matches.length });
+      return matches;
+    } catch (error) {
+      logger.error('Failed to find messages with text', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Replace text in all messages of a chat
+   * @param chatId The chat ID
+   * @param searchText Text to find
+   * @param replaceText Text to replace with
+   * @returns Number of messages updated
+   */
+  async replaceInMessages(
+    chatId: string,
+    searchText: string,
+    replaceText: string
+  ): Promise<number> {
+    try {
+      logger.debug('Replacing text in messages', {
+        chatId,
+        searchTextLength: searchText.length,
+        replaceTextLength: replaceText.length,
+      });
+
+      const messages = await this.getMessages(chatId);
+      let updatedCount = 0;
+      let hasChanges = false;
+
+      // Process each message
+      const updatedMessages = messages.map(msg => {
+        if (msg.type === 'message' && msg.content.includes(searchText)) {
+          const newContent = msg.content.split(searchText).join(replaceText);
+          if (newContent !== msg.content) {
+            updatedCount++;
+            hasChanges = true;
+            return { ...msg, content: newContent };
+          }
+        }
+        return msg;
+      });
+
+      if (!hasChanges) {
+        logger.debug('No messages needed updating', { chatId });
+        return 0;
+      }
+
+      // Validate and update messages
+      const validated = updatedMessages.map(msg => ChatEventSchema.parse(msg));
+
+      const collection = await (this as any).getCollection();
+      const msgDb = collection.db;
+      const messagesCollection = msgDb.collection(this.messagesCollectionName);
+
+      const now = (this as any).getCurrentTimestamp();
+
+      await messagesCollection.updateOne(
+        { chatId },
+        {
+          $set: {
+            messages: validated,
+            updatedAt: now,
+          },
+        }
+      );
+
+      // Update chat metadata timestamp
+      await this.update(chatId, {});
+
+      logger.info('Replaced text in messages', { chatId, updatedCount });
+      return updatedCount;
+    } catch (error) {
+      logger.error('Failed to replace text in messages', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
   }
 

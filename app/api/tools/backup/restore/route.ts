@@ -18,29 +18,23 @@
  * }
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/auth/session'
+import { NextResponse } from 'next/server'
+import { createAuthenticatedHandler } from '@/lib/api/middleware'
 import { restore, previewRestore } from '@/lib/backup/restore-service'
 import { downloadBackupFromS3 } from '@/lib/backup/backup-service'
 import { logger } from '@/lib/logger'
 import { z } from 'zod'
+
+// Extend timeout for restore operations - restores can take several minutes for large datasets
+export const maxDuration = 300 // 5 minutes
 
 const RestoreRequestSchema = z.object({
   s3Key: z.string().optional(),
   mode: z.enum(['replace', 'new-account']),
 })
 
-export async function POST(req: NextRequest) {
+export const POST = createAuthenticatedHandler(async (req, { user }) => {
   try {
-    const session = await getServerSession()
-
-    if (!session?.user?.id) {
-      logger.warn('Restore backup attempted without authentication', {
-        context: 'POST /api/tools/backup/restore',
-      })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const contentType = req.headers.get('content-type')
     let zipBuffer: Buffer | null = null
     let mode: 'replace' | 'new-account' = 'replace'
@@ -48,7 +42,7 @@ export async function POST(req: NextRequest) {
 
     logger.debug('Restore backup request received', {
       context: 'POST /api/tools/backup/restore',
-      userId: session.user.id,
+      userId: user.id,
       contentType,
     })
 
@@ -62,7 +56,7 @@ export async function POST(req: NextRequest) {
       if (!file) {
         logger.warn('Restore backup without file', {
           context: 'POST /api/tools/backup/restore',
-          userId: session.user.id,
+          userId: user.id,
         })
         return NextResponse.json(
           { error: 'No file provided' },
@@ -73,7 +67,7 @@ export async function POST(req: NextRequest) {
       if (!modeParam || !['replace', 'new-account'].includes(modeParam)) {
         logger.warn('Restore backup with invalid mode', {
           context: 'POST /api/tools/backup/restore',
-          userId: session.user.id,
+          userId: user.id,
           mode: modeParam,
         })
         return NextResponse.json(
@@ -89,7 +83,7 @@ export async function POST(req: NextRequest) {
 
       logger.debug('Backup file uploaded', {
         context: 'POST /api/tools/backup/restore',
-        userId: session.user.id,
+        userId: user.id,
         fileSize: zipBuffer.length,
         mode,
         isPreview,
@@ -102,7 +96,7 @@ export async function POST(req: NextRequest) {
       if (!s3Key) {
         logger.warn('Restore backup from S3 without s3Key', {
           context: 'POST /api/tools/backup/restore',
-          userId: session.user.id,
+          userId: user.id,
         })
         return NextResponse.json(
           { error: 's3Key is required for S3 restore' },
@@ -114,7 +108,7 @@ export async function POST(req: NextRequest) {
 
       logger.debug('Downloading backup from S3', {
         context: 'POST /api/tools/backup/restore',
-        userId: session.user.id,
+        userId: user.id,
         s3Key,
         mode,
       })
@@ -124,14 +118,14 @@ export async function POST(req: NextRequest) {
 
       logger.debug('Backup downloaded from S3', {
         context: 'POST /api/tools/backup/restore',
-        userId: session.user.id,
+        userId: user.id,
         s3Key,
         fileSize: zipBuffer.length,
       })
     } else {
       logger.warn('Restore backup with unsupported content type', {
         context: 'POST /api/tools/backup/restore',
-        userId: session.user.id,
+        userId: user.id,
         contentType,
       })
       return NextResponse.json(
@@ -143,7 +137,7 @@ export async function POST(req: NextRequest) {
     if (!zipBuffer) {
       logger.error('No backup buffer available', {
         context: 'POST /api/tools/backup/restore',
-        userId: session.user.id,
+        userId: user.id,
       })
       return NextResponse.json(
         { error: 'Failed to load backup data' },
@@ -155,7 +149,7 @@ export async function POST(req: NextRequest) {
     if (isPreview) {
       logger.info('Preview restore requested', {
         context: 'POST /api/tools/backup/restore',
-        userId: session.user.id,
+        userId: user.id,
         mode,
       })
 
@@ -169,19 +163,19 @@ export async function POST(req: NextRequest) {
 
     logger.info('Starting restore operation', {
       context: 'POST /api/tools/backup/restore',
-      userId: session.user.id,
+      userId: user.id,
       mode,
     })
 
     // Perform the actual restore
     const summary = await restore(zipBuffer, {
       mode,
-      targetUserId: session.user.id,
+      targetUserId: user.id,
     })
 
     logger.info('Restore completed', {
       context: 'POST /api/tools/backup/restore',
-      userId: session.user.id,
+      userId: user.id,
       mode,
       restoreCounts: {
         characters: summary.characters,
@@ -203,7 +197,6 @@ export async function POST(req: NextRequest) {
     if (error instanceof z.ZodError) {
       logger.warn('Restore backup validation error', {
         context: 'POST /api/tools/backup/restore',
-        userId: (await getServerSession())?.user?.id,
         errors: error.errors,
       })
       return NextResponse.json(
@@ -216,7 +209,6 @@ export async function POST(req: NextRequest) {
       'Restore backup failed',
       {
         context: 'POST /api/tools/backup/restore',
-        userId: (await getServerSession())?.user?.id,
       },
       error instanceof Error ? error : undefined
     )
@@ -225,4 +217,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

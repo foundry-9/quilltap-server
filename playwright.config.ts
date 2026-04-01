@@ -1,5 +1,24 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const fallbackPort = Number(process.env.E2E_PORT || process.env.PORT || 3000)
+let baseURL = process.env.BASE_URL || `http://localhost:${fallbackPort}`
+let serverPort = fallbackPort
+const authDisabled = process.env.E2E_AUTH_DISABLED ?? 'true'
+const authEnv = authDisabled === 'true' ? 'AUTH_DISABLED=true OAUTH_DISABLED=true' : ''
+
+try {
+  const parsedUrl = new URL(baseURL)
+  if (parsedUrl.port) {
+    serverPort = Number(parsedUrl.port)
+  }
+} catch {
+  baseURL = `http://localhost:${fallbackPort}`
+  serverPort = fallbackPort
+}
+
+process.env.BASE_URL = baseURL
+process.env.E2E_AUTH_DISABLED = authDisabled
+
 /**
  * Read environment variables from file.
  * https://github.com/motdotla/dotenv
@@ -26,7 +45,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    baseURL,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -52,9 +71,9 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: true, // Reuse existing server if running
+    command: `${authEnv} BASE_URL=${baseURL} PORT=${serverPort} npm run dev`,
+    url: baseURL,
+    reuseExistingServer: false,
     timeout: 120000, // 2 minutes for Next.js to compile
   },
 })

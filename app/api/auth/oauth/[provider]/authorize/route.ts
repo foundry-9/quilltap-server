@@ -29,8 +29,8 @@ export async function GET(
   const { provider: providerId } = await params;
 
   try {
-    // Get callback URL from query params (default to /dashboard)
-    const callbackUrl = request.nextUrl.searchParams.get('callbackUrl') || '/dashboard';
+    // Get callback URL from query params (default to /)
+    const callbackUrl = request.nextUrl.searchParams.get('callbackUrl') || '/';
 
     logger.debug('OAuth authorize request', {
       context: 'oauth.authorize.GET',

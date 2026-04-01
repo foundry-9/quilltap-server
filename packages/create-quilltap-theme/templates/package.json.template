@@ -1,0 +1,47 @@
+{
+  "name": "{{PACKAGE_NAME}}",
+  "version": "1.0.0",
+  "description": "{{DESCRIPTION}}",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "manifest.json",
+    "tokens.json",
+    "styles.css",
+    "fonts/",
+    "*.png"
+  ],
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
+  },
+  "keywords": [
+    "quilltap",
+    "quilltap-plugin",
+    "quilltap-theme",
+    "theme",
+    "{{THEME_ID}}"
+  ],
+  "author": {
+    "name": "{{AUTHOR_NAME}}",
+    "email": "{{AUTHOR_EMAIL}}"
+  },
+  "license": "MIT",
+  "peerDependencies": {
+    "@quilltap/plugin-utils": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@quilltap/plugin-types": "^1.0.0",
+    "@quilltap/plugin-utils": "^1.0.0",
+    "@quilltap/theme-storybook": "^1.0.0",
+    "@storybook/addon-essentials": "^8.0.0",
+    "@storybook/react": "^8.0.0",
+    "@storybook/react-vite": "^8.0.0",
+    "esbuild": "^0.20.0",
+    "storybook": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}

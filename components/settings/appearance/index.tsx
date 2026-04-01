@@ -15,10 +15,9 @@
  * @module components/settings/appearance
  */
 
-import { useEffect } from 'react'
-import { clientLogger } from '@/lib/client-logger'
 import { useAppearanceSettings } from './hooks/useAppearanceSettings'
 import { DisplayOptions } from './DisplayOptions'
+import { SidebarWidthControl } from './SidebarWidthControl'
 import { ThemeSelector } from './ThemeSelector'
 import { DebugThemeInfo } from './components/DebugThemeInfo'
 
@@ -71,18 +70,6 @@ export default function AppearanceTab() {
     handleNavThemeSelectorChange,
   } = useAppearanceSettings()
 
-  // Log render in useEffect to avoid state updates during render
-  useEffect(() => {
-    clientLogger.debug('AppearanceTab: rendered', {
-      activeThemeId,
-      colorMode,
-      resolvedColorMode,
-      themesCount: availableThemes.length,
-      isLoading,
-      error,
-    })
-  }, [activeThemeId, colorMode, resolvedColorMode, availableThemes.length, isLoading, error])
-
   // Loading state
   if (isLoading) {
     return <LoadingSpinner />
@@ -100,6 +87,9 @@ export default function AppearanceTab() {
         onColorModeChange={handleColorModeChange}
         onNavThemeSelectorChange={handleNavThemeSelectorChange}
       />
+
+      {/* Sidebar Width */}
+      <SidebarWidthControl />
 
       {/* Theme Selector */}
       <ThemeSelector

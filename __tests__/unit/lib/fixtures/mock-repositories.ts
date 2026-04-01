@@ -77,6 +77,10 @@ export interface MockConnectionsRepository {
   update: jest.Mock<(id: string, data: Partial<ConnectionProfile>) => Promise<ConnectionProfile | null>>;
   delete: jest.Mock<(id: string) => Promise<boolean>>;
   findApiKeyById: jest.Mock<(id: string) => Promise<ApiKey | null>>;
+  getAllApiKeys: jest.Mock<() => Promise<ApiKey[]>>;
+  createApiKey: jest.Mock<(data: Omit<ApiKey, 'id' | 'createdAt' | 'updatedAt' | 'userId'>) => Promise<ApiKey>>;
+  updateApiKey: jest.Mock<(id: string, data: Partial<ApiKey>) => Promise<ApiKey | null>>;
+  deleteApiKey: jest.Mock<(id: string) => Promise<boolean>>;
 }
 
 export interface MockImageProfilesRepository {
@@ -219,6 +223,10 @@ export function createMockConnectionsRepository(): MockConnectionsRepository {
     update: jest.fn<(id: string, data: Partial<ConnectionProfile>) => Promise<ConnectionProfile | null>>().mockResolvedValue(null),
     delete: jest.fn<(id: string) => Promise<boolean>>().mockResolvedValue(true),
     findApiKeyById: jest.fn<(id: string) => Promise<ApiKey | null>>().mockResolvedValue(null),
+    getAllApiKeys: jest.fn<() => Promise<ApiKey[]>>().mockResolvedValue([]),
+    createApiKey: jest.fn<(data: Omit<ApiKey, 'id' | 'createdAt' | 'updatedAt' | 'userId'>) => Promise<ApiKey>>(),
+    updateApiKey: jest.fn<(id: string, data: Partial<ApiKey>) => Promise<ApiKey | null>>().mockResolvedValue(null),
+    deleteApiKey: jest.fn<(id: string) => Promise<boolean>>().mockResolvedValue(true),
   };
 }
 
@@ -384,4 +392,152 @@ export function configureCreate<T extends { id?: string }>(
       id: data.id || idGenerator(),
     } as T;
   });
+}
+
+// ============================================================================
+// USERS REPOSITORY (for auth middleware)
+// ============================================================================
+
+export interface MockUsersRepository {
+  findById: jest.Mock<(id: string) => Promise<User | null>>;
+  findByEmail: jest.Mock<(email: string) => Promise<User | null>>;
+  findAll: jest.Mock<() => Promise<User[]>>;
+  create: jest.Mock<(data: Partial<User>) => Promise<User>>;
+  update: jest.Mock<(id: string, data: Partial<User>) => Promise<User | null>>;
+  delete: jest.Mock<(id: string) => Promise<boolean>>;
+}
+
+interface User {
+  id: string;
+  email?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Create a mock users repository
+ */
+export function createMockUsersRepository(): MockUsersRepository {
+  return {
+    findById: jest.fn<(id: string) => Promise<User | null>>().mockResolvedValue(null),
+    findByEmail: jest.fn<(email: string) => Promise<User | null>>().mockResolvedValue(null),
+    findAll: jest.fn<() => Promise<User[]>>().mockResolvedValue([]),
+    create: jest.fn<(data: Partial<User>) => Promise<User>>(),
+    update: jest.fn<(id: string, data: Partial<User>) => Promise<User | null>>().mockResolvedValue(null),
+    delete: jest.fn<(id: string) => Promise<boolean>>().mockResolvedValue(true),
+  };
+}
+
+// ============================================================================
+// BACKGROUND JOBS REPOSITORY
+// ============================================================================
+
+export interface MockBackgroundJobsRepository {
+  findById: jest.Mock;
+  findAll: jest.Mock;
+  create: jest.Mock;
+  update: jest.Mock;
+  delete: jest.Mock;
+  findPending: jest.Mock;
+  findByType: jest.Mock;
+  findByUserId: jest.Mock;
+  getStats: jest.Mock;
+}
+
+export function createMockBackgroundJobsRepository(): MockBackgroundJobsRepository {
+  return {
+    findById: jest.fn().mockResolvedValue(null),
+    findAll: jest.fn().mockResolvedValue([]),
+    create: jest.fn(),
+    update: jest.fn().mockResolvedValue(null),
+    delete: jest.fn().mockResolvedValue(true),
+    findPending: jest.fn().mockResolvedValue([]),
+    findByType: jest.fn().mockResolvedValue([]),
+    findByUserId: jest.fn().mockResolvedValue([]),
+    getStats: jest.fn().mockResolvedValue({ pending: 0, processing: 0, failed: 0, completed: 0, dead: 0, paused: 0 }),
+  };
+}
+
+// ============================================================================
+// FULL REPOSITORY CONTAINER (for getRepositories() mock)
+// ============================================================================
+
+export interface MockRepositoryContainer {
+  characters: MockCharactersRepository;
+  personas: MockPersonasRepository;
+  chats: MockChatsRepository;
+  tags: MockTagsRepository;
+  users: MockUsersRepository;
+  connections: MockConnectionsRepository;
+  images: MockFilesRepository;
+  imageProfiles: MockImageProfilesRepository;
+  embeddingProfiles: MockEmbeddingProfilesRepository;
+  memories: MockMemoriesRepository;
+  files: MockFilesRepository;
+  backgroundJobs: MockBackgroundJobsRepository;
+  roleplayTemplates: MockRoleplayTemplatesRepository;
+  promptTemplates: MockPromptTemplatesRepository;
+  providerModels: { findAll: jest.Mock; upsert: jest.Mock };
+  syncInstances: { findAll: jest.Mock; findById: jest.Mock; create: jest.Mock; update: jest.Mock; delete: jest.Mock };
+  syncMappings: { findAll: jest.Mock; findById: jest.Mock; create: jest.Mock; update: jest.Mock; delete: jest.Mock };
+  syncOperations: { findAll: jest.Mock; findById: jest.Mock; create: jest.Mock; update: jest.Mock; delete: jest.Mock };
+  userSyncApiKeys: { findAll: jest.Mock; findById: jest.Mock; create: jest.Mock; update: jest.Mock; delete: jest.Mock };
+  chatSettings: { findByUserId: jest.Mock; upsert: jest.Mock };
+}
+
+/**
+ * Create a complete mock repository container for getRepositories()
+ * This is used to mock the auth middleware which calls getRepositories()
+ */
+export function createMockRepositoryContainer(): MockRepositoryContainer {
+  return {
+    characters: createMockCharactersRepository(),
+    personas: createMockPersonasRepository(),
+    chats: createMockChatsRepository(),
+    tags: createMockTagsRepository(),
+    users: createMockUsersRepository(),
+    connections: createMockConnectionsRepository(),
+    images: createMockFilesRepository(),
+    imageProfiles: createMockImageProfilesRepository(),
+    embeddingProfiles: createMockEmbeddingProfilesRepository(),
+    memories: createMockMemoriesRepository(),
+    files: createMockFilesRepository(),
+    backgroundJobs: createMockBackgroundJobsRepository(),
+    roleplayTemplates: createMockRoleplayTemplatesRepository(),
+    promptTemplates: createMockPromptTemplatesRepository(),
+    providerModels: { findAll: jest.fn().mockResolvedValue([]), upsert: jest.fn() },
+    syncInstances: { findAll: jest.fn().mockResolvedValue([]), findById: jest.fn().mockResolvedValue(null), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+    syncMappings: { findAll: jest.fn().mockResolvedValue([]), findById: jest.fn().mockResolvedValue(null), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+    syncOperations: { findAll: jest.fn().mockResolvedValue([]), findById: jest.fn().mockResolvedValue(null), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+    userSyncApiKeys: { findAll: jest.fn().mockResolvedValue([]), findById: jest.fn().mockResolvedValue(null), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+    chatSettings: { findByUserId: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
+  };
+}
+
+/**
+ * Default mock user for authenticated tests
+ */
+export const DEFAULT_MOCK_USER: User = {
+  id: 'user-123',
+  email: 'test@example.com',
+  name: 'Test User',
+};
+
+/**
+ * Setup standard authentication mocks for route tests.
+ * Call this in beforeEach to set up getServerSession and getRepositories mocks.
+ *
+ * @param mockGetServerSession - The mocked getServerSession function
+ * @param mockRepos - The mock repository container (from createMockRepositoryContainer())
+ * @param mockUser - Optional custom user (defaults to DEFAULT_MOCK_USER)
+ */
+export function setupAuthMocks(
+  mockGetServerSession: jest.Mock,
+  mockRepos: MockRepositoryContainer,
+  mockUser: User = DEFAULT_MOCK_USER
+): void {
+  mockGetServerSession.mockResolvedValue({
+    user: { id: mockUser.id, email: mockUser.email },
+  });
+  mockRepos.users.findById.mockResolvedValue(mockUser);
 }

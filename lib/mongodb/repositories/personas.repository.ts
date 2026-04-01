@@ -98,6 +98,34 @@ export class PersonasRepository extends MongoBaseRepository<Persona> {
   }
 
   /**
+   * Find personas that use a specific image as their default
+   * @param imageId The image file ID
+   * @returns Promise<Persona[]> Array of personas using this image as default
+   */
+  async findByDefaultImageId(imageId: string): Promise<Persona[]> {
+    try {
+      logger.debug('Finding personas by default image ID', { imageId, collection: this.collectionName });
+
+      const collection = await this.getCollection();
+      const docs = await collection.find({ defaultImageId: imageId }).toArray();
+
+      const validated = docs
+        .map((doc) => this.validateSafe(doc))
+        .filter((result) => result.success)
+        .map((result) => result.data!);
+
+      logger.debug('Personas with default image found', { imageId, count: validated.length });
+      return validated;
+    } catch (error) {
+      logger.error('Error finding personas by default image ID', {
+        imageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
    * Find personas with a specific tag
    */
   async findByTag(tagId: string): Promise<Persona[]> {

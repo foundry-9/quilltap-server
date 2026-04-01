@@ -7,13 +7,13 @@ import { TemplateDisplay } from '@/components/characters/TemplateHighlighter'
 interface SystemPromptsTabProps {
   characterId: string
   character: Character | null
-  defaultPersonaName: string | null
+  defaultPartnerName: string | null
 }
 
 export function SystemPromptsTab({
   characterId,
   character,
-  defaultPersonaName,
+  defaultPartnerName,
 }: SystemPromptsTabProps) {
   if (!character) return null
 
@@ -63,7 +63,7 @@ export function SystemPromptsTab({
                   <TemplateDisplay
                     content={prompt.content}
                     characterName={character.name}
-                    personaName={defaultPersonaName}
+                    personaName={defaultPartnerName}
                   />
                 </code>
               </pre>

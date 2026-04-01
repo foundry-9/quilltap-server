@@ -27,8 +27,8 @@ type MockRepositories = {
     findById: jest.Mock;
     findByUserId: jest.Mock;
   };
-  users: {
-    getChatSettings: jest.Mock;
+  chatSettings: {
+    findByUserId: jest.Mock;
   };
   chats: {
     updateMessage: jest.Mock;
@@ -45,8 +45,8 @@ beforeEach(() => {
       findById: jest.fn().mockResolvedValue({ id: 'profile-1' }),
       findByUserId: jest.fn().mockResolvedValue([{ id: 'profile-1' }]),
     },
-    users: {
-      getChatSettings: jest.fn().mockResolvedValue({ cheapLLMSettings: { providerId: 'cheap' } }),
+    chatSettings: {
+      findByUserId: jest.fn().mockResolvedValue({ cheapLLMSettings: { providerId: 'cheap' } }),
     },
     chats: {
       updateMessage: jest.fn().mockResolvedValue(undefined),
@@ -108,7 +108,7 @@ describe('handleMemoryExtraction', () => {
     await expect(handleMemoryExtraction(buildJob() as any)).rejects.toThrow(/Connection profile not found/);
 
     repositories.connections.findById.mockResolvedValue({ id: 'profile-1' });
-    repositories.users.getChatSettings.mockResolvedValue(null);
+    repositories.chatSettings.findByUserId.mockResolvedValue(null);
 
     await expect(handleMemoryExtraction(buildJob() as any)).rejects.toThrow(/Chat settings not found/);
   });

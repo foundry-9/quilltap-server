@@ -10,14 +10,14 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { EmptyState } from '@/components/ui/EmptyState'
 
 interface PhysicalDescriptionListProps {
-  entityType: 'character' | 'persona'
+  // EntityType is now only 'character' - personas have been migrated to characters with controlledBy: 'user'
+  entityType: 'character'
   entityId: string
 }
 
 export function PhysicalDescriptionList({ entityType, entityId }: PhysicalDescriptionListProps) {
-  const baseUrl = entityType === 'character'
-    ? `/api/characters/${entityId}/descriptions`
-    : `/api/personas/${entityId}/descriptions`
+  // All entities are now characters (personas migrated to characters with controlledBy: 'user')
+  const baseUrl = `/api/characters/${entityId}/descriptions`
 
   const {
     items: descriptions,
