@@ -1,11 +1,13 @@
 import { ProfileCard } from './ProfileCard'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { SectionHeader } from '@/components/ui/SectionHeader'
-import type { ConnectionProfile } from './types'
+import type { ConnectionProfile, ProviderConfig } from './types'
 
 interface ProfileListProps {
   profiles: ConnectionProfile[]
   cheapDefaultProfileId: string | null
+  /** List of provider configurations to check API key requirements */
+  providers?: ProviderConfig[]
   showForm: boolean
   deleteConfirming: string | null
   isDeleting: boolean
@@ -22,6 +24,7 @@ interface ProfileListProps {
 export function ProfileList({
   profiles,
   cheapDefaultProfileId,
+  providers = [],
   showForm,
   deleteConfirming,
   isDeleting,
@@ -30,6 +33,12 @@ export function ProfileList({
   onDeleteConfirmChange,
   onAddClick,
 }: ProfileListProps) {
+  // Helper to check if a provider requires an API key
+  const providerRequiresApiKey = (providerName: string): boolean => {
+    const provider = providers.find((p) => p.name === providerName)
+    // Default to true (safer) if provider not found
+    return provider?.configRequirements?.requiresApiKey ?? true
+  }
   return (
     <div className="mb-8">
       <SectionHeader
@@ -61,6 +70,7 @@ export function ProfileList({
                 key={profile.id}
                 profile={profile}
                 cheapDefaultProfileId={cheapDefaultProfileId}
+                providerRequiresApiKey={providerRequiresApiKey(profile.provider)}
                 onEdit={onEdit}
                 onDelete={onDelete}
                 deleteConfirming={deleteConfirming}

@@ -82,8 +82,8 @@ services:
       - "3000"
     environment:
       - NODE_ENV=production
-      - NEXTAUTH_URL=${NEXTAUTH_URL:-https://yourdomain.com}
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - BASE_URL=${BASE_URL:-https://yourdomain.com}
+      - JWT_SECRET=${JWT_SECRET}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - ENCRYPTION_MASTER_PEPPER=${ENCRYPTION_MASTER_PEPPER}

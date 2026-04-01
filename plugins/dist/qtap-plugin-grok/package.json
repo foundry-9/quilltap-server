@@ -4,7 +4,7 @@
   "description": "Grok xAI provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
-  "author": "Foundry-9",
+  "author": "Foundry-9 LLC",
   "license": "MIT",
   "scripts": {
     "build": "node esbuild.config.mjs",

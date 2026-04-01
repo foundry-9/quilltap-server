@@ -52,8 +52,8 @@ jobs:
           # Skip env validation during build since runtime vars aren't needed
           SKIP_ENV_VALIDATION: 'true'
           ENCRYPTION_MASTER_PEPPER: 'test-pepper-for-ci-environment-32chars!'
-          NEXTAUTH_URL: 'http://localhost:3000'
-          NEXTAUTH_SECRET: 'test-nextauth-secret-key-32-characters!!!'
+          BASE_URL: 'http://localhost:3000'
+          JWT_SECRET: 'test-jwt-secret-key-32-characters!!!'
           MONGODB_URI: 'mongodb://localhost:27017/quilltap-ci'
 
       - name: Verify build output

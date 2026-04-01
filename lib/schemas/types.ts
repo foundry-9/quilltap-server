@@ -13,6 +13,22 @@ export { ThemePreferenceSchema };
 export type { ThemePreference };
 
 // ============================================================================
+// VERSION CONSTANTS (for Sync API compatibility)
+// ============================================================================
+
+/**
+ * Current schema version for data compatibility checks.
+ * Major version must match for sync to proceed between instances.
+ */
+export const SCHEMA_VERSION = '2.5.0';
+
+/**
+ * Sync protocol version.
+ * Must match exactly between instances for sync to proceed.
+ */
+export const SYNC_PROTOCOL_VERSION = '1.0';
+
+// ============================================================================
 // ENUMS
 // ============================================================================
 
@@ -501,6 +517,10 @@ export const ChatMetadataSchema = z.object({
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
+  /** Whether auto-responses are paused in multi-character chats */
+  isPaused: z.boolean().default(false),
+  /** Whether the user has manually renamed this chat (disables auto-renaming) */
+  isManuallyRenamed: z.boolean().default(false),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -526,6 +546,10 @@ export const ChatMetadataBaseSchema = z.object({
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
+  /** Whether auto-responses are paused in multi-character chats */
+  isPaused: z.boolean().default(false),
+  /** Whether the user has manually renamed this chat (disables auto-renaming) */
+  isManuallyRenamed: z.boolean().default(false),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -645,6 +669,7 @@ export const TagSchema = z.object({
   name: z.string(),
   nameLower: z.string(),
   quickHide: z.boolean().default(false),
+  visualStyle: TagVisualStyleSchema.nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -769,6 +794,7 @@ export const RoleplayTemplateSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   systemPrompt: z.string().min(1),           // The template content
   isBuiltIn: z.boolean().default(false),     // Built-in templates are read-only
+  pluginName: z.string().nullable().optional(), // Plugin name if provided by a plugin
   tags: z.array(UUIDSchema).default([]),     // Optional categorization
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

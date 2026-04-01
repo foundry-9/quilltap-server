@@ -11,6 +11,17 @@ import { getMongoDatabase } from '../client';
 import { logger } from '@/lib/logger';
 
 /**
+ * Options for creating entities with pre-specified values.
+ * Used by sync to preserve original IDs and timestamps from remote instances.
+ */
+export interface CreateOptions {
+  /** Pre-specified ID (for sync - use remote ID instead of generating new) */
+  id?: string;
+  /** Preserve original createdAt timestamp (for sync) */
+  createdAt?: string;
+}
+
+/**
  * Base repository with common methods for MongoDB
  */
 export abstract class MongoBaseRepository<T> {
@@ -98,7 +109,45 @@ export abstract class MongoBaseRepository<T> {
    */
   abstract findById(id: string): Promise<T | null>;
   abstract findAll(): Promise<T[]>;
-  abstract create(data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>): Promise<T>;
+  abstract create(
+    data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
+  ): Promise<T>;
   abstract update(id: string, data: Partial<T>): Promise<T | null>;
   abstract delete(id: string): Promise<boolean>;
+
+  /**
+   * Create or update an entity by ID.
+   * Used for sync operations where the ID is known (from remote instance).
+   * If entity exists, updates it. If not, creates it with the specified ID.
+   *
+   * @param id The entity ID
+   * @param data The entity data
+   * @param options Options including original createdAt timestamp
+   */
+  async createOrUpdate(
+    id: string,
+    data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: { createdAt?: string }
+  ): Promise<T> {
+    const existing = await this.findById(id);
+
+    if (existing) {
+      logger.debug('Entity exists, updating via createOrUpdate', {
+        collection: this.collectionName,
+        id,
+      });
+      const updated = await this.update(id, data as Partial<T>);
+      if (!updated) {
+        throw new Error(`Failed to update entity ${id}`);
+      }
+      return updated;
+    }
+
+    logger.debug('Entity does not exist, creating via createOrUpdate', {
+      collection: this.collectionName,
+      id,
+    });
+    return this.create(data, { id, createdAt: options?.createdAt });
+  }
 }

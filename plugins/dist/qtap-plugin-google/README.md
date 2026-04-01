@@ -207,7 +207,7 @@ for await (const chunk of provider.streamMessage({
 ## Support
 
 For issues with the plugin, refer to:
-- Quilltap GitHub: https://github.com/Foundry-9/F9-Quilltap
+- Quilltap GitHub: https://github.com/foundry-9/F9-Quilltap
 - Google Generative AI Documentation: https://ai.google.dev/
 - Google AI Studio: https://aistudio.google.com/
 

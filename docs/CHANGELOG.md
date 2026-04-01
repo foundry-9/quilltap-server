@@ -2,6 +2,380 @@
 
 ## Recent Changes
 
+### 2.5
+
+- fix: Plugin list now displays package.json version instead of manifest.json version
+  - Added `packageVersion` field to `LoadedPlugin` interface
+  - Plugin scanning now reads version from package.json (preferred) with fallback to manifest.json
+  - Affects Settings → Plugins display
+- feat: Manual chat rename with auto-rename toggle
+  - Added "Rename" button to tool palette (desktop and mobile)
+  - ChatRenameModal allows setting a custom title or re-enabling auto-naming
+  - When manually renamed, chats are excluded from automatic title updates
+  - Re-enabling auto-rename immediately regenerates the title using the cheap LLM
+  - New `isManuallyRenamed` field in chat metadata schema
+  - New `/api/chats/:id/regenerate-title` endpoint for title regeneration
+- feat: Dynamic browser tab title shows chat name
+  - Browser title changes to "Quilltap: {chat name}" when viewing a chat
+  - Reverts to "Quilltap - AI Chat Platform" when navigating away
+  - New `useDocumentTitle` hook for managing browser titles
+- fix: OAuth redirects now use BASE_URL instead of request.url
+  - Fixes Google Auth redirect to wrong URL when hosted behind CloudFront/reverse proxy
+  - OAuth callback and authorize routes now correctly redirect to the configured BASE_URL
+  - Affects `/api/auth/oauth/[provider]/callback` and `/api/auth/oauth/[provider]/authorize`
+- fix: Attach file button in chat now opens file picker
+  - The ChatComposer component was passing an empty callback to tool palettes
+  - Now properly triggers the file input click from within the component
+- test: E2E test infrastructure with user lifecycle pattern
+  - Add TestUserHelper for consistent test user management (create, login, cleanup)
+  - Tests create unique users for isolation, delete them after tests complete
+  - Add `/api/auth/delete-account` endpoint for test user cleanup
+  - Convert file-attachment and chat-flow tests to use the pattern
+  - Configure Playwright for serial execution to avoid race conditions
+- chore: Upgrade dependencies for security and performance
+  - Next.js 16.0.5 → 16.1.1 (stable Turbopack caching, security patches CVE-2025-55182 & CVE-2025-66478)
+  - MongoDB driver 6.21.0 → 7.0.0 (requires Node.js 20.19+)
+  - bcrypt 5.1.1 → 6.0.0 (switched to prebuildify, 40 fewer dependencies)
+  - @openrouter/sdk 0.2.11 → 0.3.10
+  - Now requires Node.js 22+
+- docs: Update About page tech stack with version requirements
+  - Added Node.js 22+ runtime requirement
+  - Changed auth from "NextAuth.js" to "Local + OAuth"
+  - Added version minimums to all stack items
+- fix: Quilltap import now actually imports data
+  - The `/api/tools/quilltap-import/execute` route was stubbed and never called `executeImport`
+  - Imports of connection profiles, image profiles, characters, chats, etc. now work correctly
+  - Added proper conflict strategy mapping from 'replace' to 'overwrite'
+- fix: API key import dialog now auto-closes correctly after successful import
+  - Memoized `actions` object in `useImportKeys` to prevent useEffect dependency churn
+  - Removed redundant `reset()` call from `handleClose` (the `!isOpen` effect already handles reset)
+- fix: Removed clientLogger calls from inside setState callbacks in `useImportData`
+  - Fixes React error about updating component while rendering another component
+- fix: Quilltap import preview now works correctly
+  - The preview route was stubbed and never called `previewImport`
+  - Fixed hook to call correct URL (`/api/tools/quilltap-import` not `/preview`)
+  - Added embedding profiles support to preview function
+  - Fixed entity type label mapping (camelCase from API to kebab-case for labels)
+- fix: Import dialog now shows success screen with statistics after import completes
+  - Previously the dialog closed immediately on success, skipping the complete step
+  - Now shows imported counts (green) and skipped counts (if any)
+- fix: API key test now works for all providers (including Google)
+  - Added `initializePlugins()` call to ensure provider registry is initialized
+  - Fixes "Provider not found" errors in development mode with hot-reloading
+- feat: API key import dialog auto-closes after successful import
+  - Dialog now closes automatically 1.5 seconds after showing success message
+  - Eliminates need to manually click "Close" button
+- feat: Auto-associate new API keys with profiles that need them
+  - When importing or creating API keys, automatically links them with connection profiles,
+    image generation profiles, and embedding profiles that need matching keys
+  - Profiles are linked if they require an API key (based on provider) and either have no key
+    or reference a non-existent key
+  - Toast notifications show which profiles were auto-linked to the new keys
+  - New utility module at `lib/api-keys/auto-associate.ts` for reuse
+- feat: Auto-associate profiles with API keys on settings tab navigation
+  - When navigating to API Keys, Connection Profiles, Image Profiles, or Embedding Profiles tabs
+  - System automatically checks for profiles missing valid API keys and associates them
+  - New `autoAssociateAllKeys()` function uses any matching available key (not just new ones)
+  - New `/api/keys/auto-associate` endpoint for triggering association check
+  - Shows toast notification for each profile that gets linked to an API key
+  - Runs in background without blocking tab rendering
+- fix: Sync progress polling now stops when sync completes
+  - Fixed stale closure bug where polling interval continued indefinitely after sync completion
+  - Changed polling interval from 500ms to 1500ms to reduce unnecessary API calls
+  - Used ref instead of state for completion check inside interval callback
+- feat: Sync direction control - choose between two-way sync, push-only, or pull-only
+  - Added direction dropdown in sync instance card: "Sync Now", "Push Only", "Pull Only", "Force Full Sync"
+  - Push-only mode: Only send local changes to remote (skip pulling)
+  - Pull-only mode: Only fetch remote changes to local (skip pushing)
+  - API supports `direction` query parameter (BIDIRECTIONAL, PUSH, PULL)
+- feat: Real-time sync progress bar with entity information
+  - Progress bar appears at top of Sync Settings during sync operations
+  - Shows current phase (Connecting, Pulling, Downloading files, Pushing, Complete)
+  - Displays current item being synced (character name, chat title, etc.)
+  - Running counts: Pulled, Pushed, Files fetched
+  - Auto-hides 3 seconds after successful completion
+  - Error state persists with dismiss button
+  - New `/api/sync/operations/[id]/progress` endpoint for progress polling
+  - New `useSyncProgress` hook for client-side polling
+  - New `SyncProgressBar` component with fade-out animation
+- fix: Memories now sync correctly from remote servers
+  - Fixed delta detection bug where per-entity-type limits starved later entity types (like MEMORY)
+  - Previously, if TAG+FILE+CHARACTER+CHAT filled the limit, MEMORY would get 0-9 slots
+  - Now each entity type can collect up to 10x the limit, ensuring proper sorting by updatedAt
+  - The `hasMore` flag now correctly indicates when more entities exist for pagination
+- fix: Memory sync now works correctly
+  - Fixed bug where `content` field was being stripped from all entity types during sync
+  - The `content` and `requiresContentFetch` fields are now only extracted for FILE entities
+  - Memory entities (which require `content`) now sync properly
+- fix: File content sync now uses stored S3 key correctly
+  - Sync file content endpoint was constructing a new S3 path instead of using stored s3Key
+  - Now uses the same approach as /api/files/[id] - downloading directly by s3Key
+  - Fixes "NoSuchKey" errors when file paths don't match constructed paths
+- fix: File content fetch now retries for existing files without content
+  - Previously only new files would have their content fetched from remote
+  - Now files that exist but have no s3Key will also be queued for content fetch
+  - Fixes broken images when re-syncing after a failed sync
+- feat: Add sync log sharing - server sends diagnostic logs to client
+  - New SyncLogCollector utility for capturing sync-related logs
+  - File content endpoint now returns serverLogs in error responses
+  - Helps debug sync issues without needing access to remote server logs
+- fix: Improved sync file content error handling
+  - Better error messages when S3 download fails during sync
+  - More detailed logging for troubleshooting file sync issues
+- refactor: Major sync architecture simplification - use original IDs directly
+  - Entities now keep their original IDs when synced (no ID mapping needed)
+  - Removed complex `remapEntityReferences()` function (~280 lines)
+  - All repositories now have `createOrUpdate()` for idempotent upserts
+  - Repository `create()` methods now accept optional `id` and `createdAt` via CreateOptions
+  - Sync pushes/pulls work with original entity IDs, eliminating ID mismatches
+  - Fixes duplicate characters, broken references, and missing associations
+- feat: Add "Reset Sync State" button in Sync Settings
+  - New `/api/sync/cleanup` endpoint to reset sync data
+  - Deletes legacy sync mappings and operation history
+  - Resets instance sync timestamps for fresh re-sync
+  - Added useSyncCleanup hook and CleanupPanel component
+  - User data (characters, chats, etc.) is not affected
+- feat: Sync now includes chat messages and file attachments
+  - Chat messages are now included in CHAT entity sync (previously only metadata was synced)
+  - FILE entity type added to sync - syncs avatars, attachments, and generated images
+  - Small files (<1MB) are included inline as base64; large files are fetched separately
+  - New endpoint `GET /api/sync/files/[id]/content` for streaming large file content
+- fix: Synced entities now properly reference local IDs instead of remote IDs
+  - (Superseded by ID preservation refactor - entities now use original IDs directly)
+- feat: Sync entity order now enforced to ensure dependencies exist before dependents
+  - Order: TAG -> FILE -> PERSONA -> CHARACTER -> templates -> CHAT -> MEMORY
+  - Prevents broken references when syncing entities with dependencies
+- feat: Add qt-* utility classes for backgrounds, borders, and text colors
+  - New `_utilities.css` with semantic utility classes for theme-aware styling
+  - Background utilities: qt-bg-surface, qt-bg-surface-alt, qt-bg-card, qt-bg-muted
+  - Status backgrounds with opacity: qt-bg-primary/N, qt-bg-warning/N, qt-bg-info/N, etc.
+  - Border utilities: qt-border, qt-border-primary, qt-border-warning, qt-border-info
+  - Text utilities: qt-text-secondary, qt-text-warning, qt-text-info, qt-text-success
+  - Fixes transparency issues where qt-bg-* classes were used but never defined
+- fix: Sync dropdown menu now uses proper qt-dropdown component class
+- fix: Sync connection test now shows clear success/failure feedback
+  - Success message displays remote version info (e.g., "Connection successful! Remote version: 2.5.0")
+  - Error messages now appear in the error alert section when connection test fails
+- feat: Add "Force Full Sync" option for pulling all data from remote
+  - New dropdown on Sync button with "Sync Now" and "Force Full Sync" options
+  - Force Full Sync ignores lastSyncAt timestamp and pulls all remote data
+  - Useful after local data deletion to restore from remote server
+  - Also pushes all local data regardless of previous sync timestamp
+- fix: "Delete All Data" now resets sync state for fresh remote sync
+  - Sync instances are now RESET (not deleted) - preserving remote server configuration
+  - lastSyncAt timestamp is cleared so next sync pulls all data from remote
+  - Sync mappings and operations are deleted for clean re-sync
+  - Sync API keys are preserved (for receiving remote sync requests)
+  - Delete preview UI shows sync data counts with "(reset)" clarification
+- fix: Sync tab race condition causing error on first navigation
+  - Added mount state tracking to prevent async operations during unmount
+  - Deferred fetch operations to ensure component is fully mounted
+  - Improved error logging in useAsyncOperation with better error details
+- feat: Sync operations now recorded on both client and server sides
+  - Remote server records sync operations when receiving pushes (PULL direction)
+  - Remote server records sync operations when sending deltas (PUSH direction)
+  - Both instances now show matching sync history from their respective perspectives
+- fix: Sync API batched pushing to avoid body size limits
+  - Push deltas in batches of 50 to stay under Next.js 1MB body size limit
+  - Fixes "Invalid JSON body" errors when syncing large delta sets (850+ entities)
+- fix: Sync API error response now includes required fields
+  - Error responses now include `conflicts`, `errors`, and `direction` arrays
+  - Fixes TypeError "Cannot read properties of undefined (reading 'length')" in client
+- feat: Add bidirectional Sync API for multi-instance synchronization
+  - New "Sync" tab in Settings for managing remote Quilltap instances
+  - Bidirectional sync with permanent UUID mapping between entities
+  - Last-write-wins conflict resolution based on updatedAt timestamps
+  - Syncs: Characters, Personas, Chats, Memories, Tags, Roleplay Templates, Prompt Templates
+  - Excludes: Profiles (API keys are never synced)
+  - Version compatibility checking before sync operations
+  - Server-side sync endpoints: `/api/sync/handshake`, `/api/sync/delta`, `/api/sync/push`, `/api/sync/mappings`
+  - Client-side management: `/api/sync/instances`, `/api/sync/instances/[id]`, `/api/sync/operations`
+  - New sync services: version-checker, delta-detector, conflict-resolver, sync-service, remote-client
+  - New MongoDB collections: sync_instances, sync_mappings, sync_operations
+  - New repositories: SyncInstancesRepository, SyncMappingsRepository, SyncOperationsRepository
+  - UI components: InstanceCard, InstanceForm, InstanceList, SyncHistoryPanel, SyncStatusBadge
+  - Hooks: useSyncInstances, useSyncOperations, useSyncTrigger
+  - Unit tests: 164 tests for version-checker, conflict-resolver, and Zod schema validation
+- feat: Add API key authentication for cross-instance sync
+  - Generate API keys on the main instance to allow remote instances to sync
+  - New API Key panel in Sync tab for generating and managing keys
+  - Keys are securely hashed with bcrypt (plaintext only shown once on creation)
+  - Bearer token authentication supported on all sync endpoints (handshake, delta, push, mappings)
+  - New MongoDB collection: user_sync_api_keys
+  - New repository: UserSyncApiKeysRepository
+  - New API routes: `/api/sync/api-keys`, `/api/sync/api-keys/[id]`
+  - New components: ApiKeyPanel, useSyncApiKeys hook
+  - New lib: api-key-auth.ts for Bearer token validation
+  - Enables sync from private/home instances to public instances through firewalls
+  - Unit tests: 35 tests for UserSyncApiKey schema validation
+- feat: Add AI Wizard for character creation and editing
+  - New "AI Wizard" button on both New Character and Edit Character pages
+  - Multi-step wizard modal with profile selection, image source options, field selection, and generation progress
+  - Step 1: Select primary LLM connection profile for generation
+  - Step 2: Choose physical description source (existing data, upload image, gallery, or skip)
+  - Step 3: Select which empty fields to generate with checkboxes, plus background context input
+  - Step 4: View generation progress and preview results before applying
+  - Automatically detects if vision-capable profile needed for image analysis
+  - Generates: title, description, personality, scenario, exampleDialogues, systemPrompt
+  - Generates physical descriptions with all prompt levels (short/medium/long/complete/full)
+  - Physical descriptions saved as new "AI Generated" entry in Physical Descriptions tab
+  - New API endpoint: `/api/characters/ai-wizard` for server-side generation
+  - New components: `AIWizardModal`, step components, `useAIWizard` hook
+  - Added image size validation (5MB limit) with helpful error message
+  - Fixed physical description API URL to use correct `/api/characters/{id}/descriptions` endpoint
+  - Physical descriptions now properly saved for both new and existing characters
+- fix: Navbar avatar now loads correctly from /api/files
+  - Changed from Next.js Image to regular img tag to include auth cookies
+  - Added object-cover for proper cropping of non-square images
+- feat: Add native Quilltap export/import system
+  - New Import/Export card on Tools page for selective entity export and import
+  - Supports all entity types: Characters, Personas, Chats, Roleplay Templates, Connection Profiles, Image Profiles, Embedding Profiles, Tags
+  - Export wizard: select entity type → choose scope (all/selected) → optional memory inclusion → download .qtap file
+  - Import wizard: select file → preview entities with conflict detection → choose conflict strategy → import
+  - Three conflict resolution strategies: skip (keep existing), overwrite (replace with imported), duplicate (create with new ID)
+  - Memories can be optionally included/excluded during export and import
+  - API keys are never exported for security (only labels for reference)
+  - Post-import reconciliation updates all foreign key relationships correctly
+  - New API routes: `/api/tools/quilltap-export`, `/api/tools/quilltap-import`, `/api/tools/quilltap-import/execute`
+  - New export service: `lib/export/quilltap-export-service.ts` with entity-specific export functions
+  - New import service: `lib/import/quilltap-import-service.ts` with conflict resolution and ID remapping
+  - New UI components: `ExportDialog`, `ImportDialog`, `ImportExportCard` with custom hooks
+- feat: Add API key import/export functionality
+  - New Import/Export buttons in Settings → API Keys
+  - Export encrypts keys with user-provided passphrase (AES-256-GCM)
+  - Export file includes HMAC signature for integrity verification
+  - Import supports preview of keys before importing
+  - Import warns if signature verification fails (different user/instance)
+  - Duplicate handling options: skip, replace, or rename
+  - New encryption functions: `encryptWithPassphrase`, `decryptWithPassphrase`, `signData`, `verifySignature`
+  - New API routes: `/api/keys/export`, `/api/keys/import`, `/api/keys/import/preview`
+- ux: Add visual warnings for elements missing API keys
+  - New `MissingApiKeyBadge` component displays "⚠️ No API Key" warning badge
+  - Connection profile cards show warning badge when API key is missing but required
+  - Image generation profile cards show warning badge when API key is missing
+  - Embedding profile cards show warning badge when OpenAI API key is missing (Ollama doesn't require one)
+  - Chat settings modal shows warning in profile dropdowns for profiles without valid API keys
+  - Cheap LLM settings dropdowns show warning for connection and embedding profiles without API keys
+  - Image description settings dropdown shows warning for profiles without API keys
+  - Image profile picker dropdown shows warning for profiles without API keys
+  - Helps users identify which profiles need API key configuration before use
+- refactor: Clarify authentication environment variables
+  - `AUTH_DISABLED=true` now completely bypasses auth and auto-logs in as "unauthenticatedLocalUser"
+  - New `OAUTH_DISABLED` env var hides OAuth buttons but keeps credentials login working
+  - New `AUTH_UNAUTHENTICATED_USER_NAME` env var configures display name for auto-login user
+  - Signin page auto-redirects to dashboard when `AUTH_DISABLED=true`
+  - `/api/auth/status` now returns separate `authDisabled` and `oauthDisabled` flags
+  - New unauthenticated user ID (`ffffffff-...`) distinct from deprecated anonymous user (`00000000-...`)
+  - Deprecated `AUTH_ANONYMOUS_USER_NAME` env var (use `AUTH_UNAUTHENTICATED_USER_NAME` instead)
+  - Deprecated `lib/auth/anonymous-user.ts` (use `lib/auth/unauthenticated-user.ts` instead)
+- feat: New profile page at `/profile`
+  - Accessible from user menu dropdown (new "Profile" link)
+  - Profile Settings section: edit display name, email, and profile avatar
+  - Account Information section: view read-only account details (user ID, username, email verified, creation date)
+  - Two-Factor Authentication section: enable/disable 2FA, regenerate backup codes
+  - Trusted Devices section: view and revoke devices that skip 2FA
+  - AUTH_DISABLED notice when authentication is disabled
+  - New API endpoints: GET/PUT `/api/user/profile`, PATCH `/api/user/profile/avatar`
+  - Removed `/settings/security` page (functionality moved to profile)
+  - Updated TwoFactorPrompt component to link to `/profile`
+- ux: Replace inline notices with toasts in tags settings tab
+  - Error and success messages now display as toast notifications in bottom-right corner
+  - Prevents form layout from shifting when messages appear/disappear
+  - Color picker changes are debounced (500ms) to prevent toast spam while dragging
+- refactor: Move tag visual styles from ChatSettings to Tag entities
+  - Tag visual styles (emoji, colors, formatting) now stored directly on each Tag
+  - Added `visualStyle` field to TagSchema with TagVisualStyleSchema type
+  - Updated `/api/tags` GET to include visualStyle in response
+  - Updated `/api/tags/[id]` PUT to accept visualStyle updates
+  - Updated tag-style-provider to read styles from tags instead of ChatSettings
+  - Updated tags-tab.tsx settings component to edit styles on tags directly
+  - Added migration `migrate-tag-styles-to-tags-v1` to move existing styles from ChatSettings.tagStyles to individual Tag.visualStyle
+  - Tag styles now automatically backed up and restored with tags
+- fix: Backup restore breaking entity relationships
+  - Fixed characters losing avatars and linked images after restore
+  - Fixed chats not being linked to characters after restore
+  - Fixed characters not being linked to personas after restore
+  - Root cause: Repositories generate new IDs during create(), but relationship fields still referenced backup IDs
+  - Added comprehensive ID mapping for all entity types (tags, files, profiles, characters, personas, chats)
+  - Added post-restore reconciliation phase that updates all relationship fields with correct IDs
+  - Relationships now correctly remapped: defaultImageId, personaLinks, avatarOverrides, characterLinks, chat participants
+- refactor: Convert inline settings forms to modals
+  - API Keys: New `ApiKeyModal` component for adding keys
+  - Image Profiles: New `ImageProfileModal` for create/edit
+  - Embedding Profiles: New `ProfileModal` for create/edit
+  - Connection Profiles: New `ProfileModal` with full interactive features (Connect, Fetch Models, Test Message)
+  - Profiles lists now always visible instead of being hidden when form is open
+  - Consistent UX across all settings tabs with proper modal dismiss handling (click outside, Escape key)
+- fix: FormActions component not rendering submit button when using type="submit"
+  - Button now renders when either `onSubmit` callback is provided OR `type="submit"` is set
+  - Fixes missing "Create API Key" button in API keys settings
+- refactor: Replaced NextAuth with Arctic + custom session management
+  - Removed next-auth dependency entirely
+  - Added Arctic library for OAuth 2.0 flows with PKCE support
+  - Created custom JWT session management using jose library
+  - Session tokens are derived from ENCRYPTION_MASTER_PEPPER (no separate JWT secret needed)
+  - Custom session provider with same useSession API for React components
+  - OAuth state stored in encrypted httpOnly cookies
+  - Credentials login: POST /api/auth/login
+  - OAuth authorize: GET /api/auth/oauth/[provider]/authorize
+  - OAuth callback: GET /api/auth/oauth/[provider]/callback
+  - Session check: GET /api/auth/session
+  - Logout: POST /api/auth/logout
+  - Updated Google OAuth plugin to use Arctic provider
+  - Removed NEXTAUTH_URL and NEXTAUTH_SECRET environment variables
+  - Added optional BASE_URL environment variable (defaults to http://localhost:3000)
+- feat: Plugin-provided roleplay templates (ROLEPLAY_TEMPLATE capability)
+  - Added new `ROLEPLAY_TEMPLATE` plugin capability for providing roleplay formatting templates
+  - Created `roleplayTemplateRegistry` to manage templates from enabled plugins
+  - Plugins can define templates via `roleplayTemplateConfig` in manifest.json
+  - Plugin templates appear alongside built-in and user templates in settings
+  - Plugin templates display the plugin name badge instead of "Built-in"
+  - Added `pluginName` field to RoleplayTemplate schema
+  - Migrated "Quilltap RP" template from hardcoded built-in to `qtap-plugin-template-quilltap-rp` plugin
+  - "Standard" template remains as a hardcoded built-in
+  - Added migration to remove old "Quilltap RP" built-in from database
+  - Updated PLUGIN_MANIFEST.md with capability documentation
+- fix: Memory attribution in multi-character chats
+  - Updated cheap LLM prompts with clear participant identification
+  - Added explicit "CRITICAL RULES" to prevent user/character confusion
+  - Memory extraction now passes all character names in multi-character chats
+  - Conversation labels now use actual persona/character names instead of generic "USER"/"CHARACTER"
+  - Added `allCharacterNames` to MemoryExtractionContext for multi-character awareness
+  - Both user memory and character memory prompts now clearly distinguish participants
+- fix: Chat composer textarea not resizing after message submission
+  - Added useEffect to resize textarea when input changes programmatically
+  - Textarea now properly shrinks to default height when cleared after submission
+- fix: Sending message while paused should not auto-resume turn manager
+  - User messages now respect pause state instead of unconditionally resuming
+  - Only nudging or explicit unpause will resume auto-responses when paused
+- feat: Draft message persistence across page reloads
+  - Saves textarea content to localStorage with 5-second debounce
+  - Restores draft on page load if text was being composed
+  - Clears draft automatically on successful message submission
+  - Per-chat storage using chat ID in localStorage key
+- fix: Focus returns to textarea after AI response completes
+  - Added focus call to triggerContinueMode finally block
+  - Added effect to detect when generation completes and focus textarea
+  - Re-focus immediately after Enter key form dispatch
+  - Use preventScroll option to avoid scroll conflicts
+  - User can immediately continue typing after character speaks
+- chore: Added logging for multi-character identity debugging
+  - Log selected character name when responding in multi-character chats
+  - Log context builder identity information to trace confusion issues
+- fix: Platform-aware keyboard shortcuts across the application
+  - Search: Cmd+K on macOS, Ctrl+K on Windows/Linux
+  - Dev console: Cmd+Shift+D on macOS, Ctrl+Shift+D on Windows/Linux
+  - Ctrl+K on macOS now falls through to native "delete to end of line" behavior
+- feat: Multi-character chat pause feature
+  - Added `isPaused` field to ChatMetadata schema, persisted to database
+  - Pause button in participant sidebar (desktop) and message header (mobile)
+  - Pressing stop while streaming now also pauses auto-responses
+  - Nudging a character automatically unpauses the chat
+  - Pause state survives page reload
+  - Added cleanup effect for stream cancellation on component unmount
+- chore: Cleaned up old documentation
+- Started 2.5-dev cycle
+
 ### 2.4
 
 - doc: Major documentation refresh

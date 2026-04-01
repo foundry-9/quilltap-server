@@ -85,7 +85,7 @@ export function TwoFactorPrompt() {
             </p>
             <div className="mt-3">
               <Link
-                href="/settings/security"
+                href="/profile"
                 className="inline-flex items-center rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600"
               >
                 Enable 2FA

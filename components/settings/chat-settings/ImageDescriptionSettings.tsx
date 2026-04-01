@@ -49,11 +49,14 @@ export function ImageDescriptionSettings({
             className="qt-select"
           >
             <option value="">Auto-select vision-capable profile</option>
-            {visionProfiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.name} ({profile.provider} • {profile.modelName})
-              </option>
-            ))}
+            {visionProfiles.map((profile) => {
+              const hasApiKey = Boolean(profile.apiKey)
+              return (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.provider} • {profile.modelName}){!hasApiKey ? ' ⚠️ No API Key' : ''}
+                </option>
+              )
+            })}
           </select>
           {visionProfiles.length === 0 && (
             <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">

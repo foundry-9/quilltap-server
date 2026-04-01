@@ -9,6 +9,7 @@ export interface RoleplayTemplate {
   description: string | null
   systemPrompt: string
   isBuiltIn: boolean
+  pluginName?: string | null  // Plugin name if provided by a plugin
   tags: string[]
   createdAt: string
   updatedAt: string

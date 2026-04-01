@@ -13,11 +13,21 @@ import {
 } from './lib/rate-limit';
 
 /**
- * Check if authentication is disabled via environment variable
+ * Check if authentication is completely disabled via environment variable
+ * When true, the app auto-logs in as unauthenticatedLocalUser
  * Note: This runs in Edge runtime, so we check env var directly
  */
 function isAuthDisabledInProxy(): boolean {
   return process.env.AUTH_DISABLED === 'true';
+}
+
+/**
+ * Check if OAuth providers are disabled via environment variable
+ * When true, OAuth buttons are hidden but credentials login still works
+ * Note: This runs in Edge runtime, so we check env var directly
+ */
+function isOAuthDisabledInProxy(): boolean {
+  return process.env.OAUTH_DISABLED === 'true';
 }
 
 /**
@@ -58,8 +68,9 @@ const RATE_LIMITED_PATHS = {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // If auth is disabled, set a header to indicate this to downstream handlers
+  // Check auth mode flags to indicate to downstream handlers
   const authDisabled = isAuthDisabledInProxy();
+  const oauthDisabled = isOAuthDisabledInProxy();
 
   // Apply rate limiting based on path
   const clientId = getClientIdentifier(request);
@@ -105,9 +116,12 @@ export function proxy(request: NextRequest) {
     response.headers.set(key, value);
   });
 
-  // If auth is disabled, set a header for downstream handlers to detect
+  // Set auth mode headers for downstream handlers to detect
   if (authDisabled) {
     response.headers.set('x-auth-disabled', 'true');
+  }
+  if (oauthDisabled) {
+    response.headers.set('x-oauth-disabled', 'true');
   }
 
   // CORS headers for API routes

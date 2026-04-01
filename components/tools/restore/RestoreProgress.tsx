@@ -91,8 +91,8 @@ export function RestoreProgress({
   if (restoreSummary) {
     return (
       <div className="space-y-4">
-        <div className="bg-green-100/30 border border-green-600 rounded-lg p-4">
-          <p className="text-sm font-medium text-green-800">
+        <div className="bg-green-500/20 dark:bg-green-500/30 border border-green-600 dark:border-green-500 rounded-lg p-4">
+          <p className="text-sm font-medium text-green-700 dark:text-green-300">
             Backup restored successfully!
           </p>
         </div>
@@ -111,11 +111,11 @@ export function RestoreProgress({
 
         {/* Warnings */}
         {restoreSummary.warnings && restoreSummary.warnings.length > 0 && (
-          <div className="bg-yellow-100/30 border border-yellow-600 rounded-lg p-4">
-            <p className="text-sm font-medium text-yellow-800 mb-2">
+          <div className="bg-yellow-500/20 dark:bg-yellow-500/30 border border-yellow-600 dark:border-yellow-500 rounded-lg p-4">
+            <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300 mb-2">
               Warnings ({restoreSummary.warnings.length}):
             </p>
-            <ul className="text-sm text-yellow-700 space-y-1 max-h-40 overflow-y-auto">
+            <ul className="text-sm text-yellow-600 dark:text-yellow-400 space-y-1 max-h-40 overflow-y-auto">
               {restoreSummary.warnings.map((warning, idx) => (
                 <li key={idx} className="flex gap-2">
                   <span className="flex-shrink-0">•</span>

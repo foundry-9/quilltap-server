@@ -9,10 +9,11 @@ This plan covers the implementation of authentication improvements and multi-use
 | Local Auth (email/password) | COMPLETED |
 | TOTP 2FA | COMPLETED |
 | No-Auth Mode | COMPLETED |
+| Arctic OAuth Migration | COMPLETED |
 | Per-User Data Storage | PENDING |
 | Site-Wide Plugins | PENDING |
 | Per-User Plugins | PENDING |
-| Google OAuth Plugin | PENDING |
+| Google OAuth Plugin | COMPLETED (using Arctic) |
 
 **Note:** For completed Local Auth details, see `features/complete/LOCAL_USER_AUTH.md`.
 
@@ -49,11 +50,11 @@ AUTH_ANONYMOUS_USER_NAME="Anonymous User"
 - Export `getAnonymousUserName()` function for default user name
 - Add debug logging for auth mode
 
-#### 1.2 Update NextAuth Configuration
-**File:** `lib/auth.ts`
-- Check `isAuthDisabled()` before configuring providers
-- When disabled, skip all providers
-- Create/use a single anonymous session automatically
+#### 1.2 Update Session Configuration
+**File:** `lib/auth/session.ts`
+- Check `isAuthDisabled()` before requiring authentication
+- When disabled, return anonymous user session automatically
+- Uses custom JWT sessions (Arctic replaced NextAuth)
 
 #### 1.3 Create Anonymous User Service
 **File:** `lib/auth/anonymous-user.ts`
@@ -248,13 +249,15 @@ Currently auto-verifying emails. For production:
 
 ---
 
-## Part 5: Google OAuth as Plugin
+## Part 5: Google OAuth as Plugin (COMPLETED)
 
-### Objective
-Convert the hardcoded Google OAuth provider to a plugin, enabling:
-- Optional installation
-- Easy addition of other OAuth providers (Apple, GitHub, etc.)
-- Per-installation configuration
+> **Status**: COMPLETED - Google OAuth now uses Arctic instead of NextAuth.
+
+### Implementation
+Google OAuth is implemented as a plugin using Arctic for OAuth 2.0 flows:
+- **Arctic** handles OAuth authorization and token exchange
+- **Custom JWT sessions** manage user sessions (no NextAuth dependency)
+- **PKCE** provides OAuth 2.0 security
 
 ### Plugin Structure
 ```
@@ -262,9 +265,7 @@ plugins/dist/qtap-plugin-auth-google/
 ├── manifest.json
 ├── package.json
 ├── index.ts
-├── provider.ts           <- NextAuth provider configuration
-├── callback-handler.ts   <- OAuth callback handling
-└── README.md
+├── README.md
 ```
 
 ### Implementation Steps
@@ -318,30 +319,33 @@ export interface AuthProviderPlugin {
 }
 ```
 
-`provider.ts`:
+The plugin exports Arctic provider creation and user info fetching:
 ```typescript
-import GoogleProvider from "next-auth/providers/google";
+import { Google } from 'arctic';
 
-export function createGoogleProvider() {
-  return GoogleProvider({
-    clientId: process.env.GOOGLE_CLIENT_ID!,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-  });
+export function createArcticProvider() {
+  return new Google(
+    process.env.GOOGLE_CLIENT_ID!,
+    process.env.GOOGLE_CLIENT_SECRET!,
+    `${process.env.BASE_URL}/api/auth/oauth/google/callback`
+  );
+}
+
+export async function fetchUserInfo(accessToken: string) {
+  // Fetch user info from Google's userinfo endpoint
 }
 ```
 
-#### 5.4 Update NextAuth Configuration
-**File:** `lib/auth.ts`
-- Import auth provider registry
-- Dynamically load providers from plugins
-- Keep credentials provider as built-in
-- Log which providers are active
+#### 5.4 OAuth Routes (COMPLETED)
+**Files:**
+- `app/api/auth/oauth/[provider]/authorize/route.ts` - Start OAuth flow
+- `app/api/auth/oauth/[provider]/callback/route.ts` - Handle callback
 
-#### 5.5 Update Sign-In Page
+#### 5.5 Sign-In Page (COMPLETED)
 **File:** `app/auth/signin/page.tsx`
-- Query available OAuth providers from registry
-- Dynamically render OAuth buttons
-- Handle providers that aren't configured gracefully
+- Queries `/api/auth/status` for available OAuth providers
+- Renders OAuth buttons dynamically
+- Redirects to `/api/auth/oauth/[provider]/authorize` for OAuth flow
 
 ---
 

@@ -129,7 +129,7 @@ The manifest is validated at runtime using Zod schemas. Invalid manifests will p
 
 - **Default**: `[]`
 - **Purpose**: Declares what functionality the plugin provides
-- **Available capabilities** (19 types):
+- **Available capabilities** (20 types):
   - `CHAT_COMMANDS` - Custom chat commands
   - `MESSAGE_PROCESSORS` - Message transformation
   - `UI_COMPONENTS` - React components
@@ -149,6 +149,7 @@ The manifest is validated at runtime using Zod schemas. Invalid manifests will p
   - `DATABASE_BACKEND` - Database replacement/augmentation
   - `FILE_BACKEND` - File storage replacement/augmentation
   - `UPGRADE_MIGRATION` - Database migration runner
+  - `ROLEPLAY_TEMPLATE` - Roleplay formatting templates
 
 **Example**:
 
@@ -227,6 +228,41 @@ For plugins with `LLM_PROVIDER` capability, this section defines provider-specif
 | `attachmentSupport.supported` | boolean | Yes | Supports file attachments |
 | `attachmentSupport.mimeTypes` | string[] | Yes | Supported MIME types |
 | `attachmentSupport.description` | string | No | Human-readable description |
+
+## Roleplay Template Configuration
+
+### `roleplayTemplateConfig` (object, optional)
+
+For plugins with `ROLEPLAY_TEMPLATE` capability, this section defines the roleplay formatting template.
+
+Roleplay templates provide formatting instructions that are prepended to character system prompts during chat. They define how dialogue, actions, thoughts, and out-of-character comments should be formatted.
+
+**Schema**:
+
+```json
+{
+  "roleplayTemplateConfig": {
+    "name": "Custom RP",
+    "description": "Custom roleplay formatting style",
+    "systemPrompt": "[SYSTEM INSTRUCTION: ...]\nFormatting rules here...",
+    "tags": ["custom", "roleplay"]
+  }
+}
+```
+
+**Fields**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Template display name (max 100 characters) |
+| `description` | string | No | Short description (max 500 characters) |
+| `systemPrompt` | string | Yes | The full system prompt with formatting instructions |
+| `tags` | string[] | No | Optional categorization tags |
+
+**Notes**:
+- Plugin-provided templates are treated as built-in (read-only) by users
+- Template IDs are derived from the plugin name: `qtap-plugin-template-xyz` → `plugin:xyz`
+- Multiple plugins can provide templates; they all appear in the template selection UI
 
 ## Technical Details
 
@@ -550,8 +586,8 @@ Declares required permissions.
   "description": "Handles database migrations and upgrades between Quilltap versions",
   "version": "1.0.0",
   "author": {
-    "name": "Foundry-9",
-    "email": "charles@sebold.tech"
+    "name": "Foundry-9 LLC",
+    "email": "charles.sebold@foundry-9.com"
   },
   "license": "MIT",
   "main": "index.js",
@@ -562,6 +598,37 @@ Declares required permissions.
   "category": "UTILITY",
   "enabledByDefault": true,
   "status": "STABLE"
+}
+```
+
+## Complete Example: Roleplay Template Plugin
+
+```json
+{
+  "name": "qtap-plugin-template-quilltap-rp",
+  "title": "Quilltap RP",
+  "description": "Custom roleplay formatting with bare dialogue, [actions], {thoughts}, and // OOC",
+  "version": "1.0.0",
+  "author": {
+    "name": "Foundry-9 LLC",
+    "email": "charles.sebold@foundry-9.com"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "compatibility": {
+    "quilltapVersion": ">=2.5.0"
+  },
+  "capabilities": ["ROLEPLAY_TEMPLATE"],
+  "category": "OTHER",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": ["roleplay", "template", "formatting"],
+  "roleplayTemplateConfig": {
+    "name": "Quilltap RP",
+    "description": "Custom formatting with bare dialogue, [actions], {thoughts}, and // OOC",
+    "systemPrompt": "[SYSTEM INSTRUCTION: INTERACTION FORMATTING PROTOCOL]\nYou must adhere to the following custom syntax...",
+    "tags": ["quilltap", "custom", "brackets"]
+  }
 }
 ```
 

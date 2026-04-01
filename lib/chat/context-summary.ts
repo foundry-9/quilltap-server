@@ -379,6 +379,12 @@ async function considerTitleUpdateAsync(
       return
     }
 
+    // Skip title update if user has manually renamed the chat
+    if (chat.isManuallyRenamed) {
+      logger.debug(`[Title Update] Skipping - chat ${chatId} was manually renamed`)
+      return
+    }
+
     // Get cheap LLM provider
     const cheapLLM = getCheapLLMProvider(
       connectionProfile,

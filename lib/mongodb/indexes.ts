@@ -162,6 +162,51 @@ export const INDEX_DEFINITIONS: Record<string, IndexDefinition[]> = {
       key: { fetchedAt: 1 },
     },
   ],
+
+  // Sync instances collection indexes
+  sync_instances: [
+    {
+      key: { userId: 1 },
+    },
+    {
+      key: { userId: 1, url: 1 },
+      options: { unique: true, name: 'sync_instances_userId_url_unique' },
+    },
+    {
+      key: { userId: 1, isActive: 1 },
+    },
+  ],
+
+  // Sync mappings collection indexes
+  sync_mappings: [
+    {
+      key: { userId: 1, instanceId: 1 },
+    },
+    {
+      key: { userId: 1, instanceId: 1, entityType: 1, localId: 1 },
+      options: { unique: true, name: 'sync_mappings_userId_instance_entityType_localId_unique' },
+    },
+    {
+      key: { userId: 1, instanceId: 1, entityType: 1, remoteId: 1 },
+      options: { unique: true, name: 'sync_mappings_userId_instance_entityType_remoteId_unique' },
+    },
+    {
+      key: { lastSyncedAt: 1 },
+    },
+  ],
+
+  // Sync operations collection indexes
+  sync_operations: [
+    {
+      key: { userId: 1, instanceId: 1, createdAt: -1 },
+    },
+    {
+      key: { status: 1, createdAt: 1 },
+    },
+    {
+      key: { userId: 1, status: 1 },
+    },
+  ],
 };
 
 /**

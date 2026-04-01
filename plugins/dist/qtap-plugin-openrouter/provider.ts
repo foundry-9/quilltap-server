@@ -79,7 +79,7 @@ export class OpenRouterProvider implements LLMProvider {
 
     const client = new OpenRouter({
       apiKey,
-      httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+      httpReferer: process.env.BASE_URL || 'http://localhost:3000',
       xTitle: 'Quilltap',
     });
 
@@ -221,7 +221,7 @@ export class OpenRouterProvider implements LLMProvider {
 
     const client = new OpenRouter({
       apiKey,
-      httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+      httpReferer: process.env.BASE_URL || 'http://localhost:3000',
       xTitle: 'Quilltap',
     });
 
@@ -391,7 +391,7 @@ export class OpenRouterProvider implements LLMProvider {
       });
       const client = new OpenRouter({
         apiKey,
-        httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+        httpReferer: process.env.BASE_URL || 'http://localhost:3000',
         xTitle: 'Quilltap',
       });
       await client.models.list();
@@ -416,7 +416,7 @@ export class OpenRouterProvider implements LLMProvider {
       });
       const client = new OpenRouter({
         apiKey,
-        httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+        httpReferer: process.env.BASE_URL || 'http://localhost:3000',
         xTitle: 'Quilltap',
       });
 
@@ -449,7 +449,7 @@ export class OpenRouterProvider implements LLMProvider {
 
     const client = new OpenRouter({
       apiKey,
-      httpReferer: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+      httpReferer: process.env.BASE_URL || 'http://localhost:3000',
       xTitle: 'Quilltap',
     });
 

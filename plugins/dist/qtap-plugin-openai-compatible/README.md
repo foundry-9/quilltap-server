@@ -326,7 +326,7 @@ const response = await provider.sendMessage({
 For issues with the plugin, refer to:
 
 ### General Help
-- Quilltap GitHub: https://github.com/Foundry-9/F9-Quilltap
+- Quilltap GitHub: https://github.com/foundry-9/F9-Quilltap
 - Quilltap Documentation: Check the repository README
 
 ### Implementation-Specific Help
@@ -348,4 +348,4 @@ Contributions are welcome! This plugin can be improved with:
 - Function calling support
 - Performance optimizations
 
-Please visit the [Quilltap repository](https://github.com/Foundry-9/F9-Quilltap) to contribute.
+Please visit the [Quilltap repository](https://github.com/foundry-9/F9-Quilltap) to contribute.

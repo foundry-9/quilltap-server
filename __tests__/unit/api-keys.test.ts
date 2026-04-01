@@ -9,7 +9,6 @@ import { encryptApiKey, maskApiKey } from '@/lib/encryption'
 import { getUserRepositories } from '@/lib/repositories/factory'
 
 // Mock dependencies
-jest.mock('next-auth')
 // Note: @/lib/repositories/factory is mocked globally in jest.setup.ts
 
 // Import after mock setup

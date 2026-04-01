@@ -23,6 +23,8 @@ export interface MemoryExtractionContext {
   characterName: string
   /** Persona name if available */
   personaName?: string
+  /** All character names in a multi-character chat (for clear identity context) */
+  allCharacterNames?: string[]
   /** Chat ID for source reference */
   chatId: string
   /** User message content */
@@ -106,14 +108,31 @@ function toCheapLLMConfig(settings: CheapLLMSettings): CheapLLMConfig {
 
 /**
  * Builds context string for memory extraction
+ * Includes clear participant identification for multi-character chats
  */
 function buildExtractionContext(ctx: MemoryExtractionContext): string {
   const parts: string[] = []
 
-  parts.push(`Character: ${ctx.characterName}`)
+  parts.push('PARTICIPANTS IN THIS CONVERSATION:')
 
+  // User identification
   if (ctx.personaName) {
-    parts.push(`User persona: ${ctx.personaName}`)
+    parts.push(`- USER: ${ctx.personaName} (the human participant)`)
+  } else {
+    parts.push('- USER: The human participant')
+  }
+
+  // Character(s) identification
+  if (ctx.allCharacterNames && ctx.allCharacterNames.length > 1) {
+    // Multi-character chat - list all characters
+    parts.push('- CHARACTERS (AI characters in this chat):')
+    for (const name of ctx.allCharacterNames) {
+      const marker = name === ctx.characterName ? ' (currently responding)' : ''
+      parts.push(`  * ${name}${marker}`)
+    }
+  } else {
+    // Single character chat
+    parts.push(`- CHARACTER: ${ctx.characterName} (an AI character)`)
   }
 
   return parts.join('\n')
@@ -290,13 +309,17 @@ export async function processMessageForMemory(
         ctx.userMessage,
         ctx.assistantMessage,
         extractionContext,
+        ctx.characterName,
+        ctx.personaName,
         selection,
         ctx.userId
       ),
       extractCharacterMemoryFromMessage(
         ctx.userMessage,
         ctx.assistantMessage,
+        extractionContext,
         ctx.characterName,
+        ctx.personaName,
         selection,
         ctx.userId
       ),

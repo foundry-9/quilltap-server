@@ -1,0 +1,227 @@
+/**
+ * Quilltap Component System - Utility Classes
+ *
+ * Semantic utility classes for backgrounds, borders, and colors.
+ * These complement the component classes and provide theme-aware styling.
+ *
+ * Usage:
+ *   <div class="qt-bg-surface qt-border rounded-lg p-4">...</div>
+ *   <span class="qt-bg-muted px-2 py-1 rounded">Tag</span>
+ */
+
+@layer utilities {
+  /* ==========================================================================
+     BACKGROUND UTILITIES
+     ========================================================================== */
+
+  /**
+   * Surface background - general content area background
+   * Use for sections, containers, collapsible panels
+   */
+  .qt-bg-surface {
+    background-color: var(--color-background);
+  }
+
+  /**
+   * Surface alt background - slightly elevated/different surface
+   * Use for nested containers, alternating rows, subtle highlights
+   */
+  .qt-bg-surface-alt {
+    background-color: var(--color-muted);
+  }
+
+  /**
+   * Card background - for card-like containers
+   * Use when you want card styling without full qt-card component
+   */
+  .qt-bg-card {
+    background-color: var(--color-card);
+  }
+
+  /**
+   * Muted background - subtle, de-emphasized background
+   * Use for badges, tags, secondary UI elements
+   */
+  .qt-bg-muted {
+    background-color: var(--color-muted);
+  }
+
+  /* ==========================================================================
+     STATUS BACKGROUND UTILITIES (with opacity variants)
+     ========================================================================== */
+
+  /**
+   * Primary color backgrounds with opacity
+   */
+  .qt-bg-primary\/5 {
+    background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
+  }
+
+  .qt-bg-primary\/10 {
+    background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  }
+
+  .qt-bg-primary\/20 {
+    background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  }
+
+  /**
+   * Warning color backgrounds with opacity
+   */
+  .qt-bg-warning\/5 {
+    background-color: color-mix(in srgb, var(--color-warning) 5%, transparent);
+  }
+
+  .qt-bg-warning\/10 {
+    background-color: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  }
+
+  .qt-bg-warning\/20 {
+    background-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+  }
+
+  /**
+   * Info color backgrounds with opacity
+   */
+  .qt-bg-info\/5 {
+    background-color: color-mix(in srgb, var(--color-info) 5%, transparent);
+  }
+
+  .qt-bg-info\/10 {
+    background-color: color-mix(in srgb, var(--color-info) 10%, transparent);
+  }
+
+  .qt-bg-info\/20 {
+    background-color: color-mix(in srgb, var(--color-info) 20%, transparent);
+  }
+
+  /**
+   * Success color backgrounds with opacity
+   */
+  .qt-bg-success\/5 {
+    background-color: color-mix(in srgb, var(--color-success) 5%, transparent);
+  }
+
+  .qt-bg-success\/10 {
+    background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
+  }
+
+  .qt-bg-success\/20 {
+    background-color: color-mix(in srgb, var(--color-success) 20%, transparent);
+  }
+
+  /**
+   * Destructive/danger color backgrounds with opacity
+   */
+  .qt-bg-destructive\/5 {
+    background-color: color-mix(in srgb, var(--color-destructive) 5%, transparent);
+  }
+
+  .qt-bg-destructive\/10 {
+    background-color: color-mix(in srgb, var(--color-destructive) 10%, transparent);
+  }
+
+  .qt-bg-destructive\/20 {
+    background-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
+  }
+
+  /* ==========================================================================
+     BORDER UTILITIES
+     ========================================================================== */
+
+  /**
+   * Default border - standard UI border
+   */
+  .qt-border {
+    border: 1px solid var(--color-border);
+  }
+
+  .qt-border-default {
+    border-color: var(--color-border);
+  }
+
+  /**
+   * Primary color border
+   */
+  .qt-border-primary {
+    border-color: var(--color-primary);
+  }
+
+  /**
+   * Warning color border
+   */
+  .qt-border-warning {
+    border-color: var(--color-warning);
+  }
+
+  /**
+   * Info color border
+   */
+  .qt-border-info {
+    border-color: var(--color-info);
+  }
+
+  /**
+   * Success color border
+   */
+  .qt-border-success {
+    border-color: var(--color-success);
+  }
+
+  /**
+   * Destructive/danger color border
+   */
+  .qt-border-destructive {
+    border-color: var(--color-destructive);
+  }
+
+  /* ==========================================================================
+     TEXT COLOR UTILITIES
+     ========================================================================== */
+
+  /**
+   * Secondary/muted text color
+   */
+  .qt-text-secondary {
+    color: var(--color-muted-foreground);
+  }
+
+  /**
+   * Warning text color
+   */
+  .qt-text-warning {
+    color: var(--color-warning);
+  }
+
+  /**
+   * Info text color
+   */
+  .qt-text-info {
+    color: var(--color-info);
+  }
+
+  /**
+   * Success text color
+   */
+  .qt-text-success {
+    color: var(--color-success);
+  }
+
+  /**
+   * Destructive/danger text color
+   */
+  .qt-text-destructive {
+    color: var(--color-destructive);
+  }
+
+  /* ==========================================================================
+     HOVER VARIANTS
+     ========================================================================== */
+
+  /**
+   * Hover background for surface-alt
+   */
+  .hover\:qt-bg-surface-alt:hover {
+    background-color: var(--color-muted);
+  }
+}

@@ -176,9 +176,8 @@ var envSchema = import_zod.z.object({
   NODE_ENV: import_zod.z.enum(["development", "production", "test"]).default("development"),
   // Database (legacy - no longer used, MongoDB is required)
   DATABASE_URL: import_zod.z.string().url().optional(),
-  // NextAuth
-  NEXTAUTH_URL: import_zod.z.string().url().min(1, "NEXTAUTH_URL is required"),
-  NEXTAUTH_SECRET: import_zod.z.string().min(32, "NEXTAUTH_SECRET must be at least 32 characters"),
+  // Base URL for the application (used for OAuth callbacks, etc.)
+  BASE_URL: import_zod.z.string().url().optional().default("http://localhost:3000"),
   // OAuth Providers (all optional - configured via auth plugins)
   GOOGLE_CLIENT_ID: import_zod.z.string().optional(),
   GOOGLE_CLIENT_SECRET: import_zod.z.string().optional(),
@@ -259,8 +258,7 @@ function validateEnv() {
   if (isBuildPhase) {
     return {
       NODE_ENV: process.env.NODE_ENV || "production",
-      NEXTAUTH_URL: process.env.NEXTAUTH_URL || "http://localhost:3000",
-      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || "build-time-placeholder-secret-value",
+      BASE_URL: process.env.BASE_URL || "http://localhost:3000",
       ENCRYPTION_MASTER_PEPPER: process.env.ENCRYPTION_MASTER_PEPPER || "build-time-placeholder-pepper-value",
       MONGODB_URI: process.env.MONGODB_URI || "mongodb://localhost:27017",
       MONGODB_DATABASE: "quilltap",

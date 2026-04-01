@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import ToolPalette from '@/components/chat/ToolPalette'
 import MobileToolPalette from '@/components/chat/MobileToolPalette'
 import MessageContent from '@/components/chat/MessageContent'
@@ -36,11 +36,12 @@ interface ChatComposerProps {
   // Callbacks
   onSubmit: (e: React.FormEvent) => void
   onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onAttachFileClick: () => void
+  onAttachFileClick?: () => void
   onGalleryClick: () => void
   onGenerateImageClick: () => void
   onAddCharacterClick: () => void
   onSettingsClick: () => void
+  onRenameClick?: () => void
   onDeleteChatMemoriesClick: () => void
   onReextractMemoriesClick: () => void
   onStopStreaming: () => void
@@ -98,6 +99,7 @@ export function ChatComposer({
   onGenerateImageClick,
   onAddCharacterClick,
   onSettingsClick,
+  onRenameClick,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
   onStopStreaming,
@@ -107,6 +109,22 @@ export function ChatComposer({
   const desktopToolPaletteToggleRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const maxHeight = getTextareaMaxHeight()
+
+  // Handler that triggers the file input click - the file input lives in this component
+  const handleAttachFileClick = () => {
+    clientLogger.debug('[ChatComposer] Triggering file input click')
+    fileInputRef.current?.click()
+    // Also call the parent's callback in case it needs to do something
+    onAttachFileClick?.()
+  }
+
+  // Resize textarea when input changes (including when cleared after submission)
+  useEffect(() => {
+    if (inputRef.current) {
+      clientLogger.debug('[ChatComposer] Resizing textarea on input change', { inputLength: input.length })
+      resizeTextarea(inputRef.current, maxHeight)
+    }
+  }, [input, maxHeight])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && e.shiftKey) {
@@ -127,8 +145,14 @@ export function ChatComposer({
       e.preventDefault()
       if (input.trim() || attachedFiles.length > 0) {
         const form = e.currentTarget.form
+        const textarea = e.currentTarget
         if (form) {
           form.dispatchEvent(new Event('submit', { bubbles: true }))
+          // Re-focus textarea after form dispatch to prevent focus loss
+          setTimeout(() => {
+            textarea.focus({ preventScroll: true })
+            clientLogger.debug('[ChatComposer] Re-focused textarea after Enter submit')
+          }, 10)
         }
       }
     }
@@ -141,7 +165,7 @@ export function ChatComposer({
         isOpen={mobileToolPaletteOpen}
         onClose={() => setMobileToolPaletteOpen(false)}
         toggleButtonRef={mobileToolPaletteToggleRef}
-        onAttachFileClick={onAttachFileClick}
+        onAttachFileClick={handleAttachFileClick}
         uploadingFile={uploadingFile}
         showPreview={showPreview}
         onTogglePreview={() => setShowPreview(!showPreview)}
@@ -152,6 +176,7 @@ export function ChatComposer({
         onAddCharacterClick={onAddCharacterClick}
         showAddCharacter={isSingleCharacterChat}
         onSettingsClick={onSettingsClick}
+        onRenameClick={onRenameClick}
         chatId={id}
         onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
         onReextractMemoriesClick={onReextractMemoriesClick}
@@ -250,6 +275,7 @@ export function ChatComposer({
             onGalleryClick={onGalleryClick}
             onGenerateImageClick={onGenerateImageClick}
             onSettingsClick={onSettingsClick}
+            onRenameClick={onRenameClick}
             onAddCharacterClick={onAddCharacterClick}
             onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
             onReextractMemoriesClick={onReextractMemoriesClick}
@@ -258,7 +284,7 @@ export function ChatComposer({
             showAddCharacter={isSingleCharacterChat}
             chatId={id}
             chatMemoryCount={chatMemoryCount}
-            onAttachFileClick={onAttachFileClick}
+            onAttachFileClick={handleAttachFileClick}
             uploadingFile={uploadingFile}
             showPreview={showPreview}
             onTogglePreview={() => setShowPreview(!showPreview)}

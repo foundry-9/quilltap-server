@@ -825,6 +825,16 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 
+  // Log multi-character context info for debugging identity confusion
+  if (isMultiCharacter && respondingParticipant) {
+    logger.info('[ContextManager] Multi-character context built', {
+      respondingCharacterName: character.name,
+      respondingParticipantId: respondingParticipant.id,
+      otherParticipantNames: otherParticipantsInfo?.map(p => p.name) || [],
+      systemPromptContainsIdentity: systemPrompt.includes(`You are ${character.name}`),
+    })
+  }
+
   // Check if system prompt exceeds budget
   let finalSystemPrompt = systemPrompt
   if (systemPromptTokens > budget.systemPromptBudget) {

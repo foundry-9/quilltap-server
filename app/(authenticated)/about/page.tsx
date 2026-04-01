@@ -89,22 +89,25 @@ export default function AboutPage() {
         <h2 className="text-xl font-semibold mb-4">Tech Stack</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-gray-700 dark:text-gray-300">
           <div>
-            <span className="font-medium">Framework:</span> Next.js 16
+            <span className="font-medium">Runtime:</span> Node.js 22+
           </div>
           <div>
-            <span className="font-medium">Language:</span> TypeScript 5.6
+            <span className="font-medium">Framework:</span> Next.js 16+
           </div>
           <div>
-            <span className="font-medium">Database:</span> MongoDB
+            <span className="font-medium">Language:</span> TypeScript 5.6+
+          </div>
+          <div>
+            <span className="font-medium">Database:</span> MongoDB 6+
           </div>
           <div>
             <span className="font-medium">File Storage:</span> S3-compatible
           </div>
           <div>
-            <span className="font-medium">Auth:</span> NextAuth.js
+            <span className="font-medium">Auth:</span> Local + OAuth
           </div>
           <div>
-            <span className="font-medium">Styling:</span> Tailwind CSS 4
+            <span className="font-medium">Styling:</span> Tailwind CSS 4+
           </div>
         </div>
       </div>
@@ -153,7 +156,7 @@ export default function AboutPage() {
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
             </svg>
-            Foundry-9 Website
+            Foundry-9 LLC Website
           </a>
         </div>
       </div>
@@ -165,8 +168,8 @@ export default function AboutPage() {
           <p><span className="font-medium">Author:</span> Charles Sebold</p>
           <p>
             <span className="font-medium">Email:</span>{' '}
-            <a href="mailto:charles@sebold.tech" className="text-blue-600 dark:text-blue-400 hover:underline">
-              charles@sebold.tech
+            <a href="mailto:charles.sebold@foundry-9.com" className="text-blue-600 dark:text-blue-400 hover:underline">
+              charles.sebold@foundry-9.com
             </a>
           </p>
           <p>
@@ -181,7 +184,7 @@ export default function AboutPage() {
       {/* Copyright */}
       <div className="qt-card p-6 mb-6">
         <p className="text-gray-700 dark:text-gray-300 text-center">
-          &copy; {copyrightYears} Foundry-9. All rights reserved.
+          &copy; {copyrightYears} Foundry-9 LLC. All rights reserved.
         </p>
         <p className="text-gray-500 dark:text-gray-400 text-center text-sm mt-2">
           Released under the MIT License. Free software for personal and commercial use.

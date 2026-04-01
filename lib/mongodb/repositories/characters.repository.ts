@@ -6,7 +6,7 @@
  */
 
 import { Character, CharacterInput, CharacterSchema, PhysicalDescription, CharacterSystemPrompt } from '@/lib/schemas/types';
-import { MongoBaseRepository } from './base.repository';
+import { MongoBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
 
 export class CharactersRepository extends MongoBaseRepository<Character> {
@@ -140,19 +140,24 @@ export class CharactersRepository extends MongoBaseRepository<Character> {
   /**
    * Create a new character
    * @param data The character data (without id, createdAt, updatedAt). Fields with defaults are optional.
+   * @param options Optional CreateOptions to specify ID and createdAt (for sync)
    * @returns Promise<Character> The created character with generated id and timestamps
    */
-  async create(data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>): Promise<Character> {
+  async create(
+    data: Omit<CharacterInput, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions
+  ): Promise<Character> {
     logger.debug('Creating new character', { userId: data.userId, name: data.name });
     try {
-      const id = this.generateId();
+      const id = options?.id || this.generateId();
       const now = this.getCurrentTimestamp();
+      const createdAt = options?.createdAt || now;
 
       // Use schema.parse to apply defaults for fields like talkativeness, isFavorite, etc.
       const characterInput = {
         ...data,
         id,
-        createdAt: now,
+        createdAt,
         updatedAt: now,
       };
 

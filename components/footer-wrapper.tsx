@@ -27,7 +27,7 @@ export default function FooterWrapper() {
           rel="noopener noreferrer"
           className="qt-footer-link"
         >
-          &copy; {copyrightYears} Foundry-9
+          &copy; {copyrightYears} Foundry-9 LLC
         </a>
       </div>
     </footer>

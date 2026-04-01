@@ -37,6 +37,8 @@ interface MessageRowProps {
   mobileParticipantDropdownId: string | null
   mobileParticipantRefs: React.MutableRefObject<Map<string, HTMLButtonElement | null>>
   userParticipantId: string | null
+  isPaused?: boolean
+  onTogglePause?: () => void
 
   // Callbacks
   onEditStart: (message: Message) => void
@@ -82,6 +84,8 @@ export function MessageRow({
   mobileParticipantDropdownId,
   mobileParticipantRefs,
   userParticipantId,
+  isPaused = false,
+  onTogglePause,
   onEditStart,
   onEditSave,
   onEditCancel,
@@ -152,6 +156,28 @@ export function MessageRow({
             {/* Right side: participant controls for multi-char chats */}
             {isMultiChar && (
               <div className="qt-mobile-participant-controls">
+                {/* Pause/Resume button for mobile */}
+                {onTogglePause && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onTogglePause()
+                    }}
+                    className={`qt-mobile-pause-button ${isPaused ? 'qt-mobile-pause-button-paused' : ''}`}
+                    title={isPaused ? 'Resume auto-responses' : 'Pause auto-responses'}
+                  >
+                    {isPaused ? (
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+
                 {(() => {
                   // Sort participants: user on right, characters on left
                   const activeParticipants = participantData

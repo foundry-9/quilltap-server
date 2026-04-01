@@ -189,7 +189,7 @@ export function useCharacterEdit(id: string) {
     fetchPersonas()
     fetchDefaultPersona()
     fetchProfiles()
-  }, [fetchCharacter, fetchPersonas, fetchDefaultPersona, fetchProfiles])
+  }, [id, fetchCharacter, fetchPersonas, fetchDefaultPersona, fetchProfiles])
 
   /**
    * Check if form has unsaved changes

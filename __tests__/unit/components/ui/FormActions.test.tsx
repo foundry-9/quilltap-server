@@ -29,12 +29,20 @@ describe('FormActions', () => {
     expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
   })
 
-  it('does not render submit button when onSubmit is not provided', () => {
+  it('does not render submit button when onSubmit is not provided and type is not submit', () => {
     render(
       <FormActions onCancel={() => {}} />
     )
 
     expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument()
+  })
+
+  it('renders submit button when type="submit" even without onSubmit', () => {
+    render(
+      <FormActions onCancel={() => {}} type="submit" submitLabel="Create" />
+    )
+
+    expect(screen.getByRole('button', { name: /create/i })).toBeInTheDocument()
   })
 
   it('calls onCancel when cancel button is clicked', () => {

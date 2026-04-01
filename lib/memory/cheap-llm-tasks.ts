@@ -200,17 +200,23 @@ async function executeCheapLLMTask<T>(
 /**
  * Memory extraction prompt template for user memories
  */
-const USER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about a USER from their conversation with a CHARACTER.
-Analyze the conversation exchange below and identify if there is something significant about the USER that should be remembered for future conversations.
+const USER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about the USER (human participant) from their conversation.
+The conversation participants will be listed below - pay close attention to who is speaking.
+
+Analyze the conversation exchange and identify if there is something significant about the USER that should be remembered for future conversations.
 
 Criteria for significance:
 - Personal information about the USER (preferences, history, relationships, traits)
 - Emotional moments or important decisions involving the USER
 - Facts about the USER that should persist across conversations
-- Changes in how the USER relates to or feels about the CHARACTER
+- Changes in how the USER relates to or feels about a CHARACTER
 
-IMPORTANT: Only extract memories about the USER based on what the USER says/does, not about the CHARACTER's responses or behavior.
-The memory should capture something we learn about the USER from this exchange.
+CRITICAL RULES:
+- ONLY extract memories about the USER based on what the USER says/does
+- Do NOT extract anything about what CHARACTERS say or do
+- Do NOT attribute a character's statements, traits, or actions to the user
+- If a CHARACTER says something about themselves, that is NOT a user memory
+- The memory must capture something we learn about the USER from this exchange
 
 If significant, respond with JSON only (no markdown, no code blocks):
 {
@@ -229,8 +235,10 @@ Do not include any text outside the JSON object.`
 /**
  * Memory extraction prompt template for character memories
  */
-const CHARACTER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about a CHARACTER from their conversation with a USER.
-Analyze the conversation exchange below and identify if there is something significant about the CHARACTER that should be remembered for future conversations.
+const CHARACTER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about a specific CHARACTER from their conversation.
+The conversation participants will be listed below - pay close attention to who is speaking.
+
+Analyze the conversation exchange and identify if there is something significant about the specified CHARACTER that should be remembered for future conversations.
 
 Criteria for significance:
 - Personal information the CHARACTER shares about themselves (preferences, history, relationships, traits, background)
@@ -238,8 +246,13 @@ Criteria for significance:
 - Facts about the CHARACTER that should persist across conversations
 - Changes in the CHARACTER's personality, relationships, or circumstances
 
-IMPORTANT: Only extract memories about the CHARACTER based on what the CHARACTER says/does, not about the USER's responses.
-The memory should capture something we learn about the CHARACTER from this exchange.
+CRITICAL RULES:
+- ONLY extract memories about the specified CHARACTER based on what THAT CHARACTER says/does
+- Do NOT extract anything about what the USER says or does
+- Do NOT attribute the user's statements, traits, or actions to the character
+- If the USER says something about themselves, that is NOT a character memory
+- In multi-character chats, only extract memories about the SPECIFIED character, not other characters
+- The memory must capture something we learn about the CHARACTER from this exchange
 
 If significant, respond with JSON only (no markdown, no code blocks):
 {
@@ -260,7 +273,9 @@ Do not include any text outside the JSON object.`
  *
  * @param userMessage - The user's message
  * @param assistantMessage - The assistant's response
- * @param context - Additional context (character name, persona, etc.)
+ * @param context - Additional context (participant list, etc.)
+ * @param characterName - The name of the character responding
+ * @param personaName - The user's persona name (optional)
  * @param selection - The cheap LLM provider selection
  * @param userId - The user ID for API key retrieval
  * @returns A memory candidate or null if nothing significant
@@ -269,9 +284,15 @@ export async function extractMemoryFromMessage(
   userMessage: string,
   assistantMessage: string,
   context: string,
+  characterName: string,
+  personaName: string | undefined,
   selection: CheapLLMSelection,
   userId: string
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
+  // Use actual names in conversation labels for clarity
+  const userLabel = personaName || 'USER'
+  const characterLabel = characterName
+
   const messages: LLMMessage[] = [
     {
       role: 'system',
@@ -282,9 +303,9 @@ export async function extractMemoryFromMessage(
       content: `${context}
 
 CONVERSATION:
-USER: ${userMessage}
+${userLabel}: ${userMessage}
 
-CHARACTER: ${assistantMessage}`,
+${characterLabel}: ${assistantMessage}`,
     },
   ]
 
@@ -323,7 +344,9 @@ CHARACTER: ${assistantMessage}`,
  *
  * @param userMessage - The user's message
  * @param assistantMessage - The character's response
+ * @param context - Additional context (participant list, etc.)
  * @param characterName - The character's name for context
+ * @param personaName - The user's persona name (optional)
  * @param selection - The cheap LLM provider selection
  * @param userId - The user ID for API key retrieval
  * @returns A memory candidate or null if nothing significant
@@ -331,10 +354,16 @@ CHARACTER: ${assistantMessage}`,
 export async function extractCharacterMemoryFromMessage(
   userMessage: string,
   assistantMessage: string,
+  context: string,
   characterName: string,
+  personaName: string | undefined,
   selection: CheapLLMSelection,
   userId: string
 ): Promise<CheapLLMTaskResult<MemoryCandidate>> {
+  // Use actual names in conversation labels for clarity
+  const userLabel = personaName || 'USER'
+  const characterLabel = characterName
+
   const messages: LLMMessage[] = [
     {
       role: 'system',
@@ -342,12 +371,14 @@ export async function extractCharacterMemoryFromMessage(
     },
     {
       role: 'user',
-      content: `Character: ${characterName}
+      content: `${context}
+
+Extracting memories about: ${characterName}
 
 CONVERSATION:
-USER: ${userMessage}
+${userLabel}: ${userMessage}
 
-CHARACTER: ${assistantMessage}`,
+${characterLabel}: ${assistantMessage}`,
     },
   ]
 

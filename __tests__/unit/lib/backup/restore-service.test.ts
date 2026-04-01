@@ -62,6 +62,25 @@ describe('backup restore service - delete preview', () => {
           { id: 'rp-2', userId: 'user-1', createdAt: now, updatedAt: now },
         ]),
       },
+      syncInstances: {
+        findByUserId: jest.fn().mockResolvedValue([{ id: 'sync-instance-1', userId: 'user-1' }]),
+      },
+      syncOperations: {
+        findByUserId: jest.fn().mockResolvedValue([
+          { id: 'sync-op-1', userId: 'user-1' },
+          { id: 'sync-op-2', userId: 'user-1' },
+        ]),
+      },
+      userSyncApiKeys: {
+        findByUserId: jest.fn().mockResolvedValue([{ id: 'sync-key-1', userId: 'user-1' }]),
+      },
+      syncMappings: {
+        findAllForInstance: jest.fn().mockResolvedValue([
+          { id: 'mapping-1', instanceId: 'sync-instance-1' },
+          { id: 'mapping-2', instanceId: 'sync-instance-1' },
+          { id: 'mapping-3', instanceId: 'sync-instance-1' },
+        ]),
+      },
     }
     mockedGetRepositories.mockReturnValue(globalRepos as any)
 
@@ -78,6 +97,8 @@ describe('backup restore service - delete preview', () => {
     expect(summary.backups).toBe(1)
     expect(summary.profiles).toEqual({ connection: 1, image: 1, embedding: 1 })
     expect(summary.templates).toEqual({ prompt: 1, roleplay: 2 })
+    // syncApiKeys is 0 because they are preserved (not deleted) during data deletion
+    expect(summary.sync).toEqual({ instances: 1, mappings: 3, operations: 2, syncApiKeys: 0 })
     expect(s3FileService.listUserFiles).toHaveBeenCalledWith('user-1', 'backups')
   })
 })

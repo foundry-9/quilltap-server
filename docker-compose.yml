@@ -52,7 +52,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=development
-      - NEXTAUTH_URL=https://localhost:3000
+      - BASE_URL=https://localhost:3000
       - MONGODB_URI=mongodb://mongo:27017/quilltap
       - MONGODB_DATABASE=quilltap
       - S3_MODE=external

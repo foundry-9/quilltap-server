@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { describe, it, expect, beforeEach, afterAll } from '@jest/globals'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QuickHideProvider, useQuickHide } from '@/components/providers/quick-hide-provider'
-import { useSession } from 'next-auth/react'
+import { useSession } from '@/components/providers/session-provider'
 import { clientLogger } from '@/lib/client-logger'
 
 jest.mock('@/lib/client-logger', () => ({
