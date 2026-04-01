@@ -272,6 +272,18 @@ export function getSQLiteDatabasePath(): string {
 }
 
 /**
+ * Get the LLM logs database file path
+ *
+ * Separate database for high-churn LLM request/response debug data,
+ * isolated from the main database to prevent corruption propagation.
+ *
+ * @returns LLM logs database path (<base>/data/quilltap-llm-logs.db)
+ */
+export function getLLMLogsDatabasePath(): string {
+  return path.join(getDataDir(), 'quilltap-llm-logs.db');
+}
+
+/**
  * Get the physical database backups directory path
  *
  * Physical backups are stored alongside the database file under data/backups/.

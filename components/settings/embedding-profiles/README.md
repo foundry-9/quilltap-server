@@ -11,8 +11,9 @@ embedding-profiles/
 │   ├── index.ts            # Hook barrel exports
 │   └── useEmbeddingProfiles.ts  # Data fetching hook
 ├── ProviderBadge.tsx        # Provider display component
-├── ProfileForm.tsx          # Form component (create/edit)
+├── ProfileForm.tsx          # Form component (deprecated, use ProfileModal)
 ├── ProfileList.tsx          # List display component
+├── ProfileModal.tsx         # Modal form component (create/edit)
 └── index.tsx               # Main tab component
 ```
 
@@ -36,12 +37,16 @@ A custom hook that manages embedding profile data fetching and state:
 ### ProviderBadge Component
 Simple presentational component that displays provider information with provider-specific styling.
 
-### ProfileForm Component
-Handles creating and editing embedding profiles:
+### ProfileForm Component (Deprecated)
+Legacy form component. Use ProfileModal instead for new implementations.
+
+### ProfileModal Component
+Modal-based form for creating and editing embedding profiles:
 - Manages form state using `useFormState` hook
 - Handles provider-specific fields (API key for OpenAI, base URL for Ollama)
 - Auto-fills model dimensions when available
 - Submits to the API and refetches profiles on success
+- Prompts to re-embed memories when switching default profile
 
 ### ProfileList Component
 Displays all embedding profiles with interactive features:
@@ -73,7 +78,7 @@ import {
   type EmbeddingProfile,
   type ApiKey,
   useEmbeddingProfiles,
-  ProfileForm,
+  ProfileModal,
   ProfileList,
   ProviderBadge,
 } from '@/components/settings/embedding-profiles'
@@ -83,15 +88,16 @@ import {
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| types.ts | 44 | Type definitions |
-| useEmbeddingProfiles.ts | 82 | Data fetching hook |
-| ProviderBadge.tsx | 19 | Provider badge |
-| ProfileForm.tsx | 286 | Create/edit form |
-| ProfileList.tsx | 146 | Display list |
-| index.tsx | 118 | Main tab component |
-| **Total** | **715** | **Original: 547** |
+| types.ts | 81 | Type definitions and constants |
+| useEmbeddingProfiles.ts | 157 | Data fetching hook |
+| ProviderBadge.tsx | 23 | Provider badge display |
+| ProfileForm.tsx | 389 | Legacy form component (deprecated) |
+| ProfileModal.tsx | 392 | Modal form for create/edit |
+| ProfileList.tsx | 238 | List display with edit/delete |
+| index.tsx | 133 | Main tab component |
+| **Total** | **1,413** | **Combined implementation** |
 
-Note: The total is higher due to added re-exports and comments for clarity, but each file is now under 300 lines and focused on a single responsibility.
+Note: ProfileForm and ProfileModal provide overlapping functionality with different UX patterns. ProfileModal is the current implementation used by the main tab component.
 
 ## Key Improvements
 

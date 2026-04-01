@@ -1115,12 +1115,17 @@
      ========================================================================== */
 
   /**
-   * Brand name text - uses brand font with appropriate color
-   * In dark mode, defaults to foreground color (typically white)
+   * Brand name text - always renders in EB Garamond, the official
+   * Quilltap brand typeface. This is NOT theme-overridable; the brand
+   * identity stays consistent regardless of active theme. The color
+   * remains themeable via --qt-brand-fg so themes can tint the name
+   * to complement their palette.
    */
   .qt-font-brand {
-    font-family: var(--font-brand);
+    font-family: "EB Garamond", Georgia, "Times New Roman", serif;
     color: var(--qt-brand-fg, var(--color-foreground));
+    font-weight: 600;
+    font-size: 1.05em;
   }
 
   /* ==========================================================================

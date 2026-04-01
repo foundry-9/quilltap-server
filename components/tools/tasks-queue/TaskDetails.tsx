@@ -101,9 +101,9 @@ export function TaskDetails({
             </div>
           )}
 
-          {/* Payload (what will be sent to LLM) */}
+          {/* Job parameters */}
           <div>
-            <span className="qt-text-xs">Job Payload (sent to LLM)</span>
+            <span className="qt-text-xs">Job Parameters</span>
             <pre className="mt-1 p-3 bg-muted rounded text-xs overflow-x-auto whitespace-pre-wrap break-words">
               {JSON.stringify(job.payload, null, 2)}
             </pre>

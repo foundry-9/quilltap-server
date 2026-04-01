@@ -3,7 +3,7 @@
   "name": "qtap-plugin-openai",
   "title": "OpenAI Provider",
   "description": "Provides OpenAI GPT models and DALL-E image generation for Quilltap",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -14,7 +14,7 @@
     "quilltapVersion": ">=1.7.0",
     "nodeVersion": ">=18.0.0"
   },
-  "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER", "EMBEDDING_PROVIDER"],
+  "capabilities": ["LLM_PROVIDER", "IMAGE_PROVIDER", "EMBEDDING_PROVIDER", "MODERATION_PROVIDER"],
   "category": "PROVIDER",
   "main": "index.js",
   "typescript": true,

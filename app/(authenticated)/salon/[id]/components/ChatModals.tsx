@@ -11,6 +11,7 @@ import ReattributeMessageDialog from '@/components/chat/ReattributeMessageDialog
 import BulkCharacterReplaceModal from '@/components/chat/BulkCharacterReplaceModal'
 import ChatToolSettingsModal from '@/components/chat/ChatToolSettingsModal'
 import StateEditorModal from '@/components/state/StateEditorModal'
+import RunToolModal from '@/components/chat/RunToolModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import type { SearchReplaceResult } from '@/components/tools/search-replace/types'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
@@ -55,6 +56,8 @@ interface ChatModalsProps {
   closeBulkReplace: () => void
   toolSettingsModalOpen: boolean
   closeToolSettings: () => void
+  runToolModalOpen: boolean
+  closeRunTool: () => void
   stateEditorModalOpen: boolean
   closeStateEditor: () => void
   allLLMPauseModalOpen: boolean
@@ -117,6 +120,7 @@ export function ChatModals({
   searchReplaceModalOpen, closeSearchReplace,
   bulkReplaceModalOpen, closeBulkReplace,
   toolSettingsModalOpen, closeToolSettings,
+  runToolModalOpen, closeRunTool,
   stateEditorModalOpen, closeStateEditor,
   allLLMPauseModalOpen, setAllLLMPauseModalOpen,
   llmLogViewerOpen, closeLLMLogViewer,
@@ -315,6 +319,15 @@ export function ChatModals({
           }}
         />
       )}
+
+      <RunToolModal
+        isOpen={runToolModalOpen}
+        onClose={closeRunTool}
+        chatId={chatId}
+        onToolExecuted={() => {
+          fetchChat()
+        }}
+      />
 
       {chat && (
         <StateEditorModal

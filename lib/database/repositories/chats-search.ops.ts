@@ -6,7 +6,7 @@
  */
 
 import { ChatEventSchema } from '@/lib/schemas/types';
-import { QueryFilter } from '../interfaces';
+import { QueryFilter, SortSpec } from '../interfaces';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
 import { ChatMessagesOps } from './chats-messages.ops';
@@ -82,6 +82,105 @@ export class ChatSearchReplaceOps {
       }
       return matches;
     }, 'Failed to find messages with text', { chatId }, []);
+  }
+
+  /**
+   * Search messages globally across multiple chats
+   * @param chatIds Array of chat IDs to search within
+   * @param searchText Text to search for (case-insensitive)
+   * @param limit Maximum number of results to return (default 100)
+   * @returns Array of matching messages with their metadata
+   */
+  async searchMessagesGlobal(
+    chatIds: string[],
+    searchText: string,
+    limit = 100
+  ): Promise<Array<{ messageId: string; content: string; chatId: string; role: string; createdAt: string }>> {
+    return safeQuery(async () => {
+      if (searchText.length > MAX_SEARCH_QUERY_LENGTH) {
+        logger.warn('Global search text exceeds maximum length', {
+          queryLength: searchText.length,
+          maxLength: MAX_SEARCH_QUERY_LENGTH,
+        });
+        return [];
+      }
+
+      if (chatIds.length === 0) {
+        return [];
+      }
+
+      const escapedQuery = searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escapedQuery, 'i');
+
+      if (this.ctx.isSQLiteBackend()) {
+        // SQLite: query the messages collection directly with $regex filter
+        const messagesCollection = await this.ctx.getMessagesCollection();
+        const rawMessages = await messagesCollection.find(
+          {
+            chatId: { $in: chatIds },
+            type: 'message',
+            role: { $in: ['USER', 'ASSISTANT'] },
+            content: { $regex: regex },
+          } as QueryFilter,
+          { sort: { createdAt: -1 } as SortSpec }
+        );
+
+        const results: Array<{ messageId: string; content: string; chatId: string; role: string; createdAt: string }> = [];
+        for (const msg of rawMessages) {
+          if (results.length >= limit) break;
+          const m = msg as any;
+          results.push({
+            messageId: m.id,
+            content: m.content,
+            chatId: m.chatId,
+            role: m.role,
+            createdAt: m.createdAt,
+          });
+        }
+
+        logger.debug('Global message search completed (SQLite)', {
+          chatCount: chatIds.length,
+          resultCount: results.length,
+          queryLength: searchText.length,
+        });
+
+        return results;
+      } else {
+        // Legacy data compatibility: iterate through each chat's embedded messages
+        const results: Array<{ messageId: string; content: string; chatId: string; role: string; createdAt: string }> = [];
+
+        for (const chatId of chatIds) {
+          if (results.length >= limit) break;
+          const messages = await this.messagesOps.getMessages(chatId);
+          const lowerSearch = searchText.toLowerCase();
+
+          for (const msg of messages) {
+            if (results.length >= limit) break;
+            if (
+              msg.type === 'message' &&
+              (msg.role === 'USER' || msg.role === 'ASSISTANT') &&
+              msg.content.toLowerCase().includes(lowerSearch)
+            ) {
+              results.push({
+                messageId: msg.id,
+                content: msg.content,
+                chatId,
+                role: msg.role,
+                createdAt: msg.createdAt || '',
+              });
+            }
+          }
+        }
+
+        logger.debug('Global message search completed (legacy)', {
+          chatCount: chatIds.length,
+          resultCount: results.length,
+          queryLength: searchText.length,
+        });
+
+        return results;
+      }
+    }, 'Failed to search messages globally', { chatCount: chatIds.length }, []);
   }
 
   /**

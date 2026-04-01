@@ -21,10 +21,12 @@ import {
   DeleteResult,
   SQLITE_CAPABILITIES,
 } from '../../interfaces';
-import { SQLiteConfig, loadSQLiteConfig } from '../../config';
+import { SQLiteConfig, loadSQLiteConfig, loadLLMLogsConfig } from '../../config';
 import { getSQLiteClient, closeSQLiteClient, isSQLiteConnected, setupSQLiteShutdownHandlers } from './client';
 import { runIntegrityCheck, startPeriodicCheckpoints } from './protection';
-import { createPhysicalBackup, applyRetentionPolicy } from './physical-backup';
+import { createPhysicalBackup, createLLMLogsPhysicalBackup, applyRetentionPolicy } from './physical-backup';
+import { getLLMLogsSQLiteClient, closeLLMLogsSQLiteClient } from './llm-logs-client';
+import { runLLMLogsIntegrityCheck, startLLMLogsPeriodicCheckpoints } from './llm-logs-protection';
 import { generateDDL, extractSchemaMetadata } from '../../schema-translator';
 import { buildSelectQuery, buildCountQuery, buildUpdateQuery, buildDeleteQuery, translateFilter } from './query-translator';
 import { documentToRow, rowToDocument, toJson, fromJson, fromJsonSafe, blobToEmbedding } from './json-columns';
@@ -37,7 +39,7 @@ import { logger } from '@/lib/logger';
 /**
  * SQLite implementation of DatabaseCollection
  */
-class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
+export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   readonly name: string;
   private db: DatabaseType;
   private jsonColumns: Set<string>;
@@ -181,7 +183,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
         return { matchedCount: 0, modifiedCount: 0, acknowledged: true };
       }
 
-      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
+      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns);
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -203,7 +205,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
    */
   async updateMany(filter: TypedQueryFilter<T>, update: UpdateSpec<T>): Promise<UpdateResult> {
     try {
-      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
+      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns);
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -248,7 +250,7 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       const docId = doc.id;
 
       // Perform the update using the document's ID for precision
-      const updateQuery = buildUpdateQuery(this.name, { id: docId } as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns);
+      const updateQuery = buildUpdateQuery(this.name, { id: docId } as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns);
       const result = this.db.prepare(updateQuery.sql).run(...updateQuery.params);
 
       if (result.changes === 0) {
@@ -427,6 +429,15 @@ class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
         }
       } else if (typeof value === 'number') {
         result[key] = value;
+      } else if (Buffer.isBuffer(value)) {
+        // Unexpected Buffer in a non-blob, non-JSON column — decode as Float32 BLOB.
+        // This handles timing issues where blob columns haven't been registered yet.
+        logger.debug('Buffer in non-blob column, decoding as Float32', {
+          table: this.name,
+          column: key,
+          byteLength: value.byteLength,
+        });
+        result[key] = blobToEmbedding(value);
       } else {
         // Convert null to undefined for Zod .optional() compatibility
         // (.nullable().optional() also accepts undefined, so this is safe for all schemas)
@@ -505,6 +516,29 @@ export class SQLiteBackend implements DatabaseBackend {
           });
         });
 
+      // Initialize the dedicated LLM logs database (failure is non-fatal)
+      try {
+        const llmLogsConfig = loadLLMLogsConfig();
+        const llmLogsDb = getLLMLogsSQLiteClient(llmLogsConfig);
+
+        if (llmLogsDb) {
+          runLLMLogsIntegrityCheck(llmLogsDb);
+          startLLMLogsPeriodicCheckpoints(llmLogsDb);
+
+          // Create a physical backup of the logs DB (async, non-blocking)
+          createLLMLogsPhysicalBackup(llmLogsDb).catch((error) => {
+            logger.error('LLM logs startup physical backup failed', {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        }
+      } catch (error) {
+        logger.error('Failed to initialize LLM logs database — logs will be unavailable', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Do NOT rethrow — main DB is fine, only logs are affected
+      }
+
       logger.info('SQLite backend connected', { path: this.config.path });
     } catch (error) {
       this._state = 'error';
@@ -520,6 +554,15 @@ export class SQLiteBackend implements DatabaseBackend {
    */
   async disconnect(): Promise<void> {
     try {
+      // Close LLM logs DB first (non-fatal)
+      try {
+        closeLLMLogsSQLiteClient();
+      } catch (error) {
+        logger.error('Error closing LLM logs database during disconnect', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       closeSQLiteClient();
       this.db = null;
       this._state = 'disconnected';
@@ -564,6 +607,7 @@ export class SQLiteBackend implements DatabaseBackend {
     const arrayColumns = this.collectionArrayColumns.get(name) || [];
     const booleanColumns = this.collectionBooleanColumns.get(name) || [];
     const blobColumns = this.collectionBlobColumns.get(name) || [];
+
     return new SQLiteCollection<T>(this.db, name, jsonColumns, arrayColumns, booleanColumns, blobColumns);
   }
 

@@ -23,6 +23,9 @@ export type FileSource = z.infer<typeof FileSourceEnum>;
 export const FileCategoryEnum = z.enum(['IMAGE', 'DOCUMENT', 'AVATAR', 'ATTACHMENT', 'EXPORT', 'BACKUP']);
 export type FileCategory = z.infer<typeof FileCategoryEnum>;
 
+export const FileStatusEnum = z.enum(['ok', 'orphaned']);
+export type FileStatus = z.infer<typeof FileStatusEnum>;
+
 // ============================================================================
 // FILE ENTRY
 // ============================================================================
@@ -70,6 +73,10 @@ export const FileEntrySchema = z.object({
 
   // Storage key for local file storage
   storageKey: z.string().nullable().optional(),
+
+  // File status for filesystem sync tracking
+  // 'ok' = normal file, 'orphaned' = found on disk with no prior DB record
+  fileStatus: FileStatusEnum.default('ok').optional(),
 
   // Timestamps
   createdAt: TimestampSchema,

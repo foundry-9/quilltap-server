@@ -1,0 +1,557 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quilltap.app/schemas/qtap-export.schema.json",
+  "title": "Quilltap Export Format",
+  "description": "Schema for .qtap export files — Quilltap's native export/import format. Each file contains a manifest describing the export and a data object containing the exported entities.",
+  "type": "object",
+  "required": ["manifest", "data"],
+  "additionalProperties": false,
+  "properties": {
+    "manifest": { "$ref": "#/$defs/Manifest" },
+    "data": { "$ref": "#/$defs/Data" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "characters" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["characters"],
+            "properties": {
+              "characters": { "type": "array", "items": { "$ref": "#/$defs/ExportedCharacter" } },
+              "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "chats" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["chats"],
+            "properties": {
+              "chats": { "type": "array", "items": { "$ref": "#/$defs/ExportedChat" } },
+              "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "roleplay-templates" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["roleplayTemplates"],
+            "properties": {
+              "roleplayTemplates": { "type": "array", "items": { "$ref": "#/$defs/ExportedRoleplayTemplate" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "connection-profiles" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["connectionProfiles"],
+            "properties": {
+              "connectionProfiles": { "type": "array", "items": { "$ref": "#/$defs/SanitizedConnectionProfile" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "image-profiles" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["imageProfiles"],
+            "properties": {
+              "imageProfiles": { "type": "array", "items": { "$ref": "#/$defs/SanitizedImageProfile" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "embedding-profiles" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["embeddingProfiles"],
+            "properties": {
+              "embeddingProfiles": { "type": "array", "items": { "$ref": "#/$defs/SanitizedEmbeddingProfile" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "tags" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["tags"],
+            "properties": {
+              "tags": { "type": "array", "items": { "$ref": "#/$defs/Tag" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "projects" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["projects"],
+            "properties": {
+              "projects": { "type": "array", "items": { "$ref": "#/$defs/ExportedProject" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  ],
+
+  "$defs": {
+    "UUID": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID v4 identifier"
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 date-time string"
+    },
+    "SemVer": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+",
+      "description": "Semantic version string (e.g. '2.8.0')"
+    },
+
+    "Manifest": {
+      "type": "object",
+      "description": "Export metadata describing format, version, entity type, and counts.",
+      "required": ["format", "version", "exportType", "createdAt", "appVersion", "settings", "counts"],
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "const": "quilltap-export",
+          "description": "Format identifier — always 'quilltap-export'"
+        },
+        "version": {
+          "const": "1.0",
+          "description": "Export format version"
+        },
+        "exportType": {
+          "enum": [
+            "characters",
+            "chats",
+            "roleplay-templates",
+            "connection-profiles",
+            "image-profiles",
+            "embedding-profiles",
+            "tags",
+            "projects"
+          ],
+          "description": "Type of entity contained in this export"
+        },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "appVersion": { "$ref": "#/$defs/SemVer" },
+        "settings": { "$ref": "#/$defs/ExportSettings" },
+        "counts": { "$ref": "#/$defs/ExportCounts" }
+      }
+    },
+
+    "ExportSettings": {
+      "type": "object",
+      "description": "Configuration that was used to create this export.",
+      "required": ["includeMemories", "scope", "selectedIds"],
+      "additionalProperties": false,
+      "properties": {
+        "includeMemories": {
+          "type": "boolean",
+          "description": "Whether memories associated with exported entities are included"
+        },
+        "scope": {
+          "enum": ["all", "selected"],
+          "description": "'all' exports every entity of the type; 'selected' exports specific IDs"
+        },
+        "selectedIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Entity IDs that were selected for export (empty when scope is 'all')"
+        }
+      }
+    },
+
+    "ExportCounts": {
+      "type": "object",
+      "description": "Summary counts of entities in this export, for validation and progress display.",
+      "additionalProperties": false,
+      "properties": {
+        "characters": { "type": "integer", "minimum": 0 },
+        "chats": { "type": "integer", "minimum": 0 },
+        "messages": { "type": "integer", "minimum": 0 },
+        "roleplayTemplates": { "type": "integer", "minimum": 0 },
+        "connectionProfiles": { "type": "integer", "minimum": 0 },
+        "imageProfiles": { "type": "integer", "minimum": 0 },
+        "embeddingProfiles": { "type": "integer", "minimum": 0 },
+        "tags": { "type": "integer", "minimum": 0 },
+        "memories": { "type": "integer", "minimum": 0 },
+        "projects": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "Data": {
+      "type": "object",
+      "description": "Container for exported entity arrays. Which properties are present depends on manifest.exportType."
+    },
+
+    "ExportedCharacter": {
+      "type": "object",
+      "description": "A character with optional resolved relationship metadata. Fields prefixed with '_' are informational and not used during import.",
+      "required": ["id", "userId", "name", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "userId": { "$ref": "#/$defs/UUID" },
+        "name": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "personality": { "type": "string" },
+        "scenario": { "type": "string" },
+        "firstMessage": { "type": "string" },
+        "exampleDialogues": { "type": "string" },
+        "avatarUrl": { "type": ["string", "null"] },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" },
+        "_linkedPersonaNames": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Informational: names of linked personas at export time"
+        },
+        "_tagNames": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Informational: names of assigned tags at export time"
+        }
+      }
+    },
+
+    "ExportedChat": {
+      "type": "object",
+      "description": "A chat with its messages and optional resolved participant info. Fields prefixed with '_' are informational.",
+      "required": ["id", "userId", "title", "participants", "messages", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "userId": { "$ref": "#/$defs/UUID" },
+        "title": { "type": "string" },
+        "participants": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/ChatParticipant" }
+        },
+        "messages": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/MessageEvent" }
+        },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" },
+        "_participantInfo": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["participantId", "type"],
+            "properties": {
+              "participantId": { "type": "string" },
+              "characterName": { "type": "string" },
+              "type": { "const": "CHARACTER" }
+            }
+          },
+          "description": "Informational: resolved participant names at export time"
+        },
+        "_tagNames": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Informational: names of assigned tags at export time"
+        }
+      }
+    },
+
+    "ChatParticipant": {
+      "type": "object",
+      "description": "A participant in a chat (always a CHARACTER type).",
+      "required": ["participantId", "type"],
+      "additionalProperties": true,
+      "properties": {
+        "participantId": { "$ref": "#/$defs/UUID" },
+        "type": { "const": "CHARACTER" }
+      }
+    },
+
+    "MessageEvent": {
+      "type": "object",
+      "description": "A single message in a chat conversation.",
+      "required": ["type", "id", "role", "content", "createdAt"],
+      "additionalProperties": true,
+      "properties": {
+        "type": { "const": "message" },
+        "id": { "$ref": "#/$defs/UUID" },
+        "role": {
+          "enum": ["SYSTEM", "USER", "ASSISTANT", "TOOL"],
+          "description": "The role of the message sender"
+        },
+        "content": { "type": "string" },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "participantId": { "$ref": "#/$defs/UUID" },
+        "tokenCount": { "type": "integer", "minimum": 0 },
+        "promptTokens": { "type": "integer", "minimum": 0 },
+        "completionTokens": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "Memory": {
+      "type": "object",
+      "description": "A memory entry from the Commonplace Book system.",
+      "required": ["id", "characterId", "content", "summary", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "characterId": { "$ref": "#/$defs/UUID" },
+        "content": { "type": "string", "description": "The full memory content" },
+        "summary": { "type": "string", "description": "Distilled version for context injection" },
+        "chatId": { "$ref": "#/$defs/UUID" },
+        "projectId": { "$ref": "#/$defs/UUID" },
+        "importance": { "type": "number" },
+        "keywords": { "type": "array", "items": { "type": "string" } },
+        "source": { "type": "string" },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ExportedRoleplayTemplate": {
+      "type": "object",
+      "description": "A user-created roleplay template (built-in templates are excluded from exports).",
+      "required": ["id", "name", "systemPrompt", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "userId": { "$ref": "#/$defs/UUID" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "type": "string" },
+        "systemPrompt": { "type": "string", "minLength": 1 },
+        "isBuiltIn": { "const": false },
+        "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" },
+        "_tagNames": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Informational: names of assigned tags at export time"
+        }
+      }
+    },
+
+    "SanitizedConnectionProfile": {
+      "type": "object",
+      "description": "A connection profile with the API key reference removed for security. The '_apiKeyLabel' field preserves the key's display name for reference.",
+      "required": ["id", "userId", "name", "provider", "modelName", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "not": { "required": ["apiKeyId"] },
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "userId": { "$ref": "#/$defs/UUID" },
+        "name": { "type": "string" },
+        "provider": { "type": "string", "minLength": 1 },
+        "modelName": { "type": "string" },
+        "baseUrl": { "type": ["string", "null"] },
+        "parameters": { "type": "object" },
+        "isDefault": { "type": "boolean" },
+        "isCheap": { "type": "boolean" },
+        "allowWebSearch": { "type": "boolean" },
+        "useNativeWebSearch": { "type": "boolean" },
+        "isDangerousCompatible": { "type": "boolean" },
+        "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+        "totalTokens": { "type": "integer", "minimum": 0 },
+        "totalPromptTokens": { "type": "integer", "minimum": 0 },
+        "totalCompletionTokens": { "type": "integer", "minimum": 0 },
+        "messageCount": { "type": "integer", "minimum": 0 },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" },
+        "_apiKeyLabel": {
+          "type": "string",
+          "description": "Informational: display name of the API key that was associated with this profile"
+        }
+      }
+    },
+
+    "SanitizedImageProfile": {
+      "type": "object",
+      "description": "An image generation profile with the API key reference removed for security.",
+      "required": ["id", "userId", "name", "provider", "modelName", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "not": { "required": ["apiKeyId"] },
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "userId": { "$ref": "#/$defs/UUID" },
+        "name": { "type": "string" },
+        "provider": { "type": "string", "minLength": 1 },
+        "modelName": { "type": "string" },
+        "baseUrl": { "type": ["string", "null"] },
+        "parameters": { "type": "object" },
+        "isDefault": { "type": "boolean" },
+        "isDangerousCompatible": { "type": "boolean" },
+        "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" },
+        "_apiKeyLabel": {
+          "type": "string",
+          "description": "Informational: display name of the API key that was associated with this profile"
+        }
+      }
+    },
+
+    "SanitizedEmbeddingProfile": {
+      "type": "object",
+      "description": "An embedding profile with the API key reference removed for security.",
+      "required": ["id", "userId", "name", "provider", "modelName", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "not": { "required": ["apiKeyId"] },
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "userId": { "$ref": "#/$defs/UUID" },
+        "name": { "type": "string" },
+        "provider": {
+          "enum": ["OPENAI", "OLLAMA", "OPENROUTER", "BUILTIN"],
+          "description": "Embedding provider type"
+        },
+        "modelName": { "type": "string" },
+        "baseUrl": { "type": ["string", "null"] },
+        "dimensions": { "type": ["integer", "null"] },
+        "isDefault": { "type": "boolean" },
+        "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" },
+        "_apiKeyLabel": {
+          "type": "string",
+          "description": "Informational: display name of the API key that was associated with this profile"
+        }
+      }
+    },
+
+    "Tag": {
+      "type": "object",
+      "description": "A user-defined tag for categorization.",
+      "required": ["id", "userId", "name", "nameLower", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "userId": { "$ref": "#/$defs/UUID" },
+        "name": { "type": "string" },
+        "nameLower": { "type": "string" },
+        "quickHide": { "type": "boolean" },
+        "visualStyle": {
+          "oneOf": [
+            { "$ref": "#/$defs/TagVisualStyle" },
+            { "type": "null" }
+          ]
+        },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "TagVisualStyle": {
+      "type": "object",
+      "description": "Visual customization for a tag.",
+      "additionalProperties": false,
+      "properties": {
+        "emoji": { "type": ["string", "null"], "maxLength": 8 },
+        "foregroundColor": { "type": "string", "pattern": "^#(?:[0-9a-fA-F]{3}){1,2}$" },
+        "backgroundColor": { "type": "string", "pattern": "^#(?:[0-9a-fA-F]{3}){1,2}$" },
+        "emojiOnly": { "type": "boolean" },
+        "bold": { "type": "boolean" },
+        "italic": { "type": "boolean" },
+        "strikethrough": { "type": "boolean" }
+      }
+    },
+
+    "ExportedProject": {
+      "type": "object",
+      "description": "A project with optional resolved relationship metadata. Fields prefixed with '_' are informational.",
+      "required": ["id", "userId", "name", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "userId": { "$ref": "#/$defs/UUID" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "description": { "type": ["string", "null"], "maxLength": 2000 },
+        "instructions": { "type": ["string", "null"], "maxLength": 10000 },
+        "allowAnyCharacter": { "type": "boolean" },
+        "characterRoster": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+        "color": { "type": ["string", "null"], "pattern": "^#(?:[0-9a-fA-F]{3}){1,2}$" },
+        "icon": { "type": ["string", "null"], "maxLength": 50 },
+        "mountPointId": { "type": ["string", "null"] },
+        "defaultDisabledTools": { "type": "array", "items": { "type": "string" } },
+        "defaultDisabledToolGroups": { "type": "array", "items": { "type": "string" } },
+        "defaultAgentModeEnabled": { "type": ["boolean", "null"] },
+        "state": { "type": "object" },
+        "storyBackgroundsEnabled": { "type": ["boolean", "null"] },
+        "staticBackgroundImageId": { "type": ["string", "null"] },
+        "storyBackgroundImageId": { "type": ["string", "null"] },
+        "backgroundDisplayMode": { "enum": ["latest_chat", "project", "static", "theme"] },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" },
+        "_characterRosterNames": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Informational: names of characters in the roster at export time"
+        },
+        "_chatCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Informational: number of chats in this project at export time"
+        },
+        "_fileCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Informational: number of files in this project at export time"
+        }
+      }
+    }
+  }
+}

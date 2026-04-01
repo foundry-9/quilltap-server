@@ -18,6 +18,7 @@ interface ToolPaletteProps {
   onSearchReplaceClick?: () => void
   onBulkCharacterReplaceClick?: () => void
   onToolSettingsClick?: () => void
+  onRunToolClick?: () => void
   onStateClick?: () => void
   onRegenerateBackgroundClick?: () => void
   agentModeEnabled?: boolean | null
@@ -57,6 +58,7 @@ export default function ToolPalette({
   onSearchReplaceClick,
   onBulkCharacterReplaceClick,
   onToolSettingsClick,
+  onRunToolClick,
   onStateClick,
   onRegenerateBackgroundClick,
   agentModeEnabled = false,
@@ -131,6 +133,11 @@ export default function ToolPalette({
     onClose()
   }
 
+  const handleRunToolClick = () => {
+    onRunToolClick?.()
+    onClose()
+  }
+
   const handleStateClick = () => {
     onStateClick?.()
     onClose()
@@ -192,6 +199,21 @@ export default function ToolPalette({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
               <span>Tools</span>
+            </button>
+          )}
+
+          {/* Run Tool */}
+          {onRunToolClick && (
+            <button
+              type="button"
+              onClick={handleRunToolClick}
+              className="qt-tool-palette-button"
+              title="Run a tool manually"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+              </svg>
+              <span>Run Tool</span>
             </button>
           )}
 

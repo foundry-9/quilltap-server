@@ -14,6 +14,7 @@ import { safeValidatePluginManifest, pluginRequiresRestart, type PluginManifest 
 import { isPluginCompatible } from './manifest-loader';
 import { hotLoadProviderPlugin } from './provider-registry';
 import { hotLoadSearchProviderPlugin } from './search-provider-registry';
+import { hotLoadModerationProviderPlugin } from './moderation-provider-registry';
 import { getNpmPluginsDir } from '@/lib/paths';
 
 const execAsync = promisify(exec);
@@ -289,6 +290,17 @@ export async function installPluginFromNpm(
       if (searchHotLoaded) {
         hotLoaded = true;
         logger.info('Search provider plugin hot-loaded successfully', {
+          context: 'PluginInstaller.installPluginFromNpm',
+          packageName,
+        });
+      }
+    }
+
+    if (manifest.capabilities.includes('MODERATION_PROVIDER')) {
+      const moderationHotLoaded = hotLoadModerationProviderPlugin(installedPath, manifest);
+      if (moderationHotLoaded) {
+        hotLoaded = true;
+        logger.info('Moderation provider plugin hot-loaded successfully', {
           context: 'PluginInstaller.installPluginFromNpm',
           packageName,
         });

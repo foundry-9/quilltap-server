@@ -430,7 +430,7 @@ export interface ThemePlugin {
    * Allows a theme to rename, re-describe, or re-image any of the
    * Foundry subsystem pages. Keys are subsystem IDs:
    * 'foundry' | 'aurora' | 'forge' | 'salon' | 'commonplace-book' |
-   * 'prospero' | 'dangermouse' | 'calliope' | 'lantern' | 'pascal' | 'saquel'
+   * 'prospero' | 'concierge' | 'calliope' | 'lantern' | 'pascal' | 'saquel'
    */
   subsystems?: Partial<Record<string, SubsystemOverrides>>;
 

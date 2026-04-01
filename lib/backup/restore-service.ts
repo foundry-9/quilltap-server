@@ -20,6 +20,7 @@ import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getNpmPluginsDir } from '@/lib/paths';
+import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { UuidRemapper } from './uuid-remapper';
 import type {
   BackupManifest,
@@ -30,12 +31,14 @@ import type {
 } from './types';
 import type {
   Character,
+  ChatSettings,
   Tag,
   ConnectionProfile,
   ImageProfile,
   EmbeddingProfile,
   Memory,
   FileEntry,
+  FileWritePermission,
   ChatParticipantBase,
   PhysicalDescription,
   ClothingRecord,
@@ -154,6 +157,10 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const llmLogs = await readJsonFileOptional<LLMLog[]>(rootPath, 'data/llm-logs.json', []);
     // Plugin configs are optional for backwards compatibility with older backups
     const pluginConfigs = await readJsonFileOptional<PluginConfig[]>(rootPath, 'data/plugin-configs.json', []);
+    // Chat settings are optional for backwards compatibility with older backups
+    const chatSettings = await readJsonFileOptional<ChatSettings[]>(rootPath, 'data/chat-settings.json', []);
+    // File write permissions are optional for backwards compatibility with older backups
+    const filePermissions = await readJsonFileOptional<FileWritePermission[]>(rootPath, 'data/file-permissions.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
@@ -177,6 +184,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       projects,
       llmLogs,
       pluginConfigs,
+      chatSettings,
+      filePermissions,
     };
 
     return { data, extractDir, rootFolder };
@@ -194,15 +203,32 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
  */
 export async function getFileFromExtractedBackup(
   rootPath: string,
-  file: FileEntry
+  file: FileEntry,
+  backupFormat?: number
 ): Promise<Buffer | null> {
-  const expectedPath = path.join(rootPath, 'files', file.category, `${file.id}_${file.originalFilename}`);
+  // New format (backupFormat: 2): files stored by storageKey path
+  if (backupFormat === 2 && file.storageKey) {
+    const newFormatPath = path.join(rootPath, 'files', file.storageKey);
+    try {
+      await fs.promises.access(newFormatPath);
+      return await fs.promises.readFile(newFormatPath);
+    } catch {
+      // Fall through to old format as fallback
+    }
+  }
 
+  // Old format (backupFormat: 1 or unset): files/{CATEGORY}/{fileId}_{originalFilename}
+  const oldFormatPath = path.join(rootPath, 'files', file.category, `${file.id}_${file.originalFilename}`);
   try {
-    await fs.promises.access(expectedPath);
-    return await fs.promises.readFile(expectedPath);
+    await fs.promises.access(oldFormatPath);
+    return await fs.promises.readFile(oldFormatPath);
   } catch {
-    moduleLogger.warn('File not found in extracted backup', { expectedPath, fileId: file.id });
+    moduleLogger.warn('File not found in extracted backup', {
+      fileId: file.id,
+      triedPaths: backupFormat === 2
+        ? [path.join('files', file.storageKey || ''), path.join('files', file.category, `${file.id}_${file.originalFilename}`)]
+        : [path.join('files', file.category, `${file.id}_${file.originalFilename}`)],
+    });
     return null;
   }
 }
@@ -253,6 +279,8 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       projects: data.projects.length,
       llmLogs: data.llmLogs.length,
       pluginConfigs: data.pluginConfigs?.length || 0,
+      chatSettings: data.chatSettings?.length || 0,
+      filePermissions: data.filePermissions?.length || 0,
       npmPlugins: npmPluginCount,
       warnings: [],
     };
@@ -272,7 +300,7 @@ async function deleteUserData(userId: string): Promise<void> {
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, filePermissions] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -285,6 +313,8 @@ async function deleteUserData(userId: string): Promise<void> {
       globalRepos.roleplayTemplates.findByUserId(userId),
       repos.projects.findAll(),
       repos.llmLogs.findAll(10000), // High limit to get all user logs
+      globalRepos.chatSettings.findByUserId(userId),
+      globalRepos.filePermissions.findByUserId(userId),
     ]);
 
   // Delete memories for each character first
@@ -307,6 +337,8 @@ async function deleteUserData(userId: string): Promise<void> {
     ...roleplayTemplates.map((rt) => globalRepos.roleplayTemplates.delete(rt.id)),
     ...projects.map((p) => repos.projects.delete(p.id)),
     ...llmLogs.map((log) => repos.llmLogs.delete(log.id)),
+    ...(chatSettings ? [globalRepos.chatSettings.delete(chatSettings.id)] : []),
+    ...filePermissions.map((fp) => globalRepos.filePermissions.delete(fp.id)),
   ]);
 
   // Delete files from storage
@@ -338,6 +370,8 @@ async function deleteUserData(userId: string): Promise<void> {
       roleplayTemplates: roleplayTemplates.length,
       projects: projects.length,
       llmLogs: llmLogs.length,
+      chatSettings: chatSettings ? 1 : 0,
+      filePermissions: filePermissions.length,
     },
   });
 }
@@ -685,6 +719,46 @@ function remapBackupData(
     userId: targetUserId,
   })) as PluginConfig[];
 
+  // Remap chat settings
+  const remappedChatSettings = (data.chatSettings || []).map((settings) => {
+    const remapped = {
+      ...remapper.remapFields(settings, ['id', 'imageDescriptionProfileId', 'defaultRoleplayTemplateId']),
+      userId: targetUserId,
+    };
+    // Remap nested cheapLLMSettings UUID fields
+    if (remapped.cheapLLMSettings) {
+      remapped.cheapLLMSettings = {
+        ...remapped.cheapLLMSettings,
+        ...(remapped.cheapLLMSettings.userDefinedProfileId ? { userDefinedProfileId: remapper.remap(remapped.cheapLLMSettings.userDefinedProfileId) } : {}),
+        ...(remapped.cheapLLMSettings.defaultCheapProfileId ? { defaultCheapProfileId: remapper.remap(remapped.cheapLLMSettings.defaultCheapProfileId) } : {}),
+        ...(remapped.cheapLLMSettings.embeddingProfileId ? { embeddingProfileId: remapper.remap(remapped.cheapLLMSettings.embeddingProfileId) } : {}),
+        ...(remapped.cheapLLMSettings.imagePromptProfileId ? { imagePromptProfileId: remapper.remap(remapped.cheapLLMSettings.imagePromptProfileId) } : {}),
+      };
+    }
+    // Remap nested dangerousContentSettings UUID fields
+    if (remapped.dangerousContentSettings) {
+      remapped.dangerousContentSettings = {
+        ...remapped.dangerousContentSettings,
+        ...(remapped.dangerousContentSettings.uncensoredTextProfileId ? { uncensoredTextProfileId: remapper.remap(remapped.dangerousContentSettings.uncensoredTextProfileId) } : {}),
+        ...(remapped.dangerousContentSettings.uncensoredImageProfileId ? { uncensoredImageProfileId: remapper.remap(remapped.dangerousContentSettings.uncensoredImageProfileId) } : {}),
+      };
+    }
+    // Remap nested storyBackgroundsSettings UUID fields
+    if (remapped.storyBackgroundsSettings?.defaultImageProfileId) {
+      remapped.storyBackgroundsSettings = {
+        ...remapped.storyBackgroundsSettings,
+        defaultImageProfileId: remapper.remap(remapped.storyBackgroundsSettings.defaultImageProfileId),
+      };
+    }
+    return remapped as ChatSettings;
+  });
+
+  // Remap file write permissions
+  const remappedFilePermissions = (data.filePermissions || []).map((perm) => ({
+    ...remapper.remapFields(perm, ['id', 'fileId', 'projectId', 'grantedInChatId']),
+    userId: targetUserId,
+  })) as FileWritePermission[];
+
   return {
     manifest: data.manifest,
     characters: remappedCharacters,
@@ -701,6 +775,8 @@ function remapBackupData(
     projects: remappedProjects,
     llmLogs: remappedLLMLogs,
     pluginConfigs: remappedPluginConfigs,
+    chatSettings: remappedChatSettings,
+    filePermissions: remappedFilePermissions,
   };
 }
 
@@ -794,12 +870,10 @@ export async function restore(
       const file = data.files[i];
       const originalFile = parsedData.files[i]; // original IDs for disk lookup
       try {
-        const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile);
+        const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile, data.manifest?.backupFormat);
         if (fileBuffer) {
           // Upload to storage using file storage manager
           const uploadResult = await fileStorageManager.uploadFile({
-            userId: targetUserId,
-            fileId: file.id,
             filename: file.originalFilename,
             content: fileBuffer,
             contentType: file.mimeType,
@@ -943,14 +1017,19 @@ export async function restore(
 
     // 14. LLM Logs
     let llmLogsRestored = 0;
-    for (const log of data.llmLogs) {
-      try {
-        const { id, createdAt, ...logData } = log;
-        await repos.llmLogs.create(logData, { id, createdAt });
-        llmLogsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore LLM log: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore LLM log', { logId: log.id, error });
+    if (isLLMLogsDegraded()) {
+      moduleLogger.warn('Skipping LLM logs restore — logs database is in degraded mode');
+      warnings.push('LLM logs were not restored because the logs database is in degraded mode');
+    } else {
+      for (const log of data.llmLogs) {
+        try {
+          const { id, createdAt, ...logData } = log;
+          await repos.llmLogs.create(logData, { id, createdAt });
+          llmLogsRestored++;
+        } catch (error) {
+          warnings.push(`Failed to restore LLM log: ${error instanceof Error ? error.message : String(error)}`);
+          moduleLogger.warn('Failed to restore LLM log', { logId: log.id, error });
+        }
       }
     }
 
@@ -972,7 +1051,33 @@ export async function restore(
       }
     }
 
-    // 16. NPM Plugins (copy from extracted dir to plugins/npm directory)
+    // 16. Chat Settings
+    let chatSettingsRestored = 0;
+    for (const settings of data.chatSettings || []) {
+      try {
+        const { id, createdAt, updatedAt, ...settingsData } = settings;
+        await globalRepos.chatSettings.create(settingsData, { id });
+        chatSettingsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore chat settings: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore chat settings', { settingsId: settings.id, error });
+      }
+    }
+
+    // 17. File Write Permissions
+    let filePermissionsRestored = 0;
+    for (const permission of data.filePermissions || []) {
+      try {
+        const { id, createdAt, updatedAt, ...permData } = permission;
+        await globalRepos.filePermissions.create(permData, { id });
+        filePermissionsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore file permission: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore file permission', { permissionId: permission.id, error });
+      }
+    }
+
+    // 18. NPM Plugins (copy from extracted dir to plugins/npm directory)
     let npmPluginsRestored = 0;
     const npmPluginsSrcDir = path.join(rootPath, 'plugins', 'npm');
 
@@ -1031,6 +1136,8 @@ export async function restore(
       projects: projectsRestored,
       llmLogs: llmLogsRestored,
       pluginConfigs: pluginConfigsRestored,
+      chatSettings: chatSettingsRestored,
+      filePermissions: filePermissionsRestored,
       npmPlugins: npmPluginsRestored,
       warnings,
     };

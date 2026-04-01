@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -35,6 +36,10 @@ export function ProfileModal({
     clearError: clearFormError,
   } = useAsyncOperation<void>()
 
+  const [showReembedDialog, setShowReembedDialog] = useState(false)
+  const [reembedProfileId, setReembedProfileId] = useState<string | null>(null)
+  const [reembedLoading, setReembedLoading] = useState(false)
+
   // Default to first available provider or 'BUILTIN'
   const defaultProvider = embeddingProviders[0]?.name || 'BUILTIN'
 
@@ -59,6 +64,8 @@ export function ProfileModal({
   }
 
   const handleSubmit = async () => {
+    // Track whether this save is newly setting the profile as default
+    const isNewlyDefault = !profile?.isDefault && form.formData.isDefault
 
     await executeFormSubmit(async () => {
       // For BUILTIN provider, set default model name
@@ -79,7 +86,7 @@ export function ProfileModal({
       const url = profile?.id ? `/api/v1/embedding-profiles/${profile.id}` : '/api/v1/embedding-profiles'
       const method = profile?.id ? 'PUT' : 'POST'
 
-      const result = await fetchJson(url, {
+      const result = await fetchJson<{ id: string }>(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -90,8 +97,36 @@ export function ProfileModal({
       }
 
       onSuccess()
-      handleClose()
+
+      // If newly set as default, prompt to re-embed before closing
+      if (isNewlyDefault && result.data?.id) {
+        setReembedProfileId(result.data.id)
+        setShowReembedDialog(true)
+      } else {
+        handleClose()
+      }
     })
+  }
+
+  const handleReembedConfirm = async () => {
+    if (!reembedProfileId) return
+    setReembedLoading(true)
+    try {
+      await fetchJson(`/api/v1/embedding-profiles/${reembedProfileId}?action=reindex`, {
+        method: 'POST',
+      })
+    } finally {
+      setReembedLoading(false)
+      setShowReembedDialog(false)
+      setReembedProfileId(null)
+      handleClose()
+    }
+  }
+
+  const handleReembedDecline = () => {
+    setShowReembedDialog(false)
+    setReembedProfileId(null)
+    handleClose()
   }
 
   const handleClose = () => {
@@ -123,6 +158,7 @@ export function ProfileModal({
   const isValid = form.formData.name.trim() && (isBuiltin || form.formData.modelName.trim())
 
   return (
+    <>
     <BaseModal
       isOpen={isOpen}
       onClose={handleClose}
@@ -304,6 +340,51 @@ export function ProfileModal({
         </div>
       </div>
     </BaseModal>
+
+    <BaseModal
+      isOpen={showReembedDialog}
+      onClose={handleReembedDecline}
+      title="Re-embed Memories?"
+      maxWidth="md"
+      footer={
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={handleReembedDecline}
+            disabled={reembedLoading}
+            className="qt-button-secondary"
+          >
+            Skip
+          </button>
+          <button
+            type="button"
+            onClick={handleReembedConfirm}
+            disabled={reembedLoading}
+            className="qt-button-primary"
+          >
+            {reembedLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="qt-spinner-sm" />
+                Queuing...
+              </span>
+            ) : (
+              'Re-embed All Memories'
+            )}
+          </button>
+        </div>
+      }
+    >
+      <p className="text-foreground">
+        You&apos;ve switched the default embedding profile. Existing memories were
+        embedded with a different model and may not search correctly until they
+        are re-embedded with the new profile.
+      </p>
+      <p className="mt-3 text-muted-foreground qt-text-small">
+        This will queue a background job to re-embed all character memories.
+        You can monitor progress in the Tasks Queue under Data &amp; System settings.
+      </p>
+    </BaseModal>
+    </>
   )
 }
 

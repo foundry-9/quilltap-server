@@ -25,6 +25,7 @@ const changeDirLink = document.getElementById('changeDirLink');
 // Runtime mode elements
 const runtimeDockerBtn = document.getElementById('runtimeDocker');
 const runtimeVMBtn = document.getElementById('runtimeVM');
+const runtimeNpxBtn = document.getElementById('runtimeNpx');
 const vmLabelEl = document.getElementById('vmLabel');
 
 // Rename elements
@@ -66,6 +67,7 @@ var phaseMessages = {
   'starting-vm': 'Starting virtual machine...',
   'pulling-image': 'Pulling Docker image...',
   'starting-container': 'Starting Docker container...',
+  'installing-npx': 'Starting Node.js server...',
   'waiting-health': 'Waiting for server...',
   'ready': 'Ready!',
   'error': 'Something went wrong',
@@ -124,11 +126,15 @@ function showSection(section) {
 
 /** Update the runtime mode button visual state */
 function updateRuntimeButtons() {
+  runtimeDockerBtn.classList.remove('selected');
+  runtimeVMBtn.classList.remove('selected');
+  runtimeNpxBtn.classList.remove('selected');
+
   if (currentRuntimeMode === 'docker') {
     runtimeDockerBtn.classList.add('selected');
-    runtimeVMBtn.classList.remove('selected');
+  } else if (currentRuntimeMode === 'npx') {
+    runtimeNpxBtn.classList.add('selected');
   } else {
-    runtimeDockerBtn.classList.remove('selected');
     runtimeVMBtn.classList.add('selected');
   }
 }
@@ -276,7 +282,7 @@ window.quilltap.onUpdate(function(data) {
     firstRunNote.classList.add('visible');
   } else if (
     data.phase === 'creating-vm' || data.phase === 'updating-vm' || data.phase === 'starting-vm' ||
-    data.phase === 'pulling-image' || data.phase === 'starting-container'
+    data.phase === 'pulling-image' || data.phase === 'starting-container' || data.phase === 'installing-npx'
   ) {
     progressContainer.classList.add('visible');
     progressBar.classList.add('indeterminate');
@@ -323,16 +329,32 @@ window.quilltap.onDirectories(function(data) {
   currentRuntimeMode = data.runtimeMode || 'vm';
   updateRuntimeButtons();
 
+  // On Linux there is no VM mode, so fallbacks go to the other available runtime
+  var isLinux = data.platform === 'linux';
+
   // Update Docker button availability
   if (data.dockerAvailable) {
     runtimeDockerBtn.disabled = false;
   } else {
     runtimeDockerBtn.disabled = true;
-    // Force VM mode if Docker is not available
+    // Force away from Docker mode if Docker is not available
     if (currentRuntimeMode === 'docker') {
-      currentRuntimeMode = 'vm';
+      currentRuntimeMode = isLinux ? 'npx' : 'vm';
       updateRuntimeButtons();
-      window.quilltap.setRuntimeMode('vm');
+      window.quilltap.setRuntimeMode(currentRuntimeMode);
+    }
+  }
+
+  // Update Node.js button availability
+  if (data.nodeAvailable) {
+    runtimeNpxBtn.disabled = false;
+  } else {
+    runtimeNpxBtn.disabled = true;
+    // Force away from npx mode if Node.js is not available
+    if (currentRuntimeMode === 'npx') {
+      currentRuntimeMode = isLinux ? 'docker' : 'vm';
+      updateRuntimeButtons();
+      window.quilltap.setRuntimeMode(currentRuntimeMode);
     }
   }
 
@@ -341,11 +363,11 @@ window.quilltap.onDirectories(function(data) {
     vmLabelEl.textContent = data.vmLabel;
   }
 
-  // On Linux, hide the VM option — Docker is the only runtime
-  if (data.vmLabel === 'Docker' && data.runtimeMode === 'docker') {
+  // On Linux, hide the VM option — there is no Lima/WSL2 equivalent
+  if (data.platform === 'linux') {
     runtimeVMBtn.style.display = 'none';
-    runtimeDockerBtn.classList.add('selected');
     runtimeDockerBtn.style.flex = '1';
+    runtimeNpxBtn.style.flex = '1';
   }
 });
 
@@ -403,6 +425,14 @@ runtimeVMBtn.addEventListener('click', function() {
   currentRuntimeMode = 'vm';
   updateRuntimeButtons();
   window.quilltap.setRuntimeMode('vm');
+});
+
+/** Runtime mode: Node.js button */
+runtimeNpxBtn.addEventListener('click', function() {
+  if (runtimeNpxBtn.disabled) return;
+  currentRuntimeMode = 'npx';
+  updateRuntimeButtons();
+  window.quilltap.setRuntimeMode('npx');
 });
 
 /** Delete confirmation: config only */

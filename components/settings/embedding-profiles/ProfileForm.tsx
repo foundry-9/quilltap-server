@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { useFormState } from '@/hooks/useFormState'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
+import { BaseModal } from '@/components/ui/BaseModal'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { FormActions } from '@/components/ui/FormActions'
 import type { ApiKey, EmbeddingModel, EmbeddingProfile, EmbeddingProfileFormData } from './types'
@@ -32,6 +34,10 @@ export function ProfileForm({
     clearError: clearFormError,
   } = useAsyncOperation<void>()
 
+  const [showReembedDialog, setShowReembedDialog] = useState(false)
+  const [reembedProfileId, setReembedProfileId] = useState<string | null>(null)
+  const [reembedLoading, setReembedLoading] = useState(false)
+
   const form = useFormState<EmbeddingProfileFormData>({
     name: profile?.name || '',
     provider: profile?.provider || ('OPENAI' as const),
@@ -55,6 +61,9 @@ export function ProfileForm({
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Track whether this save is newly setting the profile as default
+    const isNewlyDefault = !profile?.isDefault && form.formData.isDefault
+
     await executeFormSubmit(async () => {
       // For BUILTIN provider, set default model name
       const modelName = form.formData.provider === 'BUILTIN'
@@ -74,7 +83,7 @@ export function ProfileForm({
       const url = profile?.id ? `/api/v1/embedding-profiles/${profile.id}` : '/api/v1/embedding-profiles'
       const method = profile?.id ? 'PUT' : 'POST'
 
-      const result = await fetchJson(url, {
+      const result = await fetchJson<{ id: string }>(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -85,8 +94,36 @@ export function ProfileForm({
       }
 
       await onSubmitSuccess()
-      handleFormCancel()
+
+      // If newly set as default, prompt to re-embed before closing
+      if (isNewlyDefault && result.data?.id) {
+        setReembedProfileId(result.data.id)
+        setShowReembedDialog(true)
+      } else {
+        handleFormCancel()
+      }
     })
+  }
+
+  const handleReembedConfirm = async () => {
+    if (!reembedProfileId) return
+    setReembedLoading(true)
+    try {
+      await fetchJson(`/api/v1/embedding-profiles/${reembedProfileId}?action=reindex`, {
+        method: 'POST',
+      })
+    } finally {
+      setReembedLoading(false)
+      setShowReembedDialog(false)
+      setReembedProfileId(null)
+      handleFormCancel()
+    }
+  }
+
+  const handleReembedDecline = () => {
+    setShowReembedDialog(false)
+    setReembedProfileId(null)
+    handleFormCancel()
   }
 
   const handleFormCancel = () => {
@@ -117,6 +154,7 @@ export function ProfileForm({
   const currentModels = embeddingModels[form.formData.provider] || []
 
   return (
+    <>
     <div className="border border-border rounded-lg p-6 bg-card">
       <h3 className="text-md font-semibold text-foreground mb-4">
         {profile?.id ? 'Edit Profile' : 'Create New Profile'}
@@ -301,5 +339,50 @@ export function ProfileForm({
         </div>
       </form>
     </div>
+
+    <BaseModal
+      isOpen={showReembedDialog}
+      onClose={handleReembedDecline}
+      title="Re-embed Memories?"
+      maxWidth="md"
+      footer={
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={handleReembedDecline}
+            disabled={reembedLoading}
+            className="qt-button-secondary"
+          >
+            Skip
+          </button>
+          <button
+            type="button"
+            onClick={handleReembedConfirm}
+            disabled={reembedLoading}
+            className="qt-button-primary"
+          >
+            {reembedLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="qt-spinner-sm" />
+                Queuing...
+              </span>
+            ) : (
+              'Re-embed All Memories'
+            )}
+          </button>
+        </div>
+      }
+    >
+      <p className="text-foreground">
+        You&apos;ve switched the default embedding profile. Existing memories were
+        embedded with a different model and may not search correctly until they
+        are re-embedded with the new profile.
+      </p>
+      <p className="mt-3 text-muted-foreground qt-text-small">
+        This will queue a background job to re-embed all character memories.
+        You can monitor progress in the Tasks Queue under Data &amp; System settings.
+      </p>
+    </BaseModal>
+    </>
   )
 }

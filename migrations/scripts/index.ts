@@ -89,6 +89,16 @@ import { normalizeVectorStorageMigration } from './normalize-vector-storage';
 import { addProfileAllowToolUseFieldMigration } from './add-profile-allow-tool-use-field';
 // Drop mount points system (S3 + mount point abstraction removed)
 import { dropMountPointsMigration } from './drop-mount-points';
+// Move LLM logs to separate database
+import { moveLLMLogsToSeparateDbMigration } from './move-llm-logs-to-separate-db';
+// Add fileStatus field to files table
+import { addFileStatusFieldMigration } from './add-file-status-field';
+// Restructure file storage from old users/{userId}/... layout to new flat layout
+import { restructureFileStorageMigration } from './restructure-file-storage';
+// Cleanup pass for file storage restructure (category dirs, thumbnails, .DS_Store)
+import { restructureFileStorageCleanupMigration } from './restructure-file-storage-cleanup';
+// Fix TEXT embeddings written back by update path (should be Float32 BLOBs)
+import { fixTextEmbeddingsAfterUpdateMigration } from './fix-text-embeddings-after-update';
 
 /**
  * All available migrations.
@@ -173,6 +183,16 @@ export const migrations: Migration[] = [
   addProfileAllowToolUseFieldMigration,
   // Drop mount points system (S3 + mount point abstraction removed)
   dropMountPointsMigration,
+  // Move LLM logs to separate database
+  moveLLMLogsToSeparateDbMigration,
+  // Add fileStatus field to files table
+  addFileStatusFieldMigration,
+  // Restructure file storage from old users/{userId}/... layout to new flat layout
+  restructureFileStorageMigration,
+  // Cleanup pass for file storage restructure (category dirs, thumbnails, .DS_Store)
+  restructureFileStorageCleanupMigration,
+  // Fix TEXT embeddings written back by update path (should be Float32 BLOBs)
+  fixTextEmbeddingsAfterUpdateMigration,
 ];
 
 export {
@@ -252,4 +272,14 @@ export {
   addProfileAllowToolUseFieldMigration,
   // Drop mount points system (S3 + mount point abstraction removed)
   dropMountPointsMigration,
+  // Move LLM logs to separate database
+  moveLLMLogsToSeparateDbMigration,
+  // Add fileStatus field to files table
+  addFileStatusFieldMigration,
+  // Restructure file storage from old users/{userId}/... layout to new flat layout
+  restructureFileStorageMigration,
+  // Cleanup pass for file storage restructure
+  restructureFileStorageCleanupMigration,
+  // Fix TEXT embeddings written back by update path
+  fixTextEmbeddingsAfterUpdateMigration,
 };

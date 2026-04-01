@@ -284,7 +284,6 @@ export function buildSpeakerEntityMap(
 export function createDefaultMappings(
   speakers: ParsedSpeaker[],
   existingCharacters: Array<{ id: string; name: string; controlledBy?: 'llm' | 'user' }>,
-  existingPersonas: Array<{ id: string; name: string }>
 ): SpeakerMapping[] {
   return speakers.map(speaker => {
     if (speaker.isUser) {
@@ -304,23 +303,23 @@ export function createDefaultMappings(
         }
       }
 
-      // Fallback: Try to find a matching persona (for backwards compatibility)
-      const matchingPersona = existingPersonas.find(
-        p => p.name.toLowerCase() === speaker.name.toLowerCase()
+      // Fallback: Try to find any character with a matching name
+      const anyMatchingChar = existingCharacters.find(
+        c => c.name.toLowerCase() === speaker.name.toLowerCase()
       )
 
-      if (matchingPersona) {
+      if (anyMatchingChar) {
         return {
           speakerName: speaker.name,
           isUser: true,
-          mappingType: 'existing_persona' as const,
-          entityId: matchingPersona.id,
-          entityName: matchingPersona.name,
+          mappingType: 'existing_character' as const,
+          entityId: anyMatchingChar.id,
+          entityName: anyMatchingChar.name,
           controlledBy: 'user' as const,
         }
       }
 
-      // Default to creating a new user-controlled character (not persona)
+      // Default to creating a new user-controlled character
       return {
         speakerName: speaker.name,
         isUser: true,

@@ -18,19 +18,58 @@ export default function AboutPage() {
         </p>
       </div>
 
-      {/* Version & License Card */}
+      {/* Badges */}
       <div className="qt-card p-6 mb-6">
-        <div className="flex flex-wrap items-center gap-4">
-          <span className="qt-badge qt-badge-primary text-lg px-4 py-2">
-            v{packageJson.version}
-          </span>
+        <div className="flex flex-wrap items-center gap-3">
           <a
             href="https://github.com/foundry-9/quilltap/blob/main/LICENSE"
             target="_blank"
             rel="noopener noreferrer"
-            className="qt-badge qt-badge-secondary text-lg px-4 py-2 hover:opacity-80 transition-opacity"
           >
-            MIT License
+            <img
+              src="https://img.shields.io/badge/License-MIT-blue.svg"
+              alt="License: MIT"
+            />
+          </a>
+          <a
+            href="https://github.com/foundry-9/quilltap"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              src={`https://img.shields.io/badge/version-${packageJson.version.replace(/-/g, '--')}-yellow.svg?logo=github`}
+              alt={`Version ${packageJson.version}`}
+            />
+          </a>
+          <a
+            href="https://hub.docker.com/r/csebold/quilltap"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              src="https://img.shields.io/docker/v/csebold/quilltap?logo=docker&label=docker&sort=semver"
+              alt="Docker Hub"
+            />
+          </a>
+          <a
+            href="https://www.npmjs.com/package/quilltap"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              src="https://img.shields.io/npm/v/quilltap?logo=npm"
+              alt="npm"
+            />
+          </a>
+          <a
+            href="https://discord.com/channels/1476289075152556205/1476290238187049184"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              src="https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white"
+              alt="Discord"
+            />
           </a>
         </div>
       </div>
@@ -49,7 +88,7 @@ export default function AboutPage() {
           The platform is organized into named subsystems, each with its own character and purpose &mdash;
           rather like the wings of a well-appointed estate. Aurora (characters), The Salon (chat),
           Prospero (projects), The Commonplace Book (memory), The Lantern (story backgrounds),
-          Dangermouse (content filtering), Pascal the Croupier (gaming &amp; RNG),
+          the Concierge (alternative content provision and routing), Pascal the Croupier (gaming &amp; RNG),
           Calliope (themes), and The Foundry (architecture) &mdash;
           all extensible through a plugin system.
         </p>
@@ -94,7 +133,7 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Dangermouse &ndash; Content Filtering</strong> &ndash; content classification with detection, auto-routing to uncensored providers, and quick-hide integration</span>
+            <span><strong>The Concierge &ndash; Alternative Content Provision and Routing</strong> &ndash; content classification with detection, auto-routing to uncensored providers, and quick-hide integration</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>

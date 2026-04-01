@@ -67,7 +67,7 @@ describe('GET /api/v1/tools', () => {
     expect(toolIds).toContain('search_memories')
     expect(toolIds).toContain('search_web')
     expect(toolIds).toContain('project_info')
-    expect(toolIds).toContain('manage_files')
+    expect(toolIds).toContain('file_management')
 
     // request_full_context should never be in user-facing tool list
     expect(toolIds).not.toContain('request_full_context')

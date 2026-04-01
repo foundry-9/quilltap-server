@@ -1,6 +1,6 @@
 # LLM Logs
 
-> **[Open this page in Quilltap](/foundry)**
+> **[Open this page in Quilltap](/settings?tab=system)**
 
 The LLM Logs tool shows detailed records of all AI model interactions and API calls in your Quilltap system.
 
@@ -30,7 +30,7 @@ LLM Logs record every interaction with Large Language Models (AI providers like 
 
 ## Accessing LLM Logs
 
-**Go to Prospero** (`/foundry/prospero`) and expand the **LLM Logs** card.
+**Go to the **Data & System** tab in Settings** (`/settings?tab=system`) and expand the **LLM Logs** card.
 
 The card shows:
 

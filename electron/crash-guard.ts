@@ -134,7 +134,7 @@ function performSafeMode(): void {
     /* eslint-disable quilltap/no-quilltap-misspelling -- actual macOS bundle ID */
     const savedStatePath = path.join(
       os.homedir(), 'Library', 'Saved Application State',
-      'com.foundry9.quilttap.savedState'
+      'com.foundry9.quilltap.savedState'
     );
     /* eslint-enable quilltap/no-quilltap-misspelling */
     try {

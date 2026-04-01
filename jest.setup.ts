@@ -263,6 +263,9 @@ jest.mock('@/lib/repositories/factory', () => ({
 // Mock file storage manager - used by cascade-delete and other modules
 jest.mock('@/lib/file-storage/manager', () => {
   return {
+    safeFilename: jest.fn().mockImplementation((filename: string) => {
+      return filename.replace(/[\/\\:*?"<>|\x00-\x1f\x7f]/g, '_').replace(/_{2,}/g, '_').replace(/^[_.]+/, '').replace(/[_.]+$/, '') || 'unnamed';
+    }),
     fileStorageManager: {
       initialize: jest.fn().mockResolvedValue(undefined),
       isInitialized: jest.fn().mockReturnValue(true),
@@ -271,14 +274,39 @@ jest.mock('@/lib/file-storage/manager', () => {
       deleteFile: jest.fn().mockResolvedValue(undefined),
       getFileUrl: jest.fn().mockResolvedValue('http://localhost:3000/api/v1/files/proxy/mock-key'),
       fileExists: jest.fn().mockResolvedValue(true),
-      buildStorageKey: jest.fn().mockImplementation((params: { userId: string; fileId: string; filename: string; projectId?: string | null; folderPath?: string }) => {
-        const { userId, fileId, filename, projectId, folderPath } = params;
-        if (projectId) {
-          const normalizedFolder = folderPath && folderPath !== '/' ? folderPath.replace(/^\//, '') : '';
-          return `users/${userId}/${projectId}/${normalizedFolder}${fileId}_${filename}`;
+      storageKeyExists: jest.fn().mockResolvedValue(false),
+      getBasePath: jest.fn().mockReturnValue('/tmp/quilltap-test/files'),
+      buildStorageKey: jest.fn().mockImplementation((params: { filename: string; projectId?: string | null; folderPath?: string }) => {
+        const { filename, projectId, folderPath } = params;
+        const projectPath = projectId || '_general';
+        const folder = folderPath ? folderPath.replace(/^\/+|\/+$/g, '') : '';
+        if (folder) {
+          return `${projectPath}/${folder}/${filename}`;
         }
-        return `users/${userId}/_general/${fileId}_${filename}`;
+        return `${projectPath}/${filename}`;
       }),
+      buildFolderStoragePath: jest.fn().mockImplementation((params: { projectId: string | null; folderPath: string }) => {
+        const { projectId, folderPath } = params;
+        const projectPath = projectId || '_general';
+        const folder = folderPath.replace(/^\/+|\/+$/g, '');
+        if (folder) {
+          return `${projectPath}/${folder}`;
+        }
+        return projectPath;
+      }),
+      buildLegacyStorageKey: jest.fn().mockImplementation((params: { userId: string; fileId: string; filename: string; projectId?: string | null; folderPath?: string }) => {
+        const { userId, fileId, filename, projectId, folderPath } = params;
+        const projectPath = projectId || '_general';
+        const folder = folderPath ? folderPath.replace(/^\/+|\/+$/g, '') : '';
+        if (folder) {
+          return `users/${userId}/${projectPath}/${folder}/${fileId}_${filename}`;
+        }
+        return `users/${userId}/${projectPath}/${fileId}_${filename}`;
+      }),
+      uploadRaw: jest.fn().mockResolvedValue(undefined),
+      deleteRaw: jest.fn().mockResolvedValue(undefined),
+      createFolder: jest.fn().mockResolvedValue(undefined),
+      deleteFolder: jest.fn().mockResolvedValue(undefined),
     },
     FileStorageManager: jest.fn(),
   }

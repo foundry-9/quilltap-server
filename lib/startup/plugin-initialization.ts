@@ -15,8 +15,10 @@ import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-regis
 import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/lib/plugins/roleplay-template-registry';
 import { initializeToolRegistry, toolRegistry } from '@/lib/plugins/tool-registry';
 import { initializeSearchProviderRegistry, searchProviderRegistry } from '@/lib/plugins/search-provider-registry';
+import { initializeModerationProviderRegistry, moderationProviderRegistry } from '@/lib/plugins/moderation-provider-registry';
 import type { ToolPlugin } from '@/lib/plugins/interfaces/tool-plugin';
 import type { SearchProviderPlugin } from '@/lib/plugins/interfaces/search-provider-plugin';
+import type { ModerationProviderPlugin } from '@/lib/plugins/interfaces/moderation-provider-plugin';
 import type { ThemePlugin } from '@quilltap/plugin-types';
 import { injectPluginLoggerFactory, clearPluginLoggerFactory } from '@/lib/plugins/plugin-logger-bridge';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -495,6 +497,48 @@ async function performInitialization(): Promise<PluginInitializationResult> {
         await initializeSearchProviderRegistry(searchProviders);
         logger.info('Search provider registry initialized', {
           searchProviders: searchProviders.length,
+        });
+      }
+    }
+
+    // Initialize moderation provider registry from enabled plugins with MODERATION_PROVIDER capability
+    const moderationProviderPlugins = pluginRegistry.getEnabledByCapability('MODERATION_PROVIDER');
+    if (moderationProviderPlugins.length > 0) {
+      const moderationProviders: ModerationProviderPlugin[] = [];
+      for (const loadedPlugin of moderationProviderPlugins) {
+        try {
+          const mainFile = loadedPlugin.manifest.main || 'index.js';
+          const modulePath = _resolve(process.cwd(), loadedPlugin.pluginPath, mainFile);
+
+          // Use external loader for npm-installed plugins to resolve peer dependencies
+          const isExternalPlugin = loadedPlugin.source === 'npm';
+          const pluginModule = isExternalPlugin
+            ? loadExternalPluginModule(modulePath)
+            : dynamicRequire(modulePath);
+
+          // Moderation plugins export as { moderationPlugin: ModerationProviderPlugin }
+          if ((pluginModule as { moderationPlugin?: unknown })?.moderationPlugin) {
+            moderationProviders.push((pluginModule as { moderationPlugin: ModerationProviderPlugin }).moderationPlugin);
+          } else if ((pluginModule as { default?: { moderationPlugin?: unknown } })?.default?.moderationPlugin) {
+            moderationProviders.push((pluginModule as { default: { moderationPlugin: ModerationProviderPlugin } }).default.moderationPlugin);
+          } else {
+            logger.warn('Moderation provider plugin module does not export a moderationPlugin object', {
+              plugin: loadedPlugin.manifest.name,
+              exports: Object.keys(pluginModule as object),
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to load moderation provider plugin module', {
+            plugin: loadedPlugin.manifest.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      if (moderationProviders.length > 0) {
+        await initializeModerationProviderRegistry(moderationProviders);
+        logger.info('Moderation provider registry initialized', {
+          moderationProviders: moderationProviders.length,
         });
       }
     }

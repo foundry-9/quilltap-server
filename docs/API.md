@@ -1,6 +1,6 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v2.10.
+Complete API reference for Quilltap v3.1.
 
 ## Table of Contents
 
@@ -264,7 +264,7 @@ Check application health status.
 
 ### User Profile
 
-#### `GET /api/user/profile`
+#### `GET /api/v1/user/profile`
 
 Get current user's profile information.
 
@@ -276,13 +276,13 @@ Get current user's profile information.
   "username": "localUser",
   "email": "user@localhost.localdomain",
   "name": "Local User",
-  "image": "/api/files/avatar-uuid",
+  "image": "/api/v1/files/avatar-uuid",
   "createdAt": "2025-01-15T12:00:00.000Z",
   "updatedAt": "2025-01-19T10:00:00.000Z"
 }
 ```
 
-#### `PUT /api/user/profile`
+#### `PUT /api/v1/user/profile`
 
 Update current user's profile.
 
@@ -299,7 +299,7 @@ Update current user's profile.
 
 Returns updated profile (same format as GET).
 
-#### `PATCH /api/user/profile/avatar`
+#### `PATCH /api/v1/user/profile/avatar`
 
 Set or clear user's profile avatar.
 
@@ -847,7 +847,7 @@ List all characters.
       "isFavorite": true,
       "defaultImage": {
         "id": "file-uuid",
-        "filepath": "/api/files/file-uuid",
+        "filepath": "/api/v1/files/file-uuid",
         "url": null
       },
       "_count": {
@@ -922,7 +922,7 @@ Get a character with enriched data.
     "name": "Alice",
     "defaultImage": {
       "id": "file-uuid",
-      "filepath": "/api/files/file-uuid",
+      "filepath": "/api/v1/files/file-uuid",
       "url": null
     },
     "_count": {
@@ -1061,11 +1061,11 @@ Deletes a clothing record. Returns `{ success: true }`.
 
 NPCs are characters with `npc: true`. They appear in Settings > NPCs and can be created directly from chat.
 
-#### `GET /api/characters?npc=true`
+#### `GET /api/v1/characters?npc=true`
 
 List all NPCs.
 
-#### `POST /api/characters` with `npc: true`
+#### `POST /api/v1/characters` with `npc: true`
 
 Create an NPC character.
 
@@ -1670,7 +1670,7 @@ List files for the authenticated user.
 
 #### `POST /api/v1/files?action=write`
 
-Create a file from text content. Requires file write permission.
+Create a file from text content. Requires file write permission. If a file with the same name already exists in the same scope (user + project + folder), the existing file is overwritten and the original file ID is preserved.
 
 **Request Body**:
 
@@ -1684,11 +1684,11 @@ Create a file from text content. Requires file write permission.
 }
 ```
 
-**Response**: `201 Created`
+**Response**: `201 Created` (new file) or `200 OK` (overwrite)
 
 #### `POST /api/v1/files?action=upload`
 
-Upload a file via multipart/form-data.
+Upload a file via multipart/form-data. If a file with the same name already exists in the same scope (user + project + folder), the existing file is overwritten and the original file ID is preserved.
 
 **Request**: `multipart/form-data`
 - `file` (required) - The file to upload
@@ -1696,7 +1696,7 @@ Upload a file via multipart/form-data.
 - `folderPath` (optional) - Folder path within project
 - `tags` (optional) - JSON array of tag associations
 
-**Response**: `201 Created`
+**Response**: `201 Created` (new file) or `200 OK` (overwrite)
 
 #### `POST /api/v1/files?action=generate-thumbnails`
 
@@ -1827,29 +1827,29 @@ Promote an attachment to general or project files.
 
 ### Files & Images (Legacy)
 
-#### `GET /api/files/[id]`
+#### `GET /api/v1/files/[id]`
 
 Download a file by ID.
 
-#### `GET /api/images`
+#### `GET /api/v1/images`
 
 List user's images.
 
-#### `POST /api/images`
+#### `POST /api/v1/images`
 
 Upload an image.
 
 **Request**: `multipart/form-data`
 
-#### `GET /api/images/[id]`
+#### `GET /api/v1/images/[id]`
 
 Get image metadata.
 
-#### `DELETE /api/images/[id]`
+#### `DELETE /api/v1/images/[id]`
 
 Delete an image.
 
-#### `POST /api/images/generate`
+#### `POST /api/v1/images?action=generate`
 
 Generate an image using configured profile.
 
@@ -1868,7 +1868,7 @@ Generate an image using configured profile.
 
 Manage folder entities for file organization. Folders are first-class entities stored in the database.
 
-#### `GET /api/files/folders`
+#### `GET /api/v1/files/folders`
 
 List all folders for the authenticated user.
 
@@ -1894,7 +1894,7 @@ List all folders for the authenticated user.
 }
 ```
 
-#### `POST /api/files/folders`
+#### `POST /api/v1/files/folders`
 
 Create a new folder.
 
@@ -1924,7 +1924,7 @@ Create a new folder.
 }
 ```
 
-#### `PATCH /api/files/folders`
+#### `PATCH /api/v1/files/folders`
 
 Rename a folder. Updates the folder entity and all affected file paths.
 
@@ -1950,7 +1950,7 @@ Rename a folder. Updates the folder entity and all affected file paths.
 }
 ```
 
-#### `DELETE /api/files/folders`
+#### `DELETE /api/v1/files/folders`
 
 Delete an empty folder. Returns error if folder contains files or subfolders.
 
@@ -2140,7 +2140,7 @@ Open the data directory in the system file browser (not available in Docker).
 
 ### Tools & Backup (Legacy)
 
-#### `POST /api/tools/backup/create`
+#### `POST /api/v1/system/backup`
 
 Create a full backup.
 
@@ -2153,27 +2153,27 @@ Create a full backup.
 }
 ```
 
-#### `GET /api/tools/backup/list`
+#### `GET /api/v1/system/backup`
 
-List cloud backups.
+List backups.
 
-#### `GET /api/tools/backup/preview`
+#### `GET /api/v1/system/backup/[id]?action=preview`
 
 Preview backup contents.
 
-#### `POST /api/tools/backup/restore`
+#### `POST /api/v1/system/restore`
 
 Restore from backup.
 
-#### `GET /api/tools/backup/download`
+#### `GET /api/v1/system/backup/[id]?action=download`
 
 Download a backup file.
 
-#### `DELETE /api/tools/backup/delete`
+#### `DELETE /api/v1/system/backup/[id]`
 
-Delete a cloud backup.
+Delete a backup.
 
-#### `POST /api/tools/delete-data`
+#### `POST /api/v1/system/tools?action=delete-data`
 
 Delete all user data.
 
@@ -2185,17 +2185,17 @@ Delete all user data.
 }
 ```
 
-#### `POST /api/tools/capabilities-report/generate`
+#### `POST /api/v1/system/tools?action=capabilities-report-generate`
 
 Generate a capabilities report.
 
-#### `GET /api/tools/capabilities-report/list`
+#### `GET /api/v1/system/tools?action=capabilities-report-list`
 
 List generated reports.
 
-#### `GET /api/tools/capabilities-report/[id]`
+#### `GET /api/v1/system/tools?action=capabilities-report-get`
 
-Download a report.
+Get a specific report.
 
 ---
 
@@ -2320,7 +2320,7 @@ Update theme preference.
 
 ### Search
 
-#### `GET /api/v1/search?q=query`
+#### `GET /api/v1/ui/search?q=query`
 
 Global search across characters and chats.
 
@@ -2377,9 +2377,9 @@ Pause a job.
 
 Resume a paused job.
 
-#### `GET /api/tools/tasks-queue`
+#### `GET /api/v1/system/tools?action=tasks-queue`
 
-Get tasks queue status (UI endpoint).
+Get tasks queue status.
 
 ---
 
@@ -2433,8 +2433,8 @@ List all available LLM tools that can be enabled/disabled per chat.
       "unavailableReason": "Chat must be associated with a project"
     },
     {
-      "id": "manage_files",
-      "name": "Manage Files",
+      "id": "file_management",
+      "name": "File Management",
       "description": "Read, write, and manage files in the file system",
       "source": "built-in",
       "category": "files",
@@ -2461,7 +2461,7 @@ List all available LLM tools that can be enabled/disabled per chat.
 | `search_memories` | Search Memories | Search character memories | Always available |
 | `search_web` | Search Web | Web search for current info | Requires web search enabled in connection profile |
 | `project_info` | Project Info | Access project files | Chat must be in a project |
-| `manage_files` | Manage Files | File system operations | Always available |
+| `file_management` | File Management | File system operations | Always available |
 | `search_help` | Search Help | Search Quilltap documentation | Always available |
 
 **Notes:**

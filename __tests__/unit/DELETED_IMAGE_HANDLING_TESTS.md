@@ -97,8 +97,7 @@ The tests cover all modified components:
 3. **PhotoGalleryModal** - Modal gallery for chat, character, and persona photos
 4. **ToolMessage** - (Covered indirectly through integration tests)
 5. **ChatGalleryImageViewModal** - (Covered indirectly through integration tests)
-6. **GalleryImageViewModal** - (Covered indirectly through integration tests)
-7. **ImageDetailModal** - (Covered indirectly through integration tests)
+6. **ImageDetailModal** - (Covered indirectly through integration tests)
 
 ### Functionality Covered
 
@@ -115,7 +114,7 @@ The tests cover all modified components:
 - Proper styling and layout in different contexts
 
 #### Cleanup Operations
-- DELETE API calls to `/api/images/:id`
+- DELETE API calls to `/api/v1/images/:id`
 - Confirmation dialogs before deletion
 - Error handling and toast notifications
 - Component refresh after cleanup
@@ -182,10 +181,10 @@ Consider adding:
 
 - Main implementation: `features/memory.md`
 - Component files:
-  - `components/images/DeletedImagePlaceholder.tsx`
-  - `components/images/image-gallery.tsx`
-  - `components/images/PhotoGalleryModal.tsx`
-  - `components/chat/ToolMessage.tsx`
-  - `components/chat/ChatGalleryImageViewModal.tsx`
-  - `components/images/GalleryImageViewModal.tsx`
-  - `components/images/ImageDetailModal.tsx`
+  - `/components/images/DeletedImagePlaceholder.tsx`
+  - `/components/images/image-gallery.tsx`
+  - `/components/images/PhotoGalleryModal.tsx`
+  - `/components/chat/ToolMessage.tsx`
+  - `/components/chat/ChatGalleryImageViewModal.tsx`
+  - `/components/images/ImageDetailModal.tsx`
+  - `/components/images/image-detail/ImageDetailModal.tsx`

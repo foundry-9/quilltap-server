@@ -73,6 +73,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          characterId,
           maxMemories,
           maxAgeMonths,
           minImportance,

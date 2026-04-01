@@ -7,7 +7,7 @@
  * system that exports entities as JSON.
  *
  * Physical backups:
- * - Run automatically on each app startup (non-blocking)
+ * - Run automatically once per day (checked on startup, skipped if recent)
  * - Are stored under <data>/data/backups/
  * - Follow a retention policy: all for 7 days, weekly for 4 weeks, monthly
  *   for 12 months, yearly forever
@@ -29,6 +29,9 @@ const moduleLogger = logger.child({ module: 'database:physical-backup' });
 
 /** Regex to parse backup filenames: quilltap-YYYY-MM-DDTHHmmss.db */
 const BACKUP_FILENAME_RE = /^quilltap-(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})(\d{2})\.db$/;
+
+/** Regex to parse LLM logs backup filenames: quilltap-llm-logs-YYYY-MM-DDTHHmmss.db */
+const LLM_LOGS_BACKUP_FILENAME_RE = /^quilltap-llm-logs-(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})(\d{2})\.db$/;
 
 /**
  * Generate a backup filename from the current timestamp.
@@ -72,6 +75,104 @@ function parseBackupFilename(filename: string): Date | null {
   );
 }
 
+/**
+ * Generate a backup filename for the LLM logs database.
+ *
+ * Format: quilltap-llm-logs-YYYY-MM-DDTHHmmss.db
+ */
+function generateLLMLogsBackupFilename(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const timestamp = [
+    now.getFullYear(),
+    '-', pad(now.getMonth() + 1),
+    '-', pad(now.getDate()),
+    'T',
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+    pad(now.getSeconds()),
+  ].join('');
+
+  return `quilltap-llm-logs-${timestamp}.db`;
+}
+
+/**
+ * Parse an LLM logs backup filename into a Date.
+ *
+ * @returns Date if filename matches the expected format, null otherwise
+ */
+function parseLLMLogsBackupFilename(filename: string): Date | null {
+  const match = LLM_LOGS_BACKUP_FILENAME_RE.exec(filename);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute, second] = match;
+  return new Date(
+    parseInt(year, 10),
+    parseInt(month, 10) - 1,
+    parseInt(day, 10),
+    parseInt(hour, 10),
+    parseInt(minute, 10),
+    parseInt(second, 10),
+  );
+}
+
+// ============================================================================
+// Backup interval
+// ============================================================================
+
+/** Minimum interval between automatic physical backups (24 hours). */
+const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Find the most recent backup matching a given parse function.
+ *
+ * @returns Date of the newest backup, or null if none exist
+ */
+function findMostRecentBackup(
+  parseFn: (filename: string) => Date | null,
+): Date | null {
+  const backupsDir = getBackupsDir();
+  if (!fs.existsSync(backupsDir)) return null;
+
+  let newest: Date | null = null;
+  for (const filename of fs.readdirSync(backupsDir)) {
+    const date = parseFn(filename);
+    if (date && (!newest || date.getTime() > newest.getTime())) {
+      newest = date;
+    }
+  }
+  return newest;
+}
+
+/**
+ * Check whether enough time has elapsed since the last backup.
+ */
+function shouldCreateBackup(
+  parseFn: (filename: string) => Date | null,
+  label: string,
+): boolean {
+  const lastBackup = findMostRecentBackup(parseFn);
+  if (!lastBackup) {
+    moduleLogger.debug(`No existing ${label} backups found, backup needed`);
+    return true;
+  }
+
+  const ageMs = Date.now() - lastBackup.getTime();
+  if (ageMs < BACKUP_INTERVAL_MS) {
+    moduleLogger.debug(`Recent ${label} backup exists, skipping`, {
+      lastBackup: lastBackup.toISOString(),
+      ageHours: Math.round(ageMs / (60 * 60 * 1000) * 10) / 10,
+    });
+    return false;
+  }
+
+  moduleLogger.debug(`Last ${label} backup is old enough, backup needed`, {
+    lastBackup: lastBackup.toISOString(),
+    ageHours: Math.round(ageMs / (60 * 60 * 1000) * 10) / 10,
+  });
+  return true;
+}
+
 // ============================================================================
 // Physical Backup
 // ============================================================================
@@ -83,12 +184,17 @@ function parseBackupFilename(filename: string): Date | null {
  * This creates a consistent, hot copy of the database without requiring any
  * locks or interrupting normal operations.
  *
+ * Skips the backup if the most recent one is less than 24 hours old.
  * Partial files are cleaned up on failure.
  *
  * @param db - The better-sqlite3 database instance
- * @returns The path to the created backup file, or null on failure
+ * @returns The path to the created backup file, or null if skipped/failed
  */
 export async function createPhysicalBackup(db: DatabaseType): Promise<string | null> {
+  if (!shouldCreateBackup(parseBackupFilename, 'main database')) {
+    return null;
+  }
+
   const backupsDir = getBackupsDir();
   const filename = generateBackupFilename();
   const backupPath = path.join(backupsDir, filename);
@@ -139,6 +245,66 @@ export async function createPhysicalBackup(db: DatabaseType): Promise<string | n
 }
 
 // ============================================================================
+// LLM Logs Physical Backup
+// ============================================================================
+
+/**
+ * Create a physical backup of the LLM logs database.
+ *
+ * Same approach as createPhysicalBackup but for quilltap-llm-logs.db.
+ *
+ * @param db - The better-sqlite3 database instance for LLM logs
+ * @returns The path to the created backup file, or null on failure
+ */
+export async function createLLMLogsPhysicalBackup(db: DatabaseType): Promise<string | null> {
+  if (!shouldCreateBackup(parseLLMLogsBackupFilename, 'LLM logs')) {
+    return null;
+  }
+
+  const backupsDir = getBackupsDir();
+  const filename = generateLLMLogsBackupFilename();
+  const backupPath = path.join(backupsDir, filename);
+
+  try {
+    if (!fs.existsSync(backupsDir)) {
+      fs.mkdirSync(backupsDir, { recursive: true });
+    }
+
+    moduleLogger.info('Starting LLM logs physical backup', {
+      destination: backupPath,
+    });
+
+    await db.backup(backupPath);
+
+    const stat = fs.statSync(backupPath);
+    moduleLogger.info('LLM logs physical backup created', {
+      path: backupPath,
+      sizeBytes: stat.size,
+    });
+
+    return backupPath;
+  } catch (error) {
+    moduleLogger.error('LLM logs physical backup failed', {
+      destination: backupPath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    try {
+      if (fs.existsSync(backupPath)) {
+        fs.unlinkSync(backupPath);
+      }
+    } catch (cleanupError) {
+      moduleLogger.error('Failed to clean up partial LLM logs backup file', {
+        path: backupPath,
+        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+      });
+    }
+
+    return null;
+  }
+}
+
+// ============================================================================
 // Retention Policy
 // ============================================================================
 
@@ -162,104 +328,123 @@ export async function applyRetentionPolicy(): Promise<void> {
     }
 
     const files = fs.readdirSync(backupsDir);
+
+    // Collect main DB backups and LLM logs backups separately
     const backups: { filename: string; date: Date }[] = [];
+    const llmLogsBackups: { filename: string; date: Date }[] = [];
 
     for (const filename of files) {
+      // Check LLM logs pattern first (it's more specific)
+      const llmLogsDate = parseLLMLogsBackupFilename(filename);
+      if (llmLogsDate) {
+        llmLogsBackups.push({ filename, date: llmLogsDate });
+        continue;
+      }
+
       const date = parseBackupFilename(filename);
       if (date) {
         backups.push({ filename, date });
       }
     }
 
-    if (backups.length === 0) {
-      return;
-    }
+    // Apply retention to both backup sets
+    const allSets = [
+      { label: 'main', items: backups },
+      { label: 'llm-logs', items: llmLogsBackups },
+    ];
 
-    // Sort newest first
-    backups.sort((a, b) => b.date.getTime() - a.date.getTime());
-
-    const now = new Date();
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const keep = new Set<string>();
-
-    // Phase 1: Keep all backups < 7 days old
-    for (const backup of backups) {
-      const ageMs = now.getTime() - backup.date.getTime();
-      if (ageMs < 7 * msPerDay) {
-        keep.add(backup.filename);
+    for (const { label, items } of allSets) {
+      if (items.length === 0) {
+        continue;
       }
-    }
 
-    // Phase 2: Keep 1 per week for weeks 1-4 (days 7-28)
-    for (let week = 1; week <= 4; week++) {
-      const weekStart = 7 * week * msPerDay;
-      const weekEnd = 7 * (week + 1) * msPerDay;
+      // Sort newest first
+      items.sort((a, b) => b.date.getTime() - a.date.getTime());
 
-      // Find the most recent backup in this week window
-      for (const backup of backups) {
+      const now = new Date();
+      const msPerDay = 24 * 60 * 60 * 1000;
+      const keep = new Set<string>();
+
+      // Phase 1: Keep all backups < 7 days old
+      for (const backup of items) {
         const ageMs = now.getTime() - backup.date.getTime();
-        if (ageMs >= weekStart && ageMs < weekEnd) {
+        if (ageMs < 7 * msPerDay) {
           keep.add(backup.filename);
-          break; // Most recent in this bucket (already sorted newest first)
         }
       }
-    }
 
-    // Phase 3: Keep 1 per month for months 1-12 (approx days 28-365)
-    for (let month = 1; month <= 12; month++) {
-      const monthStart = (28 + (month - 1) * 30) * msPerDay;
-      const monthEnd = (28 + month * 30) * msPerDay;
+      // Phase 2: Keep 1 per week for weeks 1-4 (days 7-28)
+      for (let week = 1; week <= 4; week++) {
+        const weekStart = 7 * week * msPerDay;
+        const weekEnd = 7 * (week + 1) * msPerDay;
 
-      for (const backup of backups) {
+        for (const backup of items) {
+          const ageMs = now.getTime() - backup.date.getTime();
+          if (ageMs >= weekStart && ageMs < weekEnd) {
+            keep.add(backup.filename);
+            break;
+          }
+        }
+      }
+
+      // Phase 3: Keep 1 per month for months 1-12 (approx days 28-365)
+      for (let month = 1; month <= 12; month++) {
+        const monthStart = (28 + (month - 1) * 30) * msPerDay;
+        const monthEnd = (28 + month * 30) * msPerDay;
+
+        for (const backup of items) {
+          const ageMs = now.getTime() - backup.date.getTime();
+          if (ageMs >= monthStart && ageMs < monthEnd) {
+            keep.add(backup.filename);
+            break;
+          }
+        }
+      }
+
+      // Phase 4: Keep 1 per year for anything older than 12 months
+      const yearBuckets = new Map<number, string>();
+      for (const backup of items) {
         const ageMs = now.getTime() - backup.date.getTime();
-        if (ageMs >= monthStart && ageMs < monthEnd) {
-          keep.add(backup.filename);
-          break;
+        if (ageMs >= 388 * msPerDay) {
+          const year = backup.date.getFullYear();
+          if (!yearBuckets.has(year)) {
+            yearBuckets.set(year, backup.filename);
+          }
         }
       }
-    }
+      for (const filename of yearBuckets.values()) {
+        keep.add(filename);
+      }
 
-    // Phase 4: Keep 1 per year for anything older than 12 months
-    const yearBuckets = new Map<number, string>();
-    for (const backup of backups) {
-      const ageMs = now.getTime() - backup.date.getTime();
-      if (ageMs >= 388 * msPerDay) { // ~12.9 months
-        const year = backup.date.getFullYear();
-        if (!yearBuckets.has(year)) {
-          yearBuckets.set(year, backup.filename);
+      // Delete backups not in the keep set
+      let deleted = 0;
+      for (const backup of items) {
+        if (!keep.has(backup.filename)) {
+          try {
+            fs.unlinkSync(path.join(backupsDir, backup.filename));
+            deleted++;
+          } catch (error) {
+            moduleLogger.warn('Failed to delete old backup', {
+              filename: backup.filename,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         }
       }
-    }
-    for (const filename of yearBuckets.values()) {
-      keep.add(filename);
-    }
 
-    // Delete backups not in the keep set
-    let deleted = 0;
-    for (const backup of backups) {
-      if (!keep.has(backup.filename)) {
-        try {
-          fs.unlinkSync(path.join(backupsDir, backup.filename));
-          deleted++;
-        } catch (error) {
-          moduleLogger.warn('Failed to delete old backup', {
-            filename: backup.filename,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
+      if (deleted > 0) {
+        moduleLogger.info('Retention policy applied', {
+          database: label,
+          totalBackups: items.length,
+          kept: keep.size,
+          deleted,
+        });
+      } else {
+        moduleLogger.debug('Retention policy applied, no backups deleted', {
+          database: label,
+          totalBackups: items.length,
+        });
       }
-    }
-
-    if (deleted > 0) {
-      moduleLogger.info('Retention policy applied', {
-        totalBackups: backups.length,
-        kept: keep.size,
-        deleted,
-      });
-    } else {
-      moduleLogger.debug('Retention policy applied, no backups deleted', {
-        totalBackups: backups.length,
-      });
     }
   } catch (error) {
     moduleLogger.error('Failed to apply retention policy', {

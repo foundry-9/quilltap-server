@@ -23,7 +23,7 @@ function TestStatusIndicator({ status, error }: { status?: TestStatus; error?: s
     case 'success':
       return (
         <svg
-          className="w-5 h-5 text-green-500"
+          className="w-5 h-5 qt-text-success"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -35,7 +35,7 @@ function TestStatusIndicator({ status, error }: { status?: TestStatus; error?: s
       return (
         <div className="flex items-center gap-2">
           <svg
-            className="w-5 h-5 text-red-500 flex-shrink-0"
+            className="w-5 h-5 qt-text-destructive flex-shrink-0"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -47,13 +47,13 @@ function TestStatusIndicator({ status, error }: { status?: TestStatus; error?: s
               d="M6 18L18 6M6 6l12 12"
             />
           </svg>
-          {error && <span className="qt-text-xs text-red-500">{error}</span>}
+          {error && <span className="qt-text-xs qt-text-destructive">{error}</span>}
         </div>
       )
     case 'pending':
     default:
       return (
-        <span className="w-3 h-3 rounded-full bg-gray-300 inline-block" />
+        <span className="w-3 h-3 rounded-full qt-bg-muted inline-block" />
       )
   }
 }
@@ -296,7 +296,7 @@ export function TestConfirmStep({ state, dispatch, onComplete }: StepProps) {
           )}
         </button>
         {state.testResults.chat === 'success' && (
-          <span className="qt-text-small text-green-600">All tests passed</span>
+          <span className="qt-text-small qt-text-success">All tests passed</span>
         )}
       </div>
 

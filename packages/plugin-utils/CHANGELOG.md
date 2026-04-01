@@ -2,6 +2,18 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [1.4.0] - 2026-02-25
+
+### Added
+
+- **Host URL Rewriting Utilities**
+  - `isVMEnvironment()` - Check if running in a VM/container environment (Docker, Lima, WSL2)
+  - `resolveHostGateway()` - Resolve the host gateway address with multi-strategy fallback
+  - `rewriteLocalhostUrl()` - Transparently rewrite localhost URLs to point at the host gateway
+  - Self-contained environment detection (no dependency on Quilltap core `lib/paths`)
+  - Uses `createPluginLogger` for consistent logging within the plugin ecosystem
+  - New export path: `@quilltap/plugin-utils/host-rewrite`
+
 ## [1.3.0] - 2026-01-30
 
 ### Added

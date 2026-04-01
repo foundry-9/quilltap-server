@@ -16,12 +16,12 @@ import type {
   ToolExecutionResult,
   UniversalTool,
 } from '@quilltap/plugin-types';
-import { logger } from '@/lib/logger';
+import { createPluginLogger } from '@quilltap/plugin-utils';
 import { connectionManager } from './connection-manager';
 import { parseServerConfigs } from './security';
 import type { MCPPluginConfig } from './types';
 
-const pluginLogger = logger.child({ module: 'mcp-plugin' });
+const pluginLogger = createPluginLogger('mcp-plugin');
 
 /**
  * Parse plugin configuration from tool config

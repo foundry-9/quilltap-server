@@ -351,8 +351,6 @@ async function handleCompleteWrite(request: NextRequest, user: any, repos: any):
 
     // Upload to file storage
     const { storageKey } = await fileStorageManager.uploadFile({
-      userId: user.id,
-      fileId,
       filename,
       content: contentBuffer,
       contentType: mimeType,

@@ -1,6 +1,6 @@
 # Chat Settings
 
-> **[Open this page in Quilltap](/foundry/salon)**
+> **[Open this page in Quilltap](/settings?tab=chat)**
 
 Chat Settings control global behavior for all your chats in Quilltap, including how conversations look, how they're stored, and which services are used for special features.
 

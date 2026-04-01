@@ -97,11 +97,10 @@ Edit your `package.json`:
   ],
   "author": "Your Name <you@example.com>",
   "license": "MIT",
-  "dependencies": {
-    "@quilltap/plugin-types": "^1.2.0",
-    "@quilltap/plugin-utils": "^1.2.0"
-  },
+  "dependencies": {},
   "devDependencies": {
+    "@quilltap/plugin-types": "^1.2.0",
+    "@quilltap/plugin-utils": "^1.2.0",
     "esbuild": "^0.20.0",
     "typescript": "^5.0.0"
   }
@@ -549,11 +548,10 @@ qtap-plugin-template-novel/
   "keywords": ["quilltap", "quilltap-plugin", "roleplay", "template", "novel"],
   "author": "Your Name",
   "license": "MIT",
-  "dependencies": {
-    "@quilltap/plugin-types": "^1.2.0",
-    "@quilltap/plugin-utils": "^1.2.0"
-  },
+  "dependencies": {},
   "devDependencies": {
+    "@quilltap/plugin-types": "^1.2.0",
+    "@quilltap/plugin-utils": "^1.2.0",
     "esbuild": "^0.20.0",
     "typescript": "^5.0.0"
   }

@@ -19,6 +19,8 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getNpmPluginsDir } from '@/lib/paths';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { runBackupCheckpoint } from '@/lib/database/backends/sqlite/protection';
+import { getRawLLMLogsDatabase } from '@/lib/database/backends/sqlite/llm-logs-client';
+import { runLLMLogsBackupCheckpoint } from '@/lib/database/backends/sqlite/llm-logs-protection';
 import type { BackupManifest, BackupData, ChatWithMessages } from './types';
 import type { ChatEvent } from '@/lib/schemas/types';
 
@@ -51,6 +53,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     projects,
     llmLogs,
     pluginConfigs,
+    chatSettingsResult,
+    filePermissions,
   ] = await Promise.all([
     repos.characters.findAll(),
     repos.chats.findAll(),
@@ -70,6 +74,10 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     repos.llmLogs.findAll(10000), // High limit to get all user logs
     // Get plugin configurations
     globalRepos.pluginConfigs.findByUserId(userId),
+    // Get chat settings (returns single object or null)
+    globalRepos.chatSettings.findByUserId(userId),
+    // Get file write permissions
+    globalRepos.filePermissions.findByUserId(userId),
   ]);
 
   // Exclude backup files from the file list - we don't want to back up old backups
@@ -103,6 +111,9 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     // Keep apiKeyId reference but note that actual keys aren't backed up
   }));
 
+  // Wrap chatSettings in an array for backup (it's a single record per user)
+  const chatSettings = chatSettingsResult ? [chatSettingsResult] : [];
+
   return {
     characters,
     chats,
@@ -118,6 +129,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     projects,
     llmLogs,
     pluginConfigs,
+    chatSettings,
+    filePermissions,
   };
 }
 
@@ -149,6 +162,7 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
 
   return {
     version: '1.0',
+    backupFormat: 2,
     createdAt: new Date().toISOString(),
     userId,
     appVersion: APP_VERSION,
@@ -168,6 +182,8 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       projects: data.projects.length,
       llmLogs: data.llmLogs.length,
       pluginConfigs: data.pluginConfigs?.length || 0,
+      chatSettings: data.chatSettings?.length || 0,
+      filePermissions: data.filePermissions?.length || 0,
       npmPlugins: countNpmPlugins(),
     },
   };
@@ -215,6 +231,12 @@ export async function createBackup(userId: string): Promise<{
     runBackupCheckpoint(rawDb);
   }
 
+  // Also checkpoint the LLM logs database
+  const rawLLMLogsDb = getRawLLMLogsDatabase();
+  if (rawLLMLogsDb) {
+    runLLMLogsBackupCheckpoint(rawLLMLogsDb);
+  }
+
   // Collect all user data
   const data = await collectUserData(userId);
   const manifest = createManifest(userId, data);
@@ -246,6 +268,8 @@ export async function createBackup(userId: string): Promise<{
     await writeJsonFile(path.join(stagingDir, 'data', 'projects.json'), data.projects);
     await writeJsonFile(path.join(stagingDir, 'data', 'llm-logs.json'), data.llmLogs);
     await writeJsonFile(path.join(stagingDir, 'data', 'plugin-configs.json'), data.pluginConfigs || []);
+    await writeJsonFile(path.join(stagingDir, 'data', 'chat-settings.json'), data.chatSettings || []);
+    await writeJsonFile(path.join(stagingDir, 'data', 'file-permissions.json'), data.filePermissions || []);
 
     moduleLogger.debug('Wrote all JSON data files to staging directory');
 
@@ -255,7 +279,8 @@ export async function createBackup(userId: string): Promise<{
       if (file.storageKey) {
         try {
           const fileBuffer = await fileStorageManager.downloadFile(file);
-          const fileDest = path.join(stagingDir, 'files', file.category, `${file.id}_${file.originalFilename}`);
+          // Use storageKey as path in backup (preserves real folder structure)
+          const fileDest = path.join(stagingDir, 'files', file.storageKey);
           await fs.promises.mkdir(path.dirname(fileDest), { recursive: true });
           await fs.promises.writeFile(fileDest, fileBuffer);
           filesStaged++;
