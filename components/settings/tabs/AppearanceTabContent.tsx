@@ -1,0 +1,57 @@
+'use client'
+
+import { useSubsystemInfo } from '@/components/providers/theme-provider'
+import { useChatSettingsContext } from '@/components/settings/chat-settings/ChatSettingsProvider'
+import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
+import AppearanceTab from '@/components/settings/appearance-tab'
+import { AvatarSettings } from '@/components/settings/chat-settings/AvatarSettings'
+import TagsTab from '@/components/settings/tags-tab'
+
+export function AppearanceTabContent() {
+  const info = useSubsystemInfo('calliope')
+  const {
+    settings,
+    loading,
+    saving,
+    handleAvatarModeChange,
+    handleAvatarStyleChange,
+  } = useChatSettingsContext()
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-6">
+        {info.thumbnail && (
+          <img src={info.thumbnail} alt="" className="w-10 h-10 rounded-lg object-cover opacity-60" />
+        )}
+        <p className="qt-text-small qt-text-muted italic">{info.description}</p>
+      </div>
+
+      <div className="space-y-4">
+        <CollapsibleCard title="Appearance" description="Theme selection, color mode, and display options">
+          <AppearanceTab />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Avatar Settings" description="Configure avatar display mode and style">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-muted-foreground">Loading settings...</div>
+            </div>
+          ) : settings ? (
+            <AvatarSettings
+              settings={settings}
+              saving={saving}
+              onAvatarModeChange={handleAvatarModeChange}
+              onAvatarStyleChange={handleAvatarStyleChange}
+            />
+          ) : (
+            <div className="qt-alert-error">Failed to load settings</div>
+          )}
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Tags" description="Create and manage tags for organizing your content">
+          <TagsTab />
+        </CollapsibleCard>
+      </div>
+    </div>
+  )
+}

@@ -73,6 +73,13 @@ export function ProfileForm({
     }
   }, [])
 
+  // Auto-default allowToolUse based on provider capability when creating new profiles
+  useEffect(() => {
+    if (editingId) return // Don't override when editing existing profiles
+    const requirements = getProviderRequirements(formData.provider)
+    onFormSetField('allowToolUse', requirements.supportsToolUse)
+  }, [formData.provider, editingId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div id="profile-form" className="bg-card border border-border rounded-lg p-6">
       <h3 className="text-lg font-semibold mb-4">
@@ -423,6 +430,19 @@ export function ProfileForm({
             />
             <label htmlFor="isDangerousCompatible" className="text-sm">
               Uncensored-compatible (suitable for dangerous/sensitive content routing)
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="allowToolUse"
+              name="allowToolUse"
+              checked={formData.allowToolUse}
+              onChange={(e) => onFormChange('allowToolUse', e.target.checked)}
+              className="w-4 h-4 rounded border-input"
+            />
+            <label htmlFor="allowToolUse" className="text-sm">
+              Allow tool use (overrides chat and project tool settings when disabled)
             </label>
           </div>
           {/* Web Search Tool - available for all providers with tool support */}

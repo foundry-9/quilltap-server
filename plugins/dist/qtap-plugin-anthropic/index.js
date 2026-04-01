@@ -220,7 +220,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/@anthropic-ai/sdk/version.mjs
-var VERSION = "0.74.0";
+var VERSION = "0.78.0";
 
 // node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -4823,6 +4823,11 @@ var BaseAnthropic = class {
       return { bodyHeaders: void 0, body };
     } else if (typeof body === "object" && (Symbol.asyncIterator in body || Symbol.iterator in body && "next" in body && typeof body.next === "function")) {
       return { bodyHeaders: void 0, body: ReadableStreamFrom(body) };
+    } else if (typeof body === "object" && headers.values.get("content-type") === "application/x-www-form-urlencoded") {
+      return {
+        bodyHeaders: { "content-type": "application/x-www-form-urlencoded" },
+        body: this.stringifyQuery(body)
+      };
     } else {
       return __classPrivateFieldGet(this, _BaseAnthropic_encoder, "f").call(this, { body, headers });
     }
@@ -5080,7 +5085,7 @@ var safeJSON2 = (text) => {
 var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "6.21.0";
+var VERSION2 = "6.22.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser2 = () => {
@@ -9329,7 +9334,7 @@ var Files2 = class extends APIResource2 {
    * a JSON request with a file ID.
    */
   create(containerID, body, options) {
-    return this._client.post(path2`/containers/${containerID}/files`, multipartFormRequestOptions2({ body, ...options }, this._client));
+    return this._client.post(path2`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Retrieve Container File
@@ -11209,7 +11214,7 @@ var Videos = class extends APIResource2 {
   }
 };
 
-// ../../../node_modules/openai/resources/webhooks.mjs
+// ../../../node_modules/openai/resources/webhooks/webhooks.mjs
 var _Webhooks_instances;
 var _Webhooks_validateSecret;
 var _Webhooks_getRequiredHeader;
@@ -12266,7 +12271,8 @@ var capabilities = {
   chat: true,
   imageGeneration: false,
   embeddings: false,
-  webSearch: false
+  webSearch: false,
+  toolUse: true
 };
 var attachmentSupport = {
   supportsAttachments: true,

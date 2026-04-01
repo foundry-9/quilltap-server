@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an AI assistant that actually knows what they're working on. Connect to any LLM provider, organize your work into projects with persistent files and context, create characters with real personalities, and build a private AI environment that learns and remembers.
 
+### Spelling **IMPORTANT**
+
+This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", as in "quilt" + "tap". There is a linting rule to keep you from using that word. Please, please, never call anything in this system "quilttap" because that is **WRONG.**
+
 ## Technology Stack
 
 - **Frontend Framework**: React via Next.js
@@ -14,11 +18,13 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 - **Package Manager**: npm
 - **Testing**: Jest and coverage tools (Istanbul/nyc), Playwright
 - **Data Storage**: SQLite with zero external dependencies. Uses `better-sqlite3` driver directly. Data models are defined as TypeScript interfaces with Zod schemas.
-- **File Storage**: local or optional S3-compatible storage (AWS S3, MinIO, Cloudflare R2, etc.)
+- **File Storage**: local filesystem only
 - **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
 - **Design Documentation**: Storybook
 - **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern
 - **User Documentation**: Found in `/help/` and maintained and searchable using MessagePack
+- **Electron**: Electron front-end to Lima/WSL2 backend is primary way to use app
+- **Virtualization**: Lima + VZ (macOS) / WSL2 (Windows) for self-contained app distribution
 
 ## API Architecture
 
@@ -71,10 +77,12 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 - **Prospero** - the agentic and tool-using systems, and the way LLMs work — UI route: `/prospero` (was `/projects`)
 - **Aurora** - the complex character model and how it interacts with the prompts — UI route: `/aurora` (was `/characters`)
 - **Calliope** - the UX/UI and themes systems
-- **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/foundry` (was `/tools`)
+- **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/settings` (was `/foundry`, `/tools`); all settings now live on a single tabbed page with 7 tabs
 - **The Salon** - the chat interface — UI route: `/salon` (was `/chats`)
+- **Pascal the Croupier** - the RNG and game state tracking system — merged into Chat tab at `/settings?tab=chat`
+- **Saquel Ytzama the Keeper of Secrets** - the encryption, API key management, and secrets system — merged into Data & System tab at `/settings?tab=system`
 
-Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes redirect to new ones.
+Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes (`/foundry/*`) redirect to the appropriate `/settings` tab.
 
 ## Current State
 
@@ -85,8 +93,8 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - [help/](help/) - User documentation for every page and every visible feature - **IMPORTANT**: If anything in this directory is updated that we must run `npm run build:help` and add the changes from that process to the list of files to be committed
   - [.githooks/README.md](.githooks/README.md) — Documents the custom Git hook directory, especially the pre-commit script that lints, tests, bumps package versions, and how to configure/disable hooks — Grade: A (current dev workflow) — Last updated: 2025-11-18
   - [DEAD-CODE-REPORT.md](DEAD-CODE-REPORT.md) — Dead code analysis report with cleanup history, known false positives, and remaining low-priority items — Grade: A (reflects cleanup completed 2025-12-27) — Last updated: 2025-12-27
-  - [DEVELOPMENT.md](DEVELOPMENT.md) — Contributor guide covering repo structure, prerequisites, running the app (Docker and local), testing, linting, logging, data storage, and plugin development pointers — Grade: A (primary contributor reference) — Last updated: 2026-01-01
-  - [README.md](README.md) — High-level product overview, feature list, tech stack, setup instructions, deployment guidance, configuration, troubleshooting, and support links — Grade: A (source of truth for the product) — Last updated: 2026-01-23
+  - [DEVELOPMENT.md](DEVELOPMENT.md) — Contributor guide covering repo structure, prerequisites, running the app (Electron, Docker, and local), Electron/Lima VM development workflow, testing, linting, logging, data storage, and plugin development pointers — Grade: A (primary contributor reference) — Last updated: 2026-02-14
+  - [README.md](README.md) — High-level product overview, feature list, tech stack, setup instructions (Electron and Docker), deployment guidance, configuration, troubleshooting, and support links — Grade: A (source of truth for the product) — Last updated: 2026-02-14
   - [features/ROADMAP.md](features/ROADMAP.md) — Planned features and completed work for v2.7 and beyond — Grade: A (active roadmap) — Last updated: 2026-01-23
   - [`__tests__/unit/DELETED_IMAGE_HANDLING_TESTS.md`](__tests__/unit/DELETED_IMAGE_HANDLING_TESTS.md) — Describes the unit tests covering deleted image placeholders, gallery handling, modal behavior, and clean-up flows (31 total tests) — Grade: A (matches implemented tests) — Last updated: 2025-11-27
   - [components/characters/system-prompts-editor/README.md](components/characters/system-prompts-editor/README.md) — Documentation for the reorganized character system prompts editor: structure, hooks, components, APIs, logging, and styling — Grade: A (module-level documentation) — Last updated: 2025-12-17
@@ -96,8 +104,10 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - [components/settings/prompts/README.md](components/settings/prompts/README.md) — Notes on the prompts settings tab after refactor: types, usePrompts hook, prompt cards/lists/modals, and design principles — Grade: A (accurate description) — Last updated: 2025-12-17
   - [components/tools/tasks-queue/README.md](components/tools/tasks-queue/README.md) — Overview of the tasks queue card module: types, hooks, TaskItem/Filters/Details components, API integration, and structure — Grade: A (current tasks queue docs) — Last updated: 2025-12-17
   - [docs/API.md](docs/API.md) — Comprehensive Quilltap API reference for v1 REST routes (characters, chats, messages, memories, api-keys, connection-profiles, system/jobs, system/backup) with action dispatch patterns and response examples — Grade: A (canonical API reference) — Last updated: 2026-01-13
-  - [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md) — Backup/restore guide covering in-app backups, manual MongoDB/S3 scripts, CRON automation, encryption, disaster recovery, verification, and monitoring tips — Grade: A (operational guidance) — Last updated: 2025-12-10
-  - [docs/DATABASE_ABSTRACTION.md](docs/DATABASE_ABSTRACTION.md) — Database abstraction layer documentation: SQLite backend support, configuration, Docker deployment, architecture, interfaces, capabilities comparison, and troubleshooting — Grade: A (architecture reference) — Last updated: 2026-01-24
+  - [docs/BACKUP-RESTORE.md](docs/BACKUP-RESTORE.md) — Backup/restore guide covering in-app backups, CRON automation, encryption, disaster recovery, verification, and monitoring tips — Grade: A (operational guidance) — Last updated: 2025-12-10
+  - [docs/DATABASE_ABSTRACTION.md](docs/DATABASE_ABSTRACTION.md) — Database abstraction layer documentation: SQLite backend support, configuration, Docker deployment, architecture, interfaces, capabilities comparison, database protection (integrity checks, WAL checkpoints, physical backups), and troubleshooting — Grade: A (architecture reference) — Last updated: 2026-02-19
+  - [help/database-protection.md](help/database-protection.md) — User-facing documentation for automatic database protection: integrity checks, WAL checkpoints, physical backups with retention policy, restore instructions, and comparison with logical backups — Grade: A (user documentation) — Last updated: 2026-02-19
+  - [help/setup-wizard.md](help/setup-wizard.md) — User-facing documentation for the AI Stack Setup Wizard: 6-step guided flow for provider selection, API key entry, model selection, embedding/image setup, and test-and-confirm; covers first-run and settings re-entry modes — Grade: A (user documentation) — Last updated: 2026-02-22
   - [docs/CHANGELOG.md](docs/CHANGELOG.md) — Detailed changelog through versions 1.0–2.5, listing features, fixes, refactors, tests, themes, and status updates per release — Grade: A (release-of-record) — Last updated: 2025-12-17
   - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Production deployment guide with prerequisites, Docker/Nginx/SSL setup, env vars, data management, monitoring, backups, and troubleshooting — Grade: A (used for current deployments) — Last updated: 2025-12-06
   - [docs/FILE-SYSTEM-IMPLEMENTATION.md](docs/FILE-SYSTEM-IMPLEMENTATION.md) — Summary of the centralized file system implementation: manager module, repositories, API route, migration utility, docs, and benefits — Grade: A (architecture reference) — Last updated: 2025-11-29
@@ -130,9 +140,16 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - [packages/theme-storybook/README.md](packages/theme-storybook/README.md) — Documentation for the @quilltap/theme-storybook npm package: Storybook preset, default tokens, component classes, and story components for theme plugin development — Grade: A (package documentation) — Last updated: 2025-12-31
   - [packages/theme-storybook/CHANGELOG.md](packages/theme-storybook/CHANGELOG.md) — Changelog for the @quilltap/theme-storybook package — Grade: A (package changelog) — Last updated: 2025-12-31
   - [packages/create-quilltap-theme/README.md](packages/create-quilltap-theme/README.md) — Documentation for the create-quilltap-theme scaffolding CLI: usage, options, what gets created, and next steps after scaffolding — Grade: A (package documentation) — Last updated: 2025-12-31
+  - [packages/quilltap/README.md](packages/quilltap/README.md) — Documentation for the quilltap npm package: installation via npx, CLI options, data directory defaults, and links to other deployment methods — Grade: A (package documentation) — Last updated: 2026-02-19
   - [packages/create-quilltap-theme/CHANGELOG.md](packages/create-quilltap-theme/CHANGELOG.md) — Changelog for the create-quilltap-theme package — Grade: A (package changelog) — Last updated: 2025-12-31
   - [plugins/dist/qtap-plugin-mcp/README.md](plugins/dist/qtap-plugin-mcp/README.md) — Documentation for the MCP Server Connector plugin: configuration, authentication, tool naming, security, and troubleshooting — Grade: A (plugin documentation) — Last updated: 2026-01-13
   - [migrations/README.md](migrations/README.md) — Documentation for the migration system: architecture, adding new migrations, running migrations, and troubleshooting — Grade: A (migration system docs) — Last updated: 2026-01-22
+  - [docs/WINDOWS.md](docs/WINDOWS.md) — Windows/WSL2 troubleshooting guide: prerequisites, common issues, data locations, manual operations — Grade: A (troubleshooting guide) — Last updated: 2026-02-14
+  - [.github/workflows/release.yml](.github/workflows/release.yml) — GitHub Actions release workflow: builds rootfs tarballs (amd64/arm64), Electron installers (macOS DMG, Windows NSIS), and creates GitHub Release with all assets on version tags — Grade: A (build automation) — Last updated: 2026-02-17
+  - [electron-builder.yml](electron-builder.yml) — Electron Builder packaging config: app ID, macOS ZIP + Windows NSIS targets, resource bundling, Lima binary staging — Grade: A (build configuration) — Last updated: 2026-02-14
+  - [lima/quilltap.yaml](lima/quilltap.yaml) — Lima VM template: Alpine Linux 3.21, VZ hypervisor, VirtioFS mounts, OpenRC service provisioning, port forwarding — Grade: A (VM configuration) — Last updated: 2026-02-14
+  - [lima/wsl-init.sh](lima/wsl-init.sh) — WSL2 init script: starts Node.js server inside WSL2 distro with data directory resolution — Grade: A (VM configuration) — Last updated: 2026-02-14
+  - [electron/tsconfig.json](electron/tsconfig.json) — Electron-specific TypeScript config: ES2022 target, CommonJS modules, outputs to dist-electron/ — Grade: A (build configuration) — Last updated: 2026-02-14
 
 ## qt-\* CSS tokens and semantic classes for themes
 
@@ -152,6 +169,8 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
     - macOS: ~/Library/Application Support/Quilltap/
     - Windows: %APPDATA%\Quilltap\
     - Docker: /app/quilltap/
+    - Lima VM: /data/quilltap/ (VirtioFS mount of macOS path)
+    - WSL2: Accessed via /mnt/c/.../AppData/Roaming/Quilltap/ (Windows path passed as env var)
   - Category
     - `data/`
     - `files/`
@@ -167,14 +186,16 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 - If asked to fix linting errors, do not change out HTML `<img>` tags for Next.js `<Image>` tags; there is a reason that we don't use them sometimes, usually related to their being pulled in via APIs so Next.js can't know what it's going to display.
 - Every time we change a plugin, let's go ahead and bump the release number (the last of the three numbers in semver) on its package.json, and manifest.json if required, and re-run `npm run build:plugins` before we add things to the commit.
 - Check for Typescript errors by running "npx tsc" rather than "npm run build"
-- When committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
+- **Important:** Before committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
 - Keep the documentation above up to date, and update this file if you add more documentation, in the same format.
 - Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in exports, backups, and/or the migrations/ directory.
 - Any files that exist in the app source code only because they are necessary for migrations should move to the `migrations/` directory.
 - If we make changes to anything in the `packages/` directory, we need to make sure we update package.json numbers and pause to allow the developer/human user to `npm publish` to push those packages into npmjs. We do *not* just copy things down into the appropriate directories! We wait to publish the new npm package first. You can stop everything, ask me to publish the new version, then install the new one. If that doesn't work, let's fix the NPM problem we're having, **NOT** work around it.
+- **Version sync**: The `packages/quilltap/package.json` version must always match the version from the root `package.json` (including prerelease tags like `-dev.72`). The pre-commit hook in `.githooks/pre-commit` syncs this automatically, but if you manually bump the root version, sync `packages/quilltap/package.json` too.
 - Commits take a long time because there is a precommit script in `.githooks/pre-commit` that kills the dev server, runs lint, runs the unit tests, does a test compile with `npx tsc`, builds the plugins, and then does a full Next.js build of the app, to ensure that we're committing something that basically works.
 - Leave no stubs and "TODO" code behind unless you have agreed on it with me ahead of time
 - All user-visible changes must be documented in help files found in `help/*.md`
+- All writing for users is to be in the style of "steampunk + roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket"
 
 ## Best Practices and Principles
 

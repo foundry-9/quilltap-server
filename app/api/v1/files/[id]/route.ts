@@ -14,9 +14,14 @@ import { getActionParam } from '@/lib/api/middleware/actions';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logger } from '@/lib/logger';
-import sharp from 'sharp';
 import { normalizeFolderPath, validateFolderPath } from '@/lib/files/folder-utils';
-import { canResizeImage } from '@/lib/files/image-processing';
+import {
+  DEFAULT_THUMBNAIL_SIZE,
+  MAX_THUMBNAIL_SIZE,
+  canGenerateThumbnail,
+  generateThumbnail,
+  cleanupThumbnails,
+} from '@/lib/files/thumbnail-utils';
 import { getFileAssociations } from '@/lib/files/get-file-associations';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import { z } from 'zod';
@@ -32,10 +37,6 @@ const promoteFileSchema = z.object({
   targetProjectId: z.uuid().nullable().optional(),
   folderPath: z.string().optional(),
 });
-
-const DEFAULT_THUMBNAIL_SIZE = 150;
-const MAX_THUMBNAIL_SIZE = 300;
-const THUMBNAIL_QUALITY = 80;
 
 // ============================================================================
 // GET Handler - Download file or get thumbnail
@@ -65,31 +66,9 @@ async function handleDownloadFile(request: NextRequest, repos: any, fileId: stri
       return notFound('File');
     }
 
-    // Fallback to s3Key if storageKey is missing (pre-mount-points files)
-    if (!fileEntry.storageKey && fileEntry.s3Key) {
-      fileEntry.storageKey = fileEntry.s3Key;
-    }
-
     if (!fileEntry.storageKey) {
-      logger.error('[Files v1] File has no storage key - may need migration', { fileId });
+      logger.error('[Files v1] File has no storage key', { fileId });
       return serverError('File not available - storage key missing');
-    }
-
-    // Check if we should use presigned URL redirect or proxy through API
-    // For HTTP endpoints (e.g., local MinIO), we must proxy to avoid mixed content issues
-    const s3Endpoint = process.env.S3_ENDPOINT || '';
-    const isHttpEndpoint = s3Endpoint.startsWith('http://');
-    const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024; // 5MB
-
-    // Try to use presigned URL redirect for large files
-    if (fileEntry.size > LARGE_FILE_THRESHOLD && !isHttpEndpoint) {
-      try {
-        const presignedUrl = await fileStorageManager.getFileUrl(fileEntry, { presigned: true });
-
-        return NextResponse.redirect(presignedUrl);
-      } catch (error) {
-        // Fall through to proxy download
-      }
     }
 
     // Download file and serve through API
@@ -153,72 +132,17 @@ async function handleGetThumbnail(request: NextRequest, repos: any, fileId: stri
     }
 
     // Check if file is an image that can be thumbnailed
-    if (!fileEntry.mimeType.startsWith('image/') || !canResizeImage(fileEntry.mimeType)) {
+    if (!canGenerateThumbnail(fileEntry.mimeType)) {
       return badRequest('File is not a resizable image');
     }
 
-    // Build thumbnail storage key
-    function buildThumbnailStorageKey(userId: string, fId: string, sz: number): string {
-      return `users/${userId}/thumbnails/${fId}_${sz}.webp`;
-    }
+    // Generate (or retrieve from cache) using shared utility
+    const { buffer } = await generateThumbnail(fileEntry, size);
 
-    const thumbnailKey = buildThumbnailStorageKey(fileEntry.userId, fileId, size);
-    const thumbnailFileEntry = { ...fileEntry, storageKey: thumbnailKey };
-
-    // Check if cached thumbnail exists (avoids error logging for cache misses)
-    const thumbnailExists = await fileStorageManager.fileExists(thumbnailFileEntry);
-
-    if (thumbnailExists) {
-      // Return cached thumbnail
-      const cachedBuffer = await fileStorageManager.downloadFile(thumbnailFileEntry);
-
-      return new NextResponse(new Uint8Array(cachedBuffer), {
-        headers: {
-          'Content-Type': 'image/webp',
-          'Content-Length': cachedBuffer.length.toString(),
-          'Cache-Control': 'public, max-age=31536000, immutable',
-        },
-      });
-    }
-
-    // Cached thumbnail not found, generate it
-
-    // Download original image
-    const imageBuffer = await fileStorageManager.downloadFile(fileEntry);
-
-    // Generate thumbnail using sharp
-    const thumbnailBuffer = await sharp(imageBuffer)
-      .resize(size, size, {
-        fit: 'cover',
-        position: 'center',
-      })
-      .webp({ quality: THUMBNAIL_QUALITY })
-      .toBuffer();
-
-    // Cache thumbnail to storage (async, don't wait)
-    fileStorageManager.uploadFile({
-      userId: fileEntry.userId,
-      fileId: `${fileId}_thumb_${size}`,
-      filename: `${fileId}_${size}.webp`,
-      content: thumbnailBuffer,
-      contentType: 'image/webp',
-      metadata: {
-        originalFileId: fileId,
-        thumbnailSize: String(size),
-      },
-    }).then(() => {
-      // Thumbnail cached successfully
-    }).catch((cacheError) => {
-      logger.warn('[Files v1] Failed to cache thumbnail', {
-        fileId,
-        error: cacheError instanceof Error ? cacheError.message : 'Unknown error',
-      });
-    });
-
-    return new NextResponse(new Uint8Array(thumbnailBuffer), {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'image/webp',
-        'Content-Length': thumbnailBuffer.length.toString(),
+        'Content-Length': buffer.length.toString(),
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     });
@@ -302,6 +226,16 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
         });
         // Continue with metadata deletion even if storage deletion fails
       }
+    }
+
+    // Clean up cached thumbnails (fire-and-forget, non-blocking)
+    if (canGenerateThumbnail(fileEntry.mimeType)) {
+      cleanupThumbnails(fileEntry).catch((err) => {
+        logger.warn('[Files v1] Failed to clean up thumbnails', {
+          fileId,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        });
+      });
     }
 
     // Delete the file metadata from repository

@@ -16,6 +16,7 @@
     "packages/**",
     "plugins/**",
     "migrations/lib/**",
+    "electron/**",
     "**/*.d.ts",
     "**/*.stories.tsx",
     ".storybook/**"

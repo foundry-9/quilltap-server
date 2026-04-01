@@ -322,7 +322,7 @@ async function uploadFileToProject(
   const fileId = crypto.randomUUID();
 
   // Upload to file storage
-  const { storageKey, mountPointId } = await fileStorageManager.uploadFile({
+  const { storageKey } = await fileStorageManager.uploadFile({
     userId,
     fileId,
     filename,
@@ -359,7 +359,6 @@ async function uploadFileToProject(
     projectId: projectId || null,
     folderPath: '/',
     storageKey,
-    mountPointId,
   }, { id: fileId });
   return {
     id: fileEntry.id,

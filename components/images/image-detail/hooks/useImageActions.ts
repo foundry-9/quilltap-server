@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { triggerDownload } from '@/lib/download-utils'
 import type { ImageData, Character, EntityType } from '../types'
 
 interface UseImageActionsReturn {
@@ -143,14 +144,7 @@ export function useImageActions(
       const src = filepath.startsWith('/') ? filepath : `/${filepath}`
       const response = await fetch(src)
       const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = image.filename
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      await triggerDownload(blob, image.filename)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       console.error('Failed to download image', { imageId: image.id, error: errorMessage })

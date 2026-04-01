@@ -68,14 +68,8 @@ export const FileEntrySchema = z.object({
   // Defaults to "/" when not specified
   folderPath: z.string().nullable().optional(),
 
-  // Storage abstraction - new fields for pluggable file storage
-  mountPointId: UUIDSchema.nullable().optional(), // Which mount point stores this file
-  storageKey: z.string().nullable().optional(),   // Backend-agnostic storage key
-
-  // S3 storage reference (deprecated - kept for backward compatibility)
-  // Migration populates mountPointId/storageKey from these fields
-  s3Key: z.string().nullable().optional(),    // Full S3 object key
-  s3Bucket: z.string().nullable().optional(), // S3 bucket name
+  // Storage key for local file storage
+  storageKey: z.string().nullable().optional(),
 
   // Timestamps
   createdAt: TimestampSchema,

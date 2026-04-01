@@ -170,7 +170,7 @@ export const SQLITE_TABLES = [
       "keywords" TEXT DEFAULT '[]',
       "tags" TEXT DEFAULT '[]',
       "importance" REAL DEFAULT 0.5,
-      "embedding" TEXT,
+      "embedding" BLOB,
       "source" TEXT DEFAULT 'MANUAL',
       "sourceMessageId" TEXT,
       "lastAccessedAt" TEXT,
@@ -235,6 +235,7 @@ export const SQLITE_TABLES = [
       "isCheap" INTEGER DEFAULT 0,
       "allowWebSearch" INTEGER DEFAULT 0,
       "useNativeWebSearch" INTEGER DEFAULT 0,
+      "allowToolUse" INTEGER DEFAULT 1,
       "tags" TEXT DEFAULT '[]',
       "totalTokens" INTEGER DEFAULT 0,
       "totalPromptTokens" INTEGER DEFAULT 0,
@@ -310,10 +311,7 @@ export const SQLITE_TABLES = [
       "tags" TEXT DEFAULT '[]',
       "projectId" TEXT,
       "folderPath" TEXT,
-      "mountPointId" TEXT,
       "storageKey" TEXT,
-      "s3Key" TEXT,
-      "s3Bucket" TEXT,
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,
@@ -333,7 +331,6 @@ export const SQLITE_TABLES = [
       "name" TEXT NOT NULL,
       "parentFolderId" TEXT,
       "projectId" TEXT,
-      "mountPointId" TEXT,
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,
@@ -509,36 +506,11 @@ export const SQLITE_TABLES = [
       "characterRoster" TEXT DEFAULT '[]',
       "color" TEXT,
       "icon" TEXT,
-      "mountPointId" TEXT,
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,
     indexes: [
       `CREATE INDEX IF NOT EXISTS "idx_projects_userId" ON "projects" ("userId")`,
-    ],
-  },
-  // Mount points (storage backends)
-  {
-    name: 'mount_points',
-    sql: `CREATE TABLE IF NOT EXISTS "mount_points" (
-      "id" TEXT PRIMARY KEY,
-      "name" TEXT NOT NULL,
-      "description" TEXT,
-      "backendType" TEXT NOT NULL,
-      "backendConfig" TEXT NOT NULL,
-      "encryptedSecrets" TEXT,
-      "scope" TEXT NOT NULL,
-      "userId" TEXT,
-      "isDefault" INTEGER DEFAULT 0,
-      "enabled" INTEGER DEFAULT 1,
-      "healthStatus" TEXT DEFAULT 'unknown',
-      "lastHealthCheck" TEXT,
-      "createdAt" TEXT NOT NULL,
-      "updatedAt" TEXT NOT NULL
-    )`,
-    indexes: [
-      `CREATE INDEX IF NOT EXISTS "idx_mount_points_userId" ON "mount_points" ("userId")`,
-      `CREATE INDEX IF NOT EXISTS "idx_mount_points_scope" ON "mount_points" ("scope")`,
     ],
   },
   // File permissions (LLM write permissions)
@@ -560,7 +532,7 @@ export const SQLITE_TABLES = [
       `CREATE INDEX IF NOT EXISTS "idx_file_permissions_scope" ON "file_permissions" ("scope")`,
     ],
   },
-  // Vector indices (embeddings for semantic search)
+  // Vector indices metadata (per-character, no entries column — entries are in vector_entries)
   {
     name: 'vector_indices',
     sql: `CREATE TABLE IF NOT EXISTS "vector_indices" (
@@ -568,12 +540,24 @@ export const SQLITE_TABLES = [
       "characterId" TEXT NOT NULL,
       "version" INTEGER NOT NULL,
       "dimensions" INTEGER NOT NULL,
-      "entries" TEXT DEFAULT '[]',
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,
     indexes: [
       `CREATE INDEX IF NOT EXISTS "idx_vector_indices_characterId" ON "vector_indices" ("characterId")`,
+    ],
+  },
+  // Vector entries (per-embedding rows with Float32 BLOB storage)
+  {
+    name: 'vector_entries',
+    sql: `CREATE TABLE IF NOT EXISTS "vector_entries" (
+      "id" TEXT PRIMARY KEY,
+      "characterId" TEXT NOT NULL,
+      "embedding" BLOB NOT NULL,
+      "createdAt" TEXT NOT NULL
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_vector_entries_characterId" ON "vector_entries" ("characterId")`,
     ],
   },
   // Migrations state (tracks which migrations have been run)

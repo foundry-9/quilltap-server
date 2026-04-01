@@ -132,37 +132,3 @@ export function ThemeStyleInjector({
     />
   );
 }
-
-// ============================================================================
-// UTILITY: SERVER-SIDE CSS GENERATION
-// ============================================================================
-
-/**
- * Generate theme CSS string for server-side rendering
- *
- * This function can be used in layout.tsx or other server components
- * to generate initial CSS that prevents flash of unstyled content.
- *
- * @param tokens - Theme tokens
- * @param themeId - Optional theme ID for comments
- * @returns CSS string ready to be injected
- *
- * @example
- * ```tsx
- * // In layout.tsx
- * const initialCss = generateThemeCSS(DEFAULT_THEME_TOKENS, 'default');
- * return (
- *   <html>
- *     <head>
- *       <style dangerouslySetInnerHTML={{ __html: initialCss }} />
- *     </head>
- *     ...
- *   </html>
- * );
- * ```
- */
-export function generateThemeCSS(tokens: ThemeTokens, themeId?: string): string {
-  const css = themeTokensToCSS(tokens);
-
-  return `/* Quilltap Theme: ${themeId ?? 'default'} */\n${css}`;
-}

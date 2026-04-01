@@ -194,36 +194,6 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/**
- * Replaces template variables ({{char}}, {{user}}) with their actual values.
- * This is for display purposes when viewing a character (not editing).
- *
- * @param content - The text containing template variables
- * @param characterName - The character's name to replace {{char}} with
- * @param personaName - The persona's name to replace {{user}} with (defaults to "USER")
- * @returns The text with templates replaced with actual names
- */
-export function replaceTemplatesWithNames(
-  content: string,
-  characterName: string,
-  personaName?: string | null
-): string {
-  if (!content) return content
-
-  let result = content
-
-  // Replace {{char}} with character name (case-insensitive)
-  if (characterName) {
-    result = result.replace(/\{\{char\}\}/gi, characterName)
-  }
-
-  // Replace {{user}} with persona name or "USER" (case-insensitive)
-  const userName = personaName || 'USER'
-  result = result.replace(/\{\{user\}\}/gi, userName)
-
-  return result
-}
-
 interface TemplateDisplayProps {
   content: string
   characterName: string

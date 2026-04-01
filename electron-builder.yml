@@ -1,0 +1,76 @@
+publish: null
+appId: com.foundry9.quilltap
+productName: Quilltap
+directories:
+  output: out
+  buildResources: electron/resources
+files:
+  # Include compiled Electron code and splash screen assets
+  - dist-electron/**/*
+  - electron/splash/**/*
+  - package.json
+  # Exclude node_modules - Electron code uses zero npm deps (only Node builtins + Electron APIs)
+  - "!node_modules"
+  # Exclude everything else from the project (src, config, etc.)
+  # The negation patterns prevent the entire project from being bundled.
+  - "!app/**/*"
+  - "!components/**/*"
+  - "!lib/**/*"
+  - "!public/**/*"
+  - "!scripts/**/*"
+  - "!lima/**/*"
+  - "!features/**/*"
+  - "!docs/**/*"
+  - "!help/**/*"
+  - "!migrations/**/*"
+  - "!plugins/**/*"
+  - "!packages/**/*"
+  - "!__tests__/**/*"
+  - "!.storybook/**/*"
+  - "!.githooks/**/*"
+afterSign: electron/notarize.js
+mac:
+  category: public.app-category.productivity
+  notarize: false  # We handle notarization in afterSign hook (electron/notarize.js)
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  hardenedRuntime: true
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
+  icon: electron/resources/icon.icns
+  signIgnore:
+    - "lima/share/lima/lima-guestagent"
+  extraResources:
+    - from: lima/quilltap.yaml
+      to: lima/quilltap.yaml
+    - from: electron/resources/lima/
+      to: lima/
+win:
+  azureSignOptions:
+    publisherName: "Charles Sebold"
+    endpoint: "https://cus.codesigning.azure.net/"
+    certificateProfileName: "quilltap"
+    codeSigningAccountName: "quilltap"
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: electron/resources/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Quilltap
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  category: Utility
+  icon: electron/resources/icon.png

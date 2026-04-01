@@ -28,17 +28,15 @@ async function testProviderApiKey(
   baseUrl?: string
 ): Promise<{ valid: boolean; error?: string }> {
   try {
-    // Try LLM provider first
-    const llmPlugin = providerRegistry.getProvider(provider);
-    if (llmPlugin) {
-      const isValid = await llmPlugin.validateApiKey(apiKey, baseUrl);
+    // Try LLM provider first (uses URL rewriting for VM/container environments)
+    if (providerRegistry.hasProvider(provider)) {
+      const isValid = await providerRegistry.validateApiKey(provider, apiKey, baseUrl);
       return { valid: isValid };
     }
 
-    // Try search provider
-    const searchPlugin = searchProviderRegistry.getProvider(provider);
-    if (searchPlugin?.validateApiKey) {
-      const isValid = await searchPlugin.validateApiKey(apiKey, baseUrl);
+    // Try search provider (uses URL rewriting for VM/container environments)
+    if (searchProviderRegistry.hasProvider(provider)) {
+      const isValid = await searchProviderRegistry.validateApiKey(provider, apiKey, baseUrl);
       return { valid: isValid };
     }
 

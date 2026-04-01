@@ -79,6 +79,16 @@ import { addCharacterClothingRecordsFieldMigration } from './add-character-cloth
 import { fixChatMessageCountsMigration } from './fix-chat-message-counts';
 // Add memory gate fields (reinforcement tracking, related links)
 import { addMemoryGateFieldsMigration } from './add-memory-gate-fields';
+// Migrate legacy JSONL file entries to SQLite
+import { migrateLegacyJsonlFilesMigration } from './migrate-legacy-jsonl-files';
+// Add missing columns to chat_messages and fix empty JSON strings
+import { addChatMessageMissingColumnsMigration } from './add-chat-message-missing-columns';
+// Normalize vector embedding storage to Float32 BLOBs
+import { normalizeVectorStorageMigration } from './normalize-vector-storage';
+// Add allowToolUse field to connection profiles
+import { addProfileAllowToolUseFieldMigration } from './add-profile-allow-tool-use-field';
+// Drop mount points system (S3 + mount point abstraction removed)
+import { dropMountPointsMigration } from './drop-mount-points';
 
 /**
  * All available migrations.
@@ -153,6 +163,16 @@ export const migrations: Migration[] = [
   fixChatMessageCountsMigration,
   // Add memory gate fields (reinforcement tracking, related links)
   addMemoryGateFieldsMigration,
+  // Migrate legacy JSONL file entries to SQLite
+  migrateLegacyJsonlFilesMigration,
+  // Add missing columns to chat_messages and fix empty JSON strings
+  addChatMessageMissingColumnsMigration,
+  // Normalize vector embedding storage to Float32 BLOBs
+  normalizeVectorStorageMigration,
+  // Add allowToolUse field to connection profiles
+  addProfileAllowToolUseFieldMigration,
+  // Drop mount points system (S3 + mount point abstraction removed)
+  dropMountPointsMigration,
 ];
 
 export {
@@ -222,4 +242,14 @@ export {
   fixChatMessageCountsMigration,
   // Add memory gate fields (reinforcement tracking, related links)
   addMemoryGateFieldsMigration,
+  // Migrate legacy JSONL file entries to SQLite
+  migrateLegacyJsonlFilesMigration,
+  // Add missing columns to chat_messages and fix empty JSON strings
+  addChatMessageMissingColumnsMigration,
+  // Normalize vector embedding storage to Float32 BLOBs
+  normalizeVectorStorageMigration,
+  // Add allowToolUse field to connection profiles
+  addProfileAllowToolUseFieldMigration,
+  // Drop mount points system (S3 + mount point abstraction removed)
+  dropMountPointsMigration,
 };

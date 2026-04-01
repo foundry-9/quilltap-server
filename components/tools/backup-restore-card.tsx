@@ -78,7 +78,7 @@ export default function BackupRestoreCard() {
       <RestoreDialog
         isOpen={showRestoreDialog}
         onClose={() => setShowRestoreDialog(false)}
-        onRestoreComplete={() => {}}
+        onRestoreComplete={() => { window.location.reload() }}
       />
     </div>
   )

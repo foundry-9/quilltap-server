@@ -8,6 +8,7 @@
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
+import { stopPeriodicCheckpoints, runShutdownCheckpoint } from './protection';
 
 // ============================================================================
 // Singleton State
@@ -93,11 +94,20 @@ function configurePragmas(db: DatabaseType, config: SQLiteConfig): void {
 
 /**
  * Close the SQLite database connection
+ *
+ * Stops periodic checkpoints, runs a TRUNCATE checkpoint to fully merge
+ * the WAL into the main database file, then optimizes and closes.
  */
 export function closeSQLiteClient(): void {
   if (sqliteDatabase) {
     try {
       logger.info('Closing SQLite database connection');
+
+      // Stop periodic checkpoints first
+      stopPeriodicCheckpoints();
+
+      // Run a TRUNCATE checkpoint to merge WAL into main DB
+      runShutdownCheckpoint(sqliteDatabase);
 
       // Optimize before closing
       sqliteDatabase.pragma('optimize');
@@ -214,6 +224,29 @@ export function setupSQLiteShutdownHandlers(): void {
     closeSQLiteClient();
     process.exit(1);
   });
+
+  process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled rejection, closing SQLite connection', {
+      reason: reason instanceof Error ? reason.message : String(reason),
+    });
+    closeSQLiteClient();
+    process.exit(1);
+  });
+}
+
+// ============================================================================
+// Raw Database Access
+// ============================================================================
+
+/**
+ * Get the raw better-sqlite3 database instance.
+ *
+ * Returns the singleton database handle, or null if not initialized.
+ * Intended for use by protection and backup modules that need direct
+ * database access (e.g., for PRAGMA calls or .backup()).
+ */
+export function getRawDatabase(): DatabaseType | null {
+  return sqliteDatabase && isInitialized ? sqliteDatabase : null;
 }
 
 // ============================================================================

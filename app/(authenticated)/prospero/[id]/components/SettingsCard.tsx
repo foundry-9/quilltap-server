@@ -3,32 +3,13 @@
 /**
  * Settings Card
  *
- * Card displaying project instructions, mount point selection,
- * and allow any character toggle.
+ * Card displaying project instructions and allow any character toggle.
  */
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
-import { fetchJson } from '@/lib/fetch-helpers'
-import type { Project, EditForm, MountPointInfo, BackgroundDisplayMode } from '../types'
+import { useState, useCallback, useMemo } from 'react'
+import type { Project, EditForm, BackgroundDisplayMode } from '../types'
 import { ProjectToolSettingsModal } from '@/components/tools/tool-settings'
 import StateEditorModal from '@/components/state/StateEditorModal'
-
-interface MountPointData {
-  projectId: string
-  mountPointId: string | null
-  currentMountPoint: MountPointInfo | null
-  defaultMountPoint: MountPointInfo | null
-  effectiveMountPoint: MountPointInfo | null
-  fileCount: number
-}
-
-interface MountPointOption {
-  id: string
-  name: string
-  backendType: string
-  healthStatus: string
-  isDefault: boolean
-}
 
 interface SettingsCardProps {
   project: Project
@@ -77,13 +58,6 @@ export function SettingsCard({
   onToggle,
   onProjectUpdate,
 }: SettingsCardProps) {
-  const [mountPointData, setMountPointData] = useState<MountPointData | null>(null)
-  const [mountPointOptions, setMountPointOptions] = useState<MountPointOption[]>([])
-  const [selectedMountPointId, setSelectedMountPointId] = useState<string>('')
-  const [isSavingMountPoint, setIsSavingMountPoint] = useState(false)
-  const [mountPointError, setMountPointError] = useState<string | null>(null)
-  const [showMigrationConfirm, setShowMigrationConfirm] = useState(false)
-  const [pendingMountPointId, setPendingMountPointId] = useState<string | null>(null)
   const [showToolSettingsModal, setShowToolSettingsModal] = useState(false)
   const [showStateEditorModal, setShowStateEditorModal] = useState(false)
   const [localDisabledTools, setLocalDisabledTools] = useState<string[]>(project.defaultDisabledTools || [])
@@ -112,92 +86,6 @@ export function SettingsCard({
     setLocalDisabledToolGroups(newDisabledToolGroups)
     onProjectUpdate?.()
   }, [onProjectUpdate])
-
-  // Load mount point data
-  const loadMountPointData = useCallback(async () => {
-    try {
-      const [mpDataRes, mpOptionsRes] = await Promise.all([
-        fetchJson<MountPointData>(`/api/v1/projects/${project.id}?action=get-mount-point`),
-        fetchJson<{ mountPoints: MountPointOption[] }>('/api/v1/system/mount-points'),
-      ])
-
-      if (mpDataRes.ok && mpDataRes.data) {
-        setMountPointData(mpDataRes.data)
-        setSelectedMountPointId(mpDataRes.data.mountPointId || '')
-      }
-
-      if (mpOptionsRes.ok && mpOptionsRes.data?.mountPoints) {
-        setMountPointOptions(mpOptionsRes.data.mountPoints)
-      }
-    } catch (error) {
-      console.error('Failed to load mount point data', error)
-    }
-  }, [project.id])
-
-  useEffect(() => {
-    if (expanded) {
-      loadMountPointData()
-    }
-  }, [expanded, loadMountPointData])
-
-
-  const handleMountPointChange = (newMountPointId: string) => {
-    if (mountPointData && mountPointData.fileCount > 0 && newMountPointId !== selectedMountPointId) {
-      // Show confirmation if there are files to migrate
-      setPendingMountPointId(newMountPointId)
-      setShowMigrationConfirm(true)
-    } else {
-      // No files, proceed directly
-      saveMountPoint(newMountPointId)
-    }
-  }
-
-  const saveMountPoint = async (newMountPointId: string) => {
-    setIsSavingMountPoint(true)
-    setMountPointError(null)
-    setShowMigrationConfirm(false)
-
-    try {
-      if (newMountPointId === '') {
-        // Clear mount point (use system default)
-        const result = await fetchJson<{ success: boolean }>(`/api/v1/projects/${project.id}?action=clear-mount-point`, {
-          method: 'DELETE',
-        })
-
-        if (!result.ok) {
-          throw new Error(result.error || 'Failed to clear mount point')
-        }
-      } else {
-        // Set mount point
-        const result = await fetchJson<{ success: boolean; migration?: { failed: number; errors: Array<{ error: string }> } }>(
-          `/api/v1/projects/${project.id}?action=set-mount-point`,
-          {
-            method: 'PUT',
-            body: JSON.stringify({ mountPointId: newMountPointId, migrateFiles: true }),
-          }
-        )
-
-        if (!result.ok) {
-          throw new Error(result.error || 'Failed to set mount point')
-        }
-
-        if (result.data?.migration?.failed && result.data.migration.failed > 0) {
-          setMountPointError(`${result.data.migration.failed} file(s) failed to migrate`)
-        }
-      }
-
-      setSelectedMountPointId(newMountPointId)
-      await loadMountPointData()
-      onProjectUpdate?.()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update mount point'
-      setMountPointError(message)
-      console.error('Failed to update mount point', error)
-    } finally {
-      setIsSavingMountPoint(false)
-      setPendingMountPointId(null)
-    }
-  }
 
   return (
     <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">
@@ -241,65 +129,6 @@ export function SettingsCard({
             </div>
           </div>
 
-          {/* Mount Point Selection */}
-          <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 className="text-sm font-medium text-foreground mb-1">Storage Location</h4>
-            <p className="qt-text-xs qt-text-secondary mb-3">
-              Choose where project files are stored.
-              {mountPointData?.fileCount ? ` This project has ${mountPointData.fileCount} file(s).` : ''}
-            </p>
-            <select
-              value={selectedMountPointId}
-              onChange={(e) => handleMountPointChange(e.target.value)}
-              disabled={isSavingMountPoint}
-              className="qt-input w-full"
-            >
-              <option value="">System Default{mountPointData?.defaultMountPoint ? ` (${mountPointData.defaultMountPoint.name})` : ''}</option>
-              {mountPointOptions.map((mp) => (
-                <option key={mp.id} value={mp.id} disabled={mp.healthStatus === 'unhealthy'}>
-                  {mp.name} ({mp.backendType}){mp.healthStatus === 'unhealthy' ? ' - Unhealthy' : ''}
-                </option>
-              ))}
-            </select>
-            {mountPointData?.effectiveMountPoint && (
-              <p className="qt-text-xs qt-text-secondary mt-2">
-                Currently using: {mountPointData.effectiveMountPoint.name} ({mountPointData.effectiveMountPoint.backendType})
-              </p>
-            )}
-            {mountPointError && (
-              <p className="qt-text-xs text-destructive mt-2">{mountPointError}</p>
-            )}
-            {isSavingMountPoint && (
-              <p className="qt-text-xs qt-text-secondary mt-2">Updating storage location...</p>
-            )}
-          </div>
-
-          {/* Migration Confirmation Dialog */}
-          {showMigrationConfirm && (
-            <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-              <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
-                This project has {mountPointData?.fileCount} file(s). They will be migrated to the new storage location. Continue?
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => pendingMountPointId && saveMountPoint(pendingMountPointId)}
-                  className="qt-button qt-button-primary text-sm"
-                >
-                  Migrate Files
-                </button>
-                <button
-                  onClick={() => {
-                    setShowMigrationConfirm(false)
-                    setPendingMountPointId(null)
-                  }}
-                  className="qt-button qt-button-secondary text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Allow Any Character Toggle */}
           <div className="flex items-center justify-between p-3 rounded-lg qt-border qt-bg-surface">
             <div>
@@ -319,7 +148,7 @@ export function SettingsCard({
               aria-checked={project.allowAnyCharacter}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
                   project.allowAnyCharacter ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />

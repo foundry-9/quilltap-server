@@ -254,6 +254,28 @@ Add tags to profiles for easy filtering:
 2. Add tags like: "production", "testing", "fast", "expensive"
 3. Tags help you remember each profile's purpose
 
+## Allow Tool Use
+
+The **Allow tool use** checkbox on each connection profile acts as a master switch for all LLM tools. When unchecked, no tools whatsoever — built-in or plugin-provided — will be dispatched to the model when using that profile, regardless of what the per-chat or per-project tool settings say.
+
+This is rather like flipping the main breaker in a fine manor house: it matters not how many individual lamps the servants have switched on if the master circuit has been thrown.
+
+**When you might disable tool use:**
+
+- **Model compatibility:** Some models, particularly smaller or local models, do not handle tool calls gracefully — they may hallucinate tool invocations or produce garbled output
+- **Cost control:** Tool descriptions consume tokens; disabling them reduces prompt size
+- **Simplicity:** When you simply want pure conversation without the AI reaching for instruments
+
+**How it works:**
+
+1. Edit (or create) a connection profile in The Forge
+2. Uncheck **Allow tool use**
+3. Save the profile
+
+Profiles with tool use disabled display a **No Tools** badge on their profile card. When you open the Tool Settings dialog in a chat using such a profile, a notice appears explaining that tools are overridden at the profile level.
+
+To re-enable tools, simply check the box again. Per-chat and per-project tool settings will resume their normal effect immediately.
+
 ## Connection Profile Limitations
 
 ### What affects availability

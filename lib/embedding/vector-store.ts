@@ -9,6 +9,8 @@
  * - Per-character vector indices for isolation and efficient loading
  * - In-memory search with persistence (suitable for <1000 memories per character)
  * - Cosine similarity for text embedding comparison
+ * - Normalized BLOB storage: each embedding stored as a Float32 BLOB row
+ * - Incremental persistence: only changed entries written on save()
  */
 
 import { cosineSimilarity } from './embedding-service'
@@ -23,8 +25,6 @@ export interface VectorMetadata {
   memoryId: string
   /** Character ID for filtering */
   characterId: string
-  /** Text content for debugging/display */
-  content?: string
   /** Additional metadata */
   [key: string]: unknown
 }
@@ -74,13 +74,17 @@ export interface ICharacterVectorStore {
 
 /**
  * Database-backed vector store for a single character
- * Uses in-memory storage with database persistence
+ * Uses in-memory storage with incremental database persistence
  */
 export class CharacterVectorStore implements ICharacterVectorStore {
   private entries: Map<string, VectorEntry> = new Map()
   private dimensions: number | null = null
-  private dirty: boolean = false
   private createdAt: string = new Date().toISOString()
+
+  // Granular dirty tracking for incremental persistence
+  private addedIds: Set<string> = new Set()
+  private removedIds: Set<string> = new Set()
+  private updatedIds: Set<string> = new Set()
 
   constructor(private readonly characterId: string) {}
 
@@ -89,21 +93,33 @@ export class CharacterVectorStore implements ICharacterVectorStore {
    */
   async load(): Promise<void> {
     try {
-
       const repo = getVectorIndicesRepository()
-      const index = await repo.findByCharacterId(this.characterId)
+      const meta = await repo.findMetaByCharacterId(this.characterId)
+      const entryRows = await repo.findEntriesByCharacterId(this.characterId)
 
       this.entries.clear()
-      if (index) {
-        for (const entry of index.entries) {
-          this.entries.set(entry.id, entry)
-        }
-        this.dimensions = index.dimensions
-        this.createdAt = index.createdAt
-      } else {
-        this.dimensions = null
+      for (const row of entryRows) {
+        this.entries.set(row.id, {
+          id: row.id,
+          embedding: row.embedding,
+          metadata: {
+            memoryId: row.id,
+            characterId: row.characterId,
+          },
+          createdAt: row.createdAt,
+        })
       }
-      this.dirty = false
+
+      if (meta) {
+        this.dimensions = meta.dimensions
+        this.createdAt = meta.createdAt
+      } else {
+        this.dimensions = entryRows.length > 0 ? entryRows[0].embedding.length : null
+      }
+
+      this.addedIds.clear()
+      this.removedIds.clear()
+      this.updatedIds.clear()
 
     } catch (error) {
       logger.error('Error loading vector index from database', {
@@ -114,38 +130,72 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       // Start fresh on error
       this.entries.clear()
       this.dimensions = null
-      this.dirty = false
+      this.addedIds.clear()
+      this.removedIds.clear()
+      this.updatedIds.clear()
     }
   }
 
   /**
-   * Save the vector index to the database
+   * Save changed entries to the database (incremental)
    */
   async save(): Promise<void> {
-    if (!this.dirty && this.entries.size === 0) {
+    const hasChanges = this.addedIds.size > 0 || this.removedIds.size > 0 || this.updatedIds.size > 0
+    if (!hasChanges && this.entries.size === 0) {
       return // Nothing to save
     }
 
     try {
-
       const repo = getVectorIndicesRepository()
-      const now = new Date().toISOString()
 
-      await repo.save(this.characterId, {
-        characterId: this.characterId,
-        version: 1,
-        dimensions: this.dimensions || 0,
-        entries: Array.from(this.entries.values()),
-        createdAt: this.createdAt,
-        updatedAt: now,
-      })
+      // Batch insert added entries
+      if (this.addedIds.size > 0) {
+        const newEntries = Array.from(this.addedIds)
+          .map(id => this.entries.get(id))
+          .filter((e): e is VectorEntry => e !== undefined)
+          .map(e => ({
+            id: e.id,
+            characterId: this.characterId,
+            embedding: e.embedding,
+          }))
 
-      this.dirty = false
+        if (newEntries.length > 0) {
+          await repo.addEntries(newEntries)
+        }
+      }
+
+      // Batch delete removed entries
+      if (this.removedIds.size > 0) {
+        await repo.removeEntries(Array.from(this.removedIds))
+      }
+
+      // Batch update changed embeddings
+      if (this.updatedIds.size > 0) {
+        for (const id of this.updatedIds) {
+          const entry = this.entries.get(id)
+          if (entry) {
+            await repo.updateEntryEmbedding(id, entry.embedding)
+          }
+        }
+      }
+
+      // Save meta (always update to keep updatedAt current)
+      if (hasChanges) {
+        await repo.saveMeta(this.characterId, this.dimensions || 0)
+      }
+
+      // Clear tracking sets
+      this.addedIds.clear()
+      this.removedIds.clear()
+      this.updatedIds.clear()
 
     } catch (error) {
       logger.error('Error saving vector index to database', {
         context: 'CharacterVectorStore.save',
         characterId: this.characterId,
+        added: this.addedIds.size,
+        removed: this.removedIds.size,
+        updated: this.updatedIds.size,
         error: error instanceof Error ? error.message : String(error),
       })
       throw error
@@ -179,7 +229,9 @@ export class CharacterVectorStore implements ICharacterVectorStore {
     }
 
     this.entries.set(id, entry)
-    this.dirty = true
+    this.addedIds.add(id)
+    // If it was previously removed, cancel the removal
+    this.removedIds.delete(id)
   }
 
   /**
@@ -188,7 +240,13 @@ export class CharacterVectorStore implements ICharacterVectorStore {
   async removeVector(id: string): Promise<boolean> {
     const deleted = this.entries.delete(id)
     if (deleted) {
-      this.dirty = true
+      // If it was just added (not yet persisted), just un-add it
+      if (this.addedIds.has(id)) {
+        this.addedIds.delete(id)
+      } else {
+        this.removedIds.add(id)
+      }
+      this.updatedIds.delete(id)
     }
     return deleted
   }
@@ -209,7 +267,10 @@ export class CharacterVectorStore implements ICharacterVectorStore {
     }
 
     entry.embedding = embedding
-    this.dirty = true
+    // Only track as updated if it was already persisted (not just added)
+    if (!this.addedIds.has(id)) {
+      this.updatedIds.add(id)
+    }
     return true
   }
 
@@ -286,9 +347,16 @@ export class CharacterVectorStore implements ICharacterVectorStore {
    * Clear all entries
    */
   clear(): void {
+    // Mark all existing entries as removed (if they were persisted)
+    for (const id of this.entries.keys()) {
+      if (!this.addedIds.has(id)) {
+        this.removedIds.add(id)
+      }
+    }
     this.entries.clear()
     this.dimensions = null
-    this.dirty = true
+    this.addedIds.clear()
+    this.updatedIds.clear()
   }
 }
 

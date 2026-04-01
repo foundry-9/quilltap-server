@@ -1,4 +1,4 @@
-FROM node:22-alpine AS base
+FROM node:24-alpine AS base
 
 # Upgrade npm to latest version (fixes "Invalid Version" bug in npm 10.x)
 RUN npm install -g npm@latest
@@ -53,9 +53,13 @@ COPY . .
 # SKIP_ENV_VALIDATION=true skips runtime env var validation during build
 RUN SKIP_ENV_VALIDATION=true npm run build:plugins
 
-# Build Next.js
+# Remove plugin node_modules (dependencies are bundled during build)
+RUN rm -rf /app/plugins/dist/*/node_modules
+
+# Build Next.js using webpack (Turbopack default in Next 16+ exceeds Docker memory limits)
 # SKIP_ENV_VALIDATION=true skips runtime env var validation during build
-RUN SKIP_ENV_VALIDATION=true npm run build
+# NODE_OPTIONS caps V8 heap to prevent OOM-kills in memory-constrained containers
+RUN SKIP_ENV_VALIDATION=true NODE_OPTIONS="--max-old-space-size=3072" npx next build --webpack
 
 # Production stage
 FROM base AS production
@@ -83,8 +87,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
 # Copy package files for native module dependencies
 COPY package.json package-lock.json ./
 
-# Install socat for optional host port forwarding
-RUN apk add --no-cache socat
+# Install zip/unzip for backup/restore
+RUN apk add --no-cache zip unzip
 
 # Install only production dependencies (including better-sqlite3)
 RUN npm ci --omit=dev
@@ -102,6 +106,27 @@ EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["node", "server.js"]
+
+# WSL2 stage — extends production with baked-in provisioning for Windows
+FROM production AS wsl2
+
+USER root
+
+# Bake in the WSL init script
+COPY lima/wsl-init.sh /usr/local/bin/wsl-init.sh
+RUN chmod +x /usr/local/bin/wsl-init.sh
+
+# Pre-install runtime dependencies (Lima YAML does this at provision time)
+RUN apk add --no-cache libstdc++ libgcc zip unzip
+
+# Set environment defaults
+RUN printf 'export LIMA_CONTAINER=true\nexport NODE_ENV=production\nexport PORT=5050\nexport HOSTNAME=0.0.0.0\nexport NODE_OPTIONS="--max-old-space-size=2048"\n' \
+    > /etc/profile.d/quilltap.sh && chmod 644 /etc/profile.d/quilltap.sh
+
+# Remove Docker entrypoint — WSL2 uses wsl-init.sh directly
+ENTRYPOINT []
+CMD ["/usr/local/bin/wsl-init.sh"]

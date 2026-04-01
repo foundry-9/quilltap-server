@@ -10,7 +10,6 @@
 export type PluginCapability =
   | 'LLM_PROVIDER'
   | 'AUTH_PROVIDER'
-  | 'STORAGE_BACKEND'
   | 'THEME'
   | 'ROLEPLAY_TEMPLATE'
   | 'TOOL_PROVIDER'
@@ -23,7 +22,6 @@ export type PluginCapability =
 export type PluginCategory =
   | 'PROVIDER'
   | 'AUTH'
-  | 'STORAGE'
   | 'UI'
   | 'TEMPLATE'
   | 'TOOLS'
@@ -234,7 +232,7 @@ export interface PluginManifest {
    * Whether this plugin requires a server restart to activate.
    *
    * If not specified, this is inferred from capabilities:
-   * - AUTH_METHODS, DATABASE_BACKEND, FILE_BACKEND, UPGRADE_MIGRATION → requires restart
+   * - AUTH_METHODS, DATABASE_BACKEND, UPGRADE_MIGRATION → requires restart
    *
    * Set explicitly to override the inferred value.
    */

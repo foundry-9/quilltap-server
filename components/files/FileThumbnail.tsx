@@ -51,6 +51,9 @@ function supportsThumbnail(mimeType: string): boolean {
   return supportedTypes.includes(mimeType.toLowerCase())
 }
 
+const MAX_RETRIES = 2
+const RETRY_BASE_DELAY = 1000
+
 export default function FileThumbnail({
   fileId,
   mimeType,
@@ -60,10 +63,15 @@ export default function FileThumbnail({
 }: Readonly<FileThumbnailProps>) {
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
   const [isVisible, setIsVisible] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const canShowThumbnail = supportsThumbnail(mimeType)
-  const thumbnailUrl = canShowThumbnail ? `/api/v1/files/${fileId}?action=thumbnail&size=${size}` : null
+  // Append retry count to bust browser cache on retry
+  const thumbnailUrl = canShowThumbnail
+    ? `/api/v1/files/${fileId}?action=thumbnail&size=${size}${retryCount > 0 ? `&_r=${retryCount}` : ''}`
+    : null
 
   // Lazy loading with Intersection Observer
   useEffect(() => {
@@ -87,14 +95,29 @@ export default function FileThumbnail({
     return () => observer.disconnect()
   }, [canShowThumbnail])
 
+  // Cleanup retry timer on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+    }
+  }, [])
 
   const handleLoad = () => {
     setStatus('loaded')
   }
 
   const handleError = () => {
-    setStatus('error')
-    console.warn('[FileThumbnail] Thumbnail load failed', { fileId, mimeType })
+    if (retryCount < MAX_RETRIES) {
+      // Exponential backoff: 1s, 2s
+      const delay = RETRY_BASE_DELAY * Math.pow(2, retryCount)
+      retryTimerRef.current = setTimeout(() => {
+        setRetryCount(prev => prev + 1)
+        setStatus('loading')
+      }, delay)
+    } else {
+      setStatus('error')
+      console.warn('[FileThumbnail] Thumbnail load failed after retries', { fileId, mimeType })
+    }
   }
 
   // Fallback icon display

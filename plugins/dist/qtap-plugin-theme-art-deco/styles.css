@@ -535,6 +535,41 @@
 
   --qt-tab-group-gap: 0.25rem;
   --qt-tab-divider-color: var(--color-border);
+
+  /* ==========================================================================
+     OVERLAY VARIABLES
+     ========================================================================== */
+  --qt-overlay-bg: hsl(222 47% 7% / 0.9);
+  --qt-overlay-medium-bg: hsl(222 47% 7% / 0.6);
+  --qt-overlay-light-bg: hsl(222 40% 10% / 0.2);
+  --qt-overlay-caption-bg: hsl(222 47% 7% / 0.55);
+  --qt-overlay-btn-bg: hsl(43 85% 55% / 0.12);
+  --qt-overlay-btn-hover-bg: hsl(43 85% 55% / 0.25);
+  --qt-overlay-fg: var(--deco-ivory);
+  --qt-overlay-muted-fg: hsl(45 15% 90% / 0.7);
+
+  /* ==========================================================================
+     SPINNER VARIABLES
+     ========================================================================== */
+  --qt-spinner-track: color-mix(in srgb, var(--deco-gold) 20%, transparent);
+  --qt-spinner-indicator: var(--deco-gold);
+
+  /* ==========================================================================
+     FAVORITE VARIABLES
+     ========================================================================== */
+  --qt-favorite-color: var(--deco-gold);
+
+  /* ==========================================================================
+     TOGGLE VARIABLES
+     ========================================================================== */
+  --qt-toggle-knob-bg: var(--deco-ivory);
+
+  /* ==========================================================================
+     WARNING BOX VARIABLES
+     ========================================================================== */
+  --qt-warning-box-bg: hsl(43 85% 55% / 0.1);
+  --qt-warning-box-border: hsl(43 85% 55% / 0.35);
+  --qt-warning-box-fg: hsl(43 80% 42%);
 }
 
 /* ============================================================================
@@ -654,7 +689,7 @@
 [data-theme="art-deco"] body {
   position: relative;
   min-height: 100vh;
-  background-image: url('/api/themes/assets/qtap-plugin-theme-art-deco/textures/background-light.png');
+  background-image: url('/api/themes/assets/qtap-plugin-theme-art-deco/textures/background-light.webp');
   background-size: cover;
   background-position: center center;
   background-attachment: fixed;
@@ -664,7 +699,7 @@
 [data-theme="art-deco"].dark body {
   background-image:
     linear-gradient(hsl(222 47% 7% / 0.55), hsl(222 47% 7% / 0.55)),
-    url('/api/themes/assets/qtap-plugin-theme-art-deco/textures/background-dark.png');
+    url('/api/themes/assets/qtap-plugin-theme-art-deco/textures/background-dark.webp');
 }
 
 /* Ensure background shows through main containers */

@@ -241,30 +241,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
     );
   }
 
-  /**
-   * Update S3 storage reference
-   */
-  async updateS3Reference(fileId: string, s3Key: string, s3Bucket: string): Promise<FileEntry | null> {
-    return this.safeQuery(
-      async () => {
-        const result = await this.update(fileId, {
-          s3Key,
-          s3Bucket,
-        });
-
-        if (result) {
-          logger.info('S3 reference updated for file', { fileId, s3Key, s3Bucket });
-        } else {
-          logger.warn('File not found for updating S3 reference', { fileId });
-        }
-
-        return result;
-      },
-      'Error updating S3 reference for file',
-      { fileId, s3Key, s3Bucket }
-    );
-  }
-
   // =========================================================================
   // FOLDER QUERY METHODS
   // =========================================================================
@@ -423,22 +399,6 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
       },
       'Error finding file by storage key',
       { storageKey }
-    );
-  }
-
-  /**
-   * Find all files stored in a specific mount point
-   * @param mountPointId - The mount point ID
-   * @returns Array of file entries stored in the mount point
-   */
-  async findByMountPointId(mountPointId: string): Promise<FileEntry[]> {
-    return this.safeQuery(
-      async () => {
-        const files = await this.findByFilter({ mountPointId });
-        return files;
-      },
-      'Error finding files by mount point',
-      { mountPointId }
     );
   }
 

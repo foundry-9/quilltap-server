@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react'
 import { getErrorMessage } from '@/lib/error-utils'
+import { triggerDownload } from '@/lib/download-utils'
 import { useDialogState } from '@/hooks/useDialogState'
 import { useWizardState } from '@/hooks/useWizardState'
 import type { ExportState, ExportFile, ExportStep } from '../types'
@@ -107,14 +108,8 @@ export function useExportKeys({
       const blob = new Blob([JSON.stringify(exportFile, null, 2)], {
         type: 'application/json',
       })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `quilltap-api-keys-${new Date().toISOString().split('T')[0]}.json`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      const filename = `quilltap-api-keys-${new Date().toISOString().split('T')[0]}.json`
+      await triggerDownload(blob, filename)
 
 
       wizard.goTo('complete')

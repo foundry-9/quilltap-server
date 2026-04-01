@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { badRequest, serverError, unauthorized } from '@/lib/api/responses';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,10 +38,7 @@ export async function GET() {
     pepperLogger.error('Error getting pepper vault status', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: 'Failed to get pepper vault status' },
-      { status: 500 }
-    );
+    return serverError('Failed to get pepper vault status');
   }
 }
 
@@ -53,10 +51,7 @@ export async function POST(request: NextRequest) {
   const action = request.nextUrl.searchParams.get('action');
 
   if (!action) {
-    return NextResponse.json(
-      { error: 'Missing action parameter. Use ?action=setup, ?action=unlock, or ?action=store' },
-      { status: 400 }
-    );
+    return badRequest('Missing action parameter. Use ?action=setup, ?action=unlock, or ?action=store');
   }
 
   try {
@@ -71,20 +66,14 @@ export async function POST(request: NextRequest) {
       case 'store':
         return handleStore(passphrase);
       default:
-        return NextResponse.json(
-          { error: `Unknown action: ${action}` },
-          { status: 400 }
-        );
+        return badRequest(`Unknown action: ${action}`);
     }
   } catch (error) {
     pepperLogger.error('Error in pepper vault action', {
       action,
       error: error instanceof Error ? error.message : String(error),
     });
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+    return serverError(error instanceof Error ? error.message : 'Internal server error');
   }
 }
 
@@ -117,10 +106,7 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
   pepperLogger.info('Pepper vault unlock requested');
 
   if (!passphrase) {
-    return NextResponse.json(
-      { error: 'Passphrase is required to unlock' },
-      { status: 400 }
-    );
+    return badRequest('Passphrase is required to unlock');
   }
 
   const { unlockPepper } = await import('@/lib/startup/pepper-vault');
@@ -130,10 +116,7 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
 
   if (!success) {
     pepperLogger.warn('Pepper vault unlock failed: wrong passphrase');
-    return NextResponse.json(
-      { error: 'Incorrect passphrase' },
-      { status: 401 }
-    );
+    return unauthorized('Incorrect passphrase');
   }
 
   startupState.setPepperState('resolved');

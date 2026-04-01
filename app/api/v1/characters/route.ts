@@ -9,9 +9,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedHandler, AuthenticatedContext } from '@/lib/api/middleware';
+import { createAuthenticatedHandler, AuthenticatedContext, enrichWithDefaultImage } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
-import { getFilePath } from '@/lib/api/middleware/file-path';
 import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/character';
 import { runCharacterWizard, runCharacterWizardStreaming, type WizardRequest, type WizardProgressEvent } from '@/lib/services/character-wizard.service';
 import { z } from 'zod';
@@ -147,17 +146,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     // Enrich characters
     const enrichedCharacters = await Promise.all(
       characters.map(async (character) => {
-        let defaultImage = null;
-        if (character.defaultImageId) {
-          const fileEntry = await repos.files.findById(character.defaultImageId);
-          if (fileEntry) {
-            defaultImage = {
-              id: fileEntry.id,
-              filepath: getFilePath(fileEntry),
-              url: null,
-            };
-          }
-        }
+        const defaultImage = await enrichWithDefaultImage(character.defaultImageId, repos);
 
         let defaultPartnerName: string | null = null;
         if (character.defaultPartnerId) {

@@ -8,6 +8,7 @@ import {
   shouldInjectTimestamp,
   formatTimestampForSystemPrompt,
   initializeFictionalTime,
+  resolveTimezone,
 } from '@/lib/chat/timestamp-utils'
 import type { TimestampConfig } from '@/lib/schemas/types'
 
@@ -290,6 +291,179 @@ describe('timestamp-utils', () => {
       const result = calculateCurrentTimestamp(config)
       // Should contain a full day name, full month name, day number, and year
       expect(result.formatted).toMatch(/^\w+, \w+ \d{1,2}, \d{4}$/)
+    })
+  })
+
+  describe('resolveTimezone', () => {
+    const originalEnv = process.env
+
+    beforeEach(() => {
+      process.env = { ...originalEnv }
+      delete process.env.QUILLTAP_TIMEZONE
+    })
+
+    afterAll(() => {
+      process.env = originalEnv
+    })
+
+    it('should return per-chat timezone when set', () => {
+      process.env.QUILLTAP_TIMEZONE = 'UTC'
+      expect(resolveTimezone('America/New_York', 'Europe/London')).toBe('America/New_York')
+    })
+
+    it('should fall back to chatSettings timezone when per-chat is null', () => {
+      process.env.QUILLTAP_TIMEZONE = 'UTC'
+      expect(resolveTimezone(null, 'Europe/London')).toBe('Europe/London')
+    })
+
+    it('should fall back to QUILLTAP_TIMEZONE env var when both are null', () => {
+      process.env.QUILLTAP_TIMEZONE = 'Asia/Tokyo'
+      expect(resolveTimezone(null, null)).toBe('Asia/Tokyo')
+    })
+
+    it('should return undefined when all sources are empty', () => {
+      expect(resolveTimezone(null, null)).toBeUndefined()
+    })
+
+    it('should skip empty strings', () => {
+      expect(resolveTimezone('', '')).toBeUndefined()
+    })
+  })
+
+  describe('timezone-aware formatting', () => {
+    it('should format FRIENDLY with explicit timezone', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'FRIENDLY',
+        useFictionalTime: false,
+        autoPrepend: true,
+      }
+
+      // Use a fixed date: 2026-02-22T12:00:00Z (noon UTC)
+      const originalDateNow = Date.now
+      Date.now = () => new Date('2026-02-22T12:00:00Z').getTime()
+
+      try {
+        const resultNY = calculateCurrentTimestamp(config, 'America/New_York')
+        // 12:00 UTC = 7:00 AM EST
+        expect(resultNY.formatted).toContain('7:00 AM')
+
+        const resultTokyo = calculateCurrentTimestamp(config, 'Asia/Tokyo')
+        // 12:00 UTC = 9:00 PM JST
+        expect(resultTokyo.formatted).toContain('9:00 PM')
+      } finally {
+        Date.now = originalDateNow
+      }
+    })
+
+    it('should format ISO8601 with timezone offset', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'ISO8601',
+        useFictionalTime: false,
+        autoPrepend: true,
+      }
+
+      const originalDateNow = Date.now
+      Date.now = () => new Date('2026-02-22T12:00:00Z').getTime()
+
+      try {
+        const resultNY = calculateCurrentTimestamp(config, 'America/New_York')
+        // Should contain an offset like -05:00
+        expect(resultNY.formatted).toMatch(/2026-02-22T07:00:00-05:00/)
+        // isoValue should also have offset
+        expect(resultNY.isoValue).toMatch(/-05:00$/)
+
+        const resultUTC = calculateCurrentTimestamp(config, 'UTC')
+        expect(resultUTC.formatted).toMatch(/2026-02-22T12:00:00\+00:00/)
+      } finally {
+        Date.now = originalDateNow
+      }
+    })
+
+    it('should format DATE_ONLY with explicit timezone', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'DATE_ONLY',
+        useFictionalTime: false,
+        autoPrepend: true,
+      }
+
+      // Use a time that crosses the date boundary:
+      // 2026-02-22T23:30:00Z = Feb 22 in UTC, but Feb 23 in Tokyo (JST = UTC+9)
+      const originalDateNow = Date.now
+      Date.now = () => new Date('2026-02-22T23:30:00Z').getTime()
+
+      try {
+        const resultUTC = calculateCurrentTimestamp(config, 'UTC')
+        expect(resultUTC.formatted).toContain('February 22')
+
+        const resultTokyo = calculateCurrentTimestamp(config, 'Asia/Tokyo')
+        expect(resultTokyo.formatted).toContain('February 23')
+      } finally {
+        Date.now = originalDateNow
+      }
+    })
+
+    it('should format TIME_ONLY with explicit timezone', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'TIME_ONLY',
+        useFictionalTime: false,
+        autoPrepend: true,
+      }
+
+      const originalDateNow = Date.now
+      Date.now = () => new Date('2026-02-22T12:00:00Z').getTime()
+
+      try {
+        const resultNY = calculateCurrentTimestamp(config, 'America/New_York')
+        expect(resultNY.formatted).toMatch(/7:00 AM/)
+
+        const resultTokyo = calculateCurrentTimestamp(config, 'Asia/Tokyo')
+        expect(resultTokyo.formatted).toMatch(/9:00 PM/)
+      } finally {
+        Date.now = originalDateNow
+      }
+    })
+
+    it('should format CUSTOM with explicit timezone', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'CUSTOM',
+        customFormat: 'YYYY-MM-DD HH:mm',
+        useFictionalTime: false,
+        autoPrepend: true,
+      }
+
+      const originalDateNow = Date.now
+      Date.now = () => new Date('2026-02-22T12:00:00Z').getTime()
+
+      try {
+        const resultNY = calculateCurrentTimestamp(config, 'America/New_York')
+        expect(resultNY.formatted).toBe('2026-02-22 07:00')
+
+        const resultTokyo = calculateCurrentTimestamp(config, 'Asia/Tokyo')
+        expect(resultTokyo.formatted).toBe('2026-02-22 21:00')
+      } finally {
+        Date.now = originalDateNow
+      }
+    })
+
+    it('should preserve existing behavior when no timezone is specified', () => {
+      const config: TimestampConfig = {
+        mode: 'EVERY_MESSAGE',
+        format: 'ISO8601',
+        useFictionalTime: false,
+        autoPrepend: true,
+      }
+
+      const result = calculateCurrentTimestamp(config)
+
+      // Without timezone, isoValue should end with Z (UTC)
+      expect(result.isoValue).toMatch(/Z$/)
+      // formatted should also be ISO format ending with Z
+      expect(result.formatted).toMatch(/Z$/)
     })
   })
 })

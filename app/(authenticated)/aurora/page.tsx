@@ -211,7 +211,7 @@ export default function CharactersPage() {
   }
 
   return (
-    <div className="character-page qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/aurora.png)' } as React.CSSProperties}>
+    <div className="character-page qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/aurora.webp)' } as React.CSSProperties}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
         <h1 className="text-3xl font-semibold leading-tight">Characters</h1>
         <div className="flex flex-wrap gap-3">
@@ -279,14 +279,14 @@ export default function CharactersPage() {
                 <div className="flex items-center gap-1 ml-2">
                   <button
                     onClick={(e) => toggleFavorite(e, character.id)}
-                    className="text-2xl text-amber-400 transition-transform hover:scale-110"
+                    className="text-2xl qt-text-favorite transition-transform hover:scale-110"
                     title={character.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                   >
                     {character.isFavorite ? '⭐' : '☆'}
                   </button>
                   <button
                     onClick={(e) => toggleControlledBy(e, character.id)}
-                    className="text-amber-400 transition-transform hover:scale-110"
+                    className="qt-text-favorite transition-transform hover:scale-110"
                     title={character.controlledBy === 'user' ? 'Switch to LLM control' : 'Switch to user control'}
                   >
                     {character.controlledBy === 'user' ? (

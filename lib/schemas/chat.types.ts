@@ -58,7 +58,7 @@ export const MessageEventSchema = z.object({
   attachments: z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,
   // Debug: Memory extraction logs (Sprint 6)
-  debugMemoryLogs: z.array(z.string()).optional(),
+  debugMemoryLogs: z.array(z.string()).nullable().optional(),
   // Google Gemini thought signature for thinking models (e.g., gemini-3-pro)
   // Must be preserved and passed back for multi-turn conversations with function calling
   thoughtSignature: z.string().nullable().optional(),
@@ -74,7 +74,7 @@ export const MessageEventSchema = z.object({
   // Used to avoid client-side markdown processing overhead on chat load
   renderedHtml: z.string().nullable().optional(),
   // Danger content flags from gatekeeper classification
-  dangerFlags: z.array(DangerFlagSchema).optional(),
+  dangerFlags: z.array(DangerFlagSchema).nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;

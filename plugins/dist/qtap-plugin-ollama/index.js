@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.21.0";
+var VERSION = "6.22.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -4491,7 +4491,7 @@ var Files = class extends APIResource {
    * a JSON request with a file ID.
    */
   create(containerID, body, options) {
-    return this._client.post(path`/containers/${containerID}/files`, multipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post(path`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Retrieve Container File
@@ -6371,7 +6371,7 @@ var Videos = class extends APIResource {
   }
 };
 
-// ../../../node_modules/openai/resources/webhooks.mjs
+// ../../../node_modules/openai/resources/webhooks/webhooks.mjs
 var _Webhooks_instances;
 var _Webhooks_validateSecret;
 var _Webhooks_getRequiredHeader;
@@ -7385,7 +7385,8 @@ var capabilities = {
   chat: true,
   imageGeneration: false,
   embeddings: true,
-  webSearch: false
+  webSearch: false,
+  toolUse: false
 };
 var attachmentSupport = {
   supportsAttachments: false,

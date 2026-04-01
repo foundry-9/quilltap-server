@@ -66,48 +66,6 @@ Character Guidelines:
 - Instructions persist across sessions
 - Updates apply to new messages immediately
 
-## File Storage Settings
-
-Configure where project files are stored.
-
-### Default Storage
-
-By default, projects use your system's default storage:
-- Local file system storage
-- Or your configured S3/MinIO
-
-### Project-Specific Storage
-
-Projects can use dedicated mount points:
-
-1. Open project settings
-2. Find **File Storage** or **Mount Point** section
-3. Select a different storage location
-4. Optionally migrate existing files
-
-**Use cases:**
-- Store large media on S3
-- Keep sensitive projects local
-- Separate storage by project type
-
-### Changing Storage Location
-
-1. Select new mount point from dropdown
-2. Choose whether to migrate existing files
-3. Click **Save** or **Migrate**
-
-**Migration options:**
-- **Migrate Files** — Copy files to new location
-- **Keep Existing** — New files go to new location, old stay put
-
-### Mount Point Options
-
-Depending on your configuration:
-- **System Default** — Uses global storage setting
-- **Local Storage** — Files stored on server file system
-- **S3/MinIO** — Cloud-compatible object storage
-- **Custom Mounts** — Any configured storage backends
-
 ## Tool Settings
 
 Control which AI tools are available in project chats.
@@ -234,11 +192,6 @@ Settings are typically organized in cards:
 - Save button
 - Character count indicator
 
-### Files/Storage Card
-- Current mount point display
-- Change storage dropdown
-- Migrate files option
-
 ### Tools Card
 - Summary of restrictions
 - Configure button
@@ -276,12 +229,6 @@ Most settings save automatically or with explicit save:
 - Update as project evolves
 - Don't repeat character-level info
 - Use clear, parseable formatting
-
-### Storage Best Practices
-
-- Choose appropriate storage for file types
-- Consider backup implications
-- Test access before major uploads
 
 ### Tool Best Practices
 
@@ -322,18 +269,6 @@ Most settings save automatically or with explicit save:
 - Send new message (settings apply to new messages)
 - Check if tool can be disabled
 
-### Storage change failed
-
-**Causes:**
-- Invalid mount point
-- Permission issue
-- Files in use
-
-**Solutions:**
-- Verify mount point is configured
-- Check storage permissions
-- Wait and retry
-
 ### Character settings not updating
 
 **Causes:**
@@ -353,4 +288,3 @@ Most settings save automatically or with explicit save:
 - [Project Chats](project-chats.md) — Conversations in projects
 - [Project Characters](project-characters.md) — Character roster
 - [Tools Settings](tools-settings.md) — Global tool configuration
-- [File Storage Settings](file-storage-settings.md) — Storage configuration

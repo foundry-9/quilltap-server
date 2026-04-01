@@ -200,6 +200,26 @@ Array and object fields are stored as JSON strings in SQLite. The abstraction la
 - Parses JSON back to objects/arrays on read
 - Supports querying within JSON via `json_extract()`
 
+### BLOB Columns
+
+Certain columns (notably vector embeddings) are stored as compact Float32 BLOBs instead of JSON text. This provides ~4-5x storage reduction and eliminates JSON parse/serialize overhead.
+
+**Registration:** Repositories call `registerBlobColumns(tableName, columns)` via the database manager to declare which columns contain BLOB data:
+
+```ts
+await registerBlobColumns('vector_entries', ['embedding']);
+await registerBlobColumns('memories', ['embedding']);
+```
+
+**Behavior:**
+- On write: `number[]` values in registered blob columns are converted to `Float32Array` Buffers via `embeddingToBlob()`
+- On read: Buffers are converted back to `number[]` via `blobToEmbedding()`
+- Legacy JSON text is handled gracefully during migration transitions
+
+**Utilities** (in `json-columns.ts`):
+- `embeddingToBlob(embedding: number[]): Buffer` — Creates a Float32Array buffer from a number array
+- `blobToEmbedding(blob: Buffer): number[]` — Reads Float32Array from buffer back to number array
+
 ### WAL Mode
 
 SQLite runs in WAL (Write-Ahead Logging) mode by default, which provides:
@@ -216,6 +236,67 @@ Platform-specific locations:
 - Windows: `%APPDATA%\Quilltap\data\quilltap.db`
 
 The data directory is automatically created if it doesn't exist. For Docker, mount a host directory to `/app/quilltap` using `docker run -v /path/to/data:/app/quilltap`.
+
+## Database Protection
+
+Quilltap includes multiple layers of SQLite database protection implemented in two modules under `lib/database/backends/sqlite/`:
+
+### Protection Module (`protection.ts`)
+
+Provides database lifecycle protection functions. All functions accept a `Database` instance as parameter to avoid circular imports.
+
+| Function | When | PRAGMA | Purpose |
+|----------|------|--------|---------|
+| `runIntegrityCheck(db)` | Startup | `quick_check` | Detects corruption early |
+| `startPeriodicCheckpoints(db)` | Startup | `wal_checkpoint(PASSIVE)` every 5 min | Keeps WAL file size bounded |
+| `stopPeriodicCheckpoints()` | Shutdown | N/A | Clears the interval |
+| `runShutdownCheckpoint(db)` | Shutdown | `wal_checkpoint(TRUNCATE)` | Merges WAL fully into main DB |
+| `runBackupCheckpoint(db)` | Before logical backup | `wal_checkpoint(PASSIVE)` | Ensures backup reads consistent data |
+
+The periodic checkpoint interval is stored on `globalThis.__quilltapCheckpointInterval` to survive Next.js hot module replacement. The interval calls `.unref()` so it doesn't prevent process exit.
+
+### Physical Backup Module (`physical-backup.ts`)
+
+Creates hot physical backups using better-sqlite3's `.backup()` API (wraps SQLite's Online Backup API):
+
+- **`createPhysicalBackup(db)`**: Creates a backup at `<data>/data/backups/quilltap-YYYY-MM-DDTHHmmss.db`. Async, non-blocking. Cleans up partial files on failure.
+- **`applyRetentionPolicy()`**: Scans the backups directory and applies a tiered retention policy:
+  - All backups < 7 days old
+  - 1 per week for weeks 1-4
+  - 1 per month for months 1-12
+  - 1 per year indefinitely
+
+### Startup Sequence
+
+In `SQLiteBackend.connect()`:
+1. Initialize database connection (`getSQLiteClient`)
+2. Register shutdown handlers (`setupSQLiteShutdownHandlers`)
+3. Run integrity check (synchronous, logs result, doesn't block)
+4. Start periodic WAL checkpoints
+5. Create physical backup + apply retention (async, non-blocking via `.then()`)
+
+### Shutdown Sequence
+
+In `closeSQLiteClient()`:
+1. Stop periodic checkpoints
+2. Run TRUNCATE checkpoint (merges all WAL data)
+3. Run `PRAGMA optimize`
+4. Close database connection
+
+### Configuration
+
+| Setting | Default | Override |
+|---------|---------|----------|
+| `synchronous` | `FULL` | `SQLITE_SYNCHRONOUS=normal` env var |
+
+The `FULL` synchronous mode ensures writes are flushed to disk before being acknowledged, preventing data loss on power failure.
+
+### Process Safety
+
+The shutdown handlers cover:
+- `SIGTERM` / `SIGINT` — graceful shutdown signals
+- `uncaughtException` — logs error, closes DB, exits
+- `unhandledRejection` — logs reason, closes DB, exits
 
 ## Troubleshooting
 

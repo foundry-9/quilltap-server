@@ -39,7 +39,7 @@ export function RestoreDialog({
   if (!isOpen) return null
 
   const handleClose = () => {
-    if (!state.restoring) {
+    if (!state.restoring && !state.uploading) {
       actions.resetDialog()
       onClose()
     }
@@ -156,7 +156,7 @@ export function RestoreDialog({
       <button
         className="qt-dialog-overlay !p-0 cursor-default border-none z-40"
         onClick={handleClose}
-        disabled={state.restoring}
+        disabled={state.restoring || state.uploading}
         aria-label="Close dialog"
         type="button"
       />
@@ -175,7 +175,7 @@ export function RestoreDialog({
               </div>
               <button
                 onClick={handleClose}
-                disabled={state.restoring}
+                disabled={state.restoring || state.uploading}
                 className="text-muted-foreground hover:text-foreground disabled:opacity-50"
                 aria-label="Close dialog"
               >
@@ -237,7 +237,7 @@ export function RestoreDialog({
               <>
                 <button
                   onClick={actions.handleBack}
-                  disabled={state.step === 'source' || state.restoring}
+                  disabled={state.step === 'source' || state.restoring || state.uploading}
                   className="qt-button qt-button-secondary"
                 >
                   Back
@@ -247,7 +247,7 @@ export function RestoreDialog({
                   <>
                     <button
                       onClick={handleClose}
-                      disabled={state.restoring}
+                      disabled={state.restoring || state.uploading}
                       className="qt-button qt-button-secondary"
                     >
                       Cancel
@@ -276,15 +276,21 @@ export function RestoreDialog({
                       <button
                         onClick={actions.handleNext}
                         disabled={
+                          state.uploading ||
                           state.loadingPreview ||
                           (state.step === 'source' && !state.selectedFile)
                         }
                         className="qt-button qt-button-primary"
                       >
-                        {state.loadingPreview ? (
+                        {state.uploading ? (
                           <>
                             <LoadingSpinner size={4} />
-                            Loading...
+                            Uploading... {state.uploadProgress}%
+                          </>
+                        ) : state.loadingPreview ? (
+                          <>
+                            <LoadingSpinner size={4} />
+                            Analyzing...
                           </>
                         ) : (
                           'Next'

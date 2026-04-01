@@ -8,44 +8,9 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, successResponse } from '@/lib/api/responses';
 import { enqueueStoryBackgroundGeneration } from '@/lib/background-jobs/queue-service';
+import { resolveImageProfileForChat } from '@/lib/image-gen/profile-resolution';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
-import type { ChatMetadata, ChatSettings } from '@/lib/schemas/types';
-
-/**
- * Resolve the image profile to use for story background generation
- * Priority: Chat image profile > Story backgrounds default > User default
- */
-async function resolveImageProfileForChat(
-  userId: string,
-  chat: ChatMetadata,
-  chatSettings: ChatSettings | null,
-  repos: AuthenticatedContext['repos']
-): Promise<string | null> {
-  // First, check the chat's image profile (most specific)
-  if (chat.imageProfileId) {
-    const profile = await repos.imageProfiles.findById(chat.imageProfileId);
-    if (profile && profile.userId === userId && profile.apiKeyId) {
-      return profile.id;
-    }
-  }
-
-  // Second, check if story backgrounds settings has a default profile
-  const storyBackgroundsSettings = chatSettings?.storyBackgroundsSettings;
-  if (storyBackgroundsSettings?.defaultImageProfileId) {
-    const profile = await repos.imageProfiles.findById(storyBackgroundsSettings.defaultImageProfileId);
-    if (profile && profile.userId === userId && profile.apiKeyId) {
-      return profile.id;
-    }
-  }
-
-  // Third, try the user's default image profile
-  const defaultProfile = await repos.imageProfiles.findDefault(userId);
-  if (defaultProfile && defaultProfile.apiKeyId) {
-    return defaultProfile.id;
-  }
-
-  return null;
-}
+import type { ChatMetadata } from '@/lib/schemas/types';
 
 /**
  * Handle regenerate-background action

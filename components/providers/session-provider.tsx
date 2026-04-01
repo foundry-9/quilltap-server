@@ -74,6 +74,7 @@ function CustomSessionProvider({
 }: CustomSessionProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<SessionStatus>("loading");
+  const [serverNotReady, setServerNotReady] = useState(false);
 
   const fetchSession = useCallback(async (): Promise<Session | null> => {
     try {
@@ -88,6 +89,7 @@ function CustomSessionProvider({
           // Set as unauthenticated so the UI isn't stuck on "Loading..."
           setSession(null);
           setStatus("unauthenticated");
+          setServerNotReady(true);
           return null;
         }
         // Other errors - log and retry
@@ -95,6 +97,7 @@ function CustomSessionProvider({
         setStatus("loading");
         return null;
       }
+      setServerNotReady(false);
 
       const data = await response.json();
 
@@ -134,6 +137,18 @@ function CustomSessionProvider({
       return () => clearInterval(intervalId);
     }
   }, [refetchInterval, fetchSession]);
+
+  // When server returned 503 (setup needed), retry more frequently
+  // so the session resolves quickly after setup completes
+  useEffect(() => {
+    if (!serverNotReady) return;
+
+    const retryId = setInterval(() => {
+      fetchSession();
+    }, 5000); // retry every 5 seconds
+
+    return () => clearInterval(retryId);
+  }, [serverNotReady, fetchSession]);
 
   // Refetch on window focus
   useEffect(() => {

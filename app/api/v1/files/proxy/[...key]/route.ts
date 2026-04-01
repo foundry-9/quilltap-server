@@ -9,8 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from '@/lib/auth/session';
-import { getRepositories } from '@/lib/repositories/factory';
+import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -40,34 +39,26 @@ function buildContentDisposition(filename: string, disposition: 'inline' | 'atta
  * GET /api/v1/files/proxy/[...key]
  * Serve a file from local filesystem backend by storage key
  */
-export async function GET(
+async function handleGet(
   request: NextRequest,
-  { params }: { params: Promise<{ key: string[] }> }
-) {
+  ctx: RequestContext,
+  { key: keyArray }: { key: string[] }
+): Promise<NextResponse> {
+  const { user, repos } = ctx;
+
   try {
-    // Get and verify authentication
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const repos = getRepositories();
-    const user = await repos.users.findById(session.user.id);
-    if (!user) {
-      logger.warn('[Files v1] Proxy: User not found for session', { userId: session.user.id });
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
     // Extract storage key from params
-    const { key: keyArray } = await params;
     if (!keyArray || keyArray.length === 0) {
       return notFound('File');
     }
 
     const encodedKey = keyArray.join('/');
-    const storageKey = decodeURIComponent(encodedKey);// Find the file in the database by storageKey
+    const storageKey = decodeURIComponent(encodedKey);
+
+    // Find the file in the database by storageKey
     const fileEntry = await repos.files.findByStorageKey(storageKey);
-    if (!fileEntry) {return notFound('File');
+    if (!fileEntry) {
+      return notFound('File');
     }
 
     // Verify the user has access to this file
@@ -79,10 +70,13 @@ export async function GET(
         storageKey,
       });
       return forbidden();
-    }// Download the file content using the file storage manager
+    }
+
+    // Download the file content using the file storage manager
     let buffer: Buffer;
     try {
-      buffer = await fileStorageManager.downloadFile(fileEntry);} catch (downloadError) {
+      buffer = await fileStorageManager.downloadFile(fileEntry);
+    } catch (downloadError) {
       logger.error('[Files v1] Proxy: Failed to download file from storage', {
         fileId: fileEntry.id,
         storageKey,
@@ -108,3 +102,5 @@ export async function GET(
     return serverError('Failed to serve file');
   }
 }
+
+export const GET = createContextParamsHandler<{ key: string[] }>(handleGet);

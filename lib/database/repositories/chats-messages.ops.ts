@@ -11,6 +11,7 @@ import {
   ChatMetadata,
   ChatEvent,
   ChatEventSchema,
+  DangerFlagSchema,
 } from '@/lib/schemas/types';
 import { UUIDSchema, TimestampSchema, JsonSchema, RoleEnum } from '@/lib/schemas/common.types';
 import { QueryFilter, SortSpec } from '../interfaces';
@@ -27,24 +28,28 @@ export const ChatMessageRowSchema = z.object({
   id: UUIDSchema,
   chatId: UUIDSchema,
   type: z.string(),  // 'message', 'context-summary', or 'system'
-  role: RoleEnum.optional(),  // Only for type='message'
-  content: z.string().optional(),  // For type='message'
+  role: RoleEnum.nullable().optional(),  // Only for type='message'
+  content: z.string().nullable().optional(),  // For type='message'
   rawResponse: JsonSchema.nullable().optional(),  // JSON object
   tokenCount: z.number().nullable().optional(),
   promptTokens: z.number().nullable().optional(),
   completionTokens: z.number().nullable().optional(),
   swipeGroupId: z.string().nullable().optional(),
   swipeIndex: z.number().nullable().optional(),
-  attachments: z.array(UUIDSchema).default([]),  // JSON array
-  debugMemoryLogs: z.array(z.string()).optional(),  // JSON array
+  attachments: z.array(UUIDSchema).nullable().default([]),  // JSON array
+  debugMemoryLogs: z.array(z.string()).nullable().optional(),  // JSON array
   thoughtSignature: z.string().nullable().optional(),
   participantId: UUIDSchema.nullable().optional(),
   recoveryType: z.enum(['token_limit', 'token_limit_static', 'content_limit', 'content_limit_static']).nullable().optional(),
+  // Server-side pre-rendered HTML for simple messages
+  renderedHtml: z.string().nullable().optional(),
+  // Danger content flags from gatekeeper classification
+  dangerFlags: z.array(DangerFlagSchema).nullable().optional(),  // JSON array
   // For type='context-summary'
-  context: z.string().optional(),
+  context: z.string().nullable().optional(),
   // For type='system'
-  systemEventType: z.string().optional(),
-  description: z.string().optional(),
+  systemEventType: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
   totalTokens: z.number().nullable().optional(),
   provider: z.string().nullable().optional(),
   modelName: z.string().nullable().optional(),
@@ -70,13 +75,14 @@ export class ChatMessagesOps {
     return safeQuery(async () => {
       const messagesCollection = await this.ctx.getMessagesCollection();
 
+      let rawMessages: any[];
+
       if (this.ctx.isSQLiteBackend()) {
         // SQLite: Query individual message rows, sorted by createdAt
-        const messages = await messagesCollection.find(
+        rawMessages = await messagesCollection.find(
           { chatId } as QueryFilter,
           { sort: { createdAt: 1 } as SortSpec }
         );
-        return messages.map((msg: any) => ChatEventSchema.parse(msg));
       } else {
         // Legacy data compatibility: Extract from embedded array
         const messagesDoc = await messagesCollection.findOne({ chatId } as QueryFilter);
@@ -85,9 +91,27 @@ export class ChatMessagesOps {
           return [];
         }
 
-        const messages = (messagesDoc as any).messages || [];
-        return messages.map((msg: any) => ChatEventSchema.parse(msg));
+        rawMessages = (messagesDoc as any).messages || [];
       }
+
+      // Validate each message individually - skip corrupted messages rather than
+      // failing the entire chat load
+      const validMessages: ChatEvent[] = [];
+      for (const msg of rawMessages) {
+        const result = ChatEventSchema.safeParse(msg);
+        if (result.success) {
+          validMessages.push(result.data);
+        } else {
+          logger.warn('Skipping corrupted chat message', {
+            chatId,
+            messageId: msg?.id || 'unknown',
+            messageType: msg?.type || 'unknown',
+            errors: result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
+          });
+        }
+      }
+
+      return validMessages;
     }, 'Failed to get messages for chat', { chatId }, []);
   }
 

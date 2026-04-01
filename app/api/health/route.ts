@@ -28,7 +28,7 @@ interface HealthResponse {
   environment: string | undefined;
   services: {
     json?: ServiceHealth;
-    s3?: ServiceHealth;
+    fileStorage?: ServiceHealth;
   };
 }
 
@@ -77,32 +77,16 @@ async function checkFileStorageHealth(
       await fileStorageManager.initialize();
     }
 
-    const mountPoints = fileStorageManager.getMountPoints();
-
-    if (mountPoints.length === 0) {
-      services.s3 = {
-        status: 'degraded',
-        message: 'No file storage mount points configured',
-      };
-      serviceStatuses.push('degraded');
-      healthLogger.warn('No file storage mount points configured');
-      return;
-    }
-
-    // Test the default backend
-    const defaultBackend = await fileStorageManager.getDefaultBackend();
-    const metadata = defaultBackend.getMetadata();
-
-    services.s3 = {
+    services.fileStorage = {
       status: 'healthy',
-      message: `File storage operational (${metadata.displayName})`,
-      mode: metadata.displayName,
+      message: 'Local file storage operational',
+      mode: 'local',
     };
     serviceStatuses.push('healthy');
 
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-    services.s3 = {
+    services.fileStorage = {
       status: 'unhealthy',
       message: `File storage health check error: ${errorMessage}`,
     };

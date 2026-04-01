@@ -25,7 +25,6 @@ const nextConfig = {
     '/*': [
       './node_modules/@openrouter/**/*',
       './node_modules/zod/**/*',
-      './node_modules/next-auth/**/*',
       './node_modules/better-sqlite3/**/*',
     ],
   },
@@ -35,9 +34,10 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '100mb',
     },
-    // Proxy/middleware body size limit - allow large import/export files
+    // Proxy/middleware body size limit - allow large import/export and backup files
     // Default is 10MB which truncates .qtap import files with memories
-    proxyClientMaxBodySize: '100mb',
+    // Increased to 500MB to support large backup restores via streaming upload
+    proxyClientMaxBodySize: '500mb',
   },
 
   // Image optimization configuration

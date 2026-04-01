@@ -34,7 +34,7 @@ export function toJson(value: unknown): string | null {
  * Parse a JSON string from SQLite back to a JavaScript value
  */
 export function fromJson<T = unknown>(value: string | null): T | null {
-  if (value === null || value === undefined) {
+  if (value === null || value === undefined || value === '') {
     return null;
   }
 
@@ -53,7 +53,7 @@ export function fromJson<T = unknown>(value: string | null): T | null {
  * Safely parse JSON, returning null on failure instead of throwing
  */
 export function fromJsonSafe<T = unknown>(value: string | null, defaultValue: T | null = null): T | null {
-  if (value === null || value === undefined) {
+  if (value === null || value === undefined || value === '') {
     return defaultValue;
   }
 
@@ -93,9 +93,14 @@ export function shouldStoreAsJson(value: unknown): boolean {
  * Prepare a value for SQLite storage
  * Converts arrays and objects to JSON strings
  */
-export function prepareForStorage(value: unknown): string | number | null {
+export function prepareForStorage(value: unknown): string | number | Buffer | null {
   if (value === undefined || value === null) {
     return null;
+  }
+
+  // Buffer pass-through (for BLOB columns)
+  if (Buffer.isBuffer(value)) {
+    return value;
   }
 
   // Boolean to integer
@@ -284,6 +289,31 @@ export function jsonArrayLength(column: string): string {
 }
 
 // ============================================================================
+// BLOB Serialization (Float32 embeddings)
+// ============================================================================
+
+/**
+ * Convert a number[] embedding to a Float32 BLOB Buffer for compact SQLite storage.
+ * Float32 uses 4 bytes per dimension vs ~8-10 bytes per dimension in JSON text.
+ */
+export function embeddingToBlob(embedding: number[]): Buffer {
+  const float32 = new Float32Array(embedding);
+  return Buffer.from(float32.buffer, float32.byteOffset, float32.byteLength);
+}
+
+/**
+ * Convert a Float32 BLOB Buffer back to a number[] embedding.
+ */
+export function blobToEmbedding(blob: Buffer): number[] {
+  const float32 = new Float32Array(
+    blob.buffer,
+    blob.byteOffset,
+    blob.byteLength / Float32Array.BYTES_PER_ELEMENT
+  );
+  return Array.from(float32);
+}
+
+// ============================================================================
 // Type Conversion Helpers
 // ============================================================================
 
@@ -293,12 +323,20 @@ export function jsonArrayLength(column: string): string {
  */
 export function documentToRow(
   document: Record<string, unknown>,
-  jsonColumns: string[] = []
-): Record<string, string | number | null> {
-  const row: Record<string, string | number | null> = {};
+  jsonColumns: string[] = [],
+  blobColumns: Set<string> = new Set()
+): Record<string, string | number | Buffer | null> {
+  const row: Record<string, string | number | Buffer | null> = {};
 
   for (const [key, value] of Object.entries(document)) {
-    if (jsonColumns.includes(key) || shouldStoreAsJson(value)) {
+    // BLOB columns: convert number[] to Float32 Buffer
+    if (blobColumns.has(key) && Array.isArray(value) && typeof value[0] === 'number') {
+      row[key] = embeddingToBlob(value as number[]);
+    } else if (blobColumns.has(key) && Array.isArray(value) && value.length === 0) {
+      row[key] = null; // Empty embedding arrays stored as NULL
+    } else if (blobColumns.has(key) && Buffer.isBuffer(value)) {
+      row[key] = value;
+    } else if (jsonColumns.includes(key) || (shouldStoreAsJson(value) && !blobColumns.has(key))) {
       row[key] = toJson(value);
     } else {
       row[key] = prepareForStorage(value);

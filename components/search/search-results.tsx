@@ -264,7 +264,7 @@ export function SearchResults({ results, query, isLoading, onResultClick, counts
   if (isLoading) {
     return (
       <div className="p-6 text-center">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="inline-block animate-spin rounded-full h-8 w-8 qt-spinner" />
         <p className="mt-2 qt-text-small">Searching...</p>
       </div>
     )

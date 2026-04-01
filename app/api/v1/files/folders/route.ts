@@ -108,7 +108,6 @@ async function ensureParentFoldersExist(
       name: parentName,
       parentFolderId: grandparentId,
       projectId: projectId || null,
-      mountPointId: null,
     });
 
 
@@ -244,7 +243,6 @@ async function handleCreateFolder(request: NextRequest, user: any, repos: any): 
       name: folderName,
       parentFolderId,
       projectId: projectId || null,
-      mountPointId: null,
     });
 
 

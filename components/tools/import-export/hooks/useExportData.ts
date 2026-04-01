@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect } from 'react'
 import { getErrorMessage } from '@/lib/error-utils'
+import { triggerDownload } from '@/lib/download-utils'
 import { useDialogState } from '@/hooks/useDialogState'
 import { useWizardState } from '@/hooks/useWizardState'
 import type { ExportState, ExportStep, AvailableEntity } from '../types'
@@ -252,14 +253,8 @@ export function useExportData({
       // Trigger download
       const dataStr = JSON.stringify(exportData, null, 2)
       const dataBlob = new Blob([dataStr], { type: 'application/json' })
-      const url = URL.createObjectURL(dataBlob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `quilltap-${state.entityType}-${new Date().toISOString().split('T')[0]}.qtap`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      const filename = `quilltap-${state.entityType}-${new Date().toISOString().split('T')[0]}.qtap`
+      await triggerDownload(dataBlob, filename)
 
       wizard.goTo('complete')
       setState((prev) => ({

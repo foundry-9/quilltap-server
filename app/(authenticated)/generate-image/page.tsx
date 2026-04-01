@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import ImageModal from '@/components/chat/ImageModal'
 
 interface EntityOption {
   id: string
@@ -37,6 +38,7 @@ export default function GenerateImagePage() {
   const [allEntities, setAllEntities] = useState<EntityOption[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [previewImage, setPreviewImage] = useState<{ src: string; filename: string } | null>(null)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -334,35 +336,32 @@ export default function GenerateImagePage() {
                   className="w-full aspect-square object-cover rounded-lg border border-border"
                 />
                 {/* Overlay with actions */}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
+                <div className="absolute inset-0 qt-bg-overlay-medium opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
                   <button
                     onClick={() => handleDownload(image)}
-                    className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                    className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full transition-colors"
                     title="Download"
                   >
-                    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg className="w-5 h-5 qt-text-overlay" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                       <polyline points="7 10 12 15 17 10" />
                       <line x1="12" y1="15" x2="12" y2="3" />
                     </svg>
                   </button>
-                  <a
-                    href={image.filepath}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-                    title="Open in new tab"
+                  <button
+                    onClick={() => setPreviewImage({ src: image.filepath, filename: image.filename })}
+                    className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full transition-colors"
+                    title="View image"
                   >
-                    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                      <polyline points="15 3 21 3 21 9" />
-                      <line x1="10" y1="14" x2="21" y2="3" />
+                    <svg className="w-5 h-5 qt-text-overlay" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
                     </svg>
-                  </a>
+                  </button>
                 </div>
                 {/* Prompt tooltip */}
                 {image.generationPrompt && (
-                  <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/60 text-white text-xs rounded-b-lg opacity-0 group-hover:opacity-100 transition-opacity line-clamp-2">
+                  <div className="absolute bottom-0 left-0 right-0 p-2 qt-bg-overlay-medium qt-text-overlay text-xs rounded-b-lg opacity-0 group-hover:opacity-100 transition-opacity line-clamp-2">
                     {image.generationRevisedPrompt || image.generationPrompt}
                   </div>
                 )}
@@ -370,6 +369,16 @@ export default function GenerateImagePage() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <ImageModal
+          isOpen={true}
+          onClose={() => setPreviewImage(null)}
+          src={previewImage.src}
+          filename={previewImage.filename}
+        />
       )}
 
       {/* Empty State */}

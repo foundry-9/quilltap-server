@@ -70,6 +70,7 @@ export interface ConnectionProfileData {
   name: string
   provider?: string
   modelName?: string
+  allowToolUse?: boolean
   apiKey?: {
     id: string
     provider: string

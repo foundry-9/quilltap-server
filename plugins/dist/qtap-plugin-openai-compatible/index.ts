@@ -57,6 +57,7 @@ const capabilities = {
   imageGeneration: false,
   embeddings: false,
   webSearch: false,
+  toolUse: false,
 } as const;
 
 /**

@@ -47,6 +47,9 @@ export function ProfileCard({
   if (profile.isDangerousCompatible) {
     badges.push({ text: 'Uncensored', variant: 'destructive' })
   }
+  if (profile.allowToolUse === false) {
+    badges.push({ text: 'No Tools', variant: 'destructive' })
+  }
 
   return (
     <BaseProfileCard

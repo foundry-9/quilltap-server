@@ -147,7 +147,6 @@ The manifest is validated at runtime using Zod schemas. Invalid manifests will p
   - `EMBEDDING_PROVIDER` - Embedding generation
   - `THEME` - UI theme
   - `DATABASE_BACKEND` - Database replacement/augmentation
-  - `FILE_BACKEND` - File storage replacement/augmentation
   - `UPGRADE_MIGRATION` - Database migration runner
   - `ROLEPLAY_TEMPLATE` - Roleplay formatting templates
 
@@ -519,7 +518,6 @@ Declares required permissions.
 If not specified, this field is automatically inferred based on the plugin's capabilities:
 - `AUTH_METHODS` → requires restart
 - `DATABASE_BACKEND` → requires restart
-- `FILE_BACKEND` → requires restart
 - `UPGRADE_MIGRATION` → requires restart
 
 Set this field explicitly to override the inferred value.

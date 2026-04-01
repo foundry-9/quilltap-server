@@ -785,6 +785,36 @@
   --qt-tab-font-size: 0.875rem;
   --qt-tab-font-weight: 500;
   --qt-tab-transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ================================================================
+     OVERLAY VARIABLES
+     ================================================================ */
+  --qt-overlay-bg: hsl(0 0% 5% / 0.9);
+  --qt-overlay-medium-bg: hsl(0 0% 5% / 0.6);
+  --qt-overlay-light-bg: hsl(0 0% 5% / 0.2);
+  --qt-overlay-caption-bg: hsl(0 0% 5% / 0.55);
+  --qt-overlay-btn-bg: hsl(0 0% 100% / 0.08);
+  --qt-overlay-btn-hover-bg: hsl(0 0% 100% / 0.18);
+  --qt-overlay-fg: hsl(0 0% 100%);
+  --qt-overlay-muted-fg: hsl(0 0% 100% / 0.7);
+
+  /* ================================================================
+     SPINNER VARIABLES
+     ================================================================ */
+  --qt-spinner-track: hsl(var(--accent-brand) / 0.2);
+  --qt-spinner-indicator: hsl(var(--accent-brand));
+
+  /* ================================================================
+     FAVORITE VARIABLES
+     ================================================================ */
+  --qt-favorite-color: hsl(45 96% 58%);
+
+  /* ================================================================
+     WARNING BOX VARIABLES
+     ================================================================ */
+  --qt-warning-box-bg: hsl(var(--warning-900) / 0.15);
+  --qt-warning-box-border: hsl(var(--warning-100) / 0.3);
+  --qt-warning-box-fg: hsl(var(--warning-100));
 }
 
 /* ============================================================================
@@ -955,6 +985,9 @@
   --qt-response-status-sending-fg: hsl(199 89% 70%);
   --qt-response-status-streaming-fg: hsl(142 76% 65%);
   --qt-response-status-tool-fg: hsl(270 70% 70%);
+
+  /* Toggle knob - white on dark */
+  --qt-toggle-knob-bg: hsl(var(--always-white));
 }
 
 /* ============================================================================
@@ -991,6 +1024,9 @@
 
   /* Sidebar border - Subtle in light mode */
   --qt-sidebar-border: hsl(var(--border-100));
+
+  /* Toggle knob - dark on light */
+  --qt-toggle-knob-bg: hsl(var(--bg-000));
 
   /* DevConsole colors - Light mode */
   --qt-log-error-bg: hsl(0 50% 97%);

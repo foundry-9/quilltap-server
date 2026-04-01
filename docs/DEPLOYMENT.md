@@ -2,7 +2,7 @@
 
 ## Overview
 
-Quilltap uses **SQLite** for data storage and optionally **S3-compatible storage** for files. SQLite is self-contained and requires no external database services. The Docker image is the recommended way to run Quilltap in production.
+Quilltap uses **SQLite** for data storage and the **local filesystem** for files. SQLite is self-contained and requires no external database services. The Docker image is the recommended way to run Quilltap in production.
 
 ## Table of Contents
 
@@ -32,7 +32,6 @@ Quilltap uses **SQLite** for data storage and optionally **S3-compatible storage
 
 - **Domain name** with DNS pointing to your server (for HTTPS)
 - **Reverse proxy** (Nginx, Caddy, Traefik) for SSL termination
-- **S3-compatible storage** (AWS S3, MinIO, Cloudflare R2) for file storage
 
 ## Quick Start
 
@@ -78,6 +77,12 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 |----------|-------------|---------|
 | `BASE_URL` | Your production URL | `http://localhost:3000` |
 
+### Networking
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `QUILLTAP_HOST_IP` | Override host gateway IP for localhost URL rewriting (Docker/Lima/WSL2) | Auto-detected |
+
 ### Encryption
 
 | Variable | Description | Default |
@@ -92,16 +97,11 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 | `SQLITE_WAL_MODE` | Enable Write-Ahead Logging | `true` |
 | `SQLITE_BUSY_TIMEOUT` | Max wait for database locks (ms) | `5000` |
 
-### S3 Storage (Optional)
+### Timezone
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `S3_MODE` | Storage mode (`external` or `disabled`) | `disabled` |
-| `S3_ENDPOINT` | S3 endpoint URL | - |
-| `S3_REGION` | S3 region | `us-east-1` |
-| `S3_ACCESS_KEY` | S3 access key | - |
-| `S3_SECRET_KEY` | S3 secret key | - |
-| `S3_BUCKET` | S3 bucket name | `quilltap-files` |
+| `QUILLTAP_TIMEZONE` | IANA timezone name (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) for timestamp injection. Auto-detected in Electron app. | System default (usually UTC in Docker) |
 
 ### Logging
 
@@ -118,25 +118,37 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 | `SITE_PLUGINS_ENABLED` | Comma-separated plugin IDs, or `all` | `all` |
 | `SITE_PLUGINS_DISABLED` | Comma-separated plugin IDs to disable | (empty) |
 
-## Host Port Forwarding
+## Accessing Host Services (Ollama, LM Studio, etc.)
 
-If you run local services on your host machine (Ollama, LM Studio, MCP servers), the Docker container needs to reach them. Quilltap includes built-in port forwarding via the `HOST_REDIRECT_PORTS` environment variable.
+If you run local services on your host machine (Ollama, LM Studio, MCP servers), Quilltap automatically rewrites `localhost` and `127.0.0.1` URLs to point at the host gateway IP. This means you can configure `http://localhost:11434` in the UI and it will work transparently in Docker, Lima VMs, and WSL2 — no manual port forwarding needed.
+
+On Linux, add `--add-host` so the container can resolve the host IP:
 
 ```bash
 docker run -d \
   --name quilltap \
   -p 3000:3000 \
   -v /path/to/data:/app/quilltap \
-  -e HOST_REDIRECT_PORTS="11434,3030" \
   --add-host=host.docker.internal:host-gateway \
   csebold/quilltap
 ```
 
-This forwards the specified ports from the container's `localhost` to the Docker host using `socat`. Services like Ollama at `http://localhost:11434` work transparently inside the container without changing any URLs.
+On **macOS and Windows**, Docker Desktop provides `host.docker.internal` automatically — no extra flags needed.
 
-**Platform notes:**
-- **Mac and Windows:** `--add-host` is optional — Docker Desktop provides `host.docker.internal` automatically
-- **Linux:** `--add-host=host.docker.internal:host-gateway` is required
+### Override Host IP
+
+If automatic detection doesn't work in your environment, set the `QUILLTAP_HOST_IP` environment variable to the IP address of your host machine:
+
+```bash
+docker run -d \
+  --name quilltap \
+  -p 3000:3000 \
+  -v /path/to/data:/app/quilltap \
+  -e QUILLTAP_HOST_IP="192.168.1.100" \
+  csebold/quilltap
+```
+
+This override works in all environments (Docker, Lima, WSL2).
 
 ## Reverse Proxy Setup
 
@@ -227,7 +239,7 @@ docker restart quilltap
 Quilltap stores application data in two places:
 
 1. **SQLite Database File** — All application data in a single file at `/app/quilltap/data/quilltap.db`
-2. **File Storage** — Local filesystem (default) or S3-compatible storage for user files and images
+2. **File Storage** — Local filesystem for user files and images
 
 ### Storage Monitoring
 
@@ -376,6 +388,10 @@ docker stats quilltap
 
 # If high, restart the container
 docker restart quilltap
+
+# The default Node.js heap limit is 2048 MB (set via NODE_OPTIONS).
+# To increase it, override at runtime:
+docker run -e NODE_OPTIONS="--max-old-space-size=4096" quilltap
 ```
 
 ### Data Not Persisting

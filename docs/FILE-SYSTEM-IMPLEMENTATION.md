@@ -184,6 +184,8 @@ AI-generated files include:
 
 1. **Test migration (dry run)**:
    ```bash
+   # Note: The migrate-files script was removed in v2.0. These instructions
+   # are preserved for historical reference only.
    npm run migrate-files:dry-run
    ```
 
@@ -309,19 +311,19 @@ The following API routes will need updates to use the new system:
 7. **Better Recovery**: Files won't be lost after reboots
 8. **Relationship Management**: Track which files belong to which entities
 9. **Generation History**: Full metadata for AI-generated content
-10. **Scalable**: Ready for future enhancements (cloud storage, CDN, etc.)
+10. **Scalable**: Ready for future enhancements (CDN, etc.)
 
-## S3 Storage Key Structure
+## Storage Key Structure
 
-When S3 storage is enabled, files are stored using project-aware key paths:
+Files are stored on the local filesystem using project-aware key paths:
 
 ### Key Format
 
-| File Type | S3 Key Format |
-|-----------|---------------|
-| Project file at root | `{prefix}users/{userId}/{projectId}/{fileId}_{filename}` |
-| Project file in folder | `{prefix}users/{userId}/{projectId}/{folderPath}/{fileId}_{filename}` |
-| General file (no project) | `{prefix}users/{userId}/_general/{fileId}_{filename}` |
+| File Type | Storage Key Format |
+|-----------|-------------------|
+| Project file at root | `users/{userId}/{projectId}/{fileId}_{filename}` |
+| Project file in folder | `users/{userId}/{projectId}/{folderPath}/{fileId}_{filename}` |
+| General file (no project) | `users/{userId}/_general/{fileId}_{filename}` |
 
 ### Examples
 
@@ -338,12 +340,12 @@ users/abc123/_general/file789_avatar.png
 
 ### Key Generation
 
-The `buildS3Key()` function in `lib/s3/client.ts` generates keys using:
+The `fileStorageManager.buildStorageKey()` method generates keys:
 
 ```typescript
-import { buildS3Key } from '@/lib/s3/client';
+import { fileStorageManager } from '@/lib/file-storage/manager';
 
-const s3Key = buildS3Key({
+const storageKey = fileStorageManager.buildStorageKey({
   userId: 'user-123',
   fileId: 'file-456',
   filename: 'document.pdf',
@@ -352,17 +354,9 @@ const s3Key = buildS3Key({
 });
 ```
 
-### S3 Operations
-
-- **File Move**: When files are moved between folders or projects, the S3 object is physically moved (copy + delete)
-- **Listing**: Files can be listed by prefix for efficient project-level queries
-- **Migration**: The `restructure-s3-keys-v1` migration handles upgrading existing files to the new key format
-
 ## Future Enhancements
 
-The new system is designed to support:
-- Cloud storage backends (S3, Azure Blob, etc.)
-- CDN integration
+The system is designed to support:
 - Image optimization and resizing
 - Automatic cleanup of orphaned files
 - File versioning

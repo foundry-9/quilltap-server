@@ -29,6 +29,7 @@ export interface ProviderConfig {
     imageGeneration: boolean
     embeddings: boolean
     webSearch: boolean
+    toolUse?: boolean
   }
 }
 
@@ -45,6 +46,7 @@ export interface ConnectionProfile {
   isDangerousCompatible?: boolean
   allowWebSearch?: boolean
   useNativeWebSearch?: boolean
+  allowToolUse?: boolean
   apiKey?: ApiKey | null
   tags?: Tag[]
   messageCount?: number
@@ -65,6 +67,7 @@ export interface ProfileFormData {
   isDefault: boolean
   isCheap: boolean
   isDangerousCompatible: boolean
+  allowToolUse: boolean
   allowWebSearch: boolean
   useNativeWebSearch: boolean
   // OpenRouter-specific fields
@@ -90,6 +93,7 @@ export const initialFormState: ProfileFormData = {
   isDefault: false,
   isCheap: false,
   isDangerousCompatible: false,
+  allowToolUse: true,
   allowWebSearch: false,
   useNativeWebSearch: false,
   // OpenRouter-specific fields
