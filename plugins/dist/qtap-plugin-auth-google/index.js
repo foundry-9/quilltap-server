@@ -22,7 +22,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// plugins/dist/qtap-plugin-auth-google/index.ts
+// index.ts
 var import_google = __toESM(require("next-auth/providers/google"));
 var REQUIRED_ENV_VARS = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"];
 var config = {

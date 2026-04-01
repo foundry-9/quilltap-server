@@ -79,7 +79,7 @@ export async function uploadImage(file: File, userId: string): Promise<ImageUplo
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
 
-  await writeFile(fullPath, buffer);
+  await writeFile(fullPath, new Uint8Array(buffer));
 
   // Get image dimensions
   const dimensions = await getImageDimensions(buffer, file.type);
@@ -129,7 +129,7 @@ export async function importImageFromUrl(url: string, userId: string): Promise<I
   const filepath = join('uploads', 'images', userId, filename);
   const fullPath = join(process.cwd(), 'public', filepath);
 
-  await writeFile(fullPath, buffer);
+  await writeFile(fullPath, new Uint8Array(buffer));
 
   // Get image dimensions
   const dimensions = await getImageDimensions(buffer, contentType);

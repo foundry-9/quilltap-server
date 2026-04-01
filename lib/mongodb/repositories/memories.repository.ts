@@ -730,6 +730,82 @@ export class MemoriesRepository extends MongoBaseRepository<Memory> {
   }
 
   /**
+   * Find all memories associated with a specific chat
+   * @param chatId The chat ID
+   * @returns Promise<Memory[]> Array of memories associated with the chat
+   */
+  async findByChatId(chatId: string): Promise<Memory[]> {
+    logger.debug('Finding memories by chat ID', { chatId });
+    try {
+      const collection = await this.getCollection();
+      const results = await collection.find({ chatId }).toArray();
+
+      const memories = results
+        .map((doc) => {
+          const validation = this.validateSafe(doc);
+          if (validation.success && validation.data) {
+            return validation.data;
+          }
+          return null;
+        })
+        .filter((memory): memory is Memory => memory !== null);
+
+      logger.debug('Found memories for chat', { chatId, count: memories.length });
+      return memories;
+    } catch (error) {
+      logger.error('Error finding memories by chat ID', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Delete all memories associated with a specific chat
+   * @param chatId The chat ID
+   * @returns Promise<number> Number of memories deleted
+   */
+  async deleteByChatId(chatId: string): Promise<number> {
+    logger.debug('Deleting memories by chat ID', { chatId });
+    try {
+      const collection = await this.getCollection();
+      const result = await collection.deleteMany({ chatId });
+
+      logger.debug('Deleted memories for chat', { chatId, deletedCount: result.deletedCount });
+      return result.deletedCount || 0;
+    } catch (error) {
+      logger.error('Error deleting memories by chat ID', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Count memories associated with a specific chat
+   * @param chatId The chat ID
+   * @returns Promise<number> Number of memories for the chat
+   */
+  async countByChatId(chatId: string): Promise<number> {
+    logger.debug('Counting memories for chat', { chatId });
+    try {
+      const collection = await this.getCollection();
+      const count = await collection.countDocuments({ chatId });
+
+      logger.debug('Memory count for chat', { chatId, count });
+      return count;
+    } catch (error) {
+      logger.error('Error counting memories for chat', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
+    }
+  }
+
+  /**
    * Text search in memory content and summary for memories about a specific character
    * @param characterId The character who owns the memories
    * @param aboutCharacterId The character the memories are about

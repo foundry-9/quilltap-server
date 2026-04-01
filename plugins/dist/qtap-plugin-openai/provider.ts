@@ -114,7 +114,7 @@ export class OpenAIProvider implements LLMProvider {
     const requestParams: any = {
       model: params.model,
       messages: messages as ChatCompletionMessageParam[],
-      max_completion_tokens: params.maxTokens ?? 1000,
+      max_completion_tokens: params.maxTokens ?? 4096,
     };
 
     // Reasoning models (o1, o3, o4, gpt-5) don't support temperature, top_p, or other sampling parameters
@@ -184,7 +184,7 @@ export class OpenAIProvider implements LLMProvider {
     const requestParams: any = {
       model: params.model,
       messages: messages as ChatCompletionMessageParam[],
-      max_completion_tokens: params.maxTokens ?? 1000,
+      max_completion_tokens: params.maxTokens ?? 4096,
       stream: true,
       stream_options: { include_usage: true },
     };

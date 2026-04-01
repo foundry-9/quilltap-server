@@ -304,7 +304,7 @@ export function CapabilitiesReportCard() {
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-[180px] overflow-y-auto">
             {reports.map((report) => (
               <div
                 key={report.id}
@@ -323,7 +323,7 @@ export function CapabilitiesReportCard() {
                   {/* View Button */}
                   <button
                     onClick={() => handleViewReport(report)}
-                    className="p-2 text-sm bg-accent text-accent-foreground rounded hover:bg-accent/80 transition-colors"
+                    className="qt-button qt-button-icon qt-button-secondary p-2"
                     title="View Report"
                   >
                     <svg
@@ -351,7 +351,7 @@ export function CapabilitiesReportCard() {
                   <a
                     href={`/api/tools/capabilities-report/${report.id}?download=true`}
                     download={report.filename}
-                    className="p-2 text-sm bg-accent text-accent-foreground rounded hover:bg-accent/80 transition-colors"
+                    className="qt-button qt-button-icon qt-button-primary p-2"
                     title="Download Report"
                   >
                     <svg
@@ -372,7 +372,7 @@ export function CapabilitiesReportCard() {
                   {/* Delete Button */}
                   <button
                     onClick={() => handleDeleteReport(report)}
-                    className="p-2 text-sm bg-destructive/10 text-destructive rounded hover:bg-destructive/20 transition-colors"
+                    className="qt-button qt-button-icon qt-button-destructive p-2"
                     title="Delete Report"
                   >
                     <svg

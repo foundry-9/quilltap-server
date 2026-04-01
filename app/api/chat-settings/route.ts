@@ -22,7 +22,8 @@ async function updateChatSettings(
   tagStyles?: unknown,
   cheapLLMSettings?: unknown,
   imageDescriptionProfileId?: string | null,
-  themePreference?: unknown
+  themePreference?: unknown,
+  defaultRoleplayTemplateId?: string | null
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -71,6 +72,16 @@ async function updateChatSettings(
   if (typeof themePreference !== 'undefined') {
     const validatedThemePreference = ThemePreferenceSchema.parse(themePreference)
     updateData.themePreference = validatedThemePreference
+  }
+  if (typeof defaultRoleplayTemplateId !== 'undefined') {
+    // Validate template exists if setting a non-null value
+    if (defaultRoleplayTemplateId !== null) {
+      const template = await repos.roleplayTemplates.findById(defaultRoleplayTemplateId)
+      if (!template) {
+        throw new Error('Invalid roleplay template ID')
+      }
+    }
+    updateData.defaultRoleplayTemplateId = defaultRoleplayTemplateId
   }
 
   return repos.users.updateChatSettings(userId, updateData)
@@ -133,7 +144,7 @@ async function handleSettingsUpdate(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings, imageDescriptionProfileId, themePreference } = body
+    const { avatarDisplayMode, avatarDisplayStyle, tagStyles, cheapLLMSettings, imageDescriptionProfileId, themePreference, defaultRoleplayTemplateId } = body
 
     const chatSettings = await updateChatSettings(
       session.user.id,
@@ -142,7 +153,8 @@ async function handleSettingsUpdate(req: NextRequest) {
       tagStyles,
       cheapLLMSettings,
       imageDescriptionProfileId,
-      themePreference
+      themePreference,
+      defaultRoleplayTemplateId
     )
 
     return NextResponse.json(chatSettings)

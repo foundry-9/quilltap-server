@@ -16,6 +16,8 @@ export interface ModelInfo {
   deprecated?: boolean
   experimental?: boolean
   missingCapabilities?: string[]
+  maxOutputTokens?: number
+  contextWindow?: number
 }
 
 interface ModelSelectorProps {

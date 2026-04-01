@@ -30,3 +30,4 @@
 @import "./_layout.css";       /* Navbar, sidebar, page containers */
 @import "./_chat.css";         /* Chat messages, composer, participants */
 @import "./_content.css";      /* Badges, avatars, code blocks, typography */
+@import "./_devconsole.css";   /* DevConsole panel and log entries */

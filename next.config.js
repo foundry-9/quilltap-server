@@ -3,6 +3,26 @@ const nextConfig = {
   // Standalone output for Docker deployments
   output: 'standalone',
 
+  // External packages that the main app needs at runtime
+  // NOTE: LLM provider SDKs are now bundled INTO plugin output files, so they
+  // don't need to be listed here. Only packages used directly by the main app
+  // (not plugins) need to be in serverExternalPackages.
+  serverExternalPackages: [
+    '@openrouter/sdk',  // Used by lib/llm/pricing-fetcher.ts (dynamically imported, optional)
+    'zod',              // Used throughout the app
+  ],
+
+  // Include dependencies in standalone output for Docker deployments
+  // NOTE: Plugin SDK dependencies are now bundled into plugins, so we only need
+  // to include packages that the main app uses directly.
+  outputFileTracingIncludes: {
+    '/*': [
+      './node_modules/@openrouter/**/*',
+      './node_modules/zod/**/*',
+      './node_modules/next-auth/**/*',
+    ],
+  },
+
   // Experimental features
   experimental: {
     turbopackUseSystemTlsCerts: true,

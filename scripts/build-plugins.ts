@@ -2,22 +2,21 @@
 /**
  * Build Plugins Script
  *
- * Transpiles all TypeScript plugins to JavaScript using the same
- * transpiler that runs at application startup.
+ * Builds all TypeScript plugins by running `npm run build` in each plugin directory.
+ * Each plugin is responsible for its own build configuration (esbuild.config.mjs).
  *
  * Usage:
  *   npm run build:plugins
  *   tsx scripts/build-plugins.ts
+ *
+ * Options:
+ *   --install    Run npm install in each plugin directory before building
+ *   --parallel   Build plugins in parallel (faster but harder to debug)
  */
 
-// Load environment variables before importing anything that uses env
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
-dotenv.config();
-
-import { readdirSync, statSync, readFileSync } from 'node:fs';
+import { readdirSync, statSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { transpileAllPlugins } from '../lib/plugins/plugin-transpiler';
+import { execSync, spawn } from 'node:child_process';
 
 interface PluginManifest {
   name: string;
@@ -25,24 +24,27 @@ interface PluginManifest {
   typescript?: boolean;
 }
 
-/**
- * Discover all plugins in the plugins/dist directory
- */
-async function discoverPlugins() {
-  // Import logger here after env is loaded
-  const { logger } = await import('../lib/logger');
+interface BuildResult {
+  name: string;
+  success: boolean;
+  error?: string;
+  skipped?: boolean;
+}
 
+const args = process.argv.slice(2);
+const shouldInstall = args.includes('--install');
+const runParallel = args.includes('--parallel');
+
+/**
+ * Discover all TypeScript plugins in the plugins/dist directory
+ */
+function discoverPlugins(): Array<{ name: string; path: string }> {
   const cwd = process.cwd();
   const pluginsDir = join(cwd, 'plugins', 'dist');
+  const plugins: Array<{ name: string; path: string }> = [];
 
   try {
     const entries = readdirSync(pluginsDir);
-    const plugins: Array<{
-      name: string;
-      pluginPath: string;
-      main: string;
-      typescript: boolean;
-    }> = [];
 
     for (const entry of entries) {
       const fullPath = join(pluginsDir, entry);
@@ -51,38 +53,149 @@ async function discoverPlugins() {
         continue;
       }
 
-      // Check for manifest.json
+      // Check for manifest.json with typescript: true
       const manifestPath = join(fullPath, 'manifest.json');
       try {
         const manifestContent = readFileSync(manifestPath, 'utf-8');
         const manifest: PluginManifest = JSON.parse(manifestContent);
 
-        // Only include TypeScript plugins
         if (manifest.typescript) {
           plugins.push({
-            name: manifest.name,
-            pluginPath: join('plugins', 'dist', entry),
-            main: manifest.main || 'index.js',
-            typescript: true,
+            name: manifest.name || entry,
+            path: fullPath,
           });
         }
-      } catch (err) {
-        logger.warn('Skipping plugin without valid manifest', {
-          context: 'build-plugins',
-          plugin: entry,
-        });
+      } catch {
+        // Skip plugins without valid manifest
       }
     }
 
     return plugins;
   } catch (err) {
-    const { logger } = await import('../lib/logger');
-    logger.error('Failed to discover plugins', {
-      context: 'build-plugins',
-      error: err instanceof Error ? err.message : String(err),
-    });
+    console.error('Failed to discover plugins:', err);
     return [];
   }
+}
+
+/**
+ * Check if a plugin has a build script in package.json
+ */
+function hasBuildScript(pluginPath: string): boolean {
+  const packageJsonPath = join(pluginPath, 'package.json');
+  try {
+    const content = readFileSync(packageJsonPath, 'utf-8');
+    const pkg = JSON.parse(content);
+    return !!pkg.scripts?.build;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a plugin needs npm install (no node_modules or package-lock.json changed)
+ */
+function needsInstall(pluginPath: string): boolean {
+  const nodeModulesPath = join(pluginPath, 'node_modules');
+  return !existsSync(nodeModulesPath);
+}
+
+/**
+ * Build a single plugin
+ */
+async function buildPlugin(plugin: { name: string; path: string }): Promise<BuildResult> {
+  const { name, path: pluginPath } = plugin;
+
+  // Check if plugin has a build script
+  if (!hasBuildScript(pluginPath)) {
+    return { name, success: true, skipped: true };
+  }
+
+  try {
+    // Install dependencies if needed
+    if (shouldInstall || needsInstall(pluginPath)) {
+      console.log(`  📦 Installing dependencies for ${name}...`);
+      execSync('npm install', {
+        cwd: pluginPath,
+        stdio: 'pipe',
+        encoding: 'utf-8',
+      });
+    }
+
+    // Run the build
+    console.log(`  🔨 Building ${name}...`);
+    execSync('npm run build', {
+      cwd: pluginPath,
+      stdio: 'pipe',
+      encoding: 'utf-8',
+    });
+
+    return { name, success: true };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    return { name, success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Build a plugin using spawn (for parallel execution)
+ */
+function buildPluginAsync(plugin: { name: string; path: string }): Promise<BuildResult> {
+  return new Promise((resolve) => {
+    const { name, path: pluginPath } = plugin;
+
+    if (!hasBuildScript(pluginPath)) {
+      resolve({ name, success: true, skipped: true });
+      return;
+    }
+
+    // Check if needs install
+    const installFirst = shouldInstall || needsInstall(pluginPath);
+
+    const runBuild = () => {
+      const build = spawn('npm', ['run', 'build'], {
+        cwd: pluginPath,
+        stdio: 'pipe',
+      });
+
+      let stderr = '';
+      build.stderr?.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      build.on('close', (code) => {
+        if (code === 0) {
+          resolve({ name, success: true });
+        } else {
+          resolve({ name, success: false, error: stderr || `Exit code ${code}` });
+        }
+      });
+
+      build.on('error', (err) => {
+        resolve({ name, success: false, error: err.message });
+      });
+    };
+
+    if (installFirst) {
+      const install = spawn('npm', ['install'], {
+        cwd: pluginPath,
+        stdio: 'pipe',
+      });
+
+      install.on('close', (code) => {
+        if (code === 0) {
+          runBuild();
+        } else {
+          resolve({ name, success: false, error: 'npm install failed' });
+        }
+      });
+
+      install.on('error', (err) => {
+        resolve({ name, success: false, error: `npm install error: ${err.message}` });
+      });
+    } else {
+      runBuild();
+    }
+  });
 }
 
 /**
@@ -91,7 +204,11 @@ async function discoverPlugins() {
 async function main() {
   console.log('🔨 Building TypeScript plugins...\n');
 
-  const plugins = await discoverPlugins();
+  if (shouldInstall) {
+    console.log('  --install flag: Will run npm install in each plugin\n');
+  }
+
+  const plugins = discoverPlugins();
 
   if (plugins.length === 0) {
     console.log('No TypeScript plugins found to build.');
@@ -104,19 +221,35 @@ async function main() {
   }
   console.log('');
 
-  const result = await transpileAllPlugins(plugins);
+  let results: BuildResult[];
+
+  if (runParallel) {
+    console.log('Building in parallel...\n');
+    results = await Promise.all(plugins.map(buildPluginAsync));
+  } else {
+    results = [];
+    for (const plugin of plugins) {
+      const result = await buildPlugin(plugin);
+      results.push(result);
+    }
+  }
+
+  // Summary
+  const succeeded = results.filter((r) => r.success && !r.skipped).length;
+  const skipped = results.filter((r) => r.skipped).length;
+  const failed = results.filter((r) => !r.success).length;
 
   console.log('\n📊 Build Summary:');
-  console.log(`  Total:    ${result.stats.total}`);
-  console.log(`  Compiled: ${result.stats.compiled}`);
-  console.log(`  Cached:   ${result.stats.cached}`);
-  console.log(`  Failed:   ${result.stats.failed}`);
+  console.log(`  Total:     ${plugins.length}`);
+  console.log(`  Succeeded: ${succeeded}`);
+  console.log(`  Skipped:   ${skipped} (no build script)`);
+  console.log(`  Failed:    ${failed}`);
 
-  if (result.stats.failed > 0) {
+  if (failed > 0) {
     console.error('\n❌ Some plugins failed to build:');
-    for (const pluginResult of result.results) {
-      if (!pluginResult.success) {
-        console.error(`  - ${pluginResult.pluginName}: ${pluginResult.error}`);
+    for (const result of results) {
+      if (!result.success) {
+        console.error(`  - ${result.name}: ${result.error?.substring(0, 200)}`);
       }
     }
     process.exit(1);

@@ -53,21 +53,22 @@ export function getS3Client(): S3Client {
       throw new Error(errorMsg);
     }
 
-    // Ensure credentials are available
-    if (!config.accessKey || !config.secretKey) {
-      const errorMsg = 'S3 credentials are not available (S3_ACCESS_KEY and S3_SECRET_KEY required)';
-      moduleLogger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-
     // Build S3 client configuration
     const clientConfig: S3ClientConfig = {
       region: config.region,
-      credentials: {
+    };
+
+    // Only add explicit credentials if both are provided
+    // Otherwise, let the SDK use the default credential chain (IAM roles, env vars, etc.)
+    if (config.accessKey && config.secretKey) {
+      clientConfig.credentials = {
         accessKeyId: config.accessKey,
         secretAccessKey: config.secretKey,
-      },
-    };
+      };
+      moduleLogger.debug('Using explicit S3 credentials');
+    } else {
+      moduleLogger.debug('Using AWS SDK default credential chain (IAM role, env vars, etc.)');
+    }
 
     // Add endpoint configuration if provided (for S3-compatible services like MinIO)
     if (config.endpoint) {
@@ -167,32 +168,32 @@ export async function testS3Connection(): Promise<{
     return { success: false, message: errorMsg };
   }
 
-  // Ensure credentials are available
-  if (!config.accessKey || !config.secretKey) {
-    const errorMsg = 'S3 credentials are not available';
-    moduleLogger.error(errorMsg);
-    return { success: false, message: errorMsg };
-  }
-
   try {
     moduleLogger.debug('Creating S3 client for connection test', {
       endpoint: config.endpoint,
       region: config.region,
       bucket: config.bucket,
       forcePathStyle: config.forcePathStyle,
+      hasExplicitCredentials: !!(config.accessKey && config.secretKey),
     });
 
-    const testClient = new S3Client({
+    // Build test client config - use explicit credentials if provided,
+    // otherwise let the SDK use the default credential chain
+    const testClientConfig: S3ClientConfig = {
       region: config.region,
-      credentials: {
-        accessKeyId: config.accessKey,
-        secretAccessKey: config.secretKey,
-      },
+      ...(config.accessKey && config.secretKey && {
+        credentials: {
+          accessKeyId: config.accessKey,
+          secretAccessKey: config.secretKey,
+        },
+      }),
       ...(config.endpoint && {
         endpoint: config.endpoint,
         forcePathStyle: config.forcePathStyle,
       }),
-    });
+    };
+
+    const testClient = new S3Client(testClientConfig);
 
     const startTime = Date.now();
 

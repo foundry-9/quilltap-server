@@ -136,7 +136,7 @@ export class AnthropicProvider implements LLMProvider {
     const requestParams: any = {
       model: params.model,
       messages,
-      max_tokens: params.maxTokens ?? 1000,
+      max_tokens: params.maxTokens ?? 4096,
     }
 
     // Handle system message with optional cache control
@@ -233,7 +233,7 @@ export class AnthropicProvider implements LLMProvider {
     const requestParams: any = {
       model: params.model,
       messages,
-      max_tokens: params.maxTokens ?? 1000,
+      max_tokens: params.maxTokens ?? 4096,
       stream: true,
     }
 

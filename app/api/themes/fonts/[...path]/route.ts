@@ -132,7 +132,7 @@ export async function GET(
       });
 
       // Return the font with appropriate headers
-      return new NextResponse(fontBuffer, {
+      return new NextResponse(new Uint8Array(fontBuffer), {
         status: 200,
         headers: {
           'Content-Type': mimeType,

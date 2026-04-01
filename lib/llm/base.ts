@@ -24,6 +24,10 @@ export interface ModelMetadata {
   experimental?: boolean
   // Capabilities this model lacks (for informational purposes)
   missingCapabilities?: string[]
+  // Maximum output tokens supported by this model
+  maxOutputTokens?: number
+  // Context window size (input tokens)
+  contextWindow?: number
 }
 
 export interface FileAttachment {

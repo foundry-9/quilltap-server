@@ -68,6 +68,11 @@ export class OpenRouterEmbeddingProvider {
       dimensions: options?.dimensions,
     });
 
+    // Handle case where response is a string (error case)
+    if (typeof response === 'string') {
+      throw new Error(`OpenRouter returned an error: ${response}`);
+    }
+
     // Handle both float array and base64 encoded responses
     const embeddingData = response.data[0]?.embedding;
     if (!embeddingData) {
@@ -141,6 +146,11 @@ export class OpenRouterEmbeddingProvider {
       model,
       dimensions: options?.dimensions,
     });
+
+    // Handle case where response is a string (error case)
+    if (typeof response === 'string') {
+      throw new Error(`OpenRouter returned an error: ${response}`);
+    }
 
     const results: EmbeddingResult[] = [];
 

@@ -17,13 +17,20 @@ export function useAvatarDisplay() {
         setLoading(true)
         const res = await fetch('/api/chat-settings')
         if (!res.ok) {
-          throw new Error('Failed to fetch chat settings')
+          // 401 is expected when not logged in - don't log as error
+          if (res.status === 401) {
+            clientLogger.debug('Not authenticated, using default avatar display style')
+            setStyle('CIRCULAR')
+            return
+          }
+          throw new Error(`Failed to fetch chat settings: ${res.status} ${res.statusText}`)
         }
         const data = await res.json()
         setStyle((data.avatarDisplayStyle || 'CIRCULAR') as AvatarDisplayStyle)
       } catch (err) {
-        clientLogger.error('Error fetching avatar display style:', { error: err instanceof Error ? err.message : String(err) })
-        setError(err instanceof Error ? err.message : 'Unknown error')
+        const errorMessage = err instanceof Error ? err.message : String(err) || 'Unknown error'
+        clientLogger.error('Error fetching avatar display style', { error: errorMessage })
+        setError(errorMessage)
         // Default to circular on error
         setStyle('CIRCULAR')
       } finally {

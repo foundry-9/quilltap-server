@@ -21,10 +21,10 @@ import { safeJsonParse } from '@/lib/fetch-helpers'
 import { clientLogger } from '@/lib/client-logger'
 import MessageContent from '@/components/chat/MessageContent'
 import ToolMessage from '@/components/chat/ToolMessage'
+import RoleplayAnnotationButtons from '@/components/chat/RoleplayAnnotationButtons'
 import { formatMessageTime } from '@/lib/format-time'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useDebugOptional } from '@/components/providers/debug-provider'
-import DebugPanel from '@/components/debug/DebugPanel'
 import type { TagVisualStyle } from '@/lib/schemas/types'
 import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
@@ -128,6 +128,7 @@ interface Participant {
 interface Chat {
   id: string
   title: string
+  roleplayTemplateId?: string | null
   participants: Participant[]
   user: {
     id: string
@@ -169,6 +170,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [uploadingFile, setUploadingFile] = useState(false)
   const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
   const [chatPhotoCount, setChatPhotoCount] = useState(0)
+  const [chatMemoryCount, setChatMemoryCount] = useState(0)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
@@ -757,6 +759,107 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [id])
 
+  // Fetch memory count for this chat
+  const fetchChatMemoryCount = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/chats/${id}/memories`)
+      if (res.ok) {
+        const data = await res.json()
+        setChatMemoryCount(data.memoryCount || 0)
+        clientLogger.debug('[Chat] Fetched memory count', { chatId: id, memoryCount: data.memoryCount })
+      }
+    } catch (err) {
+      clientLogger.error('Failed to fetch chat memory count:', { error: err instanceof Error ? err.message : String(err) })
+    }
+  }, [id])
+
+  // Handle deleting all memories for this chat
+  const handleDeleteChatMemories = useCallback(async () => {
+    if (chatMemoryCount === 0) {
+      clientLogger.debug('[Chat] No memories to delete')
+      return
+    }
+
+    const confirmed = await showConfirmation(
+      `Delete all ${chatMemoryCount} memories created from this chat? This action cannot be undone.`
+    )
+
+    if (!confirmed) {
+      clientLogger.debug('[Chat] Memory deletion cancelled by user')
+      return
+    }
+
+    try {
+      clientLogger.info('[Chat] Deleting chat memories', { chatId: id, memoryCount: chatMemoryCount })
+      const res = await fetch(`/api/chats/${id}/memories`, { method: 'DELETE' })
+
+      if (res.ok) {
+        const data = await res.json()
+        clientLogger.info('[Chat] Chat memories deleted successfully', { deletedCount: data.deletedCount })
+        setChatMemoryCount(0)
+        showSuccessToast(`Deleted ${data.deletedCount} memories`)
+      } else {
+        const errorData = await res.json()
+        clientLogger.error('[Chat] Failed to delete chat memories', { error: errorData.error })
+        showErrorToast(`Failed to delete memories: ${errorData.error}`)
+      }
+    } catch (err) {
+      clientLogger.error('[Chat] Error deleting chat memories', { error: err instanceof Error ? err.message : String(err) })
+      showErrorToast('Failed to delete memories')
+    }
+  }, [id, chatMemoryCount])
+
+  // Handle re-extracting memories for this chat
+  const handleReextractMemories = useCallback(async () => {
+    // Get the first character participant for queueing
+    const characterParticipant = chat?.participants.find(p => p.type === 'CHARACTER' && p.isActive)
+    if (!characterParticipant?.character || !characterParticipant.connectionProfile) {
+      clientLogger.warn('[Chat] Cannot re-extract memories: no character or connection profile')
+      showErrorToast('Cannot re-extract memories: no character or connection profile configured')
+      return
+    }
+
+    const confirmed = await showConfirmation(
+      `Queue memory extraction jobs for all messages in this chat? This will process the entire conversation history.`
+    )
+
+    if (!confirmed) {
+      clientLogger.debug('[Chat] Memory re-extraction cancelled by user')
+      return
+    }
+
+    try {
+      clientLogger.info('[Chat] Queueing memory extraction', {
+        chatId: id,
+        characterId: characterParticipant.character.id,
+        characterName: characterParticipant.character.name,
+      })
+
+      const res = await fetch(`/api/chats/${id}/queue-memories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          characterId: characterParticipant.character.id,
+          characterName: characterParticipant.character.name,
+          connectionProfileId: characterParticipant.connectionProfile.id,
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        clientLogger.info('[Chat] Memory extraction jobs queued', { jobCount: data.jobCount })
+        showSuccessToast(`Queued ${data.jobCount} memory extraction jobs`)
+      } else {
+        const errorData = await res.json()
+        clientLogger.error('[Chat] Failed to queue memory extraction', { error: errorData.error })
+        showErrorToast(`Failed to queue memory extraction: ${errorData.error}`)
+      }
+    } catch (err) {
+      clientLogger.error('[Chat] Error queueing memory extraction', { error: err instanceof Error ? err.message : String(err) })
+      showErrorToast('Failed to queue memory extraction')
+    }
+  }, [id, chat])
+
   // Phase 6: Handle adding a character to the chat
   const handleAddCharacter = useCallback(() => {
     clientLogger.debug('[Chat] Opening add character dialog')
@@ -855,7 +958,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     fetchChat()
     fetchChatSettings()
     fetchChatPhotoCount()
-  }, [fetchChat, fetchChatSettings, fetchChatPhotoCount])
+    fetchChatMemoryCount()
+  }, [fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount])
 
   useEffect(() => {
     scrollToBottom()
@@ -1593,23 +1697,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     )
   }
 
-  const isDebugMode = debug?.isDebugMode ?? false
-
   // Show participant sidebar when:
   // - Multi-character chat (2+ characters)
-  // - Not in debug mode (debug panel takes precedence)
   // - User hasn't hidden it
-  const shouldShowParticipantSidebar = isMultiChar && !isDebugMode && showParticipantSidebar
-
-  const mainClasses = ['qt-chat-main']
-  if (isDebugMode) {
-    mainClasses.push('qt-chat-main-split')
-  }
+  const shouldShowParticipantSidebar = isMultiChar && showParticipantSidebar
 
   return (
     <div className="qt-chat-layout">
       {/* Main chat area */}
-      <div className={mainClasses.join(' ')}>
+      <div className="qt-chat-main">
 
       {/* Messages */}
       <div className="qt-chat-messages">
@@ -2028,6 +2124,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               ))}
             </div>
           )}
+          {/* Roleplay annotation buttons */}
+          <RoleplayAnnotationButtons
+            roleplayTemplateId={chat?.roleplayTemplateId}
+            inputRef={inputRef}
+            input={input}
+            setInput={setInput}
+            disabled={sending || !hasActiveCharacters}
+          />
           <form onSubmit={sendMessage} className="qt-chat-composer-inner">
             {/* Hidden file input */}
             <input
@@ -2079,10 +2183,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                   onGenerateImageClick={() => setGenerateImageDialogOpen(true)}
                   onSettingsClick={() => setChatSettingsModalOpen(true)}
                   onAddCharacterClick={handleAddCharacter}
+                  onDeleteChatMemoriesClick={handleDeleteChatMemories}
+                  onReextractMemoriesClick={handleReextractMemories}
                   chatPhotoCount={chatPhotoCount}
                   hasImageProfile={chat?.participants.some(p => p.imageProfile) ?? false}
                   showAddCharacter={isSingleCharacterChat}
                   chatId={id}
+                  chatMemoryCount={chatMemoryCount}
                 />
               </div>
             </div>
@@ -2247,6 +2354,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         onClose={() => setChatSettingsModalOpen(false)}
         chatId={id}
         participants={chat?.participants || []}
+        roleplayTemplateId={chat?.roleplayTemplateId}
         onSuccess={fetchChat}
       />
 
@@ -2321,12 +2429,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         onCharacterAdded={handleCharacterAdded}
       />
 
-      {/* Debug Panel */}
-      {isDebugMode && (
-        <div className="qt-chat-debug-panel">
-          <DebugPanel />
-        </div>
-      )}
     </div>
   )
 }

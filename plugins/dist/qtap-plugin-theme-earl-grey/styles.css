@@ -358,6 +358,43 @@
   --qt-auth-hint-fg: hsl(var(--text-400));
   --qt-auth-footer-fg: hsl(var(--text-400));
   --qt-auth-divider-color: hsl(var(--border-300) / 0.15);
+
+  /* ==========================================================================
+     ROLEPLAY ANNOTATION VARIABLES
+     ========================================================================== */
+
+  /* Text styling in messages */
+  --qt-rp-dialogue-color: hsl(var(--text-000));
+  --qt-rp-dialogue-bg: transparent;
+
+  /* Narration - light gray text on dark background for contrast */
+  --qt-rp-narration-color: hsl(var(--text-200));
+  --qt-rp-narration-bg: hsl(var(--bg-300) / 0.9);
+  --qt-rp-narration-style: normal;
+  --qt-rp-narration-padding: 0.125rem 0.375rem;
+  --qt-rp-narration-radius: 0.25rem;
+
+  /* Inner monologue - purple text on dark purple-tinted background */
+  --qt-rp-inner-monologue-color: hsl(var(--accent-pro-000));
+  --qt-rp-inner-monologue-bg: hsl(var(--accent-pro-900) / 0.85);
+  --qt-rp-inner-monologue-style: italic;
+  --qt-rp-inner-monologue-padding: 0.125rem 0.375rem;
+  --qt-rp-inner-monologue-radius: 0.25rem;
+
+  /* OOC - Terminal-style bright green on black */
+  --qt-rp-ooc-color: hsl(120 100% 60%);
+  --qt-rp-ooc-bg: hsl(0 0% 5%);
+  --qt-rp-ooc-font: var(--font-mono);
+  --qt-rp-ooc-padding: 0.125rem 0.375rem;
+  --qt-rp-ooc-radius: 0.25rem;
+
+  /* Annotation button colors */
+  --qt-rp-button-narration-bg: hsl(var(--pictogram-100));
+  --qt-rp-button-narration-fg: hsl(var(--text-000));
+  --qt-rp-button-internal-bg: hsl(var(--accent-pro-100));
+  --qt-rp-button-internal-fg: hsl(var(--oncolor-100));
+  --qt-rp-button-ooc-bg: hsl(120 100% 20%);
+  --qt-rp-button-ooc-fg: hsl(120 100% 75%);
 }
 
 /* Body/App Shell */

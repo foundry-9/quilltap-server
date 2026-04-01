@@ -51,7 +51,7 @@ export class OllamaProvider implements LLMProvider {
       stream: false,
       options: {
         temperature: params.temperature ?? 0.7,
-        num_predict: params.maxTokens ?? 1000,
+        num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
         stop: params.stop,
       },
@@ -139,7 +139,7 @@ export class OllamaProvider implements LLMProvider {
       stream: true,
       options: {
         temperature: params.temperature ?? 0.7,
-        num_predict: params.maxTokens ?? 1000,
+        num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
       },
     };

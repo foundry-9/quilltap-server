@@ -184,6 +184,11 @@ async function generateOpenRouterEmbedding(
     dimensions: profile.dimensions || undefined,
   })
 
+  // Handle case where response is a string (error case)
+  if (typeof response === 'string') {
+    throw new EmbeddingError(`OpenRouter returned an error: ${response}`, 'OPENROUTER')
+  }
+
   // Handle both float array and base64 encoded responses
   const embeddingData = response.data[0]?.embedding
   if (!embeddingData) {

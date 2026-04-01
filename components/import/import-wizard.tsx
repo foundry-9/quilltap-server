@@ -61,6 +61,7 @@ export function ImportWizard({
   const [defaultProfileId, setDefaultProfileId] = useState<string>(profiles[0]?.id || '')
   const [importedChat, setImportedChat] = useState<any>(null)
   const [showMemoryDialog, setShowMemoryDialog] = useState(false)
+  const [createMemories, setCreateMemories] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   /**
@@ -158,6 +159,7 @@ export function ImportWizard({
           mappings,
           defaultConnectionProfileId: defaultProfileId,
           triggerTitleGeneration: true,
+          createMemories,
         }),
       })
 
@@ -182,7 +184,7 @@ export function ImportWizard({
       showErrorToast(errorMessage)
       clientLogger.error('Error importing chat', { error: errorMessage })
     }
-  }, [parseResult, mappings, defaultProfileId])
+  }, [parseResult, mappings, defaultProfileId, createMemories])
 
   /**
    * Handle memory creation dialog close
@@ -276,6 +278,24 @@ export function ImportWizard({
               onDefaultProfileChange={setDefaultProfileId}
             />
 
+            {/* Memory creation option */}
+            <div className="border rounded-lg p-4 bg-muted/30">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createMemories}
+                  onChange={(e) => setCreateMemories(e.target.checked)}
+                  className="mt-1"
+                />
+                <div>
+                  <div className="font-medium text-foreground">Analyze messages for memories</div>
+                  <div className="text-sm text-muted-foreground">
+                    Queue each message for AI analysis to extract meaningful memories in the background
+                  </div>
+                </div>
+              </label>
+            </div>
+
             {error && (
               <div className="text-sm text-destructive whitespace-pre-wrap">
                 {error}
@@ -332,16 +352,22 @@ export function ImportWizard({
               {importedChat?.createdEntities?.personas?.length > 0 && (
                 <>, created {importedChat.createdEntities.personas.length} new persona(s)</>
               )}
+              {importedChat?.memoryJobCount > 0 && (
+                <>, queued {importedChat.memoryJobCount} messages for memory analysis</>
+              )}
             </div>
 
             <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setShowMemoryDialog(true)}
-                className="qt-button qt-button-secondary"
-              >
-                Create Memories...
-              </button>
+              {/* Only show memory dialog button if memories weren't already queued */}
+              {!importedChat?.memoryJobCount && (
+                <button
+                  type="button"
+                  onClick={() => setShowMemoryDialog(true)}
+                  className="qt-button qt-button-secondary"
+                >
+                  Analyze for Memories...
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

@@ -358,7 +358,7 @@ export class GoogleProvider implements LLMProvider {
       contents: messages,
       generationConfig: {
         temperature: params.temperature ?? 0.7,
-        maxOutputTokens: params.maxTokens ?? 1000,
+        maxOutputTokens: params.maxTokens ?? 4096,
         topP: params.topP ?? 1,
         stopSequences: params.stop,
       },
@@ -471,7 +471,7 @@ export class GoogleProvider implements LLMProvider {
       contents: messages,
       generationConfig: {
         temperature: params.temperature ?? 0.7,
-        maxOutputTokens: params.maxTokens ?? 1000,
+        maxOutputTokens: params.maxTokens ?? 4096,
         topP: params.topP ?? 1,
         stopSequences: params.stop,
       },

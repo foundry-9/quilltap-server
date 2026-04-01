@@ -1,12 +1,22 @@
 {
   "name": "qtap-plugin-google",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Google Gemini provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
   "author": "Foundry-9",
   "license": "MIT",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "clean": "rm -f index.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
   "peerDependencies": {
-    "@google/generative-ai": ">=0.1.0"
+    "react": ">=18.0.0"
   }
 }

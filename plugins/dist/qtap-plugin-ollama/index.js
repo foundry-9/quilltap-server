@@ -17,7 +17,7 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// plugins/dist/qtap-plugin-ollama/index.ts
+// index.ts
 var index_exports = {};
 __export(index_exports, {
   default: () => index_default,
@@ -25,7 +25,7 @@ __export(index_exports, {
 });
 module.exports = __toCommonJS(index_exports);
 
-// lib/logging/transports/console.ts
+// ../../../lib/logging/transports/console.ts
 var ConsoleTransport = class {
   /**
    * Write a log entry to the console
@@ -52,7 +52,7 @@ var ConsoleTransport = class {
   }
 };
 
-// lib/logging/transports/file.ts
+// ../../../lib/logging/transports/file.ts
 var import_fs = require("fs");
 var import_path = require("path");
 var FileTransport = class {
@@ -168,7 +168,7 @@ var FileTransport = class {
   }
 };
 
-// lib/env.ts
+// ../../../lib/env.ts
 var import_zod = require("zod");
 var envSchema = import_zod.z.object({
   // Node environment
@@ -242,14 +242,14 @@ var envSchema = import_zod.z.object({
 ).refine(
   (data) => {
     if (data.S3_MODE === "external") {
-      if (!data.S3_ENDPOINT || !data.S3_ACCESS_KEY || !data.S3_SECRET_KEY) {
+      if (data.S3_ACCESS_KEY && !data.S3_SECRET_KEY || !data.S3_ACCESS_KEY && data.S3_SECRET_KEY) {
         return false;
       }
     }
     return true;
   },
   {
-    message: "S3_ENDPOINT, S3_ACCESS_KEY, and S3_SECRET_KEY are required when S3_MODE is external",
+    message: "S3_ACCESS_KEY and S3_SECRET_KEY must both be provided, or both omitted (for IAM role auth)",
     path: ["S3_MODE"]
   }
 );
@@ -299,7 +299,7 @@ var isProduction = env.NODE_ENV === "production";
 var isDevelopment = env.NODE_ENV === "development";
 var isTest = env.NODE_ENV === "test";
 
-// lib/logger.ts
+// ../../../lib/logger.ts
 var LOG_LEVELS = {
   ["error" /* ERROR */]: 0,
   ["warn" /* WARN */]: 1,
@@ -448,7 +448,7 @@ var logger = new Logger({
   environment: process.env.NODE_ENV || "development"
 });
 
-// plugins/dist/qtap-plugin-ollama/provider.ts
+// provider.ts
 var OllamaProvider = class {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;
@@ -486,7 +486,7 @@ var OllamaProvider = class {
       stream: false,
       options: {
         temperature: params.temperature ?? 0.7,
-        num_predict: params.maxTokens ?? 1e3,
+        num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1,
         stop: params.stop
       }
@@ -560,7 +560,7 @@ var OllamaProvider = class {
       stream: true,
       options: {
         temperature: params.temperature ?? 0.7,
-        num_predict: params.maxTokens ?? 1e3,
+        num_predict: params.maxTokens ?? 4096,
         top_p: params.topP ?? 1
       }
     };
@@ -782,7 +782,7 @@ var OllamaProvider = class {
   }
 };
 
-// plugins/dist/qtap-plugin-ollama/icon.tsx
+// icon.tsx
 var import_jsx_runtime = require("react/jsx-runtime");
 function OllamaIcon({ className = "h-5 w-5" }) {
   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
@@ -822,7 +822,7 @@ function OllamaIcon({ className = "h-5 w-5" }) {
   );
 }
 
-// lib/llm/tool-formatting-utils.ts
+// ../../../lib/llm/tool-formatting-utils.ts
 function parseOpenAIToolCalls(response) {
   const toolCalls = [];
   try {
@@ -850,7 +850,7 @@ function parseOpenAIToolCalls(response) {
   return toolCalls;
 }
 
-// plugins/dist/qtap-plugin-ollama/index.ts
+// index.ts
 var metadata = {
   providerName: "OLLAMA",
   displayName: "Ollama",

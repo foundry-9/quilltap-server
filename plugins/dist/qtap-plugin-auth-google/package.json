@@ -1,11 +1,12 @@
 {
   "name": "qtap-plugin-auth-google",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Google OAuth authentication provider for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "node esbuild.config.mjs",
+    "clean": "rm -f index.js"
   },
   "keywords": [
     "quilltap",
@@ -16,7 +17,11 @@
   ],
   "author": "Foundry-9",
   "license": "MIT",
-  "dependencies": {
-    "next-auth": "^4.24.0"
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "peerDependencies": {
+    "next-auth": ">=4.0.0",
+    "react": ">=18.0.0"
   }
 }

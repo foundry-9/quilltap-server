@@ -182,6 +182,8 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Profile ID to use for image description fallback (when provider doesn't support images) */
   imageDescriptionProfileId: UUIDSchema.nullable().optional(),
+  /** Default roleplay template ID for all new chats */
+  defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),
   /** Theme preference settings */
   themePreference: ThemePreferenceSchema.default({
     activeThemeId: null,
@@ -301,6 +303,7 @@ export const CharacterSchema = z.object({
   avatarUrl: z.string().nullable().optional(),
   defaultImageId: UUIDSchema.nullable().optional(),
   defaultConnectionProfileId: UUIDSchema.nullable().optional(),
+  defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),  // Default roleplay template for this character
   sillyTavernData: JsonSchema.nullable().optional(),
   isFavorite: z.boolean().default(false),
   talkativeness: z.number().min(0.1).max(1.0).default(0.5),
@@ -410,6 +413,7 @@ export const ChatParticipantSchema = z.object({
   // LLM configuration (for AI characters only)
   connectionProfileId: UUIDSchema.nullable().optional(),  // Required for CHARACTER, null for PERSONA
   imageProfileId: UUIDSchema.nullable().optional(),       // Image generation profile
+  roleplayTemplateId: UUIDSchema.nullable().optional(),   // Roleplay template override for this chat
 
   // Per-chat customization
   systemPromptOverride: z.string().nullable().optional(),  // Custom scenario/context for this chat
@@ -449,6 +453,7 @@ export const ChatParticipantBaseSchema = z.object({
   personaId: UUIDSchema.nullable().optional(),
   connectionProfileId: UUIDSchema.nullable().optional(),
   imageProfileId: UUIDSchema.nullable().optional(),
+  roleplayTemplateId: UUIDSchema.nullable().optional(),  // Roleplay template override for this chat
   systemPromptOverride: z.string().nullable().optional(),
   displayOrder: z.number().default(0),
   isActive: z.boolean().default(true),
@@ -474,6 +479,8 @@ export const ChatMetadataSchema = z.object({
   contextSummary: z.string().nullable().optional(),
   sillyTavernMetadata: JsonSchema.nullable().optional(),
   tags: z.array(UUIDSchema).default([]),
+  /** Roleplay template for this chat (inherited from user default on creation) */
+  roleplayTemplateId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
@@ -495,6 +502,8 @@ export const ChatMetadataBaseSchema = z.object({
   contextSummary: z.string().nullable().optional(),
   sillyTavernMetadata: JsonSchema.nullable().optional(),
   tags: z.array(UUIDSchema).default([]),
+  /** Roleplay template for this chat (inherited from user default on creation) */
+  roleplayTemplateId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
@@ -729,6 +738,65 @@ export const MemoriesFileSchema = z.object({
 });
 
 export type MemoriesFile = z.infer<typeof MemoriesFileSchema>;
+
+// ============================================================================
+// ROLEPLAY TEMPLATES
+// ============================================================================
+
+export const RoleplayTemplateSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema.nullable().optional(),  // null for built-in templates
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).nullable().optional(),
+  systemPrompt: z.string().min(1),           // The template content
+  isBuiltIn: z.boolean().default(false),     // Built-in templates are read-only
+  tags: z.array(UUIDSchema).default([]),     // Optional categorization
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type RoleplayTemplate = z.infer<typeof RoleplayTemplateSchema>;
+
+// ============================================================================
+// BACKGROUND JOBS
+// ============================================================================
+
+export const BackgroundJobTypeEnum = z.enum([
+  'MEMORY_EXTRACTION',
+  'INTER_CHARACTER_MEMORY',
+  'CONTEXT_SUMMARY',
+  'TITLE_UPDATE',
+]);
+export type BackgroundJobType = z.infer<typeof BackgroundJobTypeEnum>;
+
+export const BackgroundJobStatusEnum = z.enum([
+  'PENDING',
+  'PROCESSING',
+  'COMPLETED',
+  'FAILED',
+  'DEAD',
+  'PAUSED',
+]);
+export type BackgroundJobStatus = z.infer<typeof BackgroundJobStatusEnum>;
+
+export const BackgroundJobSchema = z.object({
+  id: UUIDSchema,
+  userId: UUIDSchema,
+  type: BackgroundJobTypeEnum,
+  status: BackgroundJobStatusEnum.default('PENDING'),
+  payload: z.record(z.unknown()),               // Type-specific payload
+  priority: z.number().default(0),              // Higher = more urgent
+  attempts: z.number().default(0),
+  maxAttempts: z.number().default(3),
+  lastError: z.string().nullable().optional(),
+  scheduledAt: TimestampSchema,                 // When job becomes eligible to run
+  startedAt: TimestampSchema.nullable().optional(),
+  completedAt: TimestampSchema.nullable().optional(),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type BackgroundJob = z.infer<typeof BackgroundJobSchema>;
 
 // ============================================================================
 // COMPOUND OBJECTS

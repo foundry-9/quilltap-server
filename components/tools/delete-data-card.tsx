@@ -126,25 +126,40 @@ export function DeleteDataCard() {
     <>
       {/* Card */}
       <div className="qt-card p-6">
-        <div className="flex items-start gap-4">
-          <div className="flex-shrink-0 w-12 h-12 bg-destructive/10 rounded-lg flex items-center justify-center">
-            <svg className="w-6 h-6 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </div>
+        {/* Header */}
+        <div className="flex items-start gap-4 mb-6">
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-foreground">Delete All Data</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <h2 className="text-2xl font-bold text-foreground mb-1">
+              Delete All Data
+            </h2>
+            <p className="text-muted-foreground">
               Permanently delete all your data including characters, personas, chats, files, API keys, and backups. This action cannot be undone.
             </p>
-            <button
-              onClick={handleOpenDialog}
-              className="mt-4 px-4 py-2 bg-destructive text-white rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors"
+          </div>
+          <div className="flex-shrink-0 text-destructive">
+            <svg
+              className="w-8 h-8"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              Delete All Data
-            </button>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
+            </svg>
           </div>
         </div>
+
+        {/* Action Button */}
+        <button
+          onClick={handleOpenDialog}
+          className="qt-button qt-button-destructive"
+        >
+          Delete All Data
+        </button>
       </div>
 
       {/* Dialog */}
@@ -176,7 +191,7 @@ export function DeleteDataCard() {
                   </div>
                   <button
                     onClick={handleClose}
-                    className="text-muted-foreground hover:text-foreground"
+                    className="qt-button qt-button-ghost text-muted-foreground hover:text-foreground p-1"
                     aria-label="Close dialog"
                   >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -324,14 +339,14 @@ export function DeleteDataCard() {
                   <>
                     <button
                       onClick={handleClose}
-                      className="px-4 py-2 border border-input rounded-lg text-sm font-medium text-foreground bg-background hover:bg-accent transition-colors"
+                      className="qt-button qt-button-secondary"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleProceedToConfirm}
                       disabled={loading || !preview || getTotalCount(preview) === 0}
-                      className="px-4 py-2 bg-destructive text-white rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="qt-button qt-button-destructive"
                     >
                       Continue
                     </button>
@@ -342,14 +357,14 @@ export function DeleteDataCard() {
                   <>
                     <button
                       onClick={() => setStep('preview')}
-                      className="px-4 py-2 border border-input rounded-lg text-sm font-medium text-foreground bg-background hover:bg-accent transition-colors"
+                      className="qt-button qt-button-secondary"
                     >
                       Back
                     </button>
                     <button
                       onClick={handleDelete}
                       disabled={confirmText !== 'DELETE'}
-                      className="px-4 py-2 bg-destructive text-white rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="qt-button qt-button-destructive"
                     >
                       Delete Everything
                     </button>
@@ -359,7 +374,7 @@ export function DeleteDataCard() {
                 {step === 'complete' && (
                   <button
                     onClick={handleClose}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+                    className="qt-button qt-button-primary"
                   >
                     Done
                   </button>

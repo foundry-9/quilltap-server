@@ -94,10 +94,14 @@ const envSchema = z
   )
   .refine(
     (data) => {
-      // Warn about deprecated 'json' backend (validation passes but message logged elsewhere)
-      // S3 configuration is required when S3_MODE is 'external'
+      // S3 configuration validation for external mode
       if (data.S3_MODE === 'external') {
-        if (!data.S3_ENDPOINT || !data.S3_ACCESS_KEY || !data.S3_SECRET_KEY) {
+        // For AWS S3 (with or without endpoint), credentials are optional - IAM roles can provide them
+        // Only require explicit credentials if one is provided but not the other
+        if (
+          (data.S3_ACCESS_KEY && !data.S3_SECRET_KEY) ||
+          (!data.S3_ACCESS_KEY && data.S3_SECRET_KEY)
+        ) {
           return false;
         }
       }
@@ -105,7 +109,7 @@ const envSchema = z
     },
     {
       message:
-        'S3_ENDPOINT, S3_ACCESS_KEY, and S3_SECRET_KEY are required when S3_MODE is external',
+        'S3_ACCESS_KEY and S3_SECRET_KEY must both be provided, or both omitted (for IAM role auth)',
       path: ['S3_MODE'],
     }
   );
