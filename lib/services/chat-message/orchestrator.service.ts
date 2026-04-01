@@ -2404,6 +2404,8 @@ async function processMessage(
       emptyReason = 'The AI model returned an empty response after retrying, and an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
     } else if (uncensoredRetryAttempted) {
       emptyReason = 'The AI model returned an empty response, and retrying with an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
+    } else if (contentWasFlaggedDangerous) {
+      emptyReason = 'The AI model returned an empty response, likely because the Concierge flagged this content as dangerous and the provider refused to generate a response. Consider enabling Auto-Route mode in the Concierge settings to automatically reroute dangerous content to an uncensored provider.'
     } else if (sameProviderRetryAttempted) {
       emptyReason = 'The AI model returned an empty response twice. This may be a temporary issue with the provider. Please try resending your message.'
     } else {
@@ -2412,6 +2414,8 @@ async function processMessage(
     logger.warn(`Empty response for chat ${chatId}`, {
       uncensoredRetryAttempted,
       sameProviderRetryAttempted,
+      contentWasFlaggedDangerous,
+      dangerMode: dangerSettings.mode,
       provider: effectiveProfile.provider,
       model: effectiveProfile.modelName,
     })
