@@ -216,6 +216,24 @@ export function getCheapLLMProvider(
     onNoCheapLLM()
   }
 
+  // For Ollama, always use the current profile's model - all local models are "free"
+  // and we can't assume what models the user has installed
+  if (currentProfile.provider === 'OLLAMA') {
+    logger.debug('[CheapLLM] Using current Ollama profile model (all local models are free)', {
+      context: 'getCheapLLMProvider',
+      provider: currentProfile.provider,
+      modelName: currentProfile.modelName,
+    })
+
+    return {
+      provider: currentProfile.provider,
+      modelName: currentProfile.modelName,
+      baseUrl: currentProfile.baseUrl || undefined,
+      connectionProfileId: currentProfile.id,
+      isLocal: true,
+    }
+  }
+
   // Map current provider to its cheapest variant (fallback)
   const cheapModel = getCheapestModel(currentProfile.provider)
 
@@ -231,7 +249,7 @@ export function getCheapLLMProvider(
     modelName: cheapModel,
     baseUrl: currentProfile.baseUrl || undefined,
     connectionProfileId: currentProfile.id,
-    isLocal: currentProfile.provider === 'OLLAMA',
+    isLocal: false,
   }
 }
 
@@ -559,6 +577,20 @@ export async function getCheapLLMProviderWithPricing(
     onNoCheapLLM()
   }
 
+  // For Ollama, always use the current profile's model - all local models are "free"
+  // and we can't assume what models the user has installed
+  if (currentProfile.provider === 'OLLAMA') {
+    return {
+      provider: currentProfile.provider,
+      modelName: currentProfile.modelName,
+      baseUrl: currentProfile.baseUrl || undefined,
+      connectionProfileId: currentProfile.id,
+      isLocal: true,
+      pricing: undefined,
+      costTier: 1, // Cheapest tier - local models are free
+    }
+  }
+
   // Use the name-based heuristic
   const cheapModel = getCheapestModel(currentProfile.provider)
   const models = await getProviderPricing(currentProfile.provider, userId)
@@ -569,7 +601,7 @@ export async function getCheapLLMProviderWithPricing(
     modelName: cheapModel,
     baseUrl: currentProfile.baseUrl || undefined,
     connectionProfileId: currentProfile.id,
-    isLocal: currentProfile.provider === 'OLLAMA',
+    isLocal: false,
     pricing,
     costTier: pricing ? calculateCostTier(pricing) : estimateModelCost(currentProfile.provider, cheapModel),
   }

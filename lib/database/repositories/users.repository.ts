@@ -196,6 +196,75 @@ export class UsersRepository extends AbstractBaseRepository<User> {
     }
   }
 
+  /**
+   * Migrate a user from an old ID to a new ID
+   * Updates the user record and all related records that reference the user
+   */
+  async migrateUserId(oldId: string, newId: string): Promise<void> {
+    try {
+      const db = await (await import('../manager')).getDatabaseAsync();
+
+      // Get the raw database connection for direct SQL updates
+      const sqliteDb = (db as any).db;
+      if (!sqliteDb) {
+        throw new Error('Could not access SQLite database for migration');
+      }
+
+      // Tables that have a userId column referencing users
+      const tablesWithUserId = [
+        'chat_settings',
+        'chats',
+        'characters',
+        'api_keys',
+        'connection_profiles',
+        'embedding_profiles',
+        'prompts',
+        'memories',
+        'messages',
+        'files',
+        'projects',
+      ];
+
+      // Update the user ID in each related table
+      for (const table of tablesWithUserId) {
+        try {
+          const stmt = sqliteDb.prepare(`UPDATE ${table} SET userId = ? WHERE userId = ?`);
+          const result = stmt.run(newId, oldId);
+          if (result.changes > 0) {
+            logger.debug(`Migrated ${result.changes} records in ${table}`, {
+              context: 'UsersRepository.migrateUserId',
+              oldId,
+              newId,
+            });
+          }
+        } catch (tableError) {
+          // Table might not exist or might not have userId column - that's OK
+          logger.debug(`Skipping table ${table} during user ID migration`, {
+            context: 'UsersRepository.migrateUserId',
+            error: tableError instanceof Error ? tableError.message : String(tableError),
+          });
+        }
+      }
+
+      // Finally, update the user's own ID
+      const userStmt = sqliteDb.prepare('UPDATE users SET id = ? WHERE id = ?');
+      userStmt.run(newId, oldId);
+
+      logger.info('User ID migration completed', {
+        context: 'UsersRepository.migrateUserId',
+        oldId,
+        newId,
+      });
+    } catch (error) {
+      logger.error('Error migrating user ID', {
+        oldId,
+        newId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
   // ============================================================================
   // GENERAL SETTINGS COMPOUND OPERATIONS
   // ============================================================================

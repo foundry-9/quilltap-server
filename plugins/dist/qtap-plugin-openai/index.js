@@ -7336,7 +7336,7 @@ var config = {
 var capabilities = {
   chat: true,
   imageGeneration: true,
-  embeddings: false,
+  embeddings: true,
   webSearch: true
 };
 var attachmentSupport = {

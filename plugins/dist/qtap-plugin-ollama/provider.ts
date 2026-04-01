@@ -15,8 +15,11 @@ export class OllamaProvider implements LLMProvider {
   readonly supportedMimeTypes: string[] = [];
   readonly supportsImageGeneration = false;
   readonly supportsWebSearch = false;
+  private baseUrl: string;
 
-  constructor(private baseUrl: string) {
+  constructor(baseUrl: string) {
+    // Strip trailing slash to prevent double-slash in API paths
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
   }
 
   // Helper to collect attachment failures for unsupported provider

@@ -83,6 +83,38 @@ export interface LLMLogCleanupPayload {
 }
 
 /**
+ * Payload for embedding generate job
+ */
+export interface EmbeddingGeneratePayload {
+  /** Type of entity being embedded */
+  entityType: 'MEMORY';
+  /** ID of the entity (memory ID) */
+  entityId: string;
+  /** ID of the character (for memories) */
+  characterId?: string;
+  /** ID of the embedding profile to use */
+  profileId: string;
+}
+
+/**
+ * Payload for embedding refit job (TF-IDF vocabulary rebuild)
+ */
+export interface EmbeddingRefitPayload {
+  /** ID of the embedding profile */
+  profileId: string;
+  /** Whether to enqueue reindex jobs after refit */
+  triggerReindex?: boolean;
+}
+
+/**
+ * Payload for embedding reindex all job
+ */
+export interface EmbeddingReindexAllPayload {
+  /** ID of the embedding profile */
+  profileId: string;
+}
+
+/**
  * Message pair for batch memory extraction
  */
 export interface MessagePair {
@@ -179,6 +211,47 @@ export async function enqueueLLMLogCleanup(
   options?: EnqueueJobOptions
 ): Promise<string> {
   return enqueueJob(userId, 'LLM_LOG_CLEANUP', payload as unknown as Record<string, unknown>, options);
+}
+
+/**
+ * Enqueue an embedding generate job
+ */
+export async function enqueueEmbeddingGenerate(
+  userId: string,
+  payload: EmbeddingGeneratePayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  return enqueueJob(userId, 'EMBEDDING_GENERATE', payload as unknown as Record<string, unknown>, options);
+}
+
+/**
+ * Enqueue an embedding refit job (TF-IDF vocabulary rebuild)
+ */
+export async function enqueueEmbeddingRefit(
+  userId: string,
+  payload: EmbeddingRefitPayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  return enqueueJob(userId, 'EMBEDDING_REFIT', payload as unknown as Record<string, unknown>, {
+    // Refit is lower priority than individual generates
+    priority: options?.priority ?? -1,
+    ...options,
+  });
+}
+
+/**
+ * Enqueue an embedding reindex all job
+ */
+export async function enqueueEmbeddingReindexAll(
+  userId: string,
+  payload: EmbeddingReindexAllPayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  return enqueueJob(userId, 'EMBEDDING_REINDEX_ALL', payload as unknown as Record<string, unknown>, {
+    // Reindex is lower priority
+    priority: options?.priority ?? -1,
+    ...options,
+  });
 }
 
 /**

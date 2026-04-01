@@ -25,6 +25,7 @@ interface ProfileModalProps {
   operations: {
     saveLoading: boolean
     connectLoading: boolean
+    connectError: string | null
     fetchModelsLoading: boolean
     testMessageLoading: boolean
     handleConnect: (callback: (data: any) => void) => Promise<any>
@@ -157,6 +158,27 @@ export function ProfileModal({
   const reqs = operations.getProviderRequirements(form.formData.provider)
   const isValid = form.formData.name.trim() && form.formData.modelName.trim()
 
+  // Handle provider change - auto-fill base URL for providers that have defaults
+  const handleProviderChange = (newProvider: string) => {
+    form.setField('provider', newProvider)
+
+    // Auto-fill base URL for providers with defaults
+    const providerConfig = providers.find(p => p.name === newProvider)
+    if (providerConfig?.configRequirements?.baseUrlDefault && !form.formData.baseUrl) {
+      form.setField('baseUrl', providerConfig.configRequirements.baseUrlDefault)
+    }
+  }
+
+  // Handle model change - auto-fill name if empty (new profile only)
+  const handleModelChange = (modelName: string) => {
+    form.setField('modelName', modelName)
+
+    // Auto-fill name with PROVIDER/MODEL if name is empty and this is a new profile
+    if (!profile?.id && !form.formData.name.trim() && modelName.trim()) {
+      form.setField('name', `${form.formData.provider}/${modelName}`)
+    }
+  }
+
   const footer = (
     <FormActions
       onCancel={handleClose}
@@ -202,7 +224,7 @@ export function ProfileModal({
                   id="provider"
                   name="provider"
                   value={form.formData.provider}
-                  onChange={(e) => form.setField('provider', e.target.value)}
+                  onChange={(e) => handleProviderChange(e.target.value)}
                   className="qt-select"
                 >
                   {providers.length > 0 ? (
@@ -328,6 +350,12 @@ export function ProfileModal({
                 </div>
               )}
 
+              {operations.connectError && (
+                <div className="text-sm text-red-700 bg-red-50/50 border border-red-200/70 rounded px-3 py-2 mb-2">
+                  ✗ {operations.connectError}
+                </div>
+              )}
+
               {modelsMessage && (
                 <div className="text-sm text-blue-700 bg-blue-50/50 border border-blue-200/70 rounded px-3 py-2 mb-2">
                   ✓ {modelsMessage}
@@ -357,7 +385,7 @@ export function ProfileModal({
                     id="modelName"
                     name="modelName"
                     value={form.formData.modelName}
-                    onChange={(e) => form.setField('modelName', e.target.value)}
+                    onChange={(e) => handleModelChange(e.target.value)}
                     placeholder="e.g., openai/gpt-4-turbo"
                     list="modelSuggestions"
                     className="qt-input"
@@ -375,7 +403,7 @@ export function ProfileModal({
                   models={fetchedModels}
                   modelsWithInfo={fetchedModelsWithInfo}
                   value={form.formData.modelName}
-                  onChange={(value) => form.setField('modelName', value)}
+                  onChange={handleModelChange}
                   placeholder="Select or search a model"
                   required
                   showFetchedCount
@@ -387,7 +415,7 @@ export function ProfileModal({
                     id="modelName"
                     name="modelName"
                     value={form.formData.modelName}
-                    onChange={(e) => form.setField('modelName', e.target.value)}
+                    onChange={(e) => handleModelChange(e.target.value)}
                     placeholder="e.g., gpt-4"
                     list="modelSuggestions"
                     className="qt-input"

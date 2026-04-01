@@ -41,12 +41,16 @@ import { reencryptApiKeysMigration } from './reencrypt-api-keys';
 import { addDefaultImageProfileFieldMigration } from './add-default-image-profile-field';
 // Migrate user plugins to site plugins (single-user mode)
 import { migrateUserPluginsToSiteMigration } from './migrate-user-plugins-to-site';
+// Migrate site plugins to data directory
+import { migrateSitePluginsToDataDirMigration } from './migrate-site-plugins-to-data-dir';
 // Drop sync tables (sync functionality removed)
 import { dropSyncTablesMigration } from './drop-sync-tables';
 // Add tool settings fields to chats
 import { addChatToolSettingsFieldsMigration } from './add-chat-tool-settings-fields';
 // Add default tool settings fields to projects
 import { addProjectToolSettingsFieldsMigration } from './add-project-tool-settings-fields';
+// Create embedding tables for built-in TF-IDF provider
+import { createEmbeddingTablesMigration } from './create-embedding-tables';
 
 /**
  * All available migrations.
@@ -83,12 +87,16 @@ export const migrations: Migration[] = [
   addDefaultImageProfileFieldMigration,
   // Migrate user plugins to site plugins (single-user mode)
   migrateUserPluginsToSiteMigration,
+  // Migrate site plugins to data directory
+  migrateSitePluginsToDataDirMigration,
   // Drop sync tables (sync functionality removed)
   dropSyncTablesMigration,
   // Add tool settings fields to chats
   addChatToolSettingsFieldsMigration,
   // Add default tool settings fields to projects
   addProjectToolSettingsFieldsMigration,
+  // Create embedding tables for built-in TF-IDF provider
+  createEmbeddingTablesMigration,
 ];
 
 export {
@@ -120,10 +128,14 @@ export {
   addDefaultImageProfileFieldMigration,
   // Migrate user plugins to site plugins (single-user mode)
   migrateUserPluginsToSiteMigration,
+  // Migrate site plugins to data directory
+  migrateSitePluginsToDataDirMigration,
   // Drop sync tables (sync functionality removed)
   dropSyncTablesMigration,
   // Add tool settings fields to chats
   addChatToolSettingsFieldsMigration,
   // Add default tool settings fields to projects
   addProjectToolSettingsFieldsMigration,
+  // Create embedding tables for built-in TF-IDF provider
+  createEmbeddingTablesMigration,
 };

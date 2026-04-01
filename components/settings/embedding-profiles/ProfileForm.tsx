@@ -56,12 +56,17 @@ export function ProfileForm({
     e.preventDefault()
 
     await executeFormSubmit(async () => {
+      // For BUILTIN provider, set default model name
+      const modelName = form.formData.provider === 'BUILTIN'
+        ? 'tfidf-bm25-v1'
+        : form.formData.modelName
+
       const payload = {
         name: form.formData.name,
         provider: form.formData.provider,
         apiKeyId: form.formData.apiKeyId || undefined,
         baseUrl: form.formData.baseUrl || undefined,
-        modelName: form.formData.modelName,
+        modelName,
         dimensions: form.formData.dimensions ? parseInt(form.formData.dimensions) : undefined,
         isDefault: form.formData.isDefault,
       }
@@ -101,8 +106,13 @@ export function ProfileForm({
   const filteredApiKeys = apiKeys.filter(key => {
     if (form.formData.provider === 'OPENAI') return key.provider === 'OPENAI'
     if (form.formData.provider === 'OLLAMA') return key.provider === 'OLLAMA'
+    if (form.formData.provider === 'OPENROUTER') return key.provider === 'OPENROUTER'
     return false
   })
+
+  // BUILTIN provider doesn't need API keys or custom models
+  const isBuiltin = form.formData.provider === 'BUILTIN'
+  const needsApiKey = ['OPENAI', 'OPENROUTER'].includes(form.formData.provider)
 
   const currentModels = embeddingModels[form.formData.provider] || []
 
@@ -144,13 +154,21 @@ export function ProfileForm({
             onChange={handleProviderChange}
             className="qt-select"
           >
+            <option value="BUILTIN">Built-in (TF-IDF, no API key needed)</option>
             <option value="OPENAI">OpenAI</option>
+            <option value="OPENROUTER">OpenRouter</option>
             <option value="OLLAMA">Ollama (Local)</option>
           </select>
+          {isBuiltin && (
+            <p className="mt-1 qt-text-xs text-blue-600 dark:text-blue-400">
+              Built-in embeddings use TF-IDF with BM25 enhancement. No API key required, works offline.
+              The vocabulary will be automatically built from your memories.
+            </p>
+          )}
         </div>
 
-        {/* API Key (for OpenAI) */}
-        {form.formData.provider === 'OPENAI' && (
+        {/* API Key (for providers that need it) */}
+        {needsApiKey && (
           <div>
             <label className="qt-label mb-1">
               API Key
@@ -170,7 +188,7 @@ export function ProfileForm({
             </select>
             {filteredApiKeys.length === 0 && (
               <p className="mt-1 qt-text-xs text-amber-600">
-                No OpenAI API keys found. Add one in the API Keys tab first.
+                No {form.formData.provider} API keys found. Add one in the API Keys tab first.
               </p>
             )}
           </div>
@@ -196,62 +214,66 @@ export function ProfileForm({
           </div>
         )}
 
-        {/* Model Selection */}
-        <div>
-          <label className="qt-label mb-1">
-            Model
-          </label>
-          {currentModels.length > 0 ? (
-            <div className="space-y-2">
-              <select
+        {/* Model Selection - not needed for BUILTIN */}
+        {!isBuiltin && (
+          <div>
+            <label className="qt-label mb-1">
+              Model
+            </label>
+            {currentModels.length > 0 ? (
+              <div className="space-y-2">
+                <select
+                  value={form.formData.modelName}
+                  onChange={e => handleModelSelect(e.target.value)}
+                  className="qt-select"
+                >
+                  <option value="">Select a model...</option>
+                  {currentModels.map(model => (
+                    <option key={model.id} value={model.id}>
+                      {model.name} ({model.dimensions} dims)
+                    </option>
+                  ))}
+                </select>
+                {form.formData.modelName && (
+                  <p className="qt-text-xs">
+                    {currentModels.find(m => m.id === form.formData.modelName)?.description}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <input
+                type="text"
+                name="modelName"
                 value={form.formData.modelName}
-                onChange={e => handleModelSelect(e.target.value)}
-                className="qt-select"
-              >
-                <option value="">Select a model...</option>
-                {currentModels.map(model => (
-                  <option key={model.id} value={model.id}>
-                    {model.name} ({model.dimensions} dims)
-                  </option>
-                ))}
-              </select>
-              {form.formData.modelName && (
-                <p className="qt-text-xs">
-                  {currentModels.find(m => m.id === form.formData.modelName)?.description}
-                </p>
-              )}
-            </div>
-          ) : (
+                onChange={form.handleChange}
+                className="qt-input"
+                placeholder="text-embedding-3-small"
+                required
+              />
+            )}
+          </div>
+        )}
+
+        {/* Dimensions (optional override) - not needed for BUILTIN */}
+        {!isBuiltin && (
+          <div>
+            <label className="qt-label mb-1">
+              Dimensions (optional)
+            </label>
             <input
               type="text"
-              name="modelName"
-              value={form.formData.modelName}
+              name="dimensions"
+              value={form.formData.dimensions}
               onChange={form.handleChange}
               className="qt-input"
-              placeholder="text-embedding-3-small"
-              required
+              placeholder="1536"
+              min="1"
             />
-          )}
-        </div>
-
-        {/* Dimensions (optional override) */}
-        <div>
-          <label className="qt-label mb-1">
-            Dimensions (optional)
-          </label>
-          <input
-            type="text"
-            name="dimensions"
-            value={form.formData.dimensions}
-            onChange={form.handleChange}
-            className="qt-input"
-            placeholder="1536"
-            min="1"
-          />
-          <p className="mt-1 qt-text-xs">
-            Leave empty to use the model&apos;s default dimensions
-          </p>
-        </div>
+            <p className="mt-1 qt-text-xs">
+              Leave empty to use the model&apos;s default dimensions
+            </p>
+          </div>
+        )}
 
         {/* Default */}
         <div className="flex items-center">

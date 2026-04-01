@@ -322,3 +322,22 @@ export type {
   VectorEntry,
   VectorIndex,
 } from './vector-indices.types';
+
+// ============================================================================
+// EMBEDDING JOB TYPES (TF-IDF vocabulary and embedding status tracking)
+// ============================================================================
+export {
+  EmbeddingStatusEnum,
+  EmbeddableEntityTypeEnum,
+  TfidfVocabularySchema,
+  EmbeddingStatusSchema,
+} from './embedding-job.types';
+
+export type {
+  EmbeddingStatusValue,
+  EmbeddableEntityType,
+  TfidfVocabulary,
+  TfidfVocabularyInput,
+  EmbeddingStatus,
+  EmbeddingStatusInput,
+} from './embedding-job.types';

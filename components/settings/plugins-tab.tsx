@@ -393,10 +393,22 @@ export default function PluginsTab() {
 
       showSuccessToast(data.message || 'Plugin uninstalled successfully!')
 
-      // Refresh installed plugins list and switch to installed tab
+      // Optimistically remove from local state for immediate UI update
+      setPlugins(prev => prev.filter(p => p.name !== packageName && p.packageName !== packageName))
+      setInstalledPlugins(prev => prev.filter(p => p.name !== packageName))
+
+      // Update stats
+      if (stats) {
+        setStats(prev => prev ? {
+          ...prev,
+          total: prev.total - 1,
+          enabled: prev.enabled - 1, // Assume it was enabled
+        } : null)
+      }
+
+      // Refresh from server to ensure consistency
       await fetchInstalledPlugins()
       await fetchPlugins()
-      setActiveTab('installed')
 
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Uninstall failed')

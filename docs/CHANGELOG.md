@@ -2,7 +2,73 @@
 
 ## Recent Changes
 
-### 2.9-dev
+### 2.8.1
+
+- fix: Memory extraction handles LLM returning object instead of string (2026-01-31)
+  - Some LLMs return `content` as an object instead of a string in memory extraction
+  - Added type coercion to stringify non-string content/summary fields
+  - Prevents Zod validation error "expected string, received object"
+  - Added debug logging to track which task types encounter this issue
+- feat: First-startup character seeding (2026-01-31)
+  - Seeds default character "Ben" on first startup when database is empty
+  - Created `first-startup/` directory with seed character data
+  - Added `lib/startup/seed-initial-data.ts` for seeding logic
+  - Seeding runs after migrations in `instrumentation.ts` as phase 1.25
+  - Added 'seeding' phase to startup state tracking
+  - Safe to call multiple times - only seeds when no characters exist
+- feat: First-startup TF-IDF embedding profile seeding (2026-01-31)
+  - Seeds default "Built-in TF-IDF" embedding profile on first startup
+  - Enables semantic memory search without requiring any API keys
+  - Profile is set as default so memories use it immediately
+  - Added embedding profile seed data to `first-startup/` module
+- feat: Built-in TF-IDF embedding provider plugin (2026-01-30)
+  - New `qtap-plugin-builtin-embeddings` plugin provides zero-dependency, offline embedding
+  - Uses TF-IDF with BM25 enhancement and Porter stemming for semantic search
+  - Supports bigrams for better phrase matching
+  - Vocabulary automatically fits to user's memory corpus
+  - Added 'BUILTIN' to embedding profile providers (alongside OPENAI, OLLAMA, OPENROUTER)
+  - New database tables: `tfidf_vocabularies` for vocabulary storage, `embedding_status` for tracking
+  - Background jobs: EMBEDDING_GENERATE, EMBEDDING_REFIT, EMBEDDING_REINDEX_ALL
+  - Debounced vocabulary refitting when memories change (5-second debounce)
+  - API endpoints: POST `?action=refit` and `?action=reindex` on embedding profiles
+  - UI: Vocabulary stats display, manual refit button, embedding progress indicators
+  - Added qt-badge-provider-* CSS classes for theme-aware provider badges
+- fix: Connection profile test errors now display in UI (2026-01-31)
+  - Added `connectError` prop to ProfileModal
+  - Displays error message in red box when connection test fails
+  - Improved error logging in useAsyncOperation to show message directly
+- feat: Auto-fill profile name when selecting model (2026-01-31)
+  - When creating a new profile, selecting a model auto-fills name with `PROVIDER/MODEL_NAME`
+  - Only triggers if name field is empty
+  - Works with ModelSelector dropdown and manual text input
+- fix: Auto-fill base URL when selecting provider with default (2026-01-31)
+  - Selecting Ollama now pre-fills base URL with `http://localhost:11434`
+  - Works for any provider that has `baseUrlDefault` in config
+  - Updated ProviderConfig type to include baseUrlLabel and baseUrlDefault
+- fix: Ollama 405 error on test message (2026-01-31)
+  - Fixed trailing slash in base URL causing double-slash in API paths
+  - OllamaProvider now strips trailing slashes from base URL
+  - Updated qtap-plugin-ollama to v1.0.8
+- fix: Embedding-only providers not appearing in provider dropdown (2026-01-31)
+  - Extended plugin initialization to register EMBEDDING_PROVIDER plugins to provider registry
+  - Previously only LLM_PROVIDER plugins were registered, excluding embedding-only providers
+  - Fixed hotLoadProviderPlugin to also handle EMBEDDING_PROVIDER capability
+  - BUILTIN provider now correctly appears in embedding profile settings
+- fix: Ollama cheap LLM fallback uses current model instead of hardcoded one (2026-01-31)
+  - Previously fell back to hardcoded `llama3.2:3b` which may not exist
+  - Now uses the current profile's model since all Ollama models are free/local
+- fix: Memory search regex error when semantic search unavailable (2026-01-31)
+  - `searchByContent` and `searchByContentAboutCharacter` now escape regex metacharacters
+  - Previously, chat messages with `*`, `?`, `()` etc. would crash the fallback search
+  - Matches existing behavior in `countMemoriesWithText` and `findMemoriesWithText`
+- refactor: Rename auth middleware to context middleware (2026-01-30)
+  - Renamed `createAuthenticatedHandler` → `createContextHandler`
+  - Renamed `createAuthenticatedParamsHandler` → `createContextParamsHandler`
+  - Renamed `AuthenticatedContext` → `RequestContext`
+  - Renamed `withAuth` → `withContext`, `withAuthParams` → `withContextParams`
+  - Replaced `checkOwnership` with simpler `exists` type guard (ownership check meaningless in single-user mode)
+  - Legacy aliases maintained for backward compatibility
+  - Updated tests and documentation
 
 ### 2.8.0
 

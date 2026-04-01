@@ -53,7 +53,7 @@ const config = {
 const capabilities = {
   chat: true,
   imageGeneration: true,
-  embeddings: false,
+  embeddings: true,
   webSearch: true,
 } as const;
 

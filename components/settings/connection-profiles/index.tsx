@@ -169,6 +169,7 @@ export default function ConnectionProfilesTab() {
         operations={{
           saveLoading: saveOp.loading,
           connectLoading: connectOp.loading,
+          connectError: connectOp.error,
           fetchModelsLoading: fetchModelsOp.loading,
           testMessageLoading: testMessageOp.loading,
           handleConnect,

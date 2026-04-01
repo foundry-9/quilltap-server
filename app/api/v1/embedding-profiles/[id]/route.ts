@@ -4,12 +4,17 @@
  * GET /api/v1/embedding-profiles/[id] - Get a specific profile
  * PUT /api/v1/embedding-profiles/[id] - Update a profile
  * DELETE /api/v1/embedding-profiles/[id] - Delete a profile
+ * POST /api/v1/embedding-profiles/[id]?action=refit - Manually trigger vocabulary refit (BUILTIN only)
+ * POST /api/v1/embedding-profiles/[id]?action=reindex - Manually trigger re-embedding all memories
  */
 
 import { NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
-import { notFound, badRequest, serverError, messageResponse } from '@/lib/api/responses';
+import { withActionDispatch } from '@/lib/api/middleware/actions';
+import { notFound, badRequest, serverError, messageResponse, successResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
+import { invalidateAllEmbeddings } from '@/lib/embedding/embedding-service';
+import { enqueueEmbeddingRefit, enqueueEmbeddingReindexAll } from '@/lib/background-jobs/queue-service';
 
 /**
  * GET /api/v1/embedding-profiles/[id]
@@ -180,10 +185,42 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
       logger.info('[Embedding Profiles v1] Profile updated', { profileId: id });
 
+      // Check if provider or model changed - need to re-embed all memories
+      const providerChanged = provider !== undefined && provider !== existingProfile.provider;
+      const modelChanged = modelName !== undefined && modelName.trim() !== existingProfile.modelName;
+
+      if ((providerChanged || modelChanged) && updatedProfile.isDefault) {
+        logger.info('[Embedding Profiles v1] Provider/model changed, triggering re-embedding', {
+          profileId: id,
+          providerChanged,
+          modelChanged,
+          newProvider: updatedProfile.provider,
+          newModel: updatedProfile.modelName,
+        });
+
+        // Invalidate all existing embeddings
+        await invalidateAllEmbeddings(user.id, id);
+
+        // Trigger appropriate re-embedding job
+        if (updatedProfile.provider === 'BUILTIN') {
+          // For BUILTIN, refit vocabulary first (which will trigger reindex)
+          await enqueueEmbeddingRefit(user.id, {
+            profileId: id,
+            triggerReindex: true,
+          });
+        } else {
+          // For external providers, directly reindex all
+          await enqueueEmbeddingReindexAll(user.id, {
+            profileId: id,
+          });
+        }
+      }
+
       return NextResponse.json({
         ...updatedProfile,
         apiKey,
         tags: tagDetails.filter(Boolean),
+        reembeddingTriggered: (providerChanged || modelChanged) && updatedProfile.isDefault,
       });
     } catch (error) {
       logger.error('[Embedding Profiles v1] Error updating profile', { profileId: id }, error instanceof Error ? error : undefined);
@@ -217,4 +254,74 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       return serverError('Failed to delete embedding profile');
     }
   }
+);
+
+/**
+ * POST /api/v1/embedding-profiles/[id]?action=refit - Manually trigger vocabulary refit
+ * POST /api/v1/embedding-profiles/[id]?action=reindex - Manually trigger re-embedding
+ */
+export const POST = createAuthenticatedParamsHandler<{ id: string }>(
+  withActionDispatch({
+    refit: async (req, { user, repos }, { id }) => {
+      try {
+        // Verify ownership
+        const profile = await repos.embeddingProfiles.findById(id);
+
+        if (!profile || profile.userId !== user.id) {
+          return notFound('Embedding profile');
+        }
+
+        // Refit is only for BUILTIN profiles
+        if (profile.provider !== 'BUILTIN') {
+          return badRequest('Refit is only available for built-in embedding profiles. Use reindex action for external providers.');
+        }
+
+        logger.info('[Embedding Profiles v1] Manual refit triggered', { profileId: id });
+
+        // Enqueue refit job (which will trigger reindex after)
+        const jobId = await enqueueEmbeddingRefit(user.id, {
+          profileId: id,
+          triggerReindex: true,
+        });
+
+        return successResponse({
+          message: 'Vocabulary refit job enqueued',
+          jobId,
+        });
+      } catch (error) {
+        logger.error('[Embedding Profiles v1] Error triggering refit', { profileId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to trigger refit');
+      }
+    },
+
+    reindex: async (req, { user, repos }, { id }) => {
+      try {
+        // Verify ownership
+        const profile = await repos.embeddingProfiles.findById(id);
+
+        if (!profile || profile.userId !== user.id) {
+          return notFound('Embedding profile');
+        }
+
+        logger.info('[Embedding Profiles v1] Manual reindex triggered', { profileId: id });
+
+        // Invalidate all embeddings
+        const invalidatedCount = await invalidateAllEmbeddings(user.id, id);
+
+        // Enqueue reindex job
+        const jobId = await enqueueEmbeddingReindexAll(user.id, {
+          profileId: id,
+        });
+
+        return successResponse({
+          message: 'Re-embedding job enqueued',
+          jobId,
+          invalidatedCount,
+        });
+      } catch (error) {
+        logger.error('[Embedding Profiles v1] Error triggering reindex', { profileId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to trigger reindex');
+      }
+    },
+  })
 );

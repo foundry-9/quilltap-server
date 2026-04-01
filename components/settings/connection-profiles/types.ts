@@ -21,6 +21,8 @@ export interface ProviderConfig {
   configRequirements: {
     requiresApiKey: boolean
     requiresBaseUrl: boolean
+    baseUrlLabel?: string
+    baseUrlDefault?: string
   }
   capabilities: {
     chat: boolean

@@ -35,3 +35,13 @@ export type {
   ToolResult,
   ToolFormatOptions,
 } from './tools';
+
+export type {
+  EmbeddingResult,
+  EmbeddingOptions,
+  EmbeddingProvider,
+  LocalEmbeddingProviderState,
+  LocalEmbeddingProvider,
+} from './embeddings';
+
+export { isLocalEmbeddingProvider } from './embeddings';
