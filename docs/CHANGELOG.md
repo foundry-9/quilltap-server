@@ -2,6 +2,12 @@
 
 ## Recent Changes
 
+### 3.2.1
+
+- fix: `npx quilltap` fails with "sqlite not accessible after retries" because npm hoisting resolves the `better-sqlite3` alias to plain `better-sqlite3` instead of `better-sqlite3-multiple-ciphers` (SQLCipher) — the CLI package now depends on `better-sqlite3-multiple-ciphers` by its real name, resolves it explicitly in `ensureNativeModules()` and `linkNativeModules()`, and symlinks it as `better-sqlite3` for the standalone server; the `quilltap db` subcommand also prefers the SQLCipher build
+- fix: Migration retry loop silently swallows all database connection errors — `waitForDatabaseReady()` now logs the actual error on each attempt so failures are diagnosable
+- fix: `getSQLiteDatabase()` caches a half-initialized connection when pragma setup fails — subsequent retries return the same broken instance instead of retrying; now closes the connection on error so retries start fresh
+
 ### 3.2.0
 
 - docs: Update README — expand plugin types table from 5 to 7 (add Image Provider and Embedding Provider); update package.json description; add `engines` field requiring Node.js >= 24.0.0
