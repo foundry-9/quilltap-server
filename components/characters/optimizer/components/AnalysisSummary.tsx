@@ -28,7 +28,7 @@ function FrequencyBadge({ frequency }: { frequency: string }) {
   }
 
   return (
-    <span className={badgeClass}>
+    <span className={`${badgeClass} flex-shrink whitespace-normal text-left`}>
       {frequency}
     </span>
   );
@@ -36,7 +36,7 @@ function FrequencyBadge({ frequency }: { frequency: string }) {
 
 function PatternEntry({ pattern }: { pattern: BehavioralPattern }) {
   return (
-    <div className="qt-card p-3 flex flex-col gap-1.5">
+    <div className="qt-card p-3 flex flex-col gap-1.5 overflow-hidden">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <span className="text-sm font-semibold text-foreground leading-snug">{pattern.pattern}</span>
         <FrequencyBadge frequency={pattern.frequency} />
