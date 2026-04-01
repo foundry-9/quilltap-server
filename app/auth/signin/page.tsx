@@ -30,6 +30,7 @@ function SignInForm() {
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [needsTotp, setNeedsTotp] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
@@ -59,10 +60,17 @@ function SignInForm() {
     setLoading(true);
 
     try {
+      // Get trusted device token from cookie if available
+      const trustedDeviceToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('totp_trusted_device='))
+        ?.split('=')[1];
+
       const result = await signIn("credentials", {
         username,
         password,
         totpCode: needsTotp ? totpCode : undefined,
+        trustedDeviceToken: trustedDeviceToken || undefined,
         redirect: false,
       });
 
@@ -74,6 +82,18 @@ function SignInForm() {
           setError(result.error);
         }
       } else {
+        // Login successful - if TOTP was verified and remember device is checked, create trusted device
+        if (needsTotp && rememberDevice && totpCode) {
+          try {
+            await fetch('/api/auth/2fa/trusted-devices', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+            });
+          } catch (deviceErr) {
+            // Don't block login if device trust fails
+            console.error('Failed to create trusted device:', deviceErr);
+          }
+        }
         router.push("/dashboard");
       }
     } catch (err: unknown) {
@@ -218,24 +238,44 @@ function SignInForm() {
             </div>
 
             {needsTotp && (
-              <div>
-                <label
-                  htmlFor="totpCode"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-200"
-                >
-                  2FA Code
-                </label>
-                <input
-                  id="totpCode"
-                  type="text"
-                  required
-                  value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value)}
-                  placeholder="000000"
-                  maxLength={6}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-slate-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-                />
-              </div>
+              <>
+                <div>
+                  <label
+                    htmlFor="totpCode"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-200"
+                  >
+                    2FA Code
+                  </label>
+                  <input
+                    id="totpCode"
+                    type="text"
+                    required
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value)}
+                    placeholder="000000"
+                    className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-slate-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Enter code from your authenticator app, or use a backup code
+                  </p>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    id="rememberDevice"
+                    type="checkbox"
+                    checked={rememberDevice}
+                    onChange={(e) => setRememberDevice(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-slate-700"
+                  />
+                  <label
+                    htmlFor="rememberDevice"
+                    className="ml-2 text-sm text-gray-600 dark:text-gray-300"
+                  >
+                    Remember this device for 30 days
+                  </label>
+                </div>
+              </>
             )}
 
             <button

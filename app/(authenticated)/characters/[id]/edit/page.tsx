@@ -6,12 +6,12 @@ import { useRouter } from 'next/navigation'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { TagEditor } from '@/components/tags/tag-editor'
-import { MemoryList } from '@/components/memory'
 import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { EntityTabs, Tab } from '@/components/tabs'
 import { EmbeddedPhotoGallery } from '@/components/images/EmbeddedPhotoGallery'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
+import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { clientLogger } from '@/lib/client-logger'
 
 interface Character {
@@ -87,6 +87,15 @@ const EDIT_CHARACTER_TABS: Tab[] = [
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'rename',
+    label: 'Rename/Replace',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
       </svg>
     ),
   },
@@ -525,11 +534,6 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
                     {/* Tag Editor */}
                     <TagEditor entityType="character" entityId={id} />
-
-                    {/* Memories Section */}
-                    <div className="pt-6 border-t border-gray-200 dark:border-slate-700">
-                      <MemoryList characterId={id} />
-                    </div>
                   </div>
                 )
 
@@ -628,6 +632,18 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                   <PhysicalDescriptionList
                     entityType="character"
                     entityId={id}
+                  />
+                )
+
+              case 'rename':
+                return (
+                  <RenameReplaceTab
+                    characterId={id}
+                    characterName={character?.name || ''}
+                    onRenameComplete={() => {
+                      // Refresh character data after rename
+                      fetchCharacter()
+                    }}
                   />
                 )
 

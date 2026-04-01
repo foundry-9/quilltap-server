@@ -6,6 +6,8 @@ export interface STMessage {
   name: string
   is_user: boolean
   is_name: boolean
+  is_group?: boolean
+  is_system?: boolean
   send_date: number | string
   mes: string
   swipes?: string[]
@@ -17,6 +19,7 @@ export interface STMessage {
     extra?: Record<string, any>
   }>
   extra?: Record<string, any>
+  force_avatar?: string
 }
 
 export interface STChat {
