@@ -77,7 +77,7 @@ export function ProviderSelectionStep({ state, dispatch }: ProviderSelectionStep
       <div className="qt-alert qt-alert-error">
         <p>{error}</p>
         <button
-          className="qt-btn qt-button-secondary mt-2"
+          className="qt-button qt-button-secondary mt-2"
           onClick={() => {
             setError(null)
             setLoading(true)

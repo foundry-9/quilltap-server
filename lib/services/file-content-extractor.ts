@@ -176,11 +176,28 @@ async function extractPdfContent(buffer: Buffer): Promise<ExtractedContent> {
     }
 
     if (!pdfParse) {
-      logger.warn('pdf-parse not available, returning placeholder')
+      logger.warn('pdf-parse not available, using native fallback extraction')
+      const fallbackText = extractPdfTextFallback(buffer)
+      if (!fallbackText) {
+        return {
+          success: false,
+          contentType: 'error',
+          error: 'Failed to extract PDF content (pdf-parse unavailable and fallback extractor found no text)',
+        }
+      }
+
+      let content = fallbackText
+      let truncated = false
+      if (content.length > MAX_CONTENT_LENGTH) {
+        content = content.slice(0, MAX_CONTENT_LENGTH)
+        truncated = true
+      }
+
       return {
         success: true,
-        content: '[PDF content - pdf-parse library not installed]',
+        content,
         contentType: 'text',
+        truncated,
       }
     }
 
@@ -209,6 +226,57 @@ async function extractPdfContent(buffer: Buffer): Promise<ExtractedContent> {
       error: 'Failed to extract PDF content',
     }
   }
+}
+
+function extractPdfTextFallback(buffer: Buffer): string {
+  const raw = buffer.toString('latin1')
+
+  const textChunks: string[] = []
+
+  const literalMatches = raw.matchAll(/\(([^\)]{1,4000})\)\s*Tj/g)
+  for (const match of literalMatches) {
+    const decoded = decodePdfEscapes(match[1]).trim()
+    if (decoded.length >= 2) {
+      textChunks.push(decoded)
+    }
+  }
+
+  const arrayMatches = raw.matchAll(/\[([\s\S]*?)\]\s*TJ/g)
+  for (const match of arrayMatches) {
+    const arrayChunk = match[1]
+    const itemMatches = arrayChunk.matchAll(/\(([^\)]{1,4000})\)/g)
+    const parts: string[] = []
+    for (const item of itemMatches) {
+      const decoded = decodePdfEscapes(item[1]).trim()
+      if (decoded.length >= 1) {
+        parts.push(decoded)
+      }
+    }
+    if (parts.length > 0) {
+      textChunks.push(parts.join(' '))
+    }
+  }
+
+  const streamMatches = raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)
+  for (const match of streamMatches) {
+    const asciiRuns = (match[1].match(/[A-Za-z0-9][A-Za-z0-9\s,.;:!?()'"\-]{20,}/g) || [])
+      .map(s => s.replace(/\s+/g, ' ').trim())
+      .filter(s => s.length >= 20)
+    textChunks.push(...asciiRuns)
+  }
+
+  const deduped = Array.from(new Set(textChunks))
+  return deduped.join('\n').trim()
+}
+
+function decodePdfEscapes(input: string): string {
+  return input
+    .replace(/\\\(/g, '(')
+    .replace(/\\\)/g, ')')
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\\\/g, '\\')
 }
 
 /**

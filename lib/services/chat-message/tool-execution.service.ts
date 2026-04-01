@@ -23,7 +23,7 @@ export interface StreamController {
  * Process tool calls and stream results
  */
 export async function processToolCalls(
-  toolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
+  toolCalls: Array<{ name: string; arguments: Record<string, unknown>; callId?: string }>,
   toolContext: ToolExecutionContext,
   controller: StreamController,
   encoder: TextEncoder
@@ -96,6 +96,7 @@ export async function processToolCalls(
         success: true, // Mark as success so LLM doesn't see it as an error
         content: 'File write request sent to user for approval. Waiting for response.',
         arguments: toolCall.arguments,
+        callId: toolCall.callId,
         metadata: toolResult.metadata,
       })
       continue
@@ -128,6 +129,7 @@ export async function processToolCalls(
         success: true,
         content: 'Sudo command sent to user for approval. Waiting for response.',
         arguments: toolCall.arguments,
+        callId: toolCall.callId,
         metadata: toolResult.metadata,
       })
       continue
@@ -158,6 +160,7 @@ export async function processToolCalls(
         success: true,
         content: 'Workspace acknowledgement required. Waiting for user confirmation.',
         arguments: toolCall.arguments,
+        callId: toolCall.callId,
         metadata: toolResult.metadata,
       })
       continue
@@ -177,6 +180,7 @@ export async function processToolCalls(
       success: toolResult.success,
       content: resultText,
       arguments: toolCall.arguments,
+      callId: toolCall.callId,
       metadata: toolResult.metadata,
     })
 
@@ -230,6 +234,7 @@ export async function saveToolMessages(
         success: toolMsg.success,
         result: toolMsg.content,
         arguments: toolMsg.arguments,
+        callId: toolMsg.callId,
         provider: toolMsg.metadata?.provider,
         model: toolMsg.metadata?.model,
         prompt: toolMsg.metadata?.expandedPrompt,
@@ -272,7 +277,7 @@ export async function saveToolMessages(
 export function detectToolCallsInResponse(
   response: unknown,
   provider: string
-): Array<{ name: string; arguments: Record<string, unknown> }> {
+): Array<{ name: string; arguments: Record<string, unknown>; callId?: string }> {
   return detectToolCalls(response, provider)
 }
 
@@ -286,7 +291,8 @@ export function createToolContext(
   characterParticipantId: string,
   imageProfileId?: string | null,
   embeddingProfileId?: string,
-  projectId?: string | null
+  projectId?: string | null,
+  browserUserAgent?: string,
 ): ToolExecutionContext {
   return {
     chatId,
@@ -296,5 +302,6 @@ export function createToolContext(
     embeddingProfileId,
     callingParticipantId: characterParticipantId,
     projectId: projectId || undefined,
+    browserUserAgent,
   }
 }

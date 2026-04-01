@@ -30,6 +30,7 @@ var import_plugin_utils = require("@quilltap/plugin-utils");
 
 // index.ts
 var import_plugin_utils2 = require("@quilltap/plugin-utils");
+var import_tools = require("@quilltap/plugin-utils/tools");
 var logger = (0, import_plugin_utils2.createPluginLogger)("qtap-plugin-openai-compatible");
 var metadata = {
   providerName: "OPENAI_COMPATIBLE",
@@ -209,6 +210,35 @@ var plugin = {
       );
       return [];
     }
+  },
+  /**
+   * Detect spontaneous XML tool call markers in OpenAI-compatible text responses
+   * Checks all XML formats since unknown endpoints are unpredictable
+   */
+  hasTextToolMarkers(text) {
+    return (0, import_tools.hasAnyXMLToolMarkers)(text);
+  },
+  /**
+   * Parse spontaneous XML tool calls from OpenAI-compatible text responses
+   */
+  parseTextToolCalls(text) {
+    try {
+      const results = (0, import_tools.parseAllXMLAsToolCalls)(text);
+      return results;
+    } catch (error) {
+      logger.error(
+        "Error parsing text tool calls",
+        { context: "openai-compatible.parseTextToolCalls" },
+        error instanceof Error ? error : void 0
+      );
+      return [];
+    }
+  },
+  /**
+   * Strip spontaneous XML tool call markers from OpenAI-compatible text responses
+   */
+  stripTextToolMarkers(text) {
+    return (0, import_tools.stripAllXMLToolMarkers)(text);
   }
 };
 var index_default = plugin;

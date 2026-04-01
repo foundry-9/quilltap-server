@@ -17,6 +17,8 @@ import { Provider, Character, ChatParticipantBase, ChatMetadataBase, TimestampCo
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
+import { generateMemoryRecap, type MemoryRecapResult } from '@/lib/memory/memory-recap'
+import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
@@ -38,6 +40,7 @@ import {
 } from './context/memory-injector'
 import {
   filterMessagesByHistoryAccess,
+  filterWhisperMessages,
   getParticipantName,
   attributeMessagesForCharacter,
   findUserParticipantName,
@@ -73,6 +76,7 @@ export {
   formatInterCharacterMemoriesForContext,
   formatSummaryForContext,
   filterMessagesByHistoryAccess,
+  filterWhisperMessages,
   getParticipantName,
   attributeMessagesForCharacter,
   selectRecentMessages,
@@ -183,8 +187,6 @@ export interface BuildContextOptions {
   existingMessages: Array<{ role: string; content: string; id?: string; thoughtSignature?: string | null }>
   /** New user message being sent (optional for continue mode) */
   newUserMessage?: string
-  /** Custom system prompt override */
-  systemPromptOverride?: string | null
   /** Roleplay template for formatting instructions (prepended to system prompt) */
   roleplayTemplate?: { systemPrompt: string } | null
   /** Embedding profile ID for semantic search */
@@ -210,10 +212,17 @@ export interface BuildContextOptions {
   messagesWithParticipants?: MessageWithParticipant[]
 
   // ============================================================================
-  // Tool Instructions (native tool rules or pseudo-tool instructions)
+  // Participant Status Notifications
   // ============================================================================
 
-  /** Tool instructions injected into system prompt (native tool rules or pseudo-tool instructions) */
+  /** Status change notifications since the responding character's last turn */
+  statusChangeNotifications?: string[]
+
+  // ============================================================================
+  // Tool Instructions (native tool rules or text-block tool instructions)
+  // ============================================================================
+
+  /** Tool instructions injected into system prompt (native tool rules or text-block tool instructions) */
   toolInstructions?: string
 
   // ============================================================================
@@ -261,6 +270,15 @@ export interface BuildContextOptions {
 
   /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
   preSearchedMemories?: SemanticSearchResult[]
+
+  // ============================================================================
+  // Memory Recap (Chat Start / Character Join)
+  // ============================================================================
+
+  /** Whether to generate a memory recap for this character (first message or character join) */
+  generateMemoryRecap?: boolean
+  /** Uncensored fallback options for memory recap in dangerous chats */
+  uncensoredFallbackOptions?: UncensoredFallbackOptions
 }
 
 /**
@@ -297,7 +315,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     chat,
     existingMessages,
     newUserMessage,
-    systemPromptOverride,
     roleplayTemplate,
     embeddingProfileId,
     skipMemories = false,
@@ -308,7 +325,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     allParticipants,
     participantCharacters,
     messagesWithParticipants,
-    // Tool instructions (native tool rules or pseudo-tool instructions)
+    // Tool instructions (native tool rules or text-block tool instructions)
     toolInstructions,
     // Project context
     projectContext,
@@ -342,7 +359,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const systemPrompt = buildSystemPrompt(
     character,
     persona,
-    systemPromptOverride,
     otherParticipantsInfo,
     roleplayTemplate,
     toolInstructions,
@@ -350,7 +366,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     options.timestampConfig,
     options.isInitialMessage,
     projectContext,
-    options.timezone
+    options.timezone,
+    options.statusChangeNotifications,
+    respondingParticipant?.status as 'active' | 'silent' | 'absent' | 'removed' | undefined
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 
@@ -467,9 +485,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // Build the compressed system message (includes compressed history)
     effectiveSystemPrompt = buildCompressedSystemMessage(
       compressionResult.compressedHistory,
-      compressionResult.compressedSystemPrompt,
+      undefined,  // System prompt compression disabled — always use fresh per-character prompt
       finalSystemPrompt
     )
+
+    // Only keep window messages (the ones that weren't compressed)
+    // Extract visible messages first since we need the count for dynamic window sizing
+    const visibleMessages = extractVisibleConversation(existingMessages)
 
     // Calculate effective window size
     // When using a fallback cache (older compression), we need to include all
@@ -479,26 +501,22 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     const { cachedCompressionMessageCount } = options
 
     let effectiveWindowSize = standardWindowSize
-    if (cachedCompressionMessageCount !== undefined && cachedCompressionMessageCount < existingMessages.length) {
-      // Cache was computed for fewer messages than we have now
+    if (cachedCompressionMessageCount !== undefined && cachedCompressionMessageCount < visibleMessages.length) {
+      // Cache was computed for fewer visible messages than we have now
       // The compressed history covers messages up to (cachedCount - standardWindowSize)
       // So we need to include all messages after that point
-      // effectiveWindowSize = currentCount - (cachedCount - standardWindowSize)
-      //                     = currentCount - cachedCount + standardWindowSize
-      const messagesSinceCache = existingMessages.length - cachedCompressionMessageCount
+      // Use visibleMessages.length to match the count domain used by triggerAsyncCompression
+      const messagesSinceCache = visibleMessages.length - cachedCompressionMessageCount
       effectiveWindowSize = standardWindowSize + messagesSinceCache
 
       logger.info('[ContextManager] Using dynamic window size for fallback cache', {
         standardWindowSize,
         cachedMessageCount: cachedCompressionMessageCount,
-        currentMessageCount: existingMessages.length,
+        currentVisibleMessageCount: visibleMessages.length,
         messagesSinceCache,
         effectiveWindowSize,
       })
     }
-
-    // Only keep window messages (the ones that weren't compressed)
-    const visibleMessages = extractVisibleConversation(existingMessages)
     const { windowMessages } = splitMessagesForCompression(
       visibleMessages,
       effectiveWindowSize
@@ -527,6 +545,33 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const effectiveSystemPromptTokens = useCompressedContext
     ? estimateTokens(effectiveSystemPrompt, provider)
     : finalSystemPromptTokens
+
+  // 1b. Generate memory recap on chat start or character join
+  let memoryRecapContent = ''
+  let memoryRecapTokens = 0
+
+  if (options.generateMemoryRecap && character.id && options.cheapLLMSelection) {
+    try {
+      const recapResult = await generateMemoryRecap(
+        character.id,
+        character.name,
+        options.cheapLLMSelection,
+        userId,
+        chat.id,
+        options.uncensoredFallbackOptions
+      )
+
+      if (recapResult.content) {
+        memoryRecapContent = recapResult.content
+        memoryRecapTokens = estimateTokens(memoryRecapContent, provider)
+      }
+    } catch (error) {
+      warnings.push(`Failed to generate memory recap: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      logger.error('[ContextManager] Memory recap generation failed', {
+        characterId: character.id,
+      }, error instanceof Error ? error : undefined)
+    }
+  }
 
   // 2. Retrieve and format relevant memories
   let memoryContent = ''
@@ -655,7 +700,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
   // 4. Calculate remaining budget for messages
   // Use effective (possibly compressed) system prompt tokens
-  const usedTokens = effectiveSystemPromptTokens + memoryTokens + interCharacterMemoryTokens + summaryTokens
+  const usedTokens = effectiveSystemPromptTokens + memoryRecapTokens + memoryTokens + interCharacterMemoryTokens + summaryTokens
   const remainingBudget = budget.totalLimit - usedTokens - budget.responseReserve
 
   // 5. Prepare messages based on single vs multi-character mode
@@ -667,6 +712,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // 5a. Filter messages by history access
     const filteredMessages = filterMessagesByHistoryAccess(messagesWithParticipants, respondingParticipant)
 
+    // 5a-bis. Filter whisper messages not visible to this participant
+    const whisperFiltered = filterWhisperMessages(filteredMessages, respondingParticipant.id)
+
     // 5b. Prepend join scenario if participant has one and doesn't have history access
     let joinScenarioContent = ''
     if (!respondingParticipant.hasHistoryAccess && respondingParticipant.joinScenario) {
@@ -676,7 +724,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
     // 5c. Attribute messages for the responding character's perspective
     const attributedMessages = attributeMessagesForCharacter(
-      filteredMessages,
+      whisperFiltered,
       respondingParticipant.id,
       participantCharacters,
       allParticipants
@@ -734,6 +782,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Use effective system prompt (possibly compressed)
   let fullSystemContent = effectiveSystemPrompt
 
+  // Memory recap: narrative summary of what the character remembers (chat start only)
+  // Placed after character notes but before per-message memories and identity lockdown
+  if (memoryRecapContent) {
+    fullSystemContent += '\n\n' + memoryRecapContent
+  }
+
   if (memoryContent) {
     fullSystemContent += '\n\n' + memoryContent
   }
@@ -790,7 +844,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
   // Calculate final token usage
   // Use effective system prompt tokens (possibly compressed)
-  const totalMemoryTokens = memoryTokens + interCharacterMemoryTokens
+  const totalMemoryTokens = memoryRecapTokens + memoryTokens + interCharacterMemoryTokens
   const totalUsed = effectiveSystemPromptTokens + totalMemoryTokens + summaryTokens + messagesTokens + newUserMessageTokens
   const totalMemoriesIncluded = memoriesIncluded + interCharacterMemoriesIncluded
 

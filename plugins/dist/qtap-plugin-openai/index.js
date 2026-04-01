@@ -243,7 +243,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.26.0";
+var VERSION = "6.33.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -3221,7 +3221,7 @@ var Speech = class extends APIResource {
    * const speech = await client.audio.speech.create({
    *   input: 'input',
    *   model: 'string',
-   *   voice: 'ash',
+   *   voice: 'string',
    * });
    *
    * const content = await speech.blob();
@@ -6386,7 +6386,7 @@ var Videos = class extends APIResource {
    * Create a new video generation job from a prompt and optional reference assets.
    */
   create(body, options) {
-    return this._client.post("/videos", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post("/videos", multipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Fetch the latest metadata for a generated video.
@@ -6407,6 +6407,12 @@ var Videos = class extends APIResource {
     return this._client.delete(path`/videos/${videoID}`, options);
   }
   /**
+   * Create a character from an uploaded video.
+   */
+  createCharacter(body, options) {
+    return this._client.post("/videos/characters", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
    * Download the generated video bytes or a derived preview asset.
    *
    * Streams the rendered video content for the specified video job.
@@ -6418,6 +6424,25 @@ var Videos = class extends APIResource {
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
     });
+  }
+  /**
+   * Create a new video generation job by editing a source video or existing
+   * generated video.
+   */
+  edit(body, options) {
+    return this._client.post("/videos/edits", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Create an extension of a completed video.
+   */
+  extend(body, options) {
+    return this._client.post("/videos/extensions", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Fetch a character.
+   */
+  getCharacter(characterID, options) {
+    return this._client.get(path`/videos/characters/${characterID}`, options);
   }
   /**
    * Create a remix of a completed video using a refreshed prompt.
@@ -6651,8 +6676,9 @@ var OpenAI = class {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
     const url = isAbsoluteURL(path2) ? new URL(path2) : new URL(baseURL + (baseURL.endsWith("/") && path2.startsWith("/") ? path2.slice(1) : path2));
     const defaultQuery = this.defaultQuery();
-    if (!isEmptyObj(defaultQuery)) {
-      query = { ...defaultQuery, ...query };
+    const pathQuery = Object.fromEntries(url.searchParams);
+    if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
+      query = { ...pathQuery, ...defaultQuery, ...query };
     }
     if (typeof query === "object" && query && !Array.isArray(query)) {
       url.search = this.stringifyQuery(query);
@@ -7021,7 +7047,8 @@ function parseOpenAIToolCalls(response) {
           try {
             toolCalls.push({
               name: tc.function.name,
-              arguments: JSON.parse(argsStr)
+              arguments: JSON.parse(argsStr),
+              callId: tc.id || void 0
             });
           } catch {
             continue;
@@ -7086,6 +7113,14 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var GLOBAL_VERSION_KEY = "__quilltap_app_version";
+function getQuilltapVersion() {
+  const version = globalThis[GLOBAL_VERSION_KEY];
+  return typeof version === "string" ? version : "unknown";
+}
+function getQuilltapUserAgent() {
+  return `Quilltap/${getQuilltapVersion()}`;
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -7108,216 +7143,394 @@ var OpenAIProvider = class {
     this.supportsImageGeneration = true;
     this.supportsWebSearch = true;
   }
-  formatMessagesWithAttachments(messages) {
+  /**
+   * Format messages from LLMMessage format to Responses API input format.
+   * The first system message is extracted as top-level instructions.
+   * Additional system messages become 'developer' role messages.
+   */
+  formatMessagesForResponsesAPI(messages) {
     const sent = [];
     const failed = [];
-    const filteredMessages = messages.filter((m) => m.role !== "tool");
-    const formattedMessages = filteredMessages.map((msg) => {
-      if (!msg.attachments || msg.attachments.length === 0) {
-        return {
-          role: msg.role,
+    let instructions;
+    const inputMessages = [];
+    for (const msg of messages) {
+      if (msg.role === "system" && instructions === void 0) {
+        instructions = msg.content;
+      } else {
+        inputMessages.push(msg);
+      }
+    }
+    const input = [];
+    for (const msg of inputMessages) {
+      if (msg.role === "system") {
+        input.push({
+          type: "message",
+          role: "developer",
           content: msg.content
-        };
+        });
+        continue;
+      }
+      if (msg.role === "tool") {
+        if (msg.toolCallId) {
+          input.push({
+            type: "function_call_output",
+            call_id: msg.toolCallId,
+            output: msg.content
+          });
+        } else {
+          logger.debug("Skipping tool message without toolCallId", {
+            context: "OpenAIProvider.formatMessagesForResponsesAPI"
+          });
+        }
+        continue;
+      }
+      if (msg.role === "assistant") {
+        input.push({
+          type: "message",
+          role: "assistant",
+          content: msg.content
+        });
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
+          for (const tc of msg.toolCalls) {
+            input.push({
+              type: "function_call",
+              call_id: tc.id,
+              name: tc.function.name,
+              arguments: tc.function.arguments
+            });
+          }
+        }
+        continue;
       }
       const content = [];
       if (msg.content) {
-        content.push({ type: "text", text: msg.content });
+        content.push({ type: "input_text", text: msg.content });
       }
-      for (const attachment of msg.attachments) {
-        if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
-          failed.push({
-            id: attachment.id,
-            error: `Unsupported file type: ${attachment.mimeType}. OpenAI supports: ${this.supportedMimeTypes.join(", ")}`
-          });
-          continue;
-        }
-        if (!attachment.data) {
-          failed.push({
-            id: attachment.id,
-            error: "File data not loaded"
-          });
-          continue;
-        }
-        content.push({
-          type: "image_url",
-          image_url: {
-            url: `data:${attachment.mimeType};base64,${attachment.data}`,
-            detail: "auto"
+      if (msg.attachments && msg.attachments.length > 0) {
+        for (const attachment of msg.attachments) {
+          if (!this.supportedMimeTypes.includes(attachment.mimeType)) {
+            failed.push({
+              id: attachment.id,
+              error: `Unsupported file type: ${attachment.mimeType}. OpenAI supports: ${this.supportedMimeTypes.join(", ")}`
+            });
+            continue;
           }
-        });
-        sent.push(attachment.id);
+          if (!attachment.data) {
+            failed.push({
+              id: attachment.id,
+              error: "File data not loaded"
+            });
+            continue;
+          }
+          content.push({
+            type: "input_image",
+            image_url: `data:${attachment.mimeType};base64,${attachment.data}`,
+            detail: "auto"
+          });
+          sent.push(attachment.id);
+        }
       }
+      if (content.length === 0) {
+        content.push({ type: "input_text", text: "" });
+      }
+      input.push({
+        type: "message",
+        role: "user",
+        content
+      });
+    }
+    return { input, instructions, attachmentResults: { sent, failed } };
+  }
+  /**
+   * Extract only the last user message from the input for use with previous_response_id.
+   * When chaining, OpenAI reconstructs the conversation from the previous response,
+   * so we only need to send the new user message.
+   */
+  extractLastUserMessage(input) {
+    for (let i = input.length - 1; i >= 0; i--) {
+      const item = input[i];
+      if ("role" in item && item.role === "user") {
+        return [item];
+      }
+    }
+    return input.length > 0 ? [input[input.length - 1]] : [];
+  }
+  /**
+   * Convert Chat Completions-format tools to Responses API function tools
+   */
+  formatToolsForResponsesAPI(tools) {
+    if (!tools || tools.length === 0) return [];
+    return tools.map((tool) => {
+      const chatTool = tool;
+      const fn = chatTool.function;
       return {
-        role: msg.role,
-        content: content.length > 0 ? content : msg.content
+        type: "function",
+        name: fn.name,
+        description: fn.description ?? void 0,
+        parameters: fn.parameters,
+        strict: false
       };
     });
-    return { messages: formattedMessages, attachmentResults: { sent, failed } };
   }
-  async sendMessage(params, apiKey) {
+  /**
+   * Build raw response object compatible with Chat Completions format.
+   * This ensures the streaming service, tool call parser, Inspector,
+   * and chat log storage all continue to work without changes.
+   */
+  buildRawResponse(response) {
+    const toolCalls = [];
+    for (const item of response.output) {
+      if (item.type === "function_call") {
+        toolCalls.push({
+          id: item.call_id,
+          type: "function",
+          function: {
+            name: item.name,
+            arguments: item.arguments
+          }
+        });
+      }
+    }
+    return {
+      id: response.id,
+      object: "chat.completion",
+      created: response.created_at,
+      model: response.model,
+      choices: [{
+        index: 0,
+        message: {
+          role: "assistant",
+          content: response.output_text,
+          tool_calls: toolCalls.length > 0 ? toolCalls : void 0
+        },
+        finish_reason: toolCalls.length > 0 ? "tool_calls" : "stop"
+      }],
+      usage: {
+        prompt_tokens: response.usage?.input_tokens ?? 0,
+        completion_tokens: response.usage?.output_tokens ?? 0,
+        total_tokens: response.usage?.total_tokens ?? 0
+      }
+    };
+  }
+  /**
+   * Determine finish reason from response
+   */
+  getFinishReason(response) {
+    for (const item of response.output) {
+      if (item.type === "function_call") {
+        return "tool_calls";
+      }
+    }
+    if (response.status === "completed") return "stop";
+    if (response.status === "incomplete") return response.incomplete_details?.reason || "length";
+    if (response.status === "failed") return "error";
+    return "stop";
+  }
+  /**
+   * Build the text format configuration for structured output
+   */
+  buildTextConfig(responseFormat) {
+    if (!responseFormat) return void 0;
+    if (responseFormat.type === "json_object") {
+      return { format: { type: "json_object" } };
+    }
+    if (responseFormat.type === "json_schema" && responseFormat.jsonSchema) {
+      return {
+        format: {
+          type: "json_schema",
+          name: responseFormat.jsonSchema.name || "response",
+          schema: responseFormat.jsonSchema.schema,
+          strict: responseFormat.jsonSchema.strict ?? true
+        }
+      };
+    }
+    return void 0;
+  }
+  /**
+   * Build the common request parameters shared between sendMessage and streamMessage
+   */
+  buildBaseRequestParams(params, input, instructions) {
     const isReasoning = isReasoningModel(params.model);
-    const client = new OpenAI({
-      apiKey,
-      dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
-    });
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
     const requestParams = {
       model: params.model,
-      messages,
-      max_completion_tokens: params.maxTokens ?? 4096
+      input,
+      store: false,
+      max_output_tokens: params.maxTokens ?? 4096
     };
+    if (instructions) {
+      requestParams.instructions = instructions;
+    }
     if (!isReasoning) {
       requestParams.top_p = params.topP ?? 1;
-      requestParams.stop = params.stop;
       if (params.temperature !== void 0) {
         requestParams.temperature = params.temperature;
       }
     } else {
       const minTokensForReasoning = 4096;
       if ((params.maxTokens ?? 0) < minTokensForReasoning) {
-        requestParams.max_completion_tokens = minTokensForReasoning;
+        requestParams.max_output_tokens = minTokensForReasoning;
       }
     }
-    if (params.tools && params.tools.length > 0) {
-      requestParams.tools = params.tools;
-      requestParams.tool_choice = "auto";
-    }
+    const tools = [];
     if (params.webSearchEnabled) {
-      requestParams.web_search_options = {};
+      tools.push({ type: "web_search_preview" });
+      requestParams.include = ["web_search_call.action.sources"];
     }
-    const response = await client.chat.completions.create(requestParams);
-    const choice = response.choices[0];
+    if (params.tools && params.tools.length > 0) {
+      tools.push(...this.formatToolsForResponsesAPI(params.tools));
+    }
+    if (tools.length > 0) {
+      requestParams.tools = tools;
+    }
+    const textConfig = this.buildTextConfig(params.responseFormat);
+    if (textConfig) {
+      requestParams.text = textConfig;
+    }
+    return requestParams;
+  }
+  /**
+   * Build LLMResponse from a Responses API response
+   */
+  buildLLMResponse(response, attachmentResults) {
     return {
-      content: choice.message.content ?? "",
-      finishReason: choice.finish_reason,
+      content: response.output_text,
+      finishReason: this.getFinishReason(response),
       usage: {
-        promptTokens: response.usage?.prompt_tokens ?? 0,
-        completionTokens: response.usage?.completion_tokens ?? 0,
+        promptTokens: response.usage?.input_tokens ?? 0,
+        completionTokens: response.usage?.output_tokens ?? 0,
         totalTokens: response.usage?.total_tokens ?? 0
       },
-      raw: response,
+      raw: this.buildRawResponse(response),
       attachmentResults
     };
   }
-  async *streamMessage(params, apiKey) {
-    const isReasoning = isReasoningModel(params.model);
+  async sendMessage(params, apiKey) {
     const client = new OpenAI({
       apiKey,
-      dangerouslyAllowBrowser: process.env.NODE_ENV === "test"
+      dangerouslyAllowBrowser: process.env.NODE_ENV === "test",
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
-    const { messages, attachmentResults } = this.formatMessagesWithAttachments(params.messages);
+    const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
+    const baseParams = this.buildBaseRequestParams(params, input, instructions);
+    if (params.previousResponseId) {
+      try {
+        const chainedInput = this.extractLastUserMessage(input);
+        const chainedParams = {
+          ...baseParams,
+          input: chainedInput,
+          previous_response_id: params.previousResponseId,
+          stream: false
+        };
+        const response2 = await client.responses.create(chainedParams);
+        if (response2.error) {
+          throw new Error(`OpenAI API error: ${response2.error.message}`);
+        }
+        return this.buildLLMResponse(response2, attachmentResults);
+      } catch (error) {
+        logger.warn("Conversation chaining failed, falling back to full input", {
+          context: "OpenAIProvider.sendMessage",
+          previousResponseId: params.previousResponseId,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
     const requestParams = {
-      model: params.model,
-      messages,
-      max_completion_tokens: params.maxTokens ?? 4096,
-      stream: true,
-      stream_options: { include_usage: true }
+      ...baseParams,
+      stream: false
     };
-    if (!isReasoning) {
-      requestParams.top_p = params.topP ?? 1;
-      if (params.temperature !== void 0) {
-        requestParams.temperature = params.temperature;
-      }
-    } else {
-      const minTokensForReasoning = 4096;
-      if ((params.maxTokens ?? 0) < minTokensForReasoning) {
-        requestParams.max_completion_tokens = minTokensForReasoning;
+    const response = await client.responses.create(requestParams);
+    if (response.error) {
+      logger.error("Responses API returned error", {
+        context: "OpenAIProvider.sendMessage",
+        code: response.error.code,
+        message: response.error.message
+      });
+      throw new Error(`OpenAI API error: ${response.error.message}`);
+    }
+    return this.buildLLMResponse(response, attachmentResults);
+  }
+  async *streamMessage(params, apiKey) {
+    const client = new OpenAI({
+      apiKey,
+      dangerouslyAllowBrowser: process.env.NODE_ENV === "test",
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+    });
+    const { input, instructions, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
+    const baseParams = this.buildBaseRequestParams(params, input, instructions);
+    let useChaining = !!params.previousResponseId;
+    let stream = null;
+    if (useChaining) {
+      try {
+        const chainedInput = this.extractLastUserMessage(input);
+        const chainedParams = {
+          ...baseParams,
+          input: chainedInput,
+          previous_response_id: params.previousResponseId,
+          stream: true
+        };
+        stream = await client.responses.create(chainedParams);
+      } catch (error) {
+        logger.warn("Streaming conversation chaining failed, falling back to full input", {
+          context: "OpenAIProvider.streamMessage",
+          previousResponseId: params.previousResponseId,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        useChaining = false;
       }
     }
-    if (params.tools && params.tools.length > 0) {
-      requestParams.tools = params.tools;
-      requestParams.tool_choice = "auto";
+    if (!stream) {
+      const requestParams = {
+        ...baseParams,
+        stream: true
+      };
+      stream = await client.responses.create(requestParams);
     }
-    if (params.webSearchEnabled) {
-      requestParams.web_search_options = {};
-    }
-    const stream = await client.chat.completions.create(requestParams);
-    let fullMessage = {
-      choices: [
-        {
-          message: {
-            role: "assistant",
-            content: "",
-            tool_calls: []
-          },
-          finish_reason: null
-        }
-      ],
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
-    };
-    let chunkCount = 0;
-    let finishReasonSeen = false;
-    let usageSeen = false;
-    for await (const chunk of stream) {
-      chunkCount++;
-      const delta = chunk.choices?.[0]?.delta;
-      const content = delta?.content;
-      const finishReason = chunk.choices[0]?.finish_reason;
-      const hasUsage = chunk.usage;
-      if (content) {
-        fullMessage.choices[0].message.content += content;
-      }
-      if (delta?.tool_calls) {
-        for (const toolCall of delta.tool_calls) {
-          const index = toolCall.index ?? 0;
-          if (!fullMessage.choices[0].message.tool_calls[index]) {
-            fullMessage.choices[0].message.tool_calls[index] = {
-              id: "",
-              type: "function",
-              function: { name: "", arguments: "" }
-            };
-          }
-          if (toolCall.id) fullMessage.choices[0].message.tool_calls[index].id = toolCall.id;
-          if (toolCall.function?.name) fullMessage.choices[0].message.tool_calls[index].function.name = toolCall.function.name;
-          if (toolCall.function?.arguments) fullMessage.choices[0].message.tool_calls[index].function.arguments += toolCall.function.arguments;
-        }
-      }
-      if (finishReason) {
-        fullMessage.choices[0].finish_reason = finishReason;
-        finishReasonSeen = true;
-      }
-      if (hasUsage) {
-        fullMessage.usage = chunk.usage;
-        usageSeen = true;
-      }
-      const isFinalChunk = finishReasonSeen && usageSeen;
-      const isToolCallsChunk = finishReasonSeen && finishReason === "tool_calls";
-      if (content && !isFinalChunk && !isToolCallsChunk) {
+    let finalResponse = null;
+    for await (const event of stream) {
+      if (event.type === "response.output_text.delta") {
         yield {
-          content,
+          content: event.delta,
           done: false
         };
+      } else if (event.type === "response.completed") {
+        finalResponse = event.response;
       }
-      if (finishReasonSeen && finishReason === "tool_calls" && !usageSeen) {
-        yield {
-          content: "",
-          done: true,
-          usage: {
-            promptTokens: fullMessage.usage?.prompt_tokens ?? 0,
-            completionTokens: fullMessage.usage?.completion_tokens ?? 0,
-            totalTokens: fullMessage.usage?.total_tokens ?? 0
-          },
-          attachmentResults,
-          rawResponse: fullMessage
-        };
-      } else if (finishReasonSeen && usageSeen) {
-        yield {
-          content: "",
-          done: true,
-          usage: {
-            promptTokens: fullMessage.usage?.prompt_tokens ?? 0,
-            completionTokens: fullMessage.usage?.completion_tokens ?? 0,
-            totalTokens: fullMessage.usage?.total_tokens ?? 0
-          },
-          attachmentResults,
-          rawResponse: fullMessage
-        };
-      }
+    }
+    if (finalResponse) {
+      const raw = this.buildRawResponse(finalResponse);
+      yield {
+        content: "",
+        done: true,
+        usage: {
+          promptTokens: finalResponse.usage?.input_tokens ?? 0,
+          completionTokens: finalResponse.usage?.output_tokens ?? 0,
+          totalTokens: finalResponse.usage?.total_tokens ?? 0
+        },
+        attachmentResults,
+        rawResponse: raw
+      };
+    } else {
+      logger.warn("Stream ended without response.completed event", {
+        context: "OpenAIProvider.streamMessage"
+      });
+      yield {
+        content: "",
+        done: true,
+        usage: {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0
+        },
+        attachmentResults
+      };
     }
   }
   async validateApiKey(apiKey) {
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI({
+        apiKey,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      });
       await client.models.list();
       return true;
     } catch (error) {
@@ -7327,17 +7540,24 @@ var OpenAIProvider = class {
   }
   async getAvailableModels(apiKey) {
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI({
+        apiKey,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      });
       const models = await client.models.list();
-      const gptModels = models.data.filter((m) => m.id.includes("gpt")).map((m) => m.id).sort();
-      return gptModels;
+      const chatModelPrefixes = ["gpt-4", "gpt-5", "o1", "o3", "o4"];
+      const chatModels = models.data.filter((m) => chatModelPrefixes.some((prefix) => m.id.startsWith(prefix))).map((m) => m.id).sort();
+      return chatModels;
     } catch (error) {
       logger.error("Failed to fetch OpenAI models", { context: "OpenAIProvider.getAvailableModels" }, error instanceof Error ? error : void 0);
       return [];
     }
   }
   async generateImage(params, apiKey) {
-    const client = new OpenAI({ apiKey });
+    const client = new OpenAI({
+      apiKey,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+    });
     const response = await client.images.generate({
       model: params.model ?? "dall-e-3",
       prompt: params.prompt,
@@ -7410,7 +7630,10 @@ var OpenAIImageProvider = class {
     return "1024x1024";
   }
   async generateImage(params, apiKey) {
-    const client = new OpenAI({ apiKey });
+    const client = new OpenAI({
+      apiKey,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+    });
     const isGptImage = this.isGptImageModel(params.model ?? "");
     const requestParams = {
       model: params.model,
@@ -7443,7 +7666,10 @@ var OpenAIImageProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      const client = new OpenAI({ apiKey });
+      const client = new OpenAI({
+        apiKey,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+      });
       await client.models.list();
       return true;
     } catch (error) {
@@ -7530,7 +7756,8 @@ var OpenAIEmbeddingProvider = class {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`,
+        "User-Agent": getQuilltapUserAgent()
       },
       body: JSON.stringify(requestPayload)
     });
@@ -7569,7 +7796,8 @@ var OpenAIEmbeddingProvider = class {
     try {
       const response = await fetch(`${this.baseUrl}/models`, {
         headers: {
-          Authorization: `Bearer ${apiKey}`
+          Authorization: `Bearer ${apiKey}`,
+          "User-Agent": getQuilltapUserAgent()
         }
       });
       if (!response.ok) {
@@ -7604,6 +7832,330 @@ var OpenAIEmbeddingProvider = class {
   }
 };
 
+// node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
+var TOOL_NAME_ALIASES = {
+  // Direct mappings
+  "search_memories": "search_memories",
+  "generate_image": "generate_image",
+  "search_web": "search_web",
+  // Memory tool aliases
+  "memory": "search_memories",
+  "memory_search": "search_memories",
+  "search_memory": "search_memories",
+  "memories": "search_memories",
+  // Image tool aliases
+  "image": "generate_image",
+  "create_image": "generate_image",
+  "image_generation": "generate_image",
+  "gen_image": "generate_image",
+  // Web search aliases
+  "search": "search_web",
+  "web_search": "search_web",
+  "websearch": "search_web",
+  "web": "search_web",
+  // Help tool aliases
+  "help_search": "help_search",
+  "helpsearch": "help_search",
+  "search_help": "help_search",
+  "help_navigate": "help_navigate",
+  "helpnavigate": "help_navigate"
+};
+function normalizeToolName(name) {
+  const normalized = name.toLowerCase().trim();
+  return TOOL_NAME_ALIASES[normalized] || name;
+}
+function convertToToolCallRequest(parsed) {
+  switch (parsed.toolName) {
+    case "search_memories":
+      return {
+        name: "search_memories",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
+          limit: parsed.arguments.limit
+        }
+      };
+    case "generate_image":
+      return {
+        name: "generate_image",
+        arguments: {
+          prompt: parsed.arguments.prompt || parsed.arguments.description || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    case "search_web":
+      return {
+        name: "search_web",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    case "help_search":
+      return {
+        name: "help_search",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
+          limit: parsed.arguments.limit
+        }
+      };
+    case "help_navigate":
+      return {
+        name: "help_navigate",
+        arguments: {
+          url: parsed.arguments.url || parsed.arguments.path || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    default:
+      return {
+        name: parsed.toolName,
+        arguments: parsed.arguments
+      };
+  }
+}
+function parseFunctionCallsFormat(response) {
+  const results = [];
+  const functionCallsPattern = /<function_calls>([\s\S]*?)<\/function_calls>/gi;
+  let wrapperMatch;
+  while ((wrapperMatch = functionCallsPattern.exec(response)) !== null) {
+    const wrapperContent = wrapperMatch[1];
+    const wrapperStartIndex = wrapperMatch.index;
+    const contentOffset = wrapperStartIndex + "<function_calls>".length;
+    const invokePattern = /<invoke\s+name=["']([^"']+)["']>([\s\S]*?)<\/invoke>/gi;
+    let invokeMatch;
+    while ((invokeMatch = invokePattern.exec(wrapperContent)) !== null) {
+      const toolName = invokeMatch[1];
+      const paramContent = invokeMatch[2];
+      const invokeStartIndex = contentOffset + invokeMatch.index;
+      const invokeEndIndex = invokeStartIndex + invokeMatch[0].length;
+      const args = {};
+      let format = "claude";
+      const deepseekParamPattern = /<parameter\s+name=["']([^"']+)["']\s+string=["']([^"']*)["'][^>]*>([^<]*)<\/parameter>/gi;
+      let paramMatch;
+      while ((paramMatch = deepseekParamPattern.exec(paramContent)) !== null) {
+        const paramName = paramMatch[1];
+        const stringAttr = paramMatch[2];
+        const value = paramMatch[3].trim();
+        if (stringAttr === "false") {
+          const numVal = Number(value);
+          if (!isNaN(numVal)) {
+            args[paramName] = numVal;
+          } else if (value === "true") {
+            args[paramName] = true;
+          } else if (value === "false") {
+            args[paramName] = false;
+          } else {
+            args[paramName] = value;
+          }
+        } else {
+          args[paramName] = value;
+        }
+        format = "deepseek";
+      }
+      if (Object.keys(args).length === 0) {
+        const claudeParamPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+        while ((paramMatch = claudeParamPattern.exec(paramContent)) !== null) {
+          args[paramMatch[1]] = paramMatch[2].trim();
+        }
+      }
+      const antmlParamPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/antml:parameter>/gi;
+      while ((paramMatch = antmlParamPattern.exec(paramContent)) !== null) {
+        args[paramMatch[1]] = paramMatch[2].trim();
+      }
+      results.push({
+        toolName: normalizeToolName(toolName),
+        arguments: args,
+        fullMatch: invokeMatch[0],
+        startIndex: invokeStartIndex,
+        endIndex: invokeEndIndex,
+        format
+      });
+    }
+  }
+  return results;
+}
+function parseToolCallFormat(response) {
+  const results = [];
+  const toolCallPattern = /<tool_call>([\s\S]*?)<\/tool_call>/gi;
+  let match;
+  while ((match = toolCallPattern.exec(response)) !== null) {
+    const content = match[1];
+    const startIndex = match.index;
+    const nameMatch = /<name>([^<]+)<\/name>/i.exec(content);
+    if (!nameMatch) continue;
+    const toolName = nameMatch[1].trim();
+    const args = {};
+    const argsMatch = /<arguments>([\s\S]*?)<\/arguments>/i.exec(content);
+    if (argsMatch) {
+      const argsContent = argsMatch[1];
+      const argPattern = /<(\w+)>([^<]*)<\/\1>/gi;
+      let argMatch;
+      while ((argMatch = argPattern.exec(argsContent)) !== null) {
+        args[argMatch[1]] = argMatch[2].trim();
+      }
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "generic"
+    });
+  }
+  return results;
+}
+function parseFunctionCallFormat(response) {
+  const results = [];
+  const functionCallPattern = /<function_call\s+name=["']([^"']+)["']>([\s\S]*?)<\/function_call>/gi;
+  let match;
+  while ((match = functionCallPattern.exec(response)) !== null) {
+    const toolName = match[1];
+    const content = match[2];
+    const startIndex = match.index;
+    const args = {};
+    const paramPattern = /<param\s+name=["']([^"']+)["']>([^<]*)<\/param>/gi;
+    let paramMatch;
+    while ((paramMatch = paramPattern.exec(content)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    const parameterPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+    while ((paramMatch = parameterPattern.exec(content)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "function_call"
+    });
+  }
+  return results;
+}
+function parseToolUseFormat(response) {
+  const results = [];
+  const toolUsePattern = /<tool_use(?:\s+name=["']([^"']+)["'])?\s*>([\s\S]*?)<\/tool_use>/gi;
+  let match;
+  while ((match = toolUsePattern.exec(response)) !== null) {
+    const attrName = match[1];
+    const content = match[2];
+    const startIndex = match.index;
+    const trimmedContent = content.trim();
+    if (trimmedContent.startsWith("{")) {
+      try {
+        const jsonBlob = JSON.parse(trimmedContent);
+        if (typeof jsonBlob === "object" && jsonBlob !== null && jsonBlob.name) {
+          const args2 = jsonBlob.input || jsonBlob.arguments || jsonBlob.parameters || {};
+          results.push({
+            toolName: normalizeToolName(jsonBlob.name),
+            arguments: typeof args2 === "object" && args2 !== null ? args2 : {},
+            fullMatch: match[0],
+            startIndex,
+            endIndex: startIndex + match[0].length,
+            format: "tool_use"
+          });
+          continue;
+        }
+      } catch {
+      }
+    }
+    let toolName = attrName;
+    if (!toolName) {
+      const nameMatch = /<name>([^<]+)<\/name>/i.exec(content);
+      if (!nameMatch) continue;
+      toolName = nameMatch[1].trim();
+    }
+    const args = {};
+    const argsMatch = /<(?:arguments|input|parameters)>([\s\S]*?)<\/(?:arguments|input|parameters)>/i.exec(content);
+    if (argsMatch) {
+      const argsContent = argsMatch[1].trim();
+      if (argsContent.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(argsContent);
+          if (typeof parsed === "object" && parsed !== null) {
+            Object.assign(args, parsed);
+          }
+        } catch {
+        }
+      }
+      if (Object.keys(args).length === 0) {
+        const argPattern = /<(\w+)>([^<]*)<\/\1>/gi;
+        let argMatch;
+        while ((argMatch = argPattern.exec(argsContent)) !== null) {
+          args[argMatch[1]] = argMatch[2].trim();
+        }
+      }
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "tool_use"
+    });
+  }
+  return results;
+}
+function parseInvokeFormat(response) {
+  const results = [];
+  const invokePattern = /<invoke\s+name=["']([^"']+)["']>([\s\S]*?)<\/invoke>/gi;
+  let match;
+  while ((match = invokePattern.exec(response)) !== null) {
+    const toolName = match[1];
+    const paramContent = match[2];
+    const startIndex = match.index;
+    const args = {};
+    const paramPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+    let paramMatch;
+    while ((paramMatch = paramPattern.exec(paramContent)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "invoke"
+    });
+  }
+  return results;
+}
+function parseAllXMLFormats(response) {
+  const allResults = [];
+  allResults.push(...parseFunctionCallsFormat(response));
+  allResults.push(...parseToolCallFormat(response));
+  allResults.push(...parseFunctionCallFormat(response));
+  allResults.push(...parseToolUseFormat(response));
+  allResults.push(...parseInvokeFormat(response));
+  const seen = /* @__PURE__ */ new Set();
+  const deduped = allResults.filter((result) => {
+    if (seen.has(result.startIndex)) {
+      return false;
+    }
+    seen.add(result.startIndex);
+    return true;
+  });
+  deduped.sort((a, b) => a.startIndex - b.startIndex);
+  return deduped;
+}
+function parseAllXMLAsToolCalls(response) {
+  return parseAllXMLFormats(response).map(convertToToolCallRequest);
+}
+function hasAnyXMLToolMarkers(response) {
+  return /<function_calls>/i.test(response) || /<tool_call>/i.test(response) || /<function_call\s+/i.test(response) || /<tool_use[\s>]/i.test(response) || /<invoke\s+name=/i.test(response);
+}
+function stripAllXMLToolMarkers(response) {
+  let stripped = response;
+  stripped = stripped.replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, "");
+  stripped = stripped.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "");
+  stripped = stripped.replace(/<function_call\s+[^>]*>[\s\S]*?<\/function_call>/gi, "");
+  stripped = stripped.replace(/<tool_use[\s>][\s\S]*?<\/tool_use>/gi, "");
+  stripped = stripped.replace(/<invoke\s+name=["'][^"']*["']>[\s\S]*?<\/invoke>/gi, "");
+  stripped = stripped.replace(/\n{3,}/g, "\n\n").replace(/  +/g, " ").trim();
+  return stripped;
+}
+
 // moderation-provider.ts
 var logger4 = createPluginLogger("qtap-plugin-openai:moderation");
 var moderationPlugin = {
@@ -7629,7 +8181,8 @@ var moderationPlugin = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
+        "Authorization": `Bearer ${apiKey}`,
+        "User-Agent": getQuilltapUserAgent()
       },
       body: JSON.stringify({ input: content })
     });
@@ -7668,7 +8221,8 @@ var moderationPlugin = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
+          "Authorization": `Bearer ${apiKey}`,
+          "User-Agent": getQuilltapUserAgent()
         },
         body: JSON.stringify({ input: "test" })
       });
@@ -7897,6 +8451,29 @@ var plugin = {
       );
       return [];
     }
+  },
+  /**
+   * Detect spontaneous XML tool markers in response text
+   * Some models (e.g. GPT-5) occasionally emit <tool_use> XML instead of using native function calling
+   */
+  hasTextToolMarkers(text) {
+    return hasAnyXMLToolMarkers(text);
+  },
+  parseTextToolCalls(text) {
+    try {
+      const results = parseAllXMLAsToolCalls(text);
+      return results;
+    } catch (error) {
+      logger5.error(
+        "Error parsing text tool calls",
+        { context: "openai.parseTextToolCalls" },
+        error instanceof Error ? error : void 0
+      );
+      return [];
+    }
+  },
+  stripTextToolMarkers(text) {
+    return stripAllXMLToolMarkers(text);
   }
 };
 var index_default = plugin;

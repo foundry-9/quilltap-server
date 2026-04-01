@@ -299,6 +299,202 @@ export const ThemeManifestSchema = z.object({
 export type ThemeManifest = z.infer<typeof ThemeManifestSchema>;
 
 // ============================================================================
+// QTAP THEME BUNDLE MANIFEST
+// ============================================================================
+
+/**
+ * Compatibility specification for theme bundles
+ */
+export const ThemeCompatibilitySchema = z.object({
+  quilltapVersion: z.string().optional().describe('Semver range for Quilltap compatibility (e.g., ">=3.3.0")'),
+});
+
+export type ThemeCompatibility = z.infer<typeof ThemeCompatibilitySchema>;
+
+/**
+ * .qtap-theme bundle manifest schema (theme.json)
+ *
+ * This is the manifest format for standalone .qtap-theme bundles,
+ * which are logic-free zip archives containing CSS, JSON tokens, and fonts.
+ */
+export const QtapThemeManifestSchema = z.object({
+  $schema: z.string().optional().describe('JSON Schema URL for validation'),
+  format: z.literal('qtap-theme').describe('Must be "qtap-theme"'),
+  formatVersion: z.literal(1).describe('Format version (currently 1)'),
+
+  // Theme identity
+  id: z.string().regex(/^[a-z][a-z0-9-]*$/).describe('Theme identifier (lowercase, hyphens)'),
+  name: z.string().min(1).max(100).describe('Display name'),
+  description: z.string().max(500).optional().describe('Theme description'),
+  version: z.string().describe('Semantic version'),
+  author: z.union([
+    z.string(),
+    z.object({
+      name: z.string(),
+      email: z.email().optional(),
+      url: z.url().optional(),
+    }),
+  ]).describe('Theme author'),
+  license: z.string().optional().describe('SPDX license identifier'),
+
+  // Compatibility
+  compatibility: ThemeCompatibilitySchema.optional().describe('Version compatibility requirements'),
+
+  // Theme features
+  supportsDarkMode: z.boolean().default(true).describe('Whether theme provides dark mode'),
+  tags: z.array(z.string()).optional().describe('Theme tags for categorization'),
+  extendsTheme: z.string().optional().describe('ID of theme to extend/inherit from'),
+
+  // Preview
+  previewImage: z.string().optional().describe('Relative path to preview image'),
+
+  // Tokens - inline or path reference
+  tokens: ThemeTokensSchema.optional().describe('Inline theme design tokens'),
+  tokensPath: z.string().optional().describe('Relative path to tokens JSON file'),
+
+  // Styles
+  stylesPath: z.string().optional().describe('Relative path to CSS overrides file'),
+
+  // Fonts
+  fonts: z.array(FontDefinitionSchema).optional().describe('Custom font definitions'),
+
+  // Subsystem overrides
+  subsystems: z.record(z.string(), z.object({
+    name: z.string().optional(),
+    description: z.string().optional(),
+    thumbnail: z.string().optional(),
+    backgroundImage: z.string().optional(),
+  })).optional().describe('Subsystem display overrides'),
+}).refine(
+  (data) => data.tokens || data.tokensPath,
+  { message: 'Either "tokens" or "tokensPath" must be provided' }
+);
+
+export type QtapThemeManifest = z.infer<typeof QtapThemeManifestSchema>;
+
+/**
+ * Theme bundle index entry
+ */
+export const ThemeBundleIndexEntrySchema = z.object({
+  id: z.string(),
+  version: z.string(),
+  installedAt: z.string(),
+  source: z.enum(['file', 'url', 'registry']),
+  sourceUrl: z.string().nullable(),
+  registrySource: z.string().nullable(),
+  signatureVerified: z.boolean(),
+});
+
+export type ThemeBundleIndexEntry = z.infer<typeof ThemeBundleIndexEntrySchema>;
+
+/**
+ * Theme bundle index file schema (themes-index.json)
+ */
+export const ThemeBundleIndexSchema = z.object({
+  version: z.literal(1),
+  themes: z.array(ThemeBundleIndexEntrySchema),
+});
+
+export type ThemeBundleIndex = z.infer<typeof ThemeBundleIndexSchema>;
+
+// ============================================================================
+// REGISTRY TYPES
+// ============================================================================
+
+/**
+ * Registry source configuration (stored in sources.json)
+ */
+export const RegistrySourceSchema = z.object({
+  name: z.string().min(1).max(100).describe('Display name for the registry'),
+  url: z.string().url().describe('URL of the registry index JSON'),
+  enabled: z.boolean().default(true).describe('Whether this source is active'),
+  publicKey: z.string().optional().describe('Ed25519 public key for signature verification'),
+  trusted: z.boolean().default(false).describe('Whether this source is trusted (official)'),
+  addedAt: z.string().describe('ISO timestamp when source was added'),
+  lastFetched: z.string().nullable().default(null).describe('ISO timestamp of last fetch'),
+});
+
+export type RegistrySource = z.infer<typeof RegistrySourceSchema>;
+
+/**
+ * Registry sources file schema (sources.json)
+ */
+export const RegistrySourcesSchema = z.object({
+  version: z.literal(1),
+  sources: z.array(RegistrySourceSchema),
+});
+
+export type RegistrySources = z.infer<typeof RegistrySourcesSchema>;
+
+/**
+ * Preview colors for registry theme entries
+ */
+export const RegistryPreviewColorsSchema = z.object({
+  light: z.object({
+    background: z.string(),
+    primary: z.string(),
+  }),
+  dark: z.object({
+    background: z.string(),
+    primary: z.string(),
+  }).optional(),
+});
+
+export type RegistryPreviewColors = z.infer<typeof RegistryPreviewColorsSchema>;
+
+/**
+ * A theme entry in a registry index
+ */
+export const RegistryThemeSchema = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  name: z.string().min(1).max(100),
+  version: z.string(),
+  author: z.union([z.string(), z.object({ name: z.string() })]),
+  description: z.string().max(500).optional(),
+  tags: z.array(z.string()).optional(),
+  supportsDarkMode: z.boolean().default(true),
+  compatibility: ThemeCompatibilitySchema.optional(),
+  downloadUrl: z.string().url(),
+  sha256: z.string().describe('SHA-256 hash of the download file'),
+  size: z.number().optional().describe('File size in bytes'),
+  previewUrl: z.string().url().optional(),
+  previewColors: RegistryPreviewColorsSchema.optional(),
+  signature: z.string().optional().describe('Ed25519 signature of the bundle'),
+  publishedAt: z.string(),
+  updatedAt: z.string().optional(),
+});
+
+export type RegistryTheme = z.infer<typeof RegistryThemeSchema>;
+
+/**
+ * Registry index format (fetched from registry URL)
+ */
+export const RegistryIndexSchema = z.object({
+  registry: z.object({
+    name: z.string(),
+    url: z.string().url(),
+    version: z.literal(1),
+  }),
+  themes: z.array(RegistryThemeSchema),
+  signature: z.string().optional().describe('Ed25519 signature of the themes array'),
+});
+
+export type RegistryIndex = z.infer<typeof RegistryIndexSchema>;
+
+/**
+ * Theme update information
+ */
+export interface ThemeUpdate {
+  themeId: string;
+  currentVersion: string;
+  availableVersion: string;
+  registryName: string;
+  registryUrl: string;
+  downloadUrl: string;
+  sha256: string;
+}
+
+// ============================================================================
 // USER THEME PREFERENCE
 // ============================================================================
 
@@ -388,6 +584,38 @@ export function safeValidateThemeManifest(data: unknown):
     return { success: true, data: result.data };
   }
   logger.warn('Theme manifest validation failed', {
+    errorCount: result.error.issues.length,
+    errors: result.error.issues.map(e => ({
+      path: e.path.join('.'),
+      message: e.message,
+    })),
+  });
+  return { success: false, errors: result.error };
+}
+
+/**
+ * Validates a .qtap-theme bundle manifest
+ * @param data - The manifest data to validate
+ * @returns Validated manifest
+ * @throws ZodError if validation fails
+ */
+export function validateQtapThemeManifest(data: unknown): QtapThemeManifest {
+  return QtapThemeManifestSchema.parse(data);
+}
+
+/**
+ * Safely validates a .qtap-theme bundle manifest
+ * @param data - The manifest data to validate
+ * @returns Success or error result
+ */
+export function safeValidateQtapThemeManifest(data: unknown):
+  | { success: true; data: QtapThemeManifest }
+  | { success: false; errors: z.ZodError } {
+  const result = QtapThemeManifestSchema.safeParse(data);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  logger.warn('Qtap theme manifest validation failed', {
     errorCount: result.error.issues.length,
     errors: result.error.issues.map(e => ({
       path: e.path.join('.'),

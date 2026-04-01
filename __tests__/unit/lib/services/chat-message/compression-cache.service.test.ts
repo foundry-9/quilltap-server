@@ -55,6 +55,7 @@ jest.mock('@/lib/chat/context/compression', () => ({
 // Define AsyncCompressionOptions type inline
 interface AsyncCompressionOptions {
   chatId: string
+  participantId?: string
   messages: Array<{ role: string; content: string }>
   systemPrompt: string
   compressionOptions: {
@@ -78,13 +79,13 @@ const {
   getCompressionCacheStats,
 } = require('@/lib/services/chat-message/compression-cache.service') as {
   triggerAsyncCompression: (options: AsyncCompressionOptions) => void
-  getCachedCompression: (chatId: string, messageCount: number) => Promise<CachedCompressionResponse | undefined>
-  invalidateCompressionCache: (chatId: string) => void
+  getCachedCompression: (chatId: string, messageCount: number, participantId?: string, currentSystemPromptHash?: string) => Promise<CachedCompressionResponse | undefined>
+  invalidateCompressionCache: (chatId: string, participantId?: string) => void
   clearCompressionCache: () => void
   getCompressionCacheStats: () => {
     size: number
     entries: Array<{
-      chatId: string
+      cacheKey: string
       messageCount: number
       hasResult: boolean
       hasPromise: boolean
@@ -199,6 +200,78 @@ describe('Compression Cache Service', () => {
       triggerAsyncCompression(options)
 
       // Should not trigger again because cache is valid
+      expect(mockApplyContextCompression).not.toHaveBeenCalled()
+    })
+
+    it('re-triggers compression when windowSize or more new messages accumulate', async () => {
+      const compressionResult = makeCompressionResult()
+      mockApplyContextCompression.mockResolvedValue(compressionResult)
+
+      // First trigger with 6 messages, windowSize=2
+      const options = makeAsyncOptions()
+      triggerAsyncCompression(options)
+
+      // Wait for completion
+      await new Promise(resolve => setTimeout(resolve, 10))
+
+      // Reset mock
+      mockApplyContextCompression.mockClear()
+      mockApplyContextCompression.mockResolvedValue(makeCompressionResult({
+        compressionDetails: {
+          originalMessageCount: 8,
+          compressedMessageCount: 6,
+          windowMessageCount: 2,
+          totalSavings: 800,
+        },
+      }))
+
+      // Trigger again with 2 more messages (equals windowSize=2) — should re-compress
+      const updatedOptions = makeAsyncOptions({
+        messages: [
+          { role: 'user', content: 'Hello' },
+          { role: 'assistant', content: 'Hi there!' },
+          { role: 'user', content: 'How are you?' },
+          { role: 'assistant', content: 'I am doing well!' },
+          { role: 'user', content: 'Great to hear' },
+          { role: 'assistant', content: 'Thanks!' },
+          { role: 'user', content: 'New message 1' },
+          { role: 'assistant', content: 'New response 1' },
+        ],
+      })
+      triggerAsyncCompression(updatedOptions)
+
+      // Should have triggered re-compression because messagesSinceCache (2) >= windowSize (2)
+      expect(mockApplyContextCompression).toHaveBeenCalled()
+    })
+
+    it('does not re-trigger when fewer than windowSize new messages', async () => {
+      const compressionResult = makeCompressionResult()
+      mockApplyContextCompression.mockResolvedValue(compressionResult)
+
+      // First trigger with 6 messages, windowSize=2
+      const options = makeAsyncOptions()
+      triggerAsyncCompression(options)
+
+      // Wait for completion
+      await new Promise(resolve => setTimeout(resolve, 10))
+
+      // Reset mock
+      mockApplyContextCompression.mockClear()
+
+      // Trigger again with only 1 more message (less than windowSize=2) — should NOT re-compress
+      const updatedOptions = makeAsyncOptions({
+        messages: [
+          { role: 'user', content: 'Hello' },
+          { role: 'assistant', content: 'Hi there!' },
+          { role: 'user', content: 'How are you?' },
+          { role: 'assistant', content: 'I am doing well!' },
+          { role: 'user', content: 'Great to hear' },
+          { role: 'assistant', content: 'Thanks!' },
+          { role: 'user', content: 'New message' },
+        ],
+      })
+      triggerAsyncCompression(updatedOptions)
+
       expect(mockApplyContextCompression).not.toHaveBeenCalled()
     })
 
@@ -392,7 +465,7 @@ describe('Compression Cache Service', () => {
       invalidateCompressionCache('chat-1')
 
       expect(getCompressionCacheStats().size).toBe(1)
-      expect(getCompressionCacheStats().entries[0].chatId).toBe('chat-2')
+      expect(getCompressionCacheStats().entries[0].cacheKey).toBe('chat-2')
     })
 
     it('does nothing when chat not in cache', () => {
@@ -439,7 +512,7 @@ describe('Compression Cache Service', () => {
 
       const stats = getCompressionCacheStats()
       expect(stats.size).toBe(1)
-      expect(stats.entries[0].chatId).toBe('chat-1')
+      expect(stats.entries[0].cacheKey).toBe('chat-1')
       expect(stats.entries[0].messageCount).toBe(6)
       expect(stats.entries[0].hasResult).toBe(true)
       expect(stats.entries[0].hasPromise).toBe(false)

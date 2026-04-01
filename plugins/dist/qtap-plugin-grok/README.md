@@ -6,7 +6,7 @@ This plugin provides integration with xAI's Grok API, enabling Quilltap to use G
 
 - **Chat Completions**: Access to Grok 4, Grok 3, and other Grok models via the Responses API
 - **Vision Capabilities**: Analyze images with vision-enabled models
-- **Image Generation**: Create images using grok-2-image
+- **Image Generation**: Create images using Grok Imagine models (grok-imagine-image, grok-imagine-image-pro)
 - **Function Calling**: Use tools and function calling for structured outputs
 - **Web Search**: Server-side web search with `web_search` and `x_search` tools
 - **Streaming**: Support for streaming responses for real-time chat
@@ -48,7 +48,11 @@ This plugin requires the following:
 
 ### Image Generation Models
 
-- **grok-2-image**: Image generation model
+| Model | Quality | Resolution | Rate Limit |
+|-------|---------|------------|------------|
+| grok-imagine-image | Standard | 1K | 300 RPM |
+| grok-imagine-image-pro | High | 2K | 30 RPM |
+| grok-2-image | Legacy (deprecated) | — | — |
 
 ### Recommended Models by Use Case
 
@@ -57,6 +61,7 @@ This plugin requires the following:
 - **Fast responses**: grok-4-1-fast
 - **Code tasks**: grok-code-fast-1
 - **Long context**: grok-4-1-fast (2M context window)
+- **Image generation**: grok-imagine-image (standard) or grok-imagine-image-pro (high quality)
 
 ## File Attachment Support
 
@@ -83,10 +88,11 @@ Images are automatically encoded to base64 and sent with your message for analys
 
 ### Image Generation Parameters
 
-- **model**: Image model ('grok-2-image')
-- **prompt**: Text description of the image
+- **model**: Image model ('grok-imagine-image', 'grok-imagine-image-pro', or legacy 'grok-2-image')
+- **prompt**: Text description of the image (up to ~8000 characters for Imagine models)
 - **n**: Number of images to generate (1-10)
-- **aspectRatio**: Aspect ratio for generated images ('1:1', '4:3', '3:4', '16:9', '9:16')
+- **aspectRatio**: Aspect ratio for generated images ('1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '2:1', '1:2', '19.5:9', '9:19.5', '20:9', '9:20')
+- **resolution**: Automatically set to '2k' for grok-imagine-image-pro
 
 ## Web Search
 
@@ -189,7 +195,7 @@ const response = await provider.sendMessage({
 ```typescript
 const result = await provider.generateImage({
   prompt: 'A futuristic city at night',
-  model: 'grok-2-image',
+  model: 'grok-imagine-image',
   aspectRatio: '16:9',
 }, apiKey);
 ```
@@ -228,9 +234,10 @@ for await (const chunk of provider.streamMessage({
 - Some models may require specific account tier
 
 ### Image Generation Fails
-- Verify the model is 'grok-2-image'
-- Ensure the prompt is not too long (max 1024 bytes) or violates content policy
+- Use 'grok-imagine-image' or 'grok-imagine-image-pro' (grok-2-image is deprecated)
+- Ensure the prompt is within limits (~8000 chars for Imagine models) and doesn't violate content policy
 - Check that your account has image generation enabled
+- Note: grok-imagine-image-pro has a lower rate limit (30 RPM vs 300 RPM)
 
 ### Slow Responses
 - Check Grok status page: https://console.x.ai/status

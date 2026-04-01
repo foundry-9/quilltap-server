@@ -17,6 +17,11 @@ import { checkForUpdatesWithMetadata } from '@/lib/plugins/version-checker';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, validationError } from '@/lib/api/responses';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+
+const PLUGINS_GET_ACTIONS = ['check-upgrades'] as const;
+const PLUGINS_POST_ACTIONS = ['search', 'install', 'uninstall'] as const;
+type PluginsPostAction = typeof PLUGINS_POST_ACTIONS[number];
 
 // ============================================================================
 // Schemas
@@ -35,10 +40,6 @@ const installPluginSchema = z.object({
 const uninstallPluginSchema = z.object({
   packageName: z.string().min(1, 'Package name is required'),
 });
-
-type SearchPluginsInput = z.infer<typeof searchPluginsSchema>;
-type InstallPluginInput = z.infer<typeof installPluginSchema>;
-type UninstallPluginInput = z.infer<typeof uninstallPluginSchema>;
 
 // ============================================================================
 // Action Handlers
@@ -283,11 +284,10 @@ async function handleCheckUpgrades(context: any) {
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, context) => {
   try {
-    const { searchParams } = new URL(req.url);
-    const action = searchParams.get('action');
+    const action = getActionParam(req);
 
     // Handle action-based requests
-    if (action === 'check-upgrades') {
+    if (isValidAction(action, PLUGINS_GET_ACTIONS)) {
       return handleCheckUpgrades(context);
     }
 
@@ -298,7 +298,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, context) 
       await initializePlugins();
     }
 
-    const filter = searchParams.get('filter');
+    const filter = req.nextUrl.searchParams.get('filter');
 
     // Get all plugins from registry
     const state = pluginRegistry.exportState();
@@ -331,20 +331,19 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, context) 
 // ============================================================================
 
 export const POST = createAuthenticatedHandler(async (req: NextRequest, context) => {
-  const { searchParams } = new URL(req.url);
-  const action = searchParams.get('action');
+  const action = getActionParam(req);
 
-
-  switch (action) {
-    case 'search':
-      return handleSearch(req, context);
-    case 'install':
-      return handleInstall(req, context);
-    case 'uninstall':
-      return handleUninstall(req, context);
-    default:
-      return badRequest(
-        `Unknown action: ${action}. Available actions: search, install, uninstall`
-      );
+  if (!isValidAction(action, PLUGINS_POST_ACTIONS)) {
+    return badRequest(
+      `Unknown action: ${action}. Available actions: ${PLUGINS_POST_ACTIONS.join(', ')}`
+    );
   }
+
+  const actionHandlers: Record<PluginsPostAction, () => Promise<NextResponse>> = {
+    search: () => handleSearch(req, context),
+    install: () => handleInstall(req, context),
+    uninstall: () => handleUninstall(req, context),
+  };
+
+  return actionHandlers[action]();
 });

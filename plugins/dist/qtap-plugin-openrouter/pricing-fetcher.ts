@@ -8,7 +8,7 @@
 
 import { OpenRouter } from '@openrouter/sdk';
 import { Parameter } from '@openrouter/sdk/models';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-openrouter');
 
@@ -35,7 +35,7 @@ export async function fetchOpenRouterPricing(
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: 'Quilltap',
+      xTitle: getQuilltapUserAgent(),
     });
 
     const response = await client.models.list();

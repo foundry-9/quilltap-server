@@ -1,0 +1,14 @@
+{
+  "format": "qtap-theme",
+  "formatVersion": 1,
+  "id": "{{THEME_ID}}",
+  "name": "{{DISPLAY_NAME}}",
+  "description": "{{DESCRIPTION}}",
+  "version": "1.0.0",
+  "author": "{{AUTHOR_NAME}}",
+  "license": "MIT",
+  "supportsDarkMode": true,
+  "tags": [],
+  "tokensPath": "tokens.json",
+  "stylesPath": "styles.css"
+}

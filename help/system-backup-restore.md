@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system
+url: /settings?tab=system&section=backup-restore
 ---
 
 # Backup & Restore
 
-> **[Open this page in Quilltap](/settings?tab=system)**
+> **[Open this page in Quilltap](/settings?tab=system&section=backup-restore)**
 
 The Backup & Restore tool lets you create complete backups of your Quilltap system and restore from previous backups.
 
@@ -212,6 +212,12 @@ Certain data is intentionally excluded from backups:
 - Store backups in a secure location
 - Don't share backup files - they contain all your data
 - Consider encrypting sensitive backups
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=system&section=backup-restore")`
 
 ## Related Topics
 

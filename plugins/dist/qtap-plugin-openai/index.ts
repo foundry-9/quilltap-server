@@ -20,6 +20,7 @@ import {
   type OpenAIToolDefinition,
   type ToolCallRequest,
 } from '@quilltap/plugin-utils';
+import { hasAnyXMLToolMarkers, parseAllXMLAsToolCalls, stripAllXMLToolMarkers } from '@quilltap/plugin-utils/tools';
 
 const logger = createPluginLogger('qtap-plugin-openai');
 
@@ -289,6 +290,32 @@ export const plugin: LLMProviderPlugin = {
       );
       return [];
     }
+  },
+
+  /**
+   * Detect spontaneous XML tool markers in response text
+   * Some models (e.g. GPT-5) occasionally emit <tool_use> XML instead of using native function calling
+   */
+  hasTextToolMarkers(text: string): boolean {
+    return hasAnyXMLToolMarkers(text);
+  },
+
+  parseTextToolCalls(text: string): ToolCallRequest[] {
+    try {
+      const results = parseAllXMLAsToolCalls(text);
+      return results;
+    } catch (error) {
+      logger.error(
+        'Error parsing text tool calls',
+        { context: 'openai.parseTextToolCalls' },
+        error instanceof Error ? error : undefined
+      );
+      return [];
+    }
+  },
+
+  stripTextToolMarkers(text: string): string {
+    return stripAllXMLToolMarkers(text);
   },
 };
 

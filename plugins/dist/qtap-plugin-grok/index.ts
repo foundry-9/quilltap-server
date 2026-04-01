@@ -19,18 +19,20 @@ import {
   type OpenAIToolDefinition,
   type ToolCallRequest,
 } from '@quilltap/plugin-utils';
+import { hasAnyXMLToolMarkers, parseAllXMLAsToolCalls, stripAllXMLToolMarkers } from '@quilltap/plugin-utils/tools';
 
 const logger = createPluginLogger('qtap-plugin-grok');
 
 /**
  * Grok image generation constraints
- * Grok has a strict 1024-byte limit for image generation prompts
+ * Grok Imagine models support up to ~8000 characters for prompts
+ * Legacy grok-2-image had a strict 1024-byte limit but is deprecated
  * Grok uses aspect ratios instead of fixed sizes
  */
 const GROK_IMAGE_CONSTRAINTS: ImageProviderConstraints = {
-  maxPromptBytes: 1024,
-  promptConstraintWarning: 'IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.',
-  supportedAspectRatios: ['1:1', '4:3', '3:4', '16:9', '9:16'],
+  maxPromptBytes: 8000,
+  promptConstraintWarning: 'Grok Imagine models support prompts up to approximately 8000 characters. Keep your prompt within this limit.',
+  supportedAspectRatios: ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '2:1', '1:2', '19.5:9', '9:19.5', '20:9', '9:20'],
 };
 
 /**
@@ -222,8 +224,24 @@ export const plugin: LLMProviderPlugin = {
         supportsTools: true,
       },
       {
+        id: 'grok-imagine-image',
+        name: 'Grok Imagine',
+        contextWindow: 8000,
+        maxOutputTokens: 1024,
+        supportsImages: false,
+        supportsTools: false,
+      },
+      {
+        id: 'grok-imagine-image-pro',
+        name: 'Grok Imagine Pro',
+        contextWindow: 8000,
+        maxOutputTokens: 1024,
+        supportsImages: false,
+        supportsTools: false,
+      },
+      {
         id: 'grok-2-image',
-        name: 'Grok 2 Image',
+        name: 'Grok 2 Image (Legacy)',
         contextWindow: 2048,
         maxOutputTokens: 1024,
         supportsImages: false,
@@ -301,6 +319,32 @@ export const plugin: LLMProviderPlugin = {
    */
   getImageProviderConstraints: (): ImageProviderConstraints => {
     return GROK_IMAGE_CONSTRAINTS;
+  },
+
+  /**
+   * Detect spontaneous XML tool markers in response text
+   * Some models may emit XML tool markup instead of using native function calling
+   */
+  hasTextToolMarkers(text: string): boolean {
+    return hasAnyXMLToolMarkers(text);
+  },
+
+  parseTextToolCalls(text: string): ToolCallRequest[] {
+    try {
+      const results = parseAllXMLAsToolCalls(text);
+      return results;
+    } catch (error) {
+      logger.error(
+        'Error parsing text tool calls',
+        { context: 'grok.parseTextToolCalls' },
+        error instanceof Error ? error : undefined
+      );
+      return [];
+    }
+  },
+
+  stripTextToolMarkers(text: string): string {
+    return stripAllXMLToolMarkers(text);
   },
 };
 

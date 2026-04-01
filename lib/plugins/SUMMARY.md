@@ -30,7 +30,7 @@ This implementation provides a complete, production-ready schema and tooling for
    - Usage examples
    - Development guidelines
 
-5. **`docs/PLUGIN_MANIFEST.md`**
+5. **`docs/developer/PLUGIN_MANIFEST.md`**
    - Complete manifest schema reference
    - Field-by-field documentation
    - Examples and validation info
@@ -49,9 +49,8 @@ This implementation provides a complete, production-ready schema and tooling for
 8. **`lib/schemas/types.ts`**
    - Added export for plugin manifest schema
 
-9. **`plugins/qtap-plugin-template/manifest.json`**
-   - Fixed typo (mainfest.json → manifest.json)
-   - Updated to conform to full schema
+9. **`public/schemas/plugin-manifest.schema.json`**
+   - Generated JSON Schema for plugin manifests (source of truth: `lib/schemas/plugin-manifest.ts`)
    - Enhanced with all optional fields
 
 ## Key Features

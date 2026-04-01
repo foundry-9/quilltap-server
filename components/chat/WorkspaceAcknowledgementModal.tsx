@@ -64,7 +64,7 @@ export default function WorkspaceAcknowledgementModal({
           <button
             onClick={handleDismiss}
             disabled={saving}
-            className="qt-btn qt-btn-secondary"
+            className="qt-button qt-button-secondary"
             type="button"
           >
             Cancel
@@ -72,7 +72,7 @@ export default function WorkspaceAcknowledgementModal({
           <button
             onClick={handleAcknowledge}
             disabled={saving}
-            className="qt-btn qt-btn-primary"
+            className="qt-button qt-button-primary"
             type="button"
           >
             {saving ? 'Confirming...' : 'I Understand'}

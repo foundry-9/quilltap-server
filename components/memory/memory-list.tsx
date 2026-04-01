@@ -150,13 +150,13 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
             placeholder="Search memories..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+            className="qt-input text-sm"
           />
         </div>
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortBy)}
-          className="px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+           className="qt-select w-auto"
         >
           <option value="createdAt">Created Date</option>
           <option value="updatedAt">Updated Date</option>
@@ -172,7 +172,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         <select
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value as 'ALL' | 'AUTO' | 'MANUAL')}
-          className="px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+           className="qt-select w-auto"
         >
           <option value="ALL">All Sources</option>
           <option value="AUTO">Auto-generated</option>

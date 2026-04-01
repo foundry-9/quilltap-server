@@ -3,162 +3,262 @@ name: Release
 on:
   push:
     tags:
-      - '[0-9]+.[0-9]+.[0-9]+*'  # e.g., 3.0.0, 3.1.0-beta.1
+      # Matches:
+      # - 3.2.1
+      # - 3.2.0-dev.21
+      # - 3.2.0-beta.1
+      - '[0-9]*.[0-9]*.[0-9]*'
 
 permissions:
   contents: write
 
 env:
-  DOCKER_IMAGE: csebold/quilltap
+  DOCKER_IMAGE: foundry9/quilltap
+  DOCKER_IMAGE_ALT: csebold/quilltap
 
 jobs:
-  build-rootfs:
-    name: Build rootfs (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-            platform: linux/amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm
-
+  validate-tag:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Validate tag format
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Tag '$TAG' is not valid semver-ish (expected 1.2.3 or 1.2.3-dev.21)"
+            exit 1
+          fi
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build rootfs tarball
-        run: npx tsx scripts/build-rootfs.ts --platform ${{ matrix.platform }}
-
-      - name: Upload rootfs artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: rootfs-${{ matrix.arch }}
-          path: quilltap-linux-${{ matrix.arch }}.tar.gz
-          retention-days: 5
-
-  build-standalone:
-    name: Build standalone tarball
+  # ────────────────────────────────────────────────────────────────────────────
+  # Shared JS build — runs once, produces platform-agnostic artifacts that
+  # every downstream job reuses. Eliminates 5 redundant next build invocations.
+  # ────────────────────────────────────────────────────────────────────────────
+  build-app:
+    name: Build application (shared JS)
+    needs: validate-tag
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build standalone tarball
-        run: npx tsx scripts/build-standalone-tarball.ts
+      - name: Build plugins
+        run: npm run build:plugins
+
+      - name: Build Next.js standalone
+        run: SKIP_ENV_VALIDATION=true npx next build --webpack
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-build
+          include-hidden-files: true
+          path: |
+            .next/standalone/
+            .next/static/
+            plugins/dist/
+          retention-days: 5
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Standalone tarball — downloads pre-built JS, strips native modules,
+  # creates the tarball that the quilltap npm package downloads on first run.
+  # ────────────────────────────────────────────────────────────────────────────
+  build-standalone:
+    name: Build standalone tarball
+    needs: build-app
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Download pre-built app
+        uses: actions/download-artifact@v8
+        with:
+          name: app-build
+          path: .
+
+      - name: Build standalone tarball (skip next build)
+        run: npx --yes tsx scripts/build-standalone-tarball.ts --skip-build
 
       - name: Upload standalone artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: standalone
           path: quilltap-standalone-*.tar.gz
           retention-days: 5
 
-  build-docker:
-    name: Build Docker (${{ matrix.arch }})
+  # ────────────────────────────────────────────────────────────────────────────
+  # Docker + rootfs — builds Docker image from pre-built JS via Dockerfile.ci,
+  # pushes to Docker Hub, then exports the filesystem as a rootfs tarball.
+  # Combining Docker and rootfs in one job avoids a redundant image build.
+  # ────────────────────────────────────────────────────────────────────────────
+  build-docker-and-rootfs:
+    name: Docker + rootfs (${{ matrix.arch }})
+    needs: build-app
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         include:
           - arch: amd64
             platform: linux/amd64
             runner: ubuntu-latest
+            rootfs_target: wsl2
           - arch: arm64
             platform: linux/arm64
             runner: ubuntu-24.04-arm
+            rootfs_target: production
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Download pre-built app
+        uses: actions/download-artifact@v8
+        with:
+          name: app-build
+          path: prebuild
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push platform image
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          docker build \
-            --target production \
-            --tag "${DOCKER_IMAGE}:${TAG}-${{ matrix.arch }}" \
-            .
-          docker push "${DOCKER_IMAGE}:${TAG}-${{ matrix.arch }}"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push to primary registry
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.ci
+          target: production
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}:${{ github.ref_name }}-${{ matrix.arch }}
+          sbom: true
+          provenance: mode=max
+
+      - name: Build and push to alt registry
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.ci
+          target: production
+          push: true
+          tags: ${{ env.DOCKER_IMAGE_ALT }}:${{ github.ref_name }}-${{ matrix.arch }}
+          sbom: true
+          provenance: mode=max
+
+      # Build the rootfs target locally — shares buildx layer cache with the
+      # push steps above, so this is nearly instant (production layers cached,
+      # wsl2 adds only a few lightweight layers on top).
+      - name: Build rootfs image locally
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.ci
+          target: ${{ matrix.rootfs_target }}
+          load: true
+          tags: quilltap-rootfs:local
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Export rootfs tarball
+        run: npx --yes tsx scripts/build-rootfs.ts --image quilltap-rootfs:local --platform ${{ matrix.platform }}
+
+      - name: Upload rootfs artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: rootfs-${{ matrix.arch }}
+          path: quilltap-linux-${{ matrix.arch }}.tar.gz
+          retention-days: 5
 
   push-docker-manifest:
     name: Push Docker multi-arch manifest
     runs-on: ubuntu-latest
-    needs: build-docker
+    needs: build-docker-and-rootfs
 
     steps:
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Create and push manifest
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Create and push manifests
         run: |
           TAG="${GITHUB_REF_NAME}"
 
-          # Determine which tags to create
-          TAGS="${DOCKER_IMAGE}:${TAG}"
-          if [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            TAGS="${TAGS} ${DOCKER_IMAGE}:latest"
-          else
-            TAGS="${TAGS} ${DOCKER_IMAGE}:dev"
-          fi
+          for IMAGE in "${DOCKER_IMAGE}" "${DOCKER_IMAGE_ALT}"; do
+            TAGS="${IMAGE}:${TAG}"
+            if [[ "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              TAGS="${TAGS} ${IMAGE}:latest"
+            else
+              TAGS="${TAGS} ${IMAGE}:dev"
+            fi
 
-          # Create and push a manifest for each tag
-          for MANIFEST_TAG in $TAGS; do
-            docker manifest create "$MANIFEST_TAG" \
-              "${DOCKER_IMAGE}:${TAG}-amd64" \
-              "${DOCKER_IMAGE}:${TAG}-arm64"
-            docker manifest push "$MANIFEST_TAG"
+            for MANIFEST_TAG in $TAGS; do
+              docker buildx imagetools create -t "$MANIFEST_TAG" \
+                "${IMAGE}:${TAG}-amd64" \
+                "${IMAGE}:${TAG}-arm64"
+            done
           done
 
+  # ────────────────────────────────────────────────────────────────────────────
+  # Electron builds — download pre-built JS, rebuild native modules for each
+  # platform's Electron ABI, compile Electron shell, package with
+  # electron-builder. macOS also needs rootfs; Windows and Linux do not.
+  # ────────────────────────────────────────────────────────────────────────────
   build-electron-mac:
     name: Build Electron (macOS)
     runs-on: macos-latest
-    needs: build-rootfs
+    needs: build-docker-and-rootfs
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Download pre-built app
+        uses: actions/download-artifact@v8
+        with:
+          name: app-build
+          path: .
+
       - name: Download arm64 rootfs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: rootfs-arm64
           path: /tmp/rootfs
@@ -176,14 +276,14 @@ jobs:
         run: |
           CERT_FILE=$(mktemp /tmp/certificate.XXXXXX.p12)
           echo "$CSC_LINK" | base64 --decode > "$CERT_FILE"
-      
+
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-      
+
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-      
+
           security import "$CERT_FILE" \
             -k "$KEYCHAIN_PATH" \
             -P "$CSC_KEY_PASSWORD" \
@@ -191,17 +291,17 @@ jobs:
             -T /usr/bin/productbuild \
             -T /usr/bin/security \
             -f pkcs12
-      
+
           security set-key-partition-list \
             -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-      
+
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"' | xargs)
-      
+
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-      
+
           rm "$CERT_FILE"
-      
+
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
           echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
 
@@ -215,7 +315,18 @@ jobs:
           chmod 600 "$KEY_FILE"
           echo "APPLE_API_KEY=$KEY_FILE" >> "$GITHUB_ENV"
 
-      - name: Build and sign Electron app (macOS)
+      - name: Stage Lima binaries
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+        run: npx tsx scripts/stage-lima.ts
+
+      - name: Build embedded server (skip next build)
+        run: npx tsx scripts/build-electron-server.ts --skip-build
+
+      - name: Compile Electron shell
+        run: npx tsc -p electron/tsconfig.json
+
+      - name: Package with electron-builder
         timeout-minutes: 60
         env:
           GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
@@ -223,11 +334,10 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           CSC_NAME: ${{ secrets.CSC_NAME }}
           CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
-          # APPLE_API_KEY is set via GITHUB_ENV in the "Write Apple API key to file" step
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_KEY_ISSUER: ${{ secrets.APPLE_API_KEY_ISSUER }}
           DEBUG: electron-notarize*
-        run: npm run electron:build:mac
+        run: NODE_OPTIONS="-r ./electron/patch-fs.js" npx electron-builder --mac
 
       - name: Clean up keychain and API key
         if: always()
@@ -236,7 +346,7 @@ jobs:
           rm -f "$APPLE_API_KEY" || true
 
       - name: Upload macOS installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electron-mac
           path: out/*.dmg
@@ -245,31 +355,40 @@ jobs:
   build-electron-win:
     name: Build Electron (Windows)
     runs-on: windows-latest
-    needs: build-rootfs
+    needs: build-app
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Electron app (Windows)
-        run: npm run electron:build:win
+      - name: Download pre-built app
+        uses: actions/download-artifact@v8
+        with:
+          name: app-build
+          path: .
+
+      - name: Build embedded server (skip next build)
+        run: npx tsx scripts/build-electron-server.ts --skip-build
+
+      - name: Compile Electron shell
+        run: npx tsc -p electron/tsconfig.json
+
+      - name: Package with electron-builder
         env:
           GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: npx electron-builder --win
 
       - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electron-win
           path: out/*.exe
@@ -277,26 +396,39 @@ jobs:
 
   build-electron-linux:
     name: Build Electron (Linux)
+    needs: build-app
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Electron app (Linux)
-        run: npm run electron:build:linux
+      - name: Download pre-built app
+        uses: actions/download-artifact@v8
+        with:
+          name: app-build
+          path: .
+
+      - name: Build embedded server (skip next build)
+        run: npx tsx scripts/build-electron-server.ts --skip-build
+
+      - name: Compile Electron shell
+        run: npx tsc -p electron/tsconfig.json
+
+      - name: Package with electron-builder
+        run: npx electron-builder --linux
 
       - name: Upload Linux installers
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electron-linux
           path: |
@@ -311,12 +443,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Determine dist-tag
@@ -348,12 +480,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -429,10 +561,11 @@ jobs:
           ### Docker
 
           ```bash
-          docker pull csebold/quilltap:${TAG}
+          docker pull foundry9/quilltap:${TAG}
+          # or: docker pull csebold/quilltap:${TAG}
           ```
 
-          Or download the `quilltap-linux-<arch>.tar.gz` rootfs tarball for use with Lima. See the [README](https://github.com/foundry-9/quilltap#readme) for setup instructions.
+          Or download the `quilltap-linux-<arch>.tar.gz` rootfs tarball for use with Lima. See the [README](https://github.com/foundry9/quilltap#readme) for setup instructions.
           BODY
 
           sed -i 's/^          //' /tmp/release-body.md
@@ -457,7 +590,7 @@ jobs:
 
     steps:
       - name: Trigger website rebuild
-        uses: peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ secrets.CROSS_REPO_PAT }}
           repository: foundry-9/quilltap-website
@@ -466,16 +599,20 @@ jobs:
             {
               "version": "${{ github.ref_name }}",
               "prerelease": "${{ needs.create-release.outputs.prerelease }}",
-              "docker_image": "csebold/quilltap:${{ github.ref_name }}"
+              "docker_image": "foundry9/quilltap:${{ github.ref_name }}",
+              "docker_image_alt": "csebold/quilltap:${{ github.ref_name }}"
             }
 
   github-releases-to-discord:
     runs-on: ubuntu-latest
     needs: create-release
+    continue-on-error: true
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: GitHub Releases to Discord
-        uses: SethCohen/github-releases-to-discord@v1
+      - name: Notify Discord of release
+        uses: tsickert/discord-webhook@v7.0.0
         with:
-          webhook_url: ${{ secrets.DISCORD_WEBHOOK_RELEASE_URL }}
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_RELEASE_URL }}
+          embed-title: "Quilltap ${{ github.ref_name }} Released"
+          embed-url: "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+          embed-description: "A new version of Quilltap has been published. See the release notes for details."
+          embed-color: 5814783

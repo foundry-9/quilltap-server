@@ -99,10 +99,10 @@ describe('Serper Search Provider Plugin', () => {
         'https://google.serper.dev/search',
         expect.objectContaining({
           method: 'POST',
-          headers: {
+          headers: expect.objectContaining({
             'X-API-KEY': 'test-api-key',
             'Content-Type': 'application/json',
-          },
+          }),
           body: JSON.stringify({ q: 'test query', num: 5 }),
         })
       )
@@ -345,10 +345,10 @@ describe('Serper Search Provider Plugin', () => {
         'https://google.serper.dev/search',
         expect.objectContaining({
           method: 'POST',
-          headers: {
+          headers: expect.objectContaining({
             'X-API-KEY': 'valid-api-key',
             'Content-Type': 'application/json',
-          },
+          }),
           body: JSON.stringify({ q: 'test', num: 1 }),
         })
       )

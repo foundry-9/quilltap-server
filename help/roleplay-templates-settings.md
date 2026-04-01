@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=templates
+url: /settings?tab=templates&section=roleplay-templates
 ---
 
 # Roleplay Templates Settings
 
-> **[Open this page in Quilltap](/settings?tab=templates)**
+> **[Open this page in Quilltap](/settings?tab=templates&section=roleplay-templates)**
 
 The Roleplay Templates settings tab is where you manage all your templates, set defaults, and customize formatting rules for your roleplay sessions. Here you can view built-in templates, create custom ones, and organize your formatting conventions.
 
@@ -421,5 +421,15 @@ While using the settings:
 6. **Review regularly** — Clean up unused templates
 7. **Backup important** — Keep copies of templates you use frequently
 8. **Iterate** — Templates improve with testing and refinement
+
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your roleplay template configuration during a conversation using the `help_settings` tool with `category: "templates"`. This returns the list of your templates (names, descriptions, and default status) and which template is set as the default for new chats. Ask a help-tools-enabled character something like "What roleplay templates do I have?" and it will produce the inventory.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=templates&section=roleplay-templates")`
 
 The Roleplay Templates settings give you complete control over how your chats are formatted—take advantage of them to create the perfect style for your creative work!

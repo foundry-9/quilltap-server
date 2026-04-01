@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { TagStyleProvider } from "./tag-style-provider";
 import { QuickHideProvider } from "./quick-hide-provider";
-import { SidebarDataProvider } from "./sidebar-data-provider";
+
 import { ContentWidthProvider } from "./content-width-provider";
 import { AvatarDisplayProvider } from "./avatar-display-provider";
 import { ThemeProvider } from "./theme-provider";
@@ -191,13 +191,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ThemeProvider>
         <TagStyleProvider>
           <QuickHideProvider>
-            <SidebarDataProvider>
               <ContentWidthProvider>
                 <AvatarDisplayProvider>
                   {children}
                 </AvatarDisplayProvider>
               </ContentWidthProvider>
-            </SidebarDataProvider>
           </QuickHideProvider>
         </TagStyleProvider>
       </ThemeProvider>

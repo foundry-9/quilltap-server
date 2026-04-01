@@ -1,8 +1,27 @@
 
-import { GrokImageProvider } from '@/lib/image-gen/grok';
+import { GrokImageProvider } from '@/plugins/dist/qtap-plugin-grok/image-provider';
 
-// Mock global fetch
-globalThis.fetch = jest.fn();
+// Mock OpenAI
+jest.mock('openai', () => {
+  return {
+    __esModule: true,
+    default: jest.fn().mockImplementation(() => ({
+      images: {
+        generate: jest.fn(),
+      },
+      models: {
+        list: jest.fn(),
+      },
+    })),
+  };
+});
+
+import OpenAI from 'openai';
+
+function getMockClient() {
+  const MockOpenAI = OpenAI as jest.MockedClass<typeof OpenAI>;
+  return MockOpenAI.mock.results[MockOpenAI.mock.results.length - 1]?.value;
+}
 
 describe('GrokImageProvider', () => {
   let provider: GrokImageProvider;
@@ -13,145 +32,159 @@ describe('GrokImageProvider', () => {
     jest.clearAllMocks();
   });
 
-  it('should request b64_json and handle successful response with b64_json', async () => {
-    const mockResponse = {
-      data: [
-        {
-          b64_json: 'base64encodedimage',
-          revised_prompt: 'revised prompt',
-        },
-      ],
-    };
-
-    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValue(mockResponse),
+  describe('supportedModels', () => {
+    it('should include grok-imagine-image, grok-imagine-image-pro, and legacy grok-2-image', () => {
+      expect(provider.supportedModels).toEqual([
+        'grok-imagine-image',
+        'grok-imagine-image-pro',
+        'grok-2-image',
+      ]);
     });
-
-    const result = await provider.generateImage(
-      {
-        prompt: 'test prompt',
-        model: 'grok-2-image',
-        size: '1024x1024',
-        quality: 'standard',
-        style: 'vivid',
-      },
-      mockApiKey
-    );
-
-    // Verify request body includes response_format: 'b64_json'
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/images/generations'),
-      expect.objectContaining({
-        method: 'POST',
-        body: expect.stringContaining('"response_format":"b64_json"'),
-      })
-    );
-
-    // Verify request body does NOT include size, quality, or style
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        body: expect.not.stringContaining('"size"'),
-      })
-    );
-    
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        body: expect.not.stringContaining('"quality"'),
-      })
-    );
-
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        body: expect.not.stringContaining('"style"'),
-      })
-    );
-
-    expect(result.images).toHaveLength(1);
-    expect(result.images[0].data).toBe('base64encodedimage');
-    expect(result.images[0].revisedPrompt).toBe('revised prompt');
   });
 
-  it('should fallback to fetching URL if b64_json is missing', async () => {
-    const mockResponse = {
-      data: [
-        {
-          url: 'https://example.com/image.png',
-          revised_prompt: 'revised prompt',
-        },
-      ],
-    };
+  describe('generateImage', () => {
+    it('should default to grok-imagine-image when no model specified', async () => {
+      const mockResponse = {
+        data: [{ b64_json: 'base64data', revised_prompt: 'revised' }],
+      };
 
-    const mockImageBuffer = Buffer.from('image data');
-    const mockImageBase64 = mockImageBuffer.toString('base64');
+      const mockClient = { images: { generate: jest.fn().mockResolvedValue(mockResponse) }, models: { list: jest.fn() } };
+      (OpenAI as unknown as jest.Mock).mockImplementation(() => mockClient);
 
-    (globalThis.fetch as jest.Mock)
-      .mockResolvedValueOnce({ // API response
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockResponse),
-      })
-      .mockResolvedValueOnce({ // Image download response
-        ok: true,
-        arrayBuffer: jest.fn().mockResolvedValue(mockImageBuffer),
-      });
+      await provider.generateImage({ prompt: 'test prompt' }, mockApiKey);
 
-    const result = await provider.generateImage(
-      {
-        prompt: 'test prompt',
-        model: 'grok-2-image',
-      },
-      mockApiKey
-    );
-
-    expect(result.images).toHaveLength(1);
-    expect(result.images[0].data).toBe(mockImageBase64);
-    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
-  });
-
-  it('should throw error if both b64_json and url are missing', async () => {
-    const mockResponse = {
-      data: [
-        {
-          // No data
-        },
-      ],
-    };
-
-    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValue(mockResponse),
+      expect(mockClient.images.generate).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'grok-imagine-image' })
+      );
     });
 
-    await expect(
-      provider.generateImage(
-        {
-          prompt: 'test prompt',
-          model: 'grok-2-image',
-        },
+    it('should handle grok-imagine-image model with b64_json response', async () => {
+      const mockResponse = {
+        data: [{ b64_json: 'base64encodedimage', revised_prompt: 'revised prompt' }],
+      };
+
+      const mockClient = { images: { generate: jest.fn().mockResolvedValue(mockResponse) }, models: { list: jest.fn() } };
+      (OpenAI as unknown as jest.Mock).mockImplementation(() => mockClient);
+
+      const result = await provider.generateImage(
+        { prompt: 'test prompt', model: 'grok-imagine-image' },
         mockApiKey
-      )
-    ).rejects.toThrow('Failed to retrieve image data from Grok response');
-  });
+      );
 
-  it('should throw error if API returns error', async () => {
-    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: false,
-      status: 400,
-      text: jest.fn().mockResolvedValue(JSON.stringify({ message: 'Bad Request' })),
-      json: jest.fn().mockResolvedValue({ message: 'Bad Request' }),
+      expect(result.images).toHaveLength(1);
+      expect(result.images[0].data).toBe('base64encodedimage');
+      expect(result.images[0].revisedPrompt).toBe('revised prompt');
     });
 
-    await expect(
-      provider.generateImage(
-        {
-          prompt: 'test prompt',
-          model: 'grok-2-image',
-        },
+    it('should set resolution to 2k for grok-imagine-image-pro', async () => {
+      const mockResponse = {
+        data: [{ b64_json: 'base64data' }],
+      };
+
+      const mockClient = { images: { generate: jest.fn().mockResolvedValue(mockResponse) }, models: { list: jest.fn() } };
+      (OpenAI as unknown as jest.Mock).mockImplementation(() => mockClient);
+
+      await provider.generateImage(
+        { prompt: 'test prompt', model: 'grok-imagine-image-pro' },
         mockApiKey
-      )
-    ).rejects.toThrow('Bad Request');
+      );
+
+      expect(mockClient.images.generate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'grok-imagine-image-pro',
+          resolution: '2k',
+        })
+      );
+    });
+
+    it('should not set resolution for standard grok-imagine-image', async () => {
+      const mockResponse = {
+        data: [{ b64_json: 'base64data' }],
+      };
+
+      const mockClient = { images: { generate: jest.fn().mockResolvedValue(mockResponse) }, models: { list: jest.fn() } };
+      (OpenAI as unknown as jest.Mock).mockImplementation(() => mockClient);
+
+      await provider.generateImage(
+        { prompt: 'test prompt', model: 'grok-imagine-image' },
+        mockApiKey
+      );
+
+      const callArgs = mockClient.images.generate.mock.calls[0][0];
+      expect(callArgs.resolution).toBeUndefined();
+    });
+
+    it('should not set resolution for legacy grok-2-image', async () => {
+      const mockResponse = {
+        data: [{ b64_json: 'base64data' }],
+      };
+
+      const mockClient = { images: { generate: jest.fn().mockResolvedValue(mockResponse) }, models: { list: jest.fn() } };
+      (OpenAI as unknown as jest.Mock).mockImplementation(() => mockClient);
+
+      await provider.generateImage(
+        { prompt: 'test prompt', model: 'grok-2-image' },
+        mockApiKey
+      );
+
+      const callArgs = mockClient.images.generate.mock.calls[0][0];
+      expect(callArgs.resolution).toBeUndefined();
+    });
+
+    it('should pass aspect_ratio when provided', async () => {
+      const mockResponse = {
+        data: [{ b64_json: 'base64data' }],
+      };
+
+      const mockClient = { images: { generate: jest.fn().mockResolvedValue(mockResponse) }, models: { list: jest.fn() } };
+      (OpenAI as unknown as jest.Mock).mockImplementation(() => mockClient);
+
+      await provider.generateImage(
+        { prompt: 'test prompt', model: 'grok-imagine-image', aspectRatio: '16:9' },
+        mockApiKey
+      );
+
+      expect(mockClient.images.generate).toHaveBeenCalledWith(
+        expect.objectContaining({ aspect_ratio: '16:9' })
+      );
+    });
+
+    it('should throw error if API returns invalid response', async () => {
+      const mockClient = { images: { generate: jest.fn().mockResolvedValue({}) }, models: { list: jest.fn() } };
+      (OpenAI as unknown as jest.Mock).mockImplementation(() => mockClient);
+
+      await expect(
+        provider.generateImage({ prompt: 'test prompt', model: 'grok-imagine-image' }, mockApiKey)
+      ).rejects.toThrow('Invalid response from Grok Images API');
+    });
+
+    it('should throw error if no API key provided', async () => {
+      await expect(
+        provider.generateImage({ prompt: 'test prompt', model: 'grok-imagine-image' }, '')
+      ).rejects.toThrow('Grok provider requires an API key');
+    });
+
+    it('should fall back to url when b64_json is missing', async () => {
+      const mockResponse = {
+        data: [{ url: 'https://example.com/image.jpg', revised_prompt: 'revised' }],
+      };
+
+      const mockClient = { images: { generate: jest.fn().mockResolvedValue(mockResponse) }, models: { list: jest.fn() } };
+      (OpenAI as unknown as jest.Mock).mockImplementation(() => mockClient);
+
+      const result = await provider.generateImage(
+        { prompt: 'test prompt', model: 'grok-imagine-image' },
+        mockApiKey
+      );
+
+      expect(result.images[0].data).toBe('https://example.com/image.jpg');
+    });
+  });
+
+  describe('getAvailableModels', () => {
+    it('should return all supported models', async () => {
+      const models = await provider.getAvailableModels();
+      expect(models).toEqual(['grok-imagine-image', 'grok-imagine-image-pro', 'grok-2-image']);
+    });
   });
 });

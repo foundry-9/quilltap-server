@@ -90,8 +90,9 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
         }
       }))
     } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'Failed to update tag')
-      console.error('Error toggling tag:', { error: error instanceof Error ? error.message : String(error) })
+      const message = error instanceof Error ? error.message : String(error)
+      showErrorToast(message || 'Failed to update tag')
+      console.error('Error toggling tag:', { error: message, entityId, imageId: image.id })
     }
   }
 
@@ -107,13 +108,17 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
         body: JSON.stringify({ imageId: image.id }),
       })
 
-      if (!res.ok) throw new Error('Failed to set avatar')
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `Failed to set avatar (${res.status})`)
+      }
 
       onAvatarChange(image.id)
       showSuccessToast('Avatar updated!')
     } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'Failed to set avatar')
-      console.error('Error setting avatar:', { error: error instanceof Error ? error.message : String(error) })
+      const message = error instanceof Error ? error.message : String(error)
+      showErrorToast(message || 'Failed to set avatar')
+      console.error('Error setting avatar:', { error: message, entityId, imageId: image.id })
     }
   }
 
@@ -130,13 +135,17 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
         body: JSON.stringify({ imageId: null }),
       })
 
-      if (!res.ok) throw new Error('Failed to clear avatar')
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `Failed to clear avatar (${res.status})`)
+      }
 
       onAvatarChange(null)
       showSuccessToast('Avatar cleared!')
     } catch (error) {
-      showErrorToast(error instanceof Error ? error.message : 'Failed to clear avatar')
-      console.error('Error clearing avatar:', { error: error instanceof Error ? error.message : String(error) })
+      const message = error instanceof Error ? error.message : String(error)
+      showErrorToast(message || 'Failed to clear avatar')
+      console.error('Error clearing avatar:', { error: message, entityId })
     }
   }
 

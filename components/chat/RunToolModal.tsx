@@ -31,6 +31,7 @@ const CATEGORY_INFO: Record<string, { label: string; icon: string }> = {
   files: { label: 'Files', icon: '📁' },
   help: { label: 'Help', icon: '📖' },
   utility: { label: 'Utility', icon: '🔧' },
+  shell: { label: 'Shell', icon: '💻' },
   plugin: { label: 'Plugin', icon: '🔌' },
 }
 
@@ -174,7 +175,7 @@ export default function RunToolModal({
       <button
         type="button"
         onClick={handleBack}
-        className="qt-btn qt-btn-secondary"
+        className="qt-button qt-button-secondary"
         disabled={executing}
       >
         Back
@@ -183,7 +184,7 @@ export default function RunToolModal({
         <button
           type="button"
           onClick={onClose}
-          className="qt-btn qt-btn-secondary"
+          className="qt-button qt-button-secondary"
           disabled={executing}
         >
           Cancel
@@ -191,7 +192,7 @@ export default function RunToolModal({
         <button
           type="button"
           onClick={handleExecute}
-          className="qt-btn qt-btn-primary"
+          className="qt-button qt-button-primary"
           disabled={executing || (hasSchema && !formValid)}
         >
           {executing ? (
@@ -211,7 +212,7 @@ export default function RunToolModal({
       <button
         type="button"
         onClick={onClose}
-        className="qt-btn qt-btn-secondary"
+        className="qt-button qt-button-secondary"
       >
         Cancel
       </button>

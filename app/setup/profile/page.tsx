@@ -157,7 +157,7 @@ export default function ProfileSetupPage() {
         <button
           onClick={handleSubmit}
           disabled={loading || !name.trim()}
-          className="qt-btn w-full py-2"
+          className="qt-button qt-button-primary w-full py-2"
         >
           {loading ? 'Setting up...' : 'Continue'}
         </button>

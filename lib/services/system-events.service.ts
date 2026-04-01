@@ -22,6 +22,12 @@ export interface SystemEventInput {
   estimatedCostUSD?: number | null;
 }
 
+function hasTokenUsage(event: SystemEventInput): boolean {
+  return event.promptTokens !== undefined
+    || event.completionTokens !== undefined
+    || event.totalTokens !== undefined;
+}
+
 /**
  * Create a system event and add it to a chat
  */
@@ -50,7 +56,7 @@ export async function createSystemEvent(
     // Add system event to chat messages
     await repos.chats.addMessage(chatId, systemEvent);
     // Also update chat token aggregates for this operation
-    if (event.promptTokens || event.completionTokens) {
+    if (hasTokenUsage(event)) {
       const { updateChatTokenAggregates } = await import('./token-tracking.service');
       await updateChatTokenAggregates(
         chatId,

@@ -17,7 +17,7 @@ import type {
   ImageGenParams,
   ImageGenResponse,
 } from './types';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-openrouter');
 
@@ -79,17 +79,28 @@ export class OpenRouterProvider implements LLMProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: 'Quilltap',
+      xTitle: getQuilltapUserAgent(),
     });
 
     // Strip attachments from messages and convert to OpenRouter format
-    // Filter out 'tool' role messages as they require special handling
     const messages = params.messages
-      .filter(m => m.role !== 'tool')
-      .map((m) => ({
-        role: m.role as 'system' | 'user' | 'assistant',
-        content: m.content,
-      }));
+      .filter(m => !(m.role === 'tool' && !m.toolCallId))
+      .map((m) => {
+        if (m.role === 'tool' && m.toolCallId) {
+          return { role: 'tool' as const, tool_call_id: m.toolCallId, content: m.content };
+        }
+        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+          return {
+            role: 'assistant' as const,
+            content: m.content || null,
+            tool_calls: m.toolCalls.map(tc => ({ id: tc.id, type: tc.type, function: tc.function })),
+          };
+        }
+        return {
+          role: m.role as 'system' | 'user' | 'assistant',
+          content: m.content,
+        };
+      });
 
     const requestParams: any = {
       model: params.model,
@@ -192,16 +203,29 @@ export class OpenRouterProvider implements LLMProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: 'Quilltap',
+      xTitle: getQuilltapUserAgent(),
     });
 
-    // Convert messages to SDK format, filtering out 'tool' role messages
+    // Convert messages to SDK format
+    // Tool messages and assistant messages with toolCalls are handled in streamWithTools
     const messages: Message[] = params.messages
-      .filter(m => m.role !== 'tool')
-      .map((m) => ({
-        role: m.role as 'system' | 'user' | 'assistant',
-        content: m.content,
-      }));
+      .filter(m => !(m.role === 'tool' && !m.toolCallId))
+      .map((m) => {
+        if (m.role === 'tool' && m.toolCallId) {
+          return { role: 'tool' as any, tool_call_id: m.toolCallId, content: m.content } as any;
+        }
+        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+          return {
+            role: 'assistant' as const,
+            content: m.content || null,
+            tool_calls: m.toolCalls.map(tc => ({ id: tc.id, type: tc.type, function: tc.function })),
+          } as any;
+        }
+        return {
+          role: m.role as 'system' | 'user' | 'assistant',
+          content: m.content,
+        };
+      });
 
     // Convert chat messages to OpenResponses input format for callModel()
     const input = fromChatMessages(messages);
@@ -369,13 +393,25 @@ export class OpenRouterProvider implements LLMProvider {
     apiKey: string,
     attachmentResults: { sent: string[]; failed: { id: string; error: string }[] }
   ): AsyncGenerator<StreamChunk> {
-    // Build messages in OpenAI format
+    // Build messages in OpenAI Chat Completions format
     const messages = params.messages
-      .filter(m => m.role !== 'tool')
-      .map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      .filter(m => !(m.role === 'tool' && !m.toolCallId))
+      .map((m) => {
+        if (m.role === 'tool' && m.toolCallId) {
+          return { role: 'tool' as const, tool_call_id: m.toolCallId, content: m.content };
+        }
+        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+          return {
+            role: 'assistant' as const,
+            content: m.content || null,
+            tool_calls: m.toolCalls.map(tc => ({ id: tc.id, type: tc.type, function: tc.function })),
+          };
+        }
+        return {
+          role: m.role,
+          content: m.content,
+        };
+      });
 
     // Convert tools to OpenAI format
     const tools = params.tools!.map((tool: any) => ({
@@ -418,6 +454,7 @@ export class OpenRouterProvider implements LLMProvider {
           'Authorization': `Bearer ${apiKey}`,
           'HTTP-Referer': process.env.BASE_URL || 'http://localhost:3000',
           'X-Title': 'Quilltap',
+          'User-Agent': getQuilltapUserAgent(),
         },
         body: JSON.stringify(body),
       });
@@ -529,7 +566,7 @@ export class OpenRouterProvider implements LLMProvider {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-        xTitle: 'Quilltap',
+        xTitle: getQuilltapUserAgent(),
       });
       await client.models.list();
       return true;
@@ -548,7 +585,7 @@ export class OpenRouterProvider implements LLMProvider {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-        xTitle: 'Quilltap',
+        xTitle: getQuilltapUserAgent(),
       });
 
       const response = await client.models.list();
@@ -571,7 +608,7 @@ export class OpenRouterProvider implements LLMProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: 'Quilltap',
+      xTitle: getQuilltapUserAgent(),
     });
 
     const requestBody: any = {

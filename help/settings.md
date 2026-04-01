@@ -14,7 +14,7 @@ The Settings page is the central bureau of operations for your Quilltap estate -
 2. You will arrive at the Settings page with the **AI Providers** tab selected by default
 3. Click any tab to view and manage its settings
 
-You may also navigate directly to a specific tab by appending `?tab=` to the URL --- for example, `/settings?tab=chat` will open the Chat tab directly.
+You may also navigate directly to a specific tab by appending `?tab=` to the URL --- for example, `/settings?tab=chat` will open the Chat tab directly. To jump straight to a particular section within a tab, add `&section=` as well --- for example, `/settings?tab=chat&section=dangerous-content` will open the Chat tab and scroll directly to the Dangerous Content section with its accordion already open.
 
 ## The Seven Tabs
 
@@ -94,7 +94,7 @@ The engine room, the filing cabinet, and the emergency exits. Everything that ke
 - **LLM Logs** --- Review detailed records of all AI model interactions
 - **Delete All Data** --- Permanently remove all data (the lever beneath the glass cover; break only in case of genuine emergency)
 
-> See [Plugins](plugins.md), [File Storage Settings](file-storage-settings.md), [Backup & Restore](system-backup-restore.md), [Import & Export Data](system-import-export.md), [Managing Tasks](system-tasks-queue.md), [LLM Logs](system-llm-logs.md), and [Deleting Your Data](system-delete-data.md) for full details
+> See [Plugins](plugins.md), [Data Directory](data-directory.md), [Backup & Restore](system-backup-restore.md), [Import & Export Data](system-import-export.md), [Managing Tasks](system-tasks-queue.md), [LLM Logs](system-llm-logs.md), and [Deleting Your Data](system-delete-data.md) for full details
 
 ## Quick Configuration Workflow
 
@@ -127,6 +127,27 @@ All changes are saved automatically. You need not hunt for a "Save" button --- m
 ## Navigating from the Old Foundry Routes
 
 If you have bookmarks or links to the old `/foundry` subsystem pages, they will automatically redirect to the appropriate Settings tab. No link left behind, as they say.
+
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your current settings aloud during a conversation, rather like a well-informed secretary who has memorized the contents of every filing cabinet. The `help_settings` tool accepts a `category` parameter with the following values:
+
+- **`overview`** — A high-level summary of all configured profiles, counts, and key preferences
+- **`chat`** — Token display, context compression, memory cascade, timestamps, agent mode, and content settings
+- **`connections`** — Your configured LLM providers and models (API keys are never disclosed)
+- **`embeddings`** — Embedding and memory search profiles
+- **`images`** — Image generation profiles and story background settings
+- **`appearance`** — Theme preference, avatar settings, and sidebar width
+- **`templates`** — Roleplay templates and the current default
+- **`system`** — Plugin list and logging settings
+
+To use it, simply ask a help-tools-enabled character something like "What are my current settings?" or "Show me my connection profiles," and the character will consult the appropriate category on your behalf.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings")`
 
 ## Troubleshooting
 

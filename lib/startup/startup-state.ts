@@ -39,6 +39,21 @@ export type StartupPhase =
   | 'complete'
   | 'failed';
 
+/** Version guard block details for UI display */
+export interface VersionGuardBlock {
+  currentVersion: string;
+  highestVersion: string;
+}
+
+/** Instance lock conflict details for UI display */
+export interface InstanceLockConflict {
+  pid: number;
+  hostname: string;
+  environment: string;
+  startedAt: string;
+  lockPath: string;
+}
+
 interface StartupStateData {
   phase: StartupPhase;
   migrationsComplete: boolean;
@@ -58,6 +73,10 @@ interface StartupStateData {
   migrationWarnings: string[];
   /** Whether migration warning notifications have been sent to the client */
   migrationWarningsNotified: boolean;
+  /** Instance lock conflict info when another process holds the database */
+  instanceLockConflict: InstanceLockConflict | null;
+  /** Version guard block info when running an older version against a newer database */
+  versionGuardBlock: VersionGuardBlock | null;
 }
 
 // Extend globalThis type for our startup state
@@ -90,6 +109,8 @@ function getGlobalState(): StartupStateData {
       isLockedMode: false,
       migrationWarnings: [],
       migrationWarningsNotified: false,
+      instanceLockConflict: null,
+      versionGuardBlock: null,
     };
   }
 
@@ -334,6 +355,42 @@ export const startupState = {
   },
 
   /**
+   * Set version guard block details.
+   * Called when the running version is older than the database's highest version.
+   */
+  setVersionGuardBlock(block: VersionGuardBlock): void {
+    const state = getGlobalState();
+    state.versionGuardBlock = block;
+    state.phase = 'failed';
+    state.error = `Database was last used by Quilltap v${block.highestVersion}, but this is v${block.currentVersion}`;
+  },
+
+  /**
+   * Get version guard block details, if any.
+   */
+  getVersionGuardBlock(): VersionGuardBlock | null {
+    return getGlobalState().versionGuardBlock;
+  },
+
+  /**
+   * Set instance lock conflict details.
+   * Called when InstanceLockError is caught during database initialization.
+   */
+  setInstanceLockConflict(conflict: InstanceLockConflict): void {
+    const state = getGlobalState();
+    state.instanceLockConflict = conflict;
+    state.phase = 'failed';
+    state.error = `Database locked by another instance (PID ${conflict.pid}, ${conflict.environment})`;
+  },
+
+  /**
+   * Get instance lock conflict details, if any.
+   */
+  getInstanceLockConflict(): InstanceLockConflict | null {
+    return getGlobalState().instanceLockConflict;
+  },
+
+  /**
    * Wait for the server to be ready
    * Returns immediately if already ready
    * Times out after maxWaitMs (default 30 seconds)
@@ -422,6 +479,8 @@ export const startupState = {
       isLockedMode: false,
       migrationWarnings: [],
       migrationWarningsNotified: false,
+      instanceLockConflict: null,
+      versionGuardBlock: null,
     };
     global.__quilltapMigrationWarnings = [];
     setReadyPromise(undefined);

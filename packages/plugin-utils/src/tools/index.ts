@@ -46,3 +46,35 @@ export {
 } from './converters';
 
 export type { ToolConvertTarget } from './converters';
+
+// Export text-based tool call parsers (for spontaneous XML emissions)
+export {
+  // Composite utilities
+  parseAllXMLFormats,
+  parseAllXMLAsToolCalls,
+  hasAnyXMLToolMarkers,
+  stripAllXMLToolMarkers,
+  // Individual format parsers
+  parseFunctionCallsFormat,
+  parseToolCallFormat,
+  parseFunctionCallFormat,
+  parseToolUseFormat,
+  parseInvokeFormat,
+  // Individual marker checks
+  hasFunctionCallsMarkers,
+  hasToolCallMarkers,
+  hasFunctionCallMarkers,
+  hasToolUseMarkers,
+  hasInvokeMarkers,
+  // Individual strippers
+  stripFunctionCallsMarkers,
+  stripToolCallMarkers,
+  stripFunctionCallMarkers,
+  stripToolUseMarkers,
+  stripInvokeMarkers,
+  // Utilities
+  normalizeToolName,
+  convertToToolCallRequest as convertTextToolToRequest,
+} from './text-parsers';
+
+export type { ParsedTextTool } from './text-parsers';

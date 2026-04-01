@@ -686,6 +686,43 @@ export interface LLMProviderPlugin {
    */
   parseToolCalls?: (response: any) => ToolCallRequest[];
 
+  // =========================================================================
+  // Text Tool Call Detection (for spontaneous tool call emissions)
+  // =========================================================================
+
+  /**
+   * Check if a text response contains spontaneous tool call markers (OPTIONAL)
+   *
+   * Some models emit tool-call-like markup in their text output instead of
+   * using the provider's native tool calling mechanism. This is a quick check
+   * before full parsing — return true if the text might contain tool calls.
+   *
+   * @param text The model's text response content
+   */
+  hasTextToolMarkers?: (text: string) => boolean;
+
+  /**
+   * Parse spontaneous tool calls from response text (OPTIONAL)
+   *
+   * Extracts tool calls that models have hallucinated as text markup
+   * instead of using native function calling. Returns the same standardized
+   * ToolCallRequest[] format as parseToolCalls().
+   *
+   * @param text The model's text response content
+   */
+  parseTextToolCalls?: (text: string) => ToolCallRequest[];
+
+  /**
+   * Strip spontaneous tool call markers from text for display (OPTIONAL)
+   *
+   * Removes tool-call markup so the displayed response is clean.
+   * Tool execution status is shown separately in the UI.
+   *
+   * @param text The model's text response content
+   * @returns Cleaned text with markers removed
+   */
+  stripTextToolMarkers?: (text: string) => string;
+
   /**
    * Get image provider constraints (OPTIONAL)
    *

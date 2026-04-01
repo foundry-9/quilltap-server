@@ -25,6 +25,7 @@ export interface AppearanceSettings {
   handleThemeSelect: (themeId: string | null) => Promise<void>
   handleColorModeChange: (mode: ColorMode) => Promise<void>
   handleNavThemeSelectorChange: (show: boolean) => Promise<void>
+  refreshThemes: () => Promise<void>
 }
 
 /**
@@ -46,6 +47,7 @@ export function useAppearanceSettings(): AppearanceSettings {
     error,
     showNavThemeSelector,
     setShowNavThemeSelector,
+    refreshThemes,
   } = useTheme()
 
   // Ensure availableThemes is always an array
@@ -83,5 +85,6 @@ export function useAppearanceSettings(): AppearanceSettings {
     handleThemeSelect,
     handleColorModeChange,
     handleNavThemeSelectorChange,
+    refreshThemes,
   }
 }

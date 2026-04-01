@@ -18,7 +18,9 @@ import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { successResponse, serverError } from '@/lib/api/responses';
 import { toolRegistry } from '@/lib/plugins/tool-registry';
+import type { UniversalTool } from '@/lib/plugins/interfaces/tool-plugin';
 import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler';
+import { isShellEnvironment } from '@/lib/paths';
 import {
   imageGenerationToolDefinition,
   memorySearchToolDefinition,
@@ -26,8 +28,17 @@ import {
   projectInfoToolDefinition,
   fileManagementToolDefinition,
   helpSearchToolDefinition,
+  helpSettingsToolDefinition,
+  helpNavigateToolDefinition,
   rngToolDefinition,
   stateToolDefinition,
+  whisperToolDefinition,
+  shellChdirToolDefinition,
+  shellExecSyncToolDefinition,
+  shellExecAsyncToolDefinition,
+  shellAsyncResultToolDefinition,
+  shellSudoSyncToolDefinition,
+  shellCpHostToolDefinition,
 } from '@/lib/tools';
 
 /**
@@ -39,9 +50,18 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   search_web: webSearchToolDefinition,
   project_info: projectInfoToolDefinition,
   file_management: fileManagementToolDefinition,
-  search_help: helpSearchToolDefinition,
+  help_search: helpSearchToolDefinition,
+  help_settings: helpSettingsToolDefinition,
+  help_navigate: helpNavigateToolDefinition,
   rng: rngToolDefinition,
   state: stateToolDefinition,
+  whisper: whisperToolDefinition,
+  chdir: shellChdirToolDefinition,
+  exec_sync: shellExecSyncToolDefinition,
+  exec_async: shellExecAsyncToolDefinition,
+  async_result: shellAsyncResultToolDefinition,
+  sudo_sync: shellSudoSyncToolDefinition,
+  cp_host: shellCpHostToolDefinition,
 };
 
 /**
@@ -84,9 +104,23 @@ const BUILT_IN_TOOLS = [
     category: 'files',
   },
   {
-    id: 'search_help',
-    name: 'Search Help',
+    id: 'help_search',
+    name: 'Help Search',
     description: 'Search Quilltap help documentation for features, settings, and usage guidance',
+    source: 'built-in' as const,
+    category: 'help',
+  },
+  {
+    id: 'help_settings',
+    name: 'Help Settings',
+    description: 'Read instance settings to understand current configuration (API keys are never shown)',
+    source: 'built-in' as const,
+    category: 'help',
+  },
+  {
+    id: 'help_navigate',
+    name: 'Help Navigate',
+    description: 'Navigate the user\'s browser to a specific Quilltap page or settings section',
     source: 'built-in' as const,
     category: 'help',
   },
@@ -103,6 +137,55 @@ const BUILT_IN_TOOLS = [
     description: 'Get, set, or delete persistent key-value state for the chat',
     source: 'built-in' as const,
     category: 'utility',
+  },
+  {
+    id: 'whisper',
+    name: 'Whisper',
+    description: 'Send a private message to a specific character in a multi-character chat',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
+  {
+    id: 'chdir',
+    name: 'Change Directory',
+    description: 'Change the working directory for shell commands in the chat session',
+    source: 'built-in' as const,
+    category: 'shell',
+  },
+  {
+    id: 'exec_sync',
+    name: 'Execute Command',
+    description: 'Execute a shell command synchronously and wait for completion',
+    source: 'built-in' as const,
+    category: 'shell',
+  },
+  {
+    id: 'exec_async',
+    name: 'Execute Async',
+    description: 'Execute a shell command asynchronously in the background',
+    source: 'built-in' as const,
+    category: 'shell',
+  },
+  {
+    id: 'async_result',
+    name: 'Async Result',
+    description: 'Check status and retrieve output of an async command',
+    source: 'built-in' as const,
+    category: 'shell',
+  },
+  {
+    id: 'sudo_sync',
+    name: 'Sudo Execute',
+    description: 'Execute a shell command with elevated privileges (requires approval)',
+    source: 'built-in' as const,
+    category: 'shell',
+  },
+  {
+    id: 'cp_host',
+    name: 'Copy to/from Host',
+    description: 'Copy files between the workspace and Files storage',
+    source: 'built-in' as const,
+    category: 'shell',
   },
   // Note: request_full_context and submit_final_response are intentionally excluded
   // - request_full_context is a safety valve that should always be available
@@ -152,6 +235,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
       hasImageProfile: boolean;
       hasProject: boolean;
       allowsWebSearch: boolean;
+      isMultiCharacter: boolean;
     } | null = null;
 
     if (chatId) {
@@ -162,7 +246,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           const characterParticipant = chat.participants.find(
             p => p.type === 'CHARACTER' && p.isActive
           );
-          const hasImageProfile = !!characterParticipant?.imageProfileId;
+          const hasImageProfile = !!chat.imageProfileId || !!characterParticipant?.imageProfileId;
 
           // Check if chat is in a project
           const hasProject = !!chat.projectId;
@@ -176,7 +260,13 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
             allowsWebSearch = !!connectionProfile?.allowWebSearch;
           }
 
-          chatContext = { hasImageProfile, hasProject, allowsWebSearch };
+          // Check if chat has multiple active character participants (for whisper)
+          const activeCharacterCount = chat.participants.filter(
+            p => p.type === 'CHARACTER' && p.isActive
+          ).length;
+          const isMultiCharacter = activeCharacterCount > 1;
+
+          chatContext = { hasImageProfile, hasProject, allowsWebSearch, isMultiCharacter };
         }
       } catch (chatError) {
         logger.warn('[Tools v1] Failed to load chat for availability check', {
@@ -203,52 +293,86 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
       });
     }
 
-    // Get configured tool definitions from plugins
-    const pluginToolDefs = await toolRegistry.getConfiguredToolDefinitions(pluginToolConfigs);
+    // Iterate plugins individually to track which plugin each tool comes from
+    // (Previously used getConfiguredToolDefinitions which lost the plugin→tool mapping,
+    // causing multi-tool plugins to have tools without pluginName, which were then
+    // silently dropped by the UI hierarchy builder)
+    const allPlugins = toolRegistry.getAllPlugins();
+    const pluginMetadataMap = new Map<string, { displayName?: string; description?: string; category?: string }>();
 
-    for (const toolDef of pluginToolDefs) {
-      const toolName = toolDef.function.name;
+    for (const plugin of allPlugins) {
+      const pluginName = plugin.metadata.toolName;
+      const config = pluginToolConfigs.get(pluginName) || {};
 
-      // Skip internal-only tools
-      if (toolName === 'request_full_context' || toolName === 'submit_final_response') {
+      // Check if plugin is configured (if it requires configuration)
+      if (plugin.isConfigured && !plugin.isConfigured(config)) {
         continue;
       }
 
-      // Skip if this tool is already in built-in tools
-      if (BUILT_IN_TOOLS.some(t => t.id === toolName)) {
-        continue;
-      }
-
-      tools.push({
-        id: toolName,
-        name: toolDef.function.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        description: toolDef.function.description || 'Plugin-provided tool',
-        source: 'plugin',
-        category: 'plugin',
-        userInvocable: true,
-        ...(includeSchemas && toolDef.function.parameters
-          ? { parameters: toolDef.function.parameters as Record<string, unknown> }
-          : {}),
+      // Store metadata for later enhancement
+      pluginMetadataMap.set(pluginName, {
+        displayName: plugin.metadata.displayName,
+        description: plugin.metadata.description,
+        category: plugin.metadata.category,
       });
+
+      try {
+        // Get tool definitions using the same method the registry uses internally
+        let pluginToolDefs: UniversalTool[] = [];
+        if (typeof plugin.getToolDefinitions === 'function') {
+          pluginToolDefs = await plugin.getToolDefinitions(config);
+        } else if (typeof plugin.getMultipleToolDefinitions === 'function') {
+          pluginToolDefs = await plugin.getMultipleToolDefinitions(config);
+        } else if (typeof plugin.getToolDefinition === 'function') {
+          pluginToolDefs = [plugin.getToolDefinition()];
+        }
+
+        for (const toolDef of pluginToolDefs) {
+          const toolName = toolDef.function.name;
+
+          // Skip internal-only tools
+          if (toolName === 'request_full_context' || toolName === 'submit_final_response') {
+            continue;
+          }
+
+          // Skip if this tool is already in built-in tools
+          if (BUILT_IN_TOOLS.some(t => t.id === toolName)) {
+            continue;
+          }
+
+          tools.push({
+            id: toolName,
+            name: toolDef.function.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            description: toolDef.function.description || 'Plugin-provided tool',
+            source: 'plugin',
+            category: 'plugin',
+            pluginName,
+            userInvocable: true,
+            ...(includeSchemas && toolDef.function.parameters
+              ? { parameters: toolDef.function.parameters as Record<string, unknown> }
+              : {}),
+          });
+        }
+      } catch (error) {
+        logger.error('[Tools v1] Error getting tools from plugin', {
+          pluginName,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
-    // Also get metadata from registered plugins for better display names
-    const pluginMetadata = toolRegistry.getAllPluginMetadata();
-    for (const metadata of pluginMetadata) {
-      // Find any tools in our list that might have come from this plugin
-      // and enhance them with better metadata
-      const existingTool = tools.find(t => t.source === 'plugin' && t.id === metadata.toolName);
+    // Enhance single-tool plugins with better metadata from plugin registration
+    for (const [pluginName, metadata] of pluginMetadataMap) {
+      const existingTool = tools.find(t => t.source === 'plugin' && t.id === pluginName);
       if (existingTool) {
         existingTool.name = metadata.displayName || existingTool.name;
         existingTool.description = metadata.description || existingTool.description;
         existingTool.category = metadata.category || existingTool.category;
-        existingTool.pluginName = metadata.toolName;
       }
     }
 
     // Get tool hierarchy info from plugins that support it
     // This allows grouping tools by subgroup (e.g., MCP server)
-    const allPlugins = toolRegistry.getAllPlugins();
     for (const plugin of allPlugins) {
       if (typeof plugin.getToolHierarchy === 'function') {
         try {
@@ -301,6 +425,23 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
             } else if (!isWebSearchConfigured()) {
               tool.available = false;
               tool.unavailableReason = 'No search provider configured. Please add a search provider API key in Settings > API Keys.';
+            }
+            break;
+          case 'whisper':
+            if (!chatContext.isMultiCharacter) {
+              tool.available = false;
+              tool.unavailableReason = 'Whisper requires a multi-character chat with more than one active character';
+            }
+            break;
+          case 'chdir':
+          case 'exec_sync':
+          case 'exec_async':
+          case 'async_result':
+          case 'sudo_sync':
+          case 'cp_host':
+            if (!isShellEnvironment()) {
+              tool.available = false;
+              tool.unavailableReason = 'Shell tools are only available in Lima VM or Docker environments';
             }
             break;
         }

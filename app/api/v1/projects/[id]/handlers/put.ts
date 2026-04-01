@@ -6,9 +6,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { handlePutDefault, handleSetState } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
+
+const PROJECT_PUT_ACTIONS = ['set-state'] as const;
+type ProjectPutAction = typeof PROJECT_PUT_ACTIONS[number];
 
 /**
  * PUT handler for individual project
@@ -20,10 +23,13 @@ export async function handlePut(
 ): Promise<NextResponse> {
   const action = getActionParam(req);
 
-  switch (action) {
-    case 'set-state':
-      return handleSetState(req, projectId, ctx);
-    default:
-      return handlePutDefault(req, projectId, ctx);
+  if (!action || !isValidAction(action, PROJECT_PUT_ACTIONS)) {
+    return handlePutDefault(req, projectId, ctx);
   }
+
+  const actionHandlers: Record<ProjectPutAction, () => Promise<NextResponse>> = {
+    'set-state': () => handleSetState(req, projectId, ctx),
+  };
+
+  return actionHandlers[action]();
 }

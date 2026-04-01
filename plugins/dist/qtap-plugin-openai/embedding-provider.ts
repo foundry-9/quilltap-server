@@ -5,7 +5,7 @@
  * Supports text-embedding-3-small, text-embedding-3-large, and text-embedding-ada-002 models.
  */
 
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 import type { EmbeddingProvider, EmbeddingResult, EmbeddingOptions } from './types';
 
 const logger = createPluginLogger('qtap-plugin-openai');
@@ -110,6 +110,7 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
+        'User-Agent': getQuilltapUserAgent(),
       },
       body: JSON.stringify(requestPayload),
     });
@@ -154,6 +155,7 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
       const response = await fetch(`${this.baseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
+          'User-Agent': getQuilltapUserAgent(),
         },
       });
 

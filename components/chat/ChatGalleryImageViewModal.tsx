@@ -91,6 +91,18 @@ export default function ChatGalleryImageViewModal({
     onNext,
   })
 
+  const handleCopyToClipboard = async () => {
+    try {
+      const response = await fetch(file.url)
+      const blob = await response.blob()
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+      showSuccessToast('Image copied to clipboard')
+    } catch (error) {
+      console.error('Failed to copy image to clipboard:', { error: error instanceof Error ? error.message : String(error) })
+      showErrorToast('Failed to copy image to clipboard')
+    }
+  }
+
   const handleDownload = async () => {
     try {
       const response = await fetch(file.url)
@@ -233,7 +245,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             onPrev()
           }}
-          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors z-10 cursor-pointer"
+          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors z-10 cursor-pointer"
           title="Previous image (Left Arrow)"
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -248,7 +260,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             onNext()
           }}
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors z-10 cursor-pointer"
+          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors z-10 cursor-pointer"
           title="Next image (Right Arrow)"
         >
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -268,10 +280,10 @@ export default function ChatGalleryImageViewModal({
               handleToggleCharacterTag()
             }}
             disabled={isTagging || checkingTags}
-            className={`p-2 rounded-full text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
+            className={`p-2 rounded-full qt-text-overlay transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
               isTaggedToCharacter
                 ? 'bg-primary hover:bg-primary/90'
-                : 'bg-primary/10 hover:bg-primary/20'
+                : 'qt-bg-overlay-btn hover:qt-bg-overlay-btn'
             }`}
             title={isTaggedToCharacter ? `Remove from ${characterName || 'character'}'s gallery` : `Add to ${characterName || 'character'}'s gallery`}
           >
@@ -288,10 +300,10 @@ export default function ChatGalleryImageViewModal({
               handleTogglePersonaTag()
             }}
             disabled={isTagging || checkingTags}
-            className={`p-2 rounded-full text-primary-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
+            className={`p-2 rounded-full qt-text-overlay transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
               isTaggedToPersona
                 ? 'bg-primary hover:bg-primary/90'
-                : 'bg-primary/10 hover:bg-primary/20'
+                : 'qt-bg-overlay-btn hover:qt-bg-overlay-btn'
             }`}
             title={isTaggedToPersona ? `Remove from ${personaName || 'persona'}'s gallery` : `Add to ${personaName || 'persona'}'s gallery`}
           >
@@ -306,7 +318,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             handleDownload()
           }}
-          className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors cursor-pointer"
+          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors cursor-pointer"
           title="Download"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -318,13 +330,26 @@ export default function ChatGalleryImageViewModal({
             />
           </svg>
         </button>
+        {/* Copy to clipboard button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            handleCopyToClipboard()
+          }}
+          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors cursor-pointer"
+          title="Copy to clipboard"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        </button>
         {/* Close button */}
         <button
           onClick={(e) => {
             e.stopPropagation()
             onClose()
           }}
-          className="p-2 bg-primary/10 hover:bg-primary/20 rounded-full text-primary-foreground transition-colors cursor-pointer"
+          className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors cursor-pointer"
           title="Close (Escape)"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -342,7 +367,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             handleDeleteClick()
           }}
-          className="p-2 bg-destructive/80 hover:bg-destructive rounded-full text-primary-foreground transition-colors cursor-pointer"
+          className="p-2 bg-destructive/80 hover:bg-destructive rounded-full qt-text-overlay transition-colors cursor-pointer"
           title="Delete image permanently"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -8,6 +8,7 @@
 import { turnManagerLogger as logger } from './logger';
 import type { TurnState, TurnSelectionResult } from './types';
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types';
+import { isParticipantPresent } from '@/lib/schemas/types';
 
 /**
  * Selects the next speaker based on turn state and talkativeness weights.
@@ -40,7 +41,7 @@ export function selectNextSpeaker(
 
   // Get active LLM-controlled participants only (user-controlled don't take autonomous turns)
   const activeCharacterParticipants = participants.filter(
-    p => p.isActive && p.characterId &&
+    p => isParticipantPresent(p.status) && p.characterId &&
     (p.controlledBy === 'llm' || (p.controlledBy === undefined && p.type === 'CHARACTER'))
   );
   // If no active characters, it's always user's turn

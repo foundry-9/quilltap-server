@@ -1,13 +1,16 @@
 # Commit to Git
 
 1. Last chance to verify that, if the commit contains changes to a data model that shows up in backup/restore or import/export, we have covered that possibility in backup/restore and import/export
-2. Last chance to verify that, if the commit contains changes to a front-end user interface component, that we have not introduced more direct usage of Tailwind classes as opposed to creating or using appropriate `qt-*` theme utility classes
-3. You must update the [changelog](../../docs/CHANGELOG.md) for **every** git commit; no exceptions. If this is in the "bugfix" column, then it belongs in the next release section (if the last release was 3.1.2 then your changes probably belong in a 3.1.3 section), otherwise put it in the next dev section (if the last release was 3.1.2, then your changes probably belong in a 3.2-dev section).
-4. If you have not already done so, it is worth running the following commands before the commit just to be sure it won't trip you up:
+2. Verify that changes to the database schemas are covered by migrations if necessary, and all changes to the DDL or schemas in the databases must be reported in [DDL.md](../../docs/developer/DDL.md).
+3. Last chance to verify that, if the commit contains changes to a front-end user interface component, that we have not introduced more direct usage of Tailwind classes as opposed to creating or using appropriate `qt-*` theme utility classes
+4. If help files in `help/*.md` were created or modified, verify that each has a correct `url` in its frontmatter and an "In-Chat Navigation" section with the matching `help_navigate(url: "...")` tool call
+5. You must update the [changelog](../../docs/CHANGELOG.md) for **every** git commit; no exceptions. If this is in the "bugfix" column, then it belongs in the next release section (if the last release was 3.1.2 then your changes probably belong in a 3.1.3 section), otherwise put it in the next dev section (if the last release was 3.1.2, then your changes probably belong in a 3.2-dev section).
+6. If you have not already done so, it is worth running the following commands before the commit just to be sure it won't trip you up:
 
     - `npm run lint`
     - `npx tsc`
     - `npm run test:unit`
 
-5. If (and only if) either the Electron source or the Next.js source has changed in any way, run `scripts/update_version.sh` to update the version number of the application.
-6. After this, you can commit.
+7. If (and only if) either the Electron source or the Next.js source has changed in any way, run `scripts/update_version.sh` to update the version number of the application.
+8. Please don't credit yourself in the commit message.
+9. After this, you can commit.

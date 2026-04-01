@@ -66,7 +66,7 @@ export async function handleRunTool(
     const executionContext: ToolExecutionContext = {
       chatId,
       userId: user.id,
-      imageProfileId: characterParticipant?.imageProfileId || undefined,
+      imageProfileId: chat.imageProfileId || characterParticipant?.imageProfileId || undefined,
       characterId: characterParticipant?.characterId || undefined,
       callingParticipantId: characterParticipant?.id || undefined,
       projectId: chat.projectId || undefined,

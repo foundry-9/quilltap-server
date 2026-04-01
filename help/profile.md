@@ -59,3 +59,9 @@ For information about viewing your account details, see [Account Information](ac
 For more information about avatars, see [Choosing a Profile Avatar](profile-avatar.md).
 
 For details about your data directory and storage, see [Data Directory](data-directory.md).
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/profile")`

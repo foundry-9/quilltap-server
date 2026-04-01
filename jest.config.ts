@@ -50,6 +50,8 @@ const config: Config = {
   ],
   modulePathIgnorePatterns: [
     '/.next/',
+    '<rootDir>/.electron-server-staging/',
+    '<rootDir>/out/',
   ],
   coverageThreshold: {
     global: {

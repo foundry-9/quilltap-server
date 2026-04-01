@@ -134,9 +134,9 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
     try {
       // Parse query params for memory handling
-      const url = new URL(req.url);
-      const memoryAction = url.searchParams.get('memoryAction') as MemoryCascadeAction | null;
-      const skipConfirmation = url.searchParams.get('skipConfirmation') === 'true';const result = await findMessageInUserChats(repos, user.id, messageId);
+      const { searchParams } = req.nextUrl;
+      const memoryAction = searchParams.get('memoryAction') as MemoryCascadeAction | null;
+      const skipConfirmation = searchParams.get('skipConfirmation') === 'true';const result = await findMessageInUserChats(repos, user.id, messageId);
       if (!result) {
         return notFound('Message');
       }

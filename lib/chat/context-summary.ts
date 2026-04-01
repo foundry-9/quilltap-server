@@ -7,11 +7,12 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory'
-import { getCheapLLMProvider } from '@/lib/llm/cheap-llm'
-import { updateContextSummary, summarizeChat, ChatMessage, generateTitleFromSummary, considerTitleUpdate } from '@/lib/memory/cheap-llm-tasks'
+import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
+import { updateContextSummary, summarizeChat, ChatMessage, generateTitleFromSummary, considerTitleUpdate, considerHelpChatTitleUpdate, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
 import { Provider, ConnectionProfile, CheapLLMSettings } from '@/lib/schemas/types'
+import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
@@ -46,28 +47,34 @@ export function calculateInterchangeCount(messages: Array<{ role?: string; type?
 
 /**
  * Determines if we should check for title update at this interchange count
- * Checks at: 2, 3, 5, 7, 10, then every 10 after
+ * Regular chats: checks at 2, 3, 5, 7, 10, then every 10 after
+ * Help chats: checks at 1, 2, 3, 5, 7, 10, then every 10 after (fires immediately after first Q&A)
  */
 export function shouldCheckTitleAtInterchange(
   currentInterchange: number,
-  lastCheckedInterchange: number
+  lastCheckedInterchange: number,
+  chatType?: string
 ): boolean {
-  // Never check at 0 or 1
-  if (currentInterchange < 2) {
+  const isHelpChat = chatType === 'help'
+
+  // Help chats fire at interchange 1 (right after first Q&A)
+  // Regular chats never check before interchange 2
+  const minimumInterchange = isHelpChat ? 1 : 2
+  if (currentInterchange < minimumInterchange) {
     return false
   }
-  
+
   // If we haven't checked yet, and we're at one of the early checkpoints
-  const earlyCheckpoints = [2, 3, 5, 7, 10]
+  const earlyCheckpoints = isHelpChat ? [1, 2, 3, 5, 7, 10] : [2, 3, 5, 7, 10]
   if (earlyCheckpoints.includes(currentInterchange) && currentInterchange > lastCheckedInterchange) {
     return true
   }
-  
+
   // After 10, check every 10 interchanges
   if (currentInterchange >= 10 && currentInterchange % 10 === 0 && currentInterchange > lastCheckedInterchange) {
     return true
   }
-  
+
   return false
 }
 
@@ -188,7 +195,7 @@ export async function generateContextSummary(
     }
 
     // Get cheap LLM provider - convert null values to undefined for compatibility
-    const cheapLLM = getCheapLLMProvider(
+    let cheapLLM = getCheapLLMProvider(
       connectionProfile,
       {
         strategy: cheapLLMSettings.strategy,
@@ -201,6 +208,18 @@ export async function generateContextSummary(
 
     if (!cheapLLM) {
       return { success: false, error: 'No cheap LLM provider available', wasGenerated: false }
+    }
+
+    // For dangerous chats, use uncensored provider to avoid content refusals
+    if (chat.isDangerousChat === true) {
+      const chatSettingsForDanger = await repos.chatSettings.findByUserId(userId)
+      const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettingsForDanger)
+      cheapLLM = resolveUncensoredCheapLLMSelection(
+        cheapLLM,
+        true,
+        dangerSettings,
+        availableProfiles
+      )
     }
 
     // Get messages
@@ -321,8 +340,11 @@ export async function generateContextSummary(
       }
 
       // Generate a title from the summary using the cheap LLM
+      // Help chats get practical, descriptive titles; regular chats get literary ones
       try {
-        const titleResult = await generateTitleFromSummary(result.summary, cheapLLM, userId, chatId)
+        const titleResult = chat.chatType === 'help'
+          ? await generateHelpChatTitleFromSummary(result.summary, cheapLLM, userId, chatId)
+          : await generateTitleFromSummary(result.summary, cheapLLM, userId, chatId)
         if (titleResult.success && titleResult.result) {
           await repos.chats.update(chatId, {
             title: titleResult.result,
@@ -473,15 +495,11 @@ async function considerTitleUpdateAsync(
     // Use existing summary if available, otherwise use current title
     const context = chat.contextSummary || chat.title
     
-    // Ask the cheap LLM if title needs updating
-    const considerationResult = await considerTitleUpdate(
-      chat.title,
-      recentMessages,
-      context,
-      cheapLLM,
-      userId,
-      chatId
-    )
+    // Ask the cheap LLM if title needs updating — use help-specific prompt for help chats
+    const isHelpChat = chat.chatType === 'help'
+    const considerationResult = isHelpChat
+      ? await considerHelpChatTitleUpdate(chat.title, recentMessages, context, cheapLLM, userId, chatId)
+      : await considerTitleUpdate(chat.title, recentMessages, context, cheapLLM, userId, chatId)
     
     if (considerationResult.success && considerationResult.result) {
       const { needsNewTitle, reason, suggestedTitle } = considerationResult.result
@@ -519,15 +537,17 @@ async function considerTitleUpdateAsync(
         })
         logger.info(`[Title Update] Updated title for chat ${chatId} to: "${suggestedTitle}"`)
 
-        // Queue story background generation if enabled
-        const chatSettings = await repos.chatSettings.findByUserId(userId)
-        if (chatSettings) {
-          // Re-fetch chat to get updated title
-          const updatedChat = await repos.chats.findById(chatId)
-          if (updatedChat) {
-            queueStoryBackgroundIfEnabled(userId, updatedChat, chatSettings, suggestedTitle).catch(error => {
-              logger.error(`[Title Update] Failed to queue story background for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
-            })
+        // Queue story background generation if enabled (skip for help chats — no Lantern support)
+        if (!isHelpChat) {
+          const chatSettings = await repos.chatSettings.findByUserId(userId)
+          if (chatSettings) {
+            // Re-fetch chat to get updated title
+            const updatedChat = await repos.chats.findById(chatId)
+            if (updatedChat) {
+              queueStoryBackgroundIfEnabled(userId, updatedChat, chatSettings, suggestedTitle).catch(error => {
+                logger.error(`[Title Update] Failed to queue story background for chat ${chatId}:`, {}, error instanceof Error ? error : new Error(String(error)))
+              })
+            }
           }
         }
       } else {
@@ -574,10 +594,10 @@ export async function checkAndGenerateSummaryIfNeeded(
   // Check if we should consider updating the title
   const lastCheckedInterchange = chat.lastRenameCheckInterchange || 0
 
-  const isAtTitleCheckpoint = shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange)
+  const isAtTitleCheckpoint = shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange, chat.chatType)
 
   if (isAtTitleCheckpoint) {
-    logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for chat ${chatId}`)
+    logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for ${chat.chatType === 'help' ? 'help ' : ''}chat ${chatId}`)
 
     // Run title consideration in background (non-blocking)
     considerTitleUpdateAsync(

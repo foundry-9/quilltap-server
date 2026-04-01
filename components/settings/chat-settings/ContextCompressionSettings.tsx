@@ -29,18 +29,17 @@ export function ContextCompressionSettingsComponent({
   const compressionSettings = settings.contextCompressionSettings || DEFAULT_CONTEXT_COMPRESSION_SETTINGS
 
   // Track which slider is being dragged (null when not dragging)
-  const [dragging, setDragging] = useState<'window' | 'compression' | 'system' | 'projectContext' | null>(null)
+  const [dragging, setDragging] = useState<'window' | 'compression' | 'projectContext' | null>(null)
 
   // Local state for sliders to allow smooth dragging
   const [localWindowSize, setLocalWindowSize] = useState(compressionSettings.windowSize)
   const [localCompressionTarget, setLocalCompressionTarget] = useState(compressionSettings.compressionTargetTokens)
-  const [localSystemPromptTarget, setLocalSystemPromptTarget] = useState(compressionSettings.systemPromptTargetTokens)
+  // System prompt compression removed — only message history is compressed
   const [localProjectContextInterval, setLocalProjectContextInterval] = useState(compressionSettings.projectContextReinjectInterval ?? 5)
 
   // Use local value while dragging, otherwise use settings value (for external updates)
   const displayWindowSize = dragging === 'window' ? localWindowSize : compressionSettings.windowSize
   const displayCompressionTarget = dragging === 'compression' ? localCompressionTarget : compressionSettings.compressionTargetTokens
-  const displaySystemPromptTarget = dragging === 'system' ? localSystemPromptTarget : compressionSettings.systemPromptTargetTokens
   const displayProjectContextInterval = dragging === 'projectContext' ? localProjectContextInterval : (compressionSettings.projectContextReinjectInterval ?? 5)
 
   const handleEnabledChange = (enabled: boolean) => {
@@ -83,23 +82,6 @@ export function ContextCompressionSettingsComponent({
     }
   }
 
-  const handleSystemPromptTargetStart = () => {
-    setDragging('system')
-    setLocalSystemPromptTarget(compressionSettings.systemPromptTargetTokens)
-  }
-
-  const handleSystemPromptTargetChange = (systemPromptTargetTokens: number) => {
-    // Clamp value between 500 and 3000
-    const clampedValue = Math.min(3000, Math.max(500, systemPromptTargetTokens))
-    setLocalSystemPromptTarget(clampedValue)
-  }
-
-  const handleSystemPromptTargetCommit = () => {
-    setDragging(null)
-    if (localSystemPromptTarget !== compressionSettings.systemPromptTargetTokens) {
-      onUpdate({ systemPromptTargetTokens: localSystemPromptTarget })
-    }
-  }
 
   const handleProjectContextIntervalStart = () => {
     setDragging('projectContext')
@@ -239,37 +221,6 @@ export function ContextCompressionSettingsComponent({
           </div>
           <p className="qt-text-xs text-muted-foreground mt-2">
             Target token count for compressed conversation history.
-          </p>
-        </div>
-
-        {/* System Prompt Target Tokens */}
-        <div className={!compressionSettings.enabled ? 'opacity-50 pointer-events-none' : ''}>
-          <label className="qt-text-label block mb-2">
-            System Prompt Compression Target
-            <span className="qt-text-xs text-muted-foreground ml-2">
-              (~{displaySystemPromptTarget} tokens)
-            </span>
-          </label>
-          <input
-            type="range"
-            min={500}
-            max={3000}
-            step={100}
-            value={displaySystemPromptTarget}
-            onMouseDown={handleSystemPromptTargetStart}
-            onTouchStart={handleSystemPromptTargetStart}
-            onChange={(e) => handleSystemPromptTargetChange(parseInt(e.target.value, 10))}
-            onMouseUp={handleSystemPromptTargetCommit}
-            onTouchEnd={handleSystemPromptTargetCommit}
-            disabled={!compressionSettings.enabled}
-            className="w-full cursor-pointer"
-          />
-          <div className="flex justify-between qt-text-xs text-muted-foreground mt-1">
-            <span>500 (minimal)</span>
-            <span>3000 (detailed)</span>
-          </div>
-          <p className="qt-text-xs text-muted-foreground mt-2">
-            Target token count for compressed system prompt (character instructions).
           </p>
         </div>
 

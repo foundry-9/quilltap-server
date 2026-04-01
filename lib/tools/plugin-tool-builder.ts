@@ -24,8 +24,11 @@ import {
   requestFullContextToolDefinition,
   submitFinalResponseToolDefinition,
   helpSearchToolDefinition,
+  helpSettingsToolDefinition,
+  helpNavigateToolDefinition,
   rngToolDefinition,
   stateToolDefinition,
+  whisperToolDefinition,
   getAllShellToolDefinitions,
 } from '@/lib/tools';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
@@ -130,14 +133,23 @@ export interface BuildToolsOptions {
   /** Whether to enable request_full_context tool (enabled when context compression is active) */
   requestFullContext?: boolean;
 
-  /** Whether to enable help search tool (enabled by default) */
+  /** Whether to enable help search tool (gated by character help tools setting) */
   helpSearch?: boolean;
+
+  /** Whether to enable help settings tool (gated by character help tools setting) */
+  helpSettings?: boolean;
+
+  /** Whether to enable help navigate tool (gated by character help tools setting) */
+  helpNavigate?: boolean;
 
   /** Whether to enable RNG (random number generator) tool (enabled by default) */
   rng?: boolean;
 
   /** Whether to enable state (persistent state management) tool (enabled by default) */
   state?: boolean;
+
+  /** Whether to enable whisper tool (for multi-character private messaging) */
+  whisper?: boolean;
 
   /** Whether to enable submit_final_response tool (for agent mode) */
   agentMode?: boolean;
@@ -194,8 +206,11 @@ export async function buildToolsForProvider(
       requestFullContext: options.requestFullContext,
       agentMode: options.agentMode,
       helpSearch: options.helpSearch,
+      helpSettings: options.helpSettings,
+      helpNavigate: options.helpNavigate,
       rng: options.rng,
       state: options.state,
+      whisper: options.whisper,
       shellInteractivity: options.shellInteractivity,
       includePluginTools: options.includePluginTools,
     },
@@ -240,37 +255,45 @@ export async function buildToolsForProvider(
     universalTools.push(requestFullContextToolDefinition as UniversalTool);
   }
 
-  // Add help search tool if enabled (defaults to true when not specified)
-  if (options.helpSearch !== false) {
+  // Add help search tool if enabled (gated by character help tools setting)
+  if (options.helpSearch) {
     universalTools.push(helpSearchToolDefinition as UniversalTool);
-    logger_.debug('Added help search tool to universal tools');
+  }
+
+  // Add help settings tool if enabled (gated by character help tools setting)
+  if (options.helpSettings) {
+    universalTools.push(helpSettingsToolDefinition as UniversalTool);
+  }
+
+  // Add help navigate tool if enabled (gated by character help tools setting)
+  if (options.helpNavigate) {
+    universalTools.push(helpNavigateToolDefinition as UniversalTool);
   }
 
   // Add RNG tool if enabled (defaults to true when not specified)
   if (options.rng !== false) {
     universalTools.push(rngToolDefinition as UniversalTool);
-    logger_.debug('Added RNG tool to universal tools');
   }
 
   // Add state tool if enabled (defaults to true when not specified)
   if (options.state !== false) {
     universalTools.push(stateToolDefinition as UniversalTool);
-    logger_.debug('Added state tool to universal tools');
+  }
+
+  // Add whisper tool if enabled (multi-character chats only)
+  if (options.whisper) {
+    universalTools.push(whisperToolDefinition as UniversalTool);
   }
 
   // Add submit_final_response tool if agent mode is enabled
   if (options.agentMode) {
     universalTools.push(submitFinalResponseToolDefinition as UniversalTool);
-    logger_.debug('Added submit_final_response tool to universal tools (agent mode)');
   }
 
   // Add shell interactivity tools if enabled (only in VM/Docker environments)
   if (options.shellInteractivity) {
     const shellTools = getAllShellToolDefinitions();
     universalTools.push(...(shellTools as UniversalTool[]));
-    logger_.debug('Added shell interactivity tools to universal tools', {
-      count: shellTools.length,
-    });
   }
 
   // Add plugin tools if enabled (defaults to true when not specified)

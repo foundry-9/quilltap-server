@@ -4,11 +4,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { showAlert } from '@/lib/alert'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { useSidebarDataOptional } from '@/components/providers/sidebar-data-provider'
 import {
   Character,
   CharacterFormData,
   CharacterEditState,
+  CharacterScenario,
 } from '../types'
 
 const INITIAL_FORM_DATA: CharacterFormData = {
@@ -18,7 +18,7 @@ const INITIAL_FORM_DATA: CharacterFormData = {
   title: '',
   description: '',
   personality: '',
-  scenario: '',
+  scenarios: [],
   firstMessage: '',
   exampleDialogues: '',
   systemPrompt: '',
@@ -32,7 +32,6 @@ const INITIAL_FORM_DATA: CharacterFormData = {
  */
 export function useCharacterEdit(id: string) {
   const router = useRouter()
-  const sidebarData = useSidebarDataOptional()
 
   // State management
   const [state, setState] = useState<CharacterEditState>({
@@ -71,7 +70,7 @@ export function useCharacterEdit(id: string) {
           title: char.title || '',
           description: char.description || '',
           personality: char.personality || '',
-          scenario: char.scenario || '',
+          scenarios: char.scenarios || [],
           firstMessage: char.firstMessage || '',
           exampleDialogues: char.exampleDialogues || '',
           systemPrompt: char.systemPrompt || '',
@@ -142,6 +141,16 @@ export function useCharacterEdit(id: string) {
   }
 
   /**
+   * Handle scenarios array changes
+   */
+  const handleScenariosChange = (scenarios: CharacterScenario[]) => {
+    setState((prev) => ({
+      ...prev,
+      formData: { ...prev.formData, scenarios },
+    }))
+  }
+
+  /**
    * Submit form and save character data
    */
   const handleSubmit = async (e: React.FormEvent): Promise<boolean> => {
@@ -164,9 +173,6 @@ export function useCharacterEdit(id: string) {
       await fetchCharacter()
       setState((prev) => ({ ...prev, saving: false }))
       showSuccessToast('Character saved successfully!')
-
-      // Refresh sidebar to reflect character changes
-      sidebarData?.refreshCharacters()
 
       router.push(`/aurora/${id}/view`)
       return true
@@ -314,6 +320,7 @@ export function useCharacterEdit(id: string) {
     handleChange,
     handleAliasesChange,
     handlePronounsChange,
+    handleScenariosChange,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,

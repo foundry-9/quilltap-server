@@ -6,10 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who wants an AI assistant that actually knows what they're working on. Connect to any LLM provider, organize your work into projects with persistent files and context, create characters with real personalities, and build a private AI environment that learns and remembers.
 
-### Spelling **IMPORTANT**
-
-This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", as in "quilt" + "tap". There is a linting rule to keep you from using that word. Please, please, never call anything in this system "quilttap" because that is **WRONG.**
-
 ## Technology Stack
 
 - **Frontend Framework**: React via Next.js
@@ -25,6 +21,7 @@ This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", a
 - **User Documentation**: Found in `/help/` and maintained and searchable using MessagePack
 - **Electron**: Electron front-end to Lima/WSL2 backend is primary way to use app
 - **Virtualization**: Lima + VZ (macOS) / WSL2 (Windows) for self-contained app distribution
+- **Native Modules**: `better-sqlite3` (compiled via node-gyp) and `sharp` (pre-built platform binaries via `@img/sharp-{platform}-{arch}`). Both require special handling in `scripts/build-electron-server.ts` — better-sqlite3 is rebuilt against Electron's Node ABI, and sharp's platform-specific binaries must be installed for the target platform. When adding new native modules, update both `next.config.js` (`serverExternalPackages` + `outputFileTracingIncludes`) and the Electron build script.
 
 ## API Architecture
 
@@ -69,7 +66,76 @@ export const POST = createContextHandler<{ id: string }>(
 
 Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes are supported. A few non-v1 routes remain for specific purposes: `/api/health` (health check), `/api/plugin-routes/[...path]` (plugin dispatcher), and `/api/themes/*` (asset serving).
 
-## Feature Names
+## Current State
+
+- **Details for things already implemented** are in [the README](README.md)
+- **Roadmap for future development** is in the files in the `docs/developer/features/` directory, with completed development in `docs/developer/features/complete/`
+
+## Themes
+
+### Theme Distribution
+
+- **Bundle format (.qtap-theme)** is the primary and recommended way to distribute themes — declarative zip archives containing JSON tokens, CSS, fonts, and images with no build tools required
+- **Plugin format (npm)** is deprecated — existing plugin themes still work but new themes should use bundles
+- All 5 bundled themes (Art Deco, Earl Grey, Great Estate, Old School, Rains) ship as `.qtap-theme` bundle directories in `themes/bundled/` — the old `plugins/dist/qtap-plugin-theme-*` directories have been removed
+- Theme bundles are stored at `<dataDir>/themes/<themeId>/` with an index at `<dataDir>/themes/themes-index.json`
+- Theme registries allow browsing/installing themes from remote sources with Ed25519 signature verification
+- `create-quilltap-theme` v2.0.0+ defaults to bundle format; use `--plugin` for legacy npm plugin format
+
+### Theme Architecture
+
+- Theme registry is a singleton at `lib/themes/theme-registry.ts` with three source types: `'default'`, `'plugin'`, `'bundle'`
+- Bundle loader at `lib/themes/bundle-loader.ts` handles validation, install, uninstall, and loading
+- Registry client at `lib/themes/registry-client.ts` manages remote sources with caching and signature verification
+- Ed25519 crypto at `lib/themes/crypto.ts` for signing/verifying registries and bundles
+- Bundle manifest schema: `QtapThemeManifestSchema` in `lib/themes/types.ts`; JSON Schema at `public/schemas/qtap-theme.schema.json`
+- Asset/font serving routes at `app/api/themes/assets/` and `app/api/themes/fonts/` handle both plugin and bundle paths (bundle paths use `bundle:<themeId>` prefix)
+- CLI: `npx quilltap themes` subcommands (list/install/uninstall/validate/export/create/search/update/registry)
+
+### qt-* CSS tokens and semantic classes
+
+- Themes and styling should depend primarily on the `qt-*` semantic utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes. **IMPORTANT:** If you add new Tailwind classes, then almost certainly you should be adding them to the `qt-*` utility classes instead, and then apply those classes to the components you want to change.
+- qt-* significant changes need to be appropriately reflected in the stylebook, the [theme-storybook](/packages/theme-storybook) package, and maybe in the [create-quilltap-theme](/packages/create-quilltap-theme) package, as well as updating the bundled themes as necessary.
+  - **packages**: find in [packages/](/packages/)
+  - **bundled themes**: shipped in [themes/bundled/](/themes/bundled/)
+
+## Other Quilltap conventions
+
+- "instances" are the self-contained base-level directories to which you point Quilltap when you run it.
+  - Default instance for files depends on OS and category:
+    - OS
+      - Linux: ~/.quilltap/
+      - macOS: ~/Library/Application Support/Quilltap/
+      - Windows: %APPDATA%\Quilltap\
+      - Docker: /app/quilltap/
+      - Lima VM: /data/quilltap/ (VirtioFS mount of macOS path)
+      - WSL2: Accessed via /mnt/c/.../AppData/Roaming/Quilltap/ (Windows path passed as env var)
+    - Category
+      - `data/`
+      - `files/`
+      - `logs/`
+  - Other instances can exist
+    - specified by `QUILLTAP_DATA_DIR` environment variable (non-Docker)
+    - `QUILLTAP_HOST_DATA_DIR` environment variable passed to Docker so that it can display it in the UI
+    - CLI specification of instance directory
+      - `npx quilltap --data-dir /custom/path`
+      - `npx quilltap -d /custom/path`
+      - `docker run -v /custom/path:/app/quilltap foundry9/quilltap`
+      - The following can also use `QUILLTAP_DATA_DIR`:
+        - `./scripts/start-quilltap.sh -d /custom/path`
+        - `.\scripts\start-quilltap.ps1 -DataDir "D:\custom\path"`
+  - **IMPORTANT**: If I say I am in an instance in `~/iCloud/Quilltap/Friday`, for example, then this is the critical troubleshooting or development information I need for that instance:
+    - **Data**: `~/iCloud/Quilltap/Friday/data/`
+    - **Files**: `~/iCloud/Quilltap/Friday/files/`
+    - **Logs**: `~/iCloud/Quilltap/Friday/logs/`
+      - This includes `combined.log` and `error.log` which are automatically rolled every 2-3 MB
+      - This also includes `quilltap-stderr.log` and `quilltap-stdout.log` which are generated by server instances, and `startup.log` generated by the Electron app, and possibly `stdout.log` as well
+
+### Spelling **IMPORTANT**
+
+This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", as in "quilt" + "tap". There is a linting rule to keep you from using that word. Please, please, never call anything in this system "quilttap" because that is **WRONG.**
+
+### Feature Names
 
 - **The Concierge** - the dangerous content tracking/rerouting/hiding system
 - **The Commonplace Book** - the memory system that characters have, a self-managed RAG
@@ -84,35 +150,11 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 
 Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes (`/foundry/*`) redirect to the appropriate `/settings` tab.
 
-## Current State
-
-- **Details for things already implemented** are in [the README](README.md)
-- **Roadmap for future development** is in the files in the `features/` directory, with completed development in `features/complete/`
-
-## qt-\* CSS tokens and semantic classes for themes
-
-- Themes and styling should depend primarily on the `qt-*` semantic utility classes that we have defined. When possible, use those and update those with Tailwind and other things. That way the themes will always be able to override changes. **IMPORTANT:** If you add new Tailwind classes, then almost certainly you should be adding them to the `qt-*` utility classes instead, and then apply those classes to the components you want to change.
-- qt-* significant changes need to be appropriately reflected in the stylebook, the [theme-stylebook](/packages/theme-storybook) package, and maybe in the [create-quilltap-theme](/packages/create-quilltap-theme) package, as well as updating the bundled themes as necessary.
-  - **packages**: find in [packages/](/packages/)
-  - **plugins**: bundled theme plugins are in [plugins/dist/qtap-plugin-theme-*](/plugins/dist/)
-
 ## Claude-specific instructions
 
-- If you have access to Opus and agents, then plan work in Opus for a change of any significant size and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work.
+- If you have access to Opus and agents, then plan work in Opus for a change of any significant size and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work. Use worktree isolation for agents when appropriate (your agents have a tendency to want to git stash and blow things up for each other sometimes).
 - For every new feature and all existing functionality that is updated or touched in the backend, make sure that there are debug logs being fired for everything, and appropriate levels of logging for everything else, using the built-in logging system in this app
 - I am developing this in macOS, so take BSD versions of tools into account, and the fact that I have installed homebrew's coreutils and gnu-sed so that you can use GNU versions of things with "g"-prefixed utilities if you need them.
-- Default location for files depends on OS and category:
-  - OS
-    - Linux: ~/.quilltap/
-    - macOS: ~/Library/Application Support/Quilltap/
-    - Windows: %APPDATA%\Quilltap\
-    - Docker: /app/quilltap/
-    - Lima VM: /data/quilltap/ (VirtioFS mount of macOS path)
-    - WSL2: Accessed via /mnt/c/.../AppData/Roaming/Quilltap/ (Windows path passed as env var)
-  - Category
-    - `data/`
-    - `files/`
-    - `logs/`
 - I am using "npm run dev" to work on this while we're working, so the base URL is probably `http://localhost:3000/` if you want to try something.
 - You should track what's going on with the running "npm run dev" process, which is nearly always running while we're working on this, by tailing or searching the `logs/combined.log` file. You can figure out what time it is (I think it's using universal time, not local time), and then look for things that we just tried by working through that log.
 - Databases are encrypted with SQLCipher. The standard `sqlite3` CLI cannot open them. Use the Quilltap CLI instead:
@@ -122,6 +164,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
   - Interactive REPL: `npx quilltap db --repl`
   - Query LLM logs DB: `npx quilltap db --llm-logs --tables`
   - Custom data dir: `npx quilltap db --data-dir /path/to/data --tables`
+  - All information about the databases, including schema and how to query them, can be found in [DDL.md](docs/developer/DDL.md).
 - This is built in Next.js 16+, so don't look in middleware.ts, but consider proxy.ts, for things you would expect there.
 - When creating or modifying API routes, always use the `/api/v1/` structure with action dispatch patterns. Don't create new routes outside `/api/v1/`. Use the middleware from `@/lib/api/middleware` and response helpers from `@/lib/api/responses`.
 - If asked to fix linting errors, do not change out HTML `<img>` tags for Next.js `<Image>` tags; there is a reason that we don't use them sometimes, usually related to their being pulled in via APIs so Next.js can't know what it's going to display.
@@ -129,12 +172,13 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 - Check for Typescript errors by running "npx tsc" rather than "npm run build"
 - **Important:** Before committing, record basic changes in `docs/CHANGELOG.md` in reverse chronological order
 - Keep the documentation listed in [update-documentation](/.claude/commands/update-documentation.md) up to date, and update that file if you add more documentation, in the same format.
-- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in .qtap or SillyTavern exports, the [qtap schema](./public/schemas/qtap-export.schema.json), backups, and/or the migrations/ directory.
+- Any change to data, particularly the schemas used to read or write data either to files or to the database, should be checked to see if they need to be reflected in .qtap or SillyTavern exports, the [qtap schema](./public/schemas/qtap-export.schema.json), backups, and/or the migrations/ directory. Update [DDL.md](docs/developer/DDL.md) as appropriate; it must be kept up-to-date.
 - Any files that exist in the app source code only because they are necessary for migrations should move to the `migrations/` directory.
 - **IMPORTANT**: If we make changes to anything in the `packages/` directory, we need to make sure we update package.json numbers and pause to allow the developer/human user to `npm publish` to push those packages into npmjs. We do *not* just copy things down into the appropriate directories! We wait to publish the new npm package first. You can stop everything, ask me to publish the new version, then install the new one. If that doesn't work, let's fix the NPM problem we're having, **NOT** work around it.
 - The pre-commit hook in `.githooks/pre-commit` kills the dev server, cleans .next, stops watchman, and stages dependency artifacts. Linting, testing, type-checking, and version updates are handled by the [/commit](/.claude/commands/commit.md) command before the actual commit.
 - Leave no stubs and "TODO" code behind unless you have agreed on it with me ahead of time
 - All user-visible changes **MUST** be documented in help files found in `help/*.md`
+- Help files have a `url` field in their frontmatter and an "In-Chat Navigation" section with an exact `help_navigate` tool call. When creating or modifying help files, ensure the `url` frontmatter points to the correct page (with `?tab=` and `&section=` parameters for settings deep-linking), and that the "In-Chat Navigation" section contains the matching `help_navigate(url: "...")` call.
 - All writing for users is to be in the style of "steampunk + roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket"
 
 ## Best Practices and Principles

@@ -84,6 +84,10 @@ export interface SendMessageOptions {
   respondingParticipantId?: string
   /** Pending tool results to be saved as TOOL messages before the user message */
   pendingToolResults?: PendingToolResultInput[]
+  /** Target participant IDs for whisper messages (null = visible to all) */
+  targetParticipantIds?: string[] | null
+  /** Browser User-Agent string from the originating request (scrubbed of Electron/Quilltap tokens) */
+  browserUserAgent?: string
 }
 
 /**
@@ -105,6 +109,8 @@ export interface ToolMessage {
   success: boolean
   content: string
   arguments?: Record<string, unknown>
+  /** Provider-assigned call ID for native tool result formatting */
+  callId?: string
   metadata?: {
     provider?: string
     model?: string
@@ -157,6 +163,36 @@ export interface NextSpeakerInfo {
 }
 
 /**
+ * SSE event: A chained turn is starting for a new character
+ */
+export interface TurnStartEvent {
+  turnStart: true
+  participantId: string
+  characterName: string
+  chainDepth: number
+}
+
+/**
+ * SSE event: A chained turn completed for a character
+ */
+export interface TurnCompleteEvent {
+  turnComplete: true
+  participantId: string
+  messageId: string
+  chainDepth: number
+}
+
+/**
+ * SSE event: The chain of turns has finished
+ */
+export interface ChainCompleteEvent {
+  chainComplete: true
+  reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete'
+  nextSpeakerId: string | null
+  chainDepth: number
+}
+
+/**
  * Data sent to the client via SSE stream
  */
 export interface StreamChunkData {
@@ -189,6 +225,9 @@ export interface StreamChunkData {
     usedImageDescriptionLLM: boolean
     error?: string
   }>
+  turnStart?: TurnStartEvent
+  turnComplete?: TurnCompleteEvent
+  chainComplete?: ChainCompleteEvent
 }
 
 /**

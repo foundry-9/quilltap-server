@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=providers
+url: /settings?tab=providers&section=connection-profiles
 ---
 
 # Connection Profiles
 
-> **[Open this page in Quilltap](/settings?tab=providers)**
+> **[Open this page in Quilltap](/settings?tab=providers&section=connection-profiles)**
 
 Connection Profiles are where you configure your AI language models (LLMs) for use in Quilltap chats. A connection profile links together an API key, a provider, and a specific model, allowing Quilltap to communicate with the AI service.
 
@@ -48,7 +48,7 @@ The profiles list shows:
 
 Before creating a connection profile, you need an API key:
 
-1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers`) and expand **API Keys**
+1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers&section=api-keys`) and expand **API Keys**
 2. Add your API key from the provider
 3. Test the key to verify it works
 4. Return to Connection Profiles tab
@@ -343,9 +343,19 @@ Check your provider's documentation for details on file types and sizes.
 - Add at least one API key
 - Return to Connection Profiles
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your configured connection profiles during a conversation using the `help_settings` tool with `category: "connections"`. This returns each profile's name, provider, model, and configuration --- but never your API keys or credentials. Ask a help-tools-enabled character something like "What connection profiles do I have?" and it will produce the list.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=providers&section=connection-profiles")`
+
 ## Related Settings
 
-- **API Keys** — Store credentials for connection profiles
-- **Chat Settings** — Configure which profile is used by default
+- [API Keys](api-keys-settings.md) — Store credentials for connection profiles
+- [Chat Settings](chat-settings.md) — Configure which profile is used by default
 - **Image Profiles** — Separate configuration for image generation
 - **Embedding Profiles** — Separate configuration for semantic search

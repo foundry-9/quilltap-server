@@ -66,7 +66,6 @@ Located in `hooks/useSystemPrompts.ts`, this custom hook manages all the state a
   // Data
   prompts: CharacterSystemPrompt[]
   templates: PromptTemplate[]
-  samplePrompts: SamplePrompt[]
 
   // Loading states
   loading: boolean
@@ -112,14 +111,6 @@ interface PromptTemplate {
   modelHint: string | null
 }
 
-interface SamplePrompt {
-  name: string
-  content: string
-  modelHint: string
-  category: string
-  filename: string
-}
-
 interface SystemPromptsEditorProps {
   characterId: string
   characterName: string
@@ -139,8 +130,7 @@ interface PromptFormData {
 - `POST /api/v1/characters/:characterId/prompts` - Create prompt
 - `PUT /api/v1/characters/:characterId/prompts/:promptId` - Update prompt
 - `DELETE /api/v1/characters/:characterId/prompts/:promptId` - Delete prompt
-- `GET /api/v1/prompt-templates` - Fetch user templates
-- `GET /api/v1/sample-prompts` - Fetch sample prompts
+- `GET /api/v1/prompt-templates` - Fetch prompt templates (built-in samples + user-created)
 
 ## Logging
 

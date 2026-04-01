@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system
+url: /settings?tab=system&section=tasks-queue
 ---
 
 # Managing Tasks
 
-> **[Open this page in Quilltap](/settings?tab=system)**
+> **[Open this page in Quilltap](/settings?tab=system&section=tasks-queue)**
 
 The Tasks Queue shows all background jobs running in your Quilltap system. These include memory extraction, imports, exports, and other long-running operations.
 
@@ -27,7 +27,7 @@ The Tasks Queue shows all background jobs running in your Quilltap system. These
 
 ## Viewing the Tasks Queue
 
-**Go to the **Data & System** tab in Settings** (`/settings?tab=system`) and expand the **Tasks Queue** card.
+**Go to the **Data & System** tab in Settings** (`/settings?tab=system&section=tasks-queue`) and expand the **Tasks Queue** card.
 
 The Tasks Queue displays:
 
@@ -325,6 +325,12 @@ Click on a task to see more information:
 - Clear very old completed tasks
 - Archive results
 - Remove failed tasks after retrying
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=system&section=tasks-queue")`
 
 ## Related Topics
 

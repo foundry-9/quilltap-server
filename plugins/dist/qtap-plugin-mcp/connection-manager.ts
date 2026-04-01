@@ -273,9 +273,58 @@ export class MCPConnectionManager {
         executionTimeMs: Date.now() - startTime,
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Detect stale session errors from Streamable HTTP (server restarted,
+      // session expired, etc.) and automatically reconnect + retry once
+      if (errorMessage.includes('Server not initialized') || errorMessage.includes('server not initialized')) {
+        managerLogger.info('MCP server session stale, attempting reconnect and retry', {
+          serverId,
+          toolName: mcpName,
+          error: errorMessage,
+        });
+
+        try {
+          await client.reconnect();
+          await this.rebuildToolIndex();
+
+          // Retry the tool call after reconnection
+          const retryResult = await client.callTool(mcpName, args);
+          const retryContent = this.formatMCPContent(retryResult);
+
+          managerLogger.info('Tool call succeeded after reconnect', {
+            serverId,
+            toolName: mcpName,
+          });
+
+          return {
+            success: !retryResult.isError,
+            content: retryContent,
+            error: retryResult.isError ? retryContent : undefined,
+            serverId,
+            originalToolName: mcpName,
+            executionTimeMs: Date.now() - startTime,
+          };
+        } catch (reconnectError) {
+          managerLogger.error('Reconnect and retry failed', {
+            serverId,
+            toolName: mcpName,
+            error: reconnectError instanceof Error ? reconnectError.message : String(reconnectError),
+          });
+
+          return {
+            success: false,
+            error: `Reconnect failed after stale session: ${reconnectError instanceof Error ? reconnectError.message : String(reconnectError)}`,
+            serverId,
+            originalToolName: mcpName,
+            executionTimeMs: Date.now() - startTime,
+          };
+        }
+      }
+
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
         serverId,
         originalToolName: mcpName,
         executionTimeMs: Date.now() - startTime,

@@ -1,99 +1,100 @@
 ---
-url: /settings?tab=providers
+url: /settings?tab=providers&section=capabilities-report
 ---
 
 # Capabilities Report
 
-> **[Open this page in Quilltap](/settings?tab=system)**
+> **[Open this page in Quilltap](/settings?tab=providers&section=capabilities-report)**
 
-The Capabilities Report tool generates detailed documentation of your Quilltap system's configuration, installed providers, and capabilities.
+The Capabilities Report is, if one may be permitted a metaphor, a comprehensive dossier of your entire Quilltap establishment — every cog, spring, and gilded fitting catalogued with the thoroughness of a particularly zealous butler taking inventory after a weekend house party. It gathers the full state of your system into a single document suitable for troubleshooting, bug reports, or simply admiring the scope of what you've built.
 
 ## What's in a Capabilities Report?
 
-A capabilities report includes:
+A capabilities report comprises sixteen meticulously assembled sections, each illuminating a different facet of your installation:
 
-**System Information**
+**1. System Information**
 
-- Quilltap version
-- Installation type
-- System configuration
-- Database information
+The vital statistics of the machine itself — Quilltap version, Node.js version, operating system platform and architecture, total and free memory, runtime type (Docker, Lima, Electron, or plain Node), uptime, data directory path, and timezone. Consider it the identity papers your system carries in its breast pocket.
 
-**AI Providers**
+**2. Database & Security**
 
-- Installed LLM providers (OpenAI, Anthropic, etc.)
-- Configured models per provider
-- Provider settings and capabilities
-- API access status
+Whether your database is secured behind a passphrase, along with the file sizes of both the main database and the LLM logs database. A quick glance at the vaults, as it were.
 
-**Image Generation**
+**3. Backup Status**
 
-- Installed image providers
-- Available models
-- Configuration details
-- API status
+Counts and timestamps of physical backups for both the main database and LLM logs database, total backup sizes on disk, and a note about the retention policy. One sleeps better knowing the safety nets are in order.
 
-**Connection Profiles**
+**4. Plugins**
 
-- All configured connection profiles
-- Provider details for each profile
-- Web search settings
-- API key configuration (without exposing keys)
+A manifest of all installed plugins — enabled or disabled — with their version numbers and declared capabilities. The guest list for the machinery ball.
 
-**Character Configurations**
+**5. LLM Providers**
 
-- Installed character types
-- Persona profiles
-- Memory settings
-- Template configurations
+A table of your configured AI providers showing which are properly set up and what each can do: chat, image generation, embeddings, and web search. Think of it as the calling cards left on the silver tray.
 
-**Plugins**
+**6. Models by Provider**
 
-- Installed plugin tools
-- Plugin versions
-- Tool definitions
-- Configuration status
+For each configured provider, a listing of the available models — the specific instruments in your orchestra, catalogued by section.
 
-**File Management**
+**7. Cost Configuration**
 
-- Storage backend (local, S3, etc.)
-- Storage capacity
-- File type support
-- Upload settings
+Which models you've designated as your Cheap LLM (for background tasks), Image Prompt LLM, and Embedding Provider. The household budget, transparently laid out.
 
-**System Capabilities**
+**8. Image Providers**
 
-- Features available
-- Limitations or restrictions
-- Performance metrics
-- Integration points
+Your image generation providers and their available models, for those moments when a thousand words simply will not do.
+
+**9. Embedding Providers**
+
+Embedding providers and their models — the quiet librarians who make semantic search and memory retrieval possible.
+
+**10. MCP Servers**
+
+The names of your configured Model Context Protocol servers, how many are enabled, and reconnect settings. Crucially, server URLs and authentication tokens are never included — a gentleman does not publish the addresses of his secret correspondents.
+
+**11. Theme Information**
+
+Your active theme, color mode preference, theme statistics, and a list of all installed themes. The wallpaper and furnishings of your digital drawing room.
+
+**12. Feature Configuration**
+
+The state of Quilltap's various systems: The Concierge (dangerous content mode, threshold, and scan settings), context compression, agent mode, The Lantern (story backgrounds), timestamp injection, auto-lock, memory cascade, RNG auto-detection, and avatar display settings. Every dial and lever, documented.
+
+**13. Database Statistics**
+
+A census of your data: characters, favorites, chats, messages, memories, tags, projects, connection profiles (broken down by web search, tool use, and dangerous-content compatibility), image profiles, embedding profiles, prompt templates (built-in versus custom), roleplay templates (built-in versus custom), and file permissions. The ledger book of the estate.
+
+**14. Chat Statistics**
+
+Aggregate numbers across all conversations: total estimated cost in USD, total prompt and completion tokens consumed, count of agent mode chats, and count of dangerous content chats. The accountant's summary.
+
+**15. LLM Log Statistics**
+
+Total log entries, cumulative token usage, and logging configuration (whether logging is enabled, verbose mode, and retention policy). The archives, measured and weighed.
+
+**16. Storage Statistics**
+
+Total files managed, total storage consumed, and a breakdown by folder. The inventory of the warehouse.
 
 ## Generating a Report
 
 **Step-by-Step:**
 
-1. **Go to the **Data & System** tab in Settings** (`/settings?tab=system`)
+1. **Navigate to the AI Providers tab** in Settings (`/settings?tab=providers`)
 
-2. **Find the Capabilities Report card**
+2. **Find the Capabilities Report section**
 
-3. **Click "Generate Report"** button
+3. **Click "Generate Report"**
 
-4. **System generates report**
-   - May take several minutes
-   - Shows progress
-   - Collects configuration data
+4. **The system assembles its dossier**
+   - Scans all providers and configurations
+   - Gathers database statistics
+   - Collects feature settings and usage data
 
 5. **Report saved**
-   - Appears in report list
+   - Appears in the report list
    - Shows creation date and file size
    - Ready to view or download
-
-**Report generation includes:**
-
-- Scanning all installed providers
-- Checking all configurations
-- Testing API connections
-- Gathering system statistics
 
 ## Viewing Reports
 
@@ -101,36 +102,62 @@ A capabilities report includes:
 
 1. Find the report in the list
 2. Click **View** or **Open**
-3. Report displays in a modal or new view
-4. Shows formatted report content
-
-**Information displayed:**
-
-- Full provider configurations
-- Model details and capabilities
-- Connection status indicators
-- Resource usage and limits
+3. The report displays in a formatted view
+4. All sixteen sections presented in order
 
 ## Downloading Reports
 
-**Download report to your computer:**
+**Download a report to your computer:**
 
 1. **Find the report** in the Capabilities Report list
 
 2. **Click the Download button**
-   - Downloads as a text file (.txt) or PDF
-   - File name includes date generated
+   - Downloads as a text file
+   - File name includes the date generated
 
 3. **Saved to your downloads folder**
-   - Store for reference or sharing
-   - Can share with support team
+   - Store for reference or attach to bug reports
+   - Share with support when troubleshooting
 
-**Why download:**
+## Using Reports for Troubleshooting
 
-- Share with technical support
-- Archive for documentation
-- Compare with previous reports
-- Detailed offline reference
+The capabilities report was designed with bug reports in mind. When something goes sideways — and in any sufficiently advanced system, something eventually will — a fresh report captures the exact state of affairs at the moment of the mishap.
+
+**When filing a bug report:**
+
+1. **Generate a fresh report** immediately after encountering the issue
+2. **Attach the report** to your bug report or support request
+3. **The report provides** everything a developer needs to understand your environment without a lengthy back-and-forth interrogation
+
+**When comparing before and after:**
+
+- Generate a report before making changes
+- Generate another after
+- The two documents together tell the story of what shifted
+
+## Privacy & Security
+
+The Capabilities Report is designed to be safe to share publicly — in bug reports, support threads, or with fellow enthusiasts. It has been carefully constructed to include everything useful for diagnosis while excluding everything sensitive.
+
+**What's NOT in reports:**
+
+- API keys or authentication tokens
+- MCP server URLs or authentication credentials
+- Database passphrase value
+- User email or name
+- File contents or message contents
+- Connection profile base URLs
+
+**What IS in reports:**
+
+- System configuration and version information
+- Database sizes and backup status
+- Provider configurations and capabilities
+- Feature settings and their current values
+- Usage statistics (counts and totals)
+- Theme information and installed themes
+
+One may share the report with the confidence of someone who has already had the butler review the guest list for indiscretions.
 
 ## Managing Reports
 
@@ -147,177 +174,28 @@ A capabilities report includes:
 **Download** - Save report to your computer
 **Delete** - Remove report (to save space)
 
-## Using Reports for Troubleshooting
-
-**When having issues:**
-
-1. **Generate a new report**
-   - Captures current state
-   - Documents all configurations
-
-2. **Share with support**
-   - Helps support team understand your setup
-   - Speeds up troubleshooting
-   - No sensitive data exposed (API keys hidden)
-
-3. **Compare reports**
-   - Generate before and after changes
-   - Identify what changed
-   - Verify configurations
-
-**Report helps troubleshoot:**
-
-- API connection issues
-- Missing providers or models
-- Configuration errors
-- Capability limitations
-- Integration problems
-
-## Common Report Uses
-
-**Documenting Setup**
-
-- Create report of working configuration
-- Reference for future setup
-- Audit trail of capabilities
-
-**Before System Changes**
-
-- Generate report before updates
-- Compare after update
-- Identify what changed
-
-**Performance Tuning**
-
-- See resource usage
-- Identify bottlenecks
-- Plan optimizations
-
-**Sharing Configuration**
-
-- Share with team members
-- Provide to support (without API keys)
-- Document for compliance
-
-**Planning Upgrades**
-
-- See what providers you have
-- Understand capacity
-- Plan model additions
-
-## Report Contents Explained
-
-**Provider Section**
-
-- Lists each AI provider you've configured
-- Shows which models are available
-- Indicates if provider is properly connected
-- Shows API key status (not the actual key)
-
-**Model Details**
-
-- Model names and versions
-- Input/output capabilities
-- Context window sizes
-- Performance characteristics
-
-**Configuration Status**
-
-- Checkmarks for working configurations
-- Warnings for potential issues
-- Suggestions for optimization
-
-**Connection Tests**
-
-- Shows which connections work
-- Indicates any connection failures
-- Helps identify network issues
-
-## Privacy & Security
-
-**Report security:**
-
-- Reports don't contain actual API keys
-- Sensitive credentials are masked
-- Safe to share with support
-- Can be sent via email
-
-**What's NOT in reports:**
-
-- Your actual API keys
-- User data or chat contents
-- Personal information
-- Login credentials
-
-**What IS in reports:**
-
-- Configuration structure
-- Available models and capabilities
-- System status and health
-- Error messages and diagnostics
-
 ## Troubleshooting Report Generation
 
 **Report generation failed**
 
-- Check system resources available
-- Try again after stopping other tasks
-- Large systems take longer
-- Contact support if repeatedly fails
-
-**Report takes too long**
-
-- Large systems with many providers take time
-- Don't cancel unless stuck
-- System is collecting all configuration data
-- Normal to take 5-10 minutes
-
-**Can't view report**
-
-- Refresh page
-- Try downloading instead
-- Check browser compatibility
-- Contact support if view fails
+- Check that you have available disk space
+- Try again after a moment
+- If the issue persists, check your logs for errors
 
 **Report looks incomplete**
 
-- All information collected should be present
-- Some sections may be empty if not configured
-- Generate new report if needed
-- Contact support for missing sections
+- Sections for unconfigured features will naturally be sparse
+- If a section you expect to see data in appears empty, the underlying feature may not be properly configured
+- Generate a new report if you suspect a transient issue
 
-## Best Practices
+## In-Chat Navigation
 
-**Regular Generation:**
+Characters with help tools enabled can navigate directly to this page:
 
-- Generate monthly or quarterly
-- Keeps documented setup current
-- Track configuration changes
-- Audit trail for compliance
-
-**Before Support Contact:**
-
-- Generate recent report
-- Share with support team
-- Speeds up issue resolution
-- Provides diagnostic context
-
-**Archive Reports:**
-
-- Keep historical reports
-- Documents system evolution
-- Comparison reference
-- Compliance documentation
-
-**Share Safely:**
-
-- Reports are safe to share
-- API keys are not exposed
-- Good for team documentation
-- Can send to external support
+`help_navigate(url: "/settings?tab=providers&section=capabilities-report")`
 
 ## Related Topics
 
 - [System Tools](system-tools.md) - Overview of all system tools
-- [Connection Profiles](settings.md) - Configuring providers
+- [Connection Profiles](connection-profiles.md) - Configuring providers
 - [Plugins](plugins.md) - Installing and managing plugins

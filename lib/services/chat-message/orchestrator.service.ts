@@ -19,6 +19,7 @@ import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ConnectionProfile, ChatMetadataBase, Character, ChatSettings } from '@/lib/schemas/types'
+import { isParticipantPresent } from '@/lib/schemas/chat.types'
 import type { SendMessageOptions, ToolMessage, GeneratedImage } from './types'
 import type { MemoryChatSettings } from './memory-trigger.service'
 
@@ -48,36 +49,40 @@ import {
   encodeErrorEvent,
   encodeKeepAlive,
   encodeStatusEvent,
+  encodeTurnStartEvent,
+  encodeTurnCompleteEvent,
+  encodeChainCompleteEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
 import {
-  checkShouldUsePseudoTools,
-  buildPseudoToolSystemInstructions,
   buildNativeToolSystemInstructions,
-  parsePseudoToolsFromResponse,
-  stripPseudoToolMarkersFromResponse,
   determineEnabledToolOptions,
-  logPseudoToolUsage,
+  checkShouldUseTextBlockTools,
+  buildTextBlockSystemInstructions,
+  parseTextBlocksFromResponse,
+  stripTextBlockMarkersFromResponse,
+  determineTextBlockToolOptions,
+  logTextBlockToolUsage,
 } from './pseudo-tool.service'
 import {
-  parseXMLToolCalls,
-  convertXMLToToolCallRequest,
-  stripXMLToolMarkers,
-  hasXMLToolMarkers,
+  hasTextBlockMarkers,
 } from '@/lib/tools'
+import { getProvider } from '@/lib/plugins/provider-registry'
 import {
   triggerMemoryExtraction,
   triggerInterCharacterMemory,
   triggerUserControlledCharacterMemory,
   triggerContextSummaryCheck,
   triggerChatDangerClassification,
+  triggerSceneStateTracking,
 } from './memory-trigger.service'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
+import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { attemptRequestLimitRecovery } from './recovery.service'
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { extractMemorySearchKeywords, stripToolArtifacts, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
@@ -99,6 +104,12 @@ import {
   generateIterationSummary,
   type ResolvedAgentMode,
 } from './agent-mode-resolver.service'
+import { resolveUserIdentity } from './user-identity-resolver.service'
+import {
+  shouldChainNext,
+  persistTurnParticipantId,
+  DEFAULT_CHAIN_CONFIG,
+} from './turn-orchestrator.service'
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service'
@@ -133,6 +144,8 @@ export const sendMessageSchema = z.object({
   fileIds: z.array(z.string()).optional(),
   /** Pending tool results to be saved as TOOL messages before the user message */
   pendingToolResults: z.array(pendingToolResultSchema).optional(),
+  /** Target participant IDs for whisper messages */
+  targetParticipantIds: z.array(z.string()).nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.content.trim().length === 0 &&
       (!data.fileIds || data.fileIds.length === 0) &&
@@ -166,12 +179,161 @@ export async function handleSendMessage(
   return new ReadableStream({
     async start(controller) {
       try {
-        await processMessage(repos, chatId, userId, options, controller, encoder)
+        const result = await processMessage(repos, chatId, userId, options, controller, encoder)
+
+        // Server-side chain orchestration for multi-character chats
+        // After the first character responds, chain subsequent character responses
+        // in the same SSE stream instead of requiring client round-trips
+        if (result.isMultiCharacter && result.hasContent && !result.isPaused) {
+          const chainStartTime = Date.now()
+          let chainDepth = 0
+
+          // If the user just sent a message, ensure the chain loop knows a human is present
+          // even if no participant has controlledBy='user'. The sentinel '__user__' causes
+          // selectNextSpeaker to return user_turn/cycle_complete instead of looping forever.
+          const effectiveUserParticipantId = result.userParticipantId
+            ?? (options.continueMode ? null : '__user__')
+
+          while (true) {
+            const decision = await shouldChainNext(
+              repos,
+              chatId,
+              effectiveUserParticipantId,
+              chainDepth,
+              chainStartTime,
+              DEFAULT_CHAIN_CONFIG
+            )
+
+
+            if (!decision.chain || !decision.participantId) {
+              // Persist the final turn state
+              const finalNextSpeaker = decision.participantId || null
+              await persistTurnParticipantId(repos, chatId, finalNextSpeaker)
+
+              // Send chain complete event
+              safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+                reason: decision.reason as 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete',
+                nextSpeakerId: finalNextSpeaker,
+                chainDepth,
+              }))
+              break
+            }
+
+            chainDepth++
+
+            // Send turn start event
+            safeEnqueue(controller, encodeTurnStartEvent(encoder, {
+              participantId: decision.participantId,
+              characterName: decision.characterName || 'Unknown',
+              chainDepth,
+            }))
+
+            // Process the chained response using continue mode
+            try {
+              const chainResult = await processMessage(
+                repos,
+                chatId,
+                userId,
+                {
+                  continueMode: true,
+                  respondingParticipantId: decision.participantId,
+                },
+                controller,
+                encoder
+              )
+
+              // Send turn complete event
+              safeEnqueue(controller, encodeTurnCompleteEvent(encoder, {
+                participantId: decision.participantId,
+                messageId: chainResult.messageId || '',
+                chainDepth,
+              }))
+
+              // If the chained response had no content (empty response), stop chaining
+              if (!chainResult.hasContent) {
+                logger.info('[TurnOrchestrator] Chain stopped: empty response', { chatId, chainDepth })
+                await persistTurnParticipantId(repos, chatId, null)
+                safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+                  reason: 'error',
+                  nextSpeakerId: null,
+                  chainDepth,
+                }))
+                break
+              }
+            } catch (chainError) {
+              logger.error('[TurnOrchestrator] Chain error, stopping', {
+                chatId,
+                chainDepth,
+                error: chainError instanceof Error ? chainError.message : String(chainError),
+              })
+
+              // Pause chat on chain error
+              await repos.chats.update(chatId, { isPaused: true })
+              await persistTurnParticipantId(repos, chatId, null)
+              safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+                reason: 'error',
+                nextSpeakerId: null,
+                chainDepth,
+              }))
+              break
+            }
+          }
+        }
+
+        // Trigger scene state tracking once after the complete chain
+        if (result.isMultiCharacter && result.hasContent) {
+          try {
+            const chainChat = await repos.chats.findById(chatId)
+            if (chainChat) {
+              const chatSettings = await repos.chatSettings.findByUserId(userId)
+              if (chatSettings?.cheapLLMSettings) {
+                const chainCharacterIds = chainChat.participants
+                  .filter(p => isParticipantPresent(p.status) && p.characterId)
+                  .map(p => p.characterId)
+                const chainConnectionProfile = await repos.connections.findById(
+                  chainChat.participants[0]?.connectionProfileId || ''
+                )
+                if (chainConnectionProfile) {
+                  await triggerSceneStateTracking(repos, {
+                    chatId,
+                    userId,
+                    connectionProfile: chainConnectionProfile,
+                    chatSettings: { cheapLLMSettings: chatSettings.cheapLLMSettings },
+                    characterIds: chainCharacterIds,
+                  })
+                }
+              }
+            }
+          } catch (error) {
+            logger.warn('[TurnOrchestrator] Failed to trigger scene state tracking after chain', {
+              chatId,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+
+        safeClose(controller)
       } catch (error) {
         handleStreamError(error, controller, encoder)
       }
     },
   })
+}
+
+/**
+ * Result returned by processMessage for chain orchestration
+ */
+interface ProcessMessageResult {
+  /** Whether the chat has multiple characters */
+  isMultiCharacter: boolean
+  /** Whether the response had content (non-empty) */
+  hasContent: boolean
+  /** The assistant message ID (if content was generated) */
+  messageId: string | null
+  /** User participant ID for turn calculations */
+  userParticipantId: string | null
+  /** Whether the chat is paused */
+  isPaused: boolean
 }
 
 /**
@@ -184,7 +346,7 @@ async function processMessage(
   options: SendMessageOptions,
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder
-): Promise<void> {
+): Promise<ProcessMessageResult> {
   const isContinueMode = options.continueMode === true
 
   // Get chat metadata
@@ -194,11 +356,15 @@ async function processMessage(
   }
 
   // Resolve responding participant
+  // For whisper messages, the target participant should respond (not the default first character)
+  const respondingId = options.respondingParticipantId
+    || (options.targetParticipantIds?.length ? options.targetParticipantIds[0] : undefined)
+
   const participantResult = await resolveRespondingParticipant(
     repos,
     chat,
     userId,
-    options.respondingParticipantId,
+    respondingId,
     isContinueMode
   )
 
@@ -222,16 +388,17 @@ async function processMessage(
     apiKey = rawApiKey
   }
 
-  // Get persona data (kept for backward compatibility with legacy participant types)
-  let persona: { name: string; description: string } | null = null
-  let personaData: { name: string; description: string } | null = null
+  // Resolve user identity through fallback chain:
+  // 1. User-controlled character in chat → 2. Sole user-controlled character → 3. User profile → 4. "User"
+  const resolvedIdentity = await resolveUserIdentity(repos, userId, chat)
+  const persona: { name: string; description: string } | null = {
+    name: resolvedIdentity.name,
+    description: resolvedIdentity.description,
+  }
 
-  // Get user-controlled character ID (for memory aboutCharacterId)
-  // This is the character that the user is "playing as" in this chat
-  const userControlledParticipant = chat.participants.find(
-    p => p.type === 'CHARACTER' && p.controlledBy === 'user' && p.characterId && p.isActive
-  )
-  const userCharacterId = userControlledParticipant?.characterId || undefined
+
+  // User-controlled character ID for memory aboutCharacterId
+  const userCharacterId = resolvedIdentity.characterId || undefined
 
   // Get chat settings
   const chatSettings = await repos.chatSettings.findByUserId(userId)
@@ -321,7 +488,58 @@ async function processMessage(
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings)
   const dangerSettings = dangerousContentResolved.settings
 
-  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanTextChat && !isContinueMode && options.content && cheapLLMSelection) {
+  if (chat.isDangerousChat === true && dangerSettings.mode !== 'OFF' && !isContinueMode && options.content) {
+    // Chat is permanently dangerous — skip per-message classification to save tokens
+    logger.debug('[DangerousContent] Skipping per-message classification — chat permanently dangerous', {
+      chatId,
+      dangerCategories: chat.dangerCategories,
+    })
+
+    // Synthesize danger flags from stored chat-level categories
+    const categories = chat.dangerCategories && chat.dangerCategories.length > 0
+      ? chat.dangerCategories
+      : ['unspecified']
+    dangerFlags = categories.map(cat => ({
+      category: cat,
+      score: 1.0,
+      userOverridden: false,
+      wasRerouted: false,
+    }))
+
+    // If AUTO_ROUTE and current profile is NOT uncensored-compatible, reroute
+    if (dangerSettings.mode === 'AUTO_ROUTE' && !effectiveProfile.isDangerousCompatible) {
+      const routeResult = await resolveProviderForDangerousContent(
+        effectiveProfile,
+        effectiveApiKey,
+        dangerSettings,
+        userId
+      )
+
+      if (routeResult.rerouted) {
+        effectiveProfile = routeResult.connectionProfile
+        effectiveApiKey = routeResult.apiKey
+
+        dangerFlags = dangerFlags.map(flag => ({
+          ...flag,
+          wasRerouted: true,
+          reroutedProvider: routeResult.connectionProfile.provider,
+          reroutedModel: routeResult.connectionProfile.modelName,
+        }))
+
+        logger.info('[DangerousContent] Rerouted to uncensored provider (permanently dangerous chat)', {
+          chatId,
+          originalProfile: connectionProfile.name,
+          uncensoredProfile: routeResult.connectionProfile.name,
+        })
+      }
+    } else if (dangerSettings.mode === 'AUTO_ROUTE') {
+      logger.debug('[DangerousContent] Current provider is already uncensored-compatible, skipping reroute', {
+        chatId,
+        provider: effectiveProfile.provider,
+        model: effectiveProfile.modelName,
+      })
+    }
+  } else if (dangerSettings.mode !== 'OFF' && dangerSettings.scanTextChat && !isContinueMode && options.content && cheapLLMSelection) {
     try {
       // Send classification status
       safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -357,42 +575,50 @@ async function processMessage(
 
         // If AUTO_ROUTE, try to reroute to uncensored provider
         if (dangerSettings.mode === 'AUTO_ROUTE') {
-          safeEnqueue(controller, encodeStatusEvent(encoder, {
-            stage: 'rerouting',
-            message: 'Routing to uncensored provider...',
-            characterName: character.name,
-            characterId: character.id,
-          }))
-
-          const routeResult = await resolveProviderForDangerousContent(
-            effectiveProfile,
-            effectiveApiKey,
-            dangerSettings,
-            userId
-          )
-
-          if (routeResult.rerouted) {
-            effectiveProfile = routeResult.connectionProfile
-            effectiveApiKey = routeResult.apiKey
-
-            // Update danger flags with routing info
-            dangerFlags = dangerFlags.map(flag => ({
-              ...flag,
-              wasRerouted: true,
-              reroutedProvider: routeResult.connectionProfile.provider,
-              reroutedModel: routeResult.connectionProfile.modelName,
+          if (!effectiveProfile.isDangerousCompatible) {
+            safeEnqueue(controller, encodeStatusEvent(encoder, {
+              stage: 'rerouting',
+              message: 'Routing to uncensored provider...',
+              characterName: character.name,
+              characterId: character.id,
             }))
 
-            logger.info('[DangerousContent] Rerouted to uncensored provider', {
-              chatId,
-              originalProfile: connectionProfile.name,
-              uncensoredProfile: routeResult.connectionProfile.name,
-              reason: routeResult.reason,
-            })
+            const routeResult = await resolveProviderForDangerousContent(
+              effectiveProfile,
+              effectiveApiKey,
+              dangerSettings,
+              userId
+            )
+
+            if (routeResult.rerouted) {
+              effectiveProfile = routeResult.connectionProfile
+              effectiveApiKey = routeResult.apiKey
+
+              // Update danger flags with routing info
+              dangerFlags = dangerFlags.map(flag => ({
+                ...flag,
+                wasRerouted: true,
+                reroutedProvider: routeResult.connectionProfile.provider,
+                reroutedModel: routeResult.connectionProfile.modelName,
+              }))
+
+              logger.info('[DangerousContent] Rerouted to uncensored provider', {
+                chatId,
+                originalProfile: connectionProfile.name,
+                uncensoredProfile: routeResult.connectionProfile.name,
+                reason: routeResult.reason,
+              })
+            } else {
+              logger.warn('[DangerousContent] No uncensored provider available, using original', {
+                chatId,
+                reason: routeResult.reason,
+              })
+            }
           } else {
-            logger.warn('[DangerousContent] No uncensored provider available, using original', {
+            logger.debug('[DangerousContent] Current provider is already uncensored-compatible, skipping reroute', {
               chatId,
-              reason: routeResult.reason,
+              provider: effectiveProfile.provider,
+              model: effectiveProfile.modelName,
             })
           }
         }
@@ -571,6 +797,7 @@ async function processMessage(
       createdAt: now,
       attachments: options.fileIds || [],
       participantId: userParticipantId,
+      targetParticipantIds: options.targetParticipantIds || null,
     }
 
     await repos.chats.addMessage(chatId, userMessage)
@@ -612,11 +839,14 @@ async function processMessage(
     await repos.chats.update(chatId, { forceToolsOnNextMessage: false })
   }
 
-  // Check for pseudo-tools
+  // Check tool options
   const enabledToolOptions = determineEnabledToolOptions(
     imageProfileId,
     effectiveProfile.allowWebSearch
   )
+
+  // Resolve help tools enabled from character (default: disabled)
+  const helpToolsEnabled = character?.defaultHelpToolsEnabled === true
 
   // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
   // Always pass disabledTools and disabledToolGroups for filtering
@@ -625,22 +855,30 @@ async function processMessage(
     imageProfileId,
     imageProfile,
     userId,
-    false, // Will check pseudo-tools after
     chat.projectId ?? undefined, // projectId - enables project_info tool
     compressionEnabled, // requestFullContext - enable the tool when compression is active
     chat.disabledTools ?? [],
     chat.disabledToolGroups ?? [],
-    agentMode.enabled // agentModeEnabled - enables submit_final_response tool
+    agentMode.enabled, // agentModeEnabled - enables submit_final_response tool
+    isMultiCharacter, // isMultiCharacter - enables whisper tool
+    helpToolsEnabled // helpToolsEnabled - enables help_search and help_settings tools
   )
 
-  const usePseudoTools = checkShouldUsePseudoTools(modelSupportsNativeTools)
-  const actualTools = usePseudoTools ? [] : tools
+  const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools)
+  const actualTools = useTextBlockTools ? [] : tools
 
-  // Build tool instructions (pseudo-tool instructions or native tool rules)
+  // Build tool instructions (text-block or native tool rules)
   let toolInstructions: string | undefined
-  if (usePseudoTools) {
-    toolInstructions = buildPseudoToolSystemInstructions(enabledToolOptions)
-    logPseudoToolUsage(effectiveProfile.provider, effectiveProfile.modelName, enabledToolOptions)
+  if (useTextBlockTools) {
+    const textBlockOptions = determineTextBlockToolOptions(
+      imageProfileId,
+      effectiveProfile.allowWebSearch,
+      isMultiCharacter,
+      !!chat.projectId,
+      helpToolsEnabled
+    )
+    toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
+    logTextBlockToolUsage(effectiveProfile.provider, effectiveProfile.modelName, textBlockOptions)
   } else if (actualTools.length > 0) {
     toolInstructions = buildNativeToolSystemInstructions()
   }
@@ -668,8 +906,13 @@ async function processMessage(
         characterId: character.id,
       }))
 
-      const actualMessageCount = existingMessages.filter(m => m.type === 'message').length
-      const result = await getCachedCompression(chatId, actualMessageCount)
+      // Count only visible USER/ASSISTANT messages to match what triggerAsyncCompression
+      // uses (via extractVisibleConversation). Using a broader filter (type === 'message')
+      // inflates the count and causes the dynamic window to grow excessively.
+      const visibleMessages = extractVisibleConversation(existingMessages)
+      const actualMessageCount = visibleMessages.length
+      const participantIdForCache = isMultiCharacter ? characterParticipant.id : undefined
+      const result = await getCachedCompression(chatId, actualMessageCount, participantIdForCache)
       if (result) {
         logger.info('Using cached compression from async pre-computation', {
           chatId,
@@ -730,6 +973,24 @@ async function processMessage(
       characterId: character.id,
     }))
 
+    // For dangerous chats, use uncensored provider for keyword extraction
+    let recallSelection = cheapLLMSelection
+    if (chat.isDangerousChat) {
+      recallSelection = resolveUncensoredCheapLLMSelection(
+        cheapLLMSelection,
+        true,
+        dangerSettings,
+        allProfiles
+      )
+      if (recallSelection !== cheapLLMSelection) {
+        logger.debug('[ProactiveRecall] Using uncensored provider for memory keyword extraction', {
+          chatId,
+          originalProvider: cheapLLMSelection.provider,
+          uncensoredProvider: recallSelection.provider,
+        })
+      }
+    }
+
     // Extract keywords via cheap LLM, stripping tool artifacts from assistant messages
     const keywordResult = await extractMemorySearchKeywords(
       messagesSinceLastSpoke.reduce<Array<{ role: 'user' | 'assistant' | 'system'; content: string }>>((acc, m) => {
@@ -743,7 +1004,7 @@ async function processMessage(
         return acc
       }, []),
       character.name,
-      cheapLLMSelection,
+      recallSelection,
       userId,
       chatId
     )
@@ -848,6 +1109,17 @@ async function processMessage(
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
       // Proactive memory recall results
       preSearchedMemories,
+      // Memory recap: uncensored fallback for dangerous chats
+      uncensoredFallbackOptions: (chat.isDangerousChat && dangerSettings && cheapLLMSelection)
+        ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
+        : undefined,
+      // Extract status change notifications from recent system events
+      statusChangeNotifications: isMultiCharacter
+        ? existingMessages
+            .filter(m => m.type === 'system' && (m as Record<string, unknown>).systemEventType === 'STATUS_CHANGE')
+            .map(m => (m as Record<string, unknown>).description as string)
+            .filter(Boolean)
+        : undefined,
     },
     existingMessages,
     fileProcessing.attachmentsToSend
@@ -868,7 +1140,8 @@ async function processMessage(
     characterParticipant.id,
     imageProfileId,
     chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined,
-    chat.projectId
+    chat.projectId,
+    options.browserUserAgent,
   )
 
   // ============================================================================
@@ -956,13 +1229,48 @@ async function processMessage(
       hasAttachments: !!m.attachments?.length,
     })),
     tools: actualTools,
-    usePseudoTools,
     enabledToolOptions: enabledToolOptions as unknown as Record<string, boolean>,
   }))
 
   // Send fallback processing info if any
   if (fileProcessing.fallbackResults.length > 0) {
     controller.enqueue(encodeFallbackInfo(encoder, fileProcessing.fallbackResults))
+  }
+
+  // ============================================================================
+  // Pre-Send Context Validation
+  // ============================================================================
+  // Verify that the assembled payload fits within the model's context window
+  // BEFORE sending to the API. This prevents silent failures with small models
+  // that can't handle the payload even after compression.
+  const estimatedInputTokens = countMessagesTokens(
+    formattedMessages.map(m => ({ content: m.content, role: m.role }))
+  )
+  const modelContextLimit = builtContext.budget.totalLimit
+  const responseReserve = builtContext.budget.responseReserve
+  const safeInputLimit = modelContextLimit - responseReserve - Math.ceil(modelContextLimit * 0.10)
+
+  if (estimatedInputTokens > safeInputLimit) {
+    logger.warn('Context exceeds model safe input limit, payload may be rejected', {
+      chatId,
+      characterName: character.name,
+      provider: effectiveProfile.provider,
+      model: effectiveProfile.modelName,
+      estimatedInputTokens,
+      safeInputLimit,
+      modelContextLimit,
+      responseReserve,
+      compressionApplied: builtContext.compressionApplied ?? false,
+      overage: estimatedInputTokens - safeInputLimit,
+    })
+
+    // Send a warning status to the client so the user knows what happened
+    safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage: 'warning',
+      message: `Context (~${Math.round(estimatedInputTokens / 1000)}k tokens) may exceed ${effectiveProfile.modelName} limit (~${Math.round(safeInputLimit / 1000)}k tokens)`,
+      characterName: character.name,
+      characterId: character.id,
+    }))
   }
 
   // Stream the response
@@ -975,6 +1283,23 @@ async function processMessage(
 
   // Pre-generate assistant message ID so logs can reference it
   const preGeneratedAssistantMessageId = crypto.randomUUID()
+
+  // Extract previous response ID for conversation chaining (OpenAI Responses API)
+  // This allows OpenAI to use its internal cache, reducing input token costs
+  let previousResponseId: string | undefined
+  if (effectiveProfile.provider === 'OPENAI') {
+    // Find the last assistant message with a Responses API ID
+    for (let i = existingMessages.length - 1; i >= 0; i--) {
+      const msg = existingMessages[i]
+      if (msg.type === 'message' && msg.role === 'ASSISTANT' && msg.rawResponse) {
+        const raw = msg.rawResponse as Record<string, unknown>
+        if (typeof raw.id === 'string' && raw.id.startsWith('resp_')) {
+          previousResponseId = raw.id
+          break
+        }
+      }
+    }
+  }
 
   // Send status update for sending to LLM
   safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -999,6 +1324,7 @@ async function processMessage(
       messageId: preGeneratedAssistantMessageId,
       chatId,
       characterId: character.id,
+      previousResponseId,
     })) {
       if (chunk.content) {
         // Send streaming status on first content
@@ -1082,7 +1408,7 @@ async function processMessage(
           }
         }
 
-        logger.info('Tool-unsupported retry succeeded. Consider configuring pseudo-tools for this model.', {
+        logger.info('Tool-unsupported retry succeeded. Consider configuring text-block tools for this model.', {
           chatId,
           provider: effectiveProfile.provider,
           model: effectiveProfile.modelName,
@@ -1129,9 +1455,14 @@ async function processMessage(
           messageId: recoveryResult.messageId,
           isStaticFallback: recoveryResult.isStaticFallback,
         })
-        // Close the stream - recovery has handled everything
-        safeClose(controller)
-        return
+        // Recovery has handled everything - return without chaining
+        return {
+          isMultiCharacter,
+          hasContent: true,
+          messageId: recoveryResult.messageId || null,
+          userParticipantId,
+          isPaused: chat.isPaused,
+        }
       }
 
       // Recovery failed, re-throw the original error
@@ -1226,24 +1557,41 @@ async function processMessage(
     generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
     // Add assistant message with tool call to conversation
+    // Include toolCalls metadata so providers can reconstruct the native assistant turn
+    const hasCallIds = toolCalls.some(tc => tc.callId)
+    const assistantToolCalls = hasCallIds
+      ? toolCalls.filter(tc => tc.callId).map(tc => ({
+          id: tc.callId!,
+          type: 'function' as const,
+          function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
+        }))
+      : undefined
+
     if (currentResponse && currentResponse.trim().length > 0) {
       currentMessages = [
         ...currentMessages,
-        { role: 'assistant' as const, content: currentResponse, thoughtSignature, name: undefined }
+        { role: 'assistant' as const, content: currentResponse, thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
       ]
     } else {
       currentMessages = [
         ...currentMessages,
-        { role: 'assistant' as const, content: '[Tool call made]', thoughtSignature, name: undefined }
+        { role: 'assistant' as const, content: '', thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
       ]
     }
 
-    // Add tool results as user messages
+    // Add tool results — use native 'tool' role when callId is available, text fallback otherwise
     for (const toolMsg of results.toolMessages) {
-      currentMessages = [
-        ...currentMessages,
-        { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, name: undefined }
-      ]
+      if (toolMsg.callId) {
+        currentMessages = [
+          ...currentMessages,
+          { role: 'tool' as const, content: toolMsg.content, toolCallId: toolMsg.callId, name: toolMsg.toolName, thoughtSignature: undefined }
+        ]
+      } else {
+        currentMessages = [
+          ...currentMessages,
+          { role: 'user' as const, content: `[Tool Result: ${toolMsg.toolName}]\n${toolMsg.content}`, thoughtSignature: undefined, name: undefined }
+        ]
+      }
     }
 
     // Continue conversation with tool results
@@ -1351,22 +1699,21 @@ async function processMessage(
     }
   }
 
-  // Process XML tool calls (runs for ALL providers, regardless of pseudo-tool mode)
-  // This catches LLMs that spontaneously emit XML-style function calls (e.g., DeepSeek)
-  if (fullResponse && hasXMLToolMarkers(fullResponse)) {
-    const xmlToolCalls = parseXMLToolCalls(fullResponse)
+  // Process text tool calls via provider plugin (catches spontaneous XML emissions)
+  // Each plugin knows which formats its models emit (e.g., DeepSeek <function_calls>, Gemini <tool_use>)
+  const providerPlugin = getProvider(effectiveProfile.provider)
+  if (fullResponse && providerPlugin?.hasTextToolMarkers?.(fullResponse)) {
+    const textToolCallRequests = providerPlugin.parseTextToolCalls?.(fullResponse) ?? []
 
-    if (xmlToolCalls.length > 0) {
-      const xmlToolCallRequests = xmlToolCalls.map(convertXMLToToolCallRequest)
-
-      logger.info('Detected XML tool calls in response', {
-        count: xmlToolCallRequests.length,
-        tools: xmlToolCallRequests.map(tc => tc.name),
-        formats: xmlToolCalls.map(tc => tc.format),
+    if (textToolCallRequests.length > 0) {
+      logger.info('Detected text tool calls in response (via plugin)', {
+        count: textToolCallRequests.length,
+        tools: textToolCallRequests.map(tc => tc.name),
+        provider: effectiveProfile.provider,
       })
 
       // Send tool executing status for each detected tool
-      for (const toolCall of xmlToolCallRequests) {
+      for (const toolCall of textToolCallRequests) {
         safeEnqueue(controller, encodeStatusEvent(encoder, {
           stage: 'tool_executing',
           message: `Running ${toolCall.name}...`,
@@ -1376,11 +1723,11 @@ async function processMessage(
         }))
       }
 
-      const results = await processToolCalls(xmlToolCallRequests, toolContext, controller, encoder)
+      const results = await processToolCalls(textToolCallRequests, toolContext, controller, encoder)
       toolMessages = [...toolMessages, ...results.toolMessages]
       generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
-      const strippedResponse = stripXMLToolMarkers(fullResponse)
+      const strippedResponse = providerPlugin.stripTextToolMarkers?.(fullResponse) ?? fullResponse
 
       // Add stripped response and tool results to conversation
       currentMessages = [...formattedMessages]
@@ -1431,18 +1778,26 @@ async function processMessage(
       }
 
       fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-      // Strip any remaining XML markers from the continuation
-      fullResponse = stripXMLToolMarkers(fullResponse)
+      // Strip any remaining text tool markers from the continuation
+      if (providerPlugin.stripTextToolMarkers) {
+        fullResponse = providerPlugin.stripTextToolMarkers(fullResponse)
+      }
     }
   }
 
-  // Process pseudo-tools
-  if (usePseudoTools && fullResponse) {
-    const pseudoToolCalls = parsePseudoToolsFromResponse(fullResponse)
+  // Process text-block tool calls (runs for ALL providers, like XML parsing)
+  // Text-block format: [[TOOL_NAME param="value"]]content[[/TOOL_NAME]]
+  if (fullResponse && hasTextBlockMarkers(fullResponse)) {
+    const textBlockToolCalls = parseTextBlocksFromResponse(fullResponse)
 
-    if (pseudoToolCalls.length > 0) {
+    if (textBlockToolCalls.length > 0) {
+      logger.info('Detected text-block tool calls in response', {
+        count: textBlockToolCalls.length,
+        tools: textBlockToolCalls.map(tc => tc.name),
+      })
+
       // Send tool executing status for each detected tool
-      for (const toolCall of pseudoToolCalls) {
+      for (const toolCall of textBlockToolCalls) {
         safeEnqueue(controller, encodeStatusEvent(encoder, {
           stage: 'tool_executing',
           message: `Running ${toolCall.name}...`,
@@ -1452,11 +1807,11 @@ async function processMessage(
         }))
       }
 
-      const results = await processToolCalls(pseudoToolCalls, toolContext, controller, encoder)
+      const results = await processToolCalls(textBlockToolCalls, toolContext, controller, encoder)
       toolMessages = [...toolMessages, ...results.toolMessages]
       generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
-      const strippedResponse = stripPseudoToolMarkersFromResponse(fullResponse)
+      const strippedResponse = stripTextBlockMarkersFromResponse(fullResponse)
 
       // Add stripped response and tool results to conversation
       currentMessages = [...formattedMessages]
@@ -1485,8 +1840,8 @@ async function processMessage(
         connectionProfile: effectiveProfile,
         apiKey: effectiveApiKey,
         modelParams,
-        tools: [],
-        useNativeWebSearch: useNativeWebSearch && !usePseudoTools,
+        tools: useTextBlockTools ? [] : actualTools,
+        useNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
         userId,
         messageId: preGeneratedAssistantMessageId,
         chatId,
@@ -1507,52 +1862,53 @@ async function processMessage(
       }
 
       fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
-      fullResponse = stripPseudoToolMarkersFromResponse(fullResponse)
+      // Strip any remaining text-block markers from the continuation
+      fullResponse = stripTextBlockMarkersFromResponse(fullResponse)
     }
   }
 
   // ============================================================================
-  // Uncensored Retry for Empty Responses
+  // Empty Response Retry Logic
   // ============================================================================
-  // If the response is empty and no tool calls were made, this may be a silent
-  // content refusal. Attempt to re-stream with the uncensored provider if
-  // the Concierge is in AUTO_ROUTE mode.
+  // If the response is empty and no tool calls were made, the behavior depends
+  // on whether the content was flagged as dangerous by the Concierge:
+  //
+  // Content PASSED moderation (or moderation not run):
+  //   1. Retry with the SAME provider (likely a transient issue)
+  //   2. If still empty and AUTO_ROUTE with uncensored provider available,
+  //      fail over to uncensored provider
+  //
+  // Content FLAGGED as dangerous:
+  //   1. Immediately fail over to uncensored provider (the LLM's own safety
+  //      filter likely triggered the empty response)
   let uncensoredRetryAttempted = false
+  let sameProviderRetryAttempted = false
+  const contentWasFlaggedDangerous = dangerFlags && dangerFlags.length > 0
   if (
     fullResponse.trim().length === 0 &&
-    toolMessages.length === 0 &&
-    dangerSettings.mode === 'AUTO_ROUTE' &&
-    !effectiveProfile.isDangerousCompatible &&
-    dangerSettings.uncensoredTextProfileId
+    toolMessages.length === 0
   ) {
-    uncensoredRetryAttempted = true
-    logger.warn('[DangerousContent] Empty response detected, attempting uncensored retry', {
-      chatId,
-      originalProvider: effectiveProfile.provider,
-      originalModel: effectiveProfile.modelName,
-    })
+    // --- Same-provider retry for content that passed moderation ---
+    if (!contentWasFlaggedDangerous) {
+      sameProviderRetryAttempted = true
+      logger.warn('[EmptyResponse] Empty response from provider that passed moderation, retrying same provider', {
+        chatId,
+        provider: effectiveProfile.provider,
+        model: effectiveProfile.modelName,
+      })
 
-    try {
-      const routeResult = await resolveProviderForDangerousContent(
-        effectiveProfile,
-        effectiveApiKey,
-        dangerSettings,
-        userId
-      )
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'retrying',
+        message: 'Empty response received — retrying...',
+        characterName: character.name,
+        characterId: character.id,
+      }))
 
-      if (routeResult.rerouted) {
-        safeEnqueue(controller, encodeStatusEvent(encoder, {
-          stage: 'rerouting',
-          message: 'Retrying with uncensored provider...',
-          characterName: character.name,
-          characterId: character.id,
-        }))
-
-        // Re-stream with uncensored provider
+      try {
         for await (const chunk of streamMessage({
           messages: formattedMessages,
-          connectionProfile: routeResult.connectionProfile,
-          apiKey: routeResult.apiKey,
+          connectionProfile: effectiveProfile,
+          apiKey: effectiveApiKey,
           modelParams,
           tools: actualTools,
           useNativeWebSearch,
@@ -1586,30 +1942,127 @@ async function processMessage(
         }
 
         if (fullResponse.trim().length > 0) {
-          effectiveProfile = routeResult.connectionProfile
-          effectiveApiKey = routeResult.apiKey
-
-          logger.info('[DangerousContent] Uncensored retry succeeded', {
+          logger.info('[EmptyResponse] Same-provider retry succeeded', {
             chatId,
-            uncensoredProvider: routeResult.connectionProfile.provider,
-            uncensoredModel: routeResult.connectionProfile.modelName,
+            provider: effectiveProfile.provider,
+            model: effectiveProfile.modelName,
             responseLength: fullResponse.length,
           })
         } else {
-          logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
+          logger.warn('[EmptyResponse] Same-provider retry also returned empty', {
             chatId,
-            safeProvider: connectionProfile.provider,
-            safeModel: connectionProfile.modelName,
-            uncensoredProvider: routeResult.connectionProfile.provider,
-            uncensoredModel: routeResult.connectionProfile.modelName,
+            provider: effectiveProfile.provider,
+            model: effectiveProfile.modelName,
           })
         }
+      } catch (retryError) {
+        logger.error('[EmptyResponse] Same-provider retry failed', {
+          chatId,
+          error: retryError instanceof Error ? retryError.message : String(retryError),
+        })
       }
-    } catch (retryError) {
-      logger.error('[DangerousContent] Uncensored retry failed', {
+    }
+
+    // --- Uncensored failover (immediate if flagged dangerous, after same-provider retry otherwise) ---
+    if (
+      fullResponse.trim().length === 0 &&
+      dangerSettings.mode === 'AUTO_ROUTE' &&
+      dangerSettings.uncensoredTextProfileId
+    ) {
+      uncensoredRetryAttempted = true
+      logger.warn('[DangerousContent] Empty response detected, attempting uncensored retry', {
         chatId,
-        error: retryError instanceof Error ? retryError.message : String(retryError),
+        originalProvider: effectiveProfile.provider,
+        originalModel: effectiveProfile.modelName,
+        contentWasFlaggedDangerous,
+        sameProviderRetryAttempted,
       })
+
+      try {
+        const routeResult = await resolveProviderForDangerousContent(
+          effectiveProfile,
+          effectiveApiKey,
+          dangerSettings,
+          userId
+        )
+
+        // Skip if routing resolved to the same profile (pointless retry)
+        if (routeResult.rerouted && routeResult.connectionProfile.id === effectiveProfile.id) {
+          logger.debug('[DangerousContent] Uncensored fallback resolved to same profile, skipping retry', {
+            chatId,
+            profileId: effectiveProfile.id,
+          })
+        } else if (routeResult.rerouted) {
+          safeEnqueue(controller, encodeStatusEvent(encoder, {
+            stage: 'rerouting',
+            message: 'Retrying with uncensored provider...',
+            characterName: character.name,
+            characterId: character.id,
+          }))
+
+          // Re-stream with uncensored provider
+          for await (const chunk of streamMessage({
+            messages: formattedMessages,
+            connectionProfile: routeResult.connectionProfile,
+            apiKey: routeResult.apiKey,
+            modelParams,
+            tools: actualTools,
+            useNativeWebSearch,
+            userId,
+            messageId: preGeneratedAssistantMessageId,
+            chatId,
+          })) {
+            if (chunk.content) {
+              if (!hasStartedStreaming) {
+                safeEnqueue(controller, encodeStatusEvent(encoder, {
+                  stage: 'streaming',
+                  message: `${character.name} is responding...`,
+                  characterName: character.name,
+                  characterId: character.id,
+                }))
+                hasStartedStreaming = true
+              }
+              fullResponse += chunk.content
+              controller.enqueue(encodeContentChunk(encoder, chunk.content))
+            }
+
+            if (chunk.done) {
+              usage = chunk.usage || null
+              cacheUsage = chunk.cacheUsage || null
+              attachmentResults = chunk.attachmentResults || null
+              rawResponse = chunk.rawResponse
+              if (chunk.thoughtSignature) {
+                thoughtSignature = chunk.thoughtSignature
+              }
+            }
+          }
+
+          if (fullResponse.trim().length > 0) {
+            effectiveProfile = routeResult.connectionProfile
+            effectiveApiKey = routeResult.apiKey
+
+            logger.info('[DangerousContent] Uncensored retry succeeded', {
+              chatId,
+              uncensoredProvider: routeResult.connectionProfile.provider,
+              uncensoredModel: routeResult.connectionProfile.modelName,
+              responseLength: fullResponse.length,
+            })
+          } else {
+            logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
+              chatId,
+              safeProvider: connectionProfile.provider,
+              safeModel: connectionProfile.modelName,
+              uncensoredProvider: routeResult.connectionProfile.provider,
+              uncensoredModel: routeResult.connectionProfile.modelName,
+            })
+          }
+        }
+      } catch (retryError) {
+        logger.error('[DangerousContent] Uncensored retry failed', {
+          chatId,
+          error: retryError instanceof Error ? retryError.message : String(retryError),
+        })
+      }
     }
   }
 
@@ -1666,6 +2119,7 @@ async function processMessage(
       // Fire and forget - compression runs in background
       triggerAsyncCompression({
         chatId,
+        participantId: isMultiCharacter ? characterParticipant.id : undefined,
         messages: updatedMessages,
         systemPrompt: builtContext.originalSystemPrompt,
         compressionOptions: {
@@ -1764,6 +2218,7 @@ async function processMessage(
     // Send done event
     controller.enqueue(encodeDoneEvent(encoder, {
       messageId: assistantMessageId,
+      participantId: characterParticipant.id,
       usage,
       cacheUsage,
       attachmentResults,
@@ -1771,6 +2226,7 @@ async function processMessage(
       turn: turnInfo,
       provider: effectiveProfile.provider,
       modelName: effectiveProfile.modelName,
+      isSilentMessage: characterParticipant.status === 'silent' || undefined,
     }))
 
     // Trigger memory extraction
@@ -1778,9 +2234,9 @@ async function processMessage(
       const memoryChatSettings: MemoryChatSettings = {
         cheapLLMSettings: chatSettings.cheapLLMSettings,
         dangerSettings,
+        isDangerousChat: chat.isDangerousChat === true,
       }
 
-      // Note: personaName is undefined since we only support CHARACTER type participants now
       // Build pronouns map for multi-character chats
       const allCharacterPronouns = isMultiCharacter
         ? Object.fromEntries(Array.from(participantCharacters.values()).map(c => [c.name, c.pronouns ?? null]))
@@ -1790,7 +2246,7 @@ async function processMessage(
         characterId: character.id,
         characterName: character.name,
         characterPronouns: character.pronouns,
-        personaName: undefined,
+        personaName: resolvedIdentity.name !== 'User' ? resolvedIdentity.name : undefined,
         userCharacterId,
         allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
         allCharacterPronouns,
@@ -1875,6 +2331,26 @@ async function processMessage(
         connectionProfile,
         chatSettings: memoryChatSettings,
       })
+
+      // Trigger scene state tracking (single-character chats only;
+      // multi-character chats trigger once after the chain completes)
+      if (!isMultiCharacter) {
+        const participantCharacterIds = Array.from(participantCharacters.values()).map(c => c.id)
+        await triggerSceneStateTracking(repos, {
+          chatId,
+          userId,
+          connectionProfile,
+          chatSettings: memoryChatSettings,
+          characterIds: participantCharacterIds,
+        })
+      }
+    }
+    return {
+      isMultiCharacter,
+      hasContent: true,
+      messageId: assistantMessageId,
+      userParticipantId,
+      isPaused: chat.isPaused,
     }
   } else if (toolMessages.length > 0) {
     // Save tool messages even without text response
@@ -1891,6 +2367,7 @@ async function processMessage(
 
     controller.enqueue(encodeDoneEvent(encoder, {
       messageId: toolSaveResult.firstToolMessageId,
+      participantId: characterParticipant.id,
       usage,
       cacheUsage,
       attachmentResults,
@@ -1898,18 +2375,35 @@ async function processMessage(
       provider: effectiveProfile.provider,
       modelName: effectiveProfile.modelName,
     }))
+
+    return {
+      isMultiCharacter,
+      hasContent: true,
+      messageId: toolSaveResult.firstToolMessageId || null,
+      userParticipantId,
+      isPaused: chat.isPaused,
+    }
   } else {
     // Empty response
-    const emptyReason = uncensoredRetryAttempted
-      ? 'The AI model returned an empty response, and retrying with an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
-      : 'The AI model returned an empty response. This is a known issue with some providers. Please try resending your message.'
+    let emptyReason: string
+    if (uncensoredRetryAttempted && sameProviderRetryAttempted) {
+      emptyReason = 'The AI model returned an empty response after retrying, and an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
+    } else if (uncensoredRetryAttempted) {
+      emptyReason = 'The AI model returned an empty response, and retrying with an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
+    } else if (sameProviderRetryAttempted) {
+      emptyReason = 'The AI model returned an empty response twice. This may be a temporary issue with the provider. Please try resending your message.'
+    } else {
+      emptyReason = 'The AI model returned an empty response. This is a known issue with some providers. Please try resending your message.'
+    }
     logger.warn(`Empty response for chat ${chatId}`, {
       uncensoredRetryAttempted,
+      sameProviderRetryAttempted,
       provider: effectiveProfile.provider,
       model: effectiveProfile.modelName,
     })
     controller.enqueue(encodeDoneEvent(encoder, {
       messageId: null,
+      participantId: characterParticipant.id,
       usage,
       cacheUsage,
       attachmentResults,
@@ -1919,10 +2413,15 @@ async function processMessage(
       provider: effectiveProfile.provider,
       modelName: effectiveProfile.modelName,
     }))
-  }
 
-  // Close stream
-  safeClose(controller)
+    return {
+      isMultiCharacter,
+      hasContent: false,
+      messageId: null,
+      userParticipantId,
+      isPaused: chat.isPaused,
+    }
+  }
 }
 
 /**
@@ -1932,7 +2431,7 @@ async function saveAssistantMessage(
   repos: ReturnType<typeof getRepositories>,
   chatId: string,
   character: { id: string; name: string },
-  characterParticipant: { id: string },
+  characterParticipant: { id: string; status?: string },
   content: string,
   usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null,
   rawResponse: unknown,
@@ -1961,6 +2460,7 @@ async function saveAssistantMessage(
     participantId: characterParticipant.id,
     provider: provider || null,
     modelName: modelName || null,
+    isSilentMessage: characterParticipant.status === 'silent' || null,
   }
 
   await repos.chats.addMessage(chatId, assistantMessage)

@@ -15,6 +15,7 @@ export type PluginCapability =
   | 'TOOL_PROVIDER'
   | 'SEARCH_PROVIDER'
   | 'MODERATION_PROVIDER'
+  | 'SYSTEM_PROMPT'
   | 'UTILITY';
 
 /**

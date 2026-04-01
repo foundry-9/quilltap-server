@@ -62,8 +62,8 @@ export const plugin: ToolPlugin = {
     // Get config from context
     const config = context.toolConfig as Partial<CurlToolConfig>;
 
-    // Execute the request
-    const output = await executeCurlRequest(curlInput, config);
+    // Execute the request, passing browser User-Agent for realistic HTTP requests
+    const output = await executeCurlRequest(curlInput, config, context.browserUserAgent);
 
     return {
       success: output.success,

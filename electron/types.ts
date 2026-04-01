@@ -1,5 +1,5 @@
-/** Runtime mode: VM (Lima/WSL2), Docker, or Node.js (npx) */
-export type RuntimeMode = 'docker' | 'vm' | 'npx';
+/** Runtime mode: VM (Lima/WSL2), Docker, or embedded (Electron's own Node.js) */
+export type RuntimeMode = 'docker' | 'vm' | 'embedded';
 
 /** Phase identifiers for splash screen state machine */
 export type SplashPhase =
@@ -11,10 +11,19 @@ export type SplashPhase =
   | 'starting-vm'
   | 'pulling-image'
   | 'starting-container'
-  | 'installing-npx'
+  | 'starting-server'
   | 'waiting-health'
   | 'ready'
   | 'error';
+
+/** Saved window bounds for restore on next launch */
+export interface WindowBounds {
+  width: number;
+  height: number;
+  x?: number;
+  y?: number;
+  isMaximized?: boolean;
+}
 
 /** A data directory with a human-readable name */
 export interface NamedDataDir {
@@ -22,6 +31,8 @@ export interface NamedDataDir {
   path: string;
   /** Human-readable display name */
   name: string;
+  /** Remembered main window bounds for this instance */
+  windowBounds?: WindowBounds;
 }
 
 /** Disk usage information for a single data directory */
@@ -46,8 +57,8 @@ export interface DirectoryInfo {
   runtimeMode: RuntimeMode;
   /** Whether Docker CLI is available on this system */
   dockerAvailable: boolean;
-  /** Whether Node.js >= 18 is available on this system */
-  nodeAvailable: boolean;
+  /** Whether the embedded server mode is available (always true — uses Electron's Node.js) */
+  embeddedAvailable: boolean;
   /** Label for the VM button (e.g. "Lima" on macOS, "WSL2" on Windows) */
   vmLabel: string;
   /** Host platform (darwin, win32, linux) */

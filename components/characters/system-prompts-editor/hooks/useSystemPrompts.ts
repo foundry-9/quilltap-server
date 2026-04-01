@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect } from 'react'
 import {
   CharacterSystemPrompt,
   PromptTemplate,
-  SamplePrompt,
   PromptFormData,
   INITIAL_FORM_DATA,
 } from '../types'
@@ -13,7 +12,6 @@ export interface UseSystemPromptsReturn {
   // Data
   prompts: CharacterSystemPrompt[]
   templates: PromptTemplate[]
-  samplePrompts: SamplePrompt[]
 
   // Loading states
   loading: boolean
@@ -72,7 +70,6 @@ export function useSystemPrompts(
   // Import modal state
   const [showImportModal, setShowImportModal] = useState(false)
   const [templates, setTemplates] = useState<PromptTemplate[]>([])
-  const [samplePrompts, setSamplePrompts] = useState<SamplePrompt[]>([])
   const [loadingTemplates, setLoadingTemplates] = useState(false)
 
   // Preview modal state
@@ -101,21 +98,11 @@ export function useSystemPrompts(
   const fetchTemplates = useCallback(async () => {
     try {
       setLoadingTemplates(true)
-      const [templatesRes, samplesRes] = await Promise.all([
-        fetch('/api/v1/prompt-templates'),
-        fetch('/api/v1/sample-prompts?all=true'),
-      ])
+      const res = await fetch('/api/v1/prompt-templates')
 
-      if (templatesRes.ok) {
-        const data = await templatesRes.json()
-        // Extract templates array from response wrapper
+      if (res.ok) {
+        const data = await res.json()
         setTemplates(data.templates || [])
-      }
-
-      if (samplesRes.ok) {
-        const data = await samplesRes.json()
-        // Extract prompts array from response wrapper
-        setSamplePrompts(data.prompts || [])
       }
     } catch (err) {
       console.error('Error fetching templates', {
@@ -274,7 +261,6 @@ export function useSystemPrompts(
   return {
     prompts,
     templates,
-    samplePrompts,
     loading,
     loadingTemplates,
     saving,

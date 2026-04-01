@@ -9,6 +9,7 @@
  * Physical backups:
  * - Run automatically once per day (checked on startup, skipped if recent)
  * - Are stored under <data>/data/backups/
+ * - Use VACUUM INTO for SQLCipher compatibility (preserves encryption key)
  * - Follow a retention policy: all for 7 days, weekly for 4 weeks, monthly
  *   for 12 months, yearly forever
  *
@@ -60,7 +61,7 @@ function generateBackupFilename(): string {
  *
  * @returns Date if filename matches the expected format, null otherwise
  */
-function parseBackupFilename(filename: string): Date | null {
+export function parseBackupFilename(filename: string): Date | null {
   const match = BACKUP_FILENAME_RE.exec(filename);
   if (!match) return null;
 
@@ -101,7 +102,7 @@ function generateLLMLogsBackupFilename(): string {
  *
  * @returns Date if filename matches the expected format, null otherwise
  */
-function parseLLMLogsBackupFilename(filename: string): Date | null {
+export function parseLLMLogsBackupFilename(filename: string): Date | null {
   const match = LLM_LOGS_BACKUP_FILENAME_RE.exec(filename);
   if (!match) return null;
 
@@ -180,9 +181,10 @@ function shouldCreateBackup(
 /**
  * Create a physical backup of the SQLite database.
  *
- * Uses better-sqlite3's .backup() API which wraps SQLite's Online Backup API.
- * This creates a consistent, hot copy of the database without requiring any
- * locks or interrupting normal operations.
+ * Uses VACUUM INTO to create an encrypted copy of the database that preserves
+ * the SQLCipher key. This creates a consistent, defragmented copy. Note that
+ * VACUUM INTO holds a read lock for the duration, but this is acceptable for
+ * a startup backup.
  *
  * Skips the backup if the most recent one is less than 24 hours old.
  * Partial files are cleaned up on failure.
@@ -210,8 +212,11 @@ export async function createPhysicalBackup(db: DatabaseType): Promise<string | n
       destination: backupPath,
     });
 
-    // Use better-sqlite3's backup API (async, non-blocking)
-    await db.backup(backupPath);
+    // Use VACUUM INTO for SQLCipher-compatible backups. The .backup() API
+    // creates an unkeyed target file which is incompatible with an encrypted
+    // source database. VACUUM INTO preserves the encryption key and creates
+    // a consistent, defragmented copy.
+    db.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`);
 
     // Verify the backup file exists and has content
     const stat = fs.statSync(backupPath);
@@ -251,7 +256,7 @@ export async function createPhysicalBackup(db: DatabaseType): Promise<string | n
 /**
  * Create a physical backup of the LLM logs database.
  *
- * Same approach as createPhysicalBackup but for quilltap-llm-logs.db.
+ * Same approach as createPhysicalBackup (VACUUM INTO) but for quilltap-llm-logs.db.
  *
  * @param db - The better-sqlite3 database instance for LLM logs
  * @returns The path to the created backup file, or null on failure
@@ -274,7 +279,8 @@ export async function createLLMLogsPhysicalBackup(db: DatabaseType): Promise<str
       destination: backupPath,
     });
 
-    await db.backup(backupPath);
+    // Use VACUUM INTO for SQLCipher-compatible backups (see createPhysicalBackup)
+    db.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`);
 
     const stat = fs.statSync(backupPath);
     moduleLogger.info('LLM logs physical backup created', {

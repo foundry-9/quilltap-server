@@ -63,7 +63,7 @@ export interface ImageGenResponse {
 }
 
 export interface LLMMessage {
-  role: 'system' | 'user' | 'assistant'
+  role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
   // File attachments for this message (typically only for user messages)
   attachments?: FileAttachment[]
@@ -79,6 +79,10 @@ export interface LLMMessage {
   // When set to { type: 'ephemeral' }, marks this message as a cache breakpoint
   // Anthropic: reduces cost by 90% for cached content, 5-minute TTL
   cacheControl?: { type: 'ephemeral' }
+  // Tool call ID — identifies which tool call this result responds to (for role: 'tool')
+  toolCallId?: string
+  // Tool calls made by the assistant in this message (for native tool result formatting)
+  toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
 }
 
 // JSON Schema definition for structured outputs
@@ -108,6 +112,8 @@ export interface LLMParams {
   responseFormat?: ResponseFormat
   // Provider-specific parameters from profile (e.g., fallbackModels, providerPreferences)
   profileParameters?: Record<string, unknown>
+  // Previous response ID for conversation chaining (OpenAI Responses API)
+  previousResponseId?: string
 }
 
 // Cache usage statistics (OpenRouter, Anthropic)

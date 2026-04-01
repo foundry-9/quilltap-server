@@ -31,7 +31,7 @@ describe('SillyTavern Character Import/Export', () => {
     name: 'Test Character',
     description: 'A test character description',
     personality: 'Friendly and helpful',
-    scenario: 'Testing scenario',
+    scenarios: [{ id: 'test-scenario-id', title: 'Default', content: 'Testing scenario', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }],
     firstMessage: 'Hello, I am Test Character!',
     exampleDialogues: '<START>\n{{char}}: Example dialogue\n{{user}}: Example response',
     systemPrompts: [{
@@ -55,7 +55,8 @@ describe('SillyTavern Character Import/Export', () => {
       expect(result.name).toBe('Test Character')
       expect(result.description).toBe('A test character description')
       expect(result.personality).toBe('Friendly and helpful')
-      expect(result.scenario).toBe('Testing scenario')
+      expect(result.scenarios).toHaveLength(1)
+      expect(result.scenarios[0].content).toBe('Testing scenario')
       expect(result.firstMessage).toBe('Hello, I am Test Character!')
       expect(result.exampleDialogues).toBe('<START>\n{{char}}: Example dialogue\n{{user}}: Example response')
       expect(result.systemPrompts).toHaveLength(1)

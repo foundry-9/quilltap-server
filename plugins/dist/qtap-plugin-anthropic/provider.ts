@@ -7,7 +7,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types'
-import { createPluginLogger } from '@quilltap/plugin-utils'
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils'
 
 const logger = createPluginLogger('qtap-plugin-anthropic')
 
@@ -34,6 +34,8 @@ type AnthropicContentBlock =
   | { type: 'image'; source: { type: 'base64'; media_type: ImageMediaType; data: string }; cache_control?: CacheControl }
   | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string }; cache_control?: CacheControl }
   | { type: 'document'; source: { type: 'text'; media_type: 'text/plain'; data: string }; cache_control?: CacheControl }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'tool_result'; tool_use_id: string; content: string }
 
 interface AnthropicMessage {
   role: 'user' | 'assistant'
@@ -72,34 +74,95 @@ export class AnthropicProvider implements LLMProvider {
     const failed: { id: string; error: string }[] = []
 
     // Filter out system messages (handled separately in Anthropic)
-    const nonSystemMessages = messages.filter(m => m.role !== 'system')
+    // Also filter out tool messages without toolCallId (backward compatibility)
+    const nonSystemMessages = messages.filter(m => {
+      if (m.role === 'system') return false
+      if (m.role === 'tool' && !m.toolCallId) return false
+      return true
+    })
 
     // Find last user message index for caching (used in system_and_long_context strategy)
+    // Only consider actual user messages, not tool results mapped to user role
     const lastUserMessageIndex = cacheOptions?.enableCaching && cacheOptions.strategy === 'system_and_long_context'
       ? nonSystemMessages.findLastIndex(m => m.role === 'user')
       : -1
 
-    const formattedMessages: AnthropicMessage[] = nonSystemMessages.map((msg, index) => {
+    // Build formatted messages, batching consecutive tool results into single user messages
+    const formattedMessages: AnthropicMessage[] = []
+
+    for (let i = 0; i < nonSystemMessages.length; i++) {
+      const msg = nonSystemMessages[i]
+
+      // Handle tool result messages — batch consecutive ones into a single user message
+      if (msg.role === 'tool') {
+        const toolResultBlocks: AnthropicContentBlock[] = [
+          { type: 'tool_result', tool_use_id: msg.toolCallId!, content: msg.content },
+        ]
+        // Consume any consecutive tool messages
+        while (i + 1 < nonSystemMessages.length && nonSystemMessages[i + 1].role === 'tool') {
+          i++
+          const nextMsg = nonSystemMessages[i]
+          toolResultBlocks.push({
+            type: 'tool_result',
+            tool_use_id: nextMsg.toolCallId!,
+            content: nextMsg.content,
+          })
+        }
+        formattedMessages.push({ role: 'user', content: toolResultBlocks })
+        continue
+      }
+
+      // Handle assistant messages with toolCalls
+      if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+        const content: AnthropicContentBlock[] = []
+        if (msg.content) {
+          content.push({ type: 'text', text: msg.content })
+        }
+        for (const tc of msg.toolCalls) {
+          let input: Record<string, unknown> = {}
+          try {
+            input = JSON.parse(tc.function.arguments)
+          } catch (e) {
+            logger.error('Failed to parse tool call arguments', {
+              context: 'AnthropicProvider.formatMessagesWithAttachments',
+              toolCallId: tc.id,
+              name: tc.function.name,
+            }, e instanceof Error ? e : undefined)
+          }
+          content.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.function.name,
+            input,
+          })
+        }
+        formattedMessages.push({ role: 'assistant', content })
+        continue
+      }
+
+      // Standard user/assistant message handling
       const role = msg.role === 'user' ? 'user' : 'assistant'
-      const isLastUserMessage = index === lastUserMessageIndex
+      const isLastUserMessage = i === lastUserMessageIndex
 
       // If no attachments, check if we need to add cache control
       if (!msg.attachments || msg.attachments.length === 0) {
         // For system_and_long_context, add cache_control to the last user message
         if (isLastUserMessage) {
-          return {
+          formattedMessages.push({
             role,
             content: [{
               type: 'text' as const,
               text: msg.content,
               cache_control: this.buildCacheControl(cacheOptions?.ttl),
             }],
-          }
+          })
+        } else {
+          formattedMessages.push({
+            role,
+            content: msg.content,
+          })
         }
-        return {
-          role,
-          content: msg.content,
-        }
+        continue
       }
 
       // Build multimodal content array
@@ -182,18 +245,21 @@ export class AnthropicProvider implements LLMProvider {
         } as AnthropicContentBlock
       }
 
-      return {
+      formattedMessages.push({
         role,
         content: content.length > 0 ? content : msg.content,
-      }
-    })
+      })
+    }
 
     return { messages: formattedMessages, attachmentResults: { sent, failed } }
   }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
 
-    const client = new Anthropic({ apiKey })
+    const client = new Anthropic({
+      apiKey,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    })
 
     // Anthropic requires system message separate from messages array
     const systemMessage = params.messages.find(m => m.role === 'system')
@@ -295,7 +361,10 @@ export class AnthropicProvider implements LLMProvider {
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
 
-    const client = new Anthropic({ apiKey })
+    const client = new Anthropic({
+      apiKey,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    })
 
     const systemMessage = params.messages.find(m => m.role === 'system')
 
@@ -514,7 +583,10 @@ export class AnthropicProvider implements LLMProvider {
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
 
-      const client = new Anthropic({ apiKey })
+      const client = new Anthropic({
+        apiKey,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      })
       // Anthropic doesn't have a direct validation endpoint, so we make a minimal request
       await client.messages.create({
         model: 'claude-haiku-4-5-20251001',
@@ -532,7 +604,10 @@ export class AnthropicProvider implements LLMProvider {
   async getAvailableModels(apiKey: string): Promise<string[]> {
 
     try {
-      const client = new Anthropic({ apiKey })
+      const client = new Anthropic({
+        apiKey,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+      })
       const response = await client.models.list()
 
       // Extract model IDs from the response

@@ -484,6 +484,12 @@ Resources (10 files), Archive (10 files)"
 - Ensure destination folder exists
 - Check The Forge > File Storage configuration
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/files")`
+
 ## Related Topics
 
 - [File Management](files.md) — Browse and manage files

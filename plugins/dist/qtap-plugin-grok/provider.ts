@@ -2,14 +2,14 @@
  * Grok Provider Implementation for Quilltap Plugin
  *
  * Provides chat completion functionality using Grok's Responses API
+ * via the OpenAI SDK pointed at https://api.x.ai/v1
  * Supports Grok models with multimodal capabilities (text + images)
  * Uses server-side tools for web search (web_search, x_search)
- * Grok API endpoint: https://api.x.ai/v1
  */
 
 import OpenAI from 'openai';
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-grok');
 
@@ -21,199 +21,11 @@ const GROK_SUPPORTED_MIME_TYPES = [
   'image/webp',
 ];
 
-// ============================================================================
-// Responses API Types
-// ============================================================================
-
-/**
- * Input types for the Responses API
- * Messages can be system instructions, user input, or assistant responses
- */
-type ResponsesInput =
-  | ResponsesSystemInput
-  | ResponsesUserInput
-  | ResponsesAssistantInput;
-
-interface ResponsesSystemInput {
-  type: 'message';
-  role: 'system';
-  content: string;
-}
-
-interface ResponsesUserInput {
-  type: 'message';
-  role: 'user';
-  content: ResponsesUserContent[];
-}
-
-interface ResponsesAssistantInput {
-  type: 'message';
-  role: 'assistant';
-  content: string;
-}
-
-/**
- * Content types for user messages
- */
-type ResponsesUserContent =
-  | { type: 'input_text'; text: string }
-  | { type: 'input_image'; image_url: string; detail?: 'auto' | 'low' | 'high' };
-
-/**
- * Server-side tools for the Responses API
- * web_search: Searches the web
- * x_search: Searches X/Twitter
- */
-interface ResponsesServerTool {
-  type: 'web_search' | 'x_search';
-}
-
-/**
- * Client-side function tool for the Responses API
- */
-interface ResponsesFunctionTool {
-  type: 'function';
-  name: string;
-  description?: string;
-  parameters: Record<string, unknown>;
-  strict?: boolean;
-}
-
-/**
- * Request body for the Responses API
- */
-interface ResponsesAPIRequest {
-  model: string;
-  input: ResponsesInput[];
-  store?: boolean;
-  temperature?: number;
-  max_output_tokens?: number;
-  top_p?: number;
-  stop?: string[];
-  tools?: (ResponsesServerTool | ResponsesFunctionTool)[];
-  include?: string[];
-  stream?: boolean;
-}
-
-/**
- * Response output item types
- */
-interface ResponsesOutputMessage {
-  type: 'message';
-  id: string;
-  status: string;
-  role: 'assistant';
-  content: ResponsesOutputContent[];
-}
-
-interface ResponsesOutputContent {
-  type: 'output_text';
-  text: string;
-  annotations?: ResponsesAnnotation[];
-}
-
-interface ResponsesAnnotation {
-  type: 'url_citation';
-  url: string;
-  title?: string;
-  start_index: number;
-  end_index: number;
-}
-
-interface ResponsesFunctionCall {
-  type: 'function_call';
-  id: string;
-  call_id: string;
-  name: string;
-  arguments: string;
-  status: string;
-}
-
-interface ResponsesWebSearchCall {
-  type: 'web_search_call';
-  id: string;
-  status: string;
-}
-
-type ResponsesOutputItem = ResponsesOutputMessage | ResponsesFunctionCall | ResponsesWebSearchCall;
-
-/**
- * Full response from the Responses API
- */
-interface ResponsesAPIResponse {
-  id: string;
-  object: string;
-  created_at: number;
-  status: string;
-  error?: { code: string; message: string };
-  incomplete_details?: { reason: string };
-  model: string;
-  output: ResponsesOutputItem[];
-  usage: {
-    input_tokens: number;
-    input_tokens_details?: { cached_tokens: number };
-    output_tokens: number;
-    output_tokens_details?: { reasoning_tokens: number };
-    total_tokens: number;
-  };
-}
-
-/**
- * SSE stream event types
- */
-interface StreamEventDelta {
-  type: 'response.output_text.delta';
-  item_id: string;
-  output_index: number;
-  content_index: number;
-  delta: string;
-}
-
-interface StreamEventDone {
-  type: 'response.output_text.done';
-  item_id: string;
-  output_index: number;
-  content_index: number;
-  text: string;
-}
-
-interface StreamEventCompleted {
-  type: 'response.completed';
-  response: ResponsesAPIResponse;
-}
-
-interface StreamEventFunctionCallDelta {
-  type: 'response.function_call_arguments.delta';
-  item_id: string;
-  output_index: number;
-  delta: string;
-}
-
-interface StreamEventFunctionCallDone {
-  type: 'response.function_call_arguments.done';
-  item_id: string;
-  output_index: number;
-  arguments: string;
-}
-
-interface StreamEventOutputItemAdded {
-  type: 'response.output_item.added';
-  output_index: number;
-  item: ResponsesOutputItem;
-}
-
-type StreamEvent =
-  | StreamEventDelta
-  | StreamEventDone
-  | StreamEventCompleted
-  | StreamEventFunctionCallDelta
-  | StreamEventFunctionCallDone
-  | StreamEventOutputItemAdded
-  | { type: string; [key: string]: unknown };
-
-// ============================================================================
-// Provider Implementation
-// ============================================================================
+// SDK types for the Responses API
+type ResponsesInputItem = OpenAI.Responses.ResponseInputItem;
+type ResponsesTool = OpenAI.Responses.Tool;
+type ResponsesResponse = OpenAI.Responses.Response;
+type ResponsesStreamEvent = OpenAI.Responses.ResponseStreamEvent;
 
 export class GrokProvider implements LLMProvider {
   private readonly baseUrl = 'https://api.x.ai/v1';
@@ -223,41 +35,70 @@ export class GrokProvider implements LLMProvider {
   readonly supportsWebSearch = true;
 
   /**
-   * Format messages from LLMMessage format to Responses API format
-   * Handles text, image attachments, and role conversion
+   * Format messages from LLMMessage format to Responses API format.
+   * Grok uses 'system' role directly in the input array — the `instructions`
+   * parameter is NOT supported by xAI and will cause an error.
    */
   private formatMessagesForResponsesAPI(
     messages: LLMMessage[]
-  ): { input: ResponsesInput[]; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } } {
+  ): { input: ResponsesInputItem[]; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } } {
     const sent: string[] = [];
     const failed: { id: string; error: string }[] = [];
 
-    // Filter out 'tool' role messages as Grok Responses API doesn't support them directly
-    const filteredMessages = messages.filter(m => m.role !== 'tool');
+    const input: ResponsesInputItem[] = [];
 
-    const input: ResponsesInput[] = filteredMessages.map((msg) => {
-      // System messages are simple strings
+    for (const msg of messages) {
+      // Tool result messages → function_call_output items
+      if (msg.role === 'tool') {
+        if (!msg.toolCallId) {
+          logger.debug('Skipping tool message without toolCallId', {
+            context: 'GrokProvider.formatMessagesForResponsesAPI',
+          });
+          continue;
+        }
+        input.push({
+          type: 'function_call_output',
+          call_id: msg.toolCallId,
+          output: msg.content,
+        } as ResponsesInputItem);
+        continue;
+      }
+
+      // System messages stay as 'system' role (xAI doesn't support 'developer' or 'instructions')
       if (msg.role === 'system') {
-        return {
+        input.push({
           type: 'message' as const,
           role: 'system' as const,
           content: msg.content,
-        };
+        });
+        continue;
       }
 
-      // Assistant messages are simple strings
+      // Assistant messages — may include tool calls
       if (msg.role === 'assistant') {
-        return {
+        // Always emit the text content as a message
+        input.push({
           type: 'message' as const,
           role: 'assistant' as const,
           content: msg.content,
-        };
+        });
+        // If the assistant invoked tools, emit function_call items
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
+          for (const tc of msg.toolCalls) {
+            input.push({
+              type: 'function_call',
+              call_id: tc.id,
+              name: tc.function.name,
+              arguments: tc.function.arguments,
+            } as ResponsesInputItem);
+          }
+        }
+        continue;
       }
 
       // User messages need content array format
-      const content: ResponsesUserContent[] = [];
+      const content: Array<OpenAI.Responses.ResponseInputText | OpenAI.Responses.ResponseInputImage> = [];
 
-      // Add text content first
       if (msg.content) {
         content.push({ type: 'input_text', text: msg.content });
       }
@@ -281,7 +122,7 @@ export class GrokProvider implements LLMProvider {
             continue;
           }
 
-          // For images, use input_image format (Responses API format)
+          // For images, use input_image format
           if (attachment.mimeType.startsWith('image/')) {
             content.push({
               type: 'input_image',
@@ -305,7 +146,6 @@ export class GrokProvider implements LLMProvider {
               });
             }
           } else {
-            // PDFs and other binary documents - mark as failed
             failed.push({
               id: attachment.id,
               error: 'PDF and binary document support requires Grok Files API (not yet implemented)',
@@ -319,12 +159,12 @@ export class GrokProvider implements LLMProvider {
         content.push({ type: 'input_text', text: '' });
       }
 
-      return {
+      input.push({
         type: 'message' as const,
         role: 'user' as const,
         content,
-      };
-    });
+      });
+    }
 
     return { input, attachmentResults: { sent, failed } };
   }
@@ -334,17 +174,16 @@ export class GrokProvider implements LLMProvider {
    */
   private formatToolsForResponsesAPI(
     tools: LLMParams['tools']
-  ): ResponsesFunctionTool[] {
+  ): OpenAI.Responses.FunctionTool[] {
     if (!tools || tools.length === 0) return [];
 
     return tools.map((tool) => {
-      // Cast to expected OpenAI tool format
       const openAITool = tool as { type: string; function: { name: string; description?: string; parameters: Record<string, unknown> } };
       const fn = openAITool.function;
       return {
         type: 'function' as const,
         name: fn.name,
-        description: fn.description,
+        description: fn.description ?? undefined,
         parameters: fn.parameters,
         strict: false,
       };
@@ -352,9 +191,15 @@ export class GrokProvider implements LLMProvider {
   }
 
   /**
-   * Extract text content from Responses API response
+   * Extract text content from Responses API response.
+   * Used as fallback when output_text may not be populated by xAI.
    */
-  private extractTextFromResponse(response: ResponsesAPIResponse): string {
+  private extractTextFromResponse(response: ResponsesResponse): string {
+    // Prefer the SDK's convenience field if available
+    if (response.output_text) {
+      return response.output_text;
+    }
+    // Fallback: manually extract from output items
     let text = '';
     for (const item of response.output) {
       if (item.type === 'message') {
@@ -369,10 +214,11 @@ export class GrokProvider implements LLMProvider {
   }
 
   /**
-   * Build raw response object compatible with OpenAI format for tool parsing
+   * Build raw response object compatible with Chat Completions format.
+   * This ensures the tool call parser, Inspector, and chat log storage
+   * all continue to work without changes.
    */
-  private buildRawResponse(response: ResponsesAPIResponse): Record<string, unknown> {
-    // Extract function calls from output
+  private buildRawResponse(response: ResponsesResponse): Record<string, unknown> {
     const toolCalls: Array<{
       id: string;
       type: string;
@@ -392,7 +238,6 @@ export class GrokProvider implements LLMProvider {
       }
     }
 
-    // Build OpenAI-compatible response structure
     return {
       id: response.id,
       object: 'chat.completion',
@@ -408,9 +253,9 @@ export class GrokProvider implements LLMProvider {
         finish_reason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
       }],
       usage: {
-        prompt_tokens: response.usage.input_tokens,
-        completion_tokens: response.usage.output_tokens,
-        total_tokens: response.usage.total_tokens,
+        prompt_tokens: response.usage?.input_tokens ?? 0,
+        completion_tokens: response.usage?.output_tokens ?? 0,
+        total_tokens: response.usage?.total_tokens ?? 0,
       },
     };
   }
@@ -418,24 +263,16 @@ export class GrokProvider implements LLMProvider {
   /**
    * Determine finish reason from response
    */
-  private getFinishReason(response: ResponsesAPIResponse): string {
-    // Check if there are function calls
+  private getFinishReason(response: ResponsesResponse): string {
     for (const item of response.output) {
       if (item.type === 'function_call') {
         return 'tool_calls';
       }
     }
 
-    // Check response status
-    if (response.status === 'completed') {
-      return 'stop';
-    }
-    if (response.status === 'incomplete') {
-      return response.incomplete_details?.reason || 'length';
-    }
-    if (response.status === 'failed') {
-      return 'error';
-    }
+    if (response.status === 'completed') return 'stop';
+    if (response.status === 'incomplete') return response.incomplete_details?.reason || 'length';
+    if (response.status === 'failed') return 'error';
 
     return 'stop';
   }
@@ -445,76 +282,68 @@ export class GrokProvider implements LLMProvider {
       throw new Error('Grok provider requires an API key');
     }
 
+    const client = new OpenAI({
+      apiKey,
+      baseURL: this.baseUrl,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
-    const requestBody: ResponsesAPIRequest = {
+    const requestParams: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
       model: params.model,
       input,
       store: false, // Stateless operation - Quilltap manages history locally
       temperature: params.temperature ?? 0.7,
       max_output_tokens: params.maxTokens ?? 4096,
       top_p: params.topP ?? 1,
+      stream: false,
     };
 
     if (params.stop) {
-      // Normalize stop to always be an array
-      requestBody.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
+      requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
 
-    // Add tools - either server-side (web search) or client-side (function calling)
-    // Note: Server-side tools and client-side function calling can coexist
-    const tools: (ResponsesServerTool | ResponsesFunctionTool)[] = [];
+    // Build tools - server-side (web search) + client-side (function calling)
+    const tools: ResponsesTool[] = [];
 
-    // Add web search tools if enabled
     if (params.webSearchEnabled) {
-      tools.push({ type: 'web_search' });
-      tools.push({ type: 'x_search' });
-      // Request inline citations for web search results
-      requestBody.include = ['citations'];
+      // Grok uses web_search and x_search (not web_search_preview)
+      tools.push({ type: 'web_search' } as ResponsesTool);
+      tools.push({ type: 'x_search' } as ResponsesTool);
+      requestParams.include = ['citations'] as OpenAI.Responses.ResponseIncludable[];
     }
 
-    // Add function calling tools if provided
     if (params.tools && params.tools.length > 0) {
       const functionTools = this.formatToolsForResponsesAPI(params.tools);
       tools.push(...functionTools);
     }
 
     if (tools.length > 0) {
-      requestBody.tools = tools;
+      requestParams.tools = tools;
     }
 
-    const response = await fetch(`${this.baseUrl}/responses`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    const response = await client.responses.create(requestParams);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('Responses API request failed', {
+    if (response.error) {
+      logger.error('Responses API returned error', {
         context: 'GrokProvider.sendMessage',
-        status: response.status,
-        error: errorText,
+        code: response.error.code,
+        message: response.error.message,
       });
-      throw new Error(`Grok API error (${response.status}): ${errorText}`);
+      throw new Error(`Grok API error: ${response.error.message}`);
     }
 
-    const data = await response.json() as ResponsesAPIResponse;
-
-    const text = this.extractTextFromResponse(data);
-    const finishReason = this.getFinishReason(data);
-    const raw = this.buildRawResponse(data);
+    const text = this.extractTextFromResponse(response);
+    const finishReason = this.getFinishReason(response);
+    const raw = this.buildRawResponse(response);
 
     return {
       content: text,
       finishReason,
       usage: {
-        promptTokens: data.usage.input_tokens,
-        completionTokens: data.usage.output_tokens,
-        totalTokens: data.usage.total_tokens,
+        promptTokens: response.usage?.input_tokens ?? 0,
+        completionTokens: response.usage?.output_tokens ?? 0,
+        totalTokens: response.usage?.total_tokens ?? 0,
       },
       raw,
       attachmentResults,
@@ -526,9 +355,14 @@ export class GrokProvider implements LLMProvider {
       throw new Error('Grok provider requires an API key');
     }
 
+    const client = new OpenAI({
+      apiKey,
+      baseURL: this.baseUrl,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
 
-    const requestBody: ResponsesAPIRequest = {
+    const requestParams: OpenAI.Responses.ResponseCreateParamsStreaming = {
       model: params.model,
       input,
       store: false,
@@ -539,17 +373,15 @@ export class GrokProvider implements LLMProvider {
     };
 
     if (params.stop) {
-      // Normalize stop to always be an array
-      requestBody.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
+      requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
 
-    // Add tools
-    const tools: (ResponsesServerTool | ResponsesFunctionTool)[] = [];
+    const tools: ResponsesTool[] = [];
 
     if (params.webSearchEnabled) {
-      tools.push({ type: 'web_search' });
-      tools.push({ type: 'x_search' });
-      requestBody.include = ['citations'];
+      tools.push({ type: 'web_search' } as ResponsesTool);
+      tools.push({ type: 'x_search' } as ResponsesTool);
+      requestParams.include = ['citations'] as OpenAI.Responses.ResponseIncludable[];
     }
 
     if (params.tools && params.tools.length > 0) {
@@ -558,112 +390,43 @@ export class GrokProvider implements LLMProvider {
     }
 
     if (tools.length > 0) {
-      requestBody.tools = tools;
+      requestParams.tools = tools;
     }
 
-    const response = await fetch(`${this.baseUrl}/responses`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    const stream = await client.responses.create(requestParams);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('Streaming Responses API request failed', {
-        context: 'GrokProvider.streamMessage',
-        status: response.status,
-        error: errorText,
-      });
-      throw new Error(`Grok API error (${response.status}): ${errorText}`);
-    }
+    let finalResponse: ResponsesResponse | null = null;
 
-    if (!response.body) {
-      throw new Error('No response body received from Grok API');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let accumulatedContent = '';
-    let finalResponse: ResponsesAPIResponse | null = null;
-
-    // Track function call arguments being built
-    const functionCallArgs: Map<string, string> = new Map();
-    const functionCallItems: Map<string, ResponsesFunctionCall> = new Map();
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Process SSE events from buffer
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') {
-              continue;
-            }
-
-            try {
-              const event = JSON.parse(data) as StreamEvent;
-
-              if (event.type === 'response.output_text.delta') {
-                const delta = (event as StreamEventDelta).delta;
-                accumulatedContent += delta;
-                yield {
-                  content: delta,
-                  done: false,
-                };
-              } else if (event.type === 'response.output_item.added') {
-                const addedEvent = event as StreamEventOutputItemAdded;
-                if (addedEvent.item.type === 'function_call') {
-                  // Store function call item for later
-                  functionCallItems.set(addedEvent.item.id, addedEvent.item);
-                  functionCallArgs.set(addedEvent.item.id, '');
-                }
-              } else if (event.type === 'response.function_call_arguments.delta') {
-                const fcDelta = event as StreamEventFunctionCallDelta;
-                const existing = functionCallArgs.get(fcDelta.item_id) || '';
-                functionCallArgs.set(fcDelta.item_id, existing + fcDelta.delta);
-              } else if (event.type === 'response.completed') {
-                finalResponse = (event as StreamEventCompleted).response;
-              }
-            } catch (parseError) {
-              // Failed to parse SSE event - continue processing
-            }
-          }
-        }
+    for await (const event of stream as AsyncIterable<ResponsesStreamEvent>) {
+      if (event.type === 'response.output_text.delta') {
+        yield {
+          content: event.delta,
+          done: false,
+        };
+      } else if (event.type === 'response.completed') {
+        finalResponse = event.response;
       }
-    } finally {
-      reader.releaseLock();
     }
 
     // Build final response
     if (finalResponse) {
       const raw = this.buildRawResponse(finalResponse);
-      const finishReason = this.getFinishReason(finalResponse);
 
       yield {
         content: '',
         done: true,
         usage: {
-          promptTokens: finalResponse.usage.input_tokens,
-          completionTokens: finalResponse.usage.output_tokens,
-          totalTokens: finalResponse.usage.total_tokens,
+          promptTokens: finalResponse.usage?.input_tokens ?? 0,
+          completionTokens: finalResponse.usage?.output_tokens ?? 0,
+          totalTokens: finalResponse.usage?.total_tokens ?? 0,
         },
         attachmentResults,
         rawResponse: raw,
       };
     } else {
-      // No final response received, yield with accumulated content
+      logger.warn('Stream ended without response.completed event', {
+        context: 'GrokProvider.streamMessage',
+      });
       yield {
         content: '',
         done: true,
@@ -679,10 +442,10 @@ export class GrokProvider implements LLMProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      // Use models endpoint for validation (still works)
       const client = new OpenAI({
         apiKey,
         baseURL: this.baseUrl,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
       });
       await client.models.list();
       return true;
@@ -697,6 +460,7 @@ export class GrokProvider implements LLMProvider {
       const client = new OpenAI({
         apiKey,
         baseURL: this.baseUrl,
+        defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
       });
       const models = await client.models.list();
       const grokModels = models.data
@@ -717,6 +481,7 @@ export class GrokProvider implements LLMProvider {
     const client = new OpenAI({
       apiKey,
       baseURL: this.baseUrl,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
     });
 
     const response = await client.images.generate({

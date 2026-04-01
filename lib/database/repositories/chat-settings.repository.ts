@@ -211,6 +211,10 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               displayMode: 'SHOW',
               showWarningBadges: true,
             },
+            autoLockSettings: {
+              enabled: false,
+              idleMinutes: 15,
+            },
             defaultRoleplayTemplateId,
             ...data,
           };

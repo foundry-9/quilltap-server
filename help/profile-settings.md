@@ -111,6 +111,12 @@ When you've made any changes to your Display Name or Email Address:
 - **Update failed:** Check your internet connection and try again
 - **Avatar won't change:** Make sure you have images in your library; if not, upload some first
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/profile")`
+
 ## Related Topics
 
 - [Choosing a Profile Avatar](profile-avatar.md) - Detailed guide on avatar selection and management

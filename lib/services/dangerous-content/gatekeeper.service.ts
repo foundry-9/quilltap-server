@@ -209,7 +209,7 @@ async function autoDetectModerationApiKey(
  * to Concierge categories (nsfw, hate_speech, violence, etc.), taking the highest
  * score when multiple provider categories map to the same Concierge category.
  */
-function mapModerationResult(
+export function mapModerationResult(
   moderationResult: ModerationResult,
   threshold: number
 ): DangerClassificationResult {
@@ -447,7 +447,7 @@ export async function classifyContent(
 /**
  * Parse the LLM's classification response
  */
-function parseClassificationResponse(
+export function parseClassificationResponse(
   responseContent: string,
   threshold: number
 ): DangerClassificationResult {

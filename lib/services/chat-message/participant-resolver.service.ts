@@ -19,6 +19,7 @@ import type {
   Character,
   ConnectionProfile,
 } from '@/lib/schemas/types'
+import { isParticipantPresent } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('ParticipantResolverService')
 
@@ -73,22 +74,38 @@ export async function resolveRespondingParticipant(
   if (requestedRespondingParticipantId) {
     // Continue mode with specific participant requested - find them
     characterParticipant = chat.participants.find(
-      p => p.id === requestedRespondingParticipantId && p.type === 'CHARACTER' && p.isActive && p.characterId
+      p => p.id === requestedRespondingParticipantId && p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId
     )
     if (!characterParticipant) {
-      logger.warn('Requested responding participant not found or inactive', {
+      if (isContinueMode) {
+        // During continue mode (including chained turns), a mismatched participant
+        // is worse than an error — it would save content under the wrong character.
+        // Throw so the chain loop can handle it gracefully.
+        logger.error('Requested responding participant not found or inactive during continue mode', {
+          chatId: chat.id,
+          requestedParticipantId: requestedRespondingParticipantId,
+          activeParticipants: chat.participants
+            .filter(p => p.type === 'CHARACTER' && isParticipantPresent(p.status))
+            .map(p => ({ id: p.id, characterId: p.characterId })),
+        })
+        throw new Error(
+          `Requested participant ${requestedRespondingParticipantId} not found or inactive in chat ${chat.id}`
+        )
+      }
+
+      logger.warn('Requested responding participant not found or inactive, falling back', {
         chatId: chat.id,
         requestedParticipantId: requestedRespondingParticipantId,
       })
-      // Fall back to first active character
+      // Fall back to first active character (only for non-continue mode)
       characterParticipant = chat.participants.find(
-        p => p.type === 'CHARACTER' && p.isActive && p.characterId
+        p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId
       )
     }
   } else {
     // Normal mode or continue mode without specific participant - use first active character
     characterParticipant = chat.participants.find(
-      p => p.type === 'CHARACTER' && p.isActive && p.characterId
+      p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId
     )
   }
 
@@ -170,7 +187,7 @@ export async function loadAllParticipantData(
 
   // Load all characters
   for (const p of chat.participants) {
-    if (p.type === 'CHARACTER' && p.characterId && p.isActive) {
+    if (p.type === 'CHARACTER' && p.characterId && isParticipantPresent(p.status)) {
       if (p.characterId === primaryCharacter.id) {
         // Reuse already-loaded character
         participantCharacters.set(p.characterId, primaryCharacter)

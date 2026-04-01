@@ -6,7 +6,7 @@
  * Note: Ollama doesn't require API keys - it uses a local server.
  */
 
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 import type { EmbeddingProvider, EmbeddingResult } from './types';
 
 const logger = createPluginLogger('qtap-plugin-ollama');
@@ -50,6 +50,7 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': getQuilltapUserAgent(),
       },
       body: JSON.stringify(requestPayload),
     });
@@ -112,7 +113,11 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
    */
   async getAvailableModels(apiKey?: string): Promise<string[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`);
+      const response = await fetch(`${this.baseUrl}/api/tags`, {
+        headers: {
+          'User-Agent': getQuilltapUserAgent(),
+        },
+      });
 
       if (!response.ok) {
         return [];
@@ -140,7 +145,11 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
    */
   async isAvailable(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`);
+      const response = await fetch(`${this.baseUrl}/api/tags`, {
+        headers: {
+          'User-Agent': getQuilltapUserAgent(),
+        },
+      });
       return response.ok;
     } catch {
       return false;

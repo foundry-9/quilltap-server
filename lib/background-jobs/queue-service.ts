@@ -147,6 +147,23 @@ export interface ChatDangerClassificationEnqueueResult {
 }
 
 /**
+ * Payload for scene state tracking job
+ */
+export interface SceneStateTrackingPayload {
+  chatId: string;
+  characterIds: string[];
+  connectionProfileId: string;
+}
+
+/**
+ * Result of enqueueing a scene state tracking job
+ */
+export interface SceneStateTrackingEnqueueResult {
+  jobId: string;
+  isNew: boolean;
+}
+
+/**
  * Enqueue a chat danger classification job
  * Skips if there's already a pending/processing job for the same chat
  */
@@ -172,6 +189,39 @@ export async function enqueueChatDangerClassification(
   }
 
   const jobId = await enqueueJob(userId, 'CHAT_DANGER_CLASSIFICATION', payload as unknown as Record<string, unknown>, {
+    // Lower priority than interactive tasks
+    priority: options?.priority ?? -1,
+    ...options,
+  });
+  return { jobId, isNew: true };
+}
+
+/**
+ * Enqueue a scene state tracking job
+ * Skips if there's already a pending/processing job for the same chat
+ */
+export async function enqueueSceneStateTracking(
+  userId: string,
+  payload: SceneStateTrackingPayload,
+  options?: EnqueueJobOptions
+): Promise<SceneStateTrackingEnqueueResult> {
+  const repos = getRepositories();
+
+  // Check for existing pending/processing scene state jobs for this chat
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existingJob = pendingJobs.find(job => job.type === 'SCENE_STATE_TRACKING');
+
+  if (existingJob) {
+    logger.info('[SceneStateTracking] Reusing existing pending job for chat', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      existingJobId: existingJob.id,
+      existingStatus: existingJob.status,
+    });
+    return { jobId: existingJob.id, isNew: false };
+  }
+
+  const jobId = await enqueueJob(userId, 'SCENE_STATE_TRACKING', payload as unknown as Record<string, unknown>, {
     // Lower priority than interactive tasks
     priority: options?.priority ?? -1,
     ...options,

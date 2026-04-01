@@ -123,6 +123,7 @@ export type {
 // ============================================================================
 export {
   CharacterSystemPromptSchema,
+  CharacterScenarioSchema,
   PhysicalDescriptionSchema,
   ClothingRecordSchema,
   CharacterSchema,
@@ -130,6 +131,7 @@ export {
 
 export type {
   CharacterSystemPrompt,
+  CharacterScenario,
   PhysicalDescription,
   ClothingRecord,
   Character,
@@ -141,12 +143,18 @@ export type {
 // ============================================================================
 export {
   DangerFlagSchema,
+  SceneStateCharacterSchema,
+  SceneStateSchema,
   MessageEventSchema,
   ContextSummaryEventSchema,
   SystemEventTypeEnum,
   SystemEventSchema,
   ChatEventSchema,
   ParticipantTypeEnum,
+  ParticipantStatusEnum,
+  isParticipantPresent,
+  canReceiveWhisper,
+  migrateIsActiveToStatus,
   ChatParticipantSchema,
   ChatParticipantBaseSchema,
   ChatMetadataSchema,
@@ -156,12 +164,15 @@ export {
 
 export type {
   DangerFlag,
+  SceneStateCharacter,
+  SceneState,
   MessageEvent,
   ContextSummaryEvent,
   SystemEventType,
   SystemEvent,
   ChatEvent,
   ParticipantType,
+  ParticipantStatus,
   ChatParticipant,
   ChatParticipantBase,
   ChatParticipantBaseInput,

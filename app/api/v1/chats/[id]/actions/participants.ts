@@ -20,6 +20,7 @@ import {
 import { enrichParticipant, handleAddParticipant, handleParticipantUpdate, handleRemoveParticipant } from '../helpers';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
+import { isParticipantPresent } from '@/lib/schemas/types';
 
 /**
  * Start impersonating a participant
@@ -39,8 +40,8 @@ export async function handleImpersonate(
     if (!participant) {
       return notFound('Participant');
     }
-    if (!participant.isActive) {
-      return badRequest('Participant is not active');
+    if (!isParticipantPresent(participant.status)) {
+      return badRequest('Participant is not active or silent');
     }
 
     const updatedChat = await repos.chats.addImpersonation(chatId, participantId);
@@ -216,11 +217,44 @@ export async function handleAddParticipantAction(
 
     // Check if character is already in the chat
     if (validatedData.type === 'CHARACTER' && validatedData.characterId) {
-      const existingParticipant = chat.participants.find(
-        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && p.isActive
+      const activeParticipant = chat.participants.find(
+        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && isParticipantPresent(p.status)
       );
-      if (existingParticipant) {
+      if (activeParticipant) {
         return badRequest('Character is already in this chat');
+      }
+
+      // Check for deactivated (silenced) participant — still in chat, just inactive
+      const deactivatedParticipant = chat.participants.find(
+        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && p.status === 'absent'
+      );
+      if (deactivatedParticipant) {
+        return badRequest('Character is already in this chat (currently deactivated)');
+      }
+
+      // Check for soft-deleted participant — reactivate instead of creating duplicate
+      const removedParticipant = chat.participants.find(
+        (p) => p.type === 'CHARACTER' && p.characterId === validatedData.characterId && p.status === 'removed'
+      );
+      if (removedParticipant) {
+        const controlledBy = validatedData.controlledBy || removedParticipant.controlledBy || 'llm';
+        const updatedChat = await repos.chats.updateParticipant(chatId, removedParticipant.id, {
+          status: 'active',
+          isActive: true,
+          removedAt: null,
+          controlledBy,
+          connectionProfileId: validatedData.connectionProfileId || removedParticipant.connectionProfileId,
+          displayOrder: chat.participants.filter(p => isParticipantPresent(p.status)).length,
+        });
+        if (!updatedChat) {
+          return serverError('Failed to reactivate participant');
+        }
+
+        const reactivatedParticipant = updatedChat.participants.find(p => p.id === removedParticipant.id);
+        const enrichedParticipant = reactivatedParticipant ? await enrichParticipant(reactivatedParticipant, repos) : null;
+
+        logger.info('[Chats v1] Participant reactivated', { chatId, participantId: removedParticipant.id });
+        return NextResponse.json({ participant: enrichedParticipant, chat: updatedChat }, { status: 200 });
       }
     }
 
@@ -260,7 +294,9 @@ export async function handleUpdateParticipantAction(
 ): Promise<NextResponse> {
   try {
     const body = await req.json();
-    const validatedData = updateParticipantSchema.parse(body);
+    // Support both wrapped ({ updateParticipant: { ... } }) and unwrapped ({ participantId, ... }) formats
+    const rawData = body.updateParticipant ?? body;
+    const validatedData = updateParticipantSchema.parse(rawData);
 
 
     const result = await handleParticipantUpdate(chatId, validatedData, user.id, repos);
@@ -305,7 +341,7 @@ export async function handleRemoveParticipantAction(
       return notFound('Participant');
     }
 
-    const activeCharacters = chat.participants.filter((p) => p.type === 'CHARACTER' && p.isActive);
+    const activeCharacters = chat.participants.filter((p) => p.type === 'CHARACTER' && isParticipantPresent(p.status));
     if (activeCharacters.length <= 1 && participantToRemove.type === 'CHARACTER') {
       return badRequest('Cannot remove the last character from the chat');
     }
@@ -316,6 +352,17 @@ export async function handleRemoveParticipantAction(
       if (result.status === 404) return notFound('Resource');
       if (result.status === 400) return badRequest(result.error);
       return serverError(result.error);
+    }
+
+    // Clean up impersonation state for removed participant
+    const currentImpersonating = result.chat.impersonatingParticipantIds || [];
+    if (currentImpersonating.includes(validatedData.participantId)) {
+      const cleanedIds = currentImpersonating.filter((id: string) => id !== validatedData.participantId);
+      const updateData: Record<string, unknown> = { impersonatingParticipantIds: cleanedIds };
+      if (result.chat.activeTypingParticipantId === validatedData.participantId) {
+        updateData.activeTypingParticipantId = cleanedIds[0] || null;
+      }
+      await repos.chats.update(chatId, updateData);
     }
 
     logger.info('[Chats v1] Participant removed', { chatId, participantId: validatedData.participantId });

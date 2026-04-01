@@ -171,66 +171,6 @@ export const projectInfoToolDefinition = {
   },
 }
 
-/**
- * Tool definition compatible with Anthropic's tool_use format
- */
-export const anthropicProjectInfoToolDefinition = {
-  name: 'project_info',
-  description:
-    'Access information about the current project context. Use this to get project details, read instructions, list files, read file contents, or search files. Projects contain files, chats, and memories that provide context for conversations.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      action: {
-        type: 'string',
-        enum: ['get_info', 'get_instructions', 'list_files', 'read_file', 'search_files'],
-        description:
-          'The action to perform. "get_info" returns project overview and character roster. "get_instructions" returns full project instructions. "list_files" lists all project files. "read_file" reads a specific file\'s content. "search_files" searches files by query.',
-      },
-      fileId: {
-        type: 'string',
-        description: 'The file ID to read (required for read_file action)',
-      },
-      query: {
-        type: 'string',
-        description: 'Search query for finding relevant files (required for search_files action)',
-      },
-      limit: {
-        type: 'integer',
-        minimum: 1,
-        maximum: 50,
-        description: 'Maximum number of results to return (default: 10, max: 50)',
-        default: 10,
-      },
-    },
-    required: ['action'],
-  },
-}
-
-/**
- * Helper to get tool definition in OpenAI format
- */
-export function getOpenAIProjectInfoTool() {
-  return projectInfoToolDefinition
-}
-
-/**
- * Helper to get tool definition in Anthropic format
- */
-export function getAnthropicProjectInfoTool() {
-  return anthropicProjectInfoToolDefinition
-}
-
-/**
- * Helper to get Google/Gemini format tool definition
- */
-export function getGoogleProjectInfoTool() {
-  return {
-    name: anthropicProjectInfoToolDefinition.name,
-    description: anthropicProjectInfoToolDefinition.description,
-    parameters: anthropicProjectInfoToolDefinition.input_schema,
-  }
-}
 
 /**
  * Helper to validate tool input parameters

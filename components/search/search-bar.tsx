@@ -171,7 +171,7 @@ export function SearchBar() {
             onKeyDown={handleKeyDown}
             onFocus={handleFocus}
             placeholder="Search... (⌘K)"
-            className="w-48 lg:w-64 pl-9 pr-3 py-1.5 text-sm border border-input rounded-md bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
+            className="qt-input w-48 lg:w-64 pl-9 pr-3 py-1.5 focus:border-transparent transition-all"
           />
         </div>
 

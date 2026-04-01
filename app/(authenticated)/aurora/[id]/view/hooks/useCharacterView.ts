@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { countTemplateReplacements, replaceWithTemplate } from '@/components/characters/TemplateHighlighter'
 import { USER_CONTROLLED_PROFILE_ID } from '@/lib/constants/character'
+import type { TimestampConfig } from '@/lib/schemas/types'
 import {
   Character,
   Tag,
@@ -32,6 +33,10 @@ interface UseCharacterViewReturn {
   togglingFavorite: boolean
   togglingControlledBy: boolean
   savingAgentMode: boolean
+  savingHelpTools: boolean
+  savingTimestampConfig: boolean
+  savingDefaultScenario: boolean
+  savingDefaultSystemPrompt: boolean
   fetchCharacter: () => Promise<void>
   fetchTags: () => Promise<void>
   fetchProfiles: () => Promise<void>
@@ -47,6 +52,10 @@ interface UseCharacterViewReturn {
   handleSaveDefaultPartner: (partnerId: string) => Promise<void>
   handleSaveImageProfile: (profileId: string | null) => Promise<void>
   handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
+  handleSaveHelpTools: (enabled: boolean | null) => Promise<void>
+  handleSaveTimestampConfig: (config: TimestampConfig | null) => Promise<void>
+  handleSaveDefaultScenario: (scenarioId: string | null) => Promise<void>
+  handleSaveDefaultSystemPrompt: (promptId: string | null) => Promise<void>
   handleToggleNpc: () => Promise<void>
   handleToggleFavorite: () => Promise<void>
   handleToggleControlledBy: () => Promise<void>
@@ -71,6 +80,10 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [togglingFavorite, setTogglingFavorite] = useState(false)
   const [togglingControlledBy, setTogglingControlledBy] = useState(false)
   const [savingAgentMode, setSavingAgentMode] = useState(false)
+  const [savingHelpTools, setSavingHelpTools] = useState(false)
+  const [savingTimestampConfig, setSavingTimestampConfig] = useState(false)
+  const [savingDefaultScenario, setSavingDefaultScenario] = useState(false)
+  const [savingDefaultSystemPrompt, setSavingDefaultSystemPrompt] = useState(false)
 
   // Get the default partner for template highlighting ({{user}} replacement)
   // This uses the new default conversation partner system instead of old personas
@@ -85,7 +98,6 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const templateFields: TemplateFields = {
     description: character?.description,
     personality: character?.personality,
-    scenario: character?.scenario,
     firstMessage: character?.firstMessage,
     exampleDialogues: character?.exampleDialogues,
     systemPrompt: defaultSystemPromptContent,
@@ -214,9 +226,16 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
         const replaced = replaceWithTemplate(character.personality, nameToReplace, template)
         if (replaced !== character.personality) updates.personality = replaced
       }
-      if (character.scenario) {
-        const replaced = replaceWithTemplate(character.scenario, nameToReplace, template)
-        if (replaced !== character.scenario) updates.scenario = replaced
+      // Apply template replacement to all scenarios
+      if (character.scenarios && character.scenarios.length > 0) {
+        const updatedScenarios = character.scenarios.map(s => {
+          const replaced = replaceWithTemplate(s.content, nameToReplace, template)
+          return replaced !== s.content ? { ...s, content: replaced } : s
+        })
+        const hasChanges = updatedScenarios.some((s, i) => s !== character.scenarios![i])
+        if (hasChanges) {
+          (updates as Record<string, unknown>).scenarios = updatedScenarios
+        }
       }
       if (character.firstMessage) {
         const replaced = replaceWithTemplate(character.firstMessage, nameToReplace, template)
@@ -355,6 +374,113 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleSaveHelpTools = async (enabled: boolean | null) => {
+    setSavingHelpTools(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultHelpToolsEnabled: enabled }),
+      })
+      if (!res.ok) throw new Error('Failed to update help tools setting')
+
+      // Update local state
+      if (character) {
+        setCharacter({ ...character, defaultHelpToolsEnabled: enabled })
+      }
+      const message = enabled === null
+        ? 'Help tools set to inherit from global (disabled)'
+        : enabled
+          ? 'Help tools enabled'
+          : 'Help tools disabled'
+      showSuccessToast(message)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update help tools')
+      console.error('Failed to save help tools', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingHelpTools(false)
+    }
+  }
+
+  const handleSaveTimestampConfig = async (config: TimestampConfig | null) => {
+    setSavingTimestampConfig(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultTimestampConfig: config }),
+      })
+      if (!res.ok) throw new Error('Failed to update timestamp config')
+
+      // Update local state
+      if (character) {
+        setCharacter({ ...character, defaultTimestampConfig: config })
+      }
+      const message = config && config.mode !== 'NONE'
+        ? 'Default timestamp settings updated'
+        : 'Default timestamp settings cleared'
+      showSuccessToast(message)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update timestamp config')
+      console.error('Failed to save timestamp config', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingTimestampConfig(false)
+    }
+  }
+
+  const handleSaveDefaultScenario = async (scenarioId: string | null) => {
+    setSavingDefaultScenario(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultScenarioId: scenarioId }),
+      })
+      if (!res.ok) throw new Error('Failed to update default scenario')
+
+      if (character) {
+        setCharacter({ ...character, defaultScenarioId: scenarioId })
+      }
+      showSuccessToast(scenarioId ? 'Default scenario updated' : 'Default scenario cleared')
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update default scenario')
+      console.error('Failed to save default scenario', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter()
+    } finally {
+      setSavingDefaultScenario(false)
+    }
+  }
+
+  const handleSaveDefaultSystemPrompt = async (promptId: string | null) => {
+    setSavingDefaultSystemPrompt(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultSystemPromptId: promptId }),
+      })
+      if (!res.ok) throw new Error('Failed to update default system prompt')
+
+      if (character) {
+        // Also update the isDefault flags on the prompts array to stay in sync
+        const updatedPrompts = character.systemPrompts?.map(p => ({
+          ...p,
+          isDefault: promptId ? p.id === promptId : p.isDefault,
+        })) || []
+        setCharacter({ ...character, defaultSystemPromptId: promptId, systemPrompts: updatedPrompts })
+      }
+      showSuccessToast(promptId ? 'Default system prompt updated' : 'Default system prompt cleared')
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update default system prompt')
+      console.error('Failed to save default system prompt', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter()
+    } finally {
+      setSavingDefaultSystemPrompt(false)
+    }
+  }
+
   const handleToggleNpc = async () => {
     if (!character) return
     setTogglingNpc(true)
@@ -436,6 +562,10 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     togglingFavorite,
     togglingControlledBy,
     savingAgentMode,
+    savingHelpTools,
+    savingTimestampConfig,
+    savingDefaultScenario,
+    savingDefaultSystemPrompt,
     fetchCharacter,
     fetchTags,
     fetchProfiles,
@@ -451,6 +581,10 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleSaveDefaultPartner,
     handleSaveImageProfile,
     handleSaveAgentMode,
+    handleSaveHelpTools,
+    handleSaveTimestampConfig,
+    handleSaveDefaultScenario,
+    handleSaveDefaultSystemPrompt,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,

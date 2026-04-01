@@ -6,7 +6,7 @@
  */
 
 import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, ImageGenParams, ImageGenResponse } from './types';
-import { createPluginLogger } from '@quilltap/plugin-utils';
+import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-ollama');
 
@@ -41,11 +41,40 @@ export class OllamaProvider implements LLMProvider {
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
     const attachmentResults = this.collectAttachmentFailures(params);
 
-    // Strip attachments from messages
-    const messages = params.messages.map(m => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // Map messages to Ollama/OpenAI Chat Completions format, including tool messages
+    const messages = params.messages
+      .filter((m) => {
+        // Skip tool messages without toolCallId (backward compat)
+        if (m.role === 'tool' && !m.toolCallId) return false;
+        return true;
+      })
+      .map((m) => {
+        // Tool result messages
+        if (m.role === 'tool' && m.toolCallId) {
+          return {
+            role: 'tool' as const,
+            tool_call_id: m.toolCallId,
+            content: m.content,
+          };
+        }
+        // Assistant messages with tool calls
+        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+          return {
+            role: 'assistant' as const,
+            content: m.content || null,
+            tool_calls: m.toolCalls.map((tc) => ({
+              id: tc.id,
+              type: tc.type,
+              function: tc.function,
+            })),
+          };
+        }
+        // Standard messages (strip attachments)
+        return {
+          role: m.role,
+          content: m.content,
+        };
+      });
 
     const requestBody: any = {
       model: params.model,
@@ -67,7 +96,10 @@ export class OllamaProvider implements LLMProvider {
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': getQuilltapUserAgent(),
+        },
         body: JSON.stringify(requestBody),
       });
 
@@ -98,11 +130,40 @@ export class OllamaProvider implements LLMProvider {
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
     const attachmentResults = this.collectAttachmentFailures(params);
 
-    // Strip attachments from messages
-    const messages = params.messages.map(m => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // Map messages to Ollama/OpenAI Chat Completions format, including tool messages
+    const messages = params.messages
+      .filter((m) => {
+        // Skip tool messages without toolCallId (backward compat)
+        if (m.role === 'tool' && !m.toolCallId) return false;
+        return true;
+      })
+      .map((m) => {
+        // Tool result messages
+        if (m.role === 'tool' && m.toolCallId) {
+          return {
+            role: 'tool' as const,
+            tool_call_id: m.toolCallId,
+            content: m.content,
+          };
+        }
+        // Assistant messages with tool calls
+        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+          return {
+            role: 'assistant' as const,
+            content: m.content || null,
+            tool_calls: m.toolCalls.map((tc) => ({
+              id: tc.id,
+              type: tc.type,
+              function: tc.function,
+            })),
+          };
+        }
+        // Standard messages (strip attachments)
+        return {
+          role: m.role,
+          content: m.content,
+        };
+      });
 
     // Log message details for debugging
     const requestBody: any = {
@@ -123,7 +184,10 @@ export class OllamaProvider implements LLMProvider {
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': getQuilltapUserAgent(),
+        },
         body: JSON.stringify(requestBody),
       });
       if (!response.ok) {
@@ -259,6 +323,9 @@ export class OllamaProvider implements LLMProvider {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, {
         method: 'GET',
+        headers: {
+          'User-Agent': getQuilltapUserAgent(),
+        },
       });
       const isValid = response.ok;
       return isValid;
@@ -272,6 +339,9 @@ export class OllamaProvider implements LLMProvider {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, {
         method: 'GET',
+        headers: {
+          'User-Agent': getQuilltapUserAgent(),
+        },
       });
 
       if (!response.ok) {

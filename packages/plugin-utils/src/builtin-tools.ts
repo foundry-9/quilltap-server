@@ -18,7 +18,8 @@
  * - `project_info` - Get project metadata
  * - `file_management` - Read/write project files
  * - `request_full_context` - Request full context reload (context compression)
- * - `search_help` - Search Quilltap help documentation
+ * - `help_search` - Search Quilltap help documentation
+ * - `help_settings` - Read Quilltap instance settings
  */
 export const BUILTIN_TOOL_NAMES = new Set([
   'generate_image',
@@ -27,7 +28,8 @@ export const BUILTIN_TOOL_NAMES = new Set([
   'project_info',
   'file_management',
   'request_full_context',
-  'search_help',
+  'help_search',
+  'help_settings',
 ]);
 
 /**

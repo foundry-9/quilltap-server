@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import { DEFAULT_DATA_DIR } from './constants';
-import { NamedDataDir, RuntimeMode } from './types';
+import { NamedDataDir, RuntimeMode, WindowBounds } from './types';
 
 /** Persisted application settings for data directory management */
 export interface AppSettings {
@@ -12,7 +12,7 @@ export interface AppSettings {
   knownDataDirs: NamedDataDir[];
   /** Whether to auto-start with lastDataDir (skip chooser) */
   autoStart: boolean;
-  /** Runtime mode: 'docker', 'vm' (Lima/WSL2), or 'npx' (Node.js) */
+  /** Runtime mode: 'docker', 'vm' (Lima/WSL2), or 'embedded' (Electron's Node.js) */
   runtimeMode: RuntimeMode;
 }
 
@@ -65,14 +65,21 @@ export function loadSettings(): AppSettings {
         }
       }
 
+      // Migrate old 'npx' runtime mode to 'embedded'
+      let runtimeMode: RuntimeMode;
+      const savedMode = parsed.runtimeMode;
+      if (process.platform === 'linux') {
+        runtimeMode = (savedMode === 'embedded' || savedMode === 'npx') ? 'embedded' : 'docker';
+      } else {
+        runtimeMode = savedMode === 'docker' ? 'docker'
+          : (savedMode === 'embedded' || savedMode === 'npx') ? 'embedded' : 'vm';
+      }
+
       return {
         lastDataDir: parsed.lastDataDir || defaults.lastDataDir,
         knownDataDirs,
         autoStart: typeof parsed.autoStart === 'boolean' ? parsed.autoStart : defaults.autoStart,
-        runtimeMode: process.platform === 'linux'
-          ? (parsed.runtimeMode === 'npx' ? 'npx' : 'docker')
-          : (parsed.runtimeMode === 'docker' ? 'docker'
-            : parsed.runtimeMode === 'npx' ? 'npx' : 'vm'),
+        runtimeMode,
       };
     }
   } catch (err) {
@@ -93,5 +100,21 @@ export function saveSettings(settings: AppSettings): void {
     console.log('[Settings] Saved settings to', filePath);
   } catch (err) {
     console.error('[Settings] Failed to save settings:', err);
+  }
+}
+
+/** Get the saved window bounds for a specific data directory */
+export function getWindowBounds(settings: AppSettings, dirPath: string): WindowBounds | undefined {
+  const entry = settings.knownDataDirs.find((d) => d.path === dirPath);
+  return entry?.windowBounds;
+}
+
+/** Save window bounds for a specific data directory and persist to disk */
+export function saveWindowBounds(settings: AppSettings, dirPath: string, bounds: WindowBounds): void {
+  const entry = settings.knownDataDirs.find((d) => d.path === dirPath);
+  if (entry) {
+    entry.windowBounds = bounds;
+    saveSettings(settings);
+    console.log('[Settings] Saved window bounds for', dirPath, bounds);
   }
 }

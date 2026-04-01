@@ -1,0 +1,120 @@
+{
+  "format": "qtap-theme",
+  "formatVersion": 1,
+  "id": "old-school",
+  "name": "Old School",
+  "description": "The original Quilltap default theme preserved as a plugin. Warm slate-blue palette with Inter for UI and EB Garamond for branding and long-form content. Professional, clean, and comfortable for extended sessions.",
+  "version": "1.0.9",
+  "author": "Foundry-9 LLC",
+  "license": "MIT",
+  "supportsDarkMode": true,
+  "tags": [
+    "old-school",
+    "default",
+    "classic",
+    "professional",
+    "clean"
+  ],
+  "tokensPath": "tokens.json",
+  "stylesPath": "styles.css",
+  "fonts": [
+    {
+      "family": "Inter",
+      "src": "fonts/Inter-Regular.woff2",
+      "weight": "400",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Inter",
+      "src": "fonts/Inter-SemiBold.woff2",
+      "weight": "600",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Inter",
+      "src": "fonts/Inter-Bold.woff2",
+      "weight": "700",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "EB Garamond",
+      "src": "fonts/EBGaramond-Regular.woff2",
+      "weight": "400",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "EB Garamond",
+      "src": "fonts/EBGaramond-SemiBold.woff2",
+      "weight": "600",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "EB Garamond",
+      "src": "fonts/EBGaramond-Bold.woff2",
+      "weight": "700",
+      "style": "normal",
+      "display": "swap"
+    }
+  ],
+  "subsystems": {
+    "foundry": {
+      "name": "Settings"
+    },
+    "aurora": {
+      "name": "Prompts",
+      "description": "Roleplay templates and prompt configuration",
+      "thumbnail": "none",
+      "backgroundImage": "none"
+    },
+    "forge": {
+      "name": "Data",
+      "thumbnail": "none",
+      "backgroundImage": "none"
+    },
+    "salon": {
+      "name": "Chat Behavior",
+      "thumbnail": "none",
+      "backgroundImage": "none"
+    },
+    "commonplace-book": {
+      "name": "RAG/Memories",
+      "thumbnail": "none",
+      "backgroundImage": "none"
+    },
+    "prospero": {
+      "name": "LLM Usage",
+      "thumbnail": "none",
+      "backgroundImage": "none"
+    },
+    "concierge": {
+      "name": "Content Filters",
+      "thumbnail": "none",
+      "backgroundImage": "none"
+    },
+    "calliope": {
+      "name": "Appearance",
+      "thumbnail": "none",
+      "backgroundImage": "none"
+    },
+    "lantern": {
+      "name": "Images/Backgrounds",
+      "thumbnail": "none",
+      "backgroundImage": "none"
+    },
+    "pascal": {
+      "name": "Games",
+      "thumbnail": "none",
+      "backgroundImage": "none"
+    },
+    "saquel": {
+      "name": "Encryption",
+      "thumbnail": "none",
+      "backgroundImage": "none"
+    }
+  }
+}

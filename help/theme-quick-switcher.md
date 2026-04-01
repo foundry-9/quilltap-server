@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=appearance
+url: /settings?tab=appearance&section=appearance
 ---
 
 # Theme Quick-Switcher
 
-> **[Open this page in Quilltap](/settings?tab=appearance)**
+> **[Open this page in Quilltap](/settings?tab=appearance&section=appearance)**
 
 The theme quick-switcher is a convenient sidebar button that gives you instant access to switch between themes and color modes (light/dark/system). It's an optional feature that you can enable or disable based on your preferences.
 
@@ -92,8 +92,9 @@ The menu closes when you:
 The quick-switcher shows:
 
 - **Default theme** — Always available, at the top
-- **Installed plugin themes** — Any custom themes you've installed
-- **Message if none** — "Install theme plugins for more options" if you only have the default
+- **Bundled themes** — Five themes ship with Quilltap (Art Deco, Earl Grey, Great Estate, Old School, Rains)
+- **Installed bundle themes** — Any `.qtap-theme` bundles you've installed
+- **Legacy plugin themes** — Any npm-based theme plugins (deprecated)
 
 ### Choosing a Theme
 
@@ -168,7 +169,7 @@ The quick-switcher menu is organized as:
 ┌─────────────────────┐
 │ Default Theme       │ ← Default theme always first
 │ ─────────────────── │
-│ Great Estate        │ ← Plugin themes (if any)
+│ Great Estate        │ ← Bundled & installed themes
 │ Rains               │
 │ Earl Grey           │
 │ ─────────────────── │
@@ -316,5 +317,11 @@ Your quick-switcher settings are automatically saved:
 - **Across sessions** — Preferences stay the same when you log back in
 
 Every preference you set via the quick-switcher is saved to your account.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=appearance&section=appearance")`
 
 The theme quick-switcher is designed for convenience—use it to keep theming controls at your fingertips!

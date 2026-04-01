@@ -1,10 +1,10 @@
 ---
-url: /settings?tab=system
+url: /settings?tab=system&section=import-export
 ---
 
 # Import & Export Data
 
-> **[Open this page in Quilltap](/settings?tab=system)**
+> **[Open this page in Quilltap](/settings?tab=system&section=import-export)**
 
 The Import & Export tool lets you save your Quilltap data to files and load data from files back into your system.
 
@@ -295,6 +295,12 @@ When using the "Create New" conflict strategy, all internal references are autom
 - Share specific exports with team members
 - Use "Keep Existing" when importing collaborative exports
 - Coordinate who owns which items
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=system&section=import-export")`
 
 ## Related Topics
 

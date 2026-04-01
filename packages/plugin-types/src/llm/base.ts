@@ -102,6 +102,8 @@ export interface LLMParams {
   webSearchEnabled?: boolean;
   /** Provider-specific parameters from profile */
   profileParameters?: Record<string, unknown>;
+  /** Previous response ID for conversation chaining (OpenAI Responses API) */
+  previousResponseId?: string;
 }
 
 /**

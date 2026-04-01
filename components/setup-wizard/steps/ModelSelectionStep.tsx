@@ -157,7 +157,7 @@ export function ModelSelectionStep({ state, dispatch }: ModelSelectionStepProps)
                   <button
                     type="button"
                     onClick={() => loadModelsForProvider(provider)}
-                    className="qt-btn qt-button-secondary qt-text-small"
+                    className="qt-button qt-button-secondary qt-text-small"
                   >
                     Retry
                   </button>

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, session, shell } from 'electron';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -20,11 +20,11 @@ import {
 import { IVMManager, createVMManager } from './vm-manager';
 import { LimaManager } from './lima-manager';
 import { DockerManager } from './docker-manager';
-import { NpxManager } from './npx-manager';
+import { EmbeddedManager } from './embedded-manager';
 import { DownloadManager } from './download-manager';
 import { HealthChecker } from './health-checker';
-import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, DetailLevel } from './types';
-import { AppSettings, loadSettings, saveSettings, defaultNameForPath } from './settings';
+import { SplashUpdate, DirectoryInfo, DirectorySizeInfo, RuntimeMode, DetailLevel, WindowBounds } from './types';
+import { AppSettings, loadSettings, saveSettings, saveWindowBounds, getWindowBounds, defaultNameForPath } from './settings';
 import { getSizesForDir } from './disk-utils';
 import { runCrashGuard, markStartupSuccess, isInSafeMode } from './crash-guard';
 import { initStartupLog, logStartup, closeStartupLog } from './startup-log';
@@ -68,13 +68,13 @@ let splashWindow: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
 let vmManager: IVMManager;
 let dockerManager: DockerManager;
-let npxManager: NpxManager;
+let embeddedManager: EmbeddedManager;
 let downloadManager: DownloadManager;
 let healthChecker: HealthChecker;
 let isQuitting = false;
 let appSettings: AppSettings;
 let dockerAvailable = false;
-let nodeAvailable = false;
+const embeddedAvailable = true; // Always available — uses Electron's own Node.js
 let workspaceWatcher: WorkspaceWatcher | null = null;
 
 /** Whether we're in the auto-start countdown (can be interrupted) */
@@ -119,7 +119,7 @@ function sendDirectoryInfo(): void {
     autoStart: appSettings.autoStart,
     runtimeMode: appSettings.runtimeMode,
     dockerAvailable,
-    nodeAvailable,
+    embeddedAvailable,
     vmLabel: getVMLabel(),
     platform: process.platform,
   };
@@ -342,7 +342,7 @@ function createSplashWindow(): BrowserWindow {
   return win;
 }
 
-/** Stop the currently running backend (VM, Docker container, or npx process) */
+/** Stop the currently running backend (VM, Docker container, or embedded server) */
 async function stopCurrentBackend(): Promise<void> {
   if (appSettings.runtimeMode === 'docker') {
     console.log('[Main] Stopping Docker container...');
@@ -351,12 +351,12 @@ async function stopCurrentBackend(): Promise<void> {
     } catch (err) {
       console.warn('[Main] Error stopping Docker container (non-fatal):', err);
     }
-  } else if (appSettings.runtimeMode === 'npx') {
-    console.log('[Main] Stopping npx server...');
+  } else if (appSettings.runtimeMode === 'embedded') {
+    console.log('[Main] Stopping embedded server...');
     try {
-      await npxManager.stopServer();
+      await embeddedManager.stopServer();
     } catch (err) {
-      console.warn('[Main] Error stopping npx server (non-fatal):', err);
+      console.warn('[Main] Error stopping embedded server (non-fatal):', err);
     }
   } else {
     console.log('[Main] Stopping VM...');
@@ -375,14 +375,14 @@ async function stopCurrentBackend(): Promise<void> {
 async function restartServer(): Promise<void> {
   console.log('[Main] Restarting server...');
 
-  // Close main window
+  // Create splash BEFORE closing main window to avoid triggering window-all-closed quit
+  splashWindow = createSplashWindow();
+
+  // Now safe to close main window
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.close();
     mainWindow = null;
   }
-
-  // Show splash with restart status
-  splashWindow = createSplashWindow();
   splashWindow.webContents.on('did-finish-load', async () => {
     sendSplashUpdate({
       phase: 'initializing',
@@ -401,17 +401,17 @@ async function restartServer(): Promise<void> {
 async function changeSite(): Promise<void> {
   console.log('[Main] Changing site...');
 
-  // Close main window
+  // Set flag so onSplashReady goes to directory chooser instead of auto-start
+  skipAutoStart = true;
+
+  // Create splash BEFORE closing main window to avoid triggering window-all-closed quit
+  splashWindow = createSplashWindow();
+
+  // Now safe to close main window
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.close();
     mainWindow = null;
   }
-
-  // Set flag so onSplashReady goes to directory chooser instead of auto-start
-  skipAutoStart = true;
-
-  // Show splash — onSplashReady will handle showing the directory chooser
-  splashWindow = createSplashWindow();
   splashWindow.webContents.on('did-finish-load', async () => {
     sendSplashUpdate({
       phase: 'initializing',
@@ -534,11 +534,53 @@ function buildAppMenu(win: BrowserWindow): void {
   Menu.setApplicationMenu(menu);
 }
 
+/** Validate that saved window bounds are still visible on a connected display */
+function validateBounds(bounds: WindowBounds): WindowBounds | null {
+  const displays = screen.getAllDisplays();
+  // Check that at least part of the window is on a visible display
+  const x = bounds.x ?? 0;
+  const y = bounds.y ?? 0;
+  const visible = displays.some((display) => {
+    const { x: dx, y: dy, width: dw, height: dh } = display.bounds;
+    // Window is "visible" if at least 100px of it overlaps a display
+    return (
+      x + bounds.width > dx + 100 &&
+      x < dx + dw - 100 &&
+      y + bounds.height > dy + 100 &&
+      y < dy + dh - 100
+    );
+  });
+  if (!visible) {
+    console.log('[Main] Saved window bounds are off-screen, using defaults');
+    return null;
+  }
+  return bounds;
+}
+
+/** Save the current main window bounds to the active data directory's settings */
+function persistWindowBounds(win: BrowserWindow): void {
+  if (win.isDestroyed()) return;
+  const isMaximized = win.isMaximized();
+  // When maximized, preserve the pre-maximized bounds so we restore to the right size
+  const normalBounds = win.getNormalBounds();
+  const bounds: WindowBounds = {
+    ...normalBounds,
+    isMaximized,
+  };
+  if (bounds.width && bounds.height) {
+    saveWindowBounds(appSettings, appSettings.lastDataDir, bounds);
+  }
+}
+
 /** Create the main application window */
 function createMainWindow(urlPath?: string): BrowserWindow {
-  const win = new BrowserWindow({
-    width: MAIN_WIDTH,
-    height: MAIN_HEIGHT,
+  // Restore saved bounds for this data directory, or fall back to defaults
+  const dirBounds = getWindowBounds(appSettings, appSettings.lastDataDir);
+  const saved = dirBounds ? validateBounds(dirBounds) : null;
+
+  const winOptions: Electron.BrowserWindowConstructorOptions = {
+    width: saved?.width ?? MAIN_WIDTH,
+    height: saved?.height ?? MAIN_HEIGHT,
     show: false,
     title: 'Quilltap',
     webPreferences: {
@@ -546,7 +588,28 @@ function createMainWindow(urlPath?: string): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
     },
-  });
+  };
+  if (saved?.x !== undefined && saved?.y !== undefined) {
+    winOptions.x = saved.x;
+    winOptions.y = saved.y;
+  }
+
+  const win = new BrowserWindow(winOptions);
+
+  if (saved?.isMaximized) {
+    win.maximize();
+  }
+
+  // Persist bounds on resize, move, maximize, and unmaximize
+  let boundsTimer: ReturnType<typeof setTimeout> | null = null;
+  const debouncedPersist = () => {
+    if (boundsTimer) clearTimeout(boundsTimer);
+    boundsTimer = setTimeout(() => persistWindowBounds(win), 500);
+  };
+  win.on('resize', debouncedPersist);
+  win.on('move', debouncedPersist);
+  win.on('maximize', () => persistWindowBounds(win));
+  win.on('unmaximize', () => persistWindowBounds(win));
 
   const baseUrl = isDev
     ? 'http://localhost:3000'
@@ -708,7 +771,7 @@ async function startupSequence(dataDir: string): Promise<void> {
 
   // --- Production / VM mode ---
 
-  // Step 0: Stop any running Docker container or npx process to prevent port conflicts
+  // Step 0: Stop any running Docker container or embedded server to prevent port conflicts
   try {
     dockerManager.setDataDir(dataDir);
     await dockerManager.stopContainer();
@@ -716,9 +779,9 @@ async function startupSequence(dataDir: string): Promise<void> {
     console.warn('[Main] Could not stop Docker container (non-fatal):', err);
   }
   try {
-    await npxManager.stopServer();
+    await embeddedManager.stopServer();
   } catch (err) {
-    console.warn('[Main] Could not stop npx server (non-fatal):', err);
+    console.warn('[Main] Could not stop embedded server (non-fatal):', err);
   }
 
   // Step 1: Initializing — check platform prerequisites
@@ -972,8 +1035,8 @@ async function startupSequence(dataDir: string): Promise<void> {
 function routeStartup(dataDir: string): void {
   if (appSettings.runtimeMode === 'docker') {
     dockerStartupSequence(dataDir);
-  } else if (appSettings.runtimeMode === 'npx') {
-    npxStartupSequence(dataDir);
+  } else if (appSettings.runtimeMode === 'embedded') {
+    embeddedStartupSequence(dataDir);
   } else {
     startupSequence(dataDir);
   }
@@ -1013,7 +1076,7 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
     return;
   }
 
-  // Step 2: Stop any running VM or npx process to prevent port conflicts
+  // Step 2: Stop any running VM or embedded server to prevent port conflicts
   if (process.platform !== 'linux') {
     try {
       const vmStatus = await vmManager.checkStatus();
@@ -1031,9 +1094,9 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
     }
   }
   try {
-    await npxManager.stopServer();
+    await embeddedManager.stopServer();
   } catch (err) {
-    console.warn('[Main] Could not stop npx server (non-fatal):', err);
+    console.warn('[Main] Could not stop embedded server (non-fatal):', err);
   }
 
   // Step 3: Ensure the version-matched Docker image is available
@@ -1128,46 +1191,35 @@ async function dockerStartupSequence(dataDir: string): Promise<void> {
 }
 
 /**
- * Node.js/npx startup sequence. Orchestrates:
- * 1. Verify Node.js available
- * 2. Stop any running VM/Docker to prevent port conflicts
- * 3. Spawn npx quilltap@{version}
- * 4. Health check polling
- * 5. Main window launch
+ * Embedded server startup sequence. Orchestrates:
+ * 1. Stop any running VM/Docker to prevent port conflicts
+ * 2. Spawn server.js via Electron's Node.js runtime
+ * 3. Health check polling
+ * 4. Main window launch
  */
-async function npxStartupSequence(dataDir: string): Promise<void> {
+async function embeddedStartupSequence(dataDir: string): Promise<void> {
   autoStartPending = false;
 
   // Initialize startup log (overwrites any previous log)
   initStartupLog(dataDir);
 
-  console.log(`[Main] npx startup with data directory: ${dataDir}`);
+  console.log(`[Main] Embedded server startup with data directory: ${dataDir}`);
 
-  // Step 1: Verify Node.js is available
+  // Step 1: Stop any running VM or Docker container to prevent port conflicts
   sendSplashUpdate({
     phase: 'initializing',
-    message: 'Checking Node.js...',
+    message: 'Preparing to start server...',
   });
 
-  if (!nodeAvailable) {
-    sendSplashError(
-      'Node.js >= 18 is not available.\n\n' +
-      'Install Node.js from https://nodejs.org/ and try again.',
-      true
-    );
-    return;
-  }
-
-  // Step 2: Stop any running VM or Docker container to prevent port conflicts
   if (process.platform !== 'linux') {
     try {
       const vmStatus = await vmManager.checkStatus();
       if (vmStatus.running) {
-        console.log('[Main] Stopping running VM to prevent port conflict with npx');
+        console.log('[Main] Stopping running VM to prevent port conflict with embedded server');
         sendSplashUpdate({
           phase: 'initializing',
           message: 'Stopping virtual machine...',
-          detail: 'Preventing port conflict with Node.js server',
+          detail: 'Preventing port conflict with embedded server',
         });
         await vmManager.stopVM();
       }
@@ -1183,22 +1235,22 @@ async function npxStartupSequence(dataDir: string): Promise<void> {
     console.warn('[Main] Could not stop Docker container (non-fatal):', err);
   }
 
-  // Step 3: Start the npx server
+  // Step 2: Start the embedded server
   sendSplashUpdate({
-    phase: 'installing-npx',
-    message: 'Starting Quilltap via Node.js...',
-    detail: `npx quilltap@${APP_VERSION}`,
+    phase: 'starting-server',
+    message: 'Starting Quilltap server...',
+    detail: 'Using embedded Node.js runtime',
   });
 
   let startError: string | null = null;
 
-  npxManager.startServer(
+  embeddedManager.startServer(
     dataDir,
     (line) => {
-      console.log('[NpxManager] output:', line);
+      console.log('[EmbeddedManager] output:', line);
       sendSplashUpdate({
-        phase: 'installing-npx',
-        message: 'Starting Quilltap via Node.js...',
+        phase: 'starting-server',
+        message: 'Starting Quilltap server...',
         detail: line.length > 120 ? line.substring(0, 117) + '...' : line,
       });
     },
@@ -1207,20 +1259,29 @@ async function npxStartupSequence(dataDir: string): Promise<void> {
     },
   );
 
-  // Give the process a moment to fail immediately (e.g. npx not found)
+  // Give the process a moment to fail immediately
   await new Promise(resolve => setTimeout(resolve, 2000));
 
   if (startError) {
-    sendSplashError(`Failed to start Node.js server: ${startError}`, true);
+    sendSplashError(`Failed to start server: ${startError}`, true);
     return;
   }
 
-  if (!npxManager.isRunning()) {
-    sendSplashError('Node.js server process exited unexpectedly.', true);
+  if (!embeddedManager.isRunning()) {
+    const exitCode = embeddedManager.getLastExitCode();
+    const recentLines = embeddedManager.getRecentOutput(10);
+    const details = recentLines.length > 0
+      ? recentLines.join('\n')
+      : 'No output captured';
+    const codeStr = exitCode !== null ? ` (exit code ${exitCode})` : '';
+    sendSplashError(
+      `Server process exited unexpectedly${codeStr}.\n\n${details}`,
+      true,
+    );
     return;
   }
 
-  // Step 4: Wait for health
+  // Step 3: Wait for health
   sendSplashUpdate({
     phase: 'waiting-health',
     message: 'Waiting for Quilltap to start...',
@@ -1251,7 +1312,7 @@ async function npxStartupSequence(dataDir: string): Promise<void> {
   } else {
     sendSplashError(
       `Server did not become healthy after ${healthStatus.attempts} attempts.\n\n` +
-      'Check that Node.js and npx are working correctly.',
+      'Check the application logs for details.',
       true
     );
     closeStartupLog();
@@ -1273,7 +1334,7 @@ app.whenReady().then(async () => {
 
   vmManager = createVMManager();
   dockerManager = new DockerManager();
-  npxManager = new NpxManager();
+  embeddedManager = new EmbeddedManager();
   downloadManager = new DownloadManager();
   healthChecker = isDev
     ? new HealthChecker('http://localhost:3000/api/health')
@@ -1282,12 +1343,10 @@ app.whenReady().then(async () => {
   // Pre-configure VM manager with last-used directory
   vmManager.setDataDir(appSettings.lastDataDir);
 
-  // Check Docker and Node.js availability asynchronously (non-blocking)
+  // Check Docker availability asynchronously (non-blocking)
+  // Embedded mode is always available — uses Electron's own Node.js
   dockerAvailable = await dockerManager.isDockerAvailable();
   console.log('[Main] Docker available:', dockerAvailable);
-
-  nodeAvailable = await npxManager.isNodeAvailable();
-  console.log('[Main] Node.js available:', nodeAvailable);
 
   // Handle file downloads (backups, exports, etc.) — prompt user with a save dialog
   session.defaultSession.on('will-download', (_event, item) => {
@@ -1329,7 +1388,7 @@ ipcMain.handle('splash:get-directories', (): DirectoryInfo => {
     sizes: {},
     runtimeMode: appSettings.runtimeMode,
     dockerAvailable,
-    nodeAvailable,
+    embeddedAvailable,
     vmLabel: getVMLabel(),
     platform: process.platform,
   };
@@ -1364,10 +1423,10 @@ ipcMain.handle('splash:select-directory', async (): Promise<string> => {
   return selectedPath;
 });
 
-/** Set the runtime mode (docker, vm, or npx) */
+/** Set the runtime mode (docker, vm, or embedded) */
 ipcMain.on('splash:set-runtime-mode', (_event, mode: string) => {
   const runtimeMode: RuntimeMode = mode === 'docker' ? 'docker'
-    : mode === 'npx' ? 'npx' : 'vm';
+    : mode === 'embedded' ? 'embedded' : 'vm';
   console.log('[Main] Runtime mode set to:', runtimeMode);
   appSettings.runtimeMode = runtimeMode;
   saveSettings(appSettings);
@@ -1426,6 +1485,30 @@ ipcMain.handle('splash:delete-directory', async (_event, dirPath: string, action
     return true;
   } catch (err) {
     console.error('[Main] Error deleting directory:', err);
+    return false;
+  }
+});
+
+/** Erase the VM for a directory (stop + delete VM only, preserve config and data) */
+ipcMain.handle('splash:delete-vm', async (_event, dirPath: string): Promise<boolean> => {
+  console.log('[Main] Erase VM for directory:', dirPath);
+  try {
+    const tempVMManager = createVMManager();
+    tempVMManager.setDataDir(dirPath);
+    const vmStatus = await tempVMManager.checkStatus();
+    if (vmStatus.running) {
+      console.log('[Main] Stopping VM for directory:', dirPath);
+      await tempVMManager.stopVM();
+    }
+    if (vmStatus.exists) {
+      console.log('[Main] Deleting VM for directory:', dirPath);
+      await tempVMManager.deleteVM();
+    }
+    // Refresh sizes so the UI shows "No VM" for this directory
+    sendDirectoryInfo();
+    return true;
+  } catch (err) {
+    console.error('[Main] Error erasing VM:', err);
     return false;
   }
 });
@@ -1534,7 +1617,7 @@ function createShutdownWindow(): BrowserWindow {
   });
 
   const backendLabel = appSettings.runtimeMode === 'docker' ? 'container'
-    : appSettings.runtimeMode === 'npx' ? 'server' : 'virtual machine';
+    : appSettings.runtimeMode === 'embedded' ? 'server' : 'virtual machine';
   const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1599,12 +1682,12 @@ app.on('before-quit', async (event) => {
     } catch (err) {
       console.error('[Main] Error stopping Docker container:', err);
     }
-  } else if (appSettings.runtimeMode === 'npx') {
-    console.log('[Main] Stopping npx server before quit...');
+  } else if (appSettings.runtimeMode === 'embedded') {
+    console.log('[Main] Stopping embedded server before quit...');
     try {
-      await npxManager.stopServer();
+      await embeddedManager.stopServer();
     } catch (err) {
-      console.error('[Main] Error stopping npx server:', err);
+      console.error('[Main] Error stopping embedded server:', err);
     }
   } else {
     console.log('[Main] Stopping VM before quit...');

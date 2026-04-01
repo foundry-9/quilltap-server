@@ -24,6 +24,7 @@ function createCharacter(id: string, name: string, talkativeness = 0.5, isActive
     controlledBy,
     displayOrder: 1,
     isActive,
+    status: isActive ? 'active' : 'absent',
     character: {
       id: `char-${id}`,
       name,
@@ -43,6 +44,7 @@ function createPersona(id: string, name: string, isActive = true): ParticipantDa
     controlledBy: 'user',
     displayOrder: 0,
     isActive,
+    status: isActive ? 'active' : 'absent',
     character: null,
     persona: {
       id: `persona-${id}`,
@@ -297,7 +299,7 @@ describe('computePredictedTurnOrder', () => {
       })
 
       const bobEntry = result.find(e => e.participantId === 'bob')
-      expect(bobEntry?.status).toBe('inactive')
+      expect(bobEntry?.status).toBe('absent')
       expect(bobEntry?.position).toBeNull()
 
       // Bob should be last
@@ -320,7 +322,7 @@ describe('computePredictedTurnOrder', () => {
       })
 
       expect(result).toHaveLength(2)
-      expect(result.every(e => e.status === 'inactive')).toBe(true)
+      expect(result.every(e => e.status === 'absent')).toBe(true)
       expect(result.every(e => e.position === null)).toBe(true)
     })
   })
@@ -358,7 +360,7 @@ describe('computePredictedTurnOrder', () => {
         'eligible',     // eligible
         'user-turn',    // user
         'spoken',       // spoken (and gen is also spoken but already placed as generating)
-        'inactive',     // inactive
+        'absent',       // inactive (status: absent)
       ])
 
       // Check positions: active participants get sequential positions, inactive gets null
@@ -368,7 +370,7 @@ describe('computePredictedTurnOrder', () => {
       expect(result.find(e => e.status === 'eligible')?.position).toBe(4)
       expect(result.find(e => e.status === 'user-turn')?.position).toBe(5)
       expect(result.find(e => e.status === 'spoken')?.position).toBe(6)
-      expect(result.find(e => e.status === 'inactive')?.position).toBeNull()
+      expect(result.find(e => e.status === 'absent')?.position).toBeNull()
     })
 
     it('handles empty participants list', () => {

@@ -21,6 +21,7 @@ import {
   type GoogleToolDefinition,
   type ToolCallRequest,
 } from '@quilltap/plugin-utils';
+import { hasToolUseMarkers, parseToolUseFormat, stripToolUseMarkers, convertTextToolToRequest } from '@quilltap/plugin-utils/tools';
 
 const logger = createPluginLogger('qtap-plugin-google');
 
@@ -366,6 +367,40 @@ export const plugin: LLMProviderPlugin = {
       );
       return [];
     }
+  },
+
+  /**
+   * Detect spontaneous tool_use XML markers in Gemini text responses
+   */
+  hasTextToolMarkers(text: string): boolean {
+    return hasToolUseMarkers(text);
+  },
+
+  /**
+   * Parse spontaneous tool_use XML from Gemini text responses
+   */
+  parseTextToolCalls(text: string): ToolCallRequest[] {
+    try {
+      const parsed = parseToolUseFormat(text);
+      return parsed.map(convertTextToolToRequest);
+    } catch (error) {
+      logger.error(
+        'Error parsing text tool calls',
+        { context: 'google.parseTextToolCalls' },
+        error instanceof Error ? error : undefined
+      );
+      return [];
+    }
+  },
+
+  /**
+   * Strip spontaneous tool_use XML markers from Gemini text responses
+   */
+  stripTextToolMarkers(text: string): string {
+    return stripToolUseMarkers(text)
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/  +/g, ' ')
+      .trim();
   },
 };
 

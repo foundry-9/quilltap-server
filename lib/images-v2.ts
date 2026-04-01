@@ -43,21 +43,20 @@ const ALLOWED_IMAGE_TYPES = [
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 /**
- * Get image dimensions from buffer
+ * Get image dimensions from buffer using sharp
  */
-async function getImageDimensions(_buffer: Buffer, _mimeType: string): Promise<{ width?: number; height?: number }> {
-  // For now, we'll return undefined dimensions
-  // In a production app, you'd use a library like 'sharp' or 'image-size'
-  // to extract actual image dimensions
-  return { width: undefined, height: undefined };
-}
-
-/**
- * Get the file extension from an original filename
- */
-function getExtension(filename: string): string {
-  const ext = extname(filename);
-  return ext || '.bin';
+async function getImageDimensions(buffer: Buffer, _mimeType: string): Promise<{ width?: number; height?: number }> {
+  try {
+    const sharp = (await import('sharp')).default;
+    const metadata = await sharp(buffer).metadata();
+    return { width: metadata.width, height: metadata.height };
+  } catch (error) {
+    logger.debug('Failed to extract image dimensions, returning undefined', {
+      context: 'images-v2.getImageDimensions',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { width: undefined, height: undefined };
+  }
 }
 
 /**

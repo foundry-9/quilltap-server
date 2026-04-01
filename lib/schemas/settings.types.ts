@@ -185,6 +185,19 @@ export const DangerousContentSettingsSchema = z.object({
 export type DangerousContentSettings = z.infer<typeof DangerousContentSettingsSchema>;
 
 // ============================================================================
+// AUTO-LOCK SETTINGS
+// ============================================================================
+
+export const AutoLockSettingsSchema = z.object({
+  /** Whether auto-lock is enabled (default: false) */
+  enabled: z.boolean().default(false),
+  /** Number of minutes of inactivity before auto-locking (default: 15, min: 1) */
+  idleMinutes: z.number().int().min(1).default(15),
+});
+
+export type AutoLockSettings = z.infer<typeof AutoLockSettingsSchema>;
+
+// ============================================================================
 // AGENT MODE SETTINGS
 // ============================================================================
 
@@ -292,6 +305,11 @@ export const ChatSettingsSchema = z.object({
     scanImageGeneration: false,
     displayMode: 'SHOW',
     showWarningBadges: true,
+  }),
+  /** Auto-lock settings for automatic idle timeout locking */
+  autoLockSettings: AutoLockSettingsSchema.default({
+    enabled: false,
+    idleMinutes: 15,
   }),
   /** Default IANA timezone for timestamp formatting (e.g., "America/New_York"). Falls back to QUILLTAP_TIMEZONE env var or system default. */
   timezone: z.string().nullable().optional(),

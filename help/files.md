@@ -439,6 +439,18 @@ A vigilant filesystem watcher monitors your files directory at all times, rather
 
 Files found on disk without a corresponding database record are marked as **untracked**. They appear with a subtle amber indicator in both grid and list views. These are perfectly usable files — they simply arrived by some means other than the usual upload button. The AI can access them, you can preview them, and they behave in every respect like proper files, save for a faint air of mystery about their origins.
 
+Untracked files commonly appear when a chat or project is deleted but its generated images remain on disk, or after a database migration that could not match every file to its original record.
+
+### Cleaning Up Untracked Files
+
+When untracked files are present, a **cleanup button** (the broom icon with an amber count badge) appears in the file browser toolbar. Clicking it performs a quick analysis and presents a dialog with your options:
+
+- **Relocate to /orphans/** — Moves unique untracked files into a dedicated `/orphans/` folder where you can review them at your leisure. Any untracked files that are mere duplicates of files already properly catalogued are quietly removed, since there is no sense in keeping two copies of the same photograph when one is merely skulking about without an invitation. The `/orphans/` folder appears as a regular folder in the file browser — you may browse its contents, preview files, and delete them individually as you see fit.
+
+- **Delete All** — Permanently removes every untracked file from both disk and database. This is rather more decisive and cannot be undone, so do consider whether any of those uninvited guests might actually be someone you recognize before showing them all the door at once.
+
+In both cases, de-duplication happens automatically: files whose content (identified by SHA-256 hash) already exists in a tracked file are always removed, since the tracked copy is the authoritative one.
+
 ### Manual Sync
 
 Should you wish to trigger an immediate reconciliation — perhaps after copying a great many files into the directory at once — click the **Sync** button (the circular arrows icon) in the file browser header. This performs a thorough scan of the entire files directory and ensures the database reflects reality with the utmost fidelity.
@@ -559,10 +571,16 @@ Each time Quilltap starts, it performs a comprehensive reconciliation — a sort
 - Close unused tabs/apps
 - Check internet connection
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/files")`
+
 ## Related Pages
 
-- **Projects** — Manage project-specific files
-- **Characters** — Upload character images and profile files
-- **Chats** — Attach and manage message files
-- **The Forge > File Storage** — Configure where files are stored
-- **Search** — Find files by name or content
+- [Projects](projects.md) — Manage project-specific files
+- [Characters](characters.md) — Upload character images and profile files
+- [Chats](chats.md) — Attach and manage message files
+- [Data Directory](data-directory.md) — Configure where files are stored
+- [Search](search.md) — Find files by name or content

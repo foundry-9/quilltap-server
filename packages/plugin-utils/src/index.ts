@@ -116,6 +116,23 @@ export type {
 } from './roleplay-templates';
 
 // ============================================================================
+// System Prompt Utilities
+// ============================================================================
+
+export {
+  // Builder functions
+  createSystemPromptPlugin,
+
+  // Validation utilities
+  validateSystemPromptPlugin,
+} from './system-prompts';
+
+export type {
+  // Builder option types
+  CreateSystemPromptPluginOptions,
+} from './system-prompts';
+
+// ============================================================================
 // Built-in Tool Names
 // ============================================================================
 
@@ -135,11 +152,25 @@ export {
 } from './host-rewrite';
 
 // ============================================================================
-// Version
+// Quilltap App Version
+// ============================================================================
+
+export {
+  // Version injection (for Quilltap core)
+  __injectQuilltapVersion,
+  __clearQuilltapVersion,
+
+  // Version accessors (for plugins)
+  getQuilltapVersion,
+  getQuilltapUserAgent,
+} from './version';
+
+// ============================================================================
+// Package Version
 // ============================================================================
 
 /**
  * Version of the plugin-utils package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_UTILS_VERSION = '1.4.0';
+export const PLUGIN_UTILS_VERSION = '1.7.0';

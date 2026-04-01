@@ -49,7 +49,7 @@ Watch the AI work through each extraction step:
 | Step | What It Does |
 |------|-------------|
 | Analyzing Source Material | Summarizes large source documents (only for long texts) |
-| Extracting Character Basics | Name, title, description, personality, scenario |
+| Extracting Character Basics | Name, title, description, personality, and an initial scenario (title and content) |
 | Generating Dialogue | First message and example dialogue exchanges |
 | Creating System Prompts | Instructions for AI roleplay behavior |
 | Describing Appearance | Physical descriptions at 5 detail levels for image generation |
@@ -82,6 +82,12 @@ Three actions are available:
 - **Try different models.** If results are unsatisfying, try a different connection profile with a more capable model.
 - **Iterate.** Use "Add More & Regenerate" to refine results by adding more context.
 - **Memories improve roleplay.** Generated memories give the character knowledge to draw on during conversations.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora")`
 
 ## Related Topics
 

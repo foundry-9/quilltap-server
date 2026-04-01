@@ -115,7 +115,7 @@ Characters are sorted by:
 - **Title** — Optional subtitle or role (e.g., "Bounty Hunter")
 - **Description** — Long-form narrative about character
 - **Personality** — Key traits and characteristics
-- **Scenario** — The setting or situation character exists in
+- **Scenarios** — A collection of named scenes, each with a title and content, describing the settings or situations the character may find themselves in. A character may have any number of scenarios, or none at all.
 
 ### Conversation Starter
 
@@ -165,7 +165,7 @@ For more control:
 2. Fill all available fields:
    - Name, title, description
    - Personality traits
-   - Background/scenario
+   - Background and scenarios (one or more named scenes)
    - First message
    - Example dialogues
    - System prompt
@@ -240,14 +240,18 @@ Manage character organization:
 - Quick-hide settings
 - Filter by tag
 
-### Associated Profiles Tab
+### Default Settings Tab
 
-Configure character partnerships and defaults:
+Configure character partnerships, defaults, and chat behavior:
 
+- Default connection profile (LLM provider)
 - Default conversation partner
-- Connection profile (LLM)
 - Image generation profile
-- Roleplay template
+- Default system prompt (when multiple prompts exist)
+- Default scenario (when multiple scenarios exist)
+- Agent mode default
+- Help tools default
+- Default timestamp injection settings
 
 ### Photo Gallery Tab
 
@@ -278,7 +282,7 @@ View detailed appearance and outfits:
 Editable fields:
 
 - Name, aliases, pronouns, title, description
-- Personality and scenario
+- Personality and scenarios
 - First message and examples
 - Avatar and images
 - Tags
@@ -428,6 +432,12 @@ Load character created elsewhere:
 - Compatible character formats
 
 See [Importing and Exporting Characters](character-import-export.md) for guides.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/aurora")`
 
 ## Related Pages
 

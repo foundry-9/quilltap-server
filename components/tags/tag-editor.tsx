@@ -233,7 +233,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
               onKeyDown={handleKeyDown}
               placeholder="Add a tag..."
               disabled={loading}
-              className="px-3 py-1 text-sm border border-input rounded-md qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-background text-foreground disabled:opacity-50"
+              className="qt-input py-1 px-3 qt-shadow-sm focus:border-transparent"
             />
             <button
               type="button"

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { TagEditor } from '@/components/tags/tag-editor'
-import { CharacterFormData } from '../types'
+import { CharacterFormData, CharacterScenario } from '../types'
 
 interface CharacterBasicInfoProps {
   characterId: string
@@ -10,6 +10,7 @@ interface CharacterBasicInfoProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
   onAliasesChange: (aliases: string[]) => void
   onPronounsChange: (pronouns: { subject: string; object: string; possessive: string } | null) => void
+  onScenariosChange: (scenarios: CharacterScenario[]) => void
 }
 
 /**
@@ -64,7 +65,7 @@ function getPronounPreset(pronouns: { subject: string; object: string; possessiv
   return 'Custom'
 }
 
-export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesChange, onPronounsChange }: CharacterBasicInfoProps) {
+export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesChange, onPronounsChange, onScenariosChange }: CharacterBasicInfoProps) {
   return (
     <div className="space-y-6">
       {/* Name Field */}
@@ -228,20 +229,104 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
         />
       </div>
 
-      {/* Scenario Field */}
+      {/* Scenarios Field */}
       <div>
-        <label htmlFor="scenario" className="block text-sm font-medium mb-2 text-foreground">
-          Scenario (Optional)
-        </label>
-        <textarea
-          id="scenario"
-          name="scenario"
-          value={formData.scenario}
-          onChange={onChange}
-          rows={4}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder="Describe the setting and context for conversations"
-        />
+        <div className="flex justify-between items-center mb-2">
+          <label className="block text-sm font-medium text-foreground">
+            Scenarios (Optional)
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              const now = new Date().toISOString()
+              const newScenario: CharacterScenario = {
+                id: crypto.randomUUID(),
+                title: '',
+                content: '',
+                createdAt: now,
+                updatedAt: now,
+              }
+              onScenariosChange([...formData.scenarios, newScenario])
+            }}
+            className="qt-button-secondary qt-button-sm"
+          >
+            + Add Scenario
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Named settings and contexts for conversations. Each scenario can be selected when starting a chat.
+        </p>
+        {formData.scenarios.length === 0 ? (
+          <div className="qt-card text-center py-6">
+            <p className="qt-text-small mb-3">
+              No scenarios yet. Add one to give this character distinct roleplay contexts.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date().toISOString()
+                const newScenario: CharacterScenario = {
+                  id: crypto.randomUUID(),
+                  title: '',
+                  content: '',
+                  createdAt: now,
+                  updatedAt: now,
+                }
+                onScenariosChange([newScenario])
+              }}
+              className="qt-button-primary"
+            >
+              Add First Scenario
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {formData.scenarios.map((scenario, index) => (
+              <div key={scenario.id} className="qt-card">
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={scenario.title}
+                    onChange={(e) => {
+                      const updated = formData.scenarios.map((s, i) =>
+                        i === index
+                          ? { ...s, title: e.target.value, updatedAt: new Date().toISOString() }
+                          : s
+                      )
+                      onScenariosChange(updated)
+                    }}
+                    placeholder="Scenario title"
+                    className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onScenariosChange(formData.scenarios.filter((_, i) => i !== index))}
+                    className="qt-button-icon qt-button-ghost hover:text-destructive"
+                    title="Remove scenario"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+                <textarea
+                  value={scenario.content}
+                  onChange={(e) => {
+                    const updated = formData.scenarios.map((s, i) =>
+                      i === index
+                        ? { ...s, content: e.target.value, updatedAt: new Date().toISOString() }
+                        : s
+                    )
+                    onScenariosChange(updated)
+                  }}
+                  rows={3}
+                  placeholder="Describe the setting and context for this scenario"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* First Message Field */}

@@ -1,5 +1,5 @@
 ---
-url: /settings?tab=images
+url: /settings?tab=images&section=story-backgrounds
 ---
 
 # Story Backgrounds
@@ -13,15 +13,16 @@ When enabled, Quilltap generates a landscape scene image featuring your characte
 ### Generation Process
 
 1. **Trigger**: Background generation happens automatically after chat title updates (both automatic and manual)
-2. **Prompt Creation**: The system uses a cheap LLM to craft an atmospheric scene prompt based on:
-   - The chat title (which describes the current scene/situation)
-   - Character physical descriptions from your character cards
-3. **Image Generation**: The prompt is sent to your configured image generation profile
-4. **Display**: The generated image appears as a semi-transparent background (30% opacity) behind your chat content
+2. **Scene Understanding**: The system determines the current scene in one of two ways:
+   - **Scene State Tracker** (preferred): After every chat turn, a lightweight background task automatically tracks the current scene — where characters are, what they're doing, and what they look like. When this data is fresh (within 5 messages), the Lantern uses it directly, saving an extra LLM call.
+   - **On-demand derivation** (fallback): If no recent scene state exists, the system reads your recent messages and asks a cheap LLM to describe the scene, much as a particularly attentive stage manager might.
+3. **Prompt Creation**: The system uses a cheap LLM to craft an atmospheric scene prompt based on the scene context and character appearances
+4. **Image Generation**: The prompt is sent to your configured image generation profile
+5. **Display**: The generated image appears as a semi-transparent background (30% opacity) behind your chat content
 
 ## Enabling Story Backgrounds
 
-1. Go to the **Images** tab in Settings (`/settings?tab=images`)
+1. Go to the **Images** tab in Settings (`/settings?tab=images&section=story-backgrounds`)
 2. Expand the **Story Backgrounds** card
 3. Toggle **Enable Story Backgrounds** on
 4. (Optional) Select a specific **Image Generation Profile** to use
@@ -30,7 +31,7 @@ If you don't select a specific profile, the system will use your default image g
 
 ## Requirements
 
-- At least one image generation profile configured (see [Image Generation Profiles](/help/image-generation-profiles))
+- At least one image generation profile configured (see [Image Generation Profiles](image-generation-profiles.md))
 - An active API key for your image provider
 - Characters in your chat with physical descriptions (helps create better scenes)
 
@@ -66,7 +67,7 @@ Projects can display backgrounds in different ways:
 ## Troubleshooting
 
 **Background not appearing:**
-- Check that Story Backgrounds is enabled in the **Images** tab in Settings (`/settings?tab=images`)
+- Check that Story Backgrounds is enabled in the **Images** tab in Settings (`/settings?tab=images&section=story-backgrounds`)
 - Verify your image profile has a valid API key
 - Check the Tasks Queue for any failed generation jobs
 
@@ -80,8 +81,18 @@ Projects can display backgrounds in different ways:
 - Review the Tasks Queue for error messages
 - Try a different image profile
 
+## In-Chat Settings Access
+
+Characters with help tools enabled can read your story backgrounds configuration during a conversation using the `help_settings` tool with `category: "images"`. This returns your image generation profiles and story background settings. Ask a help-tools-enabled character something like "Are story backgrounds enabled?" and it will consult the records.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=images&section=story-backgrounds")`
+
 ## Related Topics
 
-- [Image Generation Profiles](/help/image-generation-profiles)
-- [Chat Settings](/help/chat-settings)
-- [Projects](/help/projects)
+- [Image Generation Profiles](image-generation-profiles.md)
+- [Chat Settings](chat-settings.md)
+- [Projects](projects.md)

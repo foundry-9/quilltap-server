@@ -1,27 +1,31 @@
 # create-quilltap-theme
 
-Scaffold a new Quilltap theme plugin with a single command.
+Scaffold a new Quilltap theme with a single command.
 
 ## Usage
 
-### Using npm init (recommended)
-
-```bash
-npm init quilltap-theme my-theme
-```
-
-### Using npx
+### Bundle format (default, recommended)
 
 ```bash
 npx create-quilltap-theme my-theme
 ```
+
+This creates a `.qtap-theme` bundle directory — a simple, declarative format with JSON tokens, CSS, and fonts. No build tools, npm packages, or TypeScript required.
+
+### Legacy plugin format (deprecated)
+
+```bash
+npx create-quilltap-theme my-theme --plugin
+```
+
+Creates an npm-based theme plugin. This format is deprecated; use bundles for new themes.
 
 ### Interactive mode
 
 Run without arguments for interactive prompts:
 
 ```bash
-npm init quilltap-theme
+npx create-quilltap-theme
 ```
 
 ### Skip prompts
@@ -29,10 +33,23 @@ npm init quilltap-theme
 Use `-y` or `--yes` to use defaults:
 
 ```bash
-npm init quilltap-theme my-theme --yes
+npx create-quilltap-theme my-theme --yes
 ```
 
 ## What gets created
+
+### Bundle format (default)
+
+```
+my-theme/
+├── theme.json            # Theme manifest with metadata and tokens
+├── tokens.json           # Design tokens (colors, fonts, spacing)
+├── styles.css            # CSS component overrides
+├── fonts/                # Custom font files (add .woff2 files here)
+└── README.md             # Documentation
+```
+
+### Plugin format (--plugin)
 
 ```
 qtap-plugin-theme-my-theme/
@@ -57,6 +74,7 @@ qtap-plugin-theme-my-theme/
 
 | Option | Description |
 |--------|-------------|
+| `--plugin` | Create a legacy npm plugin instead of a bundle |
 | `-y, --yes` | Skip prompts and use default values |
 | `-h, --help` | Show help message |
 
@@ -69,38 +87,49 @@ When run without `--yes`, you'll be asked:
 3. **Author name** - Your name
 4. **Author email** - Your email
 5. **Primary color** - Main theme color in HSL format
-6. **Include CSS overrides?** - Whether to create styles.css
-7. **Include Storybook?** - Whether to set up Storybook for development
+6. **Include CSS overrides?** - Whether to create styles.css (bundle and plugin)
+7. **Include Storybook?** - Whether to set up Storybook for development (plugin only)
 
 ## Next steps after scaffolding
+
+### Bundle themes
+
+```bash
+cd my-theme
+# Edit theme.json, tokens.json, and styles.css
+# Then install into Quilltap:
+npx quilltap themes install .
+# Or validate first:
+npx quilltap themes validate .
+```
+
+### Plugin themes (deprecated)
 
 ```bash
 cd qtap-plugin-theme-my-theme
 npm install
 npm run build
-```
-
-To preview in Storybook (if included):
-
-```bash
-npm run storybook
-```
-
-To publish:
-
-```bash
 npm publish --access public
+```
+
+## Managing themes via CLI
+
+```bash
+npx quilltap themes list                    # List all installed themes
+npx quilltap themes install my.qtap-theme   # Install a bundle
+npx quilltap themes validate my.qtap-theme  # Validate without installing
+npx quilltap themes export earl-grey        # Export any theme as a bundle
+npx quilltap themes search "dark"           # Search registries
+npx quilltap themes update                  # Check for updates
 ```
 
 ## Documentation
 
-Every scaffolded theme includes a complete development guide at `docs/THEME_PLUGIN_DEVELOPMENT.md`.
-
 For the latest online documentation:
 
-- [Theme Plugin Development Guide](https://github.com/foundry-9/quilltap/blob/main/docs/THEME_PLUGIN_DEVELOPMENT.md)
-- [Plugin Manifest Reference](https://github.com/foundry-9/quilltap/blob/main/docs/PLUGIN_MANIFEST.md)
-- [@quilltap/theme-storybook](https://www.npmjs.com/package/@quilltap/theme-storybook)
+- [Theme Plugin Development Guide](https://github.com/foundry-9/quilltap/blob/main/docs/developer/THEME_PLUGIN_DEVELOPMENT.md) (legacy plugin format)
+- [Plugin Manifest Reference](https://github.com/foundry-9/quilltap/blob/main/docs/developer/PLUGIN_MANIFEST.md)
+- [@quilltap/theme-storybook](https://www.npmjs.com/package/@quilltap/theme-storybook) (for plugin development with Storybook)
 
 ## License
 

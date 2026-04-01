@@ -34,7 +34,7 @@ import { mkdirSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 
-const IMAGE = 'csebold/quilltap';
+const IMAGE = 'foundry9/quilltap';
 
 // --- Platform detection ---
 

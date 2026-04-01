@@ -9,9 +9,10 @@ import { BackgroundJob, ChatSettings } from '@/lib/schemas/types';
 import type { ChatMetadata } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { considerTitleUpdate, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
-import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
+import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { resolveImageProfileForChat } from '@/lib/image-gen/profile-resolution';
+import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import type { TitleUpdatePayload } from '../queue-service';
 import { enqueueStoryBackgroundGeneration } from '../queue-service';
 
@@ -52,11 +53,23 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   };
 
   // Get cheap LLM selection
-  const cheapLLMSelection = getCheapLLMProvider(
+  let cheapLLMSelection = getCheapLLMProvider(
     connectionProfile,
     cheapLLMConfig,
     availableProfiles
   );
+
+  // For dangerous chats, use uncensored provider to avoid content refusals
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+  if (chat.isDangerousChat === true) {
+    cheapLLMSelection = resolveUncensoredCheapLLMSelection(
+      cheapLLMSelection,
+      true,
+      dangerSettings,
+      availableProfiles
+    );
+  }
+
   // Get chat messages
   const allMessages = await repos.chats.getMessages(payload.chatId);
 

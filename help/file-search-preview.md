@@ -138,6 +138,7 @@ Some systems open preview on double-click instead of folder entry
 
 - **Zoom In/Out** — Use controls or scroll wheel
 - **Pan** — Click and drag to move around
+- **Copy to Clipboard** — Copy the image directly to your clipboard for pasting into other applications
 - **Download** — Save to computer
 - **Full Screen** — View in full screen mode
 
@@ -294,6 +295,7 @@ Some systems open preview on double-click instead of folder entry
 | 🔍- | Zoom out |
 | ⊡ | Fit to screen |
 | ⛶ | Full screen mode |
+| 📋 | Copy image to clipboard |
 | ↓ | Download file |
 | ← → | Previous/next file |
 | ✕ | Close preview |
@@ -506,6 +508,12 @@ Path bar shows quick navigation:
 - Verify file still visible in browser
 - Try refreshing page
 - Check file still exists
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/files")`
 
 ## Related Topics
 

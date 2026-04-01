@@ -243,6 +243,12 @@ As your project grows:
 - Wait and check again
 - Try removing/adding again
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/prospero/:id")`
+
 ## Related Pages
 
 - [Projects Overview](projects.md) — Main project documentation

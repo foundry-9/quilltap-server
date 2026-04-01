@@ -8,7 +8,7 @@ import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { ClothingRecordList } from '@/components/clothing-records'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor'
-import { AIWizardModal, type GeneratedCharacterData } from '@/components/characters/ai-wizard'
+import { AIWizardModal, type GeneratedCharacterData, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
 import LLMLogsSection from '@/components/characters/LLMLogsSection'
 import { useCharacterEdit } from './hooks'
 import { CharacterBasicInfo } from './components'
@@ -75,6 +75,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     handleChange,
     handleAliasesChange,
     handlePronounsChange,
+    handleScenariosChange,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,
@@ -98,7 +99,6 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     if (data.title) fieldsToApply.push({ name: 'title', value: data.title })
     if (data.description) fieldsToApply.push({ name: 'description', value: data.description })
     if (data.personality) fieldsToApply.push({ name: 'personality', value: data.personality })
-    if (data.scenario) fieldsToApply.push({ name: 'scenario', value: data.scenario })
     if (data.exampleDialogues) fieldsToApply.push({ name: 'exampleDialogues', value: data.exampleDialogues })
     if (data.systemPrompt) fieldsToApply.push({ name: 'systemPrompt', value: data.systemPrompt })
 
@@ -140,6 +140,31 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           error: err instanceof Error ? err.message : String(err),
         })
         showErrorToast('Failed to create physical description')
+      }
+    }
+
+    // Handle wizard-generated scenarios
+    const normalizedScenarios = normalizeGeneratedScenarios(data.scenarios)
+    if (normalizedScenarios.length > 0) {
+      let scenariosSaved = 0
+      for (const scenario of normalizedScenarios) {
+        try {
+          const res = await fetch(`/api/v1/characters/${id}/scenarios`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: scenario.title, content: scenario.content }),
+          })
+          if (res.ok) scenariosSaved++
+        } catch (err) {
+          console.error('Failed to create scenario', {
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+      if (scenariosSaved > 0) {
+        showSuccessToast(`${scenariosSaved} scenario${scenariosSaved > 1 ? 's' : ''} created`)
+        // Re-fetch character data so the form shows the new scenarios
+        await fetchCharacter()
       }
     }
   }
@@ -226,7 +251,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           {(activeTab: string) => {
             switch (activeTab) {
               case 'details':
-                return <CharacterBasicInfo characterId={id} formData={formData} onChange={handleChange} onAliasesChange={handleAliasesChange} onPronounsChange={handlePronounsChange} />
+                return <CharacterBasicInfo characterId={id} formData={formData} onChange={handleChange} onAliasesChange={handleAliasesChange} onPronounsChange={handlePronounsChange} onScenariosChange={handleScenariosChange} />
 
               case 'system-prompts':
                 return (
@@ -322,7 +347,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           title: formData.title,
           description: formData.description,
           personality: formData.personality,
-          scenario: formData.scenario,
+          scenarios: formData.scenarios,
           exampleDialogues: formData.exampleDialogues,
           systemPrompt: formData.systemPrompt,
         }}

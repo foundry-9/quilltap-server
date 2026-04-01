@@ -10,14 +10,12 @@
 
 import { useCallback, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 import type { Project, UseProjectsReturn } from '../types'
 
 export function useProjects(): UseProjectsReturn {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { refreshProjects: refreshSidebar } = useSidebarData()
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -64,7 +62,6 @@ export function useProjects(): UseProjectsReturn {
         characterCount: data.project.characterRoster?.length ?? 0,
       }
       setProjects(prev => [newProject, ...prev])
-      refreshSidebar()
       showSuccessToast('Project created successfully!')
 
       return newProject
@@ -74,7 +71,7 @@ export function useProjects(): UseProjectsReturn {
       showErrorToast(errorMsg)
       return null
     }
-  }, [refreshSidebar])
+  }, [])
 
   const deleteProject = useCallback(async (id: string): Promise<boolean> => {
     try {
@@ -82,7 +79,6 @@ export function useProjects(): UseProjectsReturn {
       if (!res.ok) throw new Error('Failed to delete project')
 
       setProjects(prev => prev.filter(p => p.id !== id))
-      refreshSidebar()
       showSuccessToast('Project deleted successfully!')
 
       return true
@@ -92,7 +88,7 @@ export function useProjects(): UseProjectsReturn {
       showErrorToast(errorMsg)
       return false
     }
-  }, [refreshSidebar])
+  }, [])
 
   return {
     projects,

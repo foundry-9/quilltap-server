@@ -249,6 +249,12 @@ Standard turn management applies:
 - Use clear, direct language
 - Ensure character prompts don't conflict
 
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/prospero/:id")`
+
 ## Related Pages
 
 - [Projects Overview](projects.md) — Main project documentation

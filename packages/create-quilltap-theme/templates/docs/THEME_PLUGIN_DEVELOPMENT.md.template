@@ -560,7 +560,7 @@ For advanced customization, create `styles.css` with component overrides. This u
 | `.qt-button`, `.qt-button-primary`, `.qt-button-secondary`, `.qt-button-ghost`, `.qt-button-destructive` | Button variants |
 | `.qt-button-sm`, `.qt-button-lg`, `.qt-button-icon` | Button sizes |
 | `.qt-card`, `.qt-card-header`, `.qt-card-body`, `.qt-card-footer` | Card components |
-| `.qt-card-interactive`, `.qt-entity-card`, `.qt-panel` | Card variants |
+| `.qt-card-interactive`, `.qt-entity-card`, `.qt-character-card`, `.qt-panel` | Card variants |
 | `.qt-input`, `.qt-textarea`, `.qt-select` | Form inputs |
 | `.qt-badge`, `.qt-badge-primary`, `.qt-badge-secondary`, `.qt-badge-outline` | Badges |
 | `.qt-avatar`, `.qt-avatar-sm`, `.qt-avatar-lg`, `.qt-avatar-xl` | Avatars |
@@ -588,6 +588,7 @@ Override these variables for consistent component styling:
 --qt-card-padding
 --qt-card-shadow
 --qt-card-border
+--qt-character-card-padding
 
 /* Inputs */
 --qt-input-radius

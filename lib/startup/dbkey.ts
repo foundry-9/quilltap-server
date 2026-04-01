@@ -118,6 +118,7 @@ const log = migrationLogger.child({ context: 'dbkey' });
 
 declare global {
   var __quilltapDbKeyState: DbKeyState | undefined;
+  var __quilltapHasUserPassphrase: boolean | undefined;
 }
 
 /**
@@ -418,6 +419,11 @@ export async function provisionDbKey(): Promise<DbKeyState> {
 
       if (envHash === fileData.pepperHash) {
         log.info('DbKey resolved: env var matches stored hash');
+        // Only set passphrase flag if not already determined (e.g., by unlockDbKey)
+        if (global.__quilltapHasUserPassphrase === undefined) {
+          // Env var was provided directly — no passphrase was needed
+          global.__quilltapHasUserPassphrase = false;
+        }
         setCurrentState('resolved');
         return 'resolved';
       }
@@ -442,6 +448,7 @@ export async function provisionDbKey(): Promise<DbKeyState> {
       log.info('Pepper resolved from env var, .dbkey file storage recommended', {
         dbKeyPath,
       });
+      global.__quilltapHasUserPassphrase = false;
       setCurrentState('needs-vault-storage');
       return 'needs-vault-storage';
     }
@@ -455,6 +462,7 @@ export async function provisionDbKey(): Promise<DbKeyState> {
 
       if (pepper && hashPepper(pepper) === fileData.pepperHash) {
         log.info('DbKey resolved: decrypted from .dbkey file (no passphrase)');
+        global.__quilltapHasUserPassphrase = false;
         process.env.ENCRYPTION_MASTER_PEPPER = pepper;
         setCurrentState('resolved');
         return 'resolved';
@@ -462,6 +470,7 @@ export async function provisionDbKey(): Promise<DbKeyState> {
 
       // Internal passphrase failed — user passphrase required
       log.info('Internal passphrase did not decrypt .dbkey, user passphrase required');
+      global.__quilltapHasUserPassphrase = true;
       setCurrentState('needs-passphrase');
       return 'needs-passphrase';
     }
@@ -501,7 +510,8 @@ export function setupDbKey(passphrase: string): { pepper: string } {
   }
 
   const pepper = generatePepper();
-  const actualPassphrase = passphrase.length > 0 ? passphrase : INTERNAL_PASSPHRASE;
+  const hasUserPassphrase = passphrase.length > 0;
+  const actualPassphrase = hasUserPassphrase ? passphrase : INTERNAL_PASSPHRASE;
 
   log.debug('Encrypting new pepper');
   const fileData = encryptPepper(pepper, actualPassphrase);
@@ -511,6 +521,7 @@ export function setupDbKey(passphrase: string): { pepper: string } {
 
   // Set in process.env so the app can use it immediately
   process.env.ENCRYPTION_MASTER_PEPPER = pepper;
+  global.__quilltapHasUserPassphrase = hasUserPassphrase;
   setCurrentState('resolved');
 
   log.info('Database key setup complete', {
@@ -565,6 +576,7 @@ export function unlockDbKey(passphrase: string): boolean {
 
   // Success
   process.env.ENCRYPTION_MASTER_PEPPER = pepper;
+  global.__quilltapHasUserPassphrase = true;
   setCurrentState('resolved');
 
   log.info('Database key unlocked successfully');
@@ -624,7 +636,8 @@ export function changePassphrase(
   }
 
   // Re-encrypt with the new passphrase
-  const actualNewPassphrase = newPassphrase.length > 0 ? newPassphrase : INTERNAL_PASSPHRASE;
+  const hasNewUserPassphrase = newPassphrase.length > 0;
+  const actualNewPassphrase = hasNewUserPassphrase ? newPassphrase : INTERNAL_PASSPHRASE;
 
   log.debug('Re-encrypting pepper with new passphrase');
   const newFileData = encryptPepper(pepper, actualNewPassphrase);
@@ -636,6 +649,9 @@ export function changePassphrase(
   const llmLogsDbKeyPath = getLLMLogsDbKeyPath();
   writeDbKeyFile(llmLogsDbKeyPath, newFileData);
   log.info('LLM logs .dbkey file updated with new passphrase', { path: llmLogsDbKeyPath });
+
+  // Update the cached passphrase state
+  global.__quilltapHasUserPassphrase = hasNewUserPassphrase;
 
   log.info('Passphrase change completed successfully');
   return { success: true };
@@ -681,4 +697,57 @@ export function storeEnvPepperInDbKey(passphrase: string): void {
     dbKeyPath,
     pepperHashPrefix: fileData.pepperHash.substring(0, 12),
   });
+}
+
+/**
+ * Lock the database key by clearing the pepper from memory.
+ *
+ * This re-locks the application, requiring the passphrase to be
+ * re-entered before the database can be accessed again.
+ * Used by the auto-lock idle timer feature.
+ */
+export function lockDbKey(): void {
+  log.info('Locking database key — clearing pepper from memory');
+  delete process.env.ENCRYPTION_MASTER_PEPPER;
+  setCurrentState('needs-passphrase');
+}
+
+/**
+ * Check whether the user has set a custom passphrase.
+ *
+ * Returns false when the internal (no-passphrase) sentinel was used,
+ * true when the user provided their own passphrase.
+ *
+ * When the in-memory flag has not been set (e.g. after HMR or if
+ * setupDbKey/changePassphrase was called without updating it), this
+ * falls back to probing the .dbkey file by attempting decryption with
+ * the internal passphrase. The result is cached on the global so the
+ * expensive PBKDF2 derivation only runs once.
+ *
+ * @returns true if a user passphrase protects the .dbkey file
+ */
+export function getHasUserPassphrase(): boolean {
+  if (global.__quilltapHasUserPassphrase !== undefined) {
+    return global.__quilltapHasUserPassphrase;
+  }
+
+  // Probe the .dbkey file to determine passphrase status inherently
+  const dbKeyPath = getDbKeyPath();
+  const fileData = readDbKeyFile(dbKeyPath);
+
+  if (!fileData) {
+    // No .dbkey file — no passphrase can be set
+    log.debug('getHasUserPassphrase: no .dbkey file, returning false');
+    global.__quilltapHasUserPassphrase = false;
+    return false;
+  }
+
+  // Try the internal passphrase — if it works, no user passphrase is set
+  log.debug('getHasUserPassphrase: probing .dbkey file with internal passphrase');
+  const pepper = decryptPepperFromFile(fileData, INTERNAL_PASSPHRASE);
+  const hasPassphrase = !(pepper && hashPepper(pepper) === fileData.pepperHash);
+
+  log.debug('getHasUserPassphrase: determined from .dbkey file', { hasPassphrase });
+  global.__quilltapHasUserPassphrase = hasPassphrase;
+  return hasPassphrase;
 }

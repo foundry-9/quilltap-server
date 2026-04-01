@@ -12,7 +12,8 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { SceneStateSchema } from '@/lib/schemas/chat.types';
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import type { StoryBackgroundGenerationPayload } from '../queue-service';
@@ -78,6 +79,29 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   );
   const validCharacters = characters.filter(c => c !== null);
 
+  // Check if we have a fresh scene state to use
+  let sceneStateData: import('@/lib/schemas/chat.types').SceneState | null = null;
+  if (chat.sceneState) {
+    try {
+      const parsed = typeof chat.sceneState === 'string' ? JSON.parse(chat.sceneState as string) : chat.sceneState;
+      const validated = SceneStateSchema.safeParse(parsed);
+      if (validated.success) {
+        // Consider scene state "fresh" if within 5 messages of current count
+        const messageGap = (chat.messageCount ?? 0) - validated.data.updatedAtMessageCount;
+        if (messageGap <= 5) {
+          sceneStateData = validated.data;
+          logger.info('[StoryBackground] Using fresh scene state for context', {
+            context: 'background-jobs.story-background',
+            jobId: job.id,
+            chatId: payload.chatId,
+            sceneStateAge: messageGap,
+          });
+        }
+      }
+    } catch {
+      // Failed to parse scene state, fall back to normal derivation
+    }
+  }
 
   // 5. Get user's chat settings for cheap LLM configuration
   const chatSettings = await repos.chatSettings.findByUserId(job.userId);
@@ -114,16 +138,25 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     );
   }
 
-  // 7. Fetch recent messages (needed for both scene context and appearance resolution)
-  const chatEvents = await repos.chats.getMessages(payload.chatId);
-  const recentMessages: ChatMessage[] = extractVisibleConversation(chatEvents).slice(-20);
-
-
-  // 7b. Resolve the Concierge settings
+  // Resolve the Concierge settings early (needed for uncensored routing and appearance sanitization)
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
   const dangerSettings = dangerousContentResolved.settings;
   const isDangerousChat = chat.isDangerousChat === true;
   const hasUncensoredImageProvider = Boolean(dangerSettings.uncensoredImageProfileId);
+
+  // For dangerous chats, use uncensored provider for all cheap LLM tasks
+  if (isDangerousChat) {
+    cheapLLMSelection = resolveUncensoredCheapLLMSelection(
+      cheapLLMSelection!,
+      true,
+      dangerSettings,
+      allProfiles
+    );
+  }
+
+  // 7. Fetch recent messages (needed for both scene context and appearance resolution)
+  const chatEvents = await repos.chats.getMessages(payload.chatId);
+  const recentMessages: ChatMessage[] = extractVisibleConversation(chatEvents).slice(-20);
 
   // 8. Derive scene context AND resolve character appearances in parallel
   let sceneContext = payload.sceneContext || chat.title;
@@ -168,7 +201,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // Run scene context derivation and appearance resolution in parallel
   const [sceneResult, appearanceResolutionResult] = await Promise.all([
     // Scene context derivation
-    recentMessages.length > 0
+    recentMessages.length > 0 && !sceneStateData
       ? deriveSceneContext(
           {
             chatTitle: chat.title,
@@ -189,7 +222,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           scenePromptForAppearance,
           appearanceLLMSelection,
           job.userId,
-          payload.chatId
+          payload.chatId,
+          sceneStateData
         ).catch(error => {
           logger.warn('[StoryBackground] Appearance resolution failed, using defaults', {
             context: 'background-jobs.story-background',
@@ -201,8 +235,20 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       : Promise.resolve(null),
   ]);
 
-  // Process scene context result
-  if (sceneResult?.success && sceneResult.result) {
+  // If we used scene state, set context directly
+  if (sceneStateData) {
+    const charActions = sceneStateData.characters
+      .map(c => `${c.characterName}: ${c.action}`)
+      .join('; ');
+    sceneContext = `${sceneStateData.location}. ${charActions}`;
+
+    logger.info('[StoryBackground] Used scene state for scene context', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      location: sceneStateData.location,
+    });
+  } else if (sceneResult?.success && sceneResult.result) {
+    // Process scene context result from LLM derivation
     sceneContext = sceneResult.result;
   } else if (recentMessages.length > 0) {
     logger.warn('[StoryBackground] Failed to derive scene context, using fallback', {
@@ -234,7 +280,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         scenePromptForAppearance,
         uncensoredLLMSelection,
         job.userId,
-        payload.chatId
+        payload.chatId,
+        sceneStateData
       );
 
       if (retryResult.llmResolved) {
@@ -285,8 +332,17 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const characterDescriptions = validCharacters.map(char => {
     const resolved = resolvedAppearances?.find(a => a.characterId === char!.id);
 
+    // Derive a gender prefix from standard pronouns so image generators know the character's sex
+    let genderPrefix = '';
+    const pronouns = char!.pronouns;
+    if (pronouns) {
+      const subj = pronouns.subject.toLowerCase();
+      if (subj === 'he') genderPrefix = 'A man. ';
+      else if (subj === 'she') genderPrefix = 'A woman. ';
+    }
+
     if (resolved) {
-      const descParts = [resolved.physicalDescription];
+      const descParts = [genderPrefix + resolved.physicalDescription];
       if (resolved.clothingDescription) {
         descParts.push(`Wearing: ${resolved.clothingDescription}`);
       }
@@ -299,7 +355,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     // Fallback: simple first-description logic
     const primary = char!.physicalDescriptions?.[0];
     const primaryOutfit = char!.clothingRecords?.[0];
-    const descParts = [primary?.mediumPrompt || primary?.shortPrompt || char!.name];
+    const descParts = [genderPrefix + (primary?.mediumPrompt || primary?.shortPrompt || char!.name)];
     if (primaryOutfit?.description) {
       descParts.push(`Wearing: ${primaryOutfit.description}`);
     }

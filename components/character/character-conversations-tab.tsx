@@ -231,7 +231,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={handleSearch}
-            className="w-full pl-10 pr-4 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+            className="qt-input pl-10"
           />
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"

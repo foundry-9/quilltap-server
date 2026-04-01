@@ -74,6 +74,24 @@ export {
   blobToEmbedding,
 } from './json-columns';
 
+// Instance lock
+export {
+  acquireInstanceLock,
+  releaseInstanceLock,
+  releaseActiveInstanceLock,
+  overrideInstanceLock,
+  getInstanceLockInfo,
+  startLockHeartbeat,
+  stopLockHeartbeat,
+  InstanceLockError,
+} from './instance-lock';
+export type {
+  LockFileContent,
+  LockHistoryEntry,
+  EnvironmentType,
+  LockEvent,
+} from './instance-lock';
+
 // Query translation
 export {
   translateFilter,

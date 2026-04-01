@@ -21,10 +21,13 @@ import {
   MemoriesTab,
   DescriptionsTab,
   ChatCreationDialog,
+  ExternalPromptDialog,
+  ExternalPromptResultDialog,
 } from './components'
 import { CHARACTER_TABS } from './constants'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import type { SearchReplaceResult } from '@/components/tools/search-replace/types'
+import { CharacterOptimizerModal } from '@/components/characters/optimizer'
 
 export default function ViewCharacterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -35,11 +38,16 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
   const [showChatDialog, setShowChatDialog] = useState(false)
   const [showSearchReplaceModal, setShowSearchReplaceModal] = useState(false)
+  const [showOptimizerModal, setShowOptimizerModal] = useState(false)
+  const [showExternalPromptDialog, setShowExternalPromptDialog] = useState(false)
+  const [externalPromptResult, setExternalPromptResult] = useState<string | null>(null)
   const [dataRefreshKey, setDataRefreshKey] = useState(0)
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
   const [scenario, setScenario] = useState<string>('')
+  const [scenarioId, setScenarioId] = useState<string | null>(null)
+  const [selectedSystemPromptId, setSelectedSystemPromptId] = useState<string | null>(null)
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
@@ -69,6 +77,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     handleSaveDefaultPartner,
     handleSaveImageProfile,
     handleSaveAgentMode,
+    handleSaveHelpTools,
+    handleSaveTimestampConfig,
+    handleSaveDefaultScenario,
+    handleSaveDefaultSystemPrompt,
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,
@@ -76,6 +88,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     togglingFavorite,
     togglingControlledBy,
     savingAgentMode,
+    savingHelpTools,
+    savingTimestampConfig,
+    savingDefaultScenario,
+    savingDefaultSystemPrompt,
   } = useCharacterView(id)
 
   const { creatingChat, handleCreateChat } = useChatCreation()
@@ -108,8 +124,28 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       if (defaultPartnerId) {
         setSelectedUserCharacterId(defaultPartnerId)
       }
+
+      // Initialize timestamp config from character's default
+      if (character?.defaultTimestampConfig) {
+        setTimestampConfig(character.defaultTimestampConfig)
+      }
+
+      // Initialize default image profile if set
+      if (defaultImageProfileId) {
+        setSelectedImageProfileId(defaultImageProfileId)
+      }
+
+      // Initialize default scenario if set
+      if (character?.defaultScenarioId) {
+        setScenarioId(character.defaultScenarioId)
+      }
+
+      // Initialize default system prompt if set
+      if (character?.defaultSystemPromptId) {
+        setSelectedSystemPromptId(character.defaultSystemPromptId)
+      }
     }
-  }, [searchParams, character?.defaultConnectionProfileId, profiles, defaultPartnerId])
+  }, [searchParams, character?.defaultConnectionProfileId, character?.defaultTimestampConfig, character?.defaultScenarioId, character?.defaultSystemPromptId, defaultImageProfileId, profiles, defaultPartnerId])
 
   const handleStartChat = () => {
     if (character?.defaultConnectionProfileId) {
@@ -127,6 +163,30 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       setSelectedUserCharacterId('')
     }
 
+    // Initialize timestamp config from character's default if set
+    if (character?.defaultTimestampConfig) {
+      setTimestampConfig(character.defaultTimestampConfig)
+    } else {
+      setTimestampConfig(null)
+    }
+
+    // Initialize default image profile if set
+    setSelectedImageProfileId(defaultImageProfileId || null)
+
+    // Initialize default scenario if set
+    if (character?.defaultScenarioId) {
+      setScenarioId(character.defaultScenarioId)
+    } else {
+      setScenarioId(null)
+    }
+
+    // Initialize default system prompt if set
+    if (character?.defaultSystemPromptId) {
+      setSelectedSystemPromptId(character.defaultSystemPromptId)
+    } else {
+      setSelectedSystemPromptId(null)
+    }
+
     setShowChatDialog(true)
   }
 
@@ -137,7 +197,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       selectedProfileId,
       selectedUserCharacterId,
       selectedImageProfileId,
+      selectedSystemPromptId: selectedSystemPromptId ?? undefined,
       scenario,
+      scenarioId: scenarioId ?? undefined,
       timestampConfig,
     })
     setShowChatDialog(false)
@@ -208,7 +270,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       case 'tags':
         return <TagsTab characterId={id} />
 
-      case 'profiles':
+      case 'defaults':
         return (
           <ProfilesTab
             characterId={id}
@@ -221,10 +283,18 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             savingPartner={savingPartner}
             savingImageProfile={savingImageProfile}
             savingAgentMode={savingAgentMode}
+            savingTimestampConfig={savingTimestampConfig}
+            savingDefaultScenario={savingDefaultScenario}
+            savingDefaultSystemPrompt={savingDefaultSystemPrompt}
             onConnectionProfileChange={handleConnectionProfileSave}
             onPartnerChange={handlePartnerSave}
             onImageProfileChange={handleImageProfileSave}
             onAgentModeChange={handleSaveAgentMode}
+            savingHelpTools={savingHelpTools}
+            onHelpToolsChange={handleSaveHelpTools}
+            onTimestampConfigChange={handleSaveTimestampConfig}
+            onDefaultScenarioChange={handleSaveDefaultScenario}
+            onDefaultSystemPromptChange={handleSaveDefaultSystemPrompt}
           />
         )
 
@@ -300,7 +370,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           onToggleNpc={handleToggleNpc}
           onToggleFavorite={handleToggleFavorite}
           onToggleControlledBy={handleToggleControlledBy}
+          onOptimize={() => setShowOptimizerModal(true)}
           onSearchReplace={() => setShowSearchReplaceModal(true)}
+          onGenerateExternalPrompt={() => setShowExternalPromptDialog(true)}
           togglingNpc={togglingNpc}
           togglingFavorite={togglingFavorite}
           togglingControlledBy={togglingControlledBy}
@@ -319,17 +391,23 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           characterName={character?.name}
           profiles={profiles}
           userControlledCharacters={userControlledCharacters}
+          systemPrompts={character?.systemPrompts}
           selectedProfileId={selectedProfileId}
           selectedUserCharacterId={selectedUserCharacterId}
           selectedImageProfileId={selectedImageProfileId}
+          selectedSystemPromptId={selectedSystemPromptId}
           scenario={scenario}
+          scenarioId={scenarioId}
+          scenarios={character?.scenarios}
           timestampConfig={timestampConfig}
           creatingChat={creatingChat}
           openedFromQuery={openedFromQuery}
           onProfileChange={setSelectedProfileId}
           onUserCharacterChange={setSelectedUserCharacterId}
           onImageProfileChange={setSelectedImageProfileId}
+          onSystemPromptChange={setSelectedSystemPromptId}
           onScenarioChange={setScenario}
+          onScenarioIdChange={setScenarioId}
           onTimestampConfigChange={setTimestampConfig}
           onCancel={() => {
             if (openedFromQuery) {
@@ -339,6 +417,21 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             }
           }}
           onCreateChat={handleCreateChatClick}
+        />
+      )}
+
+      {/* Character Optimizer Modal */}
+      {showOptimizerModal && (
+        <CharacterOptimizerModal
+          characterId={id}
+          characterName={character?.name || 'Character'}
+          profiles={profiles}
+          defaultConnectionProfileId={character?.defaultConnectionProfileId}
+          onClose={() => setShowOptimizerModal(false)}
+          onApplied={() => {
+            fetchCharacter()
+            setShowOptimizerModal(false)
+          }}
         />
       )}
 
@@ -355,6 +448,29 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           }
         }}
       />
+
+      {/* External Prompt Generator */}
+      {showExternalPromptDialog && (
+        <ExternalPromptDialog
+          characterId={id}
+          characterName={character?.name}
+          systemPrompts={character?.systemPrompts}
+          scenarios={character?.scenarios}
+          onCancel={() => setShowExternalPromptDialog(false)}
+          onGenerated={(prompt) => {
+            setShowExternalPromptDialog(false)
+            setExternalPromptResult(prompt)
+          }}
+        />
+      )}
+
+      {externalPromptResult && (
+        <ExternalPromptResultDialog
+          characterName={character?.name}
+          prompt={externalPromptResult}
+          onClose={() => setExternalPromptResult(null)}
+        />
+      )}
     </div>
   )
 }

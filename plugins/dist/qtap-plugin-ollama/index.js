@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.26.0";
+var VERSION = "6.33.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -3220,7 +3220,7 @@ var Speech = class extends APIResource {
    * const speech = await client.audio.speech.create({
    *   input: 'input',
    *   model: 'string',
-   *   voice: 'ash',
+   *   voice: 'string',
    * });
    *
    * const content = await speech.blob();
@@ -6385,7 +6385,7 @@ var Videos = class extends APIResource {
    * Create a new video generation job from a prompt and optional reference assets.
    */
   create(body, options) {
-    return this._client.post("/videos", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post("/videos", multipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Fetch the latest metadata for a generated video.
@@ -6406,6 +6406,12 @@ var Videos = class extends APIResource {
     return this._client.delete(path`/videos/${videoID}`, options);
   }
   /**
+   * Create a character from an uploaded video.
+   */
+  createCharacter(body, options) {
+    return this._client.post("/videos/characters", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
    * Download the generated video bytes or a derived preview asset.
    *
    * Streams the rendered video content for the specified video job.
@@ -6417,6 +6423,25 @@ var Videos = class extends APIResource {
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
     });
+  }
+  /**
+   * Create a new video generation job by editing a source video or existing
+   * generated video.
+   */
+  edit(body, options) {
+    return this._client.post("/videos/edits", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Create an extension of a completed video.
+   */
+  extend(body, options) {
+    return this._client.post("/videos/extensions", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Fetch a character.
+   */
+  getCharacter(characterID, options) {
+    return this._client.get(path`/videos/characters/${characterID}`, options);
   }
   /**
    * Create a remix of a completed video using a refreshed prompt.
@@ -6650,8 +6675,9 @@ var OpenAI = class {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
     const url = isAbsoluteURL(path2) ? new URL(path2) : new URL(baseURL + (baseURL.endsWith("/") && path2.startsWith("/") ? path2.slice(1) : path2));
     const defaultQuery = this.defaultQuery();
-    if (!isEmptyObj(defaultQuery)) {
-      query = { ...defaultQuery, ...query };
+    const pathQuery = Object.fromEntries(url.searchParams);
+    if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
+      query = { ...pathQuery, ...defaultQuery, ...query };
     }
     if (typeof query === "object" && query && !Array.isArray(query)) {
       url.search = this.stringifyQuery(query);
@@ -7020,7 +7046,8 @@ function parseOpenAIToolCalls(response) {
           try {
             toolCalls.push({
               name: tc.function.name,
-              arguments: JSON.parse(argsStr)
+              arguments: JSON.parse(argsStr),
+              callId: tc.id || void 0
             });
           } catch {
             continue;
@@ -7085,6 +7112,14 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var GLOBAL_VERSION_KEY = "__quilltap_app_version";
+function getQuilltapVersion() {
+  const version = globalThis[GLOBAL_VERSION_KEY];
+  return typeof version === "string" ? version : "unknown";
+}
+function getQuilltapUserAgent() {
+  return `Quilltap/${getQuilltapVersion()}`;
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -7114,10 +7149,33 @@ var OllamaProvider = class {
   }
   async sendMessage(params, apiKey) {
     const attachmentResults = this.collectAttachmentFailures(params);
-    const messages = params.messages.map((m) => ({
-      role: m.role,
-      content: m.content
-    }));
+    const messages = params.messages.filter((m) => {
+      if (m.role === "tool" && !m.toolCallId) return false;
+      return true;
+    }).map((m) => {
+      if (m.role === "tool" && m.toolCallId) {
+        return {
+          role: "tool",
+          tool_call_id: m.toolCallId,
+          content: m.content
+        };
+      }
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: "assistant",
+          content: m.content || null,
+          tool_calls: m.toolCalls.map((tc) => ({
+            id: tc.id,
+            type: tc.type,
+            function: tc.function
+          }))
+        };
+      }
+      return {
+        role: m.role,
+        content: m.content
+      };
+    });
     const requestBody = {
       model: params.model,
       messages,
@@ -7135,7 +7193,10 @@ var OllamaProvider = class {
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": getQuilltapUserAgent()
+        },
         body: JSON.stringify(requestBody)
       });
       if (!response.ok) {
@@ -7162,10 +7223,33 @@ var OllamaProvider = class {
   }
   async *streamMessage(params, apiKey) {
     const attachmentResults = this.collectAttachmentFailures(params);
-    const messages = params.messages.map((m) => ({
-      role: m.role,
-      content: m.content
-    }));
+    const messages = params.messages.filter((m) => {
+      if (m.role === "tool" && !m.toolCallId) return false;
+      return true;
+    }).map((m) => {
+      if (m.role === "tool" && m.toolCallId) {
+        return {
+          role: "tool",
+          tool_call_id: m.toolCallId,
+          content: m.content
+        };
+      }
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        return {
+          role: "assistant",
+          content: m.content || null,
+          tool_calls: m.toolCalls.map((tc) => ({
+            id: tc.id,
+            type: tc.type,
+            function: tc.function
+          }))
+        };
+      }
+      return {
+        role: m.role,
+        content: m.content
+      };
+    });
     const requestBody = {
       model: params.model,
       messages,
@@ -7182,7 +7266,10 @@ var OllamaProvider = class {
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": getQuilltapUserAgent()
+        },
         body: JSON.stringify(requestBody)
       });
       if (!response.ok) {
@@ -7286,7 +7373,10 @@ var OllamaProvider = class {
   async validateApiKey(apiKey) {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, {
-        method: "GET"
+        method: "GET",
+        headers: {
+          "User-Agent": getQuilltapUserAgent()
+        }
       });
       const isValid = response.ok;
       return isValid;
@@ -7298,7 +7388,10 @@ var OllamaProvider = class {
   async getAvailableModels(apiKey) {
     try {
       const response = await fetch(`${this.baseUrl}/api/tags`, {
-        method: "GET"
+        method: "GET",
+        headers: {
+          "User-Agent": getQuilltapUserAgent()
+        }
       });
       if (!response.ok) {
         logger.error("Failed to fetch Ollama models", { context: "OllamaProvider.getAvailableModels", status: response.status });
@@ -7343,7 +7436,8 @@ var OllamaEmbeddingProvider = class {
     const response = await fetch(`${this.baseUrl}/api/embeddings`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": getQuilltapUserAgent()
       },
       body: JSON.stringify(requestPayload)
     });
@@ -7394,7 +7488,11 @@ var OllamaEmbeddingProvider = class {
    */
   async getAvailableModels(apiKey) {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`);
+      const response = await fetch(`${this.baseUrl}/api/tags`, {
+        headers: {
+          "User-Agent": getQuilltapUserAgent()
+        }
+      });
       if (!response.ok) {
         return [];
       }
@@ -7416,13 +7514,341 @@ var OllamaEmbeddingProvider = class {
    */
   async isAvailable() {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`);
+      const response = await fetch(`${this.baseUrl}/api/tags`, {
+        headers: {
+          "User-Agent": getQuilltapUserAgent()
+        }
+      });
       return response.ok;
     } catch {
       return false;
     }
   }
 };
+
+// node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
+var TOOL_NAME_ALIASES = {
+  // Direct mappings
+  "search_memories": "search_memories",
+  "generate_image": "generate_image",
+  "search_web": "search_web",
+  // Memory tool aliases
+  "memory": "search_memories",
+  "memory_search": "search_memories",
+  "search_memory": "search_memories",
+  "memories": "search_memories",
+  // Image tool aliases
+  "image": "generate_image",
+  "create_image": "generate_image",
+  "image_generation": "generate_image",
+  "gen_image": "generate_image",
+  // Web search aliases
+  "search": "search_web",
+  "web_search": "search_web",
+  "websearch": "search_web",
+  "web": "search_web",
+  // Help tool aliases
+  "help_search": "help_search",
+  "helpsearch": "help_search",
+  "search_help": "help_search",
+  "help_navigate": "help_navigate",
+  "helpnavigate": "help_navigate"
+};
+function normalizeToolName(name) {
+  const normalized = name.toLowerCase().trim();
+  return TOOL_NAME_ALIASES[normalized] || name;
+}
+function convertToToolCallRequest(parsed) {
+  switch (parsed.toolName) {
+    case "search_memories":
+      return {
+        name: "search_memories",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
+          limit: parsed.arguments.limit
+        }
+      };
+    case "generate_image":
+      return {
+        name: "generate_image",
+        arguments: {
+          prompt: parsed.arguments.prompt || parsed.arguments.description || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    case "search_web":
+      return {
+        name: "search_web",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    case "help_search":
+      return {
+        name: "help_search",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
+          limit: parsed.arguments.limit
+        }
+      };
+    case "help_navigate":
+      return {
+        name: "help_navigate",
+        arguments: {
+          url: parsed.arguments.url || parsed.arguments.path || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    default:
+      return {
+        name: parsed.toolName,
+        arguments: parsed.arguments
+      };
+  }
+}
+function parseFunctionCallsFormat(response) {
+  const results = [];
+  const functionCallsPattern = /<function_calls>([\s\S]*?)<\/function_calls>/gi;
+  let wrapperMatch;
+  while ((wrapperMatch = functionCallsPattern.exec(response)) !== null) {
+    const wrapperContent = wrapperMatch[1];
+    const wrapperStartIndex = wrapperMatch.index;
+    const contentOffset = wrapperStartIndex + "<function_calls>".length;
+    const invokePattern = /<invoke\s+name=["']([^"']+)["']>([\s\S]*?)<\/invoke>/gi;
+    let invokeMatch;
+    while ((invokeMatch = invokePattern.exec(wrapperContent)) !== null) {
+      const toolName = invokeMatch[1];
+      const paramContent = invokeMatch[2];
+      const invokeStartIndex = contentOffset + invokeMatch.index;
+      const invokeEndIndex = invokeStartIndex + invokeMatch[0].length;
+      const args = {};
+      let format = "claude";
+      const deepseekParamPattern = /<parameter\s+name=["']([^"']+)["']\s+string=["']([^"']*)["'][^>]*>([^<]*)<\/parameter>/gi;
+      let paramMatch;
+      while ((paramMatch = deepseekParamPattern.exec(paramContent)) !== null) {
+        const paramName = paramMatch[1];
+        const stringAttr = paramMatch[2];
+        const value = paramMatch[3].trim();
+        if (stringAttr === "false") {
+          const numVal = Number(value);
+          if (!isNaN(numVal)) {
+            args[paramName] = numVal;
+          } else if (value === "true") {
+            args[paramName] = true;
+          } else if (value === "false") {
+            args[paramName] = false;
+          } else {
+            args[paramName] = value;
+          }
+        } else {
+          args[paramName] = value;
+        }
+        format = "deepseek";
+      }
+      if (Object.keys(args).length === 0) {
+        const claudeParamPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+        while ((paramMatch = claudeParamPattern.exec(paramContent)) !== null) {
+          args[paramMatch[1]] = paramMatch[2].trim();
+        }
+      }
+      const antmlParamPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/antml:parameter>/gi;
+      while ((paramMatch = antmlParamPattern.exec(paramContent)) !== null) {
+        args[paramMatch[1]] = paramMatch[2].trim();
+      }
+      results.push({
+        toolName: normalizeToolName(toolName),
+        arguments: args,
+        fullMatch: invokeMatch[0],
+        startIndex: invokeStartIndex,
+        endIndex: invokeEndIndex,
+        format
+      });
+    }
+  }
+  return results;
+}
+function parseToolCallFormat(response) {
+  const results = [];
+  const toolCallPattern = /<tool_call>([\s\S]*?)<\/tool_call>/gi;
+  let match;
+  while ((match = toolCallPattern.exec(response)) !== null) {
+    const content = match[1];
+    const startIndex = match.index;
+    const nameMatch = /<name>([^<]+)<\/name>/i.exec(content);
+    if (!nameMatch) continue;
+    const toolName = nameMatch[1].trim();
+    const args = {};
+    const argsMatch = /<arguments>([\s\S]*?)<\/arguments>/i.exec(content);
+    if (argsMatch) {
+      const argsContent = argsMatch[1];
+      const argPattern = /<(\w+)>([^<]*)<\/\1>/gi;
+      let argMatch;
+      while ((argMatch = argPattern.exec(argsContent)) !== null) {
+        args[argMatch[1]] = argMatch[2].trim();
+      }
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "generic"
+    });
+  }
+  return results;
+}
+function parseFunctionCallFormat(response) {
+  const results = [];
+  const functionCallPattern = /<function_call\s+name=["']([^"']+)["']>([\s\S]*?)<\/function_call>/gi;
+  let match;
+  while ((match = functionCallPattern.exec(response)) !== null) {
+    const toolName = match[1];
+    const content = match[2];
+    const startIndex = match.index;
+    const args = {};
+    const paramPattern = /<param\s+name=["']([^"']+)["']>([^<]*)<\/param>/gi;
+    let paramMatch;
+    while ((paramMatch = paramPattern.exec(content)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    const parameterPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+    while ((paramMatch = parameterPattern.exec(content)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "function_call"
+    });
+  }
+  return results;
+}
+function parseToolUseFormat(response) {
+  const results = [];
+  const toolUsePattern = /<tool_use(?:\s+name=["']([^"']+)["'])?\s*>([\s\S]*?)<\/tool_use>/gi;
+  let match;
+  while ((match = toolUsePattern.exec(response)) !== null) {
+    const attrName = match[1];
+    const content = match[2];
+    const startIndex = match.index;
+    const trimmedContent = content.trim();
+    if (trimmedContent.startsWith("{")) {
+      try {
+        const jsonBlob = JSON.parse(trimmedContent);
+        if (typeof jsonBlob === "object" && jsonBlob !== null && jsonBlob.name) {
+          const args2 = jsonBlob.input || jsonBlob.arguments || jsonBlob.parameters || {};
+          results.push({
+            toolName: normalizeToolName(jsonBlob.name),
+            arguments: typeof args2 === "object" && args2 !== null ? args2 : {},
+            fullMatch: match[0],
+            startIndex,
+            endIndex: startIndex + match[0].length,
+            format: "tool_use"
+          });
+          continue;
+        }
+      } catch {
+      }
+    }
+    let toolName = attrName;
+    if (!toolName) {
+      const nameMatch = /<name>([^<]+)<\/name>/i.exec(content);
+      if (!nameMatch) continue;
+      toolName = nameMatch[1].trim();
+    }
+    const args = {};
+    const argsMatch = /<(?:arguments|input|parameters)>([\s\S]*?)<\/(?:arguments|input|parameters)>/i.exec(content);
+    if (argsMatch) {
+      const argsContent = argsMatch[1].trim();
+      if (argsContent.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(argsContent);
+          if (typeof parsed === "object" && parsed !== null) {
+            Object.assign(args, parsed);
+          }
+        } catch {
+        }
+      }
+      if (Object.keys(args).length === 0) {
+        const argPattern = /<(\w+)>([^<]*)<\/\1>/gi;
+        let argMatch;
+        while ((argMatch = argPattern.exec(argsContent)) !== null) {
+          args[argMatch[1]] = argMatch[2].trim();
+        }
+      }
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "tool_use"
+    });
+  }
+  return results;
+}
+function parseInvokeFormat(response) {
+  const results = [];
+  const invokePattern = /<invoke\s+name=["']([^"']+)["']>([\s\S]*?)<\/invoke>/gi;
+  let match;
+  while ((match = invokePattern.exec(response)) !== null) {
+    const toolName = match[1];
+    const paramContent = match[2];
+    const startIndex = match.index;
+    const args = {};
+    const paramPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+    let paramMatch;
+    while ((paramMatch = paramPattern.exec(paramContent)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "invoke"
+    });
+  }
+  return results;
+}
+function parseAllXMLFormats(response) {
+  const allResults = [];
+  allResults.push(...parseFunctionCallsFormat(response));
+  allResults.push(...parseToolCallFormat(response));
+  allResults.push(...parseFunctionCallFormat(response));
+  allResults.push(...parseToolUseFormat(response));
+  allResults.push(...parseInvokeFormat(response));
+  const seen = /* @__PURE__ */ new Set();
+  const deduped = allResults.filter((result) => {
+    if (seen.has(result.startIndex)) {
+      return false;
+    }
+    seen.add(result.startIndex);
+    return true;
+  });
+  deduped.sort((a, b) => a.startIndex - b.startIndex);
+  return deduped;
+}
+function parseAllXMLAsToolCalls(response) {
+  return parseAllXMLFormats(response).map(convertToToolCallRequest);
+}
+function hasAnyXMLToolMarkers(response) {
+  return /<function_calls>/i.test(response) || /<tool_call>/i.test(response) || /<function_call\s+/i.test(response) || /<tool_use[\s>]/i.test(response) || /<invoke\s+name=/i.test(response);
+}
+function stripAllXMLToolMarkers(response) {
+  let stripped = response;
+  stripped = stripped.replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, "");
+  stripped = stripped.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "");
+  stripped = stripped.replace(/<function_call\s+[^>]*>[\s\S]*?<\/function_call>/gi, "");
+  stripped = stripped.replace(/<tool_use[\s>][\s\S]*?<\/tool_use>/gi, "");
+  stripped = stripped.replace(/<invoke\s+name=["'][^"']*["']>[\s\S]*?<\/invoke>/gi, "");
+  stripped = stripped.replace(/\n{3,}/g, "\n\n").replace(/  +/g, " ").trim();
+  return stripped;
+}
 
 // index.ts
 var logger3 = createPluginLogger("qtap-plugin-ollama");
@@ -7665,6 +8091,35 @@ var plugin = {
       );
       return [];
     }
+  },
+  /**
+   * Detect spontaneous XML tool call markers in Ollama text responses
+   * Checks all XML formats since local models are unpredictable
+   */
+  hasTextToolMarkers(text) {
+    return hasAnyXMLToolMarkers(text);
+  },
+  /**
+   * Parse spontaneous XML tool calls from Ollama text responses
+   */
+  parseTextToolCalls(text) {
+    try {
+      const results = parseAllXMLAsToolCalls(text);
+      return results;
+    } catch (error) {
+      logger3.error(
+        "Error parsing text tool calls",
+        { context: "ollama.parseTextToolCalls" },
+        error instanceof Error ? error : void 0
+      );
+      return [];
+    }
+  },
+  /**
+   * Strip spontaneous XML tool call markers from Ollama text responses
+   */
+  stripTextToolMarkers(text) {
+    return stripAllXMLToolMarkers(text);
   }
 };
 var index_default = plugin;

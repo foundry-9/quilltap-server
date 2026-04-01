@@ -167,6 +167,13 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 
   /**
+   * Find chats by user ID and chat type
+   */
+  async findByType(userId: string, chatType: 'salon' | 'help'): Promise<ChatMetadata[]> {
+    return this.findByFilter({ userId, chatType } as TypedQueryFilter<ChatMetadata>);
+  }
+
+  /**
    * Create a new chat
    * @param data The chat data (without id, createdAt, updatedAt). Fields with defaults are optional.
    * @param options Optional CreateOptions to specify ID and createdAt (for sync)

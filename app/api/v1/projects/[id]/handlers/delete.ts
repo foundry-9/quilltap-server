@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import {
   handleDeleteProject,
   handleRemoveCharacter,
@@ -18,6 +18,9 @@ import {
   handleResetState,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
+
+const PROJECT_DELETE_ACTIONS = ['remove-character', 'remove-chat', 'remove-file', 'reset-state'] as const;
+type ProjectDeleteAction = typeof PROJECT_DELETE_ACTIONS[number];
 
 /**
  * DELETE handler for individual project
@@ -29,16 +32,16 @@ export async function handleDelete(
 ): Promise<NextResponse> {
   const action = getActionParam(req);
 
-  switch (action) {
-    case 'remove-character':
-      return handleRemoveCharacter(req, projectId, ctx);
-    case 'remove-chat':
-      return handleRemoveChat(req, projectId, ctx);
-    case 'remove-file':
-      return handleRemoveFile(req, projectId, ctx);
-    case 'reset-state':
-      return handleResetState(projectId, ctx);
-    default:
-      return handleDeleteProject(projectId, ctx);
+  if (!action || !isValidAction(action, PROJECT_DELETE_ACTIONS)) {
+    return handleDeleteProject(projectId, ctx);
   }
+
+  const actionHandlers: Record<ProjectDeleteAction, () => Promise<NextResponse>> = {
+    'remove-character': () => handleRemoveCharacter(req, projectId, ctx),
+    'remove-chat': () => handleRemoveChat(req, projectId, ctx),
+    'remove-file': () => handleRemoveFile(req, projectId, ctx),
+    'reset-state': () => handleResetState(projectId, ctx),
+  };
+
+  return actionHandlers[action]();
 }

@@ -8,7 +8,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { extractMemoryFromMessage, extractCharacterMemoryFromMessage, extractInterCharacterMemoryFromMessage, MemoryCandidate, UncensoredFallbackOptions } from './cheap-llm-tasks'
-import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
@@ -53,6 +53,8 @@ export interface MemoryExtractionContext {
   availableProfiles?: ConnectionProfile[]
   /** Dangerous content settings for uncensored fallback */
   dangerSettings?: DangerousContentSettings
+  /** Whether the chat is flagged as permanently dangerous */
+  isDangerousChat?: boolean
 }
 
 /**
@@ -89,6 +91,8 @@ export interface InterCharacterMemoryContext {
   availableProfiles?: ConnectionProfile[]
   /** Dangerous content settings for uncensored fallback */
   dangerSettings?: DangerousContentSettings
+  /** Whether the chat is flagged as permanently dangerous */
+  isDangerousChat?: boolean
 }
 
 /**
@@ -236,11 +240,19 @@ export async function processMessageForMemory(
   try {
     // Get cheap LLM provider selection
     const config = toCheapLLMConfig(ctx.cheapLLMSettings)
-    const selection: CheapLLMSelection = getCheapLLMProvider(
+    let selection: CheapLLMSelection = getCheapLLMProvider(
       ctx.connectionProfile,
       config,
       ctx.availableProfiles || [],
       false // ollamaAvailable - we'll check via available profiles
+    )
+
+    // For dangerous chats, prefer an uncensored provider to avoid content refusals
+    selection = resolveUncensoredCheapLLMSelection(
+      selection,
+      ctx.isDangerousChat ?? false,
+      ctx.dangerSettings,
+      ctx.availableProfiles ?? []
     )
 
     // Build context for extraction
@@ -621,11 +633,19 @@ export async function processInterCharacterMemory(
   try {
     // Get cheap LLM provider selection
     const config = toCheapLLMConfig(ctx.cheapLLMSettings)
-    const selection: CheapLLMSelection = getCheapLLMProvider(
+    let selection: CheapLLMSelection = getCheapLLMProvider(
       ctx.connectionProfile,
       config,
       ctx.availableProfiles || [],
       false
+    )
+
+    // For dangerous chats, prefer an uncensored provider to avoid content refusals
+    selection = resolveUncensoredCheapLLMSelection(
+      selection,
+      ctx.isDangerousChat ?? false,
+      ctx.dangerSettings,
+      ctx.availableProfiles ?? []
     )
 
     // Build uncensored fallback options if danger settings are provided

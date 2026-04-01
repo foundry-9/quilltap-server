@@ -2,6 +2,19 @@
 
 All notable changes to this package will be documented in this file.
 
+## [2.0.0] - 2026-03-06
+
+### Changed
+
+- Default output format is now `.qtap-theme` bundle (declarative directory with `theme.json`, `tokens.json`, `styles.css`, and `fonts/`)
+- Legacy npm plugin format available via `--plugin` flag
+- Bundle format requires no build tools, npm packages, or TypeScript
+
+### Added
+
+- Bundle directory templates (`theme.json.template`, `styles.css.template`, `README.md.template`)
+- `--plugin` flag for legacy npm plugin scaffolding
+
 ## [1.0.4] - 2026-01-01
 
 ### Added

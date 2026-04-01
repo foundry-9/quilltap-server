@@ -103,7 +103,7 @@ describe('chat-enrichment.service', () => {
         id: 'char-1',
         name: 'Alice',
         title: null,
-        avatarUrl: null,
+        avatarUrl: '/api/v1/files/img-1',
         defaultImageId: 'img-1',
         defaultImage: {
           id: 'img-1',
@@ -274,6 +274,8 @@ describe('chat-enrichment.service', () => {
         type: 'CHARACTER',
         displayOrder: 0,
         isActive: true,
+        status: 'active',
+        removedAt: null,
         character: expect.objectContaining({
           id: 'char-1',
           name: 'Alice',
@@ -304,7 +306,6 @@ describe('chat-enrichment.service', () => {
         characterId: 'char-1',
         connectionProfileId: 'conn-1',
         imageProfileId: 'img-1',
-        systemPromptOverride: 'Custom prompt',
         controlledBy: 'llm',
       })
 
@@ -324,7 +325,8 @@ describe('chat-enrichment.service', () => {
         controlledBy: 'llm',
         displayOrder: 0,
         isActive: true,
-        systemPromptOverride: 'Custom prompt',
+        status: 'active',
+        removedAt: null,
         character: expect.objectContaining({ id: 'char-1', name: 'Alice' }),
         connectionProfile: expect.objectContaining({ id: 'conn-1' }),
         imageProfile: expect.objectContaining({ id: 'img-1' }),

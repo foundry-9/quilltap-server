@@ -26,10 +26,23 @@ files:
   - "!plugins/**/*"
   - "!packages/**/*"
   - "!__tests__/**/*"
-  - "!.storybook/**/*"
   - "!.githooks/**/*"
+# Native modules are rebuilt in build-electron-server.ts against Electron's Node ABI.
+# Disable electron-builder's own @electron/rebuild to prevent it from scanning the
+# project's node_modules (which contains .bin symlinks that break macOS codesign).
+npmRebuild: false
 afterSign: electron/notarize.js
+extraResources:
+  # Embedded server: Next.js standalone output + static assets + public files + plugins
+  # NOTE: node_modules is renamed to _modules in the staging step because
+  # electron-builder has a hardcoded node_modules exclusion for extraResources.
+  # The embedded server sets NODE_PATH to find _modules at runtime.
+  - from: .electron-server-staging/
+    to: server/
+    filter:
+      - "**/*"
 mac:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
   category: public.app-category.productivity
   notarize: false  # We handle notarization in afterSign hook (electron/notarize.js)
   target:
@@ -48,11 +61,7 @@ mac:
     - from: electron/resources/lima/
       to: lima/
 win:
-  azureSignOptions:
-    publisherName: "Charles Sebold"
-    endpoint: "https://cus.codesigning.azure.net/"
-    certificateProfileName: "quilltap"
-    codeSigningAccountName: "quilltap"
+  artifactName: "${productName}-${version}-${arch}.${ext}"
   target:
     - target: nsis
       arch:
@@ -65,6 +74,7 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: Quilltap
 linux:
+  artifactName: "${productName}-${version}-${arch}.${ext}"
   target:
     - target: AppImage
       arch:

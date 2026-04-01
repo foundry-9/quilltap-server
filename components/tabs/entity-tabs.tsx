@@ -40,6 +40,8 @@ export function EntityTabs({ tabs, defaultTab, persistToUrl = true, contentClass
       } else {
         params.set('tab', tabId)
       }
+      // Clear section deep-link when switching tabs
+      params.delete('section')
       const newUrl = params.toString() ? `${pathname}?${params}` : pathname
       router.replace(newUrl, { scroll: false })
     } else {

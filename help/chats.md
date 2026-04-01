@@ -222,6 +222,7 @@ Quilltap can extract and store memories from your chats:
 - **Auto-extraction** — Important facts saved automatically
 - **Semantic Search** — Find past conversations by meaning
 - **Character Memory** — Characters can remember previous interactions
+- **Memory Recap** — When a chat begins or a character joins an existing conversation, the system generates a first-person narrative summary from the character's Commonplace Book memories. This "What You Remember" recap gives each character a sense of continuity across conversations — rather like a butler whispering a briefing in one's ear before entering the drawing room. The recap draws from memories of varying importance and is injected into the character's context automatically; no action on your part is required.
 
 See [Chat Settings](chat-settings.md) for memory configuration.
 
@@ -329,6 +330,12 @@ See [Using Tools](tools-usage.md) for tool details.
 - Check all projects, not just current one
 - Try different search terms
 - Check recently deleted if available
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/salon")`
 
 ## Related Pages
 

@@ -42,7 +42,7 @@ docker run -d \
   --name quilltap \
   -p 3000:3000 \
   -v /path/to/data:/app/quilltap \
-  csebold/quilltap
+  foundry9/quilltap
 ```
 
 Open `http://localhost:3000` and you're running. On first launch, you'll be guided through a setup wizard that generates your encryption key automatically.
@@ -58,14 +58,14 @@ docker run -d \
   -p 3000:3000 \
   -v /home/quilltap/data:/app/quilltap \
   -e BASE_URL="https://yourdomain.com" \
-  csebold/quilltap
+  foundry9/quilltap
 ```
 
 **CRITICAL SECURITY NOTES:**
 
-1. **Backup `ENCRYPTION_MASTER_PEPPER`** — If lost (and no vault passphrase), all encrypted API keys are unrecoverable. The setup wizard displays it once — save it securely.
-2. **Pepper Vault** — The encryption pepper is auto-generated on first run and stored encrypted in SQLite. You can protect it with a passphrase via the `/setup` page. Use a persistent volume so the vault survives container rebuilds.
-3. **Use strong values** — Generate with `openssl rand -base64 32`
+1. **Backup the `.dbkey` file** — The encryption pepper is auto-generated on first run and stored in `quilltap.dbkey` (and `quilltap-llm-logs.dbkey` for LLM logs) inside your data directory. Without this file, your encrypted databases cannot be decrypted. Use a persistent volume so the key file survives container rebuilds.
+2. **Optional passphrase protection** — You can protect the `.dbkey` file with a passphrase via the setup wizard or settings. If set, the passphrase is required on every startup (or after an auto-lock timeout). If the `.dbkey` file is lost and a passphrase was set, the database is unrecoverable.
+3. **Auto-lock** — Passphrase-protected instances support an idle timer that automatically locks the database after a configurable period of inactivity, requiring the passphrase to resume.
 
 ## Environment Variables
 
@@ -130,7 +130,7 @@ docker run -d \
   -p 3000:3000 \
   -v /path/to/data:/app/quilltap \
   --add-host=host.docker.internal:host-gateway \
-  csebold/quilltap
+  foundry9/quilltap
 ```
 
 On **macOS and Windows**, Docker Desktop provides `host.docker.internal` automatically — no extra flags needed.
@@ -145,7 +145,7 @@ docker run -d \
   -p 3000:3000 \
   -v /path/to/data:/app/quilltap \
   -e QUILLTAP_HOST_IP="192.168.1.100" \
-  csebold/quilltap
+  foundry9/quilltap
 ```
 
 This override works in all environments (Docker, Lima, WSL2).
@@ -322,7 +322,7 @@ See [Backup & Restore Guide](BACKUP-RESTORE.md) for detailed procedures.
 
 ```bash
 # Pull latest image
-docker pull csebold/quilltap:latest
+docker pull foundry9/quilltap:latest
 
 # Stop and remove old container
 docker stop quilltap
@@ -335,7 +335,7 @@ docker run -d \
   -p 3000:3000 \
   -v /home/quilltap/data:/app/quilltap \
   -e BASE_URL="https://yourdomain.com" \
-  csebold/quilltap:latest
+  foundry9/quilltap:latest
 
 # Verify it's working
 docker logs -f quilltap
@@ -348,7 +348,7 @@ curl https://yourdomain.com/api/health
 # If something goes wrong, use the previous image tag
 docker stop quilltap
 docker rm quilltap
-docker run -d --name quilltap ... csebold/quilltap:previous-version
+docker run -d --name quilltap ... foundry9/quilltap:previous-version
 ```
 
 ## Troubleshooting

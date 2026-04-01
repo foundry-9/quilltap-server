@@ -179,7 +179,7 @@ export function EmbeddingProviderStep({ state, dispatch }: StepProps) {
             <select
               value={selectedModel}
               onChange={(e) => handleModelSelect(e.target.value)}
-              className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+              className="qt-select"
             >
               <option value="">Select an embedding model</option>
               {models.map((model) => (

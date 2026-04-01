@@ -121,7 +121,7 @@ export function SpeakerMapper({
                         entityName: character?.name,
                       })
                     }}
-                    className="mt-1 block w-full rounded-md border border-input bg-background text-foreground qt-shadow-sm focus:border-ring focus:ring-ring text-sm px-2 py-1"
+                    className="mt-1 qt-select"
                   >
                     <option value="">Select a character</option>
                     {characters.map(c => (
@@ -140,7 +140,7 @@ export function SpeakerMapper({
                         onChange={(e) => onMappingChange(index, {
                           connectionProfileId: e.target.value || undefined,
                         })}
-                        className="mt-1 block w-full rounded-md border border-input bg-background text-foreground qt-shadow-sm focus:border-ring focus:ring-ring text-sm px-2 py-1"
+                    className="mt-1 qt-select"
                       >
                         <option value="">Use default profile</option>
                         {profiles.map(p => (
@@ -181,7 +181,7 @@ export function SpeakerMapper({
                     onChange={(e) => onMappingChange(index, {
                       connectionProfileId: e.target.value || undefined,
                     })}
-                    className="mt-1 block w-full rounded-md border border-input bg-background text-foreground qt-shadow-sm focus:border-ring focus:ring-ring text-sm px-2 py-1"
+                    className="mt-1 qt-select"
                   >
                     <option value="">Use default profile</option>
                     {profiles.map(p => (
@@ -228,7 +228,7 @@ export function SpeakerMapper({
         <select
           value={defaultProfileId}
           onChange={(e) => onDefaultProfileChange(e.target.value)}
-          className="block w-full rounded-md border border-input bg-background text-foreground qt-shadow-sm focus:border-ring focus:ring-ring text-sm px-3 py-2"
+          className="qt-select"
         >
           <option value="">Select a profile</option>
           {profiles.map(p => (

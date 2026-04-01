@@ -10,7 +10,6 @@
  * @module plugins/tool-registry
  */
 
-import { logger } from '@/lib/logger';
 import type {
   ToolPlugin,
   ToolMetadata,
@@ -19,17 +18,17 @@ import type {
   ToolExecutionResult,
 } from './interfaces/tool-plugin';
 import { getErrorMessage } from '@/lib/errors';
+import { AbstractMapRegistry } from './abstract-map-registry';
+import type { BaseRegistryState } from './base-registry';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface ToolRegistryState {
-  initialized: boolean;
+export interface ToolRegistryState extends BaseRegistryState {
   /** All registered tool plugins */
   plugins: Map<string, ToolPlugin>;
   errors: Map<string, string>;
-  lastInitTime: Date | null;
 }
 
 // ============================================================================
@@ -42,34 +41,30 @@ declare global {
   var __quilltapToolRegistryState: ToolRegistryState | undefined;
 }
 
-/**
- * Get or create the global registry state
- * Using global ensures state persists across Next.js module reloads
- */
-function getGlobalState(): ToolRegistryState {
-  if (!global.__quilltapToolRegistryState) {
-    global.__quilltapToolRegistryState = {
+// ============================================================================
+// REGISTRY SINGLETON
+// ============================================================================
+
+class ToolRegistry extends AbstractMapRegistry<ToolPlugin, ToolRegistryState> {
+  protected readonly registryName = 'tool-registry';
+  protected readonly globalStateKey = '__quilltapToolRegistryState';
+
+  protected createEmptyState(): ToolRegistryState {
+    return {
       initialized: false,
       plugins: new Map(),
       errors: new Map(),
       lastInitTime: null,
     };
   }
-  return global.__quilltapToolRegistryState;
-}
 
-// ============================================================================
-// REGISTRY SINGLETON
-// ============================================================================
-
-class ToolRegistry {
-  private get state(): ToolRegistryState {
-    return getGlobalState();
+  protected getItemMap(): Map<string, ToolPlugin> {
+    return this.state.plugins;
   }
 
-  private logger = logger.child({
-    module: 'tool-registry',
-  });
+  protected getErrorMap(): Map<string, string> {
+    return this.state.errors;
+  }
 
   /**
    * Register a tool plugin
@@ -82,7 +77,7 @@ class ToolRegistry {
 
     if (this.state.plugins.has(pluginName)) {
       const error = `Plugin '${pluginName}' is already registered`;
-      this.logger.warn(error);
+      this.registryLogger.warn(error);
       throw new Error(error);
     }
 
@@ -94,7 +89,7 @@ class ToolRegistry {
 
     if (!hasNewPattern && !hasLegacyMultiTool && !hasLegacySingleTool) {
       const error = `Plugin '${pluginName}' must implement getToolDefinitions/executeByName or legacy methods`;
-      this.logger.error(error);
+      this.registryLogger.error(error);
       throw new Error(error);
     }
 
@@ -249,7 +244,7 @@ class ToolRegistry {
 
         tools.push(...pluginTools);
       } catch (error) {
-        this.logger.error('Error getting tools from plugin', {
+        this.registryLogger.error('Error getting tools from plugin', {
           pluginName,
           error: getErrorMessage(error),
         });
@@ -286,7 +281,7 @@ class ToolRegistry {
           return { plugin, config };
         }
       } catch (error) {
-        this.logger.warn('Error checking plugin for tool', {
+        this.registryLogger.warn('Error checking plugin for tool', {
           toolName,
           pluginName,
           error: getErrorMessage(error),
@@ -332,7 +327,7 @@ class ToolRegistry {
 
     if (!found) {
       const error = `Tool '${toolName}' not found in any registered plugin`;
-      this.logger.error(error);
+      this.registryLogger.error(error);
       return {
         success: false,
         error,
@@ -344,7 +339,7 @@ class ToolRegistry {
     // Validate input
     if (!plugin.validateInput(input)) {
       const error = `Invalid input for tool '${toolName}'`;
-      this.logger.warn(error, { toolName, input });
+      this.registryLogger.warn(error, { toolName, input });
       return {
         success: false,
         error,
@@ -362,7 +357,7 @@ class ToolRegistry {
       return result;
     } catch (error) {
       const errorMessage = getErrorMessage(error);
-      this.logger.error('Tool execution failed', {
+      this.registryLogger.error('Tool execution failed', {
         toolName,
         pluginName: plugin.metadata.toolName,
         error: errorMessage,
@@ -433,7 +428,7 @@ class ToolRegistry {
         const pluginName = plugin.metadata.toolName;
         const errorMessage = getErrorMessage(error);
         this.state.errors.set(pluginName, errorMessage);
-        this.logger.warn('Failed to register plugin', {
+        this.registryLogger.warn('Failed to register plugin', {
           name: pluginName,
           error: errorMessage,
         });
@@ -447,52 +442,35 @@ class ToolRegistry {
   /**
    * Get registry statistics
    *
+   * Overrides base class to use `plugins` key instead of `items`.
+   *
    * @returns Statistics about registered plugins
    */
   getStats() {
+    const keys = Array.from(this.getItemMap().keys());
     return {
-      total: this.state.plugins.size,
-      errors: this.state.errors.size,
+      total: this.getItemMap().size,
+      errors: this.getErrorMap().size,
       initialized: this.state.initialized,
       lastInitTime: this.state.lastInitTime?.toISOString() || null,
-      plugins: Array.from(this.state.plugins.keys()),
+      items: keys,
+      plugins: keys,
     };
   }
 
   /**
    * Get all errors from plugin registration
    *
+   * Overrides base class to use `plugin` key instead of `name`.
+   *
    * @returns Array of registration errors
    */
-  getErrors(): Array<{ plugin: string; error: string }> {
-    return Array.from(this.state.errors.entries()).map(([plugin, error]) => ({
+  getErrors(): Array<{ name: string; plugin: string; error: string }> {
+    return Array.from(this.getErrorMap().entries()).map(([plugin, error]) => ({
+      name: plugin,
       plugin,
       error,
     }));
-  }
-
-  /**
-   * Check if registry is initialized
-   *
-   * @returns true if registry has been initialized
-   */
-  isInitialized(): boolean {
-    return this.state.initialized;
-  }
-
-  /**
-   * Reset the registry (for testing)
-   *
-   * @internal
-   */
-  reset(): void {
-    // Reset the global state entirely
-    global.__quilltapToolRegistryState = {
-      initialized: false,
-      plugins: new Map(),
-      errors: new Map(),
-      lastInitTime: null,
-    };
   }
 
   /**

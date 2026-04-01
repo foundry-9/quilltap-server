@@ -78,6 +78,7 @@ export interface CheapLLMTaskResult<T> {
 export interface UncensoredFallbackOptions {
   dangerSettings: DangerousContentSettings
   availableProfiles: ConnectionProfile[]
+  isDangerousChat?: boolean
 }
 
 /**
@@ -120,6 +121,8 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'memory-keyword-extraction': 'MEMORY_EXTRACTION',
     'resolve-character-appearances': 'APPEARANCE_RESOLUTION',
     'sanitize-appearance': 'APPEARANCE_RESOLUTION',
+    'scene-state-tracking': 'SCENE_STATE_TRACKING',
+    'memory-recap-summarization': 'SUMMARIZATION',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }
@@ -260,9 +263,11 @@ function shouldAttemptUncensoredFallback(
   // Need an uncensored text profile configured
   if (!dangerSettings.uncensoredTextProfileId) return null
 
-  // Check if current profile is already dangerous-compatible (no need to fallback)
+  // Check if current profile is already dangerous-compatible
+  // For dangerous chats, allow uncensored→uncensored fallback on empty (the configured
+  // fallback provider may be more reliable than the current one)
   const currentProfile = availableProfiles.find(p => p.id === currentSelection.connectionProfileId)
-  if (currentProfile?.isDangerousCompatible) return null
+  if (currentProfile?.isDangerousCompatible && !uncensoredFallback?.isDangerousChat) return null
 
   // Find the uncensored profile
   const uncensoredProfile = availableProfiles.find(p => p.id === dangerSettings.uncensoredTextProfileId)
@@ -853,6 +858,55 @@ export function extractVisibleConversation(
 }
 
 /**
+ * Help chat title prompt template — practical, descriptive titles for support conversations
+ */
+const HELP_CHAT_TITLE_PROMPT = `Generate a short, practical title for this help/support conversation.
+The title should:
+- Be 3-10 words maximum
+- Clearly describe what question was asked or what topic was discussed
+- Be specific enough that someone scanning a list can find it later (e.g., "Setting up Anthropic API connection" not "Getting started")
+- Focus on the user's actual question or problem, not the assistant's personality or style
+- Use plain, descriptive language — no literary flair, no metaphors, no poetic phrasing
+- If technical, mention the specific feature, setting, or area involved
+
+Respond with only the title, no quotes or additional text.`
+
+/**
+ * Help chat title consideration prompt — practical evaluation for help conversations
+ */
+const HELP_CHAT_TITLE_CONSIDERATION_PROMPT = `You are a help chat title evaluator. You will be given:
+1. The current chat title
+2. A previous summary or title (if available)
+3. Recent messages from the chat
+
+Determine if the chat needs a new title. Consider:
+- If the current title is generic (like "Help: [Name]" or "New Chat"), it SHOULD be replaced with a descriptive title about what the user actually asked
+- If the title is already descriptive of the question/topic, only suggest a change if the main topic has shifted significantly
+- A good help chat title clearly describes the question or topic so someone can find it in a list later
+- Titles should be plain and practical — no literary flair, metaphors, or poetic phrasing
+
+Respond with a JSON object:
+{
+  "needsNewTitle": true/false,
+  "reason": "brief explanation",
+  "suggestedTitle": "new title if needsNewTitle is true, otherwise null"
+}
+
+Keep suggested titles 3-10 words, under 60 characters, plain and descriptive.`
+
+/**
+ * Help chat title from summary prompt
+ */
+const HELP_CHAT_TITLE_FROM_SUMMARY_PROMPT = `Generate a short, practical title for this help/support conversation based on the summary provided.
+The title should:
+- Be 3-10 words maximum and under 60 characters
+- Clearly describe what question was asked or what topic was discussed
+- Be specific enough that someone scanning a list can find it later
+- Use plain, descriptive language — no literary flair, no metaphors, no poetic phrasing
+
+Respond with only the title, no quotes or additional text.`
+
+/**
  * Chat title prompt template
  */
 const CHAT_TITLE_PROMPT = `Generate a literary title for this conversation, like titling a short story.
@@ -946,6 +1000,152 @@ export async function titleChat(
       return title
     },
     'title-chat',
+    chatId
+  )
+}
+
+/**
+ * Generates a title for a help chat — practical, descriptive, not literary
+ * Should be called after the first Q&A interchange
+ */
+export async function titleHelpChat(
+  messages: ChatMessage[],
+  existingTitle: string | undefined,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<string>> {
+  // For help chats, we use fewer messages since titles should fire early
+  const capped = messages.slice(-20)
+  const conversationText = capped
+    .map(m => {
+      const label = m.role.toUpperCase()
+      const text = m.content.length > 500
+        ? m.content.substring(0, 500) + '...'
+        : m.content
+      return `${label}: ${text}`
+    })
+    .join('\n\n')
+
+  let prompt = HELP_CHAT_TITLE_PROMPT
+  if (existingTitle && !existingTitle.startsWith('Help:')) {
+    prompt += `\n\nCurrent title: "${existingTitle}"\nUpdate only if the conversation topic has shifted significantly.`
+  }
+
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: prompt },
+    { role: 'user', content: conversationText },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): string => {
+      let title = content.trim()
+      title = title.replace(/^["']|["']$/g, '')
+      if (title.length > 60) {
+        title = title.substring(0, 57) + '...'
+      }
+      return title
+    },
+    'title-chat',
+    chatId
+  )
+}
+
+/**
+ * Evaluates whether a help chat needs a new title
+ */
+export async function considerHelpChatTitleUpdate(
+  currentTitle: string,
+  recentMessages: ChatMessage[],
+  existingSummaryOrTitle: string | null,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<{ needsNewTitle: boolean; reason: string; suggestedTitle: string | null }>> {
+  const conversationText = recentMessages
+    .map(m => `${m.role.toUpperCase()}: ${m.content.substring(0, 500)}`)
+    .join('\n\n')
+
+  const contextInfo = existingSummaryOrTitle
+    ? `Previous context: ${existingSummaryOrTitle}`
+    : 'No previous context'
+
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: HELP_CHAT_TITLE_CONSIDERATION_PROMPT },
+    { role: 'user', content: `Current Title: "${currentTitle}"\n\n${contextInfo}\n\nRecent Messages:\n${conversationText}` },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): { needsNewTitle: boolean; reason: string; suggestedTitle: string | null } => {
+      try {
+        let cleanContent = content.trim()
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+        } else if (cleanContent.startsWith('```')) {
+          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+        }
+
+        const parsed = JSON.parse(cleanContent)
+
+        let suggestedTitle = parsed.suggestedTitle
+        if (suggestedTitle && typeof suggestedTitle === 'string') {
+          suggestedTitle = suggestedTitle.trim().replace(/^["']/, '').replace(/["']$/, '')
+          if (suggestedTitle.length > 60) {
+            suggestedTitle = suggestedTitle.substring(0, 57) + '...'
+          }
+        }
+
+        return {
+          needsNewTitle: parsed.needsNewTitle === true,
+          reason: parsed.reason || 'No reason provided',
+          suggestedTitle: suggestedTitle || null,
+        }
+      } catch {
+        return {
+          needsNewTitle: false,
+          reason: 'Failed to parse response',
+          suggestedTitle: null,
+        }
+      }
+    },
+    'consider-title-update',
+    chatId
+  )
+}
+
+/**
+ * Generates a help chat title from a summary — practical, not literary
+ */
+export async function generateHelpChatTitleFromSummary(
+  summary: string,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<string>> {
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: HELP_CHAT_TITLE_FROM_SUMMARY_PROMPT },
+    { role: 'user', content: `Summary:\n${summary}` },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): string => {
+      let title = content.trim()
+      title = title.replace(/^["']|["']$/g, '')
+      if (title.length > 60) {
+        title = title.substring(0, 57) + '...'
+      }
+      return title
+    },
+    'title-from-summary',
     chatId
   )
 }
@@ -1345,6 +1545,7 @@ Your task is to write a SINGLE COHERENT PARAGRAPH that:
 
 CRITICAL WRITING GUIDELINES:
 - Write in a cinematic, descriptive style suitable for image generation
+- If a person's gender is specified (e.g., [man] or [woman]), ALWAYS refer to them using that gender term (e.g., "a man with...", "a woman with...")
 - Introduce people with phrases like "A young woman with...", "Beside her, a middle-aged man with..."
 - NEVER just concatenate descriptions - write flowing prose that a human would write
 - Use transitional phrases to connect people: "sitting on the lap of", "next to", "holding hands with", etc.
@@ -1382,6 +1583,8 @@ export interface ImagePromptExpansionContext {
   placeholders: Array<{
     placeholder: string
     name: string
+    /** Gender derived from pronouns: 'male', 'female', or undefined */
+    gender?: string
     usageContext?: string
     tiers: {
       short?: string
@@ -1428,7 +1631,12 @@ export async function craftImagePrompt(
   // Format placeholder data for the LLM
   const placeholderDetails = expansionContext.placeholders
     .map(p => {
-      const parts: string[] = [`${p.placeholder} (${p.name}):`];
+      const genderHint = p.gender === 'male' ? ' [man]' : p.gender === 'female' ? ' [woman]' : '';
+      const parts: string[] = [`${p.placeholder} (${p.name}${genderHint}):`];
+
+      if (p.gender) {
+        parts.push(`  Gender: ${p.gender === 'male' ? 'man' : 'woman'} — always refer to this person as a ${p.gender === 'male' ? 'man' : 'woman'} in the prompt`);
+      }
 
       if (p.usageContext) {
         parts.push(`  Usage context: ${p.usageContext}`);
@@ -1635,6 +1843,224 @@ Based on this conversation, describe the scene these characters might be in:`,
 }
 
 // ============================================================================
+// SCENE STATE TRACKING
+// ============================================================================
+
+/**
+ * Input for scene state tracking
+ */
+export interface SceneStateInput {
+  /** Previous scene state JSON (null for first turn) */
+  previousSceneState: Record<string, unknown> | null
+  /** Character baseline data (defaults only — conversation overrides these) */
+  characters: Array<{
+    characterId: string
+    characterName: string
+    physicalDescription: string
+    clothingDescription: string
+    scenario?: string
+  }>
+  /** Messages since last scene state update (or all messages for first turn) */
+  recentMessages: ChatMessage[]
+  /** Current message count for tracking */
+  messageCount: number
+  /** Chat-level scenario/system prompt that establishes the opening scene */
+  chatScenario?: string
+}
+
+/**
+ * Scene state tracking prompt for first turn
+ * Analyzes conversation and character data to produce a structured scene state
+ */
+const SCENE_STATE_FIRST_TURN_PROMPT = `You are a scene state tracker for a roleplay chat. Read the scenario setup and conversation, then produce a structured JSON snapshot of the current scene.
+
+Output ONLY valid JSON with this exact schema:
+{
+  "location": "where the scene takes place right now",
+  "characters": [
+    {
+      "characterId": "the character's ID (from baselines)",
+      "characterName": "the character's name",
+      "action": "what the character is doing right now",
+      "appearance": "what the character currently looks like",
+      "clothing": "describe current clothing state — see rules below"
+    }
+  ]
+}
+
+CRITICAL RULES — read carefully:
+- The CONVERSATION and SCENARIO are the primary authority. Character baselines are only defaults.
+- If the scenario or conversation describes a character wearing something specific, USE THAT, not the baseline clothing.
+- If the scenario or conversation describes a character's appearance differently from baseline, USE THAT.
+- If a character undresses, is described as nude/naked, or removes clothing in the narrative, clothing should reflect that accurately — do not fall back to baseline clothing.
+- Baselines are ONLY used when the conversation gives NO information about a character's current state.
+- location: concise (1-2 sentences). Derive from scenario and conversation context.
+- action: what the character is doing RIGHT NOW at the end of the conversation.
+- appearance: complete snapshot of current state. Use baseline if the conversation provides no appearance info.
+- clothing: ALWAYS provide a string describing the current clothing state. NEVER use null. Examples: "nude", "shirtless, wearing jeans", "red cocktail dress", "partially undressed — wearing only underwear". If the character has undressed or is naked, say so explicitly (e.g. "nude", "naked", "undressed"). Only use the baseline clothing if the conversation has not described any clothing changes. If neither the conversation nor the baseline provides clothing info, use "unknown".
+- Be concise and accurate. Output ONLY the JSON object.`
+
+/**
+ * Scene state tracking prompt for subsequent turns
+ * Updates the scene state based on new messages
+ */
+const SCENE_STATE_UPDATE_PROMPT = `You are a scene state tracker for a roleplay chat. Given the previous scene state and new messages, produce an updated scene state.
+
+Output ONLY valid JSON with this exact schema:
+{
+  "location": "where the scene takes place right now",
+  "characters": [
+    {
+      "characterId": "the character's ID",
+      "characterName": "the character's name",
+      "action": "what the character is doing right now",
+      "appearance": "what the character currently looks like",
+      "clothing": "describe current clothing state — see rules below"
+    }
+  ]
+}
+
+CRITICAL RULES — read carefully:
+- The NEW MESSAGES are the primary authority. They override the previous state.
+- If new messages describe a character changing clothes, undressing, or altering appearance, UPDATE those fields.
+- If a character is described as nude/naked or removes clothing, reflect that accurately — do not revert to previous clothing.
+- Every field is a COMPLETE snapshot, not a diff.
+- If nothing changed for a field, carry it forward from the previous state.
+- Update location if the scene has moved.
+- Update action to reflect what each character is doing NOW at the end of the new messages.
+- clothing: ALWAYS provide a string describing the current clothing state. NEVER use null. Examples: "nude", "shirtless, wearing jeans", "red cocktail dress", "partially undressed — wearing only underwear". If a character has undressed or is naked, say so explicitly. If the previous state had clothing as null or missing, check the character baselines and new messages to determine the current clothing state.
+- Character baselines are provided for reference — use them to fill in null or missing fields from the previous state, but the new messages always take priority.
+- Be concise and accurate. Output ONLY the JSON object.`
+
+/**
+ * Updates scene state based on conversation messages
+ *
+ * Tracks the current state of a scene including location, character actions,
+ * appearance, and clothing. On the first turn, establishes the initial state.
+ * On subsequent turns, updates based on new messages.
+ *
+ * @param input - Scene state input including messages, character data, and previous state
+ * @param selection - The cheap LLM provider selection
+ * @param userId - The user ID for API key retrieval
+ * @param chatId - Optional chat ID for logging
+ * @returns Updated scene state as structured JSON
+ */
+export async function updateSceneState(
+  input: SceneStateInput,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string,
+  uncensoredFallback?: UncensoredFallbackOptions
+): Promise<CheapLLMTaskResult<Record<string, unknown>>> {
+  // Format recent messages for the prompt — no truncation for scene state tracking,
+  // because clothing/appearance details often appear deep in longer messages
+  const messageText = input.recentMessages
+    .map(m => {
+      const speaker = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Character' : 'System'
+      return `${speaker}: ${m.content}`
+    })
+    .join('\n\n')
+
+  // Build character baseline section
+  const characterBaselines = input.characters
+    .map(char => {
+      return `${char.characterName} (ID: ${char.characterId}):
+  - Appearance: ${char.physicalDescription}
+  - Clothing: ${char.clothingDescription}${char.scenario ? `\n  - Scenario context: ${char.scenario}` : ''}`
+    })
+    .join('\n\n')
+
+  let llmMessages: LLMMessage[]
+
+  // Build optional scenario section
+  const scenarioSection = input.chatScenario
+    ? `\nScenario / Opening Setup:\n${input.chatScenario}\n`
+    : ''
+
+  if (input.previousSceneState === null) {
+    // First turn: establish initial scene state
+    llmMessages = [
+      {
+        role: 'system',
+        content: SCENE_STATE_FIRST_TURN_PROMPT,
+      },
+      {
+        role: 'user',
+        content: `Character Baselines (defaults only — the conversation and scenario override these):
+${characterBaselines}
+${scenarioSection}
+Conversation (the primary source of truth):
+${messageText}
+
+Based on the scenario and conversation above, what is the current scene state?`,
+      },
+    ]
+  } else {
+    // Subsequent turns: update scene state with new messages + baselines for recovery
+    llmMessages = [
+      {
+        role: 'system',
+        content: SCENE_STATE_UPDATE_PROMPT,
+      },
+      {
+        role: 'user',
+        content: `Character Baselines (defaults only — use these to fill in gaps where the previous state has null or missing fields):
+${characterBaselines}
+
+Previous Scene State:
+${JSON.stringify(input.previousSceneState, null, 2)}
+
+New Messages (the primary source of truth — these override previous state where applicable):
+${messageText}
+
+Update the scene state based on these new messages:`,
+      },
+    ]
+  }
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): Record<string, unknown> => {
+      let cleanContent = content.trim()
+
+      // Empty or near-empty response = content refusal
+      if (!cleanContent || cleanContent.length < 10) {
+        logger.warn('[SceneStateTracking] Empty or near-empty LLM response, likely content refusal', {
+          contentLength: cleanContent.length,
+          content: cleanContent.substring(0, 100),
+        })
+        throw new Error('Empty LLM response (likely content refusal)')
+      }
+
+      // Remove markdown code blocks if present
+      if (cleanContent.startsWith('```json')) {
+        cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+      } else if (cleanContent.startsWith('```')) {
+        cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+      }
+
+      const parsed = JSON.parse(cleanContent)
+
+      // Validate the parsed result has meaningful content
+      if (!parsed.location || parsed.location === 'Unknown' || parsed.location === 'unknown') {
+        logger.warn('[SceneStateTracking] LLM returned unknown location, likely content refusal', {
+          location: parsed.location,
+          characterCount: parsed.characters?.length,
+        })
+      }
+
+      return parsed
+    },
+    'scene-state-tracking',
+    chatId,
+    undefined,
+    uncensoredFallback
+  )
+}
+
+// ============================================================================
 // MEMORY KEYWORD EXTRACTION
 // ============================================================================
 
@@ -1759,6 +2185,7 @@ Your task is to create a SINGLE image generation prompt that:
 CRITICAL GUIDELINES:
 - This is for a BACKGROUND image, not a portrait - the scene/environment is primary
 - Characters should be toward the left and right of the frame, not centered
+- If a character description begins with a gender term like "A man" or "A woman", always include that term when describing the character in the prompt
 - Characters should be described briefly, focusing on visual traits (hair color, clothing style, notable features)
 - Focus on atmospheric qualities: lighting, weather, time of day, mood
 - Include environmental details: location type, architectural elements, nature
@@ -1808,11 +2235,9 @@ export async function craftStoryBackgroundPrompt(
     : '\nNo specific characters to include - create an atmospheric scene matching the context.'
 
   // Provider-specific length guidance
-  let lengthGuidance = 'Keep the prompt under 700 characters.'
-  if (context.provider === 'OPENAI') {
-    lengthGuidance = 'Keep the prompt under 1000 characters for optimal DALL-E 3 results.'
-  } else if (context.provider === 'GROK') {
-    lengthGuidance = 'Keep the prompt under 600 characters for Grok image generation.'
+  let lengthGuidance = 'Keep the prompt under 1200 characters.'
+  if (context.provider === 'GROK') {
+    lengthGuidance = 'Keep the prompt under 1000 characters for Grok image generation.'
   }
 
   const llmMessages: LLMMessage[] = [
@@ -2267,6 +2692,92 @@ JSON only - no other text.`
  * @param chatId - Optional chat ID for logging
  * @returns Array of sanitized appearance texts keyed by characterId
  */
+// ============================================================================
+// Memory Recap Summarization
+// ============================================================================
+
+const MEMORY_RECAP_PROMPT = `You are summarizing a character's memories to help them recall what they know at the start of a conversation.
+
+You will receive memories organized by importance (high, medium, low), each with a relative age label.
+
+Write a concise first-person narrative summary (from the character's perspective, using "I") of what the character remembers. Focus on:
+- Key relationships and what the character knows about other people
+- Important events and emotional moments
+- Ongoing situations or unresolved threads
+- Recent interactions and their significance
+
+Keep the summary under 500 words. Use natural language, not bullet points. Write as a stream of consciousness — what's top of mind, what lingers, what matters. More recent and higher-importance memories should be given more weight.
+
+If there are no memories, respond with exactly: NO_MEMORIES`
+
+/**
+ * Summarizes a character's tiered memories into a narrative recap.
+ * Sent to the cheap LLM so the character has a sense of "what I remember"
+ * at the start of a conversation.
+ *
+ * @param characterName - The character's name (for prompt context)
+ * @param tieredMemories - Memories grouped by importance tier with age labels
+ * @param selection - Cheap LLM selection to use
+ * @param userId - User ID for API key access
+ * @param chatId - Optional chat ID for logging
+ * @returns Summarized memory recap text
+ */
+export async function summarizeMemoryRecap(
+  characterName: string,
+  tieredMemories: {
+    high: Array<{ summary: string; age: string }>
+    medium: Array<{ summary: string; age: string }>
+    low: Array<{ summary: string; age: string }>
+  },
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string,
+  uncensoredFallback?: UncensoredFallbackOptions
+): Promise<CheapLLMTaskResult<string>> {
+  const totalCount = tieredMemories.high.length + tieredMemories.medium.length + tieredMemories.low.length
+  if (totalCount === 0) {
+    return { success: true, result: '' }
+  }
+
+  const formatTier = (label: string, memories: Array<{ summary: string; age: string }>) => {
+    if (memories.length === 0) return ''
+    const lines = memories.map(m => `- [${m.age}] ${m.summary}`).join('\n')
+    return `### ${label} Importance\n${lines}`
+  }
+
+  const memoriesText = [
+    formatTier('High', tieredMemories.high),
+    formatTier('Medium', tieredMemories.medium),
+    formatTier('Low', tieredMemories.low),
+  ].filter(Boolean).join('\n\n')
+
+  const messages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: MEMORY_RECAP_PROMPT,
+    },
+    {
+      role: 'user',
+      content: `Character: ${characterName}\n\n## Memories\n${memoriesText}`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (content: string): string => {
+      const trimmed = content.trim()
+      if (trimmed === 'NO_MEMORIES') return ''
+      return trimmed
+    },
+    'memory-recap-summarization',
+    chatId,
+    undefined, // messageId
+    uncensoredFallback
+  )
+}
+
 export async function sanitizeAppearance(
   appearances: Array<{ characterId: string; appearanceText: string }>,
   selection: CheapLLMSelection,

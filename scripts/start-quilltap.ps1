@@ -54,7 +54,7 @@ param(
     [switch]$DryRun
 )
 
-$Image = "csebold/quilltap"
+$Image = "foundry9/quilltap"
 
 # Detect platform and set default data directory
 if (-not $DataDir) {

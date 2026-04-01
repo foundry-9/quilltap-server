@@ -10,7 +10,6 @@
 import { useState, useEffect } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
-import { useSidebarData } from '@/components/providers/sidebar-data-provider'
 
 interface Project {
   id: string
@@ -41,7 +40,6 @@ export default function ChatProjectModal({
   )
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const { refreshSidebar } = useSidebarData()
 
   // Update local state when prop changes
   useEffect(() => {
@@ -111,9 +109,6 @@ export default function ChatProjectModal({
           ? `Chat moved to "${projectName}"`
           : 'Chat removed from project'
       )
-
-      // Refresh sidebar to update project chat counts and chat list
-      refreshSidebar()
 
       onSuccess?.()
       onClose()

@@ -26,26 +26,16 @@ import { z } from 'zod';
 
 export const GET = createAuthenticatedHandler(async (req, context) => {
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const providerFilter = searchParams.get('provider');
     const hasVisionFilter = searchParams.get('hasVision');
-    const hasStreamingFilter = searchParams.get('hasStreaming');const { repos } = context;
+    const hasStreamingFilter = searchParams.get('hasStreaming');
+    const { repos } = context;
 
     // Get cached models from the database
-    let allModels = providerFilter
+    const allModels = providerFilter
       ? await repos.providerModels.findByProvider(providerFilter)
       : await repos.providerModels.findAll();
-
-    // Apply filters
-    if (hasVisionFilter === 'true') {
-      // Filter to models that support vision (if we have that metadata)
-      // For now, this is a placeholder as vision support isn't tracked in the cache
-    }
-
-    if (hasStreamingFilter === 'true') {
-      // Filter to models that support streaming (if we have that metadata)
-      // For now, this is a placeholder as streaming support isn't tracked in the cache
-    }
 
     logger.info('[Models v1] Listed cached models', {
       count: allModels.length,
@@ -57,8 +47,8 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
       count: allModels.length,
       filters: {
         provider: providerFilter,
-        hasVision: hasVisionFilter === 'true' ? true : false,
-        hasStreaming: hasStreamingFilter === 'true' ? true : false,
+        hasVision: hasVisionFilter === 'true',
+        hasStreaming: hasStreamingFilter === 'true',
       },
       cached: true,
     });

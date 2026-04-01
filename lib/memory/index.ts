@@ -61,3 +61,9 @@ export {
   type GateResult,
   type MemoryGateOutcome,
 } from './memory-gate'
+
+// Memory Recap (Chat Start / Character Join)
+export {
+  generateMemoryRecap,
+  type MemoryRecapResult,
+} from './memory-recap'

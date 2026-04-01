@@ -21,8 +21,11 @@ import type { LLMLoggingSettings } from '@/lib/schemas/settings.types';
 
 const logger = createServiceLogger('llm-logging');
 
-/** @deprecated Preview length was used for truncation; full content is now stored */
-// const PREVIEW_LENGTH = 500;
+const DEFAULT_LOGGING_SETTINGS: LLMLoggingSettings = {
+  enabled: true,
+  verboseMode: false,
+  retentionDays: 30,
+};
 
 /**
  * Parameters for logging an LLM call
@@ -48,6 +51,7 @@ export interface LogLLMCallParams {
   response: {
     content: string;
     error?: string;
+    toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
   };
   usage?: {
     promptTokens?: number;
@@ -76,11 +80,7 @@ export async function isLoggingEnabled(userId: string): Promise<LLMLoggingSettin
 
     // Default to enabled if settings don't exist yet
     if (!settings || !settings.llmLoggingSettings) {
-      return {
-        enabled: true,
-        verboseMode: false,
-        retentionDays: 30,
-      };
+      return DEFAULT_LOGGING_SETTINGS;
     }
     return null;
   } catch (error) {
@@ -89,11 +89,7 @@ export async function isLoggingEnabled(userId: string): Promise<LLMLoggingSettin
       error: error instanceof Error ? error.message : String(error),
     });
     // Default to enabled on error
-    return {
-      enabled: true,
-      verboseMode: false,
-      retentionDays: 30,
-    };
+    return DEFAULT_LOGGING_SETTINGS;
   }
 }
 
@@ -102,8 +98,7 @@ export async function isLoggingEnabled(userId: string): Promise<LLMLoggingSettin
  * Always stores full message content for debugging purposes
  */
 function summarizeRequest(
-  request: LogLLMCallParams['request'],
-  _verboseMode: boolean
+  request: LogLLMCallParams['request']
 ): LLMLogRequestSummary {
   const messages = request.messages.map((msg) => ({
     role: msg.role,
@@ -126,14 +121,22 @@ function summarizeRequest(
  * Always stores full response content for debugging purposes
  */
 function summarizeResponse(
-  response: LogLLMCallParams['response'],
-  _verboseMode: boolean
+  response: LogLLMCallParams['response']
 ): LLMLogResponseSummary {
-  return {
+  const summary: LLMLogResponseSummary = {
     content: response.content || '',
     contentLength: response.content?.length || 0,
     error: response.error ?? null,
   };
+
+  if (response.toolCalls && response.toolCalls.length > 0) {
+    summary.toolCalls = response.toolCalls.map(tc => ({
+      name: tc.name,
+      arguments: tc.arguments,
+    }));
+  }
+
+  return summary;
 }
 
 /**
@@ -149,11 +152,10 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
     if (!loggingSettings) {
       return null;
     }
-    const verboseMode = loggingSettings.verboseMode;
 
     // Summarize request and response
-    const requestSummary = summarizeRequest(params.request, verboseMode);
-    const responseSummary = summarizeResponse(params.response, verboseMode);
+    const requestSummary = summarizeRequest(params.request);
+    const responseSummary = summarizeResponse(params.response);
 
     // Build usage objects if provided
     let usage: LLMLogTokenUsage | null = null;

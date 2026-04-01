@@ -124,23 +124,25 @@ export function CharacterDetails({
           </div>
         )}
 
-        {character?.scenario && (
+        {character?.scenarios && character.scenarios.length > 0 && (
           <div>
             <h2 className="text-lg font-semibold text-foreground mb-2">
-              Scenario
-              {(templateCounts.fieldCounts.scenario?.char > 0 || templateCounts.fieldCounts.scenario?.user > 0) && (
-                <span className="ml-2 text-xs font-normal qt-text-xs">
-                  (template replacements available)
-                </span>
-              )}
+              {character.scenarios.length === 1 ? 'Scenario' : 'Scenarios'}
             </h2>
-            <div className="qt-text-small">
-              <TemplateDisplay
-                content={character.scenario}
-                characterName={character.name}
-                personaName={defaultPartnerName}
-              />
-            </div>
+            {character.scenarios.map((scenario) => (
+              <div key={scenario.id} className="mb-4">
+                {character.scenarios!.length > 1 && (
+                  <h3 className="text-sm font-medium text-muted-foreground mb-1">{scenario.title}</h3>
+                )}
+                <div className="qt-text-small">
+                  <TemplateDisplay
+                    content={scenario.content}
+                    characterName={character.name}
+                    personaName={defaultPartnerName}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

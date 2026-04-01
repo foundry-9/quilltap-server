@@ -1,12 +1,13 @@
 /**
  * Theme Asset File API Route
  *
- * Serves static asset files (images, etc.) from theme plugins.
+ * Serves static asset files (images, etc.) from theme plugins and theme bundles.
  * Path format: /api/themes/assets/{pluginName}/{assetPath}
  *
- * Example: /api/themes/assets/qtap-plugin-theme-great-estate/great-estate-bg.webp
+ * For plugin themes: /api/themes/assets/qtap-plugin-theme-great-estate/great-estate-bg.webp
+ * For bundle themes: /api/themes/assets/bundle:{themeId}/assets/preview.webp
  *
- * Security: Only serves files from registered theme plugins within their directory.
+ * Security: Only serves files from registered theme plugins/bundles within their directory.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -63,9 +64,26 @@ export async function GET(
       );
     }
 
-    // First segment is plugin name, rest is the asset path within the plugin
-    const [pluginName, ...assetPathSegments] = pathSegments;
-    const relativeAssetPath = assetPathSegments.join('/');// Ensure plugin/theme system is initialized
+    // First segment is plugin name (or "bundle" for bundle themes), rest is the asset path
+    // URL path: /api/themes/assets/bundle%3A{themeId}/{assetPath}
+    // or:       /api/themes/assets/{pluginName}/{assetPath}
+    let pluginName: string;
+    let assetPathSegments: string[];
+
+    // Handle "bundle:" prefix - URL encoding may split it across segments
+    if (pathSegments[0] === 'bundle' && pathSegments.length >= 3) {
+      // URL split "bundle:themeId" into ["bundle", "themeId", ...]
+      pluginName = `bundle:${pathSegments[1]}`;
+      assetPathSegments = pathSegments.slice(2);
+    } else if (pathSegments[0].startsWith('bundle:') || pathSegments[0].startsWith('bundle%3A')) {
+      pluginName = decodeURIComponent(pathSegments[0]);
+      assetPathSegments = pathSegments.slice(1);
+    } else {
+      [pluginName, ...assetPathSegments] = pathSegments;
+    }
+    const relativeAssetPath = assetPathSegments.join('/');
+
+    // Ensure plugin/theme system is initialized
     if (!isPluginSystemInitialized()) {
       logger.info('Plugin system not initialized, initializing now', {
         context: 'themes-assets-GET',
@@ -88,17 +106,24 @@ export async function GET(
       );
     }
 
-    // Get the plugin to find its directory
-    const plugin = pluginRegistry.get(pluginName);
-    if (!plugin) {
-      logger.warn('Plugin not found', {
-        context: 'GET /api/themes/assets',
-        pluginName,
-      });
-      return NextResponse.json(
-        { error: 'Plugin not found' },
-        { status: 404 }
-      );
+    // Resolve the base directory depending on theme source
+    let baseDir: string;
+    if (theme.source === 'bundle' && theme.bundlePath) {
+      baseDir = theme.bundlePath;
+    } else {
+      // Plugin-based theme: get directory from plugin registry
+      const plugin = pluginRegistry.get(pluginName);
+      if (!plugin) {
+        logger.warn('Plugin not found', {
+          context: 'GET /api/themes/assets',
+          pluginName,
+        });
+        return NextResponse.json(
+          { error: 'Plugin not found' },
+          { status: 404 }
+        );
+      }
+      baseDir = path.dirname(plugin.manifestPath);
     }
 
     // Validate file extension for security
@@ -116,14 +141,13 @@ export async function GET(
     }
 
     // Construct and validate the absolute file path
-    const pluginDir = path.dirname(plugin.manifestPath);
-    const absoluteAssetPath = path.resolve(pluginDir, relativeAssetPath);
+    const absoluteAssetPath = path.resolve(baseDir, relativeAssetPath);
 
-    // Security: Ensure the resolved path is within the plugin directory
-    if (!absoluteAssetPath.startsWith(pluginDir)) {
+    // Security: Ensure the resolved path is within the base directory
+    if (!absoluteAssetPath.startsWith(baseDir)) {
       logger.warn('Path traversal attempt detected', {
         context: 'GET /api/themes/assets',
-        pluginDir,
+        baseDir,
         resolvedPath: absoluteAssetPath,
       });
       return NextResponse.json(

@@ -93,7 +93,7 @@ export default function SudoApprovalModal({
           <button
             onClick={handleDeny}
             disabled={saving}
-            className="qt-btn qt-btn-secondary"
+            className="qt-button qt-button-secondary"
             type="button"
           >
             Deny
@@ -101,7 +101,7 @@ export default function SudoApprovalModal({
           <button
             onClick={handleApprove}
             disabled={saving}
-            className="qt-btn qt-btn-destructive"
+            className="qt-button qt-button-destructive"
             type="button"
           >
             {saving ? 'Executing...' : 'Approve & Execute'}

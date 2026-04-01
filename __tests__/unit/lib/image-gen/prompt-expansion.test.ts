@@ -81,7 +81,7 @@ const mockChat = {
       controlledBy: 'user',
       connectionProfileId: null,
       imageProfileId: null,
-      systemPromptOverride: null,
+
       displayOrder: 0,
       isActive: true,
       createdAt: now,
@@ -95,7 +95,7 @@ const mockChat = {
       controlledBy: 'llm',
       connectionProfileId: 'profile-1',
       imageProfileId: null,
-      systemPromptOverride: null,
+
       displayOrder: 1,
       isActive: true,
       createdAt: now,

@@ -10,7 +10,7 @@ import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
-import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, DangerousContentSettingsSchema } from '@/lib/schemas/settings.types'
+import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, DangerousContentSettingsSchema, AutoLockSettingsSchema } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/errors'
 
@@ -35,7 +35,8 @@ async function updateChatSettings(
   agentModeSettings?: unknown,
   storyBackgroundsSettings?: unknown,
   contextCompressionSettings?: unknown,
-  dangerousContentSettings?: unknown
+  dangerousContentSettings?: unknown,
+  autoLockSettings?: unknown
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -153,6 +154,10 @@ async function updateChatSettings(
     const validatedDangerousContentSettings = DangerousContentSettingsSchema.parse(dangerousContentSettings)
     updateData.dangerousContentSettings = validatedDangerousContentSettings
   }
+  if (typeof autoLockSettings !== 'undefined') {
+    const validatedAutoLockSettings = AutoLockSettingsSchema.parse(autoLockSettings)
+    updateData.autoLockSettings = validatedAutoLockSettings
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -212,6 +217,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       storyBackgroundsSettings,
       contextCompressionSettings,
       dangerousContentSettings,
+      autoLockSettings,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -232,7 +238,8 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,
-      dangerousContentSettings
+      dangerousContentSettings,
+      autoLockSettings
     )
 
     return successResponse(chatSettings)

@@ -61,6 +61,13 @@ These tools are always available in Quilltap:
 - Always available
 - Useful for: Getting accurate information about how to use Quilltap features, configure settings, or troubleshoot issues
 
+**Settings Reader**
+
+- Reads your current Quilltap settings by category (overview, chat, connections, embeddings, images, appearance, templates, system)
+- Requires: Help tools enabled on the character
+- Useful for: Checking your current configuration without leaving the chat, troubleshooting settings issues, or asking the AI to help you understand what you have configured
+- API keys and secrets are never disclosed
+
 **Random Number Generator (RNG)**
 
 - Rolls dice, flips coins, or randomly selects a chat participant
@@ -120,6 +127,12 @@ To configure which tools the AI can use in your current chat:
 5. **The AI will use** only the enabled tools going forward
 
 For more details, see [Configuring Chat Tools](tools-settings.md).
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=providers")`
 
 ## Related Topics
 

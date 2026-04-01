@@ -1,11 +1,12 @@
 /**
  * Database Unlock API v1
  *
- * GET /api/v1/system/unlock - Returns database key state
+ * GET /api/v1/system/unlock - Returns database key state, hasUserPassphrase, autoLockMinutes
  * POST /api/v1/system/unlock?action=setup - First-run setup
  * POST /api/v1/system/unlock?action=unlock - Unlock with passphrase
  * POST /api/v1/system/unlock?action=store - Store env var pepper in .dbkey file
  * POST /api/v1/system/unlock?action=change-passphrase - Change the .dbkey passphrase
+ * POST /api/v1/system/unlock?action=lock - Lock the application (auto-lock)
  *
  * This endpoint is unauthenticated because it must be accessible before
  * the app is fully operational (during locked mode and initial setup).
@@ -15,11 +16,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, serverError, unauthorized } from '@/lib/api/responses';
+import { badRequest, serverError, successResponse, unauthorized } from '@/lib/api/responses';
 
 export const dynamic = 'force-dynamic';
 
 const unlockLogger = logger.child({ module: 'api-unlock' });
+
+type UnlockAction = 'setup' | 'unlock' | 'store' | 'change-passphrase' | 'lock';
 
 /**
  * GET /api/v1/system/unlock
@@ -29,12 +32,33 @@ const unlockLogger = logger.child({ module: 'api-unlock' });
 export async function GET() {
   try {
     const { startupState } = await import('@/lib/startup/startup-state');
-    const { getDbKeyState } = await import('@/lib/startup/dbkey');
+    const { getDbKeyState, getHasUserPassphrase } = await import('@/lib/startup/dbkey');
 
     // startupState is the authoritative source (set during instrumentation.ts)
     const state = startupState.getPepperState?.() ?? getDbKeyState();
+    const hasUserPassphrase = getHasUserPassphrase();
 
-    return NextResponse.json({ state });
+    // Only fetch autoLockMinutes when the app is unlocked and operational
+    let autoLockMinutes: number | null = null;
+    if (state === 'resolved') {
+      try {
+        const { getRepositories } = await import('@/lib/database/repositories');
+        const repos = getRepositories();
+        // Get chat settings for the default user
+        const { SINGLE_USER_ID } = await import('@/lib/auth/single-user');
+        const userId = SINGLE_USER_ID;
+        const chatSettings = await repos.chatSettings.findByUserId(userId);
+        if (chatSettings?.autoLockSettings?.enabled) {
+          autoLockMinutes = chatSettings.autoLockSettings.idleMinutes;
+        }
+      } catch (settingsError) {
+        unlockLogger.debug('Could not fetch auto-lock settings', {
+          error: settingsError instanceof Error ? settingsError.message : String(settingsError),
+        });
+      }
+    }
+
+    return successResponse({ state, hasUserPassphrase, autoLockMinutes });
   } catch (error) {
     unlockLogger.error('Error getting database key status', {
       error: error instanceof Error ? error.message : String(error),
@@ -52,25 +76,20 @@ export async function POST(request: NextRequest) {
   const action = request.nextUrl.searchParams.get('action');
 
   if (!action) {
-    return badRequest('Missing action parameter. Use ?action=setup, ?action=unlock, ?action=store, or ?action=change-passphrase');
+    return badRequest('Missing action parameter. Use ?action=setup, ?action=unlock, ?action=store, ?action=change-passphrase, or ?action=lock');
+  }
+
+  if (!isUnlockAction(action)) {
+    return badRequest(`Unknown action: ${action}`);
+  }
+
+  const body = await parseRequestBody(request);
+  if (body instanceof NextResponse) {
+    return body;
   }
 
   try {
-    const body = await request.json();
-    const passphrase = typeof body.passphrase === 'string' ? body.passphrase : '';
-
-    switch (action) {
-      case 'setup':
-        return handleSetup(passphrase);
-      case 'unlock':
-        return handleUnlock(passphrase);
-      case 'store':
-        return handleStore(passphrase);
-      case 'change-passphrase':
-        return handleChangePassphrase(body);
-      default:
-        return badRequest(`Unknown action: ${action}`);
-    }
+    return dispatchUnlockAction(action, body);
   } catch (error) {
     unlockLogger.error('Error in database key action', {
       action,
@@ -78,6 +97,42 @@ export async function POST(request: NextRequest) {
     });
     return serverError(error instanceof Error ? error.message : 'Internal server error');
   }
+}
+
+function isUnlockAction(action: string): action is UnlockAction {
+  return action === 'setup'
+    || action === 'unlock'
+    || action === 'store'
+    || action === 'change-passphrase'
+    || action === 'lock';
+}
+
+async function parseRequestBody(request: NextRequest): Promise<Record<string, unknown> | NextResponse> {
+  try {
+    const body = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return badRequest('Request body must be a JSON object');
+    }
+    return body as Record<string, unknown>;
+  } catch {
+    return badRequest('Invalid JSON body');
+  }
+}
+
+function getPassphrase(body: Record<string, unknown>): string {
+  return typeof body.passphrase === 'string' ? body.passphrase : '';
+}
+
+function dispatchUnlockAction(action: UnlockAction, body: Record<string, unknown>): Promise<NextResponse> {
+  const actionHandlers: Record<UnlockAction, () => Promise<NextResponse>> = {
+    setup: () => handleSetup(getPassphrase(body)),
+    unlock: () => handleUnlock(getPassphrase(body)),
+    store: () => handleStore(getPassphrase(body)),
+    'change-passphrase': () => handleChangePassphrase(body),
+    lock: () => handleLock(),
+  };
+
+  return actionHandlers[action]();
 }
 
 /**
@@ -136,8 +191,7 @@ async function handleSetup(passphrase: string): Promise<NextResponse> {
   }
 
   // Return the pepper once for the user to save
-  return NextResponse.json({
-    success: true,
+  return successResponse({
     pepper: result.pepper,
     message: 'Encryption key generated and stored. Save this value — it will not be displayed again.',
   });
@@ -222,7 +276,7 @@ async function handleUnlock(passphrase: string): Promise<NextResponse> {
   }
 
   unlockLogger.info('Database key unlocked successfully');
-  return NextResponse.json({ success: true });
+  return successResponse({});
 }
 
 /**
@@ -238,7 +292,7 @@ async function handleStore(passphrase: string): Promise<NextResponse> {
   startupState.setPepperState('resolved');
 
   unlockLogger.info('Pepper stored in .dbkey file successfully');
-  return NextResponse.json({ success: true });
+  return successResponse({});
 }
 
 /**
@@ -270,5 +324,55 @@ async function handleChangePassphrase(body: Record<string, unknown>): Promise<Ne
   }
 
   unlockLogger.info('Passphrase changed successfully');
-  return NextResponse.json({ success: true });
+  return successResponse({});
+}
+
+/**
+ * Handle lock: clear pepper from memory and close DB connections.
+ * Used by the auto-lock idle timer to re-lock the application.
+ */
+async function handleLock(): Promise<NextResponse> {
+  unlockLogger.info('Auto-lock triggered — locking database');
+
+  const { getDbKeyState, lockDbKey, getHasUserPassphrase } = await import('@/lib/startup/dbkey');
+  const state = getDbKeyState();
+
+  if (state !== 'resolved') {
+    unlockLogger.warn('Cannot lock: app not in resolved state', { state });
+    return badRequest('Application is not currently unlocked');
+  }
+
+  if (!getHasUserPassphrase()) {
+    unlockLogger.warn('Cannot lock: no user passphrase set');
+    return badRequest('Cannot lock without a user passphrase');
+  }
+
+  // Close database connections
+  try {
+    const { closeSQLiteClient } = await import('@/lib/database/backends/sqlite/client');
+    closeSQLiteClient();
+  } catch (closeErr) {
+    unlockLogger.warn('Error closing main SQLite client during lock', {
+      error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+    });
+  }
+
+  try {
+    const { closeLLMLogsSQLiteClient } = await import('@/lib/database/backends/sqlite/llm-logs-client');
+    closeLLMLogsSQLiteClient();
+  } catch (closeErr) {
+    unlockLogger.warn('Error closing LLM logs SQLite client during lock', {
+      error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+    });
+  }
+
+  // Clear the pepper and set state to locked
+  lockDbKey();
+
+  const { startupState } = await import('@/lib/startup/startup-state');
+  startupState.setPepperState('needs-passphrase');
+  startupState.setPhase('locked');
+
+  unlockLogger.info('Application locked successfully via auto-lock');
+  return successResponse({});
 }

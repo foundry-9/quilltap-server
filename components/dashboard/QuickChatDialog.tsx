@@ -5,6 +5,8 @@ import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePick
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { useQuickChat } from './hooks'
 
+const CUSTOM_SCENARIO_VALUE = '__custom__'
+
 interface QuickChatDialogProps {
   characterId: string
   characterName: string
@@ -26,17 +28,33 @@ export function QuickChatDialog({
     selectedPartnerId,
     selectedImageProfileId,
     scenario,
+    scenarioId,
+    scenarios,
     timestampConfig,
     creatingChat,
     setSelectedProfileId,
     setSelectedPartnerId,
     setSelectedImageProfileId,
     setScenario,
+    setScenarioId,
     setTimestampConfig,
     fetchData,
     handleCreateChat,
     reset,
   } = useQuickChat()
+
+  const hasScenarios = scenarios.length > 0
+  const selectedPreset = scenarioId ? scenarios.find((s) => s.id === scenarioId) : null
+  const showCustomTextarea = !hasScenarios || scenarioId === null
+
+  const handleScenarioSelectChange = (value: string) => {
+    if (value === CUSTOM_SCENARIO_VALUE || value === '') {
+      setScenarioId(null)
+    } else {
+      setScenarioId(value)
+      setScenario('')
+    }
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -132,14 +150,39 @@ export function QuickChatDialog({
                   <label htmlFor="quick-scenario" className="mb-2 block text-sm qt-text-primary">
                     Starting Scenario (Optional)
                   </label>
-                  <textarea
-                    id="quick-scenario"
-                    value={scenario}
-                    onChange={(e) => setScenario(e.target.value)}
-                    placeholder="Describe the starting scenario for this chat..."
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    rows={3}
-                  />
+
+                  {hasScenarios && (
+                    <select
+                      id="quick-scenario-select"
+                      value={scenarioId ?? CUSTOM_SCENARIO_VALUE}
+                      onChange={(e) => handleScenarioSelectChange(e.target.value)}
+                      className="mb-2 w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value={CUSTOM_SCENARIO_VALUE}>Custom...</option>
+                      {scenarios.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {selectedPreset && (
+                    <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                      {selectedPreset.content}
+                    </div>
+                  )}
+
+                  {showCustomTextarea && (
+                    <textarea
+                      id="quick-scenario"
+                      value={scenario}
+                      onChange={(e) => setScenario(e.target.value)}
+                      placeholder="Describe the starting scenario for this chat..."
+                      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      rows={3}
+                    />
+                  )}
                 </div>
               </div>
 

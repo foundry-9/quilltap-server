@@ -5,6 +5,7 @@
  */
 
 import { convert as htmlToText } from 'html-to-text';
+import { getQuilltapUserAgent } from '@quilltap/plugin-utils';
 import type { CurlToolInput, CurlToolConfig, CurlToolOutput } from './types';
 import { parseUrlPatterns, validateUrl } from './url-validator';
 
@@ -23,10 +24,6 @@ const DEFAULTS: CurlToolConfig = {
  */
 const MAX_TIMEOUT = 60;
 
-/**
- * Default User-Agent string
- */
-const DEFAULT_USER_AGENT = 'Quilltap-curl/1.0';
 
 /**
  * Parse header strings into a Headers object
@@ -106,7 +103,8 @@ function truncateBody(
  */
 export async function executeCurlRequest(
   input: CurlToolInput,
-  config: Partial<CurlToolConfig>
+  config: Partial<CurlToolConfig>,
+  browserUserAgent?: string,
 ): Promise<CurlToolOutput> {
   const startTime = Date.now();
 
@@ -134,8 +132,9 @@ export async function executeCurlRequest(
   const headers = parseHeaders(input.header);
 
   // Set User-Agent if not already set
+  // Priority: LLM-specified userAgent > browser User-Agent > Quilltap identifier
   if (!headers.has('User-Agent')) {
-    headers.set('User-Agent', input.userAgent || DEFAULT_USER_AGENT);
+    headers.set('User-Agent', input.userAgent || browserUserAgent || getQuilltapUserAgent());
   }
 
   // Calculate timeout

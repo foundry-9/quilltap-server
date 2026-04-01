@@ -1,0 +1,51 @@
+{
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-default-system-prompts",
+  "title": "Default System Prompts",
+  "description": "Built-in system prompt templates for various LLM models and use cases including companion and romantic categories",
+  "version": "1.1.0",
+  "author": {
+    "name": "Foundry-9 LLC",
+    "email": "charles.sebold@foundry-9.com",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "compatibility": {
+    "quilltapVersion": ">=2.5.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": [
+    "SYSTEM_PROMPT"
+  ],
+  "category": "TEMPLATE",
+  "typescript": true,
+  "frontend": "NONE",
+  "styling": "NONE",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": [
+    "system-prompt",
+    "prompt",
+    "template",
+    "companion",
+    "romantic",
+    "claude",
+    "gpt",
+    "deepseek",
+    "gemini",
+    "grok",
+    "mistral"
+  ],
+  "systemPromptConfig": {
+    "promptCount": 10,
+    "description": "System prompts optimized for Claude, GPT-4o, GPT-5, Gemini, Grok, DeepSeek, and Mistral models in companion and romantic categories",
+    "tags": ["companion", "romantic", "claude", "gpt-4o", "gpt-5", "gemini", "grok", "deepseek", "mistral"]
+  },
+  "permissions": {
+    "fileSystem": [],
+    "network": [],
+    "database": false,
+    "userData": false
+  }
+}

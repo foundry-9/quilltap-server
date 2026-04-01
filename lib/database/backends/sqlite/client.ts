@@ -10,6 +10,7 @@ import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { stopPeriodicCheckpoints, runShutdownCheckpoint } from './protection';
 import { closeLLMLogsSQLiteClient } from './llm-logs-client';
+import { releaseActiveInstanceLock } from './instance-lock';
 
 // ============================================================================
 // Singleton State
@@ -223,6 +224,7 @@ export function setupSQLiteShutdownHandlers(): void {
   const handleShutdown = () => {
     closeLLMLogsSQLiteClient();
     closeSQLiteClient();
+    releaseActiveInstanceLock();
   };
 
   process.on('SIGTERM', handleShutdown);
@@ -233,6 +235,7 @@ export function setupSQLiteShutdownHandlers(): void {
       error: error instanceof Error ? error.message : String(error),
     });
     closeSQLiteClient();
+    releaseActiveInstanceLock();
     process.exit(1);
   });
 
@@ -241,6 +244,7 @@ export function setupSQLiteShutdownHandlers(): void {
       reason: reason instanceof Error ? reason.message : String(reason),
     });
     closeSQLiteClient();
+    releaseActiveInstanceLock();
     process.exit(1);
   });
 }

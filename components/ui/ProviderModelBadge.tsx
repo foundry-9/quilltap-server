@@ -10,6 +10,10 @@ interface ProviderModelBadgeProps {
   modelName?: string | null
   /** Badge size: 'xs' for under chat avatars, 'sm' for sidebar/cards */
   size?: 'xs' | 'sm'
+  /** Optional tooltip override (defaults to "provider: modelName") */
+  title?: string
+  /** Use tighter max-width for narrow containers like cards */
+  compact?: boolean
 }
 
 const sizeConfig = {
@@ -21,7 +25,7 @@ const sizeConfig = {
  * Reusable badge showing a provider icon and model name.
  * Gracefully returns null when provider is falsy (e.g., old messages or user messages).
  */
-export function ProviderModelBadge({ provider, modelName, size = 'xs' }: ProviderModelBadgeProps) {
+export function ProviderModelBadge({ provider, modelName, size = 'xs', title: titleOverride, compact }: ProviderModelBadgeProps) {
   const { getProviderIcon } = useProviders()
 
   if (!provider) return null
@@ -30,9 +34,9 @@ export function ProviderModelBadge({ provider, modelName, size = 'xs' }: Provide
   const { icon: iconClass, text: textClass } = sizeConfig[size]
 
   return (
-    <span className={`inline-flex items-center gap-1 opacity-60 ${textClass}`} title={`${provider}: ${modelName || 'unknown'}`}>
+    <span className={`inline-flex items-center gap-1 opacity-60 ${textClass}`} title={titleOverride || `${provider}: ${modelName || 'unknown'}`}>
       <ProviderIcon provider={provider} iconData={iconData || undefined} className={iconClass} />
-      {modelName && <span className="truncate max-w-[8rem]">{modelName}</span>}
+      {modelName && <span className={`truncate ${compact ? 'max-w-[6rem]' : 'max-w-[8rem]'}`}>{modelName}</span>}
     </span>
   )
 }

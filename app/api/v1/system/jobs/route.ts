@@ -22,7 +22,7 @@ import { badRequest, serverError } from '@/lib/api/responses';
  */
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }: AuthenticatedContext) => {
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = req.nextUrl;
     const includeJobs = searchParams.get('includeJobs') === 'true';
     const chatId = searchParams.get('chatId');// Ensure processor is running
     ensureProcessorRunning();

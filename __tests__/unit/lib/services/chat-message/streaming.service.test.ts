@@ -65,7 +65,6 @@ describe('streaming.service', () => {
           { role: 'USER', contentLength: 100, hasAttachments: false },
         ],
         tools: [],
-        usePseudoTools: false,
       }
 
       const result = encodeDebugInfo(encoder, debugInfo)
@@ -77,47 +76,6 @@ describe('streaming.service', () => {
       expect(decoded).toContain('OPENAI')
       expect(decoded).toContain('"temperature":0.7')
       expect(decoded).toMatch(/\n\n$/)
-    })
-
-    it('should include pseudo-tools info when enabled', () => {
-      const debugInfo = {
-        builtContext: {
-          tokenUsage: { total: 100, systemPrompt: 20, summary: 10, memories: 30, messages: 40 },
-          budget: { totalLimit: 1000, responseReserve: 500 },
-          memoriesIncluded: 0,
-          messagesIncluded: 1,
-          messagesTruncated: 0,
-          includedSummary: false,
-          debugMemories: [],
-          debugSummary: null,
-          debugSystemPrompt: '',
-        },
-        connectionProfile: {
-          id: 'profile-1',
-          userId: 'user-1',
-          provider: 'OPENAI',
-          modelName: 'o1-mini',
-          apiKey: 'key',
-          createdAt: '2024-01-01',
-          updatedAt: '2024-01-01',
-        },
-        modelParams: {},
-        messages: [],
-        tools: [],
-        usePseudoTools: true,
-        enabledToolOptions: {
-          memorySearch: true,
-          imageGeneration: true,
-          webSearch: false,
-        },
-      }
-
-      const result = encodeDebugInfo(encoder, debugInfo)
-      const decoded = new TextDecoder().decode(result)
-
-      expect(decoded).toContain('usePseudoTools')
-      expect(decoded).toContain('pseudoToolsEnabled')
-      expect(decoded).toContain('memorySearch')
     })
 
     it('should include tool info when tools are present', () => {
@@ -145,7 +103,6 @@ describe('streaming.service', () => {
         modelParams: {},
         messages: [],
         tools: [{ name: 'search_web' }, { name: 'generate_image' }],
-        usePseudoTools: false,
       }
 
       const result = encodeDebugInfo(encoder, debugInfo)

@@ -12,6 +12,7 @@ interface UseImageActionsReturn {
   toggleCharacterTag: (characterId: string) => Promise<void>
   setAsAvatar: (entityType: EntityType, entityId: string) => Promise<void>
   handleDownload: () => Promise<void>
+  handleCopyToClipboard: () => Promise<void>
   updateTaggedCharacters: (charIds: Set<string>) => void
   setCharacters: (characters: Character[]) => void
 }
@@ -151,6 +152,21 @@ export function useImageActions(
     }
   }, [image.id, image.filename, image.url, image.filepath])
 
+  const handleCopyToClipboard = useCallback(async () => {
+    try {
+      const filepath = image.url || image.filepath
+      const src = filepath.startsWith('/') ? filepath : `/${filepath}`
+      const response = await fetch(src)
+      const blob = await response.blob()
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+      showSuccessToast('Image copied to clipboard')
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error('Failed to copy image to clipboard', { imageId: image.id, error: errorMessage })
+      showErrorToast('Failed to copy image to clipboard')
+    }
+  }, [image.id, image.url, image.filepath])
+
   return {
     taggedCharacterIds,
     taggingInProgress,
@@ -158,6 +174,7 @@ export function useImageActions(
     toggleCharacterTag,
     setAsAvatar,
     handleDownload,
+    handleCopyToClipboard,
     updateTaggedCharacters,
     setCharacters: setInternalCharacters,
   }

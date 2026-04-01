@@ -18,11 +18,12 @@ interface Character {
   name: string
   description?: string | null
   personality?: string | null
-  scenario?: string | null
+  scenarios?: Array<{ id: string; title: string; content: string }>
   firstMessage?: string | null
   exampleDialogues?: string | null
   systemPrompts?: CharacterSystemPrompt[]
   defaultPartnerId?: string | null
+  defaultSystemPromptId?: string | null
 }
 
 /**
@@ -53,11 +54,13 @@ export interface ChatContext {
  * @param characterId - The AI-controlled character ID
  * @param userCharacterId - Optional user-controlled character ID (replaces personaId)
  * @param customScenario - Optional custom scenario override
+ * @param selectedSystemPromptId - Optional specific system prompt ID from the character's prompts array
  */
 export async function buildChatContext(
   characterId: string,
   userCharacterId?: string,
-  customScenario?: string
+  customScenario?: string,
+  selectedSystemPromptId?: string
 ): Promise<ChatContext> {
   const repos = getRepositories()
 
@@ -98,22 +101,26 @@ export async function buildChatContext(
     }
   }
 
+  // Resolve scenario content: custom text overrides first scenario in array
+  const resolvedScenario = customScenario || character.scenarios?.[0]?.content || undefined
+
   // Build system prompt (pass userCharacter as 'persona' for template compatibility)
   const systemPrompt = buildSystemPrompt({
     character,
     userCharacter: userCharacter || undefined,
-    scenario: customScenario || character.scenario || undefined,
+    scenario: resolvedScenario,
+    selectedSystemPromptId,
   })
 
-  // Get the default system prompt content for template processing
-  const defaultSystemPrompt = getDefaultSystemPrompt(character)
+  // Get the system prompt content for template processing (selected or default)
+  const defaultSystemPrompt = getSelectedOrDefaultSystemPrompt(character, selectedSystemPromptId)
 
   // Process first message with templates
   // Note: processCharacterTemplates expects 'persona' shape for {{user}} template variable
   const processedCharacter = processCharacterTemplates({
     character,
     persona: userCharacter ? { name: userCharacter.name, description: userCharacter.description } : undefined,
-    scenario: customScenario || character.scenario || undefined,
+    scenario: resolvedScenario,
     systemPrompt: defaultSystemPrompt,
   })
   const firstMessage = processedCharacter.firstMessage
@@ -134,21 +141,45 @@ function getDefaultSystemPrompt(character: Character): string {
   if (!character.systemPrompts || character.systemPrompts.length === 0) {
     return ''
   }
+  // Check defaultSystemPromptId first, then isDefault flag, then first prompt
+  if (character.defaultSystemPromptId) {
+    const byId = character.systemPrompts.find(p => p.id === character.defaultSystemPromptId)
+    if (byId) return byId.content
+  }
   const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
   return defaultPrompt?.content || character.systemPrompts[0]?.content || ''
+}
+
+/**
+ * Get the selected system prompt content, falling back to the default
+ */
+function getSelectedOrDefaultSystemPrompt(character: Character, selectedSystemPromptId?: string): string {
+  if (selectedSystemPromptId && character.systemPrompts) {
+    const selected = character.systemPrompts.find(p => p.id === selectedSystemPromptId)
+    if (selected) {
+      return selected.content
+    }
+    logger.warn('[Chat Initialize] selectedSystemPromptId not found on character, falling back to default', {
+      characterId: character.id,
+      selectedSystemPromptId,
+    })
+  }
+  return getDefaultSystemPrompt(character)
 }
 
 function buildSystemPrompt({
   character,
   userCharacter,
   scenario,
+  selectedSystemPromptId,
 }: {
   character: Character
   userCharacter?: UserCharacter
   scenario?: string | null
+  selectedSystemPromptId?: string
 }): string {
-  // Get the default system prompt content
-  const systemPromptContent = getDefaultSystemPrompt(character)
+  // Get the selected or default system prompt content
+  const systemPromptContent = getSelectedOrDefaultSystemPrompt(character, selectedSystemPromptId)
 
   // Process all character templates with the current context
   // Note: processCharacterTemplates expects 'persona' shape for {{user}} template variable

@@ -38,6 +38,7 @@ import type {
   PluginLogger,
 } from '@quilltap/plugin-types';
 import { createPluginLogger } from '../logging';
+import { getQuilltapUserAgent } from '../version';
 
 /**
  * Configuration options for OpenAI-compatible providers.
@@ -180,6 +181,21 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   /**
+   * Creates an OpenAI client configured with the provider's base URL,
+   * API key, and Quilltap User-Agent header.
+   *
+   * @param apiKey - API key for authentication
+   * @returns Configured OpenAI client instance
+   */
+  protected createClient(apiKey: string): OpenAI {
+    return new OpenAI({
+      apiKey: this.getEffectiveApiKey(apiKey),
+      baseURL: this.baseUrl,
+      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
+    });
+  }
+
+  /**
    * Sends a message and returns the complete response.
    *
    * @param params - LLM parameters including messages, model, and settings
@@ -190,18 +206,42 @@ export class OpenAICompatibleProvider implements LLMProvider {
     this.validateApiKeyRequirement(apiKey);
     const attachmentResults = this.collectAttachmentFailures(params);
 
-    const client = new OpenAI({
-      apiKey: this.getEffectiveApiKey(apiKey),
-      baseURL: this.baseUrl,
-    });
+    const client = this.createClient(apiKey);
 
-    // Strip attachments from messages and filter out 'tool' role
+    // Map messages to OpenAI Chat Completions format, including tool messages
     const messages = params.messages
-      .filter((m) => m.role !== 'tool')
-      .map((m) => ({
-        role: m.role as 'system' | 'user' | 'assistant',
-        content: m.content,
-      }));
+      .filter((m) => {
+        // Skip tool messages without toolCallId (backward compat)
+        if (m.role === 'tool' && !m.toolCallId) return false;
+        return true;
+      })
+      .map((m) => {
+        // Tool result messages
+        if (m.role === 'tool' && m.toolCallId) {
+          return {
+            role: 'tool' as const,
+            tool_call_id: m.toolCallId as string,
+            content: m.content,
+          };
+        }
+        // Assistant messages with tool calls
+        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+          return {
+            role: 'assistant' as const,
+            content: m.content || null,
+            tool_calls: m.toolCalls.map((tc: any) => ({
+              id: tc.id,
+              type: tc.type,
+              function: tc.function,
+            })),
+          };
+        }
+        // Standard messages (strip attachments)
+        return {
+          role: m.role as 'system' | 'user' | 'assistant',
+          content: m.content,
+        };
+      });
 
     try {
       const response = await client.chat.completions.create({
@@ -246,18 +286,42 @@ export class OpenAICompatibleProvider implements LLMProvider {
     this.validateApiKeyRequirement(apiKey);
     const attachmentResults = this.collectAttachmentFailures(params);
 
-    const client = new OpenAI({
-      apiKey: this.getEffectiveApiKey(apiKey),
-      baseURL: this.baseUrl,
-    });
+    const client = this.createClient(apiKey);
 
-    // Strip attachments from messages and filter out 'tool' role
+    // Map messages to OpenAI Chat Completions format, including tool messages
     const messages = params.messages
-      .filter((m) => m.role !== 'tool')
-      .map((m) => ({
-        role: m.role as 'system' | 'user' | 'assistant',
-        content: m.content,
-      }));
+      .filter((m) => {
+        // Skip tool messages without toolCallId (backward compat)
+        if (m.role === 'tool' && !m.toolCallId) return false;
+        return true;
+      })
+      .map((m) => {
+        // Tool result messages
+        if (m.role === 'tool' && m.toolCallId) {
+          return {
+            role: 'tool' as const,
+            tool_call_id: m.toolCallId as string,
+            content: m.content,
+          };
+        }
+        // Assistant messages with tool calls
+        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
+          return {
+            role: 'assistant' as const,
+            content: m.content || null,
+            tool_calls: m.toolCalls.map((tc: any) => ({
+              id: tc.id,
+              type: tc.type,
+              function: tc.function,
+            })),
+          };
+        }
+        // Standard messages (strip attachments)
+        return {
+          role: m.role as 'system' | 'user' | 'assistant',
+          content: m.content,
+        };
+      });
 
     try {
       const stream = await client.chat.completions.create({
@@ -332,10 +396,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
 
     try {
-      const client = new OpenAI({
-        apiKey: this.getEffectiveApiKey(apiKey),
-        baseURL: this.baseUrl,
-      });
+      const client = this.createClient(apiKey);
       await client.models.list();
       return true;
     } catch (error) {
@@ -364,10 +425,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
 
     try {
-      const client = new OpenAI({
-        apiKey: this.getEffectiveApiKey(apiKey),
-        baseURL: this.baseUrl,
-      });
+      const client = this.createClient(apiKey);
       const models = await client.models.list();
       const modelList = models.data.map((m) => m.id).sort();
       return modelList;

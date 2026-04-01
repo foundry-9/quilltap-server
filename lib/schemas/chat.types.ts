@@ -39,6 +39,36 @@ export const DangerFlagSchema = z.object({
 export type DangerFlag = z.infer<typeof DangerFlagSchema>;
 
 // ============================================================================
+// SCENE STATE
+// ============================================================================
+
+export const SceneStateCharacterSchema = z.object({
+  characterId: z.string(),
+  characterName: z.string(),
+  action: z.string(),
+  appearance: z.string().nullable(),
+  clothing: z.string().nullable(),
+});
+
+export type SceneStateCharacter = z.infer<typeof SceneStateCharacterSchema>;
+
+export const SceneStateSchema = z.object({
+  location: z.string(),
+  characters: z.array(SceneStateCharacterSchema),
+  updatedAt: TimestampSchema,
+  updatedAtMessageCount: z.number(),
+});
+
+export type SceneState = z.infer<typeof SceneStateSchema>;
+
+// ============================================================================
+// CHAT TYPE
+// ============================================================================
+
+export const ChatTypeEnum = z.enum(['salon', 'help']);
+export type ChatType = z.infer<typeof ChatTypeEnum>;
+
+// ============================================================================
 // MESSAGE EVENTS
 // ============================================================================
 
@@ -79,6 +109,10 @@ export const MessageEventSchema = z.object({
   provider: z.string().nullable().optional(),
   /** Model name that generated this message (e.g., 'gpt-4o', 'claude-sonnet-4-20250514') */
   modelName: z.string().nullable().optional(),
+  /** Target participant IDs for whisper messages (null = public message, array = private to sender and targets) */
+  targetParticipantIds: z.array(UUIDSchema).nullable().optional(),
+  /** Whether this message was generated while the character was in silent mode */
+  isSilentMessage: z.boolean().nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;
@@ -104,6 +138,8 @@ export const SystemEventTypeEnum = z.enum([
   'IMAGE_PROMPT_CRAFTING',
   'CONTEXT_COMPRESSION',
   'DANGER_CLASSIFICATION',
+  'SCENE_STATE_TRACKING',
+  'STATUS_CHANGE',
 ]);
 
 export type SystemEventType = z.infer<typeof SystemEventTypeEnum>;
@@ -147,6 +183,47 @@ export type ChatEvent = z.infer<typeof ChatEventSchema>;
 export const ParticipantTypeEnum = z.enum(['CHARACTER']);
 export type ParticipantType = z.infer<typeof ParticipantTypeEnum>;
 
+// ============================================================================
+// PARTICIPANT STATUS
+// ============================================================================
+
+/**
+ * Four-state participation model for characters in a chat:
+ * - active: Present and participating normally (speaks and roleplays)
+ * - silent: Gets turns, but must not speak aloud. May have inner thoughts,
+ *           physical reactions, and actions — but no audible dialogue.
+ * - absent: Turn manager skips them. Still "in" the chat but away from the scene.
+ * - removed: No longer part of the chat. Cannot be whispered to, unaware of
+ *            events after leaving.
+ */
+export const ParticipantStatusEnum = z.enum(['active', 'silent', 'absent', 'removed']);
+export type ParticipantStatus = z.infer<typeof ParticipantStatusEnum>;
+
+/**
+ * Check if a participant is present in the scene (active or silent).
+ * Both states participate in turns and can perceive what happens.
+ */
+export function isParticipantPresent(status: ParticipantStatus): boolean {
+  return status === 'active' || status === 'silent';
+}
+
+/**
+ * Check if a participant can receive whispers (must be present).
+ */
+export function canReceiveWhisper(status: ParticipantStatus): boolean {
+  return status === 'active' || status === 'silent';
+}
+
+/**
+ * Convert legacy isActive/removedAt to the new status enum.
+ * Used during migration and for backward compatibility.
+ */
+export function migrateIsActiveToStatus(isActive: boolean, removedAt?: string | null): ParticipantStatus {
+  if (isActive) return 'active';
+  if (removedAt) return 'removed';
+  return 'absent';
+}
+
 export const ChatParticipantSchema = z.object({
   id: UUIDSchema,
 
@@ -165,12 +242,15 @@ export const ChatParticipantSchema = z.object({
   roleplayTemplateId: z.string().nullable().optional(),   // Roleplay template override - can be UUID or 'plugin:*' format
 
   // Per-chat customization
-  systemPromptOverride: z.string().nullable().optional(),  // Custom scenario/context for this chat
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
 
   // Display and state
   displayOrder: z.number().default(0),   // For ordering in UI
-  isActive: z.boolean().default(true),   // Temporarily disable without removing
+  /** @deprecated Use `status` field instead. Kept as computed compat field (true when status is active or silent). */
+  isActive: z.boolean().default(true),
+  /** Participation status: active, silent, absent, or removed */
+  status: ParticipantStatusEnum.default('active'),
+  removedAt: TimestampSchema.nullable().optional(),  // Soft-delete timestamp — set when participant is removed from chat
 
   // Multi-character chat fields
   hasHistoryAccess: z.boolean().default(false),  // Whether this participant can see messages from before they joined
@@ -196,10 +276,13 @@ export const ChatParticipantBaseSchema = z.object({
   connectionProfileId: UUIDSchema.nullable().optional(),
   imageProfileId: UUIDSchema.nullable().optional(),
   roleplayTemplateId: z.string().nullable().optional(),  // Roleplay template override - can be UUID or 'plugin:*' format
-  systemPromptOverride: z.string().nullable().optional(),
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
   displayOrder: z.number().default(0),
+  /** @deprecated Use `status` field instead. Kept as computed compat field (true when status is active or silent). */
   isActive: z.boolean().default(true),
+  /** Participation status: active, silent, absent, or removed */
+  status: ParticipantStatusEnum.default('active'),
+  removedAt: TimestampSchema.nullable().optional(),  // Soft-delete timestamp
   hasHistoryAccess: z.boolean().default(false),
   joinScenario: z.string().nullable().optional(),
   createdAt: TimestampSchema,
@@ -247,6 +330,8 @@ export const ChatMetadataSchema = z.object({
   activeTypingParticipantId: UUIDSchema.nullable().optional(),
   /** Turns since last user input or pause (for all-LLM pause logic) */
   allLLMPauseTurnCount: z.number().default(0),
+  /** Server-side turn queue for chained responses (JSON array of participant IDs) */
+  turnQueue: z.string().default('[]'),
 
   /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
@@ -308,6 +393,14 @@ export const ChatMetadataSchema = z.object({
   dangerClassifiedAt: TimestampSchema.nullable().optional(),
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
+
+  /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
+  sceneState: JsonSchema.nullable().optional(),
+
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
+  chatType: z.enum(['salon', 'help']).default('salon'),
+  /** For help chats: the current page URL being viewed (for context resolution) */
+  helpPageUrl: z.string().nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
@@ -346,6 +439,8 @@ export const ChatMetadataBaseSchema = z.object({
   impersonatingParticipantIds: z.array(UUIDSchema).default([]),
   activeTypingParticipantId: UUIDSchema.nullable().optional(),
   allLLMPauseTurnCount: z.number().default(0),
+  /** Server-side turn queue for chained responses (JSON array of participant IDs) */
+  turnQueue: z.string().default('[]'),
   /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
 
@@ -406,6 +501,14 @@ export const ChatMetadataBaseSchema = z.object({
   dangerClassifiedAt: TimestampSchema.nullable().optional(),
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
+
+  /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
+  sceneState: JsonSchema.nullable().optional(),
+
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
+  chatType: z.enum(['salon', 'help']).default('salon'),
+  /** For help chats: the current page URL being viewed (for context resolution) */
+  helpPageUrl: z.string().nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

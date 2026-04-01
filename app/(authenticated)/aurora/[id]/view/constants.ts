@@ -28,9 +28,9 @@ export const CHARACTER_TABS: Tab[] = [
     icon: TabIcons.tags,
   },
   {
-    id: 'profiles',
-    label: 'Associated Profiles',
-    icon: TabIcons.profiles,
+    id: 'defaults',
+    label: 'Default Settings',
+    icon: TabIcons.defaults,
   },
   {
     id: 'gallery',

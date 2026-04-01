@@ -10,6 +10,7 @@ import type {
   SearchResult,
   SearchOutput,
 } from '@quilltap/plugin-types';
+import { getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 // ============================================================================
 // SERPER API TYPES
@@ -84,6 +85,7 @@ export const plugin: SearchProviderPlugin = {
         headers: {
           'X-API-KEY': apiKey,
           'Content-Type': 'application/json',
+          'User-Agent': getQuilltapUserAgent(),
         },
         body: JSON.stringify({
           q: query,
@@ -188,6 +190,7 @@ Summary: ${result.snippet}`;
         headers: {
           'X-API-KEY': apiKey,
           'Content-Type': 'application/json',
+          'User-Agent': getQuilltapUserAgent(),
         },
         body: JSON.stringify({
           q: 'test',

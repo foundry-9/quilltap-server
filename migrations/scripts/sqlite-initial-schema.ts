@@ -578,6 +578,15 @@ export const SQLITE_TABLES = [
       `CREATE INDEX IF NOT EXISTS "idx_tfidf_vocabularies_profileId" ON "tfidf_vocabularies" ("profileId")`,
     ],
   },
+  // Instance settings (general key-value store for instance-level configuration)
+  {
+    name: 'instance_settings',
+    sql: `CREATE TABLE IF NOT EXISTS "instance_settings" (
+      "key" TEXT PRIMARY KEY,
+      "value" TEXT NOT NULL
+    )`,
+    indexes: [],
+  },
   // Track embedding status per entity (allows monitoring which items need embedding)
   {
     name: 'embedding_status',

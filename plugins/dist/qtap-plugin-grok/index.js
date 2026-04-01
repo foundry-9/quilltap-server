@@ -242,7 +242,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.26.0";
+var VERSION = "6.33.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -3220,7 +3220,7 @@ var Speech = class extends APIResource {
    * const speech = await client.audio.speech.create({
    *   input: 'input',
    *   model: 'string',
-   *   voice: 'ash',
+   *   voice: 'string',
    * });
    *
    * const content = await speech.blob();
@@ -6385,7 +6385,7 @@ var Videos = class extends APIResource {
    * Create a new video generation job from a prompt and optional reference assets.
    */
   create(body, options) {
-    return this._client.post("/videos", maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    return this._client.post("/videos", multipartFormRequestOptions({ body, ...options }, this._client));
   }
   /**
    * Fetch the latest metadata for a generated video.
@@ -6406,6 +6406,12 @@ var Videos = class extends APIResource {
     return this._client.delete(path`/videos/${videoID}`, options);
   }
   /**
+   * Create a character from an uploaded video.
+   */
+  createCharacter(body, options) {
+    return this._client.post("/videos/characters", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
    * Download the generated video bytes or a derived preview asset.
    *
    * Streams the rendered video content for the specified video job.
@@ -6417,6 +6423,25 @@ var Videos = class extends APIResource {
       headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
       __binaryResponse: true
     });
+  }
+  /**
+   * Create a new video generation job by editing a source video or existing
+   * generated video.
+   */
+  edit(body, options) {
+    return this._client.post("/videos/edits", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Create an extension of a completed video.
+   */
+  extend(body, options) {
+    return this._client.post("/videos/extensions", multipartFormRequestOptions({ body, ...options }, this._client));
+  }
+  /**
+   * Fetch a character.
+   */
+  getCharacter(characterID, options) {
+    return this._client.get(path`/videos/characters/${characterID}`, options);
   }
   /**
    * Create a remix of a completed video using a refreshed prompt.
@@ -6650,8 +6675,9 @@ var OpenAI = class {
     const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
     const url = isAbsoluteURL(path2) ? new URL(path2) : new URL(baseURL + (baseURL.endsWith("/") && path2.startsWith("/") ? path2.slice(1) : path2));
     const defaultQuery = this.defaultQuery();
-    if (!isEmptyObj(defaultQuery)) {
-      query = { ...defaultQuery, ...query };
+    const pathQuery = Object.fromEntries(url.searchParams);
+    if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
+      query = { ...pathQuery, ...defaultQuery, ...query };
     }
     if (typeof query === "object" && query && !Array.isArray(query)) {
       url.search = this.stringifyQuery(query);
@@ -7020,7 +7046,8 @@ function parseOpenAIToolCalls(response) {
           try {
             toolCalls.push({
               name: tc.function.name,
-              arguments: JSON.parse(argsStr)
+              arguments: JSON.parse(argsStr),
+              callId: tc.id || void 0
             });
           } catch {
             continue;
@@ -7085,6 +7112,14 @@ function createPluginLogger(pluginName, minLevel = "debug") {
   }
   return createConsoleLoggerWithChild(pluginName, minLevel);
 }
+var GLOBAL_VERSION_KEY = "__quilltap_app_version";
+function getQuilltapVersion() {
+  const version = globalThis[GLOBAL_VERSION_KEY];
+  return typeof version === "string" ? version : "unknown";
+}
+function getQuilltapUserAgent() {
+  return `Quilltap/${getQuilltapVersion()}`;
+}
 var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
@@ -7104,27 +7139,54 @@ var GrokProvider = class {
     this.supportsWebSearch = true;
   }
   /**
-   * Format messages from LLMMessage format to Responses API format
-   * Handles text, image attachments, and role conversion
+   * Format messages from LLMMessage format to Responses API format.
+   * Grok uses 'system' role directly in the input array — the `instructions`
+   * parameter is NOT supported by xAI and will cause an error.
    */
   formatMessagesForResponsesAPI(messages) {
     const sent = [];
     const failed = [];
-    const filteredMessages = messages.filter((m) => m.role !== "tool");
-    const input = filteredMessages.map((msg) => {
+    const input = [];
+    for (const msg of messages) {
+      if (msg.role === "tool") {
+        if (!msg.toolCallId) {
+          logger.debug("Skipping tool message without toolCallId", {
+            context: "GrokProvider.formatMessagesForResponsesAPI"
+          });
+          continue;
+        }
+        input.push({
+          type: "function_call_output",
+          call_id: msg.toolCallId,
+          output: msg.content
+        });
+        continue;
+      }
       if (msg.role === "system") {
-        return {
+        input.push({
           type: "message",
           role: "system",
           content: msg.content
-        };
+        });
+        continue;
       }
       if (msg.role === "assistant") {
-        return {
+        input.push({
           type: "message",
           role: "assistant",
           content: msg.content
-        };
+        });
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
+          for (const tc of msg.toolCalls) {
+            input.push({
+              type: "function_call",
+              call_id: tc.id,
+              name: tc.function.name,
+              arguments: tc.function.arguments
+            });
+          }
+        }
+        continue;
       }
       const content = [];
       if (msg.content) {
@@ -7179,12 +7241,12 @@ ${textContent}`
       if (content.length === 0) {
         content.push({ type: "input_text", text: "" });
       }
-      return {
+      input.push({
         type: "message",
         role: "user",
         content
-      };
-    });
+      });
+    }
     return { input, attachmentResults: { sent, failed } };
   }
   /**
@@ -7198,16 +7260,20 @@ ${textContent}`
       return {
         type: "function",
         name: fn.name,
-        description: fn.description,
+        description: fn.description ?? void 0,
         parameters: fn.parameters,
         strict: false
       };
     });
   }
   /**
-   * Extract text content from Responses API response
+   * Extract text content from Responses API response.
+   * Used as fallback when output_text may not be populated by xAI.
    */
   extractTextFromResponse(response) {
+    if (response.output_text) {
+      return response.output_text;
+    }
     let text = "";
     for (const item of response.output) {
       if (item.type === "message") {
@@ -7221,7 +7287,9 @@ ${textContent}`
     return text;
   }
   /**
-   * Build raw response object compatible with OpenAI format for tool parsing
+   * Build raw response object compatible with Chat Completions format.
+   * This ensures the tool call parser, Inspector, and chat log storage
+   * all continue to work without changes.
    */
   buildRawResponse(response) {
     const toolCalls = [];
@@ -7252,9 +7320,9 @@ ${textContent}`
         finish_reason: toolCalls.length > 0 ? "tool_calls" : "stop"
       }],
       usage: {
-        prompt_tokens: response.usage.input_tokens,
-        completion_tokens: response.usage.output_tokens,
-        total_tokens: response.usage.total_tokens
+        prompt_tokens: response.usage?.input_tokens ?? 0,
+        completion_tokens: response.usage?.output_tokens ?? 0,
+        total_tokens: response.usage?.total_tokens ?? 0
       }
     };
   }
@@ -7267,75 +7335,66 @@ ${textContent}`
         return "tool_calls";
       }
     }
-    if (response.status === "completed") {
-      return "stop";
-    }
-    if (response.status === "incomplete") {
-      return response.incomplete_details?.reason || "length";
-    }
-    if (response.status === "failed") {
-      return "error";
-    }
+    if (response.status === "completed") return "stop";
+    if (response.status === "incomplete") return response.incomplete_details?.reason || "length";
+    if (response.status === "failed") return "error";
     return "stop";
   }
   async sendMessage(params, apiKey) {
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
+    const client = new OpenAI({
+      apiKey,
+      baseURL: this.baseUrl,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+    });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
-    const requestBody = {
+    const requestParams = {
       model: params.model,
       input,
       store: false,
       // Stateless operation - Quilltap manages history locally
       temperature: params.temperature ?? 0.7,
       max_output_tokens: params.maxTokens ?? 4096,
-      top_p: params.topP ?? 1
+      top_p: params.topP ?? 1,
+      stream: false
     };
     if (params.stop) {
-      requestBody.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
+      requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
     const tools = [];
     if (params.webSearchEnabled) {
       tools.push({ type: "web_search" });
       tools.push({ type: "x_search" });
-      requestBody.include = ["citations"];
+      requestParams.include = ["citations"];
     }
     if (params.tools && params.tools.length > 0) {
       const functionTools = this.formatToolsForResponsesAPI(params.tools);
       tools.push(...functionTools);
     }
     if (tools.length > 0) {
-      requestBody.tools = tools;
+      requestParams.tools = tools;
     }
-    const response = await fetch(`${this.baseUrl}/responses`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(requestBody)
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error("Responses API request failed", {
+    const response = await client.responses.create(requestParams);
+    if (response.error) {
+      logger.error("Responses API returned error", {
         context: "GrokProvider.sendMessage",
-        status: response.status,
-        error: errorText
+        code: response.error.code,
+        message: response.error.message
       });
-      throw new Error(`Grok API error (${response.status}): ${errorText}`);
+      throw new Error(`Grok API error: ${response.error.message}`);
     }
-    const data = await response.json();
-    const text = this.extractTextFromResponse(data);
-    const finishReason = this.getFinishReason(data);
-    const raw = this.buildRawResponse(data);
+    const text = this.extractTextFromResponse(response);
+    const finishReason = this.getFinishReason(response);
+    const raw = this.buildRawResponse(response);
     return {
       content: text,
       finishReason,
       usage: {
-        promptTokens: data.usage.input_tokens,
-        completionTokens: data.usage.output_tokens,
-        totalTokens: data.usage.total_tokens
+        promptTokens: response.usage?.input_tokens ?? 0,
+        completionTokens: response.usage?.output_tokens ?? 0,
+        totalTokens: response.usage?.total_tokens ?? 0
       },
       raw,
       attachmentResults
@@ -7345,8 +7404,13 @@ ${textContent}`
     if (!apiKey) {
       throw new Error("Grok provider requires an API key");
     }
+    const client = new OpenAI({
+      apiKey,
+      baseURL: this.baseUrl,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+    });
     const { input, attachmentResults } = this.formatMessagesForResponsesAPI(params.messages);
-    const requestBody = {
+    const requestParams = {
       model: params.model,
       input,
       store: false,
@@ -7356,106 +7420,50 @@ ${textContent}`
       stream: true
     };
     if (params.stop) {
-      requestBody.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
+      requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
     const tools = [];
     if (params.webSearchEnabled) {
       tools.push({ type: "web_search" });
       tools.push({ type: "x_search" });
-      requestBody.include = ["citations"];
+      requestParams.include = ["citations"];
     }
     if (params.tools && params.tools.length > 0) {
       const functionTools = this.formatToolsForResponsesAPI(params.tools);
       tools.push(...functionTools);
     }
     if (tools.length > 0) {
-      requestBody.tools = tools;
+      requestParams.tools = tools;
     }
-    const response = await fetch(`${this.baseUrl}/responses`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(requestBody)
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error("Streaming Responses API request failed", {
-        context: "GrokProvider.streamMessage",
-        status: response.status,
-        error: errorText
-      });
-      throw new Error(`Grok API error (${response.status}): ${errorText}`);
-    }
-    if (!response.body) {
-      throw new Error("No response body received from Grok API");
-    }
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let accumulatedContent = "";
+    const stream = await client.responses.create(requestParams);
     let finalResponse = null;
-    const functionCallArgs = /* @__PURE__ */ new Map();
-    const functionCallItems = /* @__PURE__ */ new Map();
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6).trim();
-            if (data === "[DONE]") {
-              continue;
-            }
-            try {
-              const event = JSON.parse(data);
-              if (event.type === "response.output_text.delta") {
-                const delta = event.delta;
-                accumulatedContent += delta;
-                yield {
-                  content: delta,
-                  done: false
-                };
-              } else if (event.type === "response.output_item.added") {
-                const addedEvent = event;
-                if (addedEvent.item.type === "function_call") {
-                  functionCallItems.set(addedEvent.item.id, addedEvent.item);
-                  functionCallArgs.set(addedEvent.item.id, "");
-                }
-              } else if (event.type === "response.function_call_arguments.delta") {
-                const fcDelta = event;
-                const existing = functionCallArgs.get(fcDelta.item_id) || "";
-                functionCallArgs.set(fcDelta.item_id, existing + fcDelta.delta);
-              } else if (event.type === "response.completed") {
-                finalResponse = event.response;
-              }
-            } catch (parseError) {
-            }
-          }
-        }
+    for await (const event of stream) {
+      if (event.type === "response.output_text.delta") {
+        yield {
+          content: event.delta,
+          done: false
+        };
+      } else if (event.type === "response.completed") {
+        finalResponse = event.response;
       }
-    } finally {
-      reader.releaseLock();
     }
     if (finalResponse) {
       const raw = this.buildRawResponse(finalResponse);
-      const finishReason = this.getFinishReason(finalResponse);
       yield {
         content: "",
         done: true,
         usage: {
-          promptTokens: finalResponse.usage.input_tokens,
-          completionTokens: finalResponse.usage.output_tokens,
-          totalTokens: finalResponse.usage.total_tokens
+          promptTokens: finalResponse.usage?.input_tokens ?? 0,
+          completionTokens: finalResponse.usage?.output_tokens ?? 0,
+          totalTokens: finalResponse.usage?.total_tokens ?? 0
         },
         attachmentResults,
         rawResponse: raw
       };
     } else {
+      logger.warn("Stream ended without response.completed event", {
+        context: "GrokProvider.streamMessage"
+      });
       yield {
         content: "",
         done: true,
@@ -7472,7 +7480,8 @@ ${textContent}`
     try {
       const client = new OpenAI({
         apiKey,
-        baseURL: this.baseUrl
+        baseURL: this.baseUrl,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
       });
       await client.models.list();
       return true;
@@ -7485,7 +7494,8 @@ ${textContent}`
     try {
       const client = new OpenAI({
         apiKey,
-        baseURL: this.baseUrl
+        baseURL: this.baseUrl,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
       });
       const models = await client.models.list();
       const grokModels = models.data.map((m) => m.id).sort();
@@ -7501,7 +7511,8 @@ ${textContent}`
     }
     const client = new OpenAI({
       apiKey,
-      baseURL: this.baseUrl
+      baseURL: this.baseUrl,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
     const response = await client.images.generate({
       model: params.model ?? "grok-2-image",
@@ -7533,8 +7544,14 @@ var logger2 = createPluginLogger("qtap-plugin-grok");
 var GrokImageProvider = class {
   constructor() {
     this.provider = "GROK";
-    this.supportedModels = ["grok-2-image"];
+    this.supportedModels = ["grok-imagine-image", "grok-imagine-image-pro", "grok-2-image"];
     this.baseUrl = "https://api.x.ai/v1";
+  }
+  /**
+   * Check if the model is a Grok Imagine model (vs legacy grok-2-image)
+   */
+  isImagineModel(model) {
+    return model.startsWith("grok-imagine-");
   }
   async generateImage(params, apiKey) {
     if (!apiKey) {
@@ -7542,16 +7559,21 @@ var GrokImageProvider = class {
     }
     const client = new OpenAI({
       apiKey,
-      baseURL: this.baseUrl
+      baseURL: this.baseUrl,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
+    const model = params.model ?? "grok-imagine-image";
     const requestParams = {
-      model: params.model ?? "grok-2-image",
+      model,
       prompt: params.prompt,
       n: params.n ?? 1,
       response_format: "b64_json"
     };
     if (params.aspectRatio) {
       requestParams.aspect_ratio = params.aspectRatio;
+    }
+    if (this.isImagineModel(model) && model.endsWith("-pro")) {
+      requestParams.resolution = "2k";
     }
     const response = await client.images.generate(requestParams);
     if (!("data" in response) || !response.data || !Array.isArray(response.data)) {
@@ -7571,7 +7593,8 @@ var GrokImageProvider = class {
     try {
       const client = new OpenAI({
         apiKey,
-        baseURL: this.baseUrl
+        baseURL: this.baseUrl,
+        defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
       });
       await client.models.list();
       return true;
@@ -7585,12 +7608,336 @@ var GrokImageProvider = class {
   }
 };
 
+// node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
+var TOOL_NAME_ALIASES = {
+  // Direct mappings
+  "search_memories": "search_memories",
+  "generate_image": "generate_image",
+  "search_web": "search_web",
+  // Memory tool aliases
+  "memory": "search_memories",
+  "memory_search": "search_memories",
+  "search_memory": "search_memories",
+  "memories": "search_memories",
+  // Image tool aliases
+  "image": "generate_image",
+  "create_image": "generate_image",
+  "image_generation": "generate_image",
+  "gen_image": "generate_image",
+  // Web search aliases
+  "search": "search_web",
+  "web_search": "search_web",
+  "websearch": "search_web",
+  "web": "search_web",
+  // Help tool aliases
+  "help_search": "help_search",
+  "helpsearch": "help_search",
+  "search_help": "help_search",
+  "help_navigate": "help_navigate",
+  "helpnavigate": "help_navigate"
+};
+function normalizeToolName(name) {
+  const normalized = name.toLowerCase().trim();
+  return TOOL_NAME_ALIASES[normalized] || name;
+}
+function convertToToolCallRequest(parsed) {
+  switch (parsed.toolName) {
+    case "search_memories":
+      return {
+        name: "search_memories",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
+          limit: parsed.arguments.limit
+        }
+      };
+    case "generate_image":
+      return {
+        name: "generate_image",
+        arguments: {
+          prompt: parsed.arguments.prompt || parsed.arguments.description || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    case "search_web":
+      return {
+        name: "search_web",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    case "help_search":
+      return {
+        name: "help_search",
+        arguments: {
+          query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
+          limit: parsed.arguments.limit
+        }
+      };
+    case "help_navigate":
+      return {
+        name: "help_navigate",
+        arguments: {
+          url: parsed.arguments.url || parsed.arguments.path || Object.values(parsed.arguments)[0] || ""
+        }
+      };
+    default:
+      return {
+        name: parsed.toolName,
+        arguments: parsed.arguments
+      };
+  }
+}
+function parseFunctionCallsFormat(response) {
+  const results = [];
+  const functionCallsPattern = /<function_calls>([\s\S]*?)<\/function_calls>/gi;
+  let wrapperMatch;
+  while ((wrapperMatch = functionCallsPattern.exec(response)) !== null) {
+    const wrapperContent = wrapperMatch[1];
+    const wrapperStartIndex = wrapperMatch.index;
+    const contentOffset = wrapperStartIndex + "<function_calls>".length;
+    const invokePattern = /<invoke\s+name=["']([^"']+)["']>([\s\S]*?)<\/invoke>/gi;
+    let invokeMatch;
+    while ((invokeMatch = invokePattern.exec(wrapperContent)) !== null) {
+      const toolName = invokeMatch[1];
+      const paramContent = invokeMatch[2];
+      const invokeStartIndex = contentOffset + invokeMatch.index;
+      const invokeEndIndex = invokeStartIndex + invokeMatch[0].length;
+      const args = {};
+      let format = "claude";
+      const deepseekParamPattern = /<parameter\s+name=["']([^"']+)["']\s+string=["']([^"']*)["'][^>]*>([^<]*)<\/parameter>/gi;
+      let paramMatch;
+      while ((paramMatch = deepseekParamPattern.exec(paramContent)) !== null) {
+        const paramName = paramMatch[1];
+        const stringAttr = paramMatch[2];
+        const value = paramMatch[3].trim();
+        if (stringAttr === "false") {
+          const numVal = Number(value);
+          if (!isNaN(numVal)) {
+            args[paramName] = numVal;
+          } else if (value === "true") {
+            args[paramName] = true;
+          } else if (value === "false") {
+            args[paramName] = false;
+          } else {
+            args[paramName] = value;
+          }
+        } else {
+          args[paramName] = value;
+        }
+        format = "deepseek";
+      }
+      if (Object.keys(args).length === 0) {
+        const claudeParamPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+        while ((paramMatch = claudeParamPattern.exec(paramContent)) !== null) {
+          args[paramMatch[1]] = paramMatch[2].trim();
+        }
+      }
+      const antmlParamPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/antml:parameter>/gi;
+      while ((paramMatch = antmlParamPattern.exec(paramContent)) !== null) {
+        args[paramMatch[1]] = paramMatch[2].trim();
+      }
+      results.push({
+        toolName: normalizeToolName(toolName),
+        arguments: args,
+        fullMatch: invokeMatch[0],
+        startIndex: invokeStartIndex,
+        endIndex: invokeEndIndex,
+        format
+      });
+    }
+  }
+  return results;
+}
+function parseToolCallFormat(response) {
+  const results = [];
+  const toolCallPattern = /<tool_call>([\s\S]*?)<\/tool_call>/gi;
+  let match;
+  while ((match = toolCallPattern.exec(response)) !== null) {
+    const content = match[1];
+    const startIndex = match.index;
+    const nameMatch = /<name>([^<]+)<\/name>/i.exec(content);
+    if (!nameMatch) continue;
+    const toolName = nameMatch[1].trim();
+    const args = {};
+    const argsMatch = /<arguments>([\s\S]*?)<\/arguments>/i.exec(content);
+    if (argsMatch) {
+      const argsContent = argsMatch[1];
+      const argPattern = /<(\w+)>([^<]*)<\/\1>/gi;
+      let argMatch;
+      while ((argMatch = argPattern.exec(argsContent)) !== null) {
+        args[argMatch[1]] = argMatch[2].trim();
+      }
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "generic"
+    });
+  }
+  return results;
+}
+function parseFunctionCallFormat(response) {
+  const results = [];
+  const functionCallPattern = /<function_call\s+name=["']([^"']+)["']>([\s\S]*?)<\/function_call>/gi;
+  let match;
+  while ((match = functionCallPattern.exec(response)) !== null) {
+    const toolName = match[1];
+    const content = match[2];
+    const startIndex = match.index;
+    const args = {};
+    const paramPattern = /<param\s+name=["']([^"']+)["']>([^<]*)<\/param>/gi;
+    let paramMatch;
+    while ((paramMatch = paramPattern.exec(content)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    const parameterPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+    while ((paramMatch = parameterPattern.exec(content)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "function_call"
+    });
+  }
+  return results;
+}
+function parseToolUseFormat(response) {
+  const results = [];
+  const toolUsePattern = /<tool_use(?:\s+name=["']([^"']+)["'])?\s*>([\s\S]*?)<\/tool_use>/gi;
+  let match;
+  while ((match = toolUsePattern.exec(response)) !== null) {
+    const attrName = match[1];
+    const content = match[2];
+    const startIndex = match.index;
+    const trimmedContent = content.trim();
+    if (trimmedContent.startsWith("{")) {
+      try {
+        const jsonBlob = JSON.parse(trimmedContent);
+        if (typeof jsonBlob === "object" && jsonBlob !== null && jsonBlob.name) {
+          const args2 = jsonBlob.input || jsonBlob.arguments || jsonBlob.parameters || {};
+          results.push({
+            toolName: normalizeToolName(jsonBlob.name),
+            arguments: typeof args2 === "object" && args2 !== null ? args2 : {},
+            fullMatch: match[0],
+            startIndex,
+            endIndex: startIndex + match[0].length,
+            format: "tool_use"
+          });
+          continue;
+        }
+      } catch {
+      }
+    }
+    let toolName = attrName;
+    if (!toolName) {
+      const nameMatch = /<name>([^<]+)<\/name>/i.exec(content);
+      if (!nameMatch) continue;
+      toolName = nameMatch[1].trim();
+    }
+    const args = {};
+    const argsMatch = /<(?:arguments|input|parameters)>([\s\S]*?)<\/(?:arguments|input|parameters)>/i.exec(content);
+    if (argsMatch) {
+      const argsContent = argsMatch[1].trim();
+      if (argsContent.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(argsContent);
+          if (typeof parsed === "object" && parsed !== null) {
+            Object.assign(args, parsed);
+          }
+        } catch {
+        }
+      }
+      if (Object.keys(args).length === 0) {
+        const argPattern = /<(\w+)>([^<]*)<\/\1>/gi;
+        let argMatch;
+        while ((argMatch = argPattern.exec(argsContent)) !== null) {
+          args[argMatch[1]] = argMatch[2].trim();
+        }
+      }
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "tool_use"
+    });
+  }
+  return results;
+}
+function parseInvokeFormat(response) {
+  const results = [];
+  const invokePattern = /<invoke\s+name=["']([^"']+)["']>([\s\S]*?)<\/invoke>/gi;
+  let match;
+  while ((match = invokePattern.exec(response)) !== null) {
+    const toolName = match[1];
+    const paramContent = match[2];
+    const startIndex = match.index;
+    const args = {};
+    const paramPattern = /<parameter\s+name=["']([^"']+)["']>([^<]*)<\/parameter>/gi;
+    let paramMatch;
+    while ((paramMatch = paramPattern.exec(paramContent)) !== null) {
+      args[paramMatch[1]] = paramMatch[2].trim();
+    }
+    results.push({
+      toolName: normalizeToolName(toolName),
+      arguments: args,
+      fullMatch: match[0],
+      startIndex,
+      endIndex: startIndex + match[0].length,
+      format: "invoke"
+    });
+  }
+  return results;
+}
+function parseAllXMLFormats(response) {
+  const allResults = [];
+  allResults.push(...parseFunctionCallsFormat(response));
+  allResults.push(...parseToolCallFormat(response));
+  allResults.push(...parseFunctionCallFormat(response));
+  allResults.push(...parseToolUseFormat(response));
+  allResults.push(...parseInvokeFormat(response));
+  const seen = /* @__PURE__ */ new Set();
+  const deduped = allResults.filter((result) => {
+    if (seen.has(result.startIndex)) {
+      return false;
+    }
+    seen.add(result.startIndex);
+    return true;
+  });
+  deduped.sort((a, b) => a.startIndex - b.startIndex);
+  return deduped;
+}
+function parseAllXMLAsToolCalls(response) {
+  return parseAllXMLFormats(response).map(convertToToolCallRequest);
+}
+function hasAnyXMLToolMarkers(response) {
+  return /<function_calls>/i.test(response) || /<tool_call>/i.test(response) || /<function_call\s+/i.test(response) || /<tool_use[\s>]/i.test(response) || /<invoke\s+name=/i.test(response);
+}
+function stripAllXMLToolMarkers(response) {
+  let stripped = response;
+  stripped = stripped.replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, "");
+  stripped = stripped.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "");
+  stripped = stripped.replace(/<function_call\s+[^>]*>[\s\S]*?<\/function_call>/gi, "");
+  stripped = stripped.replace(/<tool_use[\s>][\s\S]*?<\/tool_use>/gi, "");
+  stripped = stripped.replace(/<invoke\s+name=["'][^"']*["']>[\s\S]*?<\/invoke>/gi, "");
+  stripped = stripped.replace(/\n{3,}/g, "\n\n").replace(/  +/g, " ").trim();
+  return stripped;
+}
+
 // index.ts
 var logger3 = createPluginLogger("qtap-plugin-grok");
 var GROK_IMAGE_CONSTRAINTS = {
-  maxPromptBytes: 1024,
-  promptConstraintWarning: "IMPORTANT: Grok has a strict limit of 1024 bytes for image generation prompts. Keep your prompt concise and under this limit.",
-  supportedAspectRatios: ["1:1", "4:3", "3:4", "16:9", "9:16"]
+  maxPromptBytes: 8e3,
+  promptConstraintWarning: "Grok Imagine models support prompts up to approximately 8000 characters. Keep your prompt within this limit.",
+  supportedAspectRatios: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "2:1", "1:2", "19.5:9", "9:19.5", "20:9", "9:20"]
 };
 var metadata = {
   providerName: "GROK",
@@ -7744,8 +8091,24 @@ var plugin = {
         supportsTools: true
       },
       {
+        id: "grok-imagine-image",
+        name: "Grok Imagine",
+        contextWindow: 8e3,
+        maxOutputTokens: 1024,
+        supportsImages: false,
+        supportsTools: false
+      },
+      {
+        id: "grok-imagine-image-pro",
+        name: "Grok Imagine Pro",
+        contextWindow: 8e3,
+        maxOutputTokens: 1024,
+        supportsImages: false,
+        supportsTools: false
+      },
+      {
         id: "grok-2-image",
-        name: "Grok 2 Image",
+        name: "Grok 2 Image (Legacy)",
         contextWindow: 2048,
         maxOutputTokens: 1024,
         supportsImages: false,
@@ -7813,6 +8176,29 @@ var plugin = {
    */
   getImageProviderConstraints: () => {
     return GROK_IMAGE_CONSTRAINTS;
+  },
+  /**
+   * Detect spontaneous XML tool markers in response text
+   * Some models may emit XML tool markup instead of using native function calling
+   */
+  hasTextToolMarkers(text) {
+    return hasAnyXMLToolMarkers(text);
+  },
+  parseTextToolCalls(text) {
+    try {
+      const results = parseAllXMLAsToolCalls(text);
+      return results;
+    } catch (error) {
+      logger3.error(
+        "Error parsing text tool calls",
+        { context: "grok.parseTextToolCalls" },
+        error instanceof Error ? error : void 0
+      );
+      return [];
+    }
+  },
+  stripTextToolMarkers(text) {
+    return stripAllXMLToolMarkers(text);
   }
 };
 var index_default = plugin;

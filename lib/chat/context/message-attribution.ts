@@ -8,6 +8,7 @@
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types'
 import type { MultiCharacterMessage } from '@/lib/llm/message-formatter'
 import { logger } from '@/lib/logger'
+import { isParticipantPresent } from '@/lib/schemas/chat.types'
 
 /**
  * Extended message format for multi-character context building
@@ -22,6 +23,8 @@ export interface MessageWithParticipant {
   participantId?: string | null
   /** When the message was created (for history access filtering) */
   createdAt?: string
+  /** Target participant IDs for whisper messages */
+  targetParticipantIds?: string[] | null
 }
 
 /**
@@ -51,6 +54,33 @@ export function filterMessagesByHistoryAccess(
   })
 
   return filteredMessages
+}
+
+/**
+ * Filter whisper messages from context
+ * A whisper is only visible to the sender and the target(s)
+ * Public messages (no targetParticipantIds) are always visible
+ */
+export function filterWhisperMessages(
+  messages: MessageWithParticipant[],
+  respondingParticipantId: string
+): MessageWithParticipant[] {
+  return messages.filter(msg => {
+    // Public message - always include
+    if (!msg.targetParticipantIds || msg.targetParticipantIds.length === 0) {
+      return true
+    }
+    // Sender can see their own whispers
+    if (msg.participantId === respondingParticipantId) {
+      return true
+    }
+    // Target can see whispers directed at them
+    if (msg.targetParticipantIds.includes(respondingParticipantId)) {
+      return true
+    }
+    // Not involved - exclude
+    return false
+  })
 }
 
 /**
@@ -137,7 +167,7 @@ export function findUserParticipantName(
 ): string | undefined {
   // Find a user-controlled CHARACTER participant
   const userCharacterParticipant = allParticipants.find(p =>
-    p.type === 'CHARACTER' && p.controlledBy === 'user' && p.isActive && p.characterId
+    p.type === 'CHARACTER' && p.controlledBy === 'user' && isParticipantPresent(p.status) && p.characterId
   )
   if (userCharacterParticipant?.characterId) {
     const character = participantCharacters.get(userCharacterParticipant.characterId)

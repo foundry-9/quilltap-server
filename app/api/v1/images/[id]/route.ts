@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logger } from '@/lib/logger';
@@ -24,6 +24,9 @@ const addTagSchema = z.object({
 const removeTagSchema = z.object({
   tagId: z.string(),
 });
+
+const IMAGE_POST_ACTIONS = ['add-tag', 'remove-tag'] as const;
+type ImagePostAction = typeof IMAGE_POST_ACTIONS[number];
 
 // ============================================================================
 // GET Handler
@@ -235,18 +238,16 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
     return notFound('Image');
   }
 
-  switch (action) {
-    case 'add-tag': {
-      return handleAddTag(req, user, repos, id, image);
-    }
-
-    case 'remove-tag': {
-      return handleRemoveTag(req, user, repos, id, image);
-    }
-
-    default:
-      return badRequest(`Unknown action: ${action}. Available actions: add-tag, remove-tag`);
+  if (!isValidAction(action, IMAGE_POST_ACTIONS)) {
+    return badRequest(`Unknown action: ${action}. Available actions: ${IMAGE_POST_ACTIONS.join(', ')}`);
   }
+
+  const actionHandlers: Record<ImagePostAction, () => Promise<NextResponse>> = {
+    'add-tag': () => handleAddTag(req, user, repos, id, image),
+    'remove-tag': () => handleRemoveTag(req, user, repos, id, image),
+  };
+
+  return actionHandlers[action]();
 });
 
 // ============================================================================

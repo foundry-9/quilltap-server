@@ -12,6 +12,7 @@ export enum LogLevel {
   WARN = 'warn',
   INFO = 'info',
   DEBUG = 'debug',
+  TRACE = 'trace',
 }
 
 const LOG_LEVELS = {
@@ -19,6 +20,7 @@ const LOG_LEVELS = {
   [LogLevel.WARN]: 1,
   [LogLevel.INFO]: 2,
   [LogLevel.DEBUG]: 3,
+  [LogLevel.TRACE]: 4,
 };
 
 const CURRENT_LEVEL =
@@ -110,6 +112,13 @@ class Logger {
    */
   debug(message: string, context?: LogContext): void {
     this.log(LogLevel.DEBUG, message, context);
+  }
+
+  /**
+   * Log a trace message (most verbose, below debug)
+   */
+  trace(message: string, context?: LogContext): void {
+    this.log(LogLevel.TRACE, message, context);
   }
 
   /**

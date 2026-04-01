@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { PromptTemplate, PromptTemplateSchema } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { TypedQueryFilter } from '../interfaces';
+import { systemPromptRegistry } from '@/lib/plugins/system-prompt-registry';
 import { loadSamplePrompts } from '@/lib/prompts/sample-prompts-loader';
 
 /**
@@ -48,10 +49,61 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
   private async _doSeedSamplePrompts(): Promise<void> {
     return this.safeQuery(
       async () => {
+        // Primary source: system prompt plugin registry
+        const registryPrompts = systemPromptRegistry.isInitialized()
+          ? systemPromptRegistry.getAll()
+          : [];
+
+        if (registryPrompts.length > 0) {
+          const collection = await this.getCollection();
+
+          for (const prompt of registryPrompts) {
+            // Check if prompt already exists by name and isBuiltIn
+            const existing = await collection.findOne({
+              name: prompt.name,
+              isBuiltIn: true,
+            });
+
+            if (!existing) {
+              const id = this.generateId();
+              const now = this.getCurrentTimestamp();
+
+              const newTemplate: PromptTemplate = {
+                id,
+                userId: null,
+                name: prompt.name,
+                content: prompt.content,
+                description: `${prompt.category} prompt optimized for ${prompt.modelHint} models`,
+                isBuiltIn: true,
+                category: prompt.category,
+                modelHint: prompt.modelHint,
+                tags: [],
+                createdAt: now,
+                updatedAt: now,
+              };
+
+              const validated = this.validate(newTemplate);
+              await collection.insertOne(validated);
+
+              logger.info('Sample prompt template seeded from plugin', {
+                templateId: id,
+                name: prompt.name,
+                promptId: prompt.id,
+                modelHint: prompt.modelHint,
+                category: prompt.category,
+              });
+            }
+          }
+          return;
+        }
+
+        // Fallback: load from filesystem (legacy prompts/ directory)
         const samplePrompts = await loadSamplePrompts();
         if (samplePrompts.length === 0) {
           return;
         }
+
+        logger.debug('System prompt registry not available, falling back to filesystem loader');
 
         const collection = await this.getCollection();
 
@@ -83,7 +135,7 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
             const validated = this.validate(newTemplate);
             await collection.insertOne(validated);
 
-            logger.info('Sample prompt template seeded', {
+            logger.info('Sample prompt template seeded from filesystem', {
               templateId: id,
               name: sample.name,
               modelHint: sample.modelHint,
