@@ -252,11 +252,6 @@ export async function autoConfigureProfile(
     ? formatWebSearchResults(settingsSearch.results)
     : 'No search results found for recommended settings.'
 
-  logger.debug('[Auto-Configure] Web searches completed', {
-    specsResults: specsSearch.results?.length ?? 0,
-    settingsResults: settingsSearch.results?.length ?? 0,
-  })
-
   // Build the analysis prompt
   const systemPrompt = buildSystemPrompt()
   const userPrompt = buildUserPrompt(provider, modelName, specsFormatted, settingsFormatted)
@@ -274,12 +269,6 @@ export async function autoConfigureProfile(
     { messages, model: defaultProfile.modelName, temperature: 0.2, maxTokens: 1000 },
     apiKey
   )
-
-  logger.debug('[Auto-Configure] LLM analysis response received', {
-    provider: defaultProfile.provider,
-    model: defaultProfile.modelName,
-    responseLength: response.content.length,
-  })
 
   // Log the LLM call
   logLLMCall({

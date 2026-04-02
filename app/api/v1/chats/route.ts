@@ -531,11 +531,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       const matchingScenario = primaryCharacter?.scenarios?.find(s => s.id === validatedData.scenarioId);
       if (matchingScenario) {
         resolvedScenario = matchingScenario.content;
-        logger.debug('[Chats v1] Resolved scenarioId to scenario content', {
-          characterId: buildResult.firstCharacter.characterId,
-          scenarioId: validatedData.scenarioId,
-          scenarioTitle: matchingScenario.title,
-        });
       } else {
         logger.warn('[Chats v1] scenarioId not found on character', {
           characterId: buildResult.firstCharacter.characterId,
@@ -594,14 +589,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
     // Resolve timestamp config with fallback chain: request > character default > global default
     const resolvedTimestampConfig = validatedData.timestampConfig || primaryCharacter?.defaultTimestampConfig || chatSettings?.defaultTimestampConfig || null;
-    if (resolvedTimestampConfig && !validatedData.timestampConfig) {
-      const source = primaryCharacter?.defaultTimestampConfig ? 'character default' : 'global default';
-      logger.debug('[Chats v1] Applied timestamp config from fallback', {
-        characterId: buildResult.firstCharacter.characterId,
-        source,
-        mode: resolvedTimestampConfig.mode,
-      });
-    }
 
     // Use chat-level imageProfileId if provided, otherwise use first from participants (legacy support)
     const chatImageProfileId = validatedData.imageProfileId || buildResult.firstImageProfileId || null;

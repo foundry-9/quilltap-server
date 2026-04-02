@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- chore: remove 8 development `logger.debug` calls from 4 files (chats route, characters repository, prompt-templates repository, auto-configure service)
 - refactor: remove dead code (`lib/image-gen/base.ts`, `@quilltap/theme-storybook` dependency), replace raw `NextResponse.json()` with response helpers in 9 API routes for conformance
 - test: add unit and regression tests for 4.0-dev features — model classes, system prompt registry, memory recap, external prompt generator, auto-configure service, scenario persistence, orphaned file cleanup safety, Character Optimizer JSON repair and frequency guards, greeting content filter detection, Concierge DETECT_ONLY empty response handling, and gatekeeper category mapping/caching (~189 new tests)
 - ci: release workflow puts Desktop App first in installation section and pins link to the quilltap-shell release that was current at build time
