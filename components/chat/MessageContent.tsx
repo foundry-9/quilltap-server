@@ -46,26 +46,58 @@ function CodeBlockWithCopy({ code, language }: { code: string; language: string 
         {copied ? '✓' : '📋'}
         <span className="qt-copy-button-text">{copied ? 'Copied' : 'Copy'}</span>
       </button>
-      <SyntaxHighlighter
-        style={oneDark}
-        language={language}
-        PreTag="div"
-        wrapLines={true}
-        wrapLongLines={true}
-        customStyle={{
-          margin: 0,
-          padding: '1rem',
-          paddingTop: '2.5rem', // Extra padding for copy button
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-          overflowWrap: 'break-word',
-          width: '100%',
-          maxWidth: '100%',
-          boxSizing: 'border-box',
-        }}
-      >
-        {code.replace(/\n$/, '')}
-      </SyntaxHighlighter>
+      {language === 'text' ? (
+        <pre
+          style={{
+            margin: 0,
+            padding: '1rem',
+            paddingTop: '2.5rem',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            overflowWrap: 'break-word',
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            overflow: 'hidden',
+            background: 'rgb(40, 44, 52)',
+            color: '#abb2bf',
+            fontFamily: 'var(--qt-code-font, monospace)',
+            fontSize: '0.875rem',
+            lineHeight: '1.5',
+          }}
+        >
+          <code>{code.replace(/\n$/, '')}</code>
+        </pre>
+      ) : (
+        <SyntaxHighlighter
+          style={oneDark}
+          language={language}
+          PreTag="div"
+          wrapLines={true}
+          wrapLongLines={true}
+          customStyle={{
+            margin: 0,
+            padding: '1rem',
+            paddingTop: '2.5rem',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            overflowWrap: 'break-word',
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            overflow: 'hidden',
+          }}
+          codeTagProps={{
+            style: {
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              overflowWrap: 'break-word',
+            },
+          }}
+        >
+          {code.replace(/\n$/, '')}
+        </SyntaxHighlighter>
+      )}
     </div>
   )
 }
@@ -437,22 +469,7 @@ export default function MessageContent({
 
   return (
     <>
-      <style>{`
-        .message-content pre {
-          white-space: pre-wrap !important;
-          word-break: break-word !important;
-          overflow-wrap: break-word !important;
-          width: 100% !important;
-          max-width: 100% !important;
-          overflow: hidden !important;
-        }
-        .message-content code {
-          white-space: pre-wrap !important;
-          word-break: break-word !important;
-          overflow-wrap: break-word !important;
-        }
-      `}</style>
-      <div className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto message-content ${className}`} style={{ overflow: 'hidden' }}>
+      <div className={`qt-chat-message-content qt-prose prose prose-sm qt-prose-auto message-content ${className}`}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={components}

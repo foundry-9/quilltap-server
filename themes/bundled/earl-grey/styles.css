@@ -702,7 +702,7 @@
   /* ================================================================
      CHAT TOKENS (layout dimensions)
      ================================================================ */
-  --qt-chat-message-row-max-width: 800px;
+  --qt-chat-message-row-max-width: 900px;
   --qt-page-max-width: 75rem;
   --qt-card-grid-auto-min: 550px;
   --qt-chat-sidebar-collapsed-width: 4rem;

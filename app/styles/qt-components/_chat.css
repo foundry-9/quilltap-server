@@ -144,6 +144,15 @@
     color: var(--color-foreground);
   }
 
+  /* Force code blocks inside messages to wrap text */
+  .qt-chat-message-content pre,
+  .qt-chat-message-content pre code {
+    white-space: pre-wrap !important;
+    text-wrap-mode: wrap !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+
   /* Ensure prose elements inherit foreground color from message content */
   .qt-chat-message-content p,
   .qt-chat-message-content li,
@@ -1053,7 +1062,7 @@
    */
   .qt-chat-message-row {
     @apply flex gap-4;
-    width: 90%;
+    width: 95%;
     max-width: var(--qt-chat-message-row-max-width);
     isolation: isolate;
     position: relative;
@@ -1077,7 +1086,7 @@
    */
   .qt-chat-message-row-tool {
     @apply flex gap-4;
-    width: 90%;
+    width: 95%;
     max-width: var(--qt-chat-message-row-max-width);
     isolation: isolate;
     position: relative;

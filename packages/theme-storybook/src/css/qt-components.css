@@ -357,7 +357,7 @@
   --qt-participant-card-active-shadow: 0 0 8px rgb(var(--color-primary) / 0.2);
 
   /* Page layout variables */
-  --qt-chat-message-row-max-width: 800px;
+  --qt-chat-message-row-max-width: 900px;
   --qt-page-max-width: 72rem;
   --qt-card-grid-auto-min: 520px;
 

@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- style: widen chat message row default from 800px to 900px and increase row width from 90% to 95% for more readable message widths closer to modern chat UIs; fix code blocks inside list items not wrapping text by adding explicit wrap rules in `_chat.css`
 - feat: auto-configure connection profiles — new button on profile cards and in the edit/create modal that performs web searches for model specifications and recommended settings, sends results to the default LLM for structured analysis, and applies optimal maxContext, maxTokens, temperature, topP, modelClass, and isDangerousCompatible settings; falls back to cheap LLM for JSON cleanup if needed
 - fix: Concierge DETECT_ONLY mode now shows a moderation-aware message when the provider returns an empty response for flagged content, instead of a generic "empty response" error; suggests enabling Auto-Route mode
 - refactor: unify all LLM provider interfaces into four canonical shapes — TextProvider (text→text), ImageProvider (text→image), EmbeddingProvider (text→vector), ScoringProvider (text+candidates→scores); move canonical definitions to `@quilltap/plugin-types` providers/ directory; remove `generateImage()` from text provider interface; generalize moderation into ScoringProvider with documented reranking/classification support; update all plugins and lib/ to use new names with backward-compatible aliases

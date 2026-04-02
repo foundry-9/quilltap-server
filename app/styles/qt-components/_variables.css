@@ -294,7 +294,7 @@
   --qt-chat-attachment-hover-border: var(--color-primary);
   --qt-chat-attachment-overlay: rgb(0 0 0 / 0.2);
 
-  --qt-chat-message-row-max-width: 800px;
+  --qt-chat-message-row-max-width: 900px;
   --qt-page-max-width: 72rem;
   --qt-card-grid-auto-min: 520px;
 

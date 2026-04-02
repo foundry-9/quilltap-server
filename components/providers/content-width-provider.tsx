@@ -24,7 +24,7 @@ interface ContentWidthContextValue {
 
 const STORAGE_KEY = 'quilltap.contentWidth.isWide'
 const WIDE_VIEWPORT_MIN = 1000
-const NARROW_WIDTH = '800px'
+const NARROW_WIDTH = '900px'
 const WIDE_WIDTH = '100%'
 const NARROW_PAGE_WIDTH = '75rem'
 const WIDE_PAGE_WIDTH = '100%'
