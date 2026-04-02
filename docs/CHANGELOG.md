@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- test: add unit and regression tests for 4.0-dev features — model classes, system prompt registry, memory recap, external prompt generator, auto-configure service, scenario persistence, orphaned file cleanup safety, Character Optimizer JSON repair and frequency guards, greeting content filter detection, Concierge DETECT_ONLY empty response handling, and gatekeeper category mapping/caching (~189 new tests)
 - ci: release workflow puts Desktop App first in installation section and pins link to the quilltap-shell release that was current at build time
 - ci: release workflow now includes release notes from `docs/releases/{version}.md` in GitHub releases; production releases from the release branch require this file to exist
 - fix: `--qt-*` CSS variable defaults now apply to all themes via `[data-theme]` selector instead of `[data-theme="default"]` — fixes missing textarea padding, button styles, and other tokens on non-default themes after redundant declarations were stripped from bundled themes

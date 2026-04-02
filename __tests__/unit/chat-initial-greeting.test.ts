@@ -130,4 +130,121 @@ describe('generateGreetingMessage', () => {
     expect(result.content).toBe('')
     expect(result.contentFilterDetected).toBe(false)
   })
+
+  // ====================================================================
+  // Regression: content filter / uncensored fallback
+  // ====================================================================
+
+  describe('content filter detection regression', () => {
+    it('returns a result (does not throw) when content filter is detected', async () => {
+      mockProvider.sendMessage.mockResolvedValueOnce({
+        content: '',
+        finishReason: 'stop',
+        usage: { promptTokens: 200, completionTokens: 30, totalTokens: 230 },
+        raw: {},
+      })
+
+      // Must not throw — the caller uses the flag to decide fallback behavior
+      const result = await generateGreetingMessage({
+        systemPrompt: 'System instructions',
+        characterName: 'Dangerous Dan',
+        provider: 'OPENAI',
+        modelName: 'gpt-4',
+        apiKey: 'key',
+      })
+
+      expect(result).toBeDefined()
+      expect(result.content).toBe('')
+      expect(result.contentFilterDetected).toBe(true)
+    })
+
+    it('detects content filter when content is whitespace-only but tokens were consumed', async () => {
+      mockProvider.sendMessage.mockResolvedValueOnce({
+        content: '   \n\t  ',
+        finishReason: 'stop',
+        usage: { promptTokens: 150, completionTokens: 10, totalTokens: 160 },
+        raw: {},
+      })
+
+      const result = await generateGreetingMessage({
+        systemPrompt: 'System instructions',
+        characterName: 'Edgy Character',
+        provider: 'OPENROUTER',
+        modelName: 'some-model',
+        apiKey: 'key',
+      })
+
+      // After trimming, content is empty, and completionTokens > 0 → filter detected
+      expect(result.content).toBe('')
+      expect(result.contentFilterDetected).toBe(true)
+    })
+
+    it('allows caller to use contentFilterDetected to trigger fallback', async () => {
+      mockProvider.sendMessage.mockResolvedValueOnce({
+        content: '',
+        finishReason: 'stop',
+        usage: { promptTokens: 100, completionTokens: 42, totalTokens: 142 },
+        raw: {},
+      })
+
+      const result = await generateGreetingMessage({
+        systemPrompt: 'System instructions',
+        characterName: 'Blocked Character',
+        provider: 'OPENAI',
+        modelName: 'gpt-4',
+        apiKey: 'key',
+      })
+
+      // Simulate caller fallback logic
+      let greeting: string
+      if (result.contentFilterDetected) {
+        greeting = `*${result.content || 'The character appears, ready to speak.'}*`
+      } else {
+        greeting = result.content
+      }
+
+      expect(result.contentFilterDetected).toBe(true)
+      expect(greeting).toBe('*The character appears, ready to speak.*')
+    })
+
+    it('does not flag content filter when response has actual content even with tokens consumed', async () => {
+      mockProvider.sendMessage.mockResolvedValueOnce({
+        content: 'Greetings, traveler.',
+        finishReason: 'stop',
+        usage: { promptTokens: 100, completionTokens: 5, totalTokens: 105 },
+        raw: {},
+      })
+
+      const result = await generateGreetingMessage({
+        systemPrompt: 'System instructions',
+        characterName: 'Normal Character',
+        provider: 'OPENAI',
+        modelName: 'gpt-4',
+        apiKey: 'key',
+      })
+
+      expect(result.content).toBe('Greetings, traveler.')
+      expect(result.contentFilterDetected).toBe(false)
+    })
+
+    it('does not flag content filter when usage data is missing', async () => {
+      mockProvider.sendMessage.mockResolvedValueOnce({
+        content: '',
+        finishReason: 'stop',
+        usage: undefined,
+        raw: {},
+      })
+
+      const result = await generateGreetingMessage({
+        systemPrompt: 'System instructions',
+        characterName: 'Unknown Character',
+        provider: 'OLLAMA',
+        modelName: 'llama3',
+      })
+
+      // No usage data → can't confirm tokens were consumed → not a content filter
+      expect(result.content).toBe('')
+      expect(result.contentFilterDetected).toBe(false)
+    })
+  })
 })
