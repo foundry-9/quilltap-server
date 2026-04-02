@@ -31,11 +31,12 @@
 }
 
 /* ============================================================================
-   QT-* VARIABLE OVERRIDES - SHARED (BOTH MODES)
+   QT-* VARIABLE DEFAULTS - BASELINE FOR ALL THEMES (BOTH MODES)
+   Themes override any of these in their own [data-theme="<name>"] blocks.
    ============================================================================ */
-[data-theme="default"],
-[data-theme="default"].dark,
-[data-theme="default"].light {
+[data-theme],
+[data-theme].dark,
+[data-theme].light {
   /* Font stacks — system fonts only, best per-OS defaults */
   --theme-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --theme-font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
@@ -581,11 +582,11 @@
 }
 
 /* ============================================================================
-   DARK MODE OVERRIDES
+   DARK MODE DEFAULTS - BASELINE FOR ALL THEMES IN DARK MODE
    Cooler, deeper darks. Sharper contrast on badge colors.
    Black shadows + faint light edge glow for card definition.
    ============================================================================ */
-[data-theme="default"].dark {
+[data-theme].dark {
   /* Card shadows — true black for depth, faint white edge for definition */
   --qt-card-shadow: 0 1px 3px hsl(225 12% 0% / 0.25), 0 0 1px hsl(225 12% 100% / 0.04);
   --qt-card-shadow-hover: 0 4px 12px hsl(225 12% 0% / 0.35), 0 0 1px hsl(225 12% 100% / 0.06);
