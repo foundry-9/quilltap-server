@@ -317,6 +317,10 @@
           },
           "description": "Informational: resolved participant names at export time"
         },
+        "scenarioText": {
+          "type": ["string", "null"],
+          "description": "The resolved scenario content persisted on this chat at creation time"
+        },
         "_tagNames": {
           "type": "array",
           "items": { "type": "string" },
@@ -433,6 +437,21 @@
         "totalPromptTokens": { "type": "integer", "minimum": 0 },
         "totalCompletionTokens": { "type": "integer", "minimum": 0 },
         "messageCount": { "type": "integer", "minimum": 0 },
+        "modelClass": {
+          "type": ["string", "null"],
+          "enum": ["Compact", "Standard", "Extended", "Deep", null],
+          "description": "Model capability tier classification"
+        },
+        "maxContext": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Maximum context window size override"
+        },
+        "maxTokens": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Maximum output tokens for this profile"
+        },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
         "_apiKeyLabel": {
