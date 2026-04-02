@@ -7,8 +7,7 @@
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { MODEL_CLASSES } from '@/lib/llm/model-classes';
 import { logger } from '@/lib/logger';
-import { serverError } from '@/lib/api/responses';
-import { NextResponse } from 'next/server';
+import { serverError, successResponse } from '@/lib/api/responses';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -20,7 +19,7 @@ export const revalidate = 0;
  */
 export const GET = createAuthenticatedHandler(async () => {
   try {
-    return NextResponse.json({
+    return successResponse({
       modelClasses: MODEL_CLASSES,
       count: MODEL_CLASSES.length,
     });

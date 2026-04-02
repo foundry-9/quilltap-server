@@ -5,11 +5,10 @@
  * POST /api/v1/characters/[id]/prompts - Add a new system prompt to a character
  */
 
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { notFound, serverError, validationError, created } from '@/lib/api/responses';
+import { notFound, serverError, validationError, created, successResponse } from '@/lib/api/responses';
 
 const createPromptSchema = z.object({
   name: z.string().min(1).max(100),
@@ -28,7 +27,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Character');
       }
 
-      const prompts = character.systemPrompts || [];return NextResponse.json({ prompts });
+      const prompts = character.systemPrompts || [];return successResponse({ prompts });
     } catch (error) {
       logger.error('[Characters v1] Error fetching character prompts', { characterId }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch character prompts');

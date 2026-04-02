@@ -16,7 +16,7 @@ import { installPluginFromNpm, uninstallPlugin } from '@/lib/plugins/installer';
 import { checkForUpdatesWithMetadata } from '@/lib/plugins/version-checker';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { badRequest, serverError, validationError } from '@/lib/api/responses';
+import { badRequest, serverError, validationError, successResponse, created } from '@/lib/api/responses';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 
 const PLUGINS_GET_ACTIONS = ['check-upgrades'] as const;
@@ -122,7 +122,7 @@ async function handleSearch(req: NextRequest, context: any) {
         updated: obj.package.date || '',
         score: obj.score?.final || 0,
         links: obj.package.links,
-      }));return NextResponse.json({
+      }));return successResponse({
       results: plugins,
       count: plugins.length,
     });
@@ -171,18 +171,15 @@ async function handleInstall(req: NextRequest, context: any) {
     // Reinitialize plugin system to reflect changes (force rescan)
     await initializePlugins(true);
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'Plugin installed successfully',
-        plugin: {
-          name: result.manifest?.name,
-          version: result.version,
-          manifest: result.manifest,
-        },
+    return created({
+      success: true,
+      message: 'Plugin installed successfully',
+      plugin: {
+        name: result.manifest?.name,
+        version: result.version,
+        manifest: result.manifest,
       },
-      { status: 201 }
-    );
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return validationError(error);
@@ -227,7 +224,7 @@ async function handleUninstall(req: NextRequest, context: any) {
     // Reinitialize plugin system to reflect changes (force rescan)
     await initializePlugins(true);
 
-    return NextResponse.json({
+    return successResponse({
       success: true,
       message: 'Plugin uninstalled successfully',
     });
@@ -263,7 +260,7 @@ async function handleCheckUpgrades(context: any) {
       breakingUpgrades: upgrades.filter(u => !u.isNonBreaking).length,
     });
 
-    return NextResponse.json({
+    return successResponse({
       upgrades,
       lastChecked: new Date().toISOString(),
       count: upgrades.length,
@@ -310,7 +307,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, context) 
       filteredPlugins = plugins.filter((p: any) => p.enabled);
     }
 
-    return NextResponse.json({
+    return successResponse({
       plugins: filteredPlugins,
       stats: state.stats,
       errors: state.errors,

@@ -10,10 +10,9 @@
  * Unauthenticated as it runs during startup before user auth is available.
  */
 
-import { NextResponse } from 'next/server';
 import { startupState } from '@/lib/startup/startup-state';
 import { logger } from '@/lib/logger';
-import { serverError } from '@/lib/api/responses';
+import { serverError, successResponse } from '@/lib/api/responses';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +26,7 @@ export async function GET() {
   try {
     // Check if server is ready
     if (!startupState.isReady()) {
-      return NextResponse.json({
+      return successResponse({
         success: true,
         ready: false,
         results: null,
@@ -37,7 +36,7 @@ export async function GET() {
 
     // Check for un-notified upgrades
     if (!startupState.hasUnnotifiedUpgrades()) {
-      return NextResponse.json({
+      return successResponse({
         success: true,
         ready: true,
         results: null,
@@ -53,7 +52,7 @@ export async function GET() {
       failed: results?.failed.length ?? 0,
     });
 
-    return NextResponse.json({
+    return successResponse({
       success: true,
       ready: true,
       results,
@@ -82,7 +81,7 @@ export async function POST() {
       context: 'api.v1.system.plugins.upgrades.POST',
     });
 
-    return NextResponse.json({
+    return successResponse({
       success: true,
       message: 'Upgrades marked as notified',
     });

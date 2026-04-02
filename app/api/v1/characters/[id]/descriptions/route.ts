@@ -5,11 +5,10 @@
  * POST /api/v1/characters/[id]/descriptions - Create a new description
  */
 
-import { NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { notFound, serverError, validationError, created } from '@/lib/api/responses';
+import { notFound, serverError, validationError, created, successResponse } from '@/lib/api/responses';
 
 const createDescriptionSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -32,7 +31,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Character');
       }
 
-      const descriptions = await repos.characters.getDescriptions(id);return NextResponse.json({ descriptions });
+      const descriptions = await repos.characters.getDescriptions(id);return successResponse({ descriptions });
     } catch (error) {
       logger.error('[Characters v1] Error fetching character descriptions', { characterId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch character descriptions');

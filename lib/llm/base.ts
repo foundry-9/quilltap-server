@@ -24,7 +24,7 @@ export type {
   // Provider interfaces (new canonical names)
   TextProvider,
 
-  // Image types (used by image-gen/base.ts)
+  // Image types
   ImageGenParams,
   GeneratedImage,
   ImageGenResponse,

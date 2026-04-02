@@ -18,7 +18,7 @@ import { requiresBaseUrl, testProviderConnection, validateProviderConfig } from 
 import { ProviderEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { badRequest, serverError, notFound, validationError } from '@/lib/api/responses';
+import { badRequest, serverError, notFound, validationError, successResponse, created } from '@/lib/api/responses';
 import { isValidModelClassName } from '@/lib/llm/model-classes';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
 
@@ -119,13 +119,13 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
         matchingTagCount: profile.tags.filter((t) => t && allTagIds.has(t.tagId)).length,
       }));
 
-      return NextResponse.json({
+      return successResponse({
         profiles: profilesWithMatches,
         count: profilesWithMatches.length,
       });
     }
 
-    return NextResponse.json({
+    return successResponse({
       profiles: enrichedProfiles,
       count: enrichedProfiles.length,
     });
@@ -255,7 +255,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       provider: profile.provider,
     });
 
-    return NextResponse.json({ profile: { ...profile, apiKey } }, { status: 201 });
+    return created({ profile: { ...profile, apiKey } });
   } catch (error) {
     logger.error('[Connection Profiles v1] Error creating profile', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to create connection profile');
@@ -293,13 +293,13 @@ async function handleTestConnection(req: NextRequest, context: AuthenticatedCont
         provider,
         errors: configValidation.errors,
       });
-      return NextResponse.json(
+      return successResponse(
         {
           valid: false,
           provider,
           error: configValidation.errors[0] || 'Configuration validation failed',
         },
-        { status: 400 }
+        400
       );
     }
 
@@ -308,7 +308,7 @@ async function handleTestConnection(req: NextRequest, context: AuthenticatedCont
 
     if (result.valid) {
       logger.info('[Connection Profiles v1] Connection test successful', { provider });
-      return NextResponse.json({
+      return successResponse({
         valid: true,
         provider,
         message: `Successfully connected to ${provider}`,
@@ -319,13 +319,13 @@ async function handleTestConnection(req: NextRequest, context: AuthenticatedCont
       provider,
       error: result.error,
     });
-    return NextResponse.json(
+    return successResponse(
       {
         valid: false,
         provider,
         error: result.error,
       },
-      { status: 400 }
+      400
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -389,13 +389,13 @@ async function handleTestMessage(req: NextRequest, context: AuthenticatedContext
       const response = await llmProvider.sendMessage(requestParams, decryptedKey);
 
       if (!response) {
-        return NextResponse.json(
+        return successResponse(
           {
             success: false,
             provider,
             error: 'No response received from model',
           },
-          { status: 500 }
+          500
         );
       }
 
@@ -408,7 +408,7 @@ async function handleTestMessage(req: NextRequest, context: AuthenticatedContext
             ? 'Test message successful! Model responded but returned empty content.'
             : `Test message successful! Model responded: "${preview}${suffix}"`;
 
-        return NextResponse.json({
+        return successResponse({
           success: true,
           provider,
           modelName,
@@ -417,21 +417,21 @@ async function handleTestMessage(req: NextRequest, context: AuthenticatedContext
         });
       }
 
-      return NextResponse.json(
+      return successResponse(
         {
           success: false,
           provider,
           error: 'No response received from model',
         },
-        { status: 500 }
+        500
       );
-    } catch (error) {return NextResponse.json(
+    } catch (error) {return successResponse(
         {
           success: false,
           provider,
           error: error instanceof Error ? error.message : 'Failed to send test message',
         },
-        { status: 500 }
+        500
       );
     }
   } catch (error) {
@@ -484,7 +484,7 @@ async function handleReorder(req: NextRequest, context: AuthenticatedContext) {
       profileCount: order.length,
     });
 
-    return NextResponse.json({ success: true, updated: order.length });
+    return successResponse({ success: true, updated: order.length });
   } catch (error) {
     logger.error('[Connection Profiles v1] Error reordering profiles', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to reorder profiles');
@@ -535,7 +535,7 @@ async function handleResetSort(req: NextRequest, context: AuthenticatedContext) 
       profileCount: updates.length,
     });
 
-    return NextResponse.json({ success: true, updated: updates.length });
+    return successResponse({ success: true, updated: updates.length });
   } catch (error) {
     logger.error('[Connection Profiles v1] Error resetting sort order', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to reset sort order');
@@ -569,7 +569,7 @@ async function handleAutoConfigure(req: NextRequest, context: AuthenticatedConte
       modelName,
     });
 
-    return NextResponse.json({ suggestions: result });
+    return successResponse({ suggestions: result });
   } catch (error) {
     logger.error('[Connection Profiles v1] Error auto-configuring profile', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to auto-configure profile');

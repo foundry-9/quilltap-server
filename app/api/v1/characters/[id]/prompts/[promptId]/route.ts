@@ -6,11 +6,10 @@
  * DELETE /api/v1/characters/[id]/prompts/[promptId] - Delete a system prompt
  */
 
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { notFound, serverError, validationError } from '@/lib/api/responses';
+import { notFound, serverError, validationError, successResponse } from '@/lib/api/responses';
 
 const updatePromptSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -36,7 +35,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; promptId: stri
           userId: user.id,
         });
         return notFound('Prompt');
-      }return NextResponse.json({ prompt });
+      }return successResponse({ prompt });
     } catch (error) {
       logger.error('[Characters v1] Error fetching character system prompt', { characterId, promptId }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch character prompt');
@@ -89,7 +88,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string; promptId: stri
         updatedFields: Object.keys(updates),
       });
 
-      return NextResponse.json({ prompt });
+      return successResponse({ prompt });
     } catch (error) {
       if (error instanceof z.ZodError) {
         logger.warn('[Characters v1] Invalid character prompt update data', { errors: error.issues });
@@ -138,7 +137,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; promptId: s
         promptId,
       });
 
-      return NextResponse.json({ success: true });
+      return successResponse({ success: true });
     } catch (error) {
       logger.error('[Characters v1] Error deleting character system prompt', { characterId, promptId }, error instanceof Error ? error : undefined);
       return serverError('Failed to delete character prompt');

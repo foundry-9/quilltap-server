@@ -8,10 +8,9 @@
  * It is unauthenticated as it runs before user authentication is available.
  */
 
-import { NextResponse } from 'next/server';
 import { initializePlugins } from '@/lib/startup/plugin-initialization';
 import { logger } from '@/lib/logger';
-import { serverError } from '@/lib/api/responses';
+import { serverError, successResponse } from '@/lib/api/responses';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +38,7 @@ export async function POST() {
       });
     }
 
-    return NextResponse.json({
+    return successResponse({
       success: true,
       result,
     });
@@ -59,7 +58,7 @@ export async function GET() {
     const { getPluginSystemState } = await import('@/lib/startup/plugin-initialization');
     const state = getPluginSystemState();
 
-    return NextResponse.json({
+    return successResponse({
       success: true,
       state,
     });
