@@ -28,10 +28,6 @@ export async function handleAddTag(
       return notFound('Tag');
     }
 
-    if (tag.userId !== user.id) {
-      return forbidden();
-    }
-
     await repos.chats.addTag(chatId, validatedData.tagId);
 
     logger.info('[Chats v1] Tag added', { chatId, tagId: validatedData.tagId });

@@ -39,7 +39,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 
       // Verify ownership via character
       const character = await repos.characters.findById(memory.characterId);
-      if (!character || character.userId !== user.id) {
+      if (!character) {
         return notFound('Memory'); // Return 404 instead of 403 to not leak existence
       }
 
@@ -83,7 +83,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
       // Verify ownership via character
       const character = await repos.characters.findById(existingMemory.characterId);
-      if (!character || character.userId !== user.id) {
+      if (!character) {
         return notFound('Memory');
       }
 
@@ -133,7 +133,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       // Verify ownership via character
       const character = await repos.characters.findById(existingMemory.characterId);
-      if (!character || character.userId !== user.id) {
+      if (!character) {
         return notFound('Memory');
       }
 

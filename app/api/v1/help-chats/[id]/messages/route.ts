@@ -43,11 +43,6 @@ async function verifyHelpChat(
     return notFound('Help chat');
   }
 
-  if ((chat as any).userId !== user.id) {
-    logger.debug('Help chat ownership mismatch', { chatId: id, userId: user.id });
-    return notFound('Help chat');
-  }
-
   if ((chat as any).chatType !== 'help') {
     return notFound('Help chat');
   }

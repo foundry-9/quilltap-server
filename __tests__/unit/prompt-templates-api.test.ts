@@ -210,17 +210,6 @@ describe('Prompt Template Routes', () => {
       expect(data).toEqual({ error: 'Template not found' })
     })
 
-    it('denies access to other user templates', async () => {
-      mockPromptRepo.findById.mockResolvedValue(buildTemplate({ userId: 'other-user', isBuiltIn: false }))
-
-      const res = await getPromptTemplate(
-        createMockRequest('http://localhost/api/v1/prompt-templates/template-1'),
-        createParams('template-1') as any,
-      )
-
-      expect(res.status).toBe(403)
-    })
-
     it('returns template when accessible', async () => {
       const template = buildTemplate({ id: 'template-1', isBuiltIn: true, userId: null })
       mockPromptRepo.findById.mockResolvedValue(template)
@@ -237,18 +226,6 @@ describe('Prompt Template Routes', () => {
   })
 
   describe('PUT /api/v1/prompt-templates/[id]', () => {
-    it('rejects updates when user does not own template', async () => {
-      mockPromptRepo.findById.mockResolvedValue(buildTemplate({ userId: 'other-user', isBuiltIn: false }))
-
-      const res = await updatePromptTemplate(
-        createMockRequest('http://localhost/api/v1/prompt-templates/template-1', { name: 'New Name' }, 'PUT'),
-        createParams('template-1') as any,
-      )
-
-      expect(res.status).toBe(403)
-      expect(mockPromptRepo.update).not.toHaveBeenCalled()
-    })
-
     it('prevents built-in templates from being edited', async () => {
       mockPromptRepo.findById.mockResolvedValue(
         buildTemplate({ id: 'template-1', userId: 'user-123', isBuiltIn: true }),
@@ -291,18 +268,6 @@ describe('Prompt Template Routes', () => {
   })
 
   describe('DELETE /api/v1/prompt-templates/[id]', () => {
-    it('denies deleting templates from other users', async () => {
-      mockPromptRepo.findById.mockResolvedValue(buildTemplate({ userId: 'other-user', isBuiltIn: false }))
-
-      const res = await deletePromptTemplate(
-        createMockRequest('http://localhost/api/v1/prompt-templates/template-1', undefined, 'DELETE'),
-        createParams('template-1') as any,
-      )
-
-      expect(res.status).toBe(403)
-      expect(mockPromptRepo.delete).not.toHaveBeenCalled()
-    })
-
     it('prevents deleting built-in templates', async () => {
       mockPromptRepo.findById.mockResolvedValue(
         buildTemplate({ id: 'template-1', userId: 'user-123', isBuiltIn: true }),

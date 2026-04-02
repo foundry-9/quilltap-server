@@ -203,9 +203,6 @@ async function listMemoriesByCharacter(
   if (!character) {
     return notFound('Character');
   }
-  if (character.userId !== user.id) {
-    return forbidden();
-  }
 
   // Get query params for filtering
   const { searchParams } = req.nextUrl;
@@ -279,7 +276,7 @@ async function countMemoriesByChat(
 ) {
   // Verify chat ownership
   const chat = await repos.chats.findById(chatId);
-  if (!chat || chat.userId !== user.id) {
+  if (!chat) {
     return notFound('Chat');
   }
 
@@ -371,9 +368,6 @@ async function handleCreateMemory(
   if (!character) {
     return notFound('Character');
   }
-  if (character.userId !== user.id) {
-    return forbidden();
-  }
 
   // Create memory with embedding generation
   const memory = await createMemoryWithEmbedding(
@@ -415,9 +409,6 @@ async function handleSearch(
   const character = await repos.characters.findById(characterId);
   if (!character) {
     return notFound('Character');
-  }
-  if (character.userId !== user.id) {
-    return forbidden();
   }
 
   // Semantic search
@@ -473,7 +464,7 @@ async function handleHousekeep(
 
   // Verify character ownership
   const character = await repos.characters.findById(characterId);
-  if (!character || character.userId !== user.id) {
+  if (!character) {
     return notFound('Character');
   }
 
@@ -520,7 +511,7 @@ async function handleHousekeepPreview(
 
   // Verify character ownership
   const character = await repos.characters.findById(characterId);
-  if (!character || character.userId !== user.id) {
+  if (!character) {
     return notFound('Character');
   }
 
@@ -586,9 +577,6 @@ async function handleGenerateEmbeddings(
   if (!character) {
     return notFound('Character');
   }
-  if (character.userId !== user.id) {
-    return forbidden();
-  }
 
   // Check embedding profile
   const defaultProfile = await repos.embeddingProfiles.findDefault(user.id);
@@ -640,9 +628,6 @@ async function handleEmbeddingStatus(
   if (!character) {
     return notFound('Character');
   }
-  if (character.userId !== user.id) {
-    return forbidden();
-  }
 
   // Get memory stats
   const memories = await repos.memories.findByCharacterId(characterId);
@@ -676,9 +661,6 @@ async function handleRebuildIndex(
   if (!character) {
     return notFound('Character');
   }
-  if (character.userId !== user.id) {
-    return forbidden();
-  }
 
   // Rebuild the vector index
   const result = await rebuildVectorIndex(characterId, { userId: user.id });
@@ -696,7 +678,7 @@ async function handleDeleteByChatId(
 ) {
   // Verify chat ownership
   const chat = await repos.chats.findById(chatId);
-  if (!chat || chat.userId !== user.id) {
+  if (!chat) {
     return notFound('Chat');
   }
 

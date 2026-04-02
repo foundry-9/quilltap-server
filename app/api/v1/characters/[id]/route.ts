@@ -581,10 +581,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
             return notFound('Image file');
           }
 
-          if (fileEntry.userId !== user.id) {
-            return notFound('Image file');
-          }
-
           if (fileEntry.category !== 'IMAGE' && fileEntry.category !== 'AVATAR') {
             return badRequest(`Invalid file type. Expected IMAGE or AVATAR, got ${fileEntry.category}`);
           }
@@ -627,10 +623,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
 
         if (!tag) {
           return notFound('Tag');
-        }
-
-        if (tag.userId !== user.id) {
-          return forbidden();
         }
 
         await repos.characters.addTag(id, validatedData.tagId);
@@ -695,7 +687,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         // If partnerId is provided, verify it exists and is user-controlled
         if (partnerId) {
           const partner = await repos.characters.findById(partnerId);
-          if (!partner || partner.userId !== user.id) {
+          if (!partner) {
             return notFound('Partner character');
           }
           if (partner.controlledBy !== 'user') {

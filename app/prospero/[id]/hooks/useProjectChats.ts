@@ -5,7 +5,7 @@
  *
  * Manages project chats data and operations with pagination support.
  *
- * @module app/(authenticated)/projects/[id]/hooks/useProjectChats
+ * @module app/prospero/[id]/hooks/useProjectChats
  */
 
 import { useCallback, useState, useRef } from 'react'

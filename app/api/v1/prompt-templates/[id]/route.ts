@@ -44,15 +44,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Template');
       }
 
-      // Users can access built-in templates or their own templates
-      if (!template.isBuiltIn && template.userId !== user.id) {
-        logger.warn('[Prompt Templates v1] Forbidden access to template', {
-          templateId: id,
-          userId: user.id,
-          ownerId: template.userId,
-        });
-        return forbidden();
-      }return NextResponse.json({ template });
+return NextResponse.json({ template });
     } catch (error) {
       logger.error(
         '[Prompt Templates v1] Error fetching template',
@@ -92,16 +84,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
         });
         return forbidden('Cannot update built-in templates');
-      }
-
-      // Can only update own templates
-      if (existingTemplate.userId !== user.id) {
-        logger.warn('[Prompt Templates v1] Forbidden update attempt on template', {
-          templateId: id,
-          userId: user.id,
-          ownerId: existingTemplate.userId,
-        });
-        return forbidden();
       }
 
       const updates: any = {};
@@ -170,16 +152,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
           userId: user.id,
         });
         return forbidden('Cannot delete built-in templates');
-      }
-
-      // Can only delete own templates
-      if (existingTemplate.userId !== user.id) {
-        logger.warn('[Prompt Templates v1] Forbidden delete attempt on template', {
-          templateId: id,
-          userId: user.id,
-          ownerId: existingTemplate.userId,
-        });
-        return forbidden();
       }
 
       const deleted = await repos.promptTemplates.delete(id);

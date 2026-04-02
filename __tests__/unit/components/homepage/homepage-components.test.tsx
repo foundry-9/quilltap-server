@@ -94,7 +94,7 @@ jest.mock('@/components/dashboard/QuickChatDialog', () => ({
 }))
 
 // Mock CreateProjectDialog
-jest.mock('@/app/(authenticated)/prospero/components', () => ({
+jest.mock('@/app/prospero/components', () => ({
   CreateProjectDialog: function MockCreateProjectDialog({
     open,
     onClose,

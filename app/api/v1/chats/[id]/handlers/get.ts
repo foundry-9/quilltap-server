@@ -37,7 +37,7 @@ export async function handleGet(
   if (action === 'export') {
     try {
       const chat = await repos.chats.findById(chatId);
-      if (!chat || chat.userId !== user.id) {
+      if (!chat) {
         return notFound('Chat');
       }
 
@@ -105,7 +105,7 @@ export async function handleGet(
   if (action === 'get-background') {
     try {
       const chat = await repos.chats.findById(chatId);
-      if (!chat || chat.userId !== user.id) {
+      if (!chat) {
         return notFound('Chat');
       }
 
@@ -143,9 +143,6 @@ export async function handleGet(
       if (!chat) {
         return notFound('Chat');
       }
-      if (chat.userId !== user.id) {
-        return forbidden();
-      }
 
       const searchParams = req.nextUrl.searchParams;
       const detailed = searchParams.get('detailed') === 'true';
@@ -163,7 +160,7 @@ export async function handleGet(
   try {
 
     const chatMetadata = await repos.chats.findById(chatId);
-    if (!chatMetadata || chatMetadata.userId !== user.id) {
+    if (!chatMetadata) {
       return notFound('Chat');
     }
 

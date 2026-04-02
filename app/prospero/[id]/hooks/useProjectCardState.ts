@@ -7,7 +7,7 @@
  * On first visit to a project, all cards are expanded.
  * On subsequent visits, all cards are collapsed by default.
  *
- * @module app/(authenticated)/projects/[id]/hooks/useProjectCardState
+ * @module app/prospero/[id]/hooks/useProjectCardState
  */
 
 import { useState, useCallback } from 'react'

@@ -76,14 +76,6 @@ describe('GET /api/v1/llm-logs', () => {
     expect(data.logs).toHaveLength(1)
   })
 
-  it('returns 404 when chat is not owned by user', async () => {
-    mockRepos.chats.findById.mockResolvedValue({ id: 'chat-1', userId: 'user-999', participants: [] })
-
-    const res = await listLLMLogs(createMockRequest('http://localhost/api/v1/llm-logs?chatId=chat-1'))
-
-    expect(res.status).toBe(404)
-  })
-
   it('returns logs filtered by characterId', async () => {
     const res = await listLLMLogs(createMockRequest('http://localhost/api/v1/llm-logs?characterId=char-1'))
     const data = await res.json()
@@ -137,14 +129,6 @@ describe('GET /api/v1/llm-logs/[id]', () => {
     expect(res.status).toBe(404)
   })
 
-  it('returns 403 when log belongs to another user', async () => {
-    mockRepos.llmLogs.findById.mockResolvedValue({ ...baseLog, userId: 'user-999' })
-
-    const res = await getLLMLog(createMockRequest('http://localhost/api/v1/llm-logs/log-2'), createParams('log-2') as any)
-
-    expect(res.status).toBe(403)
-  })
-
   it('returns log when found and owned', async () => {
     const res = await getLLMLog(createMockRequest('http://localhost/api/v1/llm-logs/log-1'), createParams('log-1') as any)
     const data = await res.json()
@@ -161,14 +145,6 @@ describe('DELETE /api/v1/llm-logs/[id]', () => {
     const res = await deleteLLMLog(createMockRequest('http://localhost/api/v1/llm-logs/log-404'), createParams('log-404') as any)
 
     expect(res.status).toBe(404)
-  })
-
-  it('returns 403 when log belongs to another user', async () => {
-    mockRepos.llmLogs.findById.mockResolvedValue({ ...baseLog, userId: 'user-999' })
-
-    const res = await deleteLLMLog(createMockRequest('http://localhost/api/v1/llm-logs/log-2'), createParams('log-2') as any)
-
-    expect(res.status).toBe(403)
   })
 
   it('returns 500 when delete fails', async () => {

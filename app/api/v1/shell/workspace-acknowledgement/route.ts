@@ -35,7 +35,7 @@ export const POST = createAuthenticatedHandler(async (request, { user, repos }) 
 
     // Verify chat exists and belongs to user
     const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
+    if (!chat) {
       return badRequest('Chat not found');
     }
 

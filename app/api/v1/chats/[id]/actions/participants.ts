@@ -101,7 +101,7 @@ export async function handleStopImpersonate(
 
     if (newConnectionProfileId) {
       const profile = await repos.connections.findById(newConnectionProfileId);
-      if (!profile || profile.userId !== user.id) {
+      if (!profile) {
         return notFound('Connection profile');
       }
 

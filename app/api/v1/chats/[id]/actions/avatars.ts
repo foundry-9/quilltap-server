@@ -22,7 +22,7 @@ export async function handleGetAvatars(
   try {
 
     const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
+    if (!chat) {
       return notFound('Chat');
     }
 
@@ -73,13 +73,13 @@ export async function handleSetAvatar(
 
     // Verify character exists and belongs to user
     const character = await repos.characters.findById(characterId);
-    if (!character || character.userId !== user.id) {
+    if (!character) {
       return notFound('Character');
     }
 
     // Verify image exists in repository and belongs to user
     const fileEntry = await repos.files.findById(imageId);
-    if (!fileEntry || fileEntry.userId !== user.id) {
+    if (!fileEntry) {
       return notFound('Image');
     }
 
@@ -138,7 +138,7 @@ export async function handleRemoveAvatar(
 
     // Verify character exists and belongs to user
     const character = await repos.characters.findById(characterId);
-    if (!character || character.userId !== user.id) {
+    if (!character) {
       return notFound('Character');
     }
 

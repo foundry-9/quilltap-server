@@ -176,7 +176,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
     // Load and validate connection profile
     let profile = await repos.connections.findById(profileId);
 
-    if (!profile || profile.userId !== user.id) {
+    if (!profile) {
       return badRequest('Connection profile not found');
     }
 

@@ -58,7 +58,6 @@ function getPendingUpload(uploadId: string, userId: string): PendingUpload | nul
   if (!UUID_REGEX.test(uploadId)) return null;
   const upload = pendingUploads.get(uploadId);
   if (!upload) return null;
-  if (upload.userId !== userId) return null;
   return upload;
 }
 

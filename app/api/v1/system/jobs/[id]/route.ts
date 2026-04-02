@@ -28,11 +28,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Job');
       }
 
-      // Ensure user owns this job
-      if (job.userId !== user.id) {
-        return forbidden();
-      }
-
       return NextResponse.json({ job });
     } catch (error) {
       const errorMessage = getErrorMessage(error);
@@ -53,11 +48,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!job) {
         return notFound('Job');
-      }
-
-      // Ensure user owns this job
-      if (job.userId !== user.id) {
-        return forbidden();
       }
 
       // Don't allow deleting jobs that are currently processing
@@ -95,11 +85,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (!job) {
         return notFound('Job');
-      }
-
-      // Ensure user owns this job
-      if (job.userId !== user.id) {
-        return forbidden();
       }
 
       let updatedJob;

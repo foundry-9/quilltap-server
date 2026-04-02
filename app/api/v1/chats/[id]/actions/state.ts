@@ -39,7 +39,7 @@ export async function handleGetState(
 ): Promise<NextResponse> {
   try {
     const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
+    if (!chat) {
       return notFound('Chat');
     }
 
@@ -80,7 +80,7 @@ export async function handleSetState(
 ): Promise<NextResponse> {
   try {
     const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
+    if (!chat) {
       return notFound('Chat');
     }
 
@@ -120,7 +120,7 @@ export async function handleResetState(
 ): Promise<NextResponse> {
   try {
     const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
+    if (!chat) {
       return notFound('Chat');
     }
 

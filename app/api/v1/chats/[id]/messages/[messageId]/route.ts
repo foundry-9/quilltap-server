@@ -20,9 +20,9 @@ async function handleOverrideDangerFlag(
   { id, messageId }: { id: string; messageId: string }
 ) {
   try {
-    // Verify chat ownership
+    // Verify chat exists
     const chat = await repos.chats.findById(id);
-    if (!chat || chat.userId !== user.id) {
+    if (!chat) {
       return notFound('Chat');
     }
 

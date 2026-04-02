@@ -43,7 +43,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
     } else if (chatId) {
       // Verify chat ownership first
       const chat = await repos.chats.findById(chatId);
-      if (!chat || chat.userId !== user.id) {
+      if (!chat) {
         return notFound('Chat');
       }
 
@@ -58,7 +58,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
     } else if (characterId) {
       // Verify character ownership first
       const character = await repos.characters.findById(characterId);
-      if (!character || character.userId !== user.id) {
+      if (!character) {
         return notFound('Character');
       }
       logs = await repos.llmLogs.findByCharacterId(characterId);

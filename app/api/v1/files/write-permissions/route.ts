@@ -134,21 +134,21 @@ async function handleGrantPermission(request: NextRequest, user: any, repos: any
     // Verify ownership of referenced entities
     if (fileId) {
       const file = await repos.files.findById(fileId);
-      if (!file || file.userId !== user.id) {
+      if (!file) {
         return notFound('File');
       }
     }
 
     if (projectId) {
       const project = await repos.projects.findById(projectId);
-      if (!project || project.userId !== user.id) {
+      if (!project) {
         return notFound('Project');
       }
     }
 
     if (grantedInChatId) {
       const chat = await repos.chats.findById(grantedInChatId);
-      if (!chat || chat.userId !== user.id) {
+      if (!chat) {
         return notFound('Chat');
       }
     }
@@ -228,12 +228,6 @@ async function handleRevokePermission(request: NextRequest, user: any, repos: an
       return notFound('Permission');
     }
 
-    // Verify ownership
-    if (permission.userId !== user.id) {
-      logger.warn('[Files v1] Permission revoke denied - not owner', { permissionId });
-      return forbidden();
-    }
-
     // Revoke the permission
     const revoked = await repos.filePermissions.revokePermission(permissionId);
 
@@ -276,7 +270,7 @@ async function handleCompleteWrite(request: NextRequest, user: any, repos: any):
 
     const { chatId, action, pendingWrite } = parsed.data;// Verify chat exists and belongs to user
     const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
+    if (!chat) {
       return badRequest('Chat not found');
     }
 

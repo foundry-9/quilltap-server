@@ -150,7 +150,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     let hasHelpEnabled = false;
     for (const charId of validatedData.characterIds) {
       const character = await repos.characters.findById(charId);
-      if (!character || (character as any).userId !== user.id) {
+      if (!character) {
         return notFound('Character');
       }
       characters.push(character);

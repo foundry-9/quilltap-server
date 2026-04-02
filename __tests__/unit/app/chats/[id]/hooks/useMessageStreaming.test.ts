@@ -5,8 +5,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { renderHook, act } from '@testing-library/react';
-import { useMessageStreaming, PendingToolCall, ToolExecutionStatus } from '@/app/(authenticated)/salon/[id]/hooks/useMessageStreaming';
-import type { Message, Participant } from '@/app/(authenticated)/salon/[id]/types';
+import { useMessageStreaming, PendingToolCall, ToolExecutionStatus } from '@/app/salon/[id]/hooks/useMessageStreaming';
+import type { Message, Participant } from '@/app/salon/[id]/types';
 
 // Mock toast
 jest.mock('@/lib/toast', () => ({

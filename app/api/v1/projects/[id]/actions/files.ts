@@ -77,7 +77,7 @@ export async function handleAddFile(
 
     // Check file exists and is owned by user
     const file = await repos.files.findById(fileId);
-    if (!file || file.userId !== user.id) {
+    if (!file) {
       return notFound('File');
     }
 

@@ -23,7 +23,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify chat belongs to user
       const chat = await repos.chats.findById(chatId);
 
-      if (!chat || chat.userId !== user.id) {
+      if (!chat) {
         return notFound('Chat');
       }
 
@@ -104,7 +104,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify chat belongs to user
       const chat = await repos.chats.findById(chatId);
 
-      if (!chat || chat.userId !== user.id) {
+      if (!chat) {
         return notFound('Chat');
       }
 

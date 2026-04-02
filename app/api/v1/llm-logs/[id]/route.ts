@@ -22,12 +22,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('LLM Log');
       }
 
-      // Verify ownership
-      if (log.userId !== user.id) {
-        return forbidden();
-      }
-
-
       return successResponse(log);
     } catch (error) {
       logger.error(
@@ -50,11 +44,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       const log = await repos.llmLogs.findById(logId);
       if (!log) {
         return notFound('LLM Log');
-      }
-
-      // Verify ownership
-      if (log.userId !== user.id) {
-        return forbidden();
       }
 
       const deleted = await repos.llmLogs.delete(logId);

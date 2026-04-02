@@ -37,7 +37,7 @@ export async function handleDelete(
   try {
 
     const existingChat = await repos.chats.findById(chatId);
-    if (!existingChat || existingChat.userId !== user.id) {
+    if (!existingChat) {
       return notFound('Chat');
     }
 

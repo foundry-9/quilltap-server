@@ -40,11 +40,6 @@ export async function handleToggleAgentMode(
       return notFound('Chat');
     }
 
-    if (chat.userId !== user.id) {
-      logger.warn('[Chats v1] Unauthorized agent mode toggle attempt', { chatId, userId: user.id });
-      return forbidden();
-    }
-
     // Update the chat with new agent mode setting
     const enabled = validatedData.enabled;
     const updatedChat = await repos.chats.update(chatId, {

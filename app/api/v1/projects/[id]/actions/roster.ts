@@ -71,7 +71,7 @@ export async function handleAddCharacter(
 
     // Check character exists and is owned by user
     const character = await repos.characters.findById(characterId);
-    if (!character || character.userId !== user.id) {
+    if (!character) {
       return notFound('Character');
     }
 

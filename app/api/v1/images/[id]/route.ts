@@ -40,16 +40,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
       return notFound('Image');
     }
 
-    // Verify image belongs to user
-    if (image.userId !== user.id) {
-      logger.warn('[Images v1] User tried to access image they do not own', {
-        imageId: id,
-        userId: user.id,
-        ownerId: image.userId,
-      });
-      return notFound('Image');
-    }
-
     // Verify file category
     if (image.category !== 'IMAGE' && image.category !== 'AVATAR') {
       return notFound('Image');
@@ -116,16 +106,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
     const image = await repos.files.findById(id);
 
     if (!image) {
-      return notFound('Image');
-    }
-
-    // Verify image belongs to user
-    if (image.userId !== user.id) {
-      logger.warn('[Images v1] User tried to delete image they do not own', {
-        imageId: id,
-        userId: user.id,
-        ownerId: image.userId,
-      });
       return notFound('Image');
     }
 
@@ -234,7 +214,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
 
   // Verify ownership first
   const image = await repos.files.findById(id);
-  if (!image || image.userId !== user.id) {
+  if (!image) {
     return notFound('Image');
   }
 
@@ -356,20 +336,10 @@ async function verifyTaggedEntity(
     if (!character) {
       return notFound('Character');
     }
-    // Security: verify character belongs to user
-    if (character.userId !== userId) {
-      logger.warn('[Images v1] User tried to tag with character they do not own', { characterId: tagId, userId });
-      return forbidden();
-    }
   } else if (tagType === 'CHAT') {
     const chat = await repos.chats.findById(tagId);
     if (!chat) {
       return notFound('Chat');
-    }
-    // Security: verify chat belongs to user
-    if (chat.userId !== userId) {
-      logger.warn('[Images v1] User tried to tag with chat they do not own', { chatId: tagId, userId });
-      return forbidden();
     }
   }
 

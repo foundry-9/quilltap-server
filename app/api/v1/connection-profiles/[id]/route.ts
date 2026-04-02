@@ -74,7 +74,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {const profile = await repos.connections.findById(id);
 
-      if (!profile || profile.userId !== user.id) {
+      if (!profile) {
         return notFound('Connection profile');
       }
 
@@ -96,7 +96,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     try {// Verify ownership
       const existingProfile = await repos.connections.findById(id);
 
-      if (!existingProfile || existingProfile.userId !== user.id) {
+      if (!existingProfile) {
         return notFound('Connection profile');
       }
 
@@ -283,7 +283,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
     try {// Verify ownership
       const existingProfile = await repos.connections.findById(id);
 
-      if (!existingProfile || existingProfile.userId !== user.id) {
+      if (!existingProfile) {
         return notFound('Connection profile');
       }
 
@@ -312,9 +312,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     if (!profile) {
       return notFound('Connection profile');
     }
-    if (profile.userId !== user.id) {
-      return forbidden();
-    }
 
     if (!isValidAction(action, CONNECTION_PROFILE_ITEM_POST_ACTIONS)) {
       return badRequest(`Unknown action: ${action}. Available actions: ${CONNECTION_PROFILE_ITEM_POST_ACTIONS.join(', ')}`);
@@ -330,9 +327,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
           const tag = await repos.tags.findById(validatedData.tagId);
           if (!tag) {
             return notFound('Tag');
-          }
-          if (tag.userId !== user.id) {
-            return forbidden();
           }
 
           // Add tag to profile

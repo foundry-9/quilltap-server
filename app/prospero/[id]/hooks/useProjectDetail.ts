@@ -5,7 +5,7 @@
  *
  * Manages project data and update operations.
  *
- * @module app/(authenticated)/projects/[id]/hooks/useProjectDetail
+ * @module app/prospero/[id]/hooks/useProjectDetail
  */
 
 import { useCallback, useState } from 'react'

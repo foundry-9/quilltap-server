@@ -230,19 +230,6 @@ describe('Roleplay Template Routes', () => {
       expect(data).toEqual({ error: 'Roleplay template not found' })
     })
 
-    it('denies access to other user templates', async () => {
-      mockRoleplayRepo.findById.mockResolvedValue(buildTemplate({ userId: 'other-user', isBuiltIn: false }))
-
-      const res = await getRoleplayTemplate(
-        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1'),
-        createParams('template-1') as any,
-      )
-      const data = await res.json()
-
-      expect(res.status).toBe(404)
-      expect(data).toEqual({ error: 'Roleplay template not found' })
-    })
-
     it('returns template when accessible', async () => {
       const template = buildTemplate({ id: 'template-1', isBuiltIn: true, userId: null })
       mockRoleplayRepo.findById.mockResolvedValue(template)
@@ -259,18 +246,6 @@ describe('Roleplay Template Routes', () => {
   })
 
   describe('PUT /api/v1/roleplay-templates/[id]', () => {
-    it('rejects updates when user does not own template', async () => {
-      mockRoleplayRepo.findById.mockResolvedValue(buildTemplate({ userId: 'other-user', isBuiltIn: false }))
-
-      const res = await updateRoleplayTemplate(
-        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1', { name: 'New Name' }, 'PUT'),
-        createParams('template-1') as any,
-      )
-
-      expect(res.status).toBe(404)
-      expect(mockRoleplayRepo.update).not.toHaveBeenCalled()
-    })
-
     it('prevents built-in templates from being edited', async () => {
       mockRoleplayRepo.findById.mockResolvedValue(
         buildTemplate({ id: 'template-1', userId: 'user-123', isBuiltIn: true }),
@@ -331,18 +306,6 @@ describe('Roleplay Template Routes', () => {
   })
 
   describe('DELETE /api/v1/roleplay-templates/[id]', () => {
-    it('denies deleting templates from other users', async () => {
-      mockRoleplayRepo.findById.mockResolvedValue(buildTemplate({ userId: 'other-user', isBuiltIn: false }))
-
-      const res = await deleteRoleplayTemplate(
-        createMockRequest('http://localhost/api/v1/roleplay-templates/template-1', undefined, 'DELETE'),
-        createParams('template-1') as any,
-      )
-
-      expect(res.status).toBe(404)
-      expect(mockRoleplayRepo.delete).not.toHaveBeenCalled()
-    })
-
     it('prevents deleting built-in templates', async () => {
       mockRoleplayRepo.findById.mockResolvedValue(
         buildTemplate({ id: 'template-1', userId: 'user-123', isBuiltIn: true }),

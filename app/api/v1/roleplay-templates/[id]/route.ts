@@ -43,15 +43,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       if (!template) {return notFound('Roleplay template');
       }
 
-      // Check ownership: user must own it OR it must be built-in
-      if (template.userId && template.userId !== user.id) {
-        logger.warn('Unauthorized access attempt to roleplay template', {
-          templateId: id,
-          requestingUserId: user.id,
-          templateUserId: template.userId,
-        });
-        return notFound('Roleplay template');
-      }return successResponse(template);
+return successResponse(template);
     } catch (error) {
       logger.error(
         'Failed to fetch roleplay template',
@@ -90,16 +82,6 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     try {const existingTemplate = await repos.roleplayTemplates.findById(id);
 
       if (!existingTemplate) {return notFound('Roleplay template');
-      }
-
-      // Check ownership
-      if (existingTemplate.userId !== user.id) {
-        logger.warn('Unauthorized update attempt to roleplay template', {
-          templateId: id,
-          requestingUserId: user.id,
-          templateUserId: existingTemplate.userId,
-        });
-        return notFound('Roleplay template');
       }
 
       // Prevent editing built-in templates
@@ -182,16 +164,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
     try {const existingTemplate = await repos.roleplayTemplates.findById(id);
 
       if (!existingTemplate) {return notFound('Roleplay template');
-      }
-
-      // Check ownership
-      if (existingTemplate.userId !== user.id) {
-        logger.warn('Unauthorized deletion attempt on roleplay template', {
-          templateId: id,
-          requestingUserId: user.id,
-          templateUserId: existingTemplate.userId,
-        });
-        return notFound('Roleplay template');
       }
 
       // Prevent deleting built-in templates

@@ -36,7 +36,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   try {// Verify chat ownership
     const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
+    if (!chat) {
       return notFound('Chat');
     }
 
@@ -85,7 +85,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     if (isContinueMode) {
       const parsed = continueMessageSchema.parse(body);// Verify chat ownership
       const chat = await repos.chats.findById(chatId);
-      if (!chat || chat.userId !== user.id) {
+      if (!chat) {
         return notFound('Chat');
       }
 
@@ -105,7 +105,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     } else {
       const parsed = sendMessageSchema.parse(body);// Verify chat ownership
       const chat = await repos.chats.findById(chatId);
-      if (!chat || chat.userId !== user.id) {
+      if (!chat) {
         return notFound('Chat');
       }
 

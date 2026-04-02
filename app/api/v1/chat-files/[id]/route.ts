@@ -48,11 +48,6 @@ async function handleTag(
     return notFound('File');
   }
 
-  // Verify file belongs to user
-  if (fileEntry.userId !== user.id) {
-    return unauthorized();
-  }
-
   // Verify the file is linked to a chat
   const chatId = fileEntry.linkedTo.find((linkId: string) => linkId.startsWith('chat-') || linkId.length === 36);
   if (!chatId) {
@@ -61,13 +56,13 @@ async function handleTag(
 
   // Verify chat belongs to user
   const chat = await repos.chats.findById(chatId);
-  if (!chat || chat.userId !== user.id) {
+  if (!chat) {
     return unauthorized();
   }
 
   // Verify the tagged entity exists and belongs to user
   const character = await repos.characters.findById(tagId);
-  if (!character || character.userId !== user.id) {
+  if (!character) {
     return notFound('Character');
   }
 
@@ -127,11 +122,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('File');
       }
 
-      // Verify file belongs to user
-      if (fileEntry.userId !== user.id) {
-        return unauthorized();
-      }
-
       // Verify the file is linked to a chat
       const chatId = fileEntry.linkedTo.find((linkId: string) => linkId.startsWith('chat-') || linkId.length === 36);
       if (!chatId) {
@@ -140,7 +130,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
 
       // Verify chat belongs to user
       const chat = await repos.chats.findById(chatId);
-      if (!chat || chat.userId !== user.id) {
+      if (!chat) {
         return unauthorized();
       }
 

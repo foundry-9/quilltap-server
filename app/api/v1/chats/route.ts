@@ -100,7 +100,7 @@ async function buildCharacterParticipant(
   }
 
   const character = await repos.characters.findById(data.characterId);
-  if (character?.userId !== userId) {
+  if (!character) {
     return { error: 'Character not found' };
   }
 
@@ -113,14 +113,14 @@ async function buildCharacterParticipant(
 
   if (data.connectionProfileId) {
     const profile = await repos.connections.findById(data.connectionProfileId);
-    if (profile?.userId !== userId) {
+    if (!profile) {
       return { error: 'Connection profile not found' };
     }
   }
 
   if (data.imageProfileId) {
     const imgProfile = await repos.imageProfiles.findById(data.imageProfileId);
-    if (imgProfile?.userId !== userId) {
+    if (!imgProfile) {
       return { error: 'Image profile not found' };
     }
   }
@@ -563,7 +563,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
     if (validatedData.projectId) {
       const project = await repos.projects.findById(validatedData.projectId);
-      if (!project || project.userId !== user.id) {
+      if (!project) {
         return notFound('Project');
       }
 

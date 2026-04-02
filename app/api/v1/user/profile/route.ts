@@ -291,16 +291,6 @@ export const PATCH = createAuthenticatedHandler(async (req, context) => {
         return notFound('File');
       }
 
-      // Verify file belongs to user
-      if (fileEntry.userId !== user.id) {
-        logger.warn('[User Profile v1] File does not belong to user', {
-          fileId: imageId,
-          fileOwnerId: fileEntry.userId,
-          userId: user.id,
-        });
-        return notFound('File');
-      }
-
       // Verify file category is valid for avatar
       const validCategories = ['IMAGE', 'AVATAR'];
       if (!validCategories.includes(fileEntry.category)) {

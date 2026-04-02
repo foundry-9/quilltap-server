@@ -29,7 +29,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     try {
       // Verify chat ownership
       const chat = await repos.chats.findById(id);
-      if (!chat || chat.userId !== user.id) {
+      if (!chat) {
         return notFound('Chat');
       }
 
