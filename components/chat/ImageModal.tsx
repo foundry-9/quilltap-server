@@ -255,7 +255,7 @@ export default function ImageModal({
               handleDelete()
             }}
             disabled={isDeleting}
-            className="p-2 bg-destructive/80 hover:bg-destructive rounded-full qt-text-overlay transition-colors disabled:opacity-50"
+            className="p-2 qt-bg-destructive/80 hover:bg-destructive rounded-full qt-text-overlay transition-colors disabled:opacity-50"
             title="Delete image"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

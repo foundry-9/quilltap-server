@@ -72,13 +72,13 @@ export function SpeakerMapper({
     return (
       <div
         key={speaker.name}
-        className="border border-border rounded-lg p-4 bg-muted"
+        className="border qt-border-default rounded-lg p-4 qt-bg-muted"
       >
         {/* Speaker info header */}
         <div className="flex items-center gap-2 mb-3">
           <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
             isUser
-              ? 'qt-bg-success/10 text-success'
+              ? 'qt-bg-success/10 qt-text-success'
               : 'qt-bg-primary/10 text-primary'
           }`}>
             {isUser ? 'User' : 'AI'}
@@ -266,7 +266,7 @@ export function SpeakerMapper({
       )}
 
       {speakers.length === 0 && (
-        <div className="text-center py-8 text-muted-foreground">
+        <div className="text-center py-8 qt-text-secondary">
           No speakers found in the file
         </div>
       )}

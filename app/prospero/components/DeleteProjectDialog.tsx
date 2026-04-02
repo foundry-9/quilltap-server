@@ -17,7 +17,7 @@ export function DeleteProjectDialog({ open, onClose, onConfirm }: DeleteProjectD
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
         <h3 className="mb-4 text-lg font-semibold text-foreground">Delete Project</h3>
         <p className="mb-4 qt-text-small">
           Are you sure you want to delete this project? Chats and files will be disassociated but not deleted.
@@ -26,13 +26,13 @@ export function DeleteProjectDialog({ open, onClose, onConfirm }: DeleteProjectD
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm qt-text-primary shadow-sm hover:bg-muted"
+            className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="inline-flex items-center rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground shadow hover:bg-destructive/90"
+            className="inline-flex items-center rounded-lg bg-destructive px-4 py-2 text-sm font-semibold qt-text-destructive-foreground shadow hover:qt-bg-destructive/90"
           >
             Delete
           </button>

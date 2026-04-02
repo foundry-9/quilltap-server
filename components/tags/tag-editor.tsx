@@ -215,7 +215,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
               setTimeout(() => inputRef.current?.focus(), 0);
             }}
             disabled={loading}
-            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-muted text-foreground hover:bg-accent focus:outline-none disabled:opacity-50"
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium qt-bg-muted text-foreground hover:bg-accent focus:outline-none disabled:opacity-50"
           >
             + Add Tag
           </button>
@@ -239,7 +239,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
               type="button"
               onClick={cancelAddTag}
               disabled={loading}
-              className="inline-flex items-center justify-center w-5 h-5 text-muted-foreground hover:text-foreground focus:outline-none disabled:opacity-50"
+              className="inline-flex items-center justify-center w-5 h-5 qt-text-secondary hover:text-foreground focus:outline-none disabled:opacity-50"
               aria-label="Cancel adding tag"
             >
               <svg
@@ -259,7 +259,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
             {showSuggestions && (filteredSuggestions.length > 0 || inputValue.trim()) && (
               <div
                 ref={suggestionsRef}
-                className="absolute z-10 top-full left-0 mt-1 bg-card border border-input rounded-md qt-shadow-lg max-h-60 overflow-y-auto"
+                className="absolute z-10 top-full left-0 mt-1 qt-bg-card border border-input rounded-md qt-shadow-lg max-h-60 overflow-y-auto"
               >
                 {filteredSuggestions.length > 0 ? (
                   <ul className="py-1">

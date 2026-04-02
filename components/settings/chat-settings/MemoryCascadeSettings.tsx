@@ -58,7 +58,7 @@ export function MemoryCascadeSettings({
               </option>
             ))}
           </select>
-          <p className="qt-text-xs text-muted-foreground mt-1">
+          <p className="qt-text-xs qt-text-secondary mt-1">
             {MEMORY_CASCADE_ACTIONS.find((a) => a.value === preferences.onMessageDelete)?.description}
           </p>
         </div>
@@ -78,7 +78,7 @@ export function MemoryCascadeSettings({
               </option>
             ))}
           </select>
-          <p className="qt-text-xs text-muted-foreground mt-1">
+          <p className="qt-text-xs qt-text-secondary mt-1">
             {MEMORY_CASCADE_ACTIONS.find((a) => a.value === preferences.onSwipeRegenerate)?.description}
           </p>
         </div>

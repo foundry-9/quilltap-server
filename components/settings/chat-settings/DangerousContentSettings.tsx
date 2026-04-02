@@ -97,7 +97,7 @@ export function DangerousContentSettings({
             value={dangerSettings.mode}
             onChange={(e) => onUpdate({ mode: e.target.value as DangerousContentSettingsType['mode'] })}
             disabled={saving}
-            className="w-full max-w-xs rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground focus:qt-border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             {MODE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -138,7 +138,7 @@ export function DangerousContentSettings({
                 What to Scan
               </label>
 
-              <label className="flex items-start gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer">
+              <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer">
                 <input
                   type="checkbox"
                   checked={dangerSettings.scanTextChat}
@@ -152,7 +152,7 @@ export function DangerousContentSettings({
                 </div>
               </label>
 
-              <label className="flex items-start gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer">
+              <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer">
                 <input
                   type="checkbox"
                   checked={dangerSettings.scanImagePrompts}
@@ -166,7 +166,7 @@ export function DangerousContentSettings({
                 </div>
               </label>
 
-              <label className="flex items-start gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer">
+              <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer">
                 <input
                   type="checkbox"
                   checked={dangerSettings.scanImageGeneration}
@@ -275,7 +275,7 @@ export function DangerousContentSettings({
                 </p>
               </div>
 
-              <label className="flex items-start gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer">
+              <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer">
                 <input
                   type="checkbox"
                   checked={dangerSettings.showWarningBadges}
@@ -320,7 +320,7 @@ export function DangerousContentSettings({
                 value={imagePromptProfileId || ''}
                 onChange={(e) => onImagePromptProfileChange(e.target.value || null)}
                 disabled={saving || loadingProfiles}
-                className="w-full max-w-md rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full max-w-md rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground focus:qt-border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="">Use global cheap LLM</option>
                 {connectionProfiles.map((profile) => {
@@ -333,7 +333,7 @@ export function DangerousContentSettings({
                 })}
               </select>
               {connectionProfiles.length === 0 && !loadingProfiles && (
-                <p className="mt-1 qt-text-small text-warning">
+                <p className="mt-1 qt-text-small qt-text-warning">
                   No connection profiles found. Create one in the Connection Profiles tab first.
                 </p>
               )}

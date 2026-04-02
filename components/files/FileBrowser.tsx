@@ -529,7 +529,7 @@ export default function FileBrowser({
                 const path = '/' + arr.slice(0, index + 1).join('/') + '/'
                 return (
                   <span key={path} className="flex items-center gap-2">
-                    <span className="text-muted-foreground">/</span>
+                    <span className="qt-text-secondary">/</span>
                     <button
                       onClick={() => setCurrentFolder(path)}
                       className="hover:text-primary transition-colors"
@@ -547,7 +547,7 @@ export default function FileBrowser({
       {/* Content */}
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
-          <span className="qt-text-small text-muted-foreground">Loading files...</span>
+          <span className="qt-text-small qt-text-secondary">Loading files...</span>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
@@ -580,8 +580,8 @@ export default function FileBrowser({
       )}
 
       {/* Footer with file count */}
-      <div className="mt-4 pt-2 border-t border-border">
-        <span className="qt-text-xs text-muted-foreground">
+      <div className="mt-4 pt-2 border-t qt-border-default">
+        <span className="qt-text-xs qt-text-secondary">
           {files.length} file{files.length !== 1 ? 's' : ''} total
           {currentFolder !== '/' && ` \u2022 ${filteredFiles.length} in current folder`}
         </span>

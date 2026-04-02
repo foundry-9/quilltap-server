@@ -47,7 +47,7 @@ export function ClothingRecordCard({
               </>
             )}
             {!hasDescription && !record.usageContext && (
-              <span className="italic text-muted-foreground">No details yet</span>
+              <span className="italic qt-text-secondary">No details yet</span>
             )}
           </div>
         </div>
@@ -55,7 +55,7 @@ export function ClothingRecordCard({
           {hasDescription && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="p-2 text-muted-foreground hover:text-foreground rounded"
+              className="p-2 qt-text-secondary hover:text-foreground rounded"
               title={expanded ? 'Collapse' : 'Expand'}
             >
               <svg
@@ -80,7 +80,7 @@ export function ClothingRecordCard({
           <button
             onClick={() => onDelete(record.id)}
             disabled={isDeleting}
-            className="p-2 text-destructive hover:bg-destructive/10 rounded disabled:opacity-50"
+            className="p-2 qt-text-destructive hover:qt-bg-destructive/10 rounded disabled:opacity-50"
             title="Delete"
           >
             {isDeleting ? (
@@ -97,7 +97,7 @@ export function ClothingRecordCard({
       </div>
 
       {expanded && hasDescription && (
-        <div className="mt-4 border-t border-border pt-4">
+        <div className="mt-4 border-t qt-border-default pt-4">
           <div className="qt-text-small prose qt-prose-auto prose-sm max-w-none">
             <MessageContent content={record.description!} />
           </div>

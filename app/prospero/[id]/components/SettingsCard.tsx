@@ -108,7 +108,7 @@ export function SettingsCard({
 
       {/* Content - expandable */}
       {expanded && (
-        <div className="border-t border-border p-4 space-y-4">
+        <div className="border-t qt-border-default p-4 space-y-4">
           {/* Project Instructions */}
           <div>
             <label className="qt-text-label block mb-2">Project Instructions</label>

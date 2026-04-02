@@ -32,7 +32,7 @@ export function ImagesTabContent() {
         <CollapsibleCard title="Story Backgrounds" description="Configure automatic story background image generation" sectionId="story-backgrounds" forceOpen={activeSection === 'story-backgrounds'}>
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="text-muted-foreground">Loading settings...</div>
+              <div className="qt-text-secondary">Loading settings...</div>
             </div>
           ) : settings ? (
             <StoryBackgroundsSettings

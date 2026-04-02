@@ -82,7 +82,7 @@ export function CharactersCard({ project, onRemoveCharacter, expanded, onToggle 
 
       {/* Content - expandable */}
       {expanded && (
-        <div className="border-t border-border">
+        <div className="border-t qt-border-default">
           {/* Roster mode indicator */}
           <div className="px-4 py-2 qt-bg-muted">
             <p className="qt-text-xs qt-text-secondary">
@@ -106,7 +106,7 @@ export function CharactersCard({ project, onRemoveCharacter, expanded, onToggle 
                 {visibleCharacters.map((char) => (
                   <div
                     key={char.id}
-                    className="relative flex flex-col p-3 rounded-lg qt-border qt-bg-surface hover:qt-border-primary hover:shadow-md transition-all group"
+                    className="relative flex flex-col p-3 rounded-lg qt-border qt-bg-surface hover:qt-border-primary hover:qt-shadow-md transition-all group"
                   >
                     {/* Remove button */}
                     <button

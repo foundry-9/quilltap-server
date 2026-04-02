@@ -70,7 +70,7 @@ export function ImageProfilePicker({
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-muted-foreground">
+      <div className="flex items-center gap-2 qt-text-secondary">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-ring border-r-transparent"></div>
         Loading profiles...
       </div>
@@ -83,7 +83,7 @@ export function ImageProfilePicker({
         value={value || ''}
         onChange={e => onChange?.(e.target.value || null)}
         disabled={disabled}
-        className="w-full px-3 py-2 border border-border bg-card text-foreground rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+        className="w-full px-3 py-2 border qt-border-default qt-bg-card text-foreground rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
       >
         <option value="">No image generation</option>
         {profiles.map(profile => {
@@ -98,17 +98,17 @@ export function ImageProfilePicker({
         })}
       </select>
 
-      {error && <p className="text-destructive text-sm">{error}</p>}
+      {error && <p className="qt-text-destructive text-sm">{error}</p>}
 
       {profiles.length === 0 && !loading && !error && (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm qt-text-secondary">
           No image profiles available. Create one in Settings first.
         </p>
       )}
 
       {/* Show selected profile details */}
       {value && profiles.length > 0 && (
-        <div className="mt-3 p-3 rounded-md border qt-bg-info/10 border-info">
+        <div className="mt-3 p-3 rounded-md border qt-bg-info/10 qt-border-info">
           {(() => {
             const selected = profiles.find(p => p.id === value)
             if (!selected) return null
@@ -119,7 +119,7 @@ export function ImageProfilePicker({
                   <ProviderIcon provider={selected.provider} />
                   <div>
                     <p className="font-medium text-sm text-foreground">{selected.name}</p>
-                    <p className="text-xs text-muted-foreground">{selected.modelName}</p>
+                    <p className="text-xs qt-text-secondary">{selected.modelName}</p>
                   </div>
                 </div>
               </div>

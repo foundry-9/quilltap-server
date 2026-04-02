@@ -67,7 +67,7 @@ export function CapabilitiesReportDialog({
               </h2>
               <button
                 onClick={onClose}
-                className="p-1 hover:bg-muted rounded transition-colors"
+                className="p-1 hover:qt-bg-muted rounded transition-colors"
                 aria-label="Close"
               >
                 <svg
@@ -99,32 +99,32 @@ export function CapabilitiesReportDialog({
                   // Custom table styling
                   table: ({ children }) => (
                     <div className="overflow-x-auto my-4">
-                      <table className="min-w-full border-collapse border border-border">
+                      <table className="min-w-full border-collapse border qt-border-default">
                         {children}
                       </table>
                     </div>
                   ),
                   thead: ({ children }) => (
-                    <thead className="bg-muted">{children}</thead>
+                    <thead className="qt-bg-muted">{children}</thead>
                   ),
                   th: ({ children }) => (
-                    <th className="border border-border px-3 py-2 text-left font-semibold">
+                    <th className="border qt-border-default px-3 py-2 text-left font-semibold">
                       {children}
                     </th>
                   ),
                   td: ({ children }) => (
-                    <td className="border border-border px-3 py-2">
+                    <td className="border qt-border-default px-3 py-2">
                       {children}
                     </td>
                   ),
                   // Custom heading styling
                   h1: ({ children }) => (
-                    <h1 className="text-2xl font-bold mt-6 mb-4 pb-2 border-b border-border">
+                    <h1 className="text-2xl font-bold mt-6 mb-4 pb-2 border-b qt-border-default">
                       {children}
                     </h1>
                   ),
                   h2: ({ children }) => (
-                    <h2 className="text-xl font-semibold mt-6 mb-3 pb-1 border-b border-border">
+                    <h2 className="text-xl font-semibold mt-6 mb-3 pb-1 border-b qt-border-default">
                       {children}
                     </h2>
                   ),
@@ -152,7 +152,7 @@ export function CapabilitiesReportDialog({
                     const isInline = !className
                     if (isInline) {
                       return (
-                        <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
+                        <code className="qt-bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
                           {children}
                         </code>
                       )

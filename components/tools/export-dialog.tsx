@@ -105,7 +105,7 @@ export function ExportDialog({
               <button
                 onClick={handleClose}
                 disabled={state.exporting}
-                className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                className="qt-text-secondary hover:text-foreground disabled:opacity-50"
                 aria-label="Close dialog"
               >
                 <svg

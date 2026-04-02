@@ -235,7 +235,7 @@ export default function ChatsPage() {
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-destructive">Error: {error}</p>
+        <p className="text-lg qt-text-destructive">Error: {error}</p>
       </div>
     )
   }
@@ -254,18 +254,18 @@ export default function ChatsPage() {
         }
       `}</style>
 
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <h1 className="text-3xl font-semibold leading-tight">Chats</h1>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setImportDialogOpen(true)}
-            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button chat-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Import SillyTavern Chat
           </button>
           <Link
             href="/salon/new"
-            className="qt-button chat-toolbar__button chat-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button chat-toolbar__button chat-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             New Chat
           </Link>
@@ -273,7 +273,7 @@ export default function ChatsPage() {
       </div>
 
       {visibleChats.length === 0 ? (
-        <div className="chat-empty-state mt-12 rounded-2xl border border-dashed border-border/70 bg-card/80 px-8 py-12 text-center shadow-sm">
+        <div className="chat-empty-state mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">
           <p className="mb-4 text-lg qt-text-small">No chats yet</p>
           <Link
             href="/salon/new"

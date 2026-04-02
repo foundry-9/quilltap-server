@@ -258,17 +258,17 @@ export function ImportWizard({
       case 'file-select':
         return (
           <div className="space-y-4">
-            <p className="qt-text-small text-muted-foreground">
+            <p className="qt-text-small qt-text-secondary">
               Select a SillyTavern chat file (.json or .jsonl) to import.
             </p>
 
             <div
               className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
                 dragActive
-                  ? 'border-primary bg-primary/10'
+                  ? 'qt-border-primary qt-bg-primary/10'
                   : selectedFile
-                    ? 'border-primary/50 bg-primary/5'
-                    : 'border-border hover:border-primary/50'
+                    ? 'qt-border-primary/50 qt-bg-primary/5'
+                    : 'qt-border-default hover:qt-border-primary/50'
               }`}
               onClick={() => fileInputRef.current?.click()}
               onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(true) }}
@@ -284,7 +284,7 @@ export function ImportWizard({
                 className="hidden"
               />
               <svg
-                className="w-12 h-12 mx-auto mb-3 text-muted-foreground"
+                className="w-12 h-12 mx-auto mb-3 qt-text-secondary"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -299,7 +299,7 @@ export function ImportWizard({
               <p className="text-foreground font-medium">
                 {selectedFile ? selectedFile.name : 'Drag and drop a chat file here'}
               </p>
-              <p className="text-muted-foreground text-sm mt-1">
+              <p className="qt-text-secondary text-sm mt-1">
                 {selectedFile
                   ? formatFileSize(selectedFile.size)
                   : 'or click to browse'}
@@ -307,7 +307,7 @@ export function ImportWizard({
             </div>
 
             {error && (
-              <div className="text-sm text-destructive whitespace-pre-wrap">
+              <div className="text-sm qt-text-destructive whitespace-pre-wrap">
                 {error}
               </div>
             )}
@@ -321,7 +321,7 @@ export function ImportWizard({
         return (
           <div className="space-y-4">
             {parseResult && (
-              <div className="qt-text-small text-muted-foreground">
+              <div className="qt-text-small qt-text-secondary">
                 Found {parseResult.messages.length} messages from {parseResult.speakers.length} speaker(s)
                 {parseResult.isGroupChat && ' (Group Chat)'}
               </div>
@@ -338,7 +338,7 @@ export function ImportWizard({
             />
 
             {/* Memory creation option */}
-            <div className="border rounded-lg p-4 bg-muted/30">
+            <div className="border rounded-lg p-4 qt-bg-muted/30">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -348,7 +348,7 @@ export function ImportWizard({
                 />
                 <div>
                   <div className="text-foreground font-medium">Analyze messages for memories</div>
-                  <div className="qt-text-small text-muted-foreground">
+                  <div className="qt-text-small qt-text-secondary">
                     Queue each message for AI analysis to extract meaningful memories in the background
                   </div>
                 </div>
@@ -356,7 +356,7 @@ export function ImportWizard({
             </div>
 
             {error && (
-              <div className="text-sm text-destructive whitespace-pre-wrap">
+              <div className="text-sm qt-text-destructive whitespace-pre-wrap">
                 {error}
               </div>
             )}
@@ -489,7 +489,7 @@ export function ImportWizard({
               <button
                 onClick={handleClose}
                 disabled={isProcessing}
-                className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                className="qt-text-secondary hover:text-foreground disabled:opacity-50"
                 aria-label="Close dialog"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -509,7 +509,7 @@ export function ImportWizard({
                           ? 'bg-primary text-primary-foreground'
                           : i === currentStepIndex
                             ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground'
+                            : 'qt-bg-muted qt-text-secondary'
                       }`}
                     >
                       {i < currentStepIndex ? (
@@ -521,7 +521,7 @@ export function ImportWizard({
                       )}
                     </div>
                     <span className={`text-xs hidden sm:inline ${
-                      i === currentStepIndex ? 'text-foreground font-medium' : 'text-muted-foreground'
+                      i === currentStepIndex ? 'text-foreground font-medium' : 'qt-text-secondary'
                     }`}>
                       {s.label}
                     </span>

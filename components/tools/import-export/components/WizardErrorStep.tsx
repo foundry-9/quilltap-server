@@ -14,7 +14,7 @@ export function WizardErrorStep({ title, error }: WizardErrorStepProps) {
       <div className="flex flex-col items-center justify-center py-6">
         <div className="w-12 h-12 rounded-full qt-bg-destructive/10 flex items-center justify-center mb-4">
           <svg
-            className="w-6 h-6 text-destructive"
+            className="w-6 h-6 qt-text-destructive"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -30,8 +30,8 @@ export function WizardErrorStep({ title, error }: WizardErrorStepProps) {
         <h3 className="text-lg font-semibold text-foreground">{title}</h3>
       </div>
       {error && (
-        <div className="p-3 bg-destructive/10 border border-destructive rounded-lg">
-          <p className="text-sm text-destructive">{error}</p>
+        <div className="p-3 qt-bg-destructive/10 border qt-border-destructive rounded-lg">
+          <p className="text-sm qt-text-destructive">{error}</p>
         </div>
       )}
     </div>

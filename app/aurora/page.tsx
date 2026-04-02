@@ -235,39 +235,39 @@ export default function CharactersPage() {
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-destructive">Error: {error}</p>
+        <p className="text-lg qt-text-destructive">Error: {error}</p>
       </div>
     )
   }
 
   return (
     <div className="character-page qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/aurora.webp)' } as React.CSSProperties}>
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <h1 className="text-3xl font-semibold leading-tight">Characters</h1>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setResetBuiltinsDialogOpen(true)}
-            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title="Reset built-in characters to first-run defaults"
           >
             Reset Built-in Characters
           </button>
           <button
             onClick={() => setImportDialogOpen(true)}
-            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Import from SillyTavern
           </button>
           <button
             onClick={() => setAIImportDialogOpen(true)}
-            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border border-border bg-muted/70 px-4 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title="AI generation of character from any text source"
           >
             Summon From Lore
           </button>
           <Link
             href="/aurora/new"
-            className="qt-button character-toolbar__button character-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="qt-button character-toolbar__button character-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Create Character
           </Link>
@@ -275,8 +275,8 @@ export default function CharactersPage() {
       </div>
 
       {visibleCharacters.length === 0 ? (
-        <div className="character-empty-state mt-12 rounded-2xl border border-dashed border-border/70 bg-card/80 px-8 py-12 text-center shadow-sm">
-          <p className="mb-4 text-lg text-muted-foreground">No characters yet</p>
+        <div className="character-empty-state mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">
+          <p className="mb-4 text-lg qt-text-secondary">No characters yet</p>
           <Link
             href="/aurora/new"
             className="qt-text-primary hover:text-primary/80"
@@ -289,7 +289,7 @@ export default function CharactersPage() {
           {visibleCharacters.map((character) => (
             <div
               key={character.id}
-              className="qt-entity-card character-card cursor-pointer hover:border-primary/50 transition-colors"
+              className="qt-entity-card character-card cursor-pointer hover:qt-border-primary/50 transition-colors"
               onClick={(e) => handleCardClick(e, character.id)}
             >
               <div className="flex items-start justify-between mb-4">
@@ -365,7 +365,7 @@ export default function CharactersPage() {
               <div className="qt-entity-card-actions character-card-actions">
                 <Link
                   href={`/aurora/${character.id}/view?action=chat`}
-                  className="character-card__action character-card__action--chat inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow-sm transition hover:bg-success/90"
+                  className="character-card__action character-card__action--chat inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-success-foreground qt-shadow-sm transition hover:qt-bg-success/90"
                   title="Start a chat with this character"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -375,7 +375,7 @@ export default function CharactersPage() {
                 </Link>
                 <a
                   href={`/api/v1/characters/${character.id}?action=export&format=json`}
-                  className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/80 px-3 py-2 text-sm qt-text-primary shadow-sm transition hover:bg-muted"
+                  className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border qt-border-default qt-bg-muted/80 px-3 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted"
                   title="Export character data"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -384,7 +384,7 @@ export default function CharactersPage() {
                 </a>
                 <button
                   onClick={() => openDeleteDialog(character)}
-                  className="character-card__action qt-button-destructive shadow-sm"
+                  className="character-card__action qt-button-destructive qt-shadow-sm"
                   title="Delete this character"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -400,7 +400,7 @@ export default function CharactersPage() {
       {/* Import Dialog */}
       {importDialogOpen && (
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
             <h3 className="mb-4 text-lg font-semibold text-foreground">
               Import from SillyTavern
             </h3>
@@ -414,20 +414,20 @@ export default function CharactersPage() {
                   name="file"
                   accept=".png,.json"
                   required
-                  className="block w-full qt-text-small file:mr-4 file:rounded-md file:border-0 file:bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:bg-primary/30"
+                  className="block w-full qt-text-small file:mr-4 file:rounded-md file:border-0 file:qt-bg-primary/20 file:px-4 file:py-2 file:font-semibold file:text-primary hover:file:qt-bg-primary/30"
                 />
               </div>
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => setImportDialogOpen(false)}
-                  className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm qt-text-primary shadow-sm hover:bg-muted"
+                  className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90"
+                  className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90"
                 >
                   Import
                 </button>
@@ -440,7 +440,7 @@ export default function CharactersPage() {
       {/* Reset Built-ins Dialog */}
       {resetBuiltinsDialogOpen && (
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
             <h3 className="mb-3 text-lg font-semibold text-foreground">
               Reset Built-in Characters
             </h3>
@@ -452,7 +452,7 @@ export default function CharactersPage() {
                 type="button"
                 onClick={() => setResetBuiltinsDialogOpen(false)}
                 disabled={resetBuiltinsInProgress}
-                className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm qt-text-primary shadow-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancel
               </button>
@@ -460,7 +460,7 @@ export default function CharactersPage() {
                 type="button"
                 onClick={handleResetBuiltins}
                 disabled={resetBuiltinsInProgress}
-                className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {resetBuiltinsInProgress ? 'Resetting...' : 'Reset Built-ins'}
               </button>
@@ -472,14 +472,14 @@ export default function CharactersPage() {
       {/* AI Import Dialog */}
       {aiImportDialogOpen && (
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-foreground">
                 Summon From Lore
               </h3>
               <button
                 onClick={() => setAIImportDialogOpen(false)}
-                className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-3 py-1.5 text-sm qt-text-primary shadow-sm hover:bg-muted"
+                className="inline-flex items-center justify-center rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted"
               >
                 Close
               </button>

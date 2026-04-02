@@ -19,7 +19,7 @@ export function TagsTab({ characterId }: TagsTabProps) {
           </p>
         </div>
       </div>
-      <div className="character-section-card rounded-lg border border-border bg-card p-6">
+      <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
         <TagEditor entityType="character" entityId={characterId} />
       </div>
     </div>

@@ -89,8 +89,8 @@ export function ColorModeSelector({
               flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium
               border rounded-lg transition-colors
               ${isSelected
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border bg-card hover:bg-accent text-foreground'
+                ? 'qt-border-primary bg-primary text-primary-foreground'
+                : 'qt-border-default qt-bg-card hover:bg-accent text-foreground'
               }
               ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
             `}

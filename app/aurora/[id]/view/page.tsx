@@ -334,7 +334,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <p className="mb-4 text-lg text-destructive">Error: {error}</p>
+          <p className="mb-4 text-lg qt-text-destructive">Error: {error}</p>
           <Link
             href="/aurora"
             className="font-medium text-primary hover:text-primary/80"
@@ -348,7 +348,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
 
   if (quickHideActive && character && shouldHideByIds(characterTagIds)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted">
+      <div className="flex min-h-screen items-center justify-center qt-bg-muted">
         <HiddenPlaceholder />
       </div>
     )

@@ -44,13 +44,13 @@ export function StreamingMessage({
       )}
       <div className="qt-chat-message-body">
         {waitingForResponse && !streaming ? (
-          <div className="text-muted-foreground">
+          <div className="qt-text-secondary">
             <QuillAnimation size="lg" />
           </div>
         ) : (
-          <div className="flex-1 min-w-0 px-4 py-3 rounded-lg bg-card border border-border text-foreground">
+          <div className="flex-1 min-w-0 px-4 py-3 rounded-lg qt-bg-card border qt-border-default text-foreground">
             <MessageContent content={streamingContent} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} />
-            <QuillAnimation size="sm" className="inline-block ml-2 text-muted-foreground" />
+            <QuillAnimation size="sm" className="inline-block ml-2 qt-text-secondary" />
           </div>
         )}
       </div>

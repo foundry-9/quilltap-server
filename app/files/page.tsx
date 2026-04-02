@@ -17,7 +17,7 @@ function FilesPageContent() {
 
   return (
     <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/commonplace_book.webp)' } as React.CSSProperties}>
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <div>
           <h1 className="text-3xl font-semibold leading-tight">Files</h1>
           <p className="qt-text-small qt-text-secondary mt-1">
@@ -34,9 +34,9 @@ function FilesPageContent() {
         />
       </div>
 
-      <div className="mt-8 p-4 border border-border rounded-lg bg-muted/50">
+      <div className="mt-8 p-4 border qt-border-default rounded-lg qt-bg-muted/50">
         <h3 className="font-medium mb-2">About General Files</h3>
-        <ul className="qt-text-small text-muted-foreground space-y-1 list-disc list-inside">
+        <ul className="qt-text-small qt-text-secondary space-y-1 list-disc list-inside">
           <li>General files are not associated with any project</li>
           <li>The LLM can access these files during conversations using the file management tool</li>
           <li>Files in projects are accessible only within that project&apos;s chats</li>

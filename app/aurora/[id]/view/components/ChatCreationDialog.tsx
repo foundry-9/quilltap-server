@@ -92,7 +92,7 @@ export function ChatCreationDialog({
 
   return (
     <div className="character-chat-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md md:max-w-3xl rounded-2xl border border-border bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-md md:max-w-3xl rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col">
         <h3 className="mb-4 text-lg font-semibold flex-shrink-0">
           Start Chat with {characterName}
         </h3>
@@ -110,7 +110,7 @@ export function ChatCreationDialog({
                   id="profile"
                   value={selectedProfileId}
                   onChange={(e) => onProfileChange(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">Select a profile</option>
                   {profiles.map((profile) => (
@@ -131,7 +131,7 @@ export function ChatCreationDialog({
                     id="systemPrompt"
                     value={selectedSystemPromptId || ''}
                     onChange={(e) => onSystemPromptChange(e.target.value || null)}
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="">Use Default</option>
                     {systemPrompts.map((prompt) => (
@@ -153,7 +153,7 @@ export function ChatCreationDialog({
                     id="userCharacter"
                     value={selectedUserCharacterId}
                     onChange={(e) => onUserCharacterChange(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="">Chat as yourself</option>
                     {userControlledCharacters.map((char) => (
@@ -189,7 +189,7 @@ export function ChatCreationDialog({
                     id="scenarioSelect"
                     value={selectedScenarioId ?? CUSTOM_SCENARIO_VALUE}
                     onChange={(e) => handleScenarioSelectChange(e.target.value)}
-                    className="mb-2 w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="mb-2 w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value={CUSTOM_SCENARIO_VALUE}>Custom...</option>
                     {scenarios.map((s) => (
@@ -201,7 +201,7 @@ export function ChatCreationDialog({
                 )}
 
                 {selectedPreset && (
-                  <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                  <div className="rounded-lg border qt-border-default qt-bg-muted/40 px-3 py-2 text-sm qt-text-secondary">
                     {selectedPreset.content}
                   </div>
                 )}
@@ -212,7 +212,7 @@ export function ChatCreationDialog({
                     value={scenario}
                     onChange={(e) => onScenarioChange(e.target.value)}
                     placeholder="Describe the starting scenario for this chat..."
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     rows={3}
                   />
                 )}
@@ -234,14 +234,14 @@ export function ChatCreationDialog({
         <div className="mt-6 flex justify-end gap-3 flex-shrink-0">
           <button
             onClick={onCancel}
-            className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-sm transition hover:bg-muted"
+            className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium qt-text-secondary qt-shadow-sm transition hover:qt-bg-muted"
           >
             Cancel
           </button>
           <button
             onClick={onCreateChat}
             disabled={!selectedProfileId || creatingChat}
-            className="inline-flex items-center rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow transition hover:bg-success/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-success-foreground shadow transition hover:qt-bg-success/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {creatingChat ? 'Creating...' : 'Start Chat'}
           </button>

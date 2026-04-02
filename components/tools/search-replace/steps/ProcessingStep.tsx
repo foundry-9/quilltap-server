@@ -16,7 +16,7 @@ export function ProcessingStep({ phase }: ProcessingStepProps) {
     <div className="space-y-6 py-8">
       <div className="flex flex-col items-center justify-center">
         {/* Spinner */}
-        <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-6" />
+        <div className="w-12 h-12 border-4 qt-border-primary/20 border-t-primary rounded-full animate-spin mb-6" />
 
         <h3 className="qt-text-primary text-lg font-medium mb-2">
           Processing...

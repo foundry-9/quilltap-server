@@ -26,7 +26,7 @@ function CloseIcon({ className }: { className?: string }) {
 export function ChatsTab({ projectId, chats, onRemoveChat }: ChatsTabProps) {
   if (chats.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
+      <div className="text-center py-12 qt-text-secondary">
         <p>No chats in this project yet.</p>
         <p className="text-sm mt-2">
           <Link
@@ -56,7 +56,7 @@ export function ChatsTab({ projectId, chats, onRemoveChat }: ChatsTabProps) {
           </div>
           <button
             onClick={() => onRemoveChat(chat.id)}
-            className="text-muted-foreground hover:text-destructive"
+            className="qt-text-secondary hover:qt-text-destructive"
             title="Remove from project"
           >
             <CloseIcon className="w-5 h-5" />

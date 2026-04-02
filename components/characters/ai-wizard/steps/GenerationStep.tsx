@@ -70,26 +70,26 @@ export function GenerationStep({
       const pd = generatedData.physicalDescription
       return (
         <div className="mt-2 space-y-3">
-          <div className="text-xs text-muted-foreground">
+          <div className="text-xs qt-text-secondary">
             <strong>Short prompt:</strong> {pd.shortPrompt.substring(0, 100)}...
           </div>
           {isExpanded && (
             <div className="space-y-2 text-sm">
               <div>
                 <strong className="text-foreground">Short ({pd.shortPrompt.length} chars):</strong>
-                <p className="text-muted-foreground">{pd.shortPrompt}</p>
+                <p className="qt-text-secondary">{pd.shortPrompt}</p>
               </div>
               <div>
                 <strong className="text-foreground">Medium ({pd.mediumPrompt.length} chars):</strong>
-                <p className="text-muted-foreground">{pd.mediumPrompt}</p>
+                <p className="qt-text-secondary">{pd.mediumPrompt}</p>
               </div>
               <div>
                 <strong className="text-foreground">Long ({pd.longPrompt.length} chars):</strong>
-                <p className="text-muted-foreground">{pd.longPrompt}</p>
+                <p className="qt-text-secondary">{pd.longPrompt}</p>
               </div>
               <div>
                 <strong className="text-foreground">Complete ({pd.completePrompt.length} chars):</strong>
-                <p className="text-muted-foreground">{pd.completePrompt}</p>
+                <p className="qt-text-secondary">{pd.completePrompt}</p>
               </div>
               <div>
                 <strong className="text-foreground">Full Description:</strong>
@@ -110,7 +110,7 @@ export function GenerationStep({
           {scenarios.map((s, idx) => (
             <div key={idx} className="text-sm">
               <strong className="text-foreground">{s.title}</strong>
-              <p className="text-muted-foreground mt-0.5 whitespace-pre-wrap">{s.content}</p>
+              <p className="qt-text-secondary mt-0.5 whitespace-pre-wrap">{s.content}</p>
             </div>
           ))}
         </div>
@@ -119,7 +119,7 @@ export function GenerationStep({
 
     return (
       <div className="mt-2">
-        <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+        <div className="text-sm qt-text-secondary whitespace-pre-wrap">
           {isExpanded || !isLong ? content : `${content.substring(0, 200)}...`}
         </div>
       </div>
@@ -134,18 +134,18 @@ export function GenerationStep({
           <h3 className="text-lg font-semibold text-foreground mb-2">
             Ready to Generate
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm qt-text-secondary">
             Click the button below to start generating content for your character.
           </p>
         </div>
 
         {/* Selected fields summary */}
-        <div className="p-4 rounded-lg border border-border bg-muted/20">
+        <div className="p-4 rounded-lg border qt-border-default qt-bg-muted/20">
           <h4 className="font-medium text-foreground mb-2">Fields to Generate</h4>
           <ul className="space-y-1">
             {Array.from(selectedFields).map((field) => (
-              <li key={field} className="flex items-center gap-2 text-sm text-muted-foreground">
-                <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <li key={field} className="flex items-center gap-2 text-sm qt-text-secondary">
+                <svg className="w-4 h-4 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="10" strokeWidth={2} />
                 </svg>
                 <span>{FIELD_LABELS[field]}</span>
@@ -184,7 +184,7 @@ export function GenerationStep({
           <h3 className="text-lg font-semibold text-foreground mb-2">
             Generating Content...
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm qt-text-secondary">
             Please wait while the AI generates your character content.
           </p>
         </div>
@@ -195,7 +195,7 @@ export function GenerationStep({
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            <p className="text-muted-foreground">
+            <p className="qt-text-secondary">
               {progress.currentField
                 ? `Generating ${FIELD_LABELS[progress.currentField]}...`
                 : 'Starting generation...'}
@@ -216,21 +216,21 @@ export function GenerationStep({
                 key={field}
                 className={`rounded-lg border transition-all ${
                   isCompleted
-                    ? 'border-success/50 qt-bg-success/10'
+                    ? 'qt-border-success/50 qt-bg-success/10'
                     : hasError
-                    ? 'border-destructive/50 qt-bg-destructive/10'
+                    ? 'qt-border-destructive/50 qt-bg-destructive/10'
                     : isCurrent
-                    ? 'border-primary qt-bg-primary/5'
-                    : 'border-border bg-muted/20'
+                    ? 'qt-border-primary qt-bg-primary/5'
+                    : 'qt-border-default qt-bg-muted/20'
                 }`}
               >
                 <div className="flex items-center gap-3 p-3">
                   {isCompleted ? (
-                    <svg className="w-5 h-5 text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 qt-text-success flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   ) : hasError ? (
-                    <svg className="w-5 h-5 text-destructive flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 qt-text-destructive flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   ) : isCurrent ? (
@@ -239,23 +239,23 @@ export function GenerationStep({
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
                   ) : (
-                    <svg className="w-5 h-5 text-muted-foreground flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 qt-text-secondary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <circle cx="12" cy="12" r="10" strokeWidth={2} />
                     </svg>
                   )}
                   <div className="flex-1 min-w-0">
-                    <span className={`font-medium ${isCompleted ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    <span className={`font-medium ${isCompleted ? 'text-foreground' : 'qt-text-secondary'}`}>
                       {FIELD_LABELS[field]}
                     </span>
                     {/* Show snippet for completed fields */}
                     {isCompleted && snippet && (
-                      <p className="text-xs text-muted-foreground mt-1 truncate">
+                      <p className="text-xs qt-text-secondary mt-1 truncate">
                         {snippet}
                       </p>
                     )}
                     {/* Show error message */}
                     {hasError && (
-                      <p className="text-xs text-destructive mt-1">
+                      <p className="text-xs qt-text-destructive mt-1">
                         {progress.errors[field]}
                       </p>
                     )}
@@ -274,12 +274,12 @@ export function GenerationStep({
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold text-foreground mb-2 flex items-center gap-2">
-          <svg className="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           Generation Complete
         </h3>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm qt-text-secondary">
           Review the generated content below. Click on a field to expand it.
         </p>
       </div>
@@ -302,10 +302,10 @@ export function GenerationStep({
               key={field}
               className={`rounded-lg border transition-colors ${
                 hasError
-                  ? 'border-destructive/50 qt-bg-destructive/10'
+                  ? 'qt-border-destructive/50 qt-bg-destructive/10'
                   : content
-                  ? 'border-success/50 qt-bg-success/10'
-                  : 'border-border bg-muted/20'
+                  ? 'qt-border-success/50 qt-bg-success/10'
+                  : 'qt-border-default qt-bg-muted/20'
               }`}
             >
               <button
@@ -315,22 +315,22 @@ export function GenerationStep({
               >
                 <div className="flex items-center gap-3">
                   {content ? (
-                    <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   ) : hasError ? (
-                    <svg className="w-5 h-5 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 qt-text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   ) : (
-                    <svg className="w-5 h-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <circle cx="12" cy="12" r="10" strokeWidth={2} />
                     </svg>
                   )}
                   <span className="font-medium text-foreground">{FIELD_LABELS[field]}</span>
                 </div>
                 <svg
-                  className={`w-5 h-5 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                  className={`w-5 h-5 qt-text-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -340,13 +340,13 @@ export function GenerationStep({
               </button>
 
               {isExpanded && (
-                <div className="px-3 pb-3 border-t border-border/50 pt-3">
+                <div className="px-3 pb-3 border-t qt-border-default/50 pt-3">
                   {hasError ? (
-                    <p className="text-sm text-destructive">{progress.errors[field]}</p>
+                    <p className="text-sm qt-text-destructive">{progress.errors[field]}</p>
                   ) : content ? (
                     renderFieldPreview(field)
                   ) : (
-                    <p className="text-sm text-muted-foreground">No content generated</p>
+                    <p className="text-sm qt-text-secondary">No content generated</p>
                   )}
                 </div>
               )}

@@ -82,7 +82,7 @@ export function ProfileForm({
   }, [formData.provider, editingId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div id="profile-form" className="bg-card border border-border rounded-lg p-6">
+    <div id="profile-form" className="qt-bg-card border qt-border-default rounded-lg p-6">
       <h3 className="text-lg font-semibold mb-4">
         {editingId ? 'Edit Connection Profile' : 'Add New Connection Profile'}
       </h3>
@@ -198,7 +198,7 @@ export function ProfileForm({
         })()}
 
         {/* Connection Testing Section */}
-        <div className="border border-border rounded-lg p-4 bg-muted/50">
+        <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
           <h4 className="font-medium text-sm mb-3">Connection Testing</h4>
 
           <div className="flex flex-wrap gap-3 mb-3">
@@ -206,7 +206,7 @@ export function ProfileForm({
               type="button"
               onClick={onConnect}
               disabled={isConnecting}
-              className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+              className="qt-button-primary disabled:qt-bg-muted disabled:qt-text-secondary disabled:cursor-not-allowed"
             >
               {isConnecting ? 'Connecting...' : 'Connect'}
             </button>
@@ -223,7 +223,7 @@ export function ProfileForm({
                 if (reqs.requiresApiKey && !isConnected) return true
                 return false
               })()}
-              className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+              className="qt-button-primary disabled:qt-bg-muted disabled:qt-text-secondary disabled:cursor-not-allowed"
             >
               {isFetchingModels ? 'Fetching...' : 'Fetch Models'}
             </button>
@@ -232,7 +232,7 @@ export function ProfileForm({
               type="button"
               onClick={onTestMessage}
               disabled={!isConnected || isTestingMessage || !formData.modelName}
-              className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+              className="qt-button-primary disabled:qt-bg-muted disabled:qt-text-secondary disabled:cursor-not-allowed"
             >
               {isTestingMessage ? 'Testing...' : 'Test Message'}
             </button>
@@ -330,7 +330,7 @@ export function ProfileForm({
         </div>
 
         {/* Model Parameters */}
-        <div className="border-t border-border pt-4">
+        <div className="border-t qt-border-default pt-4">
           <h4 className="font-medium text-sm mb-3">Model Parameters (Optional)</h4>
           <div className="grid grid-cols-3 gap-4">
             <div>
@@ -550,11 +550,11 @@ export function ProfileForm({
         )}
 
         {/* Form Actions */}
-        <div className="flex gap-3 pt-4 border-t border-border">
+        <div className="flex gap-3 pt-4 border-t qt-border-default">
           <button
             type="submit"
             disabled={isSaving}
-            className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground"
+            className="qt-button-primary disabled:qt-bg-muted disabled:qt-text-secondary"
           >
             {isSaving ? 'Saving...' : editingId ? 'Update Profile' : 'Create Profile'}
           </button>
@@ -584,7 +584,7 @@ function OpenRouterOptions({
   onSetField: (name: string, value: any) => void
 }) {
   return (
-    <div className="border border-border rounded-lg p-4 bg-muted/50">
+    <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
       <h4 className="font-medium text-sm mb-3">OpenRouter Options</h4>
 
       {/* ZDR Toggle */}
@@ -635,11 +635,11 @@ function OpenRouterOptions({
             supports up to 3 total models (1 primary + 2 fallbacks).
           </p>
           {formData.fallbackModels.length >= 2 && (
-            <p className="qt-text-xs text-warning mb-2">
+            <p className="qt-text-xs qt-text-warning mb-2">
               Maximum fallback models reached. Remove one to add a different model.
             </p>
           )}
-          <div className="space-y-1 max-h-32 overflow-y-auto border border-border rounded p-2 bg-background">
+          <div className="space-y-1 max-h-32 overflow-y-auto border qt-border-default rounded p-2 bg-background">
             {fetchedModels
               .filter((model) => model !== formData.modelName)
               .slice(0, 50)
@@ -650,7 +650,7 @@ function OpenRouterOptions({
                   <label
                     key={model}
                     className={`flex items-center gap-2 p-1 rounded ${
-                      isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-muted'
+                      isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:qt-bg-muted'
                     }`}
                   >
                     <input
@@ -681,7 +681,7 @@ function OpenRouterOptions({
                 {formData.fallbackModels.map((model, idx) => (
                   <span
                     key={model}
-                    className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded flex items-center gap-1"
+                    className="px-2 py-0.5 qt-bg-primary/10 text-primary text-xs rounded flex items-center gap-1"
                   >
                     {idx + 1}. {model.split('/').pop()}
                     <button
@@ -692,7 +692,7 @@ function OpenRouterOptions({
                           formData.fallbackModels.filter((m) => m !== model)
                         )
                       }
-                      className="hover:text-destructive ml-1"
+                      className="hover:qt-text-destructive ml-1"
                     >
                       ×
                     </button>
@@ -718,17 +718,17 @@ function OpenRouterOptions({
                 key={provider}
                 type="button"
                 onClick={() => onSetField('providerOrder', [...formData.providerOrder, provider])}
-                className="px-2 py-1 text-xs bg-muted text-foreground rounded hover:bg-accent text-left truncate"
+                className="px-2 py-1 text-xs qt-bg-muted text-foreground rounded hover:bg-accent text-left truncate"
               >
                 + {provider}
               </button>
             ))}
         </div>
         {formData.providerOrder.length > 0 && (
-          <div className="space-y-1 border border-border rounded p-2 bg-card">
+          <div className="space-y-1 border qt-border-default rounded p-2 qt-bg-card">
             <p className="qt-text-label-xs mb-1">Priority order:</p>
             {formData.providerOrder.map((provider, idx) => (
-              <div key={provider} className="flex items-center gap-2 bg-primary/5 rounded px-2 py-1">
+              <div key={provider} className="flex items-center gap-2 qt-bg-primary/5 rounded px-2 py-1">
                 <span className="qt-text-label-xs w-4">{idx + 1}.</span>
                 <span className="qt-text-xs flex-1">{provider}</span>
                 <button
@@ -741,7 +741,7 @@ function OpenRouterOptions({
                     }
                   }}
                   disabled={idx === 0}
-                  className="px-1 text-xs disabled:opacity-30 hover:bg-muted rounded"
+                  className="px-1 text-xs disabled:opacity-30 hover:qt-bg-muted rounded"
                 >
                   ↑
                 </button>
@@ -755,7 +755,7 @@ function OpenRouterOptions({
                     }
                   }}
                   disabled={idx === formData.providerOrder.length - 1}
-                  className="px-1 qt-text-xs disabled:opacity-30 hover:bg-muted rounded"
+                  className="px-1 qt-text-xs disabled:opacity-30 hover:qt-bg-muted rounded"
                 >
                   ↓
                 </button>
@@ -767,7 +767,7 @@ function OpenRouterOptions({
                       formData.providerOrder.filter((p) => p !== provider)
                     )
                   }
-                  className="px-1 qt-text-xs text-destructive hover:bg-destructive/10 rounded"
+                  className="px-1 qt-text-xs qt-text-destructive hover:qt-bg-destructive/10 rounded"
                 >
                   ×
                 </button>
@@ -791,7 +791,7 @@ function AnthropicOptions({
   onSetField: (name: string, value: any) => void
 }) {
   return (
-    <div className="border border-border rounded-lg p-4 bg-muted/50">
+    <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
       <h4 className="font-medium text-sm mb-3">Anthropic Options</h4>
 
       {/* Cache Control */}

@@ -63,7 +63,7 @@ export default function OrphanCleanupModal({
       <button
         onClick={onDelete}
         disabled={isProcessing}
-        className="qt-button bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+        className="qt-button bg-destructive qt-text-destructive-foreground hover:qt-bg-destructive/90 disabled:opacity-50"
       >
         {isProcessing ? 'Processing...' : 'Delete All'}
       </button>
@@ -96,7 +96,7 @@ export default function OrphanCleanupModal({
         {/* Duplicate files explanation */}
         {duplicateCount > 0 && (
           <div>
-            <p className="qt-text-small text-muted-foreground">
+            <p className="qt-text-small qt-text-secondary">
               Of these, <strong>{duplicateCount}</strong> are mere duplicates of files already in good standing and shall be disposed of regardless of your choice below.
             </p>
           </div>
@@ -104,7 +104,7 @@ export default function OrphanCleanupModal({
 
         {/* Unique files summary */}
         <div>
-          <p className="qt-text-small text-muted-foreground">
+          <p className="qt-text-small qt-text-secondary">
             The remaining <strong>{uniqueCount} unique files</strong> ({formatSize(uniqueSize)}) await your instruction.
           </p>
         </div>
@@ -113,14 +113,14 @@ export default function OrphanCleanupModal({
         <div className="space-y-3 pt-2">
           <div>
             <p className="qt-text-small font-medium mb-1">Relocate to /orphans/</p>
-            <p className="qt-text-small text-muted-foreground">
+            <p className="qt-text-small qt-text-secondary">
               Move unique files to a dedicated folder for your later review. All duplicates will be removed.
             </p>
           </div>
 
           <div>
             <p className="qt-text-small font-medium mb-1">Delete All</p>
-            <p className="qt-text-small text-muted-foreground">
+            <p className="qt-text-small qt-text-secondary">
               Permanently remove all untracked files, both unique and duplicates. This action cannot be undone.
             </p>
           </div>

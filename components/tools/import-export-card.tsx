@@ -14,7 +14,7 @@ export function ImportExportCard() {
       <div className="flex items-start gap-4 mb-6">
         <div className="p-3 rounded-lg qt-bg-info/10">
           <svg
-            className="h-8 w-8 text-info"
+            className="h-8 w-8 qt-text-info"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

@@ -199,8 +199,8 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
   if (loading && chats.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-r-transparent"></div>
+        <div className="flex items-center gap-3 qt-text-secondary">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
           Loading conversations...
         </div>
       </div>
@@ -210,7 +210,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
   if (error && chats.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-destructive">{error}</p>
+        <p className="qt-text-destructive">{error}</p>
         <button
           onClick={() => fetchChats(0, searchQuery, false)}
           className="mt-4 text-primary hover:underline"
@@ -234,7 +234,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
             className="qt-input pl-10"
           />
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -255,9 +255,9 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
 
       {/* Conversations List */}
       {visibleChats.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-border rounded-lg">
+        <div className="text-center py-12 border border-dashed qt-border-default rounded-lg">
           <svg
-            className="mx-auto h-12 w-12 text-muted-foreground"
+            className="mx-auto h-12 w-12 qt-text-secondary"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -303,8 +303,8 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
           {/* Load more trigger */}
           <div ref={loadMoreRef} className="py-4">
             {loadingMore && (
-              <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-r-transparent"></div>
+              <div className="flex items-center justify-center gap-2 qt-text-secondary">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
                 Loading more...
               </div>
             )}

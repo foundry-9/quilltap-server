@@ -7,9 +7,9 @@ interface GalleryEmptyProps {
 
 export function GalleryEmpty({ showOnlyTagged, entityName }: GalleryEmptyProps) {
   return (
-    <div className="text-center py-12 border border-dashed border-border rounded-lg">
+    <div className="text-center py-12 border border-dashed qt-border-default rounded-lg">
       <svg
-        className="mx-auto h-12 w-12 text-muted-foreground"
+        className="mx-auto h-12 w-12 qt-text-secondary"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"

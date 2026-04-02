@@ -247,10 +247,10 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
       <div className="fixed inset-x-4 top-16 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-full md:max-w-2xl z-[101]">
         <div className="bg-background rounded-lg shadow-2xl overflow-hidden">
           {/* Search input */}
-          <div className="p-4 border-b border-border">
+          <div className="p-4 border-b qt-border-default">
             <div className="relative">
               <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground"
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 qt-text-secondary"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -282,7 +282,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
                     setCountsByType({})
                     inputRef.current?.focus()
                   }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 qt-text-secondary hover:text-foreground"
                   aria-label="Clear search"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -323,12 +323,12 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
                 {/* Loading more indicator */}
                 {isLoadingMore && (
                   <div className="p-4 text-center">
-                    <div className="inline-block w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    <div className="inline-block w-5 h-5 border-2 qt-border-primary border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
                 {/* End of results indicator */}
                 {!isLoading && !isLoadingMore && results.length > 0 && !hasMore && (
-                  <div className="p-3 text-center qt-text-xs text-muted-foreground border-t border-border">
+                  <div className="p-3 text-center qt-text-xs qt-text-secondary border-t qt-border-default">
                     Showing all {totalCount} results
                   </div>
                 )}
@@ -344,7 +344,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
           </div>
 
           {/* Footer with keyboard shortcuts */}
-          <div className="px-4 py-2 border-t border-border bg-muted qt-text-xs flex justify-between">
+          <div className="px-4 py-2 border-t qt-border-default qt-bg-muted qt-text-xs flex justify-between">
             <span>
               <kbd className="px-1.5 py-0.5 bg-accent rounded">↵</kbd> to search
             </span>

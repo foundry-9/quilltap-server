@@ -262,8 +262,8 @@ export default function ApiKeysTab() {
                   <p
                     className={`text-sm mt-2 ${
                       testResults[key.id].startsWith('✓')
-                        ? 'text-success'
-                        : 'text-destructive/80'
+                        ? 'qt-text-success'
+                        : 'qt-text-destructive/80'
                     }`}
                   >
                     {testResults[key.id]}

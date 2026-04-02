@@ -144,7 +144,7 @@ export function ChatsSection({
 
       {/* Empty state */}
       {visibleChats.length === 0 ? (
-        <div className="rounded-2xl qt-border border-dashed qt-bg-card px-8 py-12 text-center shadow-sm">
+        <div className="rounded-2xl qt-border border-dashed qt-bg-card px-8 py-12 text-center qt-shadow-sm">
           <p className="mb-4 text-lg qt-text-secondary">
             {chats.length === 0 ? 'No chats in this project yet.' : 'No visible chats (some may be hidden).'}
           </p>

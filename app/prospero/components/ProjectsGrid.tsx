@@ -29,8 +29,8 @@ export function ProjectsGrid({ projects, onCreateClick, onDeleteClick }: Project
 
   if (projects.length === 0) {
     return (
-      <div className="mt-12 rounded-2xl border border-dashed border-border/70 bg-card/80 px-8 py-12 text-center shadow-sm">
-        <p className="mb-4 text-lg text-muted-foreground">No projects yet</p>
+      <div className="mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">
+        <p className="mb-4 text-lg qt-text-secondary">No projects yet</p>
         <button
           onClick={onCreateClick}
           className="qt-text-primary hover:text-primary/80"

@@ -201,15 +201,15 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                 className="w-20 h-20 rounded-full object-cover"
               />
             ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
-                <span className="text-3xl font-bold text-muted-foreground">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full qt-bg-muted">
+                <span className="text-3xl font-bold qt-text-secondary">
                   {character?.name?.charAt(0)?.toUpperCase() || '?'}
                 </span>
               </div>
             )}
             <button
               onClick={() => toggleAvatarSelector(true)}
-              className="absolute -bottom-1 -right-1 rounded-full bg-primary p-1.5 text-primary-foreground shadow-lg transition hover:bg-primary/90"
+              className="absolute -bottom-1 -right-1 rounded-full bg-primary p-1.5 text-primary-foreground qt-shadow-lg transition hover:qt-bg-primary/90"
               title="Change avatar"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -240,7 +240,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
       {/* Error Display */}
       {error && (
-        <div className="mb-4 rounded border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive">
+        <div className="mb-4 rounded border qt-border-destructive/40 qt-bg-destructive/10 px-4 py-3 qt-text-destructive">
           {error}
         </div>
       )}
@@ -298,14 +298,14 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-primary-foreground shadow transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg bg-primary px-6 py-3 text-base font-semibold text-primary-foreground shadow transition hover:qt-bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? 'Saving...' : 'Save Character'}
           </button>
           <button
             type="button"
             onClick={handleCancel}
-            className="rounded-lg border border-border bg-card px-6 py-3 text-base font-medium text-muted-foreground shadow transition hover:bg-muted"
+            className="rounded-lg border qt-border-default qt-bg-card px-6 py-3 text-base font-medium qt-text-secondary shadow transition hover:qt-bg-muted"
           >
             Cancel
           </button>

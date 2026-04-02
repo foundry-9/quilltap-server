@@ -32,11 +32,11 @@ export function CharacterDetails({
           <button
             onClick={() => onTemplateReplace('char')}
             disabled={replacingTemplate !== null}
-            className="flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-medium text-primary shadow-sm transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border qt-border-primary/40 qt-bg-primary/10 px-3 py-2 text-sm font-medium text-primary qt-shadow-sm transition hover:qt-bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50"
             title={`Replace ${templateCounts.charCount} occurrences of "${character?.name}" with {{char}}`}
           >
             {replacingTemplate === 'char' ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-r-transparent"></div>
+              <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
             ) : (
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -44,7 +44,7 @@ export function CharacterDetails({
             )}
             <span className="hidden sm:inline">{character?.name}</span>
             <span className="text-primary">→</span>
-            <code className="rounded bg-primary/20 px-1 text-xs text-primary">{`{{char}}`}</code>
+            <code className="rounded qt-bg-primary/20 px-1 text-xs text-primary">{`{{char}}`}</code>
             <span className="text-xs text-primary/80">({templateCounts.charCount})</span>
           </button>
         )}
@@ -54,26 +54,26 @@ export function CharacterDetails({
           <button
             onClick={() => onTemplateReplace('user')}
             disabled={replacingTemplate !== null}
-            className="flex items-center gap-1.5 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm font-medium text-success shadow-sm transition hover:bg-success/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border qt-border-success/40 qt-bg-success/10 px-3 py-2 text-sm font-medium qt-text-success qt-shadow-sm transition hover:qt-bg-success/20 disabled:cursor-not-allowed disabled:opacity-50"
             title={`Replace ${templateCounts.userCount} occurrences of "${defaultPartnerName}" with {{user}}`}
           >
             {replacingTemplate === 'user' ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-success border-r-transparent"></div>
+              <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-success border-r-transparent"></div>
             ) : (
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             )}
             <span className="hidden sm:inline">{defaultPartnerName}</span>
-            <span className="text-success">→</span>
-            <code className="rounded bg-success/20 px-1 text-xs text-success">{`{{user}}`}</code>
-            <span className="text-xs text-success/80">({templateCounts.userCount})</span>
+            <span className="qt-text-success">→</span>
+            <code className="rounded qt-bg-success/20 px-1 text-xs qt-text-success">{`{{user}}`}</code>
+            <span className="text-xs qt-text-success/80">({templateCounts.userCount})</span>
           </button>
         )}
 
         <Link
           href={`/characters/${characterId}/edit`}
-          className="character-edit-link flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition hover:bg-primary/90"
+          className="character-edit-link flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow transition hover:qt-bg-primary/90"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -132,7 +132,7 @@ export function CharacterDetails({
             {character.scenarios.map((scenario) => (
               <div key={scenario.id} className="mb-4">
                 {character.scenarios!.length > 1 && (
-                  <h3 className="text-sm font-medium text-muted-foreground mb-1">{scenario.title}</h3>
+                  <h3 className="text-sm font-medium qt-text-secondary mb-1">{scenario.title}</h3>
                 )}
                 <div className="qt-text-small">
                   <TemplateDisplay
@@ -188,7 +188,7 @@ export function CharacterDetails({
 
         {/* Active System Prompt Indicator */}
         {character?.systemPrompts && character.systemPrompts.length > 0 && (
-          <div className="rounded-lg border border-border bg-muted/30 p-4">
+          <div className="rounded-lg border qt-border-default qt-bg-muted/30 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">

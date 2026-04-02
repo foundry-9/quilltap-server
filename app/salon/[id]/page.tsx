@@ -598,8 +598,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                       className="w-5 h-5 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center">
-                      <span className="text-xs font-medium text-muted-foreground">
+                    <div className="w-5 h-5 rounded-full qt-bg-muted flex items-center justify-center">
+                      <span className="text-xs font-medium qt-text-secondary">
                         {character.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
@@ -654,8 +654,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               onClick={toggleInspector}
               className={`p-1.5 rounded transition-colors ${
                 inspectorOpen
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'qt-bg-primary/15 text-primary'
+                  : 'qt-text-secondary hover:text-foreground'
               }`}
               title="LLM Inspector (Cmd+Shift+L)"
               aria-label="Toggle LLM Inspector"
@@ -769,7 +769,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   if (awaitingTagInfo) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-muted-foreground">Loading chat...</p>
+        <p className="text-lg qt-text-secondary">Loading chat...</p>
       </div>
     )
   }
@@ -793,7 +793,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   if (error || !chat) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-destructive">Error: {error || 'Chat not found'}</p>
+        <p className="text-lg qt-text-destructive">Error: {error || 'Chat not found'}</p>
       </div>
     )
   }
@@ -878,7 +878,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
         {/* Speaker Selector - shown when controlling multiple characters */}
         {participantsWithImpersonation.controlledCharacters.length >= 2 && (
-          <div className="qt-chat-speaker-selector px-4 py-2 border-t border-border">
+          <div className="qt-chat-speaker-selector px-4 py-2 border-t qt-border-default">
             <SpeakerSelector
               characters={participantsWithImpersonation.controlledCharacters}
               activeParticipantId={impersonation.activeTypingParticipantId}

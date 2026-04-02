@@ -165,7 +165,7 @@ export default function ReattributeMessageDialog({
         {/* Content */}
         <div className="qt-dialog-body">
           {availableParticipants.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 qt-text-secondary">
               No other participants available in this chat.
             </div>
           ) : (
@@ -191,8 +191,8 @@ export default function ReattributeMessageDialog({
                       className={`
                         w-full p-3 rounded-lg border text-left transition-all
                         ${isSelected
-                          ? 'border-primary bg-primary/10 ring-2 ring-primary'
-                          : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                          ? 'qt-border-primary qt-bg-primary/10 ring-2 ring-primary'
+                          : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
                         }
                         disabled:opacity-50 disabled:cursor-not-allowed
                       `}
@@ -212,12 +212,12 @@ export default function ReattributeMessageDialog({
                             <span className="font-semibold text-foreground truncate">
                               {name}
                             </span>
-                            <span className="qt-text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                            <span className="qt-text-xs px-1.5 py-0.5 rounded qt-bg-muted qt-text-secondary">
                               {participant.type === 'CHARACTER' ? 'Character' : 'Persona'}
                             </span>
                           </div>
                           {title && (
-                            <div className="qt-text-xs italic truncate text-muted-foreground">
+                            <div className="qt-text-xs italic truncate qt-text-secondary">
                               {title}
                             </div>
                           )}

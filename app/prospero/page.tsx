@@ -46,18 +46,18 @@ export default function ProjectsPage() {
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-destructive">Error: {error}</p>
+        <p className="text-lg qt-text-destructive">Error: {error}</p>
       </div>
     )
   }
 
   return (
     <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/prospero.webp)' } as React.CSSProperties}>
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <h1 className="text-3xl font-semibold leading-tight">Projects</h1>
         <button
           onClick={() => setCreateDialogOpen(true)}
-          className="qt-button inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="qt-button inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Create Project
         </button>

@@ -148,7 +148,7 @@ export default function LLMInspectorEntry({ log, isHighlighted }: Readonly<LLMIn
                 onClick={() => setActiveTab(tab)}
                 className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
                   activeTab === tab
-                    ? 'border-primary qt-text'
+                    ? 'qt-border-primary qt-text'
                     : 'border-transparent qt-text-secondary hover:qt-text'
                 }`}
               >
@@ -229,12 +229,12 @@ function ResponseTab({ log }: { log: LLMLog }) {
   return (
     <div className="space-y-3">
       {log.response.error ? (
-        <div className="p-2 qt-bg-destructive/10 border border-destructive/20 rounded">
+        <div className="p-2 qt-bg-destructive/10 border qt-border-destructive/20 rounded">
           <h4 className="font-medium qt-text-destructive mb-1">Error</h4>
           <p className="qt-text">{log.response.error}</p>
         </div>
       ) : (
-        <div className="p-2 qt-bg-success/10 border border-success/20 rounded">
+        <div className="p-2 qt-bg-success/10 border qt-border-success/20 rounded">
           <p className="qt-text font-medium">Request completed successfully</p>
         </div>
       )}

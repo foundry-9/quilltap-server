@@ -41,7 +41,7 @@ function PatternEntry({ pattern }: { pattern: BehavioralPattern }) {
         <span className="text-sm font-semibold text-foreground leading-snug">{pattern.pattern}</span>
         <FrequencyBadge frequency={pattern.frequency} />
       </div>
-      <p className="text-xs italic text-muted-foreground leading-relaxed">{pattern.evidence}</p>
+      <p className="text-xs italic qt-text-secondary leading-relaxed">{pattern.evidence}</p>
     </div>
   );
 }
@@ -66,7 +66,7 @@ export function AnalysisSummary({ analysis, memoryCount }: AnalysisSummaryProps)
       {/* Behavioral patterns */}
       {analysis.behavioralPatterns.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h4 className="qt-label text-xs uppercase tracking-wider text-muted-foreground">
+          <h4 className="qt-label text-xs uppercase tracking-wider qt-text-secondary">
             Observed Behavioural Tendencies
           </h4>
           <div className="flex flex-col gap-2">

@@ -214,7 +214,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     if (loading) {
       return (
         <div className="flex items-center justify-center py-12">
-          <p className="text-muted-foreground">Loading images...</p>
+          <p className="qt-text-secondary">Loading images...</p>
         </div>
       )
     }
@@ -222,7 +222,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     if (items.length === 0) {
       return (
         <div className="flex items-center justify-center py-12">
-          <p className="text-muted-foreground">{emptyStateText}</p>
+          <p className="qt-text-secondary">{emptyStateText}</p>
         </div>
       )
     }
@@ -286,13 +286,13 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
           style={{ minWidth: '300px' }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="qt-dialog-header border-b border-border">
+          <div className="qt-dialog-header border-b qt-border-default">
             <h2 className="text-lg font-semibold text-foreground">{title}</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleZoomOut}
                 disabled={thumbnailSizeIndex === 0}
-                className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 qt-text-secondary hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Smaller thumbnails"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -302,7 +302,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
               <button
                 onClick={handleZoomIn}
                 disabled={thumbnailSizeIndex === THUMBNAIL_SIZES.length - 1}
-                className="p-2 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-2 qt-text-secondary hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                 title="Larger thumbnails"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -311,7 +311,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-muted-foreground hover:text-foreground"
+                className="p-2 qt-text-secondary hover:text-foreground"
                 title="Close"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

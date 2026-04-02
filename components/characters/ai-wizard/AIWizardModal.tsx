@@ -100,7 +100,7 @@ export function AIWizardModal({
               </svg>
               AI Wizard
             </h2>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm qt-text-secondary mt-1">
               {STEP_TITLES[wizard.currentStep]}
             </p>
           </div>
@@ -117,7 +117,7 @@ export function AIWizardModal({
         </div>
 
         {/* Step Indicator */}
-        <div className="px-6 py-4 border-b border-border flex-shrink-0">
+        <div className="px-6 py-4 border-b qt-border-default flex-shrink-0">
           <div className="flex items-center justify-between">
             {[1, 2, 3, 4].map((step) => (
               <div key={step} className="flex items-center">
@@ -127,7 +127,7 @@ export function AIWizardModal({
                       ? 'bg-primary text-primary-foreground'
                       : step === wizard.currentStep
                       ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background'
-                      : 'bg-muted text-muted-foreground'
+                      : 'qt-bg-muted qt-text-secondary'
                   }`}
                 >
                   {step < wizard.currentStep ? (
@@ -141,7 +141,7 @@ export function AIWizardModal({
                 {step < 4 && (
                   <div
                     className={`w-16 sm:w-24 h-0.5 mx-2 transition-colors ${
-                      step < wizard.currentStep ? 'bg-primary' : 'bg-muted'
+                      step < wizard.currentStep ? 'bg-primary' : 'qt-bg-muted'
                     }`}
                   />
                 )}

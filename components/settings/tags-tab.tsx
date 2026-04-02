@@ -261,7 +261,7 @@ export default function TagsTab() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="text-muted-foreground">Loading settings...</div>
+        <div className="qt-text-secondary">Loading settings...</div>
       </div>
     )
   }
@@ -270,7 +270,7 @@ export default function TagsTab() {
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold mb-4">Tag Appearance</h2>
-        <p className="text-muted-foreground mb-4">
+        <p className="qt-text-secondary mb-4">
           Map tags to custom emojis and colors. Tags without a custom style use the default gray border/background and show only the tag name.
         </p>
 
@@ -313,7 +313,7 @@ export default function TagsTab() {
                 const isSaving = tagSaving === tag.id
 
                 return (
-                  <div key={tag.id} className="border border-border rounded-lg p-4 bg-card qt-shadow-sm flex flex-col">
+                  <div key={tag.id} className="border qt-border-default rounded-lg p-4 qt-bg-card qt-shadow-sm flex flex-col">
                     <div className="flex-1">
                       <div className="qt-text-primary">{label}</div>
                       <div className="qt-text-xs mt-2">Preview:</div>
@@ -381,7 +381,7 @@ export default function TagsTab() {
                           <span className="line-through">Strikethrough</span>
                         </label>
 
-                        <div className="pt-2 mt-2 border-t border-dashed border-border">
+                        <div className="pt-2 mt-2 border-t border-dashed qt-border-default">
                           <label className="flex items-center gap-2 qt-text-label text-foreground">
                             <input
                               type="checkbox"
@@ -434,7 +434,7 @@ export default function TagsTab() {
               })}
             </div>
           ) : (
-            <div className="qt-text-small border border-dashed border-border rounded-lg p-4">
+            <div className="qt-text-small border border-dashed qt-border-default rounded-lg p-4">
               No custom tag styles yet. Select a tag above to add an emoji and colors.
             </div>
           )}
@@ -444,12 +444,12 @@ export default function TagsTab() {
       {/* Tag Management Section */}
       <div>
         <h2 className="text-xl font-semibold mb-4">Tag Management</h2>
-        <p className="text-muted-foreground mb-4">
+        <p className="qt-text-secondary mb-4">
           View all tags and their usage across your workspace. Delete tags you no longer need — they will be removed from all entities that use them.
         </p>
 
         {tagOptions.length > 0 ? (
-          <div className="border border-border rounded-lg divide-y divide-border">
+          <div className="border qt-border-default rounded-lg divide-y divide-border">
             {[...tagOptions].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => {
               const usage = tag.totalUsage ?? 0
 
@@ -457,7 +457,7 @@ export default function TagsTab() {
                 <div key={tag.id} className="flex items-center justify-between px-4 py-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <TagBadge tag={{ id: tag.id, name: tag.name }} />
-                    <span className="text-sm text-muted-foreground whitespace-nowrap">
+                    <span className="text-sm qt-text-secondary whitespace-nowrap">
                       {usage > 0 ? `Used ${usage} time${usage !== 1 ? 's' : ''}` : 'Unused'}
                     </span>
                   </div>
@@ -485,7 +485,7 @@ export default function TagsTab() {
             })}
           </div>
         ) : (
-          <div className="qt-text-small border border-dashed border-border rounded-lg p-4">
+          <div className="qt-text-small border border-dashed qt-border-default rounded-lg p-4">
             No tags exist yet. Tags are created when you assign them to characters, profiles, or other content.
           </div>
         )}

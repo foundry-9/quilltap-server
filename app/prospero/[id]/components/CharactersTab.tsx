@@ -34,7 +34,7 @@ export function CharactersTab({ project, onRemoveCharacter }: CharactersTabProps
       </div>
 
       {project.characterRoster.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
+        <div className="text-center py-12 qt-text-secondary">
           <p>No characters in the roster yet.</p>
           <p className="text-sm mt-2">Characters are added automatically when chats are associated with this project.</p>
         </div>
@@ -46,7 +46,7 @@ export function CharactersTab({ project, onRemoveCharacter }: CharactersTabProps
                 {char.avatarUrl ? (
                   <img src={char.avatarUrl} alt={char.name || 'Character'} className="w-10 h-10 rounded-full object-cover" />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-lg font-semibold">
+                  <div className="w-10 h-10 rounded-full qt-bg-muted flex items-center justify-center text-lg font-semibold">
                     {char.name ? char.name.charAt(0).toUpperCase() : '?'}
                   </div>
                 )}
@@ -59,7 +59,7 @@ export function CharactersTab({ project, onRemoveCharacter }: CharactersTabProps
               </div>
               <button
                 onClick={() => onRemoveCharacter(char.id)}
-                className="text-muted-foreground hover:text-destructive"
+                className="qt-text-secondary hover:qt-text-destructive"
                 title="Remove from roster"
               >
                 <CloseIcon className="w-5 h-5" />

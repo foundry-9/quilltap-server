@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- style: convert 1,314 raw Tailwind visual classes to `qt-*` semantic theme classes across 234 files — backgrounds, text colors, border colors, and shadows now use theme-overridable CSS variables
 - refactor: remove vestigial `userId` ownership checks from 45 API route files (single-user app); flatten `app/(authenticated)/` route group into `app/` to eliminate shell-escaping issues with parenthesized directory names
 - docs: add 4.0.0 release notes
 - docs: update README with Desktop App–first installation, model classes, auto-configure, budget compression, Non-Quilltap Prompt generator; update API.md to v4.0-dev with 20 new route groups; remove stale S3/mount points from DEVELOPMENT.md

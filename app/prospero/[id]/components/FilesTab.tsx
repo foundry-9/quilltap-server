@@ -37,7 +37,7 @@ function formatBytes(bytes: number): string {
 export function FilesTab({ files }: FilesTabProps) {
   if (files.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
+      <div className="text-center py-12 qt-text-secondary">
         <p>No files in this project yet.</p>
         <p className="text-sm mt-2">Drag and drop files here to add them.</p>
       </div>
@@ -49,11 +49,11 @@ export function FilesTab({ files }: FilesTabProps) {
       {files.map((file) => (
         <div key={file.id} className="qt-entity-card flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
+            <div className="w-10 h-10 rounded qt-bg-muted flex items-center justify-center">
               {file.mimeType.startsWith('image/') ? (
-                <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                <ImageIcon className="w-5 h-5 qt-text-secondary" />
               ) : (
-                <DocumentIcon className="w-5 h-5 text-muted-foreground" />
+                <DocumentIcon className="w-5 h-5 qt-text-secondary" />
               )}
             </div>
             <div>

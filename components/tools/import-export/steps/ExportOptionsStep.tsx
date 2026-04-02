@@ -16,10 +16,10 @@ export function ExportOptionsStep({
 }: ExportOptionsStepProps) {
   return (
     <div className="space-y-4">
-      <p className="qt-text-small text-muted-foreground">
+      <p className="qt-text-small qt-text-secondary">
         Configure export options
       </p>
-      <label className="flex items-start gap-3 p-4 border border-border rounded-lg cursor-pointer hover:bg-muted/50">
+      <label className="flex items-start gap-3 p-4 border qt-border-default rounded-lg cursor-pointer hover:qt-bg-muted/50">
         <input
           type="checkbox"
           checked={includeMemories}
@@ -31,7 +31,7 @@ export function ExportOptionsStep({
             Include associated memories
           </p>
           {memoryCount > 0 && (
-            <p className="qt-text-small text-muted-foreground mt-1">
+            <p className="qt-text-small qt-text-secondary mt-1">
               {memoryCount} memories will be included
             </p>
           )}

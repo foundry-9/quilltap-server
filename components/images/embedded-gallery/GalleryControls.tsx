@@ -49,7 +49,7 @@ export function GalleryControls({
             }}
             className="rounded border-input text-primary focus:ring-ring"
           />
-          <span className="text-muted-foreground">Show only tagged</span>
+          <span className="qt-text-secondary">Show only tagged</span>
         </label>
       </div>
 
@@ -59,7 +59,7 @@ export function GalleryControls({
           onClick={() => {
             onUploadClick()
           }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:qt-bg-primary/90 rounded-md transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -73,7 +73,7 @@ export function GalleryControls({
             onClick={() => {
               onClearAvatarClick()
             }}
-            className="px-3 py-1 qt-text-label-xs text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+            className="px-3 py-1 qt-text-label-xs qt-text-destructive hover:qt-bg-destructive/10 rounded-md transition-colors"
           >
             Clear Avatar
           </button>
@@ -85,7 +85,7 @@ export function GalleryControls({
             onZoomOut()
           }}
           disabled={thumbnailSizeIndex === 0}
-          className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+          className="p-1 qt-text-secondary hover:text-foreground disabled:opacity-50"
           title="Smaller thumbnails"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,7 +100,7 @@ export function GalleryControls({
             onZoomIn()
           }}
           disabled={thumbnailSizeIndex === maxThumbnailIndex}
-          className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+          className="p-1 qt-text-secondary hover:text-foreground disabled:opacity-50"
           title="Larger thumbnails"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

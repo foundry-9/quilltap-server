@@ -259,7 +259,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <section className="border-t border-border pt-8">
+    <section className="border-t qt-border-default pt-8">
       {/* Collapsible Header */}
       <div className="flex items-center justify-between mb-2">
         <button
@@ -308,7 +308,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
       </div>
 
       {!isExpanded && (
-        <p className="text-muted-foreground qt-text-small">
+        <p className="qt-text-secondary qt-text-small">
           Discover and install themes from remote registries.
         </p>
       )}
@@ -345,7 +345,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
           {/* Search */}
           <div className="relative">
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none"
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary pointer-events-none"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -362,7 +362,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
               placeholder="Search themes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+              className="w-full pl-10 pr-4 py-2 rounded-lg border qt-border-default qt-bg-card text-foreground placeholder:qt-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
             />
           </div>
 
@@ -370,7 +370,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
           {isLoadingThemes && (
             <div className="flex items-center justify-center py-12">
               <div className="qt-spinner" />
-              <span className="ml-2 qt-text-small text-muted-foreground">
+              <span className="ml-2 qt-text-small qt-text-secondary">
                 Loading registry themes...
               </span>
             </div>
@@ -388,7 +388,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
           {!isLoadingThemes && !themesError && (
             <>
               {filteredThemes.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-8 qt-text-secondary">
                   {themes.length === 0 ? (
                     <p>
                       No themes available from configured registries.
@@ -417,14 +417,14 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
           )}
 
           {/* Sources section */}
-          <div className="border-t border-border pt-4 mt-4">
+          <div className="border-t qt-border-default pt-4 mt-4">
             <div className="flex items-center flex-wrap gap-2">
               <span className="text-sm font-medium text-foreground">Sources:</span>
 
               {isLoadingSources ? (
                 <div className="qt-spinner w-3 h-3" />
               ) : sources.length === 0 ? (
-                <span className="qt-text-small text-muted-foreground">No sources configured</span>
+                <span className="qt-text-small qt-text-secondary">No sources configured</span>
               ) : (
                 sources.map((source) => (
                   <span
@@ -447,7 +447,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                       </svg>
                     ) : (
                       <svg
-                        className="w-3.5 h-3.5 text-muted-foreground"
+                        className="w-3.5 h-3.5 qt-text-secondary"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -463,7 +463,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                     <button
                       type="button"
                       onClick={() => handleRemoveSource(source.name)}
-                      className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors"
+                      className="ml-0.5 qt-text-secondary hover:qt-text-destructive transition-colors"
                       title={`Remove ${source.name}`}
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -479,7 +479,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                 ))
               )}
 
-              <span className="text-muted-foreground">|</span>
+              <span className="qt-text-secondary">|</span>
 
               <button
                 type="button"
@@ -500,7 +500,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
 
             {/* Add source form */}
             {showAddSource && (
-              <div className="mt-3 p-4 rounded-lg border border-border bg-card space-y-3">
+              <div className="mt-3 p-4 rounded-lg border qt-border-default qt-bg-card space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">
@@ -511,7 +511,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                       placeholder="e.g. Community"
                       value={newSourceName}
                       onChange={(e) => setNewSourceName(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                      className="w-full px-3 py-1.5 rounded-md border qt-border-default bg-background text-foreground placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
                     />
                   </div>
                   <div>
@@ -523,20 +523,20 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                       placeholder="https://registry.example.com/themes"
                       value={newSourceUrl}
                       onChange={(e) => setNewSourceUrl(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                      className="w-full px-3 py-1.5 rounded-md border qt-border-default bg-background text-foreground placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
                     />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Public Key <span className="text-muted-foreground font-normal">(optional)</span>
+                    Public Key <span className="qt-text-secondary font-normal">(optional)</span>
                   </label>
                   <input
                     type="text"
                     placeholder="For signature verification"
                     value={newSourceKey}
                     onChange={(e) => setNewSourceKey(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                    className="w-full px-3 py-1.5 rounded-md border qt-border-default bg-background text-foreground placeholder:qt-text-secondary text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:qt-border-primary"
                   />
                 </div>
                 <div className="flex items-center gap-2 justify-end">
@@ -595,18 +595,18 @@ function RegistryThemeCard({ theme, isInstalling, onInstall }: RegistryThemeCard
     : null
 
   return (
-    <div className="relative flex flex-col p-4 rounded-lg border-2 border-border bg-card transition-all hover:border-input">
+    <div className="relative flex flex-col p-4 rounded-lg border-2 qt-border-default qt-bg-card transition-all hover:border-input">
       {/* Theme name */}
       <div className="font-semibold text-base text-foreground">{theme.name}</div>
 
       {/* Author */}
       {theme.author && (
-        <div className="qt-text-small text-muted-foreground mt-0.5">by {theme.author}</div>
+        <div className="qt-text-small qt-text-secondary mt-0.5">by {theme.author}</div>
       )}
 
       {/* Description */}
       {theme.description && (
-        <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
+        <div className="text-sm qt-text-secondary mt-1 line-clamp-2">
           {theme.description}
         </div>
       )}
@@ -617,7 +617,7 @@ function RegistryThemeCard({ theme, isInstalling, onInstall }: RegistryThemeCard
           {swatchColors.map((color, i) => (
             <div
               key={i}
-              className="w-5 h-5 rounded-full border border-border"
+              className="w-5 h-5 rounded-full border qt-border-default"
               style={{ backgroundColor: color }}
               title={color}
             />
@@ -626,11 +626,11 @@ function RegistryThemeCard({ theme, isInstalling, onInstall }: RegistryThemeCard
       )}
 
       {/* Bottom row: version, badges, install */}
-      <div className="flex items-center justify-between mt-3 pt-2 border-t border-border">
+      <div className="flex items-center justify-between mt-3 pt-2 border-t qt-border-default">
         <div className="flex items-center gap-1.5">
           {/* Version */}
           {theme.version && (
-            <span className="qt-text-small text-muted-foreground">
+            <span className="qt-text-small qt-text-secondary">
               v{theme.version}
             </span>
           )}

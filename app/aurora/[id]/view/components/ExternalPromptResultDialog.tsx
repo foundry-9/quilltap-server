@@ -62,7 +62,7 @@ export function ExternalPromptResultDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md md:max-w-3xl rounded-2xl border border-border bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-md md:max-w-3xl rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between mb-4 flex-shrink-0">
           <h3 className="text-lg font-semibold">
             Generated Prompt{characterName ? ` for ${characterName}` : ''}
@@ -70,12 +70,12 @@ export function ExternalPromptResultDialog({
           <div className="flex items-center gap-2">
             <button
               onClick={handleCopy}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground shadow-sm hover:bg-muted"
+              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted"
               title="Copy to clipboard"
             >
               {copied ? (
                 <>
-                  <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   Copied
@@ -91,7 +91,7 @@ export function ExternalPromptResultDialog({
             </button>
             <button
               onClick={handleDownload}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground shadow-sm hover:bg-muted"
+              className="inline-flex items-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-3 py-1.5 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted"
               title="Download as Markdown file"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,7 +102,7 @@ export function ExternalPromptResultDialog({
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1 pr-2 -mr-2 rounded-lg border border-border bg-background/50 p-4">
+        <div className="overflow-y-auto flex-1 pr-2 -mr-2 rounded-lg border qt-border-default bg-background/50 p-4">
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {prompt}
@@ -113,7 +113,7 @@ export function ExternalPromptResultDialog({
         <div className="mt-4 flex justify-end flex-shrink-0">
           <button
             onClick={onClose}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90"
           >
             Close
           </button>

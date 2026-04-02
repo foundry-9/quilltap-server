@@ -82,7 +82,7 @@ export default function ProjectDetailPage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <p className="text-lg text-destructive mb-4">{error || 'Project not found'}</p>
+          <p className="text-lg qt-text-destructive mb-4">{error || 'Project not found'}</p>
           <Link href="/prospero" className="qt-text-primary hover:underline">
             Back to Projects
           </Link>

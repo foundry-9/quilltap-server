@@ -441,13 +441,13 @@ export default function NewChatPage() {
         <h1 className="mb-6 text-3xl font-semibold">New Chat</h1>
 
         {project && (
-          <div className="mb-6 rounded-lg border border-border bg-card/50 p-4">
+          <div className="mb-6 rounded-lg border qt-border-default qt-bg-card/50 p-4">
             <div className="flex items-center gap-3">
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{ backgroundColor: project.color || 'var(--muted)' }}
               >
-                <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>
               </div>
@@ -460,7 +460,7 @@ export default function NewChatPage() {
         )}
 
         {profiles.length === 0 && (
-          <div className="mb-6 rounded-lg border border-warning/50 bg-warning/10 p-4 text-warning">
+          <div className="mb-6 rounded-lg border qt-border-warning/50 qt-bg-warning/10 p-4 qt-text-warning">
             <p className="font-medium">No connection profiles available</p>
             <p className="mt-1 text-sm">
               You need to create a connection profile before starting a chat.{' '}
@@ -470,7 +470,7 @@ export default function NewChatPage() {
         )}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="flex flex-col rounded-xl border border-border bg-card p-6 lg:max-h-[calc(100vh-12rem)]">
+          <div className="flex flex-col rounded-xl border qt-border-default qt-bg-card p-6 lg:max-h-[calc(100vh-12rem)]">
             <h2 className="mb-4 text-lg font-semibold">Select Characters</h2>
             <div className="mb-4 flex-shrink-0">
               <input
@@ -479,7 +479,7 @@ export default function NewChatPage() {
                 placeholder="Search characters..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-border bg-background px-4 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border qt-border-default bg-background px-4 py-2 text-foreground placeholder:qt-text-secondary focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
@@ -495,7 +495,7 @@ export default function NewChatPage() {
                     <button
                       key={character.id}
                       onClick={() => handleSelectCharacter(character)}
-                      className={'w-full flex items-center gap-3 rounded-lg border p-3 transition ' + (isSelected ? 'border-primary bg-primary/10' : 'border-border bg-card hover:border-primary/50 hover:bg-muted/50')}
+                      className={'w-full flex items-center gap-3 rounded-lg border p-3 transition ' + (isSelected ? 'qt-border-primary qt-bg-primary/10' : 'qt-border-default qt-bg-card hover:qt-border-primary/50 hover:qt-bg-muted/50')}
                     >
                       {avatarSrc ? (
                          
@@ -509,7 +509,7 @@ export default function NewChatPage() {
                         <div className="qt-text-primary">{character.name}</div>
                         {character.title && <div className="qt-text-small">{character.title}</div>}
                       </div>
-                      <div className={'flex h-6 w-6 items-center justify-center rounded-full border-2 ' + (isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground')}>
+                      <div className={'flex h-6 w-6 items-center justify-center rounded-full border-2 ' + (isSelected ? 'qt-border-primary bg-primary text-primary-foreground' : 'border-muted-foreground')}>
                         {isSelected && (
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -524,7 +524,7 @@ export default function NewChatPage() {
           </div>
 
           <div className="space-y-6">
-            <div className="rounded-xl border border-border bg-card p-6">
+            <div className="rounded-xl border qt-border-default qt-bg-card p-6">
               <h2 className="mb-4 text-lg font-semibold">Selected Characters ({selectedCharacters.length})</h2>
               {selectedCharacters.length === 0 ? (
                 <div className="py-8 text-center qt-text-small">Click on characters to add them to the chat</div>
@@ -533,7 +533,7 @@ export default function NewChatPage() {
                   {selectedCharacters.map((sc, index) => {
                     const avatarSrc = getAvatarSrc(sc.character)
                     return (
-                      <div key={sc.character.id} className="rounded-lg border border-border bg-muted/30 p-4">
+                      <div key={sc.character.id} className="rounded-lg border qt-border-default qt-bg-muted/30 p-4">
                         <div className="flex items-start gap-3">
                           {avatarSrc ? (
                              
@@ -546,7 +546,7 @@ export default function NewChatPage() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <span className="qt-text-primary">{sc.character.name}</span>
-                              {index === 0 && <span className="rounded bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">Speaks First</span>}
+                              {index === 0 && <span className="rounded qt-bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">Speaks First</span>}
                             </div>
                             {sc.character.title && <div className="qt-text-small">{sc.character.title}</div>}
                             <div className="mt-3">
@@ -554,7 +554,7 @@ export default function NewChatPage() {
                               <select
                                 value={sc.controlledBy === 'user' ? USER_CONTROLLED_PROFILE : sc.connectionProfileId}
                                 onChange={(e) => handleProfileChange(sc.character.id, e.target.value)}
-                                className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                                className="w-full rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                               >
                                 <option value="">Select profile...</option>
                                 <option value={USER_CONTROLLED_PROFILE}>Play As (User)</option>
@@ -579,7 +579,7 @@ export default function NewChatPage() {
                                 <select
                                   value={sc.selectedSystemPromptId || ''}
                                   onChange={(e) => handleSystemPromptChange(sc.character.id, e.target.value || null)}
-                                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                                  className="w-full rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                                 >
                                   <option value="">Use Default</option>
                                   {sc.character.systemPrompts.map((prompt) => (
@@ -591,7 +591,7 @@ export default function NewChatPage() {
                               </div>
                             )}
                           </div>
-                          <button onClick={() => handleRemoveCharacter(sc.character.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" title="Remove character">
+                          <button onClick={() => handleRemoveCharacter(sc.character.id)} className="rounded p-1 qt-text-secondary hover:qt-bg-destructive/10 hover:qt-text-destructive" title="Remove character">
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
@@ -605,13 +605,13 @@ export default function NewChatPage() {
             </div>
 
             {userControlledCharacters.length > 0 && (
-              <div className="rounded-xl border border-border bg-card p-6">
+              <div className="rounded-xl border qt-border-default qt-bg-card p-6">
                 <h2 className="mb-4 text-lg font-semibold">Play As (Optional)</h2>
                 <p className="mb-3 qt-text-small">Select a character to represent you in the conversation.</p>
                 <select
                   value={selectedUserCharacterId}
                   onChange={(e) => setSelectedUserCharacterId(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">No character selected</option>
                   {userControlledCharacters.map((char) => (
@@ -623,7 +623,7 @@ export default function NewChatPage() {
               </div>
             )}
 
-            <div className="rounded-xl border border-border bg-card p-6">
+            <div className="rounded-xl border qt-border-default qt-bg-card p-6">
               <h2 className="mb-4 text-lg font-semibold">Scenario (Optional)</h2>
               <p className="mb-3 qt-text-small">Describe the starting scenario for this chat.</p>
 
@@ -631,7 +631,7 @@ export default function NewChatPage() {
                 <select
                   value={scenarioId ?? CUSTOM_SCENARIO_VALUE}
                   onChange={(e) => handleScenarioSelectChange(e.target.value)}
-                  className="mb-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="mb-3 w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value={CUSTOM_SCENARIO_VALUE}>Custom...</option>
                   {singleCharacterScenarios.map((s) => (
@@ -643,7 +643,7 @@ export default function NewChatPage() {
               )}
 
               {selectedPreset && (
-                <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                <div className="rounded-lg border qt-border-default qt-bg-muted/40 px-3 py-2 text-sm qt-text-secondary">
                   {selectedPreset.content}
                 </div>
               )}
@@ -653,20 +653,20 @@ export default function NewChatPage() {
                   value={scenario}
                   onChange={(e) => setScenario(e.target.value)}
                   placeholder="e.g., You are in a cozy coffee shop on a rainy afternoon..."
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-foreground placeholder:qt-text-secondary focus:outline-none focus:ring-2 focus:ring-ring"
                   rows={4}
                 />
               )}
             </div>
 
             {imageProfiles.length > 0 && (
-              <div className="rounded-xl border border-border bg-card p-6">
+              <div className="rounded-xl border qt-border-default qt-bg-card p-6">
                 <h2 className="mb-4 text-lg font-semibold">Image Generation (Optional)</h2>
                 <p className="mb-3 qt-text-small">Select an image profile to enable image generation in this chat.</p>
                 <select
                   value={chatImageProfileId}
                   onChange={(e) => setChatImageProfileId(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">No image generation</option>
                   {imageProfiles.map((profile) => (
@@ -684,7 +684,7 @@ export default function NewChatPage() {
             />
 
             <div className="flex justify-end gap-3">
-              <Link href="/salon" className="rounded-lg border border-border bg-card px-6 py-2 font-medium qt-text-small transition hover:bg-muted">Cancel</Link>
+              <Link href="/salon" className="rounded-lg border qt-border-default qt-bg-card px-6 py-2 font-medium qt-text-small transition hover:qt-bg-muted">Cancel</Link>
               <button
                 onClick={handleCreateChat}
                 disabled={
@@ -694,7 +694,7 @@ export default function NewChatPage() {
                   selectedCharacters.some((sc) => sc.controlledBy === 'llm' && !sc.connectionProfileId) ||
                   !selectedCharacters.some((sc) => sc.controlledBy === 'llm')
                 }
-                className="rounded-lg bg-success px-6 py-2 font-semibold text-success-foreground transition hover:bg-success/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-success px-6 py-2 font-semibold qt-text-success-foreground transition hover:qt-bg-success/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {creating ? 'Creating...' : 'Create Chat'}
               </button>

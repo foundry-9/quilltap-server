@@ -89,7 +89,7 @@ export function HelpChatMessageList({
   return (
     <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
       {visibleMessages.length === 0 && !isStreaming && (
-        <div className="text-center text-muted-foreground text-sm py-8">
+        <div className="text-center qt-text-secondary text-sm py-8">
           Ask a question to get started
         </div>
       )}
@@ -113,7 +113,7 @@ export function HelpChatMessageList({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs qt-text-secondary">
                     {character?.name?.[0] || '?'}
                   </span>
                 )}
@@ -151,7 +151,7 @@ export function HelpChatMessageList({
               if (char?.avatarUrl) {
                 return <img src={char.avatarUrl} alt={char.name} className="w-full h-full object-cover" />
               }
-              return <span className="text-xs text-muted-foreground">{char?.name?.[0] || '?'}</span>
+              return <span className="text-xs qt-text-secondary">{char?.name?.[0] || '?'}</span>
             })()}
           </div>
           <svg className="qt-help-tail qt-help-tail-assistant" viewBox="0 0 10 16" fill="currentColor">
@@ -172,7 +172,7 @@ export function HelpChatMessageList({
               if (char?.avatarUrl) {
                 return <img src={char.avatarUrl} alt={char.name} className="w-full h-full object-cover" />
               }
-              return <span className="text-xs text-muted-foreground">{char?.name?.[0] || '...'}</span>
+              return <span className="text-xs qt-text-secondary">{char?.name?.[0] || '...'}</span>
             })()}
           </div>
           <svg className="qt-help-tail qt-help-tail-assistant" viewBox="0 0 10 16" fill="currentColor">

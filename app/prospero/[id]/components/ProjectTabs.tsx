@@ -30,15 +30,15 @@ export function ProjectTabs({ activeTab, onTabChange, chatCount, fileCount, char
   }
 
   return (
-    <div className="flex gap-4 border-b border-border/60 mt-6">
+    <div className="flex gap-4 border-b qt-border-default/60 mt-6">
       {TABS.map((tab) => (
         <button
           key={tab}
           onClick={() => onTabChange(tab)}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             activeTab === tab
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
+              ? 'qt-border-primary text-primary'
+              : 'border-transparent qt-text-secondary hover:text-foreground'
           }`}
         >
           {getTabLabel(tab)}

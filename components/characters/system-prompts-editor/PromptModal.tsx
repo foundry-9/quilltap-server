@@ -86,7 +86,7 @@ export function PromptModal({
             </button>
           </div>
           {showPreview ? (
-            <div className="p-4 border border-border rounded-lg bg-muted/30 min-h-[200px] prose prose-sm qt-prose-auto max-w-none">
+            <div className="p-4 border qt-border-default rounded-lg qt-bg-muted/30 min-h-[200px] prose prose-sm qt-prose-auto max-w-none">
               <ReactMarkdown>{formData.content || '*No content*'}</ReactMarkdown>
             </div>
           ) : (

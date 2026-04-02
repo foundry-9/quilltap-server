@@ -37,7 +37,7 @@ function AliasInput({ onAdd }: { onAdd: (alias: string) => void }) {
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={handleKeyDown}
-      className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
       placeholder="Type an alias and press Enter"
     />
   )
@@ -80,7 +80,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           value={formData.name}
           onChange={onChange}
           required
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
@@ -89,20 +89,20 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
         <label className="block text-sm font-medium mb-2 text-foreground">
           Aliases (Optional)
         </label>
-        <p className="text-xs text-muted-foreground mb-2">
+        <p className="text-xs qt-text-secondary mb-2">
           Alternate names this character goes by. Press Enter to add.
         </p>
         <div className="flex flex-wrap gap-2 mb-2">
           {formData.aliases.map((alias, index) => (
             <span
               key={index}
-              className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-sm text-foreground"
+              className="inline-flex items-center gap-1 rounded-full qt-bg-muted px-3 py-1 text-sm text-foreground"
             >
               {alias}
               <button
                 type="button"
                 onClick={() => onAliasesChange(formData.aliases.filter((_, i) => i !== index))}
-                className="ml-1 text-muted-foreground hover:text-foreground"
+                className="ml-1 qt-text-secondary hover:text-foreground"
               >
                 &times;
               </button>
@@ -121,7 +121,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
         <label className="block text-sm font-medium mb-2 text-foreground">
           Pronouns (Optional)
         </label>
-        <p className="text-xs text-muted-foreground mb-2">
+        <p className="text-xs qt-text-secondary mb-2">
           The character&apos;s pronouns, included in system prompts so the LLM uses them correctly.
         </p>
         <select
@@ -137,7 +137,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
               onPronounsChange({ ...selected.value })
             }
           }}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
         >
           {PRONOUN_PRESETS.map((preset) => (
             <option key={preset.label} value={preset.label}>
@@ -148,33 +148,33 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
         {formData.pronouns && getPronounPreset(formData.pronouns) === 'Custom' && (
           <div className="mt-2 grid grid-cols-3 gap-2">
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">Subject</label>
+              <label className="block text-xs qt-text-secondary mb-1">Subject</label>
               <input
                 type="text"
                 value={formData.pronouns.subject}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, subject: e.target.value })}
                 placeholder="e.g., they"
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">Object</label>
+              <label className="block text-xs qt-text-secondary mb-1">Object</label>
               <input
                 type="text"
                 value={formData.pronouns.object}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, object: e.target.value })}
                 placeholder="e.g., them"
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
             <div>
-              <label className="block text-xs text-muted-foreground mb-1">Possessive</label>
+              <label className="block text-xs qt-text-secondary mb-1">Possessive</label>
               <input
                 type="text"
                 value={formData.pronouns.possessive}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, possessive: e.target.value })}
                 placeholder="e.g., their"
-                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
           </div>
@@ -192,7 +192,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           name="title"
           value={formData.title}
           onChange={onChange}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder="e.g., Student, Teacher, Narrator"
         />
       </div>
@@ -208,7 +208,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           value={formData.description}
           onChange={onChange}
           rows={4}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder="Describe the character's appearance, background, and key traits"
         />
       </div>
@@ -224,7 +224,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           value={formData.personality}
           onChange={onChange}
           rows={4}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder="Describe the character's personality traits and behavioral patterns"
         />
       </div>
@@ -253,7 +253,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
             + Add Scenario
           </button>
         </div>
-        <p className="text-xs text-muted-foreground mb-3">
+        <p className="text-xs qt-text-secondary mb-3">
           Named settings and contexts for conversations. Each scenario can be selected when starting a chat.
         </p>
         {formData.scenarios.length === 0 ? (
@@ -296,12 +296,12 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
                       onScenariosChange(updated)
                     }}
                     placeholder="Scenario title"
-                    className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="flex-1 rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <button
                     type="button"
                     onClick={() => onScenariosChange(formData.scenarios.filter((_, i) => i !== index))}
-                    className="qt-button-icon qt-button-ghost hover:text-destructive"
+                    className="qt-button-icon qt-button-ghost hover:qt-text-destructive"
                     title="Remove scenario"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -321,7 +321,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
                   }}
                   rows={3}
                   placeholder="Describe the setting and context for this scenario"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
             ))}
@@ -340,7 +340,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           value={formData.firstMessage}
           onChange={onChange}
           rows={3}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder="The character's opening message to start conversations"
         />
       </div>
@@ -356,7 +356,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           value={formData.exampleDialogues}
           onChange={onChange}
           rows={6}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder="Example conversations to guide the AI's responses"
         />
       </div>
@@ -372,7 +372,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           value={formData.systemPrompt}
           onChange={onChange}
           rows={4}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder="Custom system instructions (will be combined with auto-generated prompt)"
         />
       </div>

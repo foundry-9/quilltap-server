@@ -227,7 +227,7 @@ export function PluginConfigModal({
       {loading ? (
         <div className="flex items-center justify-center py-8">
           <div className="flex items-center gap-3">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-r-transparent" />
+            <div className="h-5 w-5 animate-spin rounded-full border-2 qt-border-primary border-r-transparent" />
             <span className="qt-text-small">Loading configuration...</span>
           </div>
         </div>
@@ -244,12 +244,12 @@ export function PluginConfigModal({
               {field.type !== 'boolean' && (
                 <label htmlFor={field.key} className="block qt-text-label">
                   {field.label}
-                  {field.required && <span className="text-destructive ml-1">*</span>}
+                  {field.required && <span className="qt-text-destructive ml-1">*</span>}
                 </label>
               )}
               {renderField(field)}
               {field.description && field.type !== 'boolean' && (
-                <p className="qt-text-small text-muted-foreground">{field.description}</p>
+                <p className="qt-text-small qt-text-secondary">{field.description}</p>
               )}
             </div>
           ))}

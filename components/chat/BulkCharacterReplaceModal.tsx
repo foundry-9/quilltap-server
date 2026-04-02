@@ -237,7 +237,7 @@ export default function BulkCharacterReplaceModal({
         {/* Content */}
         <div className="qt-dialog-body space-y-5">
           {participants.length < 2 && !hasUnassignedMessages ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 qt-text-secondary">
               This chat needs at least 2 participants to use bulk character replace.
             </div>
           ) : (

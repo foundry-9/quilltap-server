@@ -52,7 +52,7 @@ export function DataSystemTabContent() {
         <CollapsibleCard title="LLM Logging" description="Configure LLM request logging" sectionId="llm-logging" forceOpen={activeSection === 'llm-logging'}>
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="text-muted-foreground">Loading settings...</div>
+              <div className="qt-text-secondary">Loading settings...</div>
             </div>
           ) : settings ? (
             <LLMLoggingSettingsComponent

@@ -216,7 +216,7 @@ export function DataDirectorySection() {
         <div>
           <div className="qt-text-label text-sm mb-1">Location</div>
           <div className="flex items-center gap-2">
-            <code className="qt-text-primary font-mono text-sm bg-muted/50 px-2 py-1 rounded flex-1 overflow-x-auto">
+            <code className="qt-text-primary font-mono text-sm qt-bg-muted/50 px-2 py-1 rounded flex-1 overflow-x-auto">
               {dirInfo.path}
             </code>
             <button
@@ -265,7 +265,7 @@ export function DataDirectorySection() {
             {opening ? 'Opening...' : 'Open in File Browser'}
           </button>
         ) : (
-          <div className="qt-text-muted text-sm bg-muted/30 p-3 rounded">
+          <div className="qt-text-muted text-sm qt-bg-muted/30 p-3 rounded">
             <div className="flex items-start gap-2">
               <ExternalLinkIcon className="w-4 h-4 mt-0.5 shrink-0" />
               <div>
@@ -273,7 +273,7 @@ export function DataDirectorySection() {
                 <p className="mt-1">
                   The data directory is mounted from your host system. Access it through your
                   host&apos;s file browser at the path you mounted with{' '}
-                  <code className="text-xs bg-muted px-1 rounded">docker run -v /path:/app/quilltap</code>.
+                  <code className="text-xs qt-bg-muted px-1 rounded">docker run -v /path:/app/quilltap</code>.
                 </p>
               </div>
             </div>

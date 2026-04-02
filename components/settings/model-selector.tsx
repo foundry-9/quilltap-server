@@ -154,12 +154,12 @@ export function ModelSelector({
     return (
       <span className="ml-2 inline-flex gap-1">
         {info.experimental && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+          <span className="text-xs px-1.5 py-0.5 rounded qt-bg-primary/10 text-primary">
             experimental
           </span>
         )}
         {info.deprecated && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-destructive/10 text-destructive">
+          <span className="text-xs px-1.5 py-0.5 rounded qt-bg-destructive/10 qt-text-destructive">
             deprecated
           </span>
         )}
@@ -236,7 +236,7 @@ export function ModelSelector({
       </div>
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg qt-shadow-lg z-10 max-h-64 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 qt-bg-card border qt-border-default rounded-lg qt-shadow-lg z-10 max-h-64 overflow-y-auto">
           {filteredModels.length > 0 ? (
             <ul className="py-1">
               {filteredModels.map(model => (

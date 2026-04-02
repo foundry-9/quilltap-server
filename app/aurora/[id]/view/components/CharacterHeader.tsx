@@ -51,7 +51,7 @@ export function CharacterHeader({
   }
 
   return (
-    <div className="mb-8 flex flex-wrap items-start justify-between gap-6 rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm">
+    <div className="mb-8 flex flex-wrap items-start justify-between gap-6 rounded-2xl border qt-border-default/60 qt-bg-card/80 p-6 qt-shadow-sm">
       <div className="flex flex-grow items-center gap-4">
         <div className="relative">
           {getAvatarSrc() ? (
@@ -75,10 +75,10 @@ export function CharacterHeader({
             <h1 className="text-3xl font-semibold">
               {character?.name || 'Loading...'}
               {character?.aliases && character.aliases.length > 0 && (
-                <span className="text-lg font-normal text-muted-foreground ml-2">({character.aliases.join(' / ')})</span>
+                <span className="text-lg font-normal qt-text-secondary ml-2">({character.aliases.join(' / ')})</span>
               )}
               {character?.pronouns && (
-                <span className="text-lg font-normal text-muted-foreground ml-2">({character.pronouns.subject}/{character.pronouns.object}/{character.pronouns.possessive})</span>
+                <span className="text-lg font-normal qt-text-secondary ml-2">({character.pronouns.subject}/{character.pronouns.object}/{character.pronouns.possessive})</span>
               )}
             </h1>
             <button
@@ -115,21 +115,21 @@ export function CharacterHeader({
       <div className="flex flex-shrink-0 flex-col gap-2">
         <button
           onClick={onStartChat}
-          className="inline-flex items-center justify-center rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow hover:bg-success/90"
+          className="inline-flex items-center justify-center rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-success-foreground shadow hover:qt-bg-success/90"
         >
           Start Chat
         </button>
         <button
           onClick={onToggleNpc}
           disabled={togglingNpc}
-          className="inline-flex items-center justify-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted disabled:opacity-50"
         >
           {togglingNpc ? 'Converting...' : character?.npc ? 'Convert to Character' : 'Convert to NPC'}
         </button>
         {onGenerateExternalPrompt && (
           <button
             onClick={onGenerateExternalPrompt}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted"
             title="Generate a standalone system prompt for use in external tools"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -141,7 +141,7 @@ export function CharacterHeader({
         {onOptimize && (
           <button
             onClick={onOptimize}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted"
             title="Analyze memories and suggest character refinements"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -153,7 +153,7 @@ export function CharacterHeader({
         {onSearchReplace && (
           <button
             onClick={onSearchReplace}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted"
             title="Search & Replace across all chats and memories for this character"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -281,7 +281,7 @@ export default function ChatGalleryImageViewModal({
             disabled={isTagging || checkingTags}
             className={`p-2 rounded-full qt-text-overlay transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
               isTaggedToCharacter
-                ? 'bg-primary hover:bg-primary/90'
+                ? 'bg-primary hover:qt-bg-primary/90'
                 : 'qt-bg-overlay-btn hover:qt-bg-overlay-btn'
             }`}
             title={isTaggedToCharacter ? `Remove from ${characterName || 'character'}'s gallery` : `Add to ${characterName || 'character'}'s gallery`}
@@ -301,7 +301,7 @@ export default function ChatGalleryImageViewModal({
             disabled={isTagging || checkingTags}
             className={`p-2 rounded-full qt-text-overlay transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
               isTaggedToPersona
-                ? 'bg-primary hover:bg-primary/90'
+                ? 'bg-primary hover:qt-bg-primary/90'
                 : 'qt-bg-overlay-btn hover:qt-bg-overlay-btn'
             }`}
             title={isTaggedToPersona ? `Remove from ${personaName || 'persona'}'s gallery` : `Add to ${personaName || 'persona'}'s gallery`}
@@ -366,7 +366,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             handleDeleteClick()
           }}
-          className="p-2 bg-destructive/80 hover:bg-destructive rounded-full qt-text-overlay transition-colors cursor-pointer"
+          className="p-2 qt-bg-destructive/80 hover:bg-destructive rounded-full qt-text-overlay transition-colors cursor-pointer"
           title="Delete image permanently"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

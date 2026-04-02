@@ -66,7 +66,7 @@ export function DisplayOptions({
         <label
           className={`
           flex items-center justify-between gap-4 p-4 border rounded-lg transition-colors cursor-pointer
-          ${showNavThemeSelector ? 'border-primary bg-accent' : 'border-border hover:bg-accent'}
+          ${showNavThemeSelector ? 'qt-border-primary bg-accent' : 'qt-border-default hover:bg-accent'}
           ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}
         `}
         >
@@ -74,7 +74,7 @@ export function DisplayOptions({
             <div
               className={`
               flex-shrink-0 p-2 rounded-full
-              ${showNavThemeSelector ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}
+              ${showNavThemeSelector ? 'qt-bg-primary/10 text-primary' : 'qt-bg-muted qt-text-secondary'}
             `}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,7 +102,7 @@ export function DisplayOptions({
             className={`
               relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
               transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
-              ${showNavThemeSelector ? 'bg-primary' : 'bg-muted'}
+              ${showNavThemeSelector ? 'bg-primary' : 'qt-bg-muted'}
               ${isLoading ? 'cursor-not-allowed' : ''}
             `}
           >

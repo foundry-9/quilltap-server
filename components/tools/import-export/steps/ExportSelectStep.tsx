@@ -62,7 +62,7 @@ export function ExportSelectStep({
       </div>
 
       {scope === 'selected' && (
-        <div className="space-y-3 mt-4 pt-4 border-t border-border">
+        <div className="space-y-3 mt-4 pt-4 border-t qt-border-default">
           <SearchInput
             value={searchQuery}
             onChange={onSearchChange}
@@ -74,7 +74,7 @@ export function ExportSelectStep({
               <LoadingSpinner />
             </div>
           ) : filteredEntities.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground">
+            <div className="text-center py-6 qt-text-secondary">
               No entities found
             </div>
           ) : (
@@ -82,7 +82,7 @@ export function ExportSelectStep({
               {filteredEntities.map((entity) => (
                 <label
                   key={entity.id}
-                  className="flex items-center gap-3 p-2 hover:bg-muted/50 rounded cursor-pointer"
+                  className="flex items-center gap-3 p-2 hover:qt-bg-muted/50 rounded cursor-pointer"
                 >
                   <input
                     type="checkbox"
@@ -96,7 +96,7 @@ export function ExportSelectStep({
             </div>
           )}
 
-          <div className="text-sm text-muted-foreground pt-2">
+          <div className="text-sm qt-text-secondary pt-2">
             {selectedIds.length} of {availableEntities.length} selected
           </div>
         </div>

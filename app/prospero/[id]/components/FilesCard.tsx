@@ -131,7 +131,7 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
 
         {/* Content - expandable */}
         {expanded && (
-          <div className="border-t border-border">
+          <div className="border-t qt-border-default">
             {files.length === 0 ? (
               <div className="p-4 text-center qt-text-secondary">
                 <p>No files in this project yet.</p>
@@ -172,7 +172,7 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
 
             {/* Action buttons */}
             {projectId && (
-              <div className="p-2 border-t border-border flex gap-2">
+              <div className="p-2 border-t qt-border-default flex gap-2">
                 <button
                   onClick={triggerFileSelect}
                   disabled={uploading}

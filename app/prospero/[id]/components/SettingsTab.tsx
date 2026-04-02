@@ -36,12 +36,12 @@ export function SettingsTab({
           onChange={(e) => onEditFormChange({ ...editForm, instructions: e.target.value })}
           rows={6}
           placeholder="Add instructions for characters in this project..."
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-foreground focus:qt-border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
         <div className="mt-2 flex justify-end">
           <button
             onClick={onSave}
-            className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90"
+            className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90"
           >
             Save Instructions
           </button>
@@ -49,7 +49,7 @@ export function SettingsTab({
       </div>
 
       {/* Allow Any Character */}
-      <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-card">
+      <div className="flex items-center justify-between p-4 rounded-lg border qt-border-default qt-bg-card">
         <div>
           <h4 className="font-medium">Allow Any Character</h4>
           <p className="qt-text-small">
@@ -59,7 +59,7 @@ export function SettingsTab({
         <button
           onClick={onToggleAllowAnyCharacter}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            project.allowAnyCharacter ? 'bg-primary' : 'bg-muted'
+            project.allowAnyCharacter ? 'bg-primary' : 'qt-bg-muted'
           }`}
         >
           <span

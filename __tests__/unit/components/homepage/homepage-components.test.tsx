@@ -222,7 +222,7 @@ describe('WelcomeSection', () => {
   it('renders paragraph with muted foreground class', () => {
     const { container } = render(<WelcomeSection displayName="John" />)
     const paragraph = container.querySelector('p')
-    expect(paragraph).toHaveClass('text-muted-foreground')
+    expect(paragraph).toHaveClass('qt-text-secondary')
   })
 
   it('renders name with primary text class', () => {
@@ -773,7 +773,7 @@ describe('ProjectItem', () => {
 
   it('renders icon container with correct classes', () => {
     const { container } = render(<ProjectItem project={createMockProject()} />)
-    const iconContainer = container.querySelector('.rounded-md.bg-muted')
+    const iconContainer = container.querySelector('.rounded-md.qt-bg-muted')
     expect(iconContainer).toBeInTheDocument()
   })
 

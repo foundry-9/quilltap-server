@@ -30,7 +30,7 @@ export function ImportModal({
       showCloseButton={true}
     >
       {loading ? (
-        <div className="text-center py-8 text-muted-foreground">Loading templates...</div>
+        <div className="text-center py-8 qt-text-secondary">Loading templates...</div>
       ) : (
         <div className="space-y-6">
           {/* Sample Prompts (built-in templates) */}
@@ -102,7 +102,7 @@ export function ImportModal({
           )}
 
           {sampleTemplates.length === 0 && userTemplates.length === 0 && (
-            <p className="text-center text-muted-foreground py-4">
+            <p className="text-center qt-text-secondary py-4">
               No templates available. Create templates in Settings &gt; Prompts.
             </p>
           )}

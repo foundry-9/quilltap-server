@@ -182,7 +182,7 @@ export default function RenameModal(props: Readonly<RenameModalProps>) {
       </div>
 
       {type === 'folder' && (
-        <p className="qt-text-xs text-muted-foreground">
+        <p className="qt-text-xs qt-text-secondary">
           All files in this folder will be updated to the new path.
         </p>
       )}

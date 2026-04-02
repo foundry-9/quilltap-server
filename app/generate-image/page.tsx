@@ -175,7 +175,7 @@ export default function GenerateImagePage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-foreground">Generate Image</h1>
-        <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/" className="text-sm qt-text-secondary hover:text-foreground">
           &larr; Back to Home
         </Link>
       </div>
@@ -205,7 +205,7 @@ export default function GenerateImagePage() {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="Describe the image you want to generate... Use {{CharacterName}} to include character descriptions."
-                className="w-full h-32 px-3 py-2 border border-border rounded-lg bg-card text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full h-32 px-3 py-2 border qt-border-default rounded-lg qt-bg-card text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring"
               />
 
               {/* Character Placeholder Dropdown */}
@@ -220,7 +220,7 @@ export default function GenerateImagePage() {
                     }}
                     onFocus={() => setIsDropdownOpen(true)}
                     placeholder="Search characters to insert..."
-                    className="flex-1 px-3 py-2 text-sm border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="flex-1 px-3 py-2 text-sm border qt-border-default rounded-lg qt-bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <button
                     type="button"
@@ -242,15 +242,15 @@ export default function GenerateImagePage() {
 
                 {/* Dropdown list */}
                 {isDropdownOpen && filteredEntities.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 max-h-48 overflow-y-auto bg-card border border-border rounded-lg shadow-lg">
+                  <div className="absolute z-10 w-full mt-1 max-h-48 overflow-y-auto qt-bg-card border qt-border-default rounded-lg qt-shadow-lg">
                     {filteredEntities.slice(0, 10).map((entity) => (
                       <button
                         key={entity.id}
                         type="button"
                         onClick={() => insertPlaceholder(entity.name)}
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
+                        className="w-full px-3 py-2 text-left text-sm hover:qt-bg-muted transition-colors flex items-center gap-2"
                       >
-                        <span className="text-xs px-1.5 py-0.5 bg-muted rounded">
+                        <span className="text-xs px-1.5 py-0.5 qt-bg-muted rounded">
                           {entity.type}
                         </span>
                         <span>{entity.name}</span>
@@ -270,7 +270,7 @@ export default function GenerateImagePage() {
             <select
               value={imageCount}
               onChange={(e) => setImageCount(parseInt(e.target.value, 10))}
-              className="px-3 py-2 border border-border rounded-lg bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="px-3 py-2 border qt-border-default rounded-lg qt-bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
               {[1, 2, 3, 4].map((n) => (
                 <option key={n} value={n}>
@@ -322,7 +322,7 @@ export default function GenerateImagePage() {
                 <img
                   src={image.filepath}
                   alt={image.generationPrompt || 'Generated image'}
-                  className="w-full aspect-square object-cover rounded-lg border border-border"
+                  className="w-full aspect-square object-cover rounded-lg border qt-border-default"
                 />
                 {/* Overlay with actions */}
                 <div className="absolute inset-0 qt-bg-overlay-medium opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
@@ -372,7 +372,7 @@ export default function GenerateImagePage() {
 
       {/* Empty State */}
       {generatedImages.length === 0 && (
-        <div className="qt-card p-8 text-center text-muted-foreground">
+        <div className="qt-card p-8 text-center qt-text-secondary">
           <svg className="w-16 h-16 mx-auto mb-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
             <circle cx="8.5" cy="8.5" r="1.5" />

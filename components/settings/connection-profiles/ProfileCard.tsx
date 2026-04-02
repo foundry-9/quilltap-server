@@ -31,7 +31,7 @@ const DragHandle = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTML
     return (
       <button
         ref={ref}
-        className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors touch-none"
+        className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-accent/50 qt-text-secondary hover:text-foreground transition-colors touch-none"
         aria-label="Drag to reorder"
         {...props}
       >
@@ -131,7 +131,7 @@ function ProfileCardContent({
             <span>{profile.messageCount} message{profile.messageCount === 1 ? '' : 's'}</span>
           )}
           {profile.messageCount !== undefined && profile.totalTokens !== undefined && (
-            <span className="text-muted-foreground"> • </span>
+            <span className="qt-text-secondary"> • </span>
           )}
           {profile.totalTokens !== undefined && profile.totalTokens > 0 && (
             <span>{formatTokenCount(profile.totalTokens)} tokens</span>

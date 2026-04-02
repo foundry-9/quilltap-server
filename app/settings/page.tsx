@@ -162,7 +162,7 @@ export default function SettingsPage() {
       </div>
 
       <ChatSettingsProvider>
-        <Suspense fallback={<div className="text-muted-foreground">Loading...</div>}>
+        <Suspense fallback={<div className="qt-text-secondary">Loading...</div>}>
           <EntityTabs tabs={SETTINGS_TABS} defaultTab="providers" contentClassName="qt-settings-panel">
             {(activeTab) => <SettingsTabContent activeTab={activeTab} />}
           </EntityTabs>

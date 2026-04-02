@@ -45,7 +45,7 @@ export function ProjectDetailHeader({
   onSave,
 }: ProjectDetailHeaderProps) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 pb-6">
+    <div className="flex flex-wrap items-start justify-between gap-4 border-b qt-border-default/60 pb-6">
       <div className="flex items-center gap-4">
         <Link href="/prospero" className="qt-text-primary hover:underline text-sm">
           &larr; Projects
@@ -54,7 +54,7 @@ export function ProjectDetailHeader({
           className="w-12 h-12 rounded-lg flex items-center justify-center text-xl"
           style={{ backgroundColor: project.color || 'var(--muted)' }}
         >
-          {project.icon || <FolderIcon className="w-6 h-6 text-muted-foreground" />}
+          {project.icon || <FolderIcon className="w-6 h-6 qt-text-secondary" />}
         </div>
         <div>
           {isEditing ? (
@@ -62,7 +62,7 @@ export function ProjectDetailHeader({
               type="text"
               value={editForm.name}
               onChange={(e) => onEditFormChange({ ...editForm, name: e.target.value })}
-              className="text-2xl font-semibold bg-transparent border-b border-primary focus:outline-none"
+              className="text-2xl font-semibold bg-transparent border-b qt-border-primary focus:outline-none"
             />
           ) : (
             <h1 className="text-2xl font-semibold">{project.name}</h1>
@@ -73,7 +73,7 @@ export function ProjectDetailHeader({
               value={editForm.description}
               onChange={(e) => onEditFormChange({ ...editForm, description: e.target.value })}
               placeholder="Add a description..."
-              className="qt-text-small bg-transparent border-b border-border focus:outline-none w-full"
+              className="qt-text-small bg-transparent border-b qt-border-default focus:outline-none w-full"
             />
           ) : (
             project.description && <p className="qt-text-small">{project.description}</p>
@@ -83,7 +83,7 @@ export function ProjectDetailHeader({
       <div className="flex gap-2">
         <Link
           href={`/salon/new?projectId=${project.id}`}
-          className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold text-success-foreground shadow hover:bg-success/90"
+          className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-success-foreground shadow hover:qt-bg-success/90"
         >
           <PlusIcon className="w-4 h-4" />
           New Chat
@@ -92,13 +92,13 @@ export function ProjectDetailHeader({
           <>
             <button
               onClick={onCancelEdit}
-              className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm shadow-sm hover:bg-muted"
+              className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-shadow-sm hover:qt-bg-muted"
             >
               Cancel
             </button>
             <button
               onClick={onSave}
-              className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90"
+              className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90"
             >
               Save
             </button>
@@ -106,7 +106,7 @@ export function ProjectDetailHeader({
         ) : (
           <button
             onClick={onEditClick}
-            className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm shadow-sm hover:bg-muted"
+            className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-shadow-sm hover:qt-bg-muted"
           >
             Edit
           </button>

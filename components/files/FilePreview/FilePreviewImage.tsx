@@ -35,12 +35,12 @@ export default function FilePreviewImage({
     <div className="flex items-center justify-center w-full h-full min-h-[300px]">
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="animate-pulse text-muted-foreground">Loading image...</div>
+          <div className="animate-pulse qt-text-secondary">Loading image...</div>
         </div>
       )}
 
       {error ? (
-        <div className="text-center text-muted-foreground">
+        <div className="text-center qt-text-secondary">
           <div className="text-4xl mb-2">{'\u{1F5BC}\uFE0F'}</div>
           <p>{error}</p>
         </div>

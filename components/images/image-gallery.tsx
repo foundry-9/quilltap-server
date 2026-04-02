@@ -95,7 +95,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
   if (loading) {
     return (
       <div className={`flex items-center justify-center py-12 ${className}`}>
-        <div className="text-muted-foreground">Loading images...</div>
+        <div className="qt-text-secondary">Loading images...</div>
       </div>
     );
   }
@@ -103,7 +103,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
   if (error) {
     return (
       <div className={`flex items-center justify-center py-12 ${className}`}>
-        <div className="text-destructive">Error: {error}</div>
+        <div className="qt-text-destructive">Error: {error}</div>
       </div>
     );
   }
@@ -111,7 +111,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
   if (images.length === 0) {
     return (
       <div className={`flex items-center justify-center py-12 ${className}`}>
-        <div className="text-muted-foreground">No images found</div>
+        <div className="qt-text-secondary">No images found</div>
       </div>
     );
   }
@@ -136,7 +136,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
           } ${onSelectImage ? 'cursor-pointer' : ''}`}
           onClick={() => onSelectImage?.(image)}
         >
-          <div className="aspect-square relative bg-muted">
+          <div className="aspect-square relative qt-bg-muted">
             {missingImages.has(image.id) ? (
               <DeletedImagePlaceholder
                 imageId={image.id}
@@ -172,7 +172,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
                   e.stopPropagation()
                   handleDeleteImage(image.id)
                 }}
-                className="absolute bottom-2 right-2 bg-destructive text-destructive-foreground p-2 rounded-full hover:bg-destructive/90 transition-colors"
+                className="absolute bottom-2 right-2 bg-destructive qt-text-destructive-foreground p-2 rounded-full hover:qt-bg-destructive/90 transition-colors"
                 title="Delete image"
                 aria-label="Delete image"
               >

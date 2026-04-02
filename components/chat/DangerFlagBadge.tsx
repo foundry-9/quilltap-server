@@ -37,8 +37,8 @@ export function DangerFlagBadge({ dangerFlags, onOverride }: DangerFlagBadgeProp
           key={`${flag.category}-${idx}`}
           className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
             flag.userOverridden
-              ? 'bg-muted text-muted-foreground line-through'
-              : 'qt-bg-warning/10 text-warning'
+              ? 'qt-bg-muted qt-text-secondary line-through'
+              : 'qt-bg-warning/10 qt-text-warning'
           }`}
           title={`Score: ${flag.score.toFixed(2)}${flag.wasRerouted ? ' (rerouted)' : ''}`}
         >
@@ -48,7 +48,7 @@ export function DangerFlagBadge({ dangerFlags, onOverride }: DangerFlagBadgeProp
 
       {wasRerouted && reroutedInfo && (
         <span
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs qt-bg-info/10 text-info"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs qt-bg-info/10 qt-text-info"
           title={`Rerouted to ${reroutedInfo.reroutedProvider}/${reroutedInfo.reroutedModel}`}
         >
           Rerouted
@@ -58,7 +58,7 @@ export function DangerFlagBadge({ dangerFlags, onOverride }: DangerFlagBadgeProp
       {!allOverridden && onOverride && (
         <button
           onClick={onOverride}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-muted text-muted-foreground hover:bg-accent cursor-pointer"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs qt-bg-muted qt-text-secondary hover:bg-accent cursor-pointer"
           title="Mark as not dangerous"
         >
           Not Dangerous

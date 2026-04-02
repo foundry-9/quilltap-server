@@ -105,7 +105,7 @@ export function ProgressBar({ currentStep, startedAt }: ProgressBarProps) {
   return (
     <div className="flex flex-col gap-2">
       {/* Three-segment bar */}
-      <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-muted">
+      <div className="flex gap-1 h-2 rounded-full overflow-hidden qt-bg-muted">
         {SEGMENTS.map((seg) => {
           const fill = fillPercents[seg.key] ?? 0;
           const segIndex = getStepIndex(seg.key);
@@ -115,7 +115,7 @@ export function ProgressBar({ currentStep, startedAt }: ProgressBarProps) {
           return (
             <div
               key={seg.key}
-              className="flex-1 rounded-full overflow-hidden bg-muted"
+              className="flex-1 rounded-full overflow-hidden qt-bg-muted"
               title={seg.label}
             >
               <div
@@ -140,7 +140,7 @@ export function ProgressBar({ currentStep, startedAt }: ProgressBarProps) {
               <span
                 key={seg.key}
                 className={`text-[10px] ${
-                  isActive ? 'text-primary font-medium' : isDone ? 'qt-text-success' : 'text-muted-foreground'
+                  isActive ? 'text-primary font-medium' : isDone ? 'qt-text-success' : 'qt-text-secondary'
                 }`}
               >
                 {seg.label}
@@ -149,7 +149,7 @@ export function ProgressBar({ currentStep, startedAt }: ProgressBarProps) {
           })}
         </div>
         {startedAt && (
-          <span className="text-[10px] text-muted-foreground tabular-nums">
+          <span className="text-[10px] qt-text-secondary tabular-nums">
             {formatElapsed(elapsed)}
           </span>
         )}

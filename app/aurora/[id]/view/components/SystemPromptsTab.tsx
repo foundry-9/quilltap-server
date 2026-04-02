@@ -46,8 +46,8 @@ export function SystemPromptsTab({
               key={prompt.id}
               className={`rounded-lg border p-4 ${
                 prompt.isDefault
-                  ? 'border-primary/40 bg-primary/5'
-                  : 'border-border bg-card'
+                  ? 'qt-border-primary/40 qt-bg-primary/5'
+                  : 'qt-border-default qt-bg-card'
               }`}
             >
               <div className="flex items-center gap-2 mb-3">
@@ -58,7 +58,7 @@ export function SystemPromptsTab({
                   </span>
                 )}
               </div>
-              <pre className="overflow-hidden rounded-md bg-muted/80 p-4 text-sm text-foreground">
+              <pre className="overflow-hidden rounded-md qt-bg-muted/80 p-4 text-sm text-foreground">
                 <code className="text-sm whitespace-pre-wrap break-words">
                   <TemplateDisplay
                     content={prompt.content}
@@ -71,8 +71,8 @@ export function SystemPromptsTab({
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-border bg-muted/30 p-8 text-center">
-          <svg className="mx-auto h-12 w-12 text-muted-foreground/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="rounded-lg border border-dashed qt-border-default qt-bg-muted/30 p-8 text-center">
+          <svg className="mx-auto h-12 w-12 qt-text-secondary/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <p className="mt-4 qt-text-small">

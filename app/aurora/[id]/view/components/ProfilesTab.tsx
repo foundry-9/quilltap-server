@@ -64,7 +64,7 @@ export function ProfilesTab({
   return (
     <div className="space-y-8">
       {/* Connection Profile Section */}
-      <div className="character-section-card rounded-lg border border-border bg-card p-6">
+      <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
         <h2 className="text-lg font-semibold text-foreground mb-2">
           Default Connection Profile
         </h2>
@@ -80,7 +80,7 @@ export function ProfilesTab({
             }
             onChange={(e) => onConnectionProfileChange(e.target.value)}
             disabled={savingConnectionProfile}
-            className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            className="flex-1 rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           >
             <option value="">No default profile</option>
             <option value={USER_CONTROLLED_PROFILE_ID}>User Acts As Character</option>
@@ -98,14 +98,14 @@ export function ProfilesTab({
           )}
         </div>
         {profiles.length === 0 && (
-          <p className="mt-2 text-sm text-warning">
+          <p className="mt-2 text-sm qt-text-warning">
             No connection profiles available. <Link href="/settings?tab=providers" className="underline hover:no-underline">Create one in AI Providers</Link>.
           </p>
         )}
       </div>
 
       {/* Default Partner Section */}
-      <div className={`character-section-card rounded-lg border border-border bg-card p-6 ${isUserControlled ? 'opacity-50' : ''}`}>
+      <div className={`character-section-card rounded-lg border qt-border-default qt-bg-card p-6 ${isUserControlled ? 'opacity-50' : ''}`}>
         <h2 className="text-lg font-semibold text-foreground mb-2">
           Default Conversation Partner
         </h2>
@@ -119,7 +119,7 @@ export function ProfilesTab({
             value={defaultPartnerId}
             onChange={(e) => onPartnerChange(e.target.value)}
             disabled={savingPartner || isUserControlled}
-            className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            className="flex-1 rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           >
             <option value="">No default partner</option>
             {userControlledCharacters
@@ -138,14 +138,14 @@ export function ProfilesTab({
           )}
         </div>
         {!isUserControlled && userControlledCharacters.filter(c => c.id !== characterId).length === 0 && (
-          <p className="mt-2 text-sm text-warning">
+          <p className="mt-2 text-sm qt-text-warning">
             No user-controlled characters available. <Link href="/aurora/new" className="underline hover:no-underline">Create one</Link> or set an existing character to &quot;User Acts As Character&quot;.
           </p>
         )}
       </div>
 
       {/* Image Profile Section */}
-      <div className="character-section-card rounded-lg border border-border bg-card p-6">
+      <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
         <h2 className="text-lg font-semibold text-foreground mb-2">
           Image Generation Profile
         </h2>
@@ -172,7 +172,7 @@ export function ProfilesTab({
 
       {/* Default System Prompt Section - only show if more than one prompt */}
       {character.systemPrompts && character.systemPrompts.length > 1 && (
-        <div className="character-section-card rounded-lg border border-border bg-card p-6">
+        <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
           <h2 className="text-lg font-semibold text-foreground mb-2">
             Default System Prompt
           </h2>
@@ -184,7 +184,7 @@ export function ProfilesTab({
               value={character.defaultSystemPromptId || ''}
               onChange={(e) => onDefaultSystemPromptChange(e.target.value || null)}
               disabled={savingDefaultSystemPrompt}
-              className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+              className="flex-1 rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
             >
               <option value="">Use first prompt marked as default</option>
               {character.systemPrompts.map((prompt) => (
@@ -205,7 +205,7 @@ export function ProfilesTab({
 
       {/* Default Scenario Section - only show if more than one scenario */}
       {character.scenarios && character.scenarios.length > 1 && (
-        <div className="character-section-card rounded-lg border border-border bg-card p-6">
+        <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
           <h2 className="text-lg font-semibold text-foreground mb-2">
             Default Scenario
           </h2>
@@ -217,7 +217,7 @@ export function ProfilesTab({
               value={character.defaultScenarioId || ''}
               onChange={(e) => onDefaultScenarioChange(e.target.value || null)}
               disabled={savingDefaultScenario}
-              className="flex-1 rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+              className="flex-1 rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
             >
               <option value="">No default scenario</option>
               {character.scenarios.map((scenario) => (
@@ -237,7 +237,7 @@ export function ProfilesTab({
       )}
 
       {/* Agent Mode Section */}
-      <div className="character-section-card rounded-lg border border-border bg-card p-6">
+      <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
         <h2 className="text-lg font-semibold text-foreground mb-2">
           Agent Mode
         </h2>
@@ -253,7 +253,7 @@ export function ProfilesTab({
               onAgentModeChange(value === 'inherit' ? null : value === 'enabled')
             }}
             disabled={savingAgentMode}
-            className="flex-1 max-w-xs rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            className="flex-1 max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           >
             <option value="inherit">Inherit from global settings</option>
             <option value="enabled">Enabled by default</option>
@@ -269,7 +269,7 @@ export function ProfilesTab({
       </div>
 
       {/* Help Tools Section */}
-      <div className="character-section-card rounded-lg border border-border bg-card p-6">
+      <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
         <h2 className="text-lg font-semibold text-foreground mb-2">
           Help Tools
         </h2>
@@ -285,7 +285,7 @@ export function ProfilesTab({
               onHelpToolsChange(value === 'inherit' ? null : value === 'enabled')
             }}
             disabled={savingHelpTools}
-            className="flex-1 max-w-xs rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            className="flex-1 max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           >
             <option value="inherit">Inherit from global settings (disabled)</option>
             <option value="enabled">Enabled</option>
@@ -301,7 +301,7 @@ export function ProfilesTab({
       </div>
 
       {/* Default Timestamp Settings Section */}
-      <div className="character-section-card rounded-lg border border-border bg-card p-6">
+      <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
         <h2 className="text-lg font-semibold text-foreground mb-2">
           Default Timestamp Settings
         </h2>

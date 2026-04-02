@@ -40,7 +40,7 @@ function TrashIcon({ className }: { className?: string }) {
 export function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
   return (
     <div
-      className="qt-entity-card cursor-pointer hover:border-primary/50 transition-colors"
+      className="qt-entity-card cursor-pointer hover:qt-border-primary/50 transition-colors"
       onClick={onClick}
     >
       <div className="flex items-start justify-between mb-4">
@@ -49,7 +49,7 @@ export function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
             className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
             style={{ backgroundColor: project.color || 'var(--muted)' }}
           >
-            {project.icon || <FolderIcon className="w-5 h-5 text-muted-foreground" />}
+            {project.icon || <FolderIcon className="w-5 h-5 qt-text-secondary" />}
           </div>
           <div>
             <h2 className="text-xl font-semibold text-foreground">{project.name}</h2>
@@ -67,13 +67,13 @@ export function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
       <div className="qt-entity-card-actions flex gap-2">
         <Link
           href={`/projects/${project.id}`}
-          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90"
+          className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-sm transition hover:qt-bg-primary/90"
         >
           Open
         </Link>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete() }}
-          className="qt-button-destructive shadow-sm"
+          className="qt-button-destructive qt-shadow-sm"
           title="Delete project"
         >
           <TrashIcon className="w-5 h-5" />

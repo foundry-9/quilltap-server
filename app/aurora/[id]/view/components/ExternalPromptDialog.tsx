@@ -163,11 +163,11 @@ export function ExternalPromptDialog({
   const estimatedChars = maxTokens * 4
   const canGenerate = connectionProfileId && systemPromptId && !generating
 
-  const selectClasses = 'w-full rounded-lg border border-border bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring'
+  const selectClasses = 'w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md md:max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-md md:max-w-lg rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col">
         <h3 className="mb-4 text-lg font-semibold flex-shrink-0">
           Generate External Prompt{characterName ? ` for ${characterName}` : ''}
         </h3>
@@ -217,7 +217,7 @@ export function ExternalPromptDialog({
                 ))}
               </select>
               {(!systemPrompts || systemPrompts.length === 0) && (
-                <p className="mt-1 text-xs text-destructive">
+                <p className="mt-1 text-xs qt-text-destructive">
                   This character has no system prompts. Add one first.
                 </p>
               )}
@@ -312,7 +312,7 @@ export function ExternalPromptDialog({
 
             {/* Error */}
             {error && (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <div className="rounded-lg border qt-border-destructive/50 qt-bg-destructive/10 px-3 py-2 text-sm qt-text-destructive">
                 {error}
               </div>
             )}
@@ -324,18 +324,18 @@ export function ExternalPromptDialog({
           <button
             onClick={onCancel}
             disabled={generating}
-            className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:bg-muted disabled:opacity-50"
+            className="rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleGenerate}
             disabled={!canGenerate}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-50"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90 disabled:opacity-50"
           >
             {generating ? (
               <span className="inline-flex items-center gap-2">
-                <span className="animate-spin h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full" />
+                <span className="animate-spin h-4 w-4 border-2 qt-border-primary-foreground border-t-transparent rounded-full" />
                 Generating...
               </span>
             ) : (

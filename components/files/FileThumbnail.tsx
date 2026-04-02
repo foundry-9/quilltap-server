@@ -123,7 +123,7 @@ export default function FileThumbnail({
   // Fallback icon display
   const renderFallbackIcon = () => (
     <div
-      className={`flex items-center justify-center bg-muted text-4xl ${className}`}
+      className={`flex items-center justify-center qt-bg-muted text-4xl ${className}`}
       style={{ width: size, height: size }}
     >
       {getFileIcon(mimeType)}
@@ -138,12 +138,12 @@ export default function FileThumbnail({
   return (
     <div
       ref={containerRef}
-      className={`relative overflow-hidden bg-muted ${className}`}
+      className={`relative overflow-hidden qt-bg-muted ${className}`}
       style={{ width: size, height: size }}
     >
       {/* Loading skeleton */}
       {status === 'loading' && (
-        <div className="absolute inset-0 animate-pulse bg-muted-foreground/20" />
+        <div className="absolute inset-0 animate-pulse qt-bg-muted-foreground/20" />
       )}
 
       {/* Thumbnail image */}
