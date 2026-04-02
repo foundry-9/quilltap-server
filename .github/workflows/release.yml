@@ -261,6 +261,59 @@ jobs:
             echo "Release type: prerelease (clean_tag=$CLEAN_TAG, on_release=$ON_RELEASE)"
           fi
 
+      - name: Build release notes
+        id: release-notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          IS_PRERELEASE="${{ steps.release-type.outputs.prerelease }}"
+          NOTES_FILE="docs/releases/${TAG}.md"
+
+          # Build the installation section
+          cat > /tmp/install-body.md <<INSTALL
+          ## Installation
+
+          ### Node.js (any platform)
+
+          \`\`\`bash
+          npm install -g quilltap
+          quilltap
+          \`\`\`
+
+          On first run, the CLI downloads the application files (~150-250 MB)
+          and caches them locally. Subsequent launches start instantly.
+
+          ### Docker
+
+          \`\`\`bash
+          docker pull foundry9/quilltap:${TAG}
+          \`\`\`
+
+          ### Desktop App
+
+          The Quilltap desktop app (Electron) is available from the
+          [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository.
+
+          The \`quilltap-linux-arm64.tar.gz\` and \`quilltap-linux-amd64.tar.gz\` rootfs
+          tarballs are used by the shell's Lima (macOS) and WSL2 (Windows) VM modes.
+
+          See the [README](https://github.com/foundry-9/quilltap#readme) for setup instructions.
+          INSTALL
+          sed -i 's/^          //' /tmp/install-body.md
+
+          if [[ -f "$NOTES_FILE" ]]; then
+            # Strip YAML frontmatter (everything between the first two --- lines)
+            sed '1{/^---$/!q}; 1,/^---$/d' "$NOTES_FILE" > /tmp/release-body.md
+            echo "" >> /tmp/release-body.md
+            cat /tmp/install-body.md >> /tmp/release-body.md
+            echo "has_notes=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$IS_PRERELEASE" == "false" ]]; then
+            echo "::error::Production release requires release notes at ${NOTES_FILE}"
+            exit 1
+          else
+            cp /tmp/install-body.md /tmp/release-body.md
+            echo "has_notes=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
@@ -271,38 +324,6 @@ jobs:
           if [[ "${{ steps.release-type.outputs.prerelease }}" == "true" ]]; then
             PRERELEASE_FLAG="--prerelease"
           fi
-
-          cat > /tmp/release-body.md <<'BODY'
-          ## Installation
-
-          ### Node.js (any platform)
-
-          ```bash
-          npm install -g quilltap
-          quilltap
-          ```
-
-          On first run, the CLI downloads the application files (~150-250 MB)
-          and caches them locally. Subsequent launches start instantly.
-
-          ### Docker
-
-          ```bash
-          docker pull foundry9/quilltap:${TAG}
-          ```
-
-          ### Desktop App
-
-          The Quilltap desktop app (Electron) is available from the
-          [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository.
-
-          The `quilltap-linux-arm64.tar.gz` and `quilltap-linux-amd64.tar.gz` rootfs
-          tarballs are used by the shell's Lima (macOS) and WSL2 (Windows) VM modes.
-
-          See the [README](https://github.com/foundry-9/quilltap#readme) for setup instructions.
-          BODY
-
-          sed -i 's/^          //' /tmp/release-body.md
 
           ASSETS=(
             artifacts/rootfs-amd64/quilltap-linux-amd64.tar.gz
