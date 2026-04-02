@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- ci: release workflow puts Desktop App first in installation section and pins link to the quilltap-shell release that was current at build time
 - ci: release workflow now includes release notes from `docs/releases/{version}.md` in GitHub releases; production releases from the release branch require this file to exist
 - fix: `--qt-*` CSS variable defaults now apply to all themes via `[data-theme]` selector instead of `[data-theme="default"]` — fixes missing textarea padding, button styles, and other tokens on non-default themes after redundant declarations were stripped from bundled themes
 - refactor: strip redundant `--qt-*` CSS variables from all bundled themes — variables matching `_variables.css` defaults are removed so themes only declare overrides; reduces theme file sizes 6-34%; update `create-quilltap-theme` bundle template with complete variable reference (all ~250 `--qt-*` vars commented out with defaults)

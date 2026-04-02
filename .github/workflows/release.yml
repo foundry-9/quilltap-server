@@ -261,16 +261,41 @@ jobs:
             echo "Release type: prerelease (clean_tag=$CLEAN_TAG, on_release=$ON_RELEASE)"
           fi
 
+      - name: Resolve latest quilltap-shell release
+        id: shell-release
+        env:
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+        run: |
+          SHELL_TAG=$(gh release view --repo foundry-9/quilltap-shell --json tagName -q .tagName 2>/dev/null || echo "")
+          if [[ -z "$SHELL_TAG" ]]; then
+            echo "shell_url=https://github.com/foundry-9/quilltap-shell/releases" >> "$GITHUB_OUTPUT"
+            echo "shell_label=quilltap-shell releases" >> "$GITHUB_OUTPUT"
+          else
+            echo "shell_url=https://github.com/foundry-9/quilltap-shell/releases/tag/${SHELL_TAG}" >> "$GITHUB_OUTPUT"
+            echo "shell_label=quilltap-shell ${SHELL_TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build release notes
         id: release-notes
         run: |
           TAG="${GITHUB_REF_NAME}"
           IS_PRERELEASE="${{ steps.release-type.outputs.prerelease }}"
           NOTES_FILE="docs/releases/${TAG}.md"
+          SHELL_URL="${{ steps.shell-release.outputs.shell_url }}"
+          SHELL_LABEL="${{ steps.shell-release.outputs.shell_label }}"
 
           # Build the installation section
           cat > /tmp/install-body.md <<INSTALL
           ## Installation
+
+          ### Desktop App (recommended)
+
+          The Quilltap desktop app (Electron) is available from
+          [${SHELL_LABEL}](${SHELL_URL}).
+          Download the release for your platform (macOS, Windows, or Linux).
+
+          The \`quilltap-linux-arm64.tar.gz\` and \`quilltap-linux-amd64.tar.gz\` rootfs
+          tarballs attached to this release are used by the shell's Lima (macOS) and WSL2 (Windows) VM modes.
 
           ### Node.js (any platform)
 
@@ -287,14 +312,6 @@ jobs:
           \`\`\`bash
           docker pull foundry9/quilltap:${TAG}
           \`\`\`
-
-          ### Desktop App
-
-          The Quilltap desktop app (Electron) is available from the
-          [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository.
-
-          The \`quilltap-linux-arm64.tar.gz\` and \`quilltap-linux-amd64.tar.gz\` rootfs
-          tarballs are used by the shell's Lima (macOS) and WSL2 (Windows) VM modes.
 
           See the [README](https://github.com/foundry-9/quilltap#readme) for setup instructions.
           INSTALL
