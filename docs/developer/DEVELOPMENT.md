@@ -39,12 +39,11 @@ quilltap/
 ├── lib/                      # Domain logic and utilities
 │   ├── auth/                 # Single-user mode and session management
 │   ├── chat/                 # Chat logic (context-manager, turn-manager, tool execution)
-│   ├── file-storage/         # File storage manager (local, S3, plugin backends)
+│   ├── file-storage/         # File storage manager (local filesystem)
 │   ├── llm/                  # LLM utilities (formatting, pricing, streaming)
 │   ├── memory/               # Memory and embedding logic
 │   ├── paths.ts              # Platform-aware data directory resolution
 │   ├── plugins/              # Plugin registry and loader
-│   ├── s3/                   # S3 storage utilities
 │   ├── sillytavern/          # SillyTavern import/export
 │   ├── tools/                # Tool definitions (image generation, web search, memory)
 │   └── backup/               # Backup and restore logic
@@ -88,7 +87,7 @@ quilltap/
 
 - **Node.js 22+**
 - **SQLite with SQLCipher** (automatic with better-sqlite3-multiple-ciphers) — note that the standard `sqlite3` CLI cannot open Quilltap's encrypted database files; use `npx quilltap db` for direct database access
-- **File storage**: Local filesystem (default) or optionally S3-compatible storage
+- **File storage**: Local filesystem
 
 ### Running Locally
 
@@ -229,27 +228,20 @@ Override with `QUILLTAP_DATA_DIR` (non-Docker environments).
 
 ### File Storage
 
-Files are stored on the local filesystem by default, with optional S3-compatible storage:
-
-**Local Filesystem (Default)**:
+Files are stored on the local filesystem:
 
 - Files stored in platform-specific data directory (e.g., `~/.quilltap/files/` on Linux)
 - No additional configuration required
-
-**S3-Compatible Storage (Optional)**:
-
-- Configure via mount points in Settings > Storage
-- Supports AWS S3, MinIO, Cloudflare R2, etc.
 
 ## Plugin Development
 
 Plugins are self-contained modules in `plugins/src/` that provide:
 
 - **LLM Providers** - Connect to AI services (OpenAI, Anthropic, Google, etc.)
-- **Storage Backends** - S3-compatible file storage
 - **Themes** - Visual theme packs (deprecated as plugins; use `.qtap-theme` bundles instead)
 - **Roleplay Templates** - Message formatting templates
 - **Tool Providers** - Custom LLM tools (MCP connector, etc.)
+- **System Prompts** - Custom system prompt templates for characters
 
 See [plugins/README.md](plugins/README.md) for the plugin developer guide.
 
@@ -307,8 +299,7 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 9. If we updated any packages (in `packages/`), make sure that those are published to npmjs and properly installed in any NPM package.json files that exist throughout the application, including other packages, plugins, and the primary one at the root level
 10. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
 11. Make sure that lint/test/build in Github Actions are working
-12. Remove all log.debug calls made during this development cycle (i.e., since the last release)
-13. Check the following Markdown files to be sure they are up-to-date:
+12. Check the following Markdown files to be sure they are up-to-date:
     - [README](../../README.md)
     - [Changelog](../CHANGELOG.md)
     - [API Documentation](API.md)

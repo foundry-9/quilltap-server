@@ -59,18 +59,18 @@ There are several paths to the same destination. Which one you choose depends on
 
 That second question deserves a moment of your attention. As AI models grow more capable — reading files, writing code, using tools — the question of *where* that code executes becomes important. A virtual machine is a genuine locked room: if an AI-generated script misbehaves, it misbehaves inside a contained environment with no access to your host system. Docker provides a similar boundary, though somewhat thinner. Running directly on your machine provides no boundary at all.
 
-| | Docker | Node.js (`npx`) |
-| --- | --- | --- |
-| **You install** | Docker Desktop or Docker Engine | Node.js 22+ |
-| **First launch** | Fast — pulls the container image | Fast — downloads app files, runs directly |
-| **AI sandbox** | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
-| **Best for** | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
+| | Desktop App | Docker | Node.js (`npx`) |
+| --- | --- | --- | --- |
+| **You install** | Download from GitHub | Docker Desktop or Docker Engine | Node.js 22+ |
+| **First launch** | Double-click the app | Fast — pulls the container image | Fast — downloads app files, runs directly |
+| **AI sandbox** | ✅ VM isolation (Lima/WSL2) or container | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
+| **Best for** | Most users — native window, managed updates | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
 
-> **Our recommendation:** For most people, Docker provides the best balance of convenience and security. If you'd prefer a desktop application with a native window, see the [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository. If you have Node.js installed and simply want to kick the tires, `npx quilltap` will have you running in under a minute.
+> **Our recommendation:** The Desktop App provides the best experience for most people — a native window with managed updates and optional VM isolation for AI sandboxing. If you're deploying to a server or already live in Docker, the container image is excellent. If you have Node.js and simply want to kick the tires, `npx quilltap` will have you running in under a minute.
 
 ### Desktop App
 
-The Quilltap desktop app (Electron) is available from the [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository.
+The Quilltap desktop app (Electron) is available from the [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository. It provides a native window on macOS, Windows, and Linux, with automatic updates, instance management, and optional VM-based isolation (Lima on macOS, WSL2 on Windows) for sandboxed AI execution.
 
 ### Docker
 
@@ -153,6 +153,8 @@ Connect to any major AI provider — or several at once. Quilltap uses a three-m
 | **OpenRouter** | 200+ models through a unified API with automatic pricing. |
 | **OpenAI-Compatible** | LM Studio, vLLM, Together AI, Groq, and any compatible endpoint. |
 
+Each connection profile is classified into a **model class** — Compact, Standard, Extended, or Deep — that defines its context window and output capacity. Don't know the right settings for your model? **Auto-configure** searches the web for your model's specifications, sends the results to your default LLM for analysis, and applies optimal settings automatically. Budget-driven **context compression** uses your profile's context window and output limits to intelligently compress conversation history and recalled memories when they approach capacity, rather than using arbitrary message counts.
+
 Agent Mode lets the AI use tools iteratively — web search, image generation, file management, memory search, and any MCP server you connect. The Run Tool feature lets you invoke any tool directly from the chat toolbar. The plugin system means additional providers and tools can be added without waiting for us.
 
 ### Writer's Workspace
@@ -165,7 +167,7 @@ Semantic search finds content by meaning across your entire project: not just th
 
 Create AI characters with personality, backstory, system prompts, pronouns, aliases, and physical descriptions. Each character maintains their own long-term memory — they remember your conversations, your preferences, your history together. When you come back after a week away, they know what you talked about last time. In multi-character chats, characters also form memories about each other — learning names, personalities, and shared experiences the way people do.
 
-Characters aren't limited to a single personality template. Each can have multiple named system prompts and scenarios, letting you shift context — the same companion in different settings, or different facets of the same relationship. The AI Character Import wizard can generate a complete character from source material (wiki pages, documents, freeform text).
+Characters aren't limited to a single personality template. Each can have multiple named system prompts and scenarios, letting you shift context — the same companion in different settings, or different facets of the same relationship. The AI Character Import wizard can generate a complete character from source material (wiki pages, documents, freeform text). The **Non-Quilltap Prompt generator** exports any character as a standalone system prompt for use in other AI tools — taking your character with you when you need to.
 
 The Concierge system ensures that your conversations are never arbitrarily refused. Instead of blocking content, it routes intelligently — detecting content type and, when configured, directing requests to providers that can handle them. You set the boundaries. The software respects them.
 
