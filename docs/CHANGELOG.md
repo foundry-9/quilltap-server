@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- docs: add 4.0.0 release notes
 - docs: update README with Desktop App–first installation, model classes, auto-configure, budget compression, Non-Quilltap Prompt generator; update API.md to v4.0-dev with 20 new route groups; remove stale S3/mount points from DEVELOPMENT.md
 - fix: add missing `scenarioText`, `modelClass`, `maxContext`, `maxTokens` fields to `.qtap` export schema; bump `@quilltap/theme-storybook` to 1.0.28 for chat message width variable update
 - chore: remove 8 development `logger.debug` calls from 4 files (chats route, characters repository, prompt-templates repository, auto-configure service)
