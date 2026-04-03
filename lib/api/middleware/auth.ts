@@ -6,10 +6,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { getServerSession, type ExtendedSession } from '@/lib/auth/session';
 import { getRepositoriesSafe, type RepositoryContainer } from '@/lib/repositories/factory';
 import { startupState } from '@/lib/startup/startup-state';
 import { logger } from '@/lib/logger';
+import { validationError, serverError } from '@/lib/api/responses';
 import type { User } from '@/lib/schemas/types';
 
 const contextLogger = logger.child({ module: 'api-context-middleware' });
@@ -150,9 +152,31 @@ export async function withContextParams<P extends Record<string, string | string
 }
 
 /**
+ * Catch handler errors and return appropriate responses.
+ * ZodErrors become 400 validation errors; everything else becomes 500.
+ */
+async function handleRouteError(
+  request: NextRequest,
+  handlerFn: () => Promise<NextResponse>
+): Promise<NextResponse> {
+  try {
+    return await handlerFn();
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return validationError(error);
+    }
+    const method = request.method;
+    const url = new URL(request.url).pathname;
+    contextLogger.error(`[${method} ${url}] Unhandled route error`, {}, error instanceof Error ? error : undefined);
+    return serverError('Internal server error');
+  }
+}
+
+/**
  * Higher-order function to create a route handler with context
  *
  * Creates a complete route handler that can be directly exported.
+ * Automatically catches ZodErrors (returning 400) and unhandled errors (returning 500).
  */
 export function createContextHandler(
   handler: (
@@ -188,7 +212,7 @@ export function createContextHandler(
       return NextResponse.json({ error: 'User not found' }, { status: 500 });
     }
 
-    return handler(request, { user, repos, session });
+    return handleRouteError(request, () => handler(request, { user, repos, session }));
   };
 }
 
@@ -237,7 +261,7 @@ export function createContextParamsHandler<P extends Record<string, string | str
       return NextResponse.json({ error: 'User not found' }, { status: 500 });
     }
 
-    return handler(request, { user, repos, session }, params);
+    return handleRouteError(request, () => handler(request, { user, repos, session }, params));
   };
 }
 

@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, serverError, validationError } from '@/lib/api/responses';
+import { notFound, serverError } from '@/lib/api/responses';
 import { scheduleRefit, handleEntityDeletion } from '@/lib/embedding/embedding-job-scheduler';
 
 // Validation schema for updating a memory
@@ -75,48 +75,40 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
  */
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: memoryId }) => {
-    try {// Find the memory
-      const existingMemory = await repos.memories.findById(memoryId);
-      if (!existingMemory) {
-        return notFound('Memory');
-      }
-
-      // Verify ownership via character
-      const character = await repos.characters.findById(existingMemory.characterId);
-      if (!character) {
-        return notFound('Memory');
-      }
-
-      const body = await req.json();
-      const validatedData = updateMemorySchema.parse(body);
-
-      const memory = await repos.memories.updateForCharacter(
-        existingMemory.characterId,
-        memoryId,
-        validatedData
-      );
-
-      if (!memory) {
-        return notFound('Memory');
-      }
-
-      // Schedule refit for BUILTIN profiles (non-blocking)
-      scheduleRefit(user.id).catch((err: Error) =>
-        logger.warn('[Memories API v1] Failed to schedule refit after update', {
-          memoryId,
-          error: err.message,
-        })
-      );
-
-      return NextResponse.json({ memory });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return validationError(error);
-      }
-
-      logger.error('[Memories API v1] Error updating memory', {}, error instanceof Error ? error : undefined);
-      return serverError('Failed to update memory');
+    // Find the memory
+    const existingMemory = await repos.memories.findById(memoryId);
+    if (!existingMemory) {
+      return notFound('Memory');
     }
+
+    // Verify ownership via character
+    const character = await repos.characters.findById(existingMemory.characterId);
+    if (!character) {
+      return notFound('Memory');
+    }
+
+    const body = await req.json();
+    const validatedData = updateMemorySchema.parse(body);
+
+    const memory = await repos.memories.updateForCharacter(
+      existingMemory.characterId,
+      memoryId,
+      validatedData
+    );
+
+    if (!memory) {
+      return notFound('Memory');
+    }
+
+    // Schedule refit for BUILTIN profiles (non-blocking)
+    scheduleRefit(user.id).catch((err: Error) =>
+      logger.warn('[Memories API v1] Failed to schedule refit after update', {
+        memoryId,
+        error: err.message,
+      })
+    );
+
+    return NextResponse.json({ memory });
   }
 );
 

@@ -18,7 +18,7 @@ import { requiresBaseUrl, testProviderConnection, validateProviderConfig } from 
 import { ProviderEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { badRequest, serverError, notFound, validationError, successResponse, created } from '@/lib/api/responses';
+import { badRequest, serverError, notFound, successResponse, created } from '@/lib/api/responses';
 import { isValidModelClassName } from '@/lib/llm/model-classes';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
 
@@ -268,73 +268,64 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 async function handleTestConnection(req: NextRequest, context: AuthenticatedContext) {
   const { user, repos } = context;
 
-  try {
-    const body = await req.json();
-    const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body);// Get API key if provided
-    let decryptedKey = '';
-    if (apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId);
+  const body = await req.json();
+  const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body);// Get API key if provided
+  let decryptedKey = '';
+  if (apiKeyId) {
+    const apiKey = await repos.connections.findApiKeyById(apiKeyId);
 
-      if (!apiKey) {
-        return notFound('API key');
-      }
-
-      decryptedKey = apiKey.key_value;
+    if (!apiKey) {
+      return notFound('API key');
     }
 
-    // Validate configuration
-    const configValidation = validateProviderConfig(provider, {
-      apiKey: decryptedKey,
-      baseUrl,
-    });
+    decryptedKey = apiKey.key_value;
+  }
 
-    if (!configValidation.valid) {
-      logger.warn('[Connection Profiles v1] Config validation failed', {
-        provider,
-        errors: configValidation.errors,
-      });
-      return successResponse(
-        {
-          valid: false,
-          provider,
-          error: configValidation.errors[0] || 'Configuration validation failed',
-        },
-        400
-      );
-    }
+  // Validate configuration
+  const configValidation = validateProviderConfig(provider, {
+    apiKey: decryptedKey,
+    baseUrl,
+  });
 
-    // Test the connection
-    const result = await testProviderConnection(provider, decryptedKey, baseUrl);
-
-    if (result.valid) {
-      logger.info('[Connection Profiles v1] Connection test successful', { provider });
-      return successResponse({
-        valid: true,
-        provider,
-        message: `Successfully connected to ${provider}`,
-      });
-    }
-
-    logger.warn('[Connection Profiles v1] Connection test failed', {
+  if (!configValidation.valid) {
+    logger.warn('[Connection Profiles v1] Config validation failed', {
       provider,
-      error: result.error,
+      errors: configValidation.errors,
     });
     return successResponse(
       {
         valid: false,
         provider,
-        error: result.error,
+        error: configValidation.errors[0] || 'Configuration validation failed',
       },
       400
     );
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Connection Profiles v1] Error testing connection', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to test connection');
   }
+
+  // Test the connection
+  const result = await testProviderConnection(provider, decryptedKey, baseUrl);
+
+  if (result.valid) {
+    logger.info('[Connection Profiles v1] Connection test successful', { provider });
+    return successResponse({
+      valid: true,
+      provider,
+      message: `Successfully connected to ${provider}`,
+    });
+  }
+
+  logger.warn('[Connection Profiles v1] Connection test failed', {
+    provider,
+    error: result.error,
+  });
+  return successResponse(
+    {
+      valid: false,
+      provider,
+      error: result.error,
+    },
+    400
+  );
 }
 
 /**
@@ -343,80 +334,51 @@ async function handleTestConnection(req: NextRequest, context: AuthenticatedCont
 async function handleTestMessage(req: NextRequest, context: AuthenticatedContext) {
   const { user, repos } = context;
 
-  try {
-    const body = await req.json();
-    const { provider, apiKeyId, baseUrl, modelName, parameters = {} } = testMessageSchema.parse(body);
+  const body = await req.json();
+  const { provider, apiKeyId, baseUrl, modelName, parameters = {} } = testMessageSchema.parse(body);
 
-    // Get API key if provided
-    let decryptedKey = '';
-    if (apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId);
+  // Get API key if provided
+  let decryptedKey = '';
+  if (apiKeyId) {
+    const apiKey = await repos.connections.findApiKeyById(apiKeyId);
 
-      if (!apiKey) {
-        return notFound('API key');
-      }
-
-      decryptedKey = apiKey.key_value;
+    if (!apiKey) {
+      return notFound('API key');
     }
 
-    // Validate configuration
-    const configValidation = validateProviderConfig(provider, {
-      apiKey: decryptedKey,
-      baseUrl,
-    });
-    if (!configValidation.valid) {
-      return badRequest(configValidation.errors[0]);
-    }
+    decryptedKey = apiKey.key_value;
+  }
 
-    // Create provider instance
-    const llmProvider = await createLLMProvider(provider, baseUrl);
+  // Validate configuration
+  const configValidation = validateProviderConfig(provider, {
+    apiKey: decryptedKey,
+    baseUrl,
+  });
+  if (!configValidation.valid) {
+    return badRequest(configValidation.errors[0]);
+  }
 
-    // Send test message
-    const testPrompt = 'Hello! Please respond with a brief greeting to confirm the connection is working.';
+  // Create provider instance
+  const llmProvider = await createLLMProvider(provider, baseUrl);
 
-    const requestParams = {
-      model: modelName,
-      messages: [
-        {
-          role: 'user' as const,
-          content: testPrompt,
-        },
-      ],
-      temperature: parameters.temperature,
-      maxTokens: parameters.max_tokens || 50,
-      topP: parameters.top_p,
-    };try {
-      const response = await llmProvider.sendMessage(requestParams, decryptedKey);
+  // Send test message
+  const testPrompt = 'Hello! Please respond with a brief greeting to confirm the connection is working.';
 
-      if (!response) {
-        return successResponse(
-          {
-            success: false,
-            provider,
-            error: 'No response received from model',
-          },
-          500
-        );
-      }
+  const requestParams = {
+    model: modelName,
+    messages: [
+      {
+        role: 'user' as const,
+        content: testPrompt,
+      },
+    ],
+    temperature: parameters.temperature,
+    maxTokens: parameters.max_tokens || 50,
+    topP: parameters.top_p,
+  };try {
+    const response = await llmProvider.sendMessage(requestParams, decryptedKey);
 
-      if (response.content !== undefined && response.content !== null) {
-        const preview = response.content.substring(0, 100);
-        const isTruncated = response.content.length > 100;
-        const suffix = isTruncated ? '...' : '';
-        const message =
-          preview.length === 0
-            ? 'Test message successful! Model responded but returned empty content.'
-            : `Test message successful! Model responded: "${preview}${suffix}"`;
-
-        return successResponse({
-          success: true,
-          provider,
-          modelName,
-          message,
-          responsePreview: response.content.substring(0, 200),
-        });
-      }
-
+    if (!response) {
       return successResponse(
         {
           success: false,
@@ -425,22 +387,42 @@ async function handleTestMessage(req: NextRequest, context: AuthenticatedContext
         },
         500
       );
-    } catch (error) {return successResponse(
-        {
-          success: false,
-          provider,
-          error: error instanceof Error ? error.message : 'Failed to send test message',
-        },
-        500
-      );
-    }
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
     }
 
-    logger.error('[Connection Profiles v1] Error in test message', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to test message');
+    if (response.content !== undefined && response.content !== null) {
+      const preview = response.content.substring(0, 100);
+      const isTruncated = response.content.length > 100;
+      const suffix = isTruncated ? '...' : '';
+      const message =
+        preview.length === 0
+          ? 'Test message successful! Model responded but returned empty content.'
+          : `Test message successful! Model responded: "${preview}${suffix}"`;
+
+      return successResponse({
+        success: true,
+        provider,
+        modelName,
+        message,
+        responsePreview: response.content.substring(0, 200),
+      });
+    }
+
+    return successResponse(
+      {
+        success: false,
+        provider,
+        error: 'No response received from model',
+      },
+      500
+    );
+  } catch (error) {return successResponse(
+      {
+        success: false,
+        provider,
+        error: error instanceof Error ? error.message : 'Failed to send test message',
+      },
+      500
+    );
   }
 }
 

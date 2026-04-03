@@ -10,7 +10,7 @@ import { createAuthenticatedParamsHandler, type AuthenticatedContext } from '@/l
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import { handleHelpChatMessage } from '@/lib/services/help-chat/orchestrator.service';
-import { notFound, badRequest, serverError, validationError, successResponse } from '@/lib/api/responses';
+import { notFound, successResponse } from '@/lib/api/responses';
 
 const logger = createServiceLogger('HelpChatMessagesRoute');
 
@@ -64,49 +64,24 @@ async function handleSendMessage(
 ): Promise<NextResponse> {
   const { user, repos } = context;
 
-  try {
-    const result = await verifyHelpChat(id, context);
-    if (result instanceof NextResponse) return result;
+  const result = await verifyHelpChat(id, context);
+  if (result instanceof NextResponse) return result;
 
-    const body = await req.json();
-    const parsed = sendMessageSchema.parse(body);
+  const body = await req.json();
+  const parsed = sendMessageSchema.parse(body);
 
-    const stream = await handleHelpChatMessage(repos, id, user.id, {
-      content: parsed.content,
-      fileIds: parsed.fileIds,
-    });
+  const stream = await handleHelpChatMessage(repos, id, user.id, {
+    content: parsed.content,
+    fileIds: parsed.fileIds,
+  });
 
-    return new NextResponse(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    if (error instanceof Error) {
-      const message = error.message;
-
-      if (message === 'Chat not found' || message === 'Character not found' || message === 'Connection profile not found') {
-        return notFound(message);
-      }
-
-      if (message === 'No active help characters in chat' || message === 'No connection profile for help character' || message === 'No API key configured') {
-        return badRequest(message);
-      }
-    }
-
-    logger.error('Error sending help chat message', {
-      chatId: id,
-      userId: user.id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return serverError('Failed to send message');
-  }
+  return new NextResponse(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
 }
 
 /**
@@ -119,20 +94,12 @@ async function handleGetMessages(
 ): Promise<NextResponse> {
   const { repos } = context;
 
-  try {
-    const result = await verifyHelpChat(id, context);
-    if (result instanceof NextResponse) return result;
+  const result = await verifyHelpChat(id, context);
+  if (result instanceof NextResponse) return result;
 
-    const messages = await repos.chats.getMessages(id);
+  const messages = await repos.chats.getMessages(id);
 
-    return successResponse({ messages });
-  } catch (error) {
-    logger.error('Error loading help chat messages', {
-      chatId: id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return serverError('Failed to load messages');
-  }
+  return successResponse({ messages });
 }
 
 // ============================================================================

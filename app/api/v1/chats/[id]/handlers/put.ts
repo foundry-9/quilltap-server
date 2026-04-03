@@ -6,11 +6,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, validationError, serverError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import { chatUpdateRequestSchema } from '../schemas';
 import { processChatUpdates } from '../helpers';
 import { handleSetState } from '../actions';
@@ -32,42 +31,32 @@ export async function handlePut(
     return handleSetState(req, chatId, ctx);
   }
 
-  try {
-
-    const existingChat = await repos.chats.findById(chatId);
-    if (!existingChat) {
-      return notFound('Chat');
-    }
-
-    const body = await req.json();
-    const validatedData = chatUpdateRequestSchema.parse(body);
-
-    const result = await processChatUpdates(chatId, existingChat, validatedData, user.id, repos);
-
-    if ('error' in result) {
-      if (result.status === 404) {
-        return notFound('Resource');
-      } else if (result.status === 400) {
-        return badRequest(result.error);
-      }
-      return serverError(result.error);
-    }
-
-    const enrichedParticipants = await Promise.all(
-      result.chat.participants.map((p) => enrichParticipantDetail(p, repos))
-    );
-
-    logger.info('[Chats v1] Chat updated', { chatId });
-
-    return NextResponse.json({
-      chat: { ...result.chat, participants: enrichedParticipants },
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Chats v1] Error updating chat', { chatId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to update chat');
+  const existingChat = await repos.chats.findById(chatId);
+  if (!existingChat) {
+    return notFound('Chat');
   }
+
+  const body = await req.json();
+  const validatedData = chatUpdateRequestSchema.parse(body);
+
+  const result = await processChatUpdates(chatId, existingChat, validatedData, user.id, repos);
+
+  if ('error' in result) {
+    if (result.status === 404) {
+      return notFound('Resource');
+    } else if (result.status === 400) {
+      return badRequest(result.error);
+    }
+    return serverError(result.error);
+  }
+
+  const enrichedParticipants = await Promise.all(
+    result.chat.participants.map((p) => enrichParticipantDetail(p, repos))
+  );
+
+  logger.info('[Chats v1] Chat updated', { chatId });
+
+  return NextResponse.json({
+    chat: { ...result.chat, participants: enrichedParticipants },
+  });
 }

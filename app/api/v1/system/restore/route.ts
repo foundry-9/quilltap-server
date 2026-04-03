@@ -18,8 +18,7 @@ import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { restore, previewRestore } from '@/lib/backup/restore-service';
 import { logger } from '@/lib/logger';
-import { z } from 'zod';
-import { badRequest, serverError, validationError } from '@/lib/api/responses';
+import { badRequest, serverError } from '@/lib/api/responses';
 
 // Extend timeout for restore operations
 export const maxDuration = 300; // 5 minutes
@@ -236,13 +235,6 @@ async function handleRestore(req: NextRequest, userId: string): Promise<NextResp
       success: true,
       summary,
     });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[System Restore v1] Error restoring backup', { uploadId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to restore backup');
   } finally {
     await removePendingUpload(uploadId);
   }

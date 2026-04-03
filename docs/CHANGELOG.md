@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- refactor: move ZodError and unhandled error catching into API middleware; remove ~97 try-catch blocks from 60 route files (~1,084 lines of boilerplate eliminated)
 - style: convert 1,314 raw Tailwind visual classes to `qt-*` semantic theme classes across 234 files — backgrounds, text colors, border colors, and shadows now use theme-overridable CSS variables
 - refactor: remove vestigial `userId` ownership checks from 45 API route files (single-user app); flatten `app/(authenticated)/` route group into `app/` to eliminate shell-escaping issues with parenthesized directory names
 - docs: add 4.0.0 release notes

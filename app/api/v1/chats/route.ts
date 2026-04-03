@@ -21,7 +21,7 @@ import { z } from 'zod';
 import type { ChatEvent, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
 import { TimestampConfigSchema } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import {
   enrichParticipantSummary,
   enrichChatsForList,
@@ -513,128 +513,120 @@ async function handleHasDangerous(context: AuthenticatedContext) {
 async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   const { user, repos } = context;
 
-  try {
-    const body = await req.json();
-    const validatedData = createChatSchema.parse(body);
+  const body = await req.json();
+  const validatedData = createChatSchema.parse(body);
 
-    const buildResult = await buildAllParticipants(validatedData.participants, user.id, repos);
-    if ('error' in buildResult) {
-      return badRequest(buildResult.error);
+  const buildResult = await buildAllParticipants(validatedData.participants, user.id, repos);
+  if ('error' in buildResult) {
+    return badRequest(buildResult.error);
+  }
+
+  // Fetch the primary character for defaults resolution
+  const primaryCharacter = await repos.characters.findById(buildResult.firstCharacter.characterId);
+
+  // Resolve scenario: custom text takes priority, then scenarioId lookup, then nothing
+  let resolvedScenario = validatedData.scenario;
+  if (!resolvedScenario && validatedData.scenarioId) {
+    const matchingScenario = primaryCharacter?.scenarios?.find(s => s.id === validatedData.scenarioId);
+    if (matchingScenario) {
+      resolvedScenario = matchingScenario.content;
+    } else {
+      logger.warn('[Chats v1] scenarioId not found on character', {
+        characterId: buildResult.firstCharacter.characterId,
+        scenarioId: validatedData.scenarioId,
+      });
+    }
+  }
+
+  const chatContext = await buildChatContext(
+    buildResult.firstCharacter.characterId,
+    buildResult.firstCharacter.userCharacterId,
+    resolvedScenario,
+    buildResult.firstCharacter.selectedSystemPromptId
+  );
+
+  const chatSettings = await repos.chatSettings.findByUserId(user.id);
+  const defaultRoleplayTemplateId = chatSettings?.defaultRoleplayTemplateId || null;
+  const now = new Date().toISOString();
+  const participantsWithTimestamps: ChatParticipantBaseInput[] = buildResult.participants.map((p) => ({
+    ...p,
+    id: crypto.randomUUID(),
+    createdAt: now,
+    updatedAt: now,
+  }));
+
+  // Default tool settings from project (if creating chat within a project)
+  let projectToolDefaults = {
+    disabledTools: [] as string[],
+    disabledToolGroups: [] as string[],
+  };
+
+  if (validatedData.projectId) {
+    const project = await repos.projects.findById(validatedData.projectId);
+    if (!project) {
+      return notFound('Project');
     }
 
-    // Fetch the primary character for defaults resolution
-    const primaryCharacter = await repos.characters.findById(buildResult.firstCharacter.characterId);
+    // Extract default tool settings from project
+    projectToolDefaults = {
+      disabledTools: project.defaultDisabledTools || [],
+      disabledToolGroups: project.defaultDisabledToolGroups || [],
+    };
 
-    // Resolve scenario: custom text takes priority, then scenarioId lookup, then nothing
-    let resolvedScenario = validatedData.scenario;
-    if (!resolvedScenario && validatedData.scenarioId) {
-      const matchingScenario = primaryCharacter?.scenarios?.find(s => s.id === validatedData.scenarioId);
-      if (matchingScenario) {
-        resolvedScenario = matchingScenario.content;
-      } else {
-        logger.warn('[Chats v1] scenarioId not found on character', {
-          characterId: buildResult.firstCharacter.characterId,
-          scenarioId: validatedData.scenarioId,
+    if (!project.allowAnyCharacter) {
+      const characterIds = participantsWithTimestamps
+        .filter((p) => p.type === 'CHARACTER' && p.characterId)
+        .map((p) => p.characterId as string);
+
+      const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
+      if (newCharacterIds.length > 0) {
+        await repos.projects.update(validatedData.projectId, {
+          characterRoster: [...project.characterRoster, ...newCharacterIds],
         });
       }
     }
-
-    const chatContext = await buildChatContext(
-      buildResult.firstCharacter.characterId,
-      buildResult.firstCharacter.userCharacterId,
-      resolvedScenario,
-      buildResult.firstCharacter.selectedSystemPromptId
-    );
-
-    const chatSettings = await repos.chatSettings.findByUserId(user.id);
-    const defaultRoleplayTemplateId = chatSettings?.defaultRoleplayTemplateId || null;const now = new Date().toISOString();
-    const participantsWithTimestamps: ChatParticipantBaseInput[] = buildResult.participants.map((p) => ({
-      ...p,
-      id: crypto.randomUUID(),
-      createdAt: now,
-      updatedAt: now,
-    }));
-
-    // Default tool settings from project (if creating chat within a project)
-    let projectToolDefaults = {
-      disabledTools: [] as string[],
-      disabledToolGroups: [] as string[],
-    };
-
-    if (validatedData.projectId) {
-      const project = await repos.projects.findById(validatedData.projectId);
-      if (!project) {
-        return notFound('Project');
-      }
-
-      // Extract default tool settings from project
-      projectToolDefaults = {
-        disabledTools: project.defaultDisabledTools || [],
-        disabledToolGroups: project.defaultDisabledToolGroups || [],
-      };
-
-      if (!project.allowAnyCharacter) {
-        const characterIds = participantsWithTimestamps
-          .filter((p) => p.type === 'CHARACTER' && p.characterId)
-          .map((p) => p.characterId as string);
-
-        const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
-        if (newCharacterIds.length > 0) {
-          await repos.projects.update(validatedData.projectId, {
-            characterRoster: [...project.characterRoster, ...newCharacterIds],
-          });
-        }
-      }
-    }
-
-    // Resolve timestamp config with fallback chain: request > character default > global default
-    const resolvedTimestampConfig = validatedData.timestampConfig || primaryCharacter?.defaultTimestampConfig || chatSettings?.defaultTimestampConfig || null;
-
-    // Use chat-level imageProfileId if provided, otherwise use first from participants (legacy support)
-    const chatImageProfileId = validatedData.imageProfileId || buildResult.firstImageProfileId || null;
-
-    const chat = await repos.chats.create({
-      userId: user.id,
-      participants: participantsWithTimestamps,
-      title: validatedData.title || `Chat with ${chatContext.character.name}`,
-      contextSummary: validatedData.scenario || null,
-      tags: Array.from(buildResult.tags),
-      roleplayTemplateId: defaultRoleplayTemplateId,
-      timestampConfig: resolvedTimestampConfig,
-      messageCount: 0,
-      lastMessageAt: null,
-      lastRenameCheckInterchange: 0,
-      projectId: validatedData.projectId || null,
-      scenarioText: resolvedScenario || null,
-      disabledTools: projectToolDefaults.disabledTools,
-      disabledToolGroups: projectToolDefaults.disabledToolGroups,
-      imageProfileId: chatImageProfileId,
-    });
-
-    await createInitialMessages(
-      chat.id,
-      chatContext,
-      participantsWithTimestamps,
-      user.id,
-      repos,
-      validatedData.projectId || null
-    );
-
-    const enrichedParticipants = await Promise.all(
-      chat.participants.map((p) => enrichParticipantSummary(p, repos))
-    );
-
-    logger.info('[Chats v1] Chat created', { chatId: chat.id });
-
-    return NextResponse.json({ chat: { ...chat, participants: enrichedParticipants } }, { status: 201 });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Chats v1] Error creating chat', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to create chat');
   }
+
+  // Resolve timestamp config with fallback chain: request > character default > global default
+  const resolvedTimestampConfig = validatedData.timestampConfig || primaryCharacter?.defaultTimestampConfig || chatSettings?.defaultTimestampConfig || null;
+
+  // Use chat-level imageProfileId if provided, otherwise use first from participants (legacy support)
+  const chatImageProfileId = validatedData.imageProfileId || buildResult.firstImageProfileId || null;
+
+  const chat = await repos.chats.create({
+    userId: user.id,
+    participants: participantsWithTimestamps,
+    title: validatedData.title || `Chat with ${chatContext.character.name}`,
+    contextSummary: validatedData.scenario || null,
+    tags: Array.from(buildResult.tags),
+    roleplayTemplateId: defaultRoleplayTemplateId,
+    timestampConfig: resolvedTimestampConfig,
+    messageCount: 0,
+    lastMessageAt: null,
+    lastRenameCheckInterchange: 0,
+    projectId: validatedData.projectId || null,
+    scenarioText: resolvedScenario || null,
+    disabledTools: projectToolDefaults.disabledTools,
+    disabledToolGroups: projectToolDefaults.disabledToolGroups,
+    imageProfileId: chatImageProfileId,
+  });
+
+  await createInitialMessages(
+    chat.id,
+    chatContext,
+    participantsWithTimestamps,
+    user.id,
+    repos,
+    validatedData.projectId || null
+  );
+
+  const enrichedParticipants = await Promise.all(
+    chat.participants.map((p) => enrichParticipantSummary(p, repos))
+  );
+
+  logger.info('[Chats v1] Chat created', { chatId: chat.id });
+
+  return NextResponse.json({ chat: { ...chat, participants: enrichedParticipants } }, { status: 201 });
 }
 
 /**

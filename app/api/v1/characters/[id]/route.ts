@@ -34,7 +34,7 @@ import { PronounsSchema } from '@/lib/schemas/character.types';
 import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
 import type { Character } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { notFound, forbidden, badRequest, serverError } from '@/lib/api/responses';
 import { runCharacterOptimizer } from '@/lib/services/character-optimizer.service';
 import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.service';
 import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
@@ -383,45 +383,36 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 // ============================================================================
 
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
-  try {
-    const existingCharacter = await repos.characters.findById(id);
+  const existingCharacter = await repos.characters.findById(id);
 
-    if (!checkOwnership(existingCharacter, user.id)) {
-      return notFound('Character');
-    }
-
-    const body = await req.json();
-    const validatedData = updateCharacterSchema.parse(body);
-
-    // Normalize scenarios: fill in missing id/createdAt/updatedAt
-    const { scenarios: rawScenarios, ...restValidatedData } = validatedData;
-    const updatePayload: Partial<Character> = { ...restValidatedData };
-    if (rawScenarios) {
-      const now = new Date().toISOString();
-      updatePayload.scenarios = rawScenarios.map(s => ({
-        id: s.id ?? crypto.randomUUID(),
-        title: s.title,
-        content: s.content,
-        createdAt: s.createdAt ?? now,
-        updatedAt: s.updatedAt ?? now,
-      }));
-    }
-
-    const character = await repos.characters.update(id, updatePayload);
-
-    revalidatePath('/');
-
-    logger.info('[Characters v1] Character updated', { characterId: id });
-
-    return NextResponse.json({ character });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Characters v1] Error updating character', { characterId: id }, error instanceof Error ? error : undefined);
-    return serverError('Failed to update character');
+  if (!checkOwnership(existingCharacter, user.id)) {
+    return notFound('Character');
   }
+
+  const body = await req.json();
+  const validatedData = updateCharacterSchema.parse(body);
+
+  // Normalize scenarios: fill in missing id/createdAt/updatedAt
+  const { scenarios: rawScenarios, ...restValidatedData } = validatedData;
+  const updatePayload: Partial<Character> = { ...restValidatedData };
+  if (rawScenarios) {
+    const now = new Date().toISOString();
+    updatePayload.scenarios = rawScenarios.map(s => ({
+      id: s.id ?? crypto.randomUUID(),
+      title: s.title,
+      content: s.content,
+      createdAt: s.createdAt ?? now,
+      updatedAt: s.updatedAt ?? now,
+    }));
+  }
+
+  const character = await repos.characters.update(id, updatePayload);
+
+  revalidatePath('/');
+
+  logger.info('[Characters v1] Character updated', { characterId: id });
+
+  return NextResponse.json({ character });
 });
 
 // ============================================================================
@@ -480,60 +471,50 @@ async function handleOptimizeStream(
   characterId: string
 ): Promise<NextResponse> {
 
-  try {
-    const body = await req.json();
-    const { connectionProfileId, maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate } = optimizeStreamSchema.parse(body);
+  const body = await req.json();
+  const { connectionProfileId, maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate } = optimizeStreamSchema.parse(body);
 
-    logger.info('[Characters v1] Character optimizer starting (streaming)', {
-      userId: user.id,
-      characterId,
-      connectionProfileId,
-      maxMemories,
-      searchQuery: searchQuery || '(none)',
-      useSemanticSearch,
-      sinceDate,
-      beforeDate,
-    });
+  logger.info('[Characters v1] Character optimizer starting (streaming)', {
+    userId: user.id,
+    characterId,
+    connectionProfileId,
+    maxMemories,
+    searchQuery: searchQuery || '(none)',
+    useSemanticSearch,
+    sinceDate,
+    beforeDate,
+  });
 
-    const encoder = new TextEncoder();
-    const optimizerOptions = { maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate };
+  const encoder = new TextEncoder();
+  const optimizerOptions = { maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate };
 
-    const stream = new ReadableStream({
-      async start(controller) {
-        const enqueue = (event: OptimizerProgressEvent) => {
-          try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-          } catch {
-            // Stream may be closed
-          }
-        };
-
-        await runCharacterOptimizer(characterId, connectionProfileId, user.id, repos, enqueue, optimizerOptions);
-
+  const stream = new ReadableStream({
+    async start(controller) {
+      const enqueue = (event: OptimizerProgressEvent) => {
         try {
-          controller.close();
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
         } catch {
-          // Stream may already be closed
+          // Stream may be closed
         }
-      },
-    });
+      };
 
-    return new NextResponse(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
+      await runCharacterOptimizer(characterId, connectionProfileId, user.id, repos, enqueue, optimizerOptions);
 
-    const errorMessage = error instanceof Error ? error.message : 'Optimization failed';
-    logger.error('[Characters v1] Character optimizer stream failed', { characterId, error: errorMessage });
-    return serverError(errorMessage);
-  }
+      try {
+        controller.close();
+      } catch {
+        // Stream may already be closed
+      }
+    },
+  });
+
+  return new NextResponse(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
 }
 
 // ============================================================================
@@ -569,99 +550,75 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
     },
 
     avatar: async () => {
-      try {
-        const body = await req.json();
-        const { imageId } = avatarSchema.parse(body);
+      const body = await req.json();
+      const { imageId } = avatarSchema.parse(body);
 
-        // Validate image if provided
-        if (imageId) {
-          const fileEntry = await repos.files.findById(imageId);
+      // Validate image if provided
+      if (imageId) {
+        const fileEntry = await repos.files.findById(imageId);
 
-          if (!fileEntry) {
-            return notFound('Image file');
-          }
-
-          if (fileEntry.category !== 'IMAGE' && fileEntry.category !== 'AVATAR') {
-            return badRequest(`Invalid file type. Expected IMAGE or AVATAR, got ${fileEntry.category}`);
-          }
+        if (!fileEntry) {
+          return notFound('Image file');
         }
 
-        const updatedCharacter = await repos.characters.update(id, {
-          defaultImageId: imageId,
-        });
-
-        // Build response with file info
-        const defaultImage = await enrichWithDefaultImage(updatedCharacter?.defaultImageId, repos);
-
-        logger.info('[Characters v1] Avatar updated', {
-          characterId: id,
-          newImageId: imageId,
-        });
-
-        return NextResponse.json({
-          data: {
-            ...updatedCharacter,
-            defaultImage,
-          },
-        });
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return validationError(error);
+        if (fileEntry.category !== 'IMAGE' && fileEntry.category !== 'AVATAR') {
+          return badRequest(`Invalid file type. Expected IMAGE or AVATAR, got ${fileEntry.category}`);
         }
-        logger.error('[Characters v1] Error updating avatar', { characterId: id }, error instanceof Error ? error : undefined);
-        return serverError('Failed to update character avatar');
       }
+
+      const updatedCharacter = await repos.characters.update(id, {
+        defaultImageId: imageId,
+      });
+
+      // Build response with file info
+      const defaultImage = await enrichWithDefaultImage(updatedCharacter?.defaultImageId, repos);
+
+      logger.info('[Characters v1] Avatar updated', {
+        characterId: id,
+        newImageId: imageId,
+      });
+
+      return NextResponse.json({
+        data: {
+          ...updatedCharacter,
+          defaultImage,
+        },
+      });
     },
 
     'add-tag': async () => {
-      try {
-        const body = await req.json();
-        const validatedData = addTagSchema.parse(body);
+      const body = await req.json();
+      const validatedData = addTagSchema.parse(body);
 
-        // Verify tag exists and belongs to user
-        const tag = await repos.tags.findById(validatedData.tagId);
+      // Verify tag exists and belongs to user
+      const tag = await repos.tags.findById(validatedData.tagId);
 
-        if (!tag) {
-          return notFound('Tag');
-        }
-
-        await repos.characters.addTag(id, validatedData.tagId);
-
-        logger.info('[Characters v1] Tag added', {
-          characterId: id,
-          tagId: validatedData.tagId,
-        });
-
-        return NextResponse.json({ success: true, tag }, { status: 201 });
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return validationError(error);
-        }
-        logger.error('[Characters v1] Error adding tag', { characterId: id }, error instanceof Error ? error : undefined);
-        return serverError('Failed to add tag to character');
+      if (!tag) {
+        return notFound('Tag');
       }
+
+      await repos.characters.addTag(id, validatedData.tagId);
+
+      logger.info('[Characters v1] Tag added', {
+        characterId: id,
+        tagId: validatedData.tagId,
+      });
+
+      return NextResponse.json({ success: true, tag }, { status: 201 });
     },
 
     'remove-tag': async () => {
-      try {
-        const body = await req.json();
-        const validatedData = removeTagSchema.parse(body);
+      const body = await req.json();
+      const validatedData = removeTagSchema.parse(body);
 
-        await repos.characters.removeTag(id, validatedData.tagId);
+      await repos.characters.removeTag(id, validatedData.tagId);
 
-        logger.info('[Characters v1] Tag removed', {
-          characterId: id,
-          tagId: validatedData.tagId,
-        });
+      logger.info('[Characters v1] Tag removed', {
+        characterId: id,
+        tagId: validatedData.tagId,
+      });
 
-        return NextResponse.json({ success: true });
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return validationError(error);
-        }
-        logger.error('[Characters v1] Error removing tag', { characterId: id }, error instanceof Error ? error : undefined);
-        return serverError('Failed to remove tag from character');
-      }
+      return NextResponse.json({ success: true });
     },
 
     'toggle-controlled-by': async () => {
@@ -680,75 +637,58 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
     },
 
     'set-default-partner': async () => {
-      try {
-        const body = await req.json();
-        const { partnerId } = setDefaultPartnerSchema.parse(body);
+      const body = await req.json();
+      const { partnerId } = setDefaultPartnerSchema.parse(body);
 
-        // If partnerId is provided, verify it exists and is user-controlled
-        if (partnerId) {
-          const partner = await repos.characters.findById(partnerId);
-          if (!partner) {
-            return notFound('Partner character');
-          }
-          if (partner.controlledBy !== 'user') {
-            return badRequest('Partner must be a user-controlled character');
-          }
-          if (partnerId === id) {
-            return badRequest('Character cannot be its own partner');
-          }
+      // If partnerId is provided, verify it exists and is user-controlled
+      if (partnerId) {
+        const partner = await repos.characters.findById(partnerId);
+        if (!partner) {
+          return notFound('Partner character');
         }
-
-        await repos.characters.update(id, {
-          defaultPartnerId: partnerId,
-        });
-
-        logger.info('[Characters v1] Default partner updated', {
-          characterId: id,
-          partnerId,
-        });
-
-        return NextResponse.json({
-          partnerId,
-          success: true,
-        });
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return validationError(error);
+        if (partner.controlledBy !== 'user') {
+          return badRequest('Partner must be a user-controlled character');
         }
-        logger.error('[Characters v1] Error updating default partner', { characterId: id }, error instanceof Error ? error : undefined);
-        return serverError('Failed to update default partner');
+        if (partnerId === id) {
+          return badRequest('Character cannot be its own partner');
+        }
       }
+
+      await repos.characters.update(id, {
+        defaultPartnerId: partnerId,
+      });
+
+      logger.info('[Characters v1] Default partner updated', {
+        characterId: id,
+        partnerId,
+      });
+
+      return NextResponse.json({
+        partnerId,
+        success: true,
+      });
     },
 
     'optimize-stream': () => handleOptimizeStream(req, user, repos, id),
 
     'generate-external-prompt': async () => {
-      try {
-        const body = await req.json();
-        const validated = generateExternalPromptSchema.parse(body);
+      const body = await req.json();
+      const validated = generateExternalPromptSchema.parse(body);
 
-        logger.info('[Characters v1] External prompt generation starting', {
-          userId: user.id,
-          characterId: id,
-          connectionProfileId: validated.connectionProfileId,
-          maxTokens: validated.maxTokens,
-        });
+      logger.info('[Characters v1] External prompt generation starting', {
+        userId: user.id,
+        characterId: id,
+        connectionProfileId: validated.connectionProfileId,
+        maxTokens: validated.maxTokens,
+      });
 
-        const result = await generateExternalPrompt(id, validated, user.id, repos);
+      const result = await generateExternalPrompt(id, validated, user.id, repos);
 
-        if (!result.success) {
-          return serverError(result.error || 'Generation failed');
-        }
-
-        return NextResponse.json({ prompt: result.prompt, tokensUsed: result.tokensUsed });
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return validationError(error);
-        }
-        const errorMessage = error instanceof Error ? error.message : 'External prompt generation failed';
-        logger.error('[Characters v1] External prompt generation failed', { characterId: id, error: errorMessage });
-        return serverError(errorMessage);
+      if (!result.success) {
+        return serverError(result.error || 'Generation failed');
       }
+
+      return NextResponse.json({ prompt: result.prompt, tokensUsed: result.tokensUsed });
     },
   };
 

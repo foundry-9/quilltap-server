@@ -14,7 +14,7 @@ import { createAuthenticatedParamsHandler, AuthenticatedContext } from '@/lib/ap
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { notFound, forbidden, badRequest, serverError } from '@/lib/api/responses';
 import { isValidModelClassName } from '@/lib/llm/model-classes';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
 
@@ -319,54 +319,38 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
     const actionHandlers: Record<ConnectionProfileItemPostAction, () => Promise<NextResponse>> = {
       'add-tag': async () => {
-        try {
-          const body = await req.json();
-          const validatedData = addTagSchema.parse(body);
+        const body = await req.json();
+        const validatedData = addTagSchema.parse(body);
 
-          // Verify tag exists and belongs to user
-          const tag = await repos.tags.findById(validatedData.tagId);
-          if (!tag) {
-            return notFound('Tag');
-          }
-
-          // Add tag to profile
-          await repos.connections.addTag(id, validatedData.tagId);
-
-          logger.info('[Connection Profiles v1] Tag added to profile', {
-            profileId: id,
-            tagId: validatedData.tagId,
-          });
-
-          return NextResponse.json({ success: true, tag }, { status: 201 });
-        } catch (error) {
-          if (error instanceof z.ZodError) {
-            return validationError(error);
-          }
-          logger.error('[Connection Profiles v1] Error adding tag', { profileId: id }, error instanceof Error ? error : undefined);
-          return serverError('Failed to add tag to connection profile');
+        // Verify tag exists and belongs to user
+        const tag = await repos.tags.findById(validatedData.tagId);
+        if (!tag) {
+          return notFound('Tag');
         }
+
+        // Add tag to profile
+        await repos.connections.addTag(id, validatedData.tagId);
+
+        logger.info('[Connection Profiles v1] Tag added to profile', {
+          profileId: id,
+          tagId: validatedData.tagId,
+        });
+
+        return NextResponse.json({ success: true, tag }, { status: 201 });
       },
       'remove-tag': async () => {
-        try {
-          const body = await req.json();
-          const validatedData = removeTagSchema.parse(body);
+        const body = await req.json();
+        const validatedData = removeTagSchema.parse(body);
 
-          // Remove tag from profile
-          await repos.connections.removeTag(id, validatedData.tagId);
+        // Remove tag from profile
+        await repos.connections.removeTag(id, validatedData.tagId);
 
-          logger.info('[Connection Profiles v1] Tag removed from profile', {
-            profileId: id,
-            tagId: validatedData.tagId,
-          });
+        logger.info('[Connection Profiles v1] Tag removed from profile', {
+          profileId: id,
+          tagId: validatedData.tagId,
+        });
 
-          return NextResponse.json({ success: true });
-        } catch (error) {
-          if (error instanceof z.ZodError) {
-            return validationError(error);
-          }
-          logger.error('[Connection Profiles v1] Error removing tag', { profileId: id }, error instanceof Error ? error : undefined);
-          return serverError('Failed to remove tag from connection profile');
-        }
+        return NextResponse.json({ success: true });
       },
       'auto-configure': async () => {
         try {

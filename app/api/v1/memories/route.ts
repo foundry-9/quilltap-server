@@ -27,7 +27,7 @@ import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types';
 
 // =============================================================================
@@ -136,29 +136,21 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   const action = getActionParam(req);
 
-  try {
-    // Action-based operations
-    if (action === 'search') {
-      return handleSearch(req, { user, repos });
-    }
-
-    if (action === 'housekeep') {
-      return handleHousekeep(req, { user, repos });
-    }
-
-    if (action === 'embeddings') {
-      return handleGenerateEmbeddings(req, { user, repos });
-    }
-
-    // Default: Create memory
-    return handleCreateMemory(req, { user, repos });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-    logger.error('[Memories API] Error in POST', {}, error instanceof Error ? error : undefined);
-    return serverError('Operation failed');
+  // Action-based operations
+  if (action === 'search') {
+    return handleSearch(req, { user, repos });
   }
+
+  if (action === 'housekeep') {
+    return handleHousekeep(req, { user, repos });
+  }
+
+  if (action === 'embeddings') {
+    return handleGenerateEmbeddings(req, { user, repos });
+  }
+
+  // Default: Create memory
+  return handleCreateMemory(req, { user, repos });
 });
 
 // =============================================================================

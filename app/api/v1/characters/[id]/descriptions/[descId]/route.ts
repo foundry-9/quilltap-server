@@ -9,7 +9,7 @@
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { notFound, serverError, validationError, successResponse } from '@/lib/api/responses';
+import { notFound, serverError, successResponse } from '@/lib/api/responses';
 
 const updateDescriptionSchema = z.object({
   name: z.string().min(1).optional(),
@@ -47,37 +47,28 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; descId: string
 // PUT /api/v1/characters/[id]/descriptions/[descId]
 export const PUT = createAuthenticatedParamsHandler<{ id: string; descId: string }>(
   async (req, { user, repos }, { id, descId }) => {
-    try {
-      // Verify character exists and belongs to user
-      const character = await repos.characters.findById(id);
+    // Verify character exists and belongs to user
+    const character = await repos.characters.findById(id);
 
-      if (!checkOwnership(character, user.id)) {
-        return notFound('Character');
-      }
-
-      const body = await req.json();
-      const validatedData = updateDescriptionSchema.parse(body);
-
-      const description = await repos.characters.updateDescription(id, descId, validatedData);
-
-      if (!description) {
-        return notFound('Description');
-      }
-
-      logger.info('[Characters v1] Description updated', {
-        characterId: id,
-        descriptionId: descId,
-      });
-
-      return successResponse({ description });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return validationError(error);
-      }
-
-      logger.error('[Characters v1] Error updating character description', { characterId: id, descriptionId: descId }, error instanceof Error ? error : undefined);
-      return serverError('Failed to update character description');
+    if (!checkOwnership(character, user.id)) {
+      return notFound('Character');
     }
+
+    const body = await req.json();
+    const validatedData = updateDescriptionSchema.parse(body);
+
+    const description = await repos.characters.updateDescription(id, descId, validatedData);
+
+    if (!description) {
+      return notFound('Description');
+    }
+
+    logger.info('[Characters v1] Description updated', {
+      characterId: id,
+      descriptionId: descId,
+    });
+
+    return successResponse({ description });
   }
 );
 

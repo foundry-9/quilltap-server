@@ -38,24 +38,13 @@ const updateRoleplayTemplateSchema = z.object({
  */
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {const template = await repos.roleplayTemplates.findById(id);
+    const template = await repos.roleplayTemplates.findById(id);
 
-      if (!template) {return notFound('Roleplay template');
-      }
-
-return successResponse(template);
-    } catch (error) {
-      logger.error(
-        'Failed to fetch roleplay template',
-        {
-          endpoint: '/api/v1/roleplay-templates/[id]',
-          method: 'GET',
-          templateId: id,
-        },
-        error instanceof Error ? error : undefined
-      );
-      return errorResponse('Failed to fetch roleplay template', 500);
+    if (!template) {
+      return notFound('Roleplay template');
     }
+
+    return successResponse(template);
   }
 );
 
@@ -79,73 +68,54 @@ return successResponse(template);
  */
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {const existingTemplate = await repos.roleplayTemplates.findById(id);
+    const existingTemplate = await repos.roleplayTemplates.findById(id);
 
-      if (!existingTemplate) {return notFound('Roleplay template');
-      }
+    if (!existingTemplate) {
+      return notFound('Roleplay template');
+    }
 
-      // Prevent editing built-in templates
-      if (existingTemplate.isBuiltIn) {
-        logger.warn('Attempted to edit built-in roleplay template', {
-          templateId: id,
-          userId: user.id,
-        });
-        return forbidden('Cannot edit built-in roleplay templates');
-      }
-
-      const body = await req.json();
-      const validatedData = updateRoleplayTemplateSchema.parse(body);
-
-      // If name is being updated, check for duplicates
-      if (validatedData.name && validatedData.name !== existingTemplate.name) {
-        const existingByName = await repos.roleplayTemplates.findByName(user.id, validatedData.name);
-        if (existingByName) {
-          logger.warn('Duplicate roleplay template name', {
-            templateId: id,
-            userId: user.id,
-            newName: validatedData.name,
-          });
-          return errorResponse('A roleplay template with this name already exists', 409);
-        }
-      }
-
-      // Trim string values
-      const updateData = {
-        ...validatedData,
-        name: validatedData.name?.trim(),
-        description: validatedData.description?.trim(),
-        systemPrompt: validatedData.systemPrompt?.trim(),
-      };
-
-      const updatedTemplate = await repos.roleplayTemplates.update(id, updateData);
-
-      logger.info('Roleplay template updated successfully', {
+    // Prevent editing built-in templates
+    if (existingTemplate.isBuiltIn) {
+      logger.warn('Attempted to edit built-in roleplay template', {
         templateId: id,
-        templateName: updatedTemplate?.name,
         userId: user.id,
       });
-
-      return successResponse(updatedTemplate);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        logger.warn('Validation error updating roleplay template', {
-          templateId: id,
-          errors: error.issues,
-        });
-        return errorResponse('Invalid request body', 400);
-      }
-
-      logger.error(
-        'Failed to update roleplay template',
-        {
-          endpoint: '/api/v1/roleplay-templates/[id]',
-          method: 'PUT',
-          templateId: id,
-        },
-        error instanceof Error ? error : undefined
-      );
-      return errorResponse('Failed to update roleplay template', 500);
+      return forbidden('Cannot edit built-in roleplay templates');
     }
+
+    const body = await req.json();
+    const validatedData = updateRoleplayTemplateSchema.parse(body);
+
+    // If name is being updated, check for duplicates
+    if (validatedData.name && validatedData.name !== existingTemplate.name) {
+      const existingByName = await repos.roleplayTemplates.findByName(user.id, validatedData.name);
+      if (existingByName) {
+        logger.warn('Duplicate roleplay template name', {
+          templateId: id,
+          userId: user.id,
+          newName: validatedData.name,
+        });
+        return errorResponse('A roleplay template with this name already exists', 409);
+      }
+    }
+
+    // Trim string values
+    const updateData = {
+      ...validatedData,
+      name: validatedData.name?.trim(),
+      description: validatedData.description?.trim(),
+      systemPrompt: validatedData.systemPrompt?.trim(),
+    };
+
+    const updatedTemplate = await repos.roleplayTemplates.update(id, updateData);
+
+    logger.info('Roleplay template updated successfully', {
+      templateId: id,
+      templateName: updatedTemplate?.name,
+      userId: user.id,
+    });
+
+    return successResponse(updatedTemplate);
   }
 );
 
@@ -161,51 +131,40 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
  */
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {const existingTemplate = await repos.roleplayTemplates.findById(id);
+    const existingTemplate = await repos.roleplayTemplates.findById(id);
 
-      if (!existingTemplate) {return notFound('Roleplay template');
-      }
+    if (!existingTemplate) {
+      return notFound('Roleplay template');
+    }
 
-      // Prevent deleting built-in templates
-      if (existingTemplate.isBuiltIn) {
-        logger.warn('Attempted to delete built-in roleplay template', {
-          templateId: id,
-          userId: user.id,
-        });
-        return forbidden('Cannot delete built-in roleplay templates');
-      }
-
-      const deleted = await repos.roleplayTemplates.delete(id);
-
-      if (!deleted) {
-        logger.warn('Failed to delete roleplay template', {
-          templateId: id,
-          userId: user.id,
-        });
-        return errorResponse('Failed to delete roleplay template', 500);
-      }
-
-      logger.info('Roleplay template deleted successfully', {
+    // Prevent deleting built-in templates
+    if (existingTemplate.isBuiltIn) {
+      logger.warn('Attempted to delete built-in roleplay template', {
         templateId: id,
-        templateName: existingTemplate.name,
         userId: user.id,
       });
+      return forbidden('Cannot delete built-in roleplay templates');
+    }
 
-      return successResponse({
-        success: true,
-        deletedId: id,
+    const deleted = await repos.roleplayTemplates.delete(id);
+
+    if (!deleted) {
+      logger.warn('Failed to delete roleplay template', {
+        templateId: id,
+        userId: user.id,
       });
-    } catch (error) {
-      logger.error(
-        'Failed to delete roleplay template',
-        {
-          endpoint: '/api/v1/roleplay-templates/[id]',
-          method: 'DELETE',
-          templateId: id,
-        },
-        error instanceof Error ? error : undefined
-      );
       return errorResponse('Failed to delete roleplay template', 500);
     }
+
+    logger.info('Roleplay template deleted successfully', {
+      templateId: id,
+      templateName: existingTemplate.name,
+      userId: user.id,
+    });
+
+    return successResponse({
+      success: true,
+      deletedId: id,
+    });
   }
 );

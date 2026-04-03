@@ -15,7 +15,7 @@ import { logger } from '@/lib/logger';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { z } from 'zod';
-import { successResponse, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { successResponse, badRequest, serverError } from '@/lib/api/responses';
 import { createHash } from 'crypto';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
@@ -169,19 +169,18 @@ export const POST = createAuthenticatedHandler(async (request, { user, repos }) 
 // ============================================================================
 
 async function handleGenerateImage(request: NextRequest, user: { id: string }, repos: any): Promise<NextResponse> {
+  const body = await request.json();
+  const { prompt, profileId, tags, options = {} } = generateImageSchema.parse(body);
+
+  // Load and validate connection profile
+  let profile = await repos.connections.findById(profileId);
+
+  if (!profile) {
+    return badRequest('Connection profile not found');
+  }
+
+  // the Concierge integration: classify prompt and potentially reroute provider
   try {
-    const body = await request.json();
-    const { prompt, profileId, tags, options = {} } = generateImageSchema.parse(body);
-
-    // Load and validate connection profile
-    let profile = await repos.connections.findById(profileId);
-
-    if (!profile) {
-      return badRequest('Connection profile not found');
-    }
-
-    // the Concierge integration: classify prompt and potentially reroute provider
-    try {
       const chatSettings = await repos.chatSettings.findByUserId(user.id);
       const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
       const dangerSettings = dangerousContentResolved.settings;
@@ -251,132 +250,124 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       });
     }
 
-    // Get API key if profile has one
-    let decryptedKey = '';
-    if (profile.apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId);
-      if (apiKey) {
-        decryptedKey = apiKey.key_value;
-      }
+  // Get API key if profile has one
+  let decryptedKey = '';
+  if (profile.apiKeyId) {
+    const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId);
+    if (apiKey) {
+      decryptedKey = apiKey.key_value;
     }
-
-    // Create image provider instance
-    let provider;
-    try {
-      provider = createImageProvider(profile.provider as any, profile.baseUrl ?? undefined);
-    } catch {
-      return badRequest(`${profile.provider} provider does not support image generation`);
-    }
-
-    // Build image generation request
-    const imageGenRequest = {
-      prompt,
-      model: profile.modelName,
-      n: options.n,
-      size: options.size,
-      quality: options.quality,
-      style: options.style,
-      aspectRatio: options.aspectRatio,
-    };
-
-    // Generate images
-    const imageGenResponse = await provider.generateImage(imageGenRequest, decryptedKey);
-
-    // Build linkedTo from tags
-    const linkedTo = tags?.map(t => t.tagId) || [];
-
-    // Store generated images as files
-    const savedImages = await Promise.all(
-      imageGenResponse.images.map(async (generatedImage, index) => {
-        // Decode base64 to buffer
-        const imageData = generatedImage.data || generatedImage.b64Json;
-        if (!imageData) {
-          throw new Error('Generated image has no data');
-        }
-        const imageBuffer = Buffer.from(imageData, 'base64');
-
-        // Get file extension from mime type
-        const mimeTypeParts = (generatedImage.mimeType || 'image/png').split('/');
-        const ext = mimeTypeParts[1] === 'jpeg' ? 'jpg' : mimeTypeParts[1] || 'png';
-
-        // Generate unique filename and hash
-        const sha256 = createHash('sha256').update(new Uint8Array(imageBuffer)).digest('hex');
-        const shortHash = sha256.substring(0, 8);
-        const filename = `generated_${Date.now()}_${index}_${shortHash}.${ext}`;
-
-        // Generate a new file ID
-        const fileId = crypto.randomUUID();
-        const category: FileCategory = 'IMAGE';
-        const source: FileSource = 'GENERATED';
-
-        // Upload to file storage
-        const { storageKey } = await fileStorageManager.uploadFile({
-          filename,
-          content: imageBuffer,
-          contentType: generatedImage.mimeType || 'image/png',
-          projectId: null,
-          folderPath: '/',
-        });
-
-
-        // Inherit tags from linked entities
-        const inheritedTags = await getInheritedTags(linkedTo, user.id);
-
-        // Create database record
-        const file = await repos.files.create({
-          sha256,
-          userId: user.id,
-          originalFilename: filename,
-          mimeType: generatedImage.mimeType,
-          size: imageBuffer.length,
-          source,
-          category,
-          linkedTo,
-          generationPrompt: prompt,
-          generationModel: profile.modelName,
-          generationRevisedPrompt: generatedImage.revisedPrompt || null,
-          tags: inheritedTags,
-          storageKey,
-        }, { id: fileId });
-
-        // Use API route for file path
-        const filepath = `/api/v1/files/${file.id}`;
-
-        return {
-          id: file.id,
-          filename: file.originalFilename,
-          filepath,
-          url: filepath,
-          mimeType: file.mimeType,
-          size: file.size,
-          revisedPrompt: generatedImage.revisedPrompt,
-          tags: tags || [],
-        };
-      })
-    );
-
-    logger.info('[Images v1] Image generation complete', {
-      userId: user.id,
-      generatedCount: savedImages.length,
-    });
-
-    return successResponse({
-      data: savedImages,
-      metadata: {
-        prompt,
-        provider: profile.provider,
-        model: profile.modelName,
-        count: savedImages.length,
-      },
-    }, 201);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Images v1] Error generating images', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to generate images');
   }
+
+  // Create image provider instance
+  let provider;
+  try {
+    provider = createImageProvider(profile.provider as any, profile.baseUrl ?? undefined);
+  } catch {
+    return badRequest(`${profile.provider} provider does not support image generation`);
+  }
+
+  // Build image generation request
+  const imageGenRequest = {
+    prompt,
+    model: profile.modelName,
+    n: options.n,
+    size: options.size,
+    quality: options.quality,
+    style: options.style,
+    aspectRatio: options.aspectRatio,
+  };
+
+  // Generate images
+  const imageGenResponse = await provider.generateImage(imageGenRequest, decryptedKey);
+
+  // Build linkedTo from tags
+  const linkedTo = tags?.map(t => t.tagId) || [];
+
+  // Store generated images as files
+  const savedImages = await Promise.all(
+    imageGenResponse.images.map(async (generatedImage, index) => {
+      // Decode base64 to buffer
+      const imageData = generatedImage.data || generatedImage.b64Json;
+      if (!imageData) {
+        throw new Error('Generated image has no data');
+      }
+      const imageBuffer = Buffer.from(imageData, 'base64');
+
+      // Get file extension from mime type
+      const mimeTypeParts = (generatedImage.mimeType || 'image/png').split('/');
+      const ext = mimeTypeParts[1] === 'jpeg' ? 'jpg' : mimeTypeParts[1] || 'png';
+
+      // Generate unique filename and hash
+      const sha256 = createHash('sha256').update(new Uint8Array(imageBuffer)).digest('hex');
+      const shortHash = sha256.substring(0, 8);
+      const filename = `generated_${Date.now()}_${index}_${shortHash}.${ext}`;
+
+      // Generate a new file ID
+      const fileId = crypto.randomUUID();
+      const category: FileCategory = 'IMAGE';
+      const source: FileSource = 'GENERATED';
+
+      // Upload to file storage
+      const { storageKey } = await fileStorageManager.uploadFile({
+        filename,
+        content: imageBuffer,
+        contentType: generatedImage.mimeType || 'image/png',
+        projectId: null,
+        folderPath: '/',
+      });
+
+
+      // Inherit tags from linked entities
+      const inheritedTags = await getInheritedTags(linkedTo, user.id);
+
+      // Create database record
+      const file = await repos.files.create({
+        sha256,
+        userId: user.id,
+        originalFilename: filename,
+        mimeType: generatedImage.mimeType,
+        size: imageBuffer.length,
+        source,
+        category,
+        linkedTo,
+        generationPrompt: prompt,
+        generationModel: profile.modelName,
+        generationRevisedPrompt: generatedImage.revisedPrompt || null,
+        tags: inheritedTags,
+        storageKey,
+      }, { id: fileId });
+
+      // Use API route for file path
+      const filepath = `/api/v1/files/${file.id}`;
+
+      return {
+        id: file.id,
+        filename: file.originalFilename,
+        filepath,
+        url: filepath,
+        mimeType: file.mimeType,
+        size: file.size,
+        revisedPrompt: generatedImage.revisedPrompt,
+        tags: tags || [],
+      };
+    })
+  );
+
+  logger.info('[Images v1] Image generation complete', {
+    userId: user.id,
+    generatedCount: savedImages.length,
+  });
+
+  return successResponse({
+    data: savedImages,
+    metadata: {
+      prompt,
+      provider: profile.provider,
+      model: profile.modelName,
+      count: savedImages.length,
+    },
+  }, 201);
 }
 
 // ============================================================================
@@ -384,112 +375,103 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
 // ============================================================================
 
 async function handleUploadOrImport(request: NextRequest, user: { id: string }, repos: any): Promise<NextResponse> {
-  try {
-    const contentType = request.headers.get('content-type') || '';
+  const contentType = request.headers.get('content-type') || '';
 
-    // Handle URL import (JSON payload)
-    if (contentType.includes('application/json')) {
-      const body = await request.json();
-      const { url, tags } = importFromUrlSchema.parse(body);
+  // Handle URL import (JSON payload)
+  if (contentType.includes('application/json')) {
+    const body = await request.json();
+    const { url, tags } = importFromUrlSchema.parse(body);
 
-      // Build linkedTo array from tags
-      const linkedTo = tags ? tags.map(t => t.tagId) : [];
+    // Build linkedTo array from tags
+    const linkedTo = tags ? tags.map(t => t.tagId) : [];
 
-      // Import image from URL (creates file entry automatically)
-      const imageData = await importImageFromUrl(url, user.id, linkedTo);
+    // Import image from URL (creates file entry automatically)
+    const imageData = await importImageFromUrl(url, user.id, linkedTo);
 
-      // Add tags to the file using repository
-      if (tags) {
-        for (const tag of tags) {
-          await repos.files.addTag(imageData.id, tag.tagId);
-        }
+    // Add tags to the file using repository
+    if (tags) {
+      for (const tag of tags) {
+        await repos.files.addTag(imageData.id, tag.tagId);
       }
-
-      logger.info('[Images v1] Image imported from URL', { imageId: imageData.id, userId: user.id });
-
-      // Transform response - use filepath from ImageUploadResult
-      const responseData = {
-        id: imageData.id,
-        userId: user.id,
-        filename: imageData.filename,
-        filepath: imageData.filepath,
-        url: url,
-        mimeType: imageData.mimeType,
-        size: imageData.size,
-        width: imageData.width,
-        height: imageData.height,
-        source: 'import',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        tags: tags || [],
-      };
-
-      return successResponse({ data: responseData }, 201);
     }
 
-    // Handle file upload (multipart/form-data)
-    if (contentType.includes('multipart/form-data')) {
-      const formData = await request.formData();
-      const file = formData.get('file') as File | null;
-      const tagsJson = formData.get('tags') as string | null;
+    logger.info('[Images v1] Image imported from URL', { imageId: imageData.id, userId: user.id });
 
-      if (!file) {
-        return badRequest('No file provided');
-      }
+    // Transform response - use filepath from ImageUploadResult
+    const responseData = {
+      id: imageData.id,
+      userId: user.id,
+      filename: imageData.filename,
+      filepath: imageData.filepath,
+      url: url,
+      mimeType: imageData.mimeType,
+      size: imageData.size,
+      width: imageData.width,
+      height: imageData.height,
+      source: 'import',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: tags || [],
+    };
 
-
-      // Parse tags if provided
-      let tags: Array<{ tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME'; tagId: string }> | undefined;
-      if (tagsJson) {
-        try {
-          tags = JSON.parse(tagsJson);
-        } catch {
-          return badRequest('Invalid tags JSON');
-        }
-      }
-
-      // Build linkedTo array from tags
-      const linkedTo = tags ? tags.map(t => t.tagId) : [];
-
-      // Upload image (creates file entry automatically)
-      const imageData = await uploadImage(file, user.id, linkedTo);
-
-      // Add tags to the file using repository
-      if (tags) {
-        for (const tag of tags) {
-          await repos.files.addTag(imageData.id, tag.tagId);
-        }
-      }
-
-      logger.info('[Images v1] Image uploaded', { imageId: imageData.id, userId: user.id });
-
-      // Transform response - use filepath from ImageUploadResult
-      const responseData = {
-        id: imageData.id,
-        userId: user.id,
-        filename: imageData.filename,
-        filepath: imageData.filepath,
-        url: null,
-        mimeType: imageData.mimeType,
-        size: imageData.size,
-        width: imageData.width,
-        height: imageData.height,
-        source: 'upload',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        tags: tags || [],
-      };
-
-      return successResponse({ data: responseData }, 201);
-    }
-
-    return badRequest('Invalid content type');
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Images v1] Error uploading/importing image', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to upload/import image');
+    return successResponse({ data: responseData }, 201);
   }
+
+  // Handle file upload (multipart/form-data)
+  if (contentType.includes('multipart/form-data')) {
+    const formData = await request.formData();
+    const file = formData.get('file') as File | null;
+    const tagsJson = formData.get('tags') as string | null;
+
+    if (!file) {
+      return badRequest('No file provided');
+    }
+
+
+    // Parse tags if provided
+    let tags: Array<{ tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME'; tagId: string }> | undefined;
+    if (tagsJson) {
+      try {
+        tags = JSON.parse(tagsJson);
+      } catch {
+        return badRequest('Invalid tags JSON');
+      }
+    }
+
+    // Build linkedTo array from tags
+    const linkedTo = tags ? tags.map(t => t.tagId) : [];
+
+    // Upload image (creates file entry automatically)
+    const imageData = await uploadImage(file, user.id, linkedTo);
+
+    // Add tags to the file using repository
+    if (tags) {
+      for (const tag of tags) {
+        await repos.files.addTag(imageData.id, tag.tagId);
+      }
+    }
+
+    logger.info('[Images v1] Image uploaded', { imageId: imageData.id, userId: user.id });
+
+    // Transform response - use filepath from ImageUploadResult
+    const responseData = {
+      id: imageData.id,
+      userId: user.id,
+      filename: imageData.filename,
+      filepath: imageData.filepath,
+      url: null,
+      mimeType: imageData.mimeType,
+      size: imageData.size,
+      width: imageData.width,
+      height: imageData.height,
+      source: 'upload',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      tags: tags || [],
+    };
+
+    return successResponse({ data: responseData }, 201);
+  }
+
+  return badRequest('Invalid content type');
 }

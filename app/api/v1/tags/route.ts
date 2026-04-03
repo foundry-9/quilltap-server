@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { created, validationError, serverError, successResponse } from '@/lib/api/responses';
+import { created, successResponse } from '@/lib/api/responses';
 
 // ============================================================================
 // Schemas
@@ -25,69 +25,62 @@ const createTagSchema = z.object({
 // ============================================================================
 
 export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
-  try {
+  const searchParams = req.nextUrl.searchParams;
+  const search = searchParams.get('search');
 
-    const searchParams = req.nextUrl.searchParams;
-    const search = searchParams.get('search');
+  // Get all tags for the user
+  let tags = await repos.tags.findAll();
 
-    // Get all tags for the user
-    let tags = await repos.tags.findAll();
-
-    // Filter by search if provided
-    if (search) {
-      const searchLower = search.toLowerCase();
-      tags = tags.filter(tag => tag.nameLower.includes(searchLower));
-    }
-
-    // Sort by name
-    tags.sort((a, b) => a.name.localeCompare(b.name));
-
-    // Get usage counts for each tag across all taggable entity types
-    const [allCharacters, allChats, allConnections, allImageProfiles, allEmbeddingProfiles, allFiles] = await Promise.all([
-      repos.characters.findAll(),
-      repos.chats.findAll(),
-      repos.connections.findAll(),
-      repos.imageProfiles.findAll(),
-      repos.embeddingProfiles.findAll(),
-      repos.files.findAll(),
-    ]);
-
-    const tagsWithCounts = tags.map(tag => {
-      const characterTags = allCharacters.filter(c => c.tags.includes(tag.id)).length;
-      const chatTags = allChats.filter(c => c.tags.includes(tag.id)).length;
-      const connectionProfileTags = allConnections.filter(c => c.tags.includes(tag.id)).length;
-      const imageProfileTags = allImageProfiles.filter(c => c.tags.includes(tag.id)).length;
-      const embeddingProfileTags = allEmbeddingProfiles.filter(c => c.tags.includes(tag.id)).length;
-      const fileTags = allFiles.filter(c => c.tags.includes(tag.id)).length;
-
-      return {
-        id: tag.id,
-        name: tag.name,
-        quickHide: tag.quickHide,
-        visualStyle: tag.visualStyle ?? null,
-        createdAt: tag.createdAt,
-        updatedAt: tag.updatedAt,
-        _count: {
-          characterTags,
-          chatTags,
-          connectionProfileTags,
-          imageProfileTags,
-          embeddingProfileTags,
-          fileTags,
-        },
-        totalUsage: characterTags + chatTags + connectionProfileTags + imageProfileTags + embeddingProfileTags + fileTags,
-      };
-    });
-
-
-    return successResponse({
-      tags: tagsWithCounts,
-      count: tagsWithCounts.length,
-    });
-  } catch (error) {
-    logger.error('[Tags v1] Error fetching tags', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to fetch tags');
+  // Filter by search if provided
+  if (search) {
+    const searchLower = search.toLowerCase();
+    tags = tags.filter(tag => tag.nameLower.includes(searchLower));
   }
+
+  // Sort by name
+  tags.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Get usage counts for each tag across all taggable entity types
+  const [allCharacters, allChats, allConnections, allImageProfiles, allEmbeddingProfiles, allFiles] = await Promise.all([
+    repos.characters.findAll(),
+    repos.chats.findAll(),
+    repos.connections.findAll(),
+    repos.imageProfiles.findAll(),
+    repos.embeddingProfiles.findAll(),
+    repos.files.findAll(),
+  ]);
+
+  const tagsWithCounts = tags.map(tag => {
+    const characterTags = allCharacters.filter(c => c.tags.includes(tag.id)).length;
+    const chatTags = allChats.filter(c => c.tags.includes(tag.id)).length;
+    const connectionProfileTags = allConnections.filter(c => c.tags.includes(tag.id)).length;
+    const imageProfileTags = allImageProfiles.filter(c => c.tags.includes(tag.id)).length;
+    const embeddingProfileTags = allEmbeddingProfiles.filter(c => c.tags.includes(tag.id)).length;
+    const fileTags = allFiles.filter(c => c.tags.includes(tag.id)).length;
+
+    return {
+      id: tag.id,
+      name: tag.name,
+      quickHide: tag.quickHide,
+      visualStyle: tag.visualStyle ?? null,
+      createdAt: tag.createdAt,
+      updatedAt: tag.updatedAt,
+      _count: {
+        characterTags,
+        chatTags,
+        connectionProfileTags,
+        imageProfileTags,
+        embeddingProfileTags,
+        fileTags,
+      },
+      totalUsage: characterTags + chatTags + connectionProfileTags + imageProfileTags + embeddingProfileTags + fileTags,
+    };
+  });
+
+  return successResponse({
+    tags: tagsWithCounts,
+    count: tagsWithCounts.length,
+  });
 });
 
 // ============================================================================
@@ -95,41 +88,31 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 // ============================================================================
 
 export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
-  try {
-    const body = await req.json();
-    const validatedData = createTagSchema.parse(body);
+  const body = await req.json();
+  const validatedData = createTagSchema.parse(body);
 
+  const nameLower = validatedData.name.toLowerCase();
 
-    const nameLower = validatedData.name.toLowerCase();
+  // Check if tag already exists (case-insensitive)
+  const existingTag = await repos.tags.findByName(user.id, validatedData.name);
 
-    // Check if tag already exists (case-insensitive)
-    const existingTag = await repos.tags.findByName(user.id, validatedData.name);
-
-    if (existingTag) {// Return existing tag instead of creating duplicate
-      return successResponse({ tag: existingTag });
-    }
-
-    // Create tag
-    const tag = await repos.tags.create({
-      userId: user.id,
-      name: validatedData.name,
-      nameLower,
-      quickHide: false,
-    });
-
-    logger.info('[Tags v1] Tag created', {
-      userId: user.id,
-      tagId: tag.id,
-      tagName: tag.name,
-    });
-
-    return created({ tag });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Tags v1] Error creating tag', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to create tag');
+  if (existingTag) {// Return existing tag instead of creating duplicate
+    return successResponse({ tag: existingTag });
   }
+
+  // Create tag
+  const tag = await repos.tags.create({
+    userId: user.id,
+    name: validatedData.name,
+    nameLower,
+    quickHide: false,
+  });
+
+  logger.info('[Tags v1] Tag created', {
+    userId: user.id,
+    tagId: tag.id,
+    tagName: tag.name,
+  });
+
+  return created({ tag });
 });

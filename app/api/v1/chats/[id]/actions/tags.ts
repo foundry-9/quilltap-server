@@ -5,9 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, validationError, serverError } from '@/lib/api/responses';
+import { notFound } from '@/lib/api/responses';
 import { addTagSchema, removeTagSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -19,27 +18,19 @@ export async function handleAddTag(
   chatId: string,
   { user, repos }: AuthenticatedContext
 ): Promise<NextResponse> {
-  try {
-    const body = await req.json();
-    const validatedData = addTagSchema.parse(body);
+  const body = await req.json();
+  const validatedData = addTagSchema.parse(body);
 
-    const tag = await repos.tags.findById(validatedData.tagId);
-    if (!tag) {
-      return notFound('Tag');
-    }
-
-    await repos.chats.addTag(chatId, validatedData.tagId);
-
-    logger.info('[Chats v1] Tag added', { chatId, tagId: validatedData.tagId });
-
-    return NextResponse.json({ success: true, tag }, { status: 201 });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-    logger.error('[Chats v1] Error adding tag', { chatId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to add tag to chat');
+  const tag = await repos.tags.findById(validatedData.tagId);
+  if (!tag) {
+    return notFound('Tag');
   }
+
+  await repos.chats.addTag(chatId, validatedData.tagId);
+
+  logger.info('[Chats v1] Tag added', { chatId, tagId: validatedData.tagId });
+
+  return NextResponse.json({ success: true, tag }, { status: 201 });
 }
 
 /**
@@ -50,20 +41,12 @@ export async function handleRemoveTag(
   chatId: string,
   { repos }: AuthenticatedContext
 ): Promise<NextResponse> {
-  try {
-    const body = await req.json();
-    const validatedData = removeTagSchema.parse(body);
+  const body = await req.json();
+  const validatedData = removeTagSchema.parse(body);
 
-    await repos.chats.removeTag(chatId, validatedData.tagId);
+  await repos.chats.removeTag(chatId, validatedData.tagId);
 
-    logger.info('[Chats v1] Tag removed', { chatId, tagId: validatedData.tagId });
+  logger.info('[Chats v1] Tag removed', { chatId, tagId: validatedData.tagId });
 
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-    logger.error('[Chats v1] Error removing tag', { chatId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to remove tag from chat');
-  }
+  return NextResponse.json({ success: true });
 }
