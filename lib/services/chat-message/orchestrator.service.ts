@@ -96,8 +96,11 @@ import { resolveUserIdentity } from './user-identity-resolver.service'
 import {
   executeTurnChain,
 } from './turn-orchestrator.service'
-import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service'
 import { resolveMessageDangerState } from './danger-orchestrator.service'
+import {
+  attemptEmptyResponseRecovery,
+  getEmptyResponseReason,
+} from './provider-failover.service'
 import type { DangerFlag } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
@@ -1610,204 +1613,44 @@ async function processMessage(
     }
   }
 
-  // ============================================================================
-  // Empty Response Retry Logic
-  // ============================================================================
-  // If the response is empty and no tool calls were made, the behavior depends
-  // on whether the content was flagged as dangerous by the Concierge:
-  //
-  // Content PASSED moderation (or moderation not run):
-  //   1. Retry with the SAME provider (likely a transient issue)
-  //   2. If still empty and AUTO_ROUTE with uncensored provider available,
-  //      fail over to uncensored provider
-  //
-  // Content FLAGGED as dangerous:
-  //   1. Immediately fail over to uncensored provider (the LLM's own safety
-  //      filter likely triggered the empty response)
-  let uncensoredRetryAttempted = false
-  let sameProviderRetryAttempted = false
-  const contentWasFlaggedDangerous = dangerFlags && dangerFlags.length > 0
-  if (
-    fullResponse.trim().length === 0 &&
-    toolMessages.length === 0
-  ) {
-    // --- Same-provider retry for content that passed moderation ---
-    if (!contentWasFlaggedDangerous) {
-      sameProviderRetryAttempted = true
-      logger.warn('[EmptyResponse] Empty response from provider that passed moderation, retrying same provider', {
-        chatId,
-        provider: effectiveProfile.provider,
-        model: effectiveProfile.modelName,
-      })
+  const contentWasFlaggedDangerous = !!(dangerFlags && dangerFlags.length > 0)
+  const recoveryResult = await attemptEmptyResponseRecovery({
+    fullResponse,
+    toolMessagesLength: toolMessages.length,
+    contentWasFlaggedDangerous,
+    dangerSettings,
+    effectiveProfile,
+    effectiveApiKey,
+    connectionProfile,
+    formattedMessages,
+    modelParams,
+    actualTools,
+    useNativeWebSearch,
+    userId,
+    chatId,
+    character,
+    controller,
+    encoder,
+    preGeneratedAssistantMessageId,
+    hasStartedStreaming,
+    usage,
+    cacheUsage,
+    attachmentResults,
+    rawResponse,
+    thoughtSignature,
+  })
 
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'retrying',
-        message: 'Empty response received — retrying...',
-        characterName: character.name,
-        characterId: character.id,
-      }))
+  fullResponse = recoveryResult.fullResponse
+  effectiveProfile = recoveryResult.effectiveProfile
+  effectiveApiKey = recoveryResult.effectiveApiKey
+  usage = recoveryResult.usage
+  cacheUsage = recoveryResult.cacheUsage
+  attachmentResults = recoveryResult.attachmentResults
+  rawResponse = recoveryResult.rawResponse
+  thoughtSignature = recoveryResult.thoughtSignature
+  hasStartedStreaming = recoveryResult.hasStartedStreaming
 
-      try {
-        for await (const chunk of streamMessage({
-          messages: formattedMessages,
-          connectionProfile: effectiveProfile,
-          apiKey: effectiveApiKey,
-          modelParams,
-          tools: actualTools,
-          useNativeWebSearch,
-          userId,
-          messageId: preGeneratedAssistantMessageId,
-          chatId,
-        })) {
-          if (chunk.content) {
-            if (!hasStartedStreaming) {
-              safeEnqueue(controller, encodeStatusEvent(encoder, {
-                stage: 'streaming',
-                message: `${character.name} is responding...`,
-                characterName: character.name,
-                characterId: character.id,
-              }))
-              hasStartedStreaming = true
-            }
-            fullResponse += chunk.content
-            controller.enqueue(encodeContentChunk(encoder, chunk.content))
-          }
-
-          if (chunk.done) {
-            usage = chunk.usage || null
-            cacheUsage = chunk.cacheUsage || null
-            attachmentResults = chunk.attachmentResults || null
-            rawResponse = chunk.rawResponse
-            if (chunk.thoughtSignature) {
-              thoughtSignature = chunk.thoughtSignature
-            }
-          }
-        }
-
-        if (fullResponse.trim().length > 0) {
-          logger.info('[EmptyResponse] Same-provider retry succeeded', {
-            chatId,
-            provider: effectiveProfile.provider,
-            model: effectiveProfile.modelName,
-            responseLength: fullResponse.length,
-          })
-        } else {
-          logger.warn('[EmptyResponse] Same-provider retry also returned empty', {
-            chatId,
-            provider: effectiveProfile.provider,
-            model: effectiveProfile.modelName,
-          })
-        }
-      } catch (retryError) {
-        logger.error('[EmptyResponse] Same-provider retry failed', {
-          chatId,
-          error: retryError instanceof Error ? retryError.message : String(retryError),
-        })
-      }
-    }
-
-    // --- Uncensored failover (immediate if flagged dangerous, after same-provider retry otherwise) ---
-    if (
-      fullResponse.trim().length === 0 &&
-      dangerSettings.mode === 'AUTO_ROUTE' &&
-      dangerSettings.uncensoredTextProfileId
-    ) {
-      uncensoredRetryAttempted = true
-      logger.warn('[DangerousContent] Empty response detected, attempting uncensored retry', {
-        chatId,
-        originalProvider: effectiveProfile.provider,
-        originalModel: effectiveProfile.modelName,
-        contentWasFlaggedDangerous,
-        sameProviderRetryAttempted,
-      })
-
-      try {
-        const routeResult = await resolveProviderForDangerousContent(
-          effectiveProfile,
-          effectiveApiKey,
-          dangerSettings,
-          userId
-        )
-
-        // Skip if routing resolved to the same profile (pointless retry)
-        if (routeResult.rerouted && routeResult.connectionProfile.id === effectiveProfile.id) {
-          logger.debug('[DangerousContent] Uncensored fallback resolved to same profile, skipping retry', {
-            chatId,
-            profileId: effectiveProfile.id,
-          })
-        } else if (routeResult.rerouted) {
-          safeEnqueue(controller, encodeStatusEvent(encoder, {
-            stage: 'rerouting',
-            message: 'Retrying with uncensored provider...',
-            characterName: character.name,
-            characterId: character.id,
-          }))
-
-          // Re-stream with uncensored provider
-          for await (const chunk of streamMessage({
-            messages: formattedMessages,
-            connectionProfile: routeResult.connectionProfile,
-            apiKey: routeResult.apiKey,
-            modelParams,
-            tools: actualTools,
-            useNativeWebSearch,
-            userId,
-            messageId: preGeneratedAssistantMessageId,
-            chatId,
-          })) {
-            if (chunk.content) {
-              if (!hasStartedStreaming) {
-                safeEnqueue(controller, encodeStatusEvent(encoder, {
-                  stage: 'streaming',
-                  message: `${character.name} is responding...`,
-                  characterName: character.name,
-                  characterId: character.id,
-                }))
-                hasStartedStreaming = true
-              }
-              fullResponse += chunk.content
-              controller.enqueue(encodeContentChunk(encoder, chunk.content))
-            }
-
-            if (chunk.done) {
-              usage = chunk.usage || null
-              cacheUsage = chunk.cacheUsage || null
-              attachmentResults = chunk.attachmentResults || null
-              rawResponse = chunk.rawResponse
-              if (chunk.thoughtSignature) {
-                thoughtSignature = chunk.thoughtSignature
-              }
-            }
-          }
-
-          if (fullResponse.trim().length > 0) {
-            effectiveProfile = routeResult.connectionProfile
-            effectiveApiKey = routeResult.apiKey
-
-            logger.info('[DangerousContent] Uncensored retry succeeded', {
-              chatId,
-              uncensoredProvider: routeResult.connectionProfile.provider,
-              uncensoredModel: routeResult.connectionProfile.modelName,
-              responseLength: fullResponse.length,
-            })
-          } else {
-            logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
-              chatId,
-              safeProvider: connectionProfile.provider,
-              safeModel: connectionProfile.modelName,
-              uncensoredProvider: routeResult.connectionProfile.provider,
-              uncensoredModel: routeResult.connectionProfile.modelName,
-            })
-          }
-        }
-      } catch (retryError) {
-        logger.error('[DangerousContent] Uncensored retry failed', {
-          chatId,
-          error: retryError instanceof Error ? retryError.message : String(retryError),
-        })
-      }
-    }
-  }
+  const { uncensoredRetryAttempted, sameProviderRetryAttempted } = recoveryResult
 
   // Save assistant message
   let assistantMessageId: string | null = null
@@ -1882,18 +1725,11 @@ async function processMessage(
     }
   } else {
     // Empty response
-    let emptyReason: string
-    if (uncensoredRetryAttempted && sameProviderRetryAttempted) {
-      emptyReason = 'The AI model returned an empty response after retrying, and an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
-    } else if (uncensoredRetryAttempted) {
-      emptyReason = 'The AI model returned an empty response, and retrying with an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
-    } else if (contentWasFlaggedDangerous) {
-      emptyReason = 'The AI model returned an empty response, likely because the Concierge flagged this content as dangerous and the provider refused to generate a response. Consider enabling Auto-Route mode in the Concierge settings to automatically reroute dangerous content to an uncensored provider.'
-    } else if (sameProviderRetryAttempted) {
-      emptyReason = 'The AI model returned an empty response twice. This may be a temporary issue with the provider. Please try resending your message.'
-    } else {
-      emptyReason = 'The AI model returned an empty response. This is a known issue with some providers. Please try resending your message.'
-    }
+    const emptyReason = getEmptyResponseReason({
+      uncensoredRetryAttempted,
+      sameProviderRetryAttempted,
+      contentWasFlaggedDangerous,
+    })
     logger.warn(`Empty response for chat ${chatId}`, {
       uncensoredRetryAttempted,
       sameProviderRetryAttempted,

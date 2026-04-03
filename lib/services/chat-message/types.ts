@@ -189,6 +189,23 @@ export interface DangerResolutionResult {
 }
 
 /**
+ * Result of empty-response retry/failover recovery.
+ */
+export interface EmptyResponseRecoveryResult {
+  fullResponse: string
+  effectiveProfile: ConnectionProfile
+  effectiveApiKey: string
+  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
+  cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
+  attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
+  rawResponse: unknown
+  thoughtSignature?: string
+  hasStartedStreaming: boolean
+  uncensoredRetryAttempted: boolean
+  sameProviderRetryAttempted: boolean
+}
+
+/**
  * SSE event: A chained turn is starting for a new character
  */
 export interface TurnStartEvent {

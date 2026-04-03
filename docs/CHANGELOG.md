@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting empty-response retry and uncensored failover handling into `provider-failover.service.ts`, with focused coverage for same-provider retries, Auto-Route fallback, and final empty-response messaging
 - refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting Concierge classification and uncensored provider-routing preflight into `danger-orchestrator.service.ts`, with focused coverage for mode handling, reroutes, and fail-open behavior
 - refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting assistant response persistence, completion events, token tracking, RNG follow-up, and memory/summary triggers into `message-finalizer.service.ts`, with targeted coverage for the new finalization flow
 - refactor: begin decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting multi-character turn chaining into `turn-orchestrator.service.ts`, adding targeted chain execution tests while preserving the existing message streaming API
