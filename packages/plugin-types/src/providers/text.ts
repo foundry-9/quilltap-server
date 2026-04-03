@@ -67,6 +67,12 @@ export interface LLMParams {
   temperature?: number;
   /** Maximum tokens to generate */
   maxTokens?: number;
+  /**
+   * When true, the provider MUST respect the exact maxTokens value without
+   * applying model-specific overrides (e.g. reasoning model minimums).
+   * Used by background tasks (cheap LLM) that need strict output limits.
+   */
+  strictMaxTokens?: boolean;
   /** Nucleus sampling parameter */
   topP?: number;
   /** Stop sequences */

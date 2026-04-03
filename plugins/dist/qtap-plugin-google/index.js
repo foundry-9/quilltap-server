@@ -47538,10 +47538,16 @@ var GoogleProvider = class {
       config2.stopSequences = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
     if (this.isThinkingModel(params.model)) {
-      config2.thinkingConfig = {
-        thinkingBudget: 4096
-      };
-      config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
+      if (!params.strictMaxTokens) {
+        config2.thinkingConfig = {
+          thinkingBudget: 4096
+        };
+        config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
+      } else {
+        config2.thinkingConfig = {
+          thinkingBudget: 1024
+        };
+      }
     }
     try {
       const response = await ai.models.generateContent({
@@ -47623,10 +47629,16 @@ var GoogleProvider = class {
       config2.stopSequences = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
     if (this.isThinkingModel(params.model)) {
-      config2.thinkingConfig = {
-        thinkingBudget: 4096
-      };
-      config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
+      if (!params.strictMaxTokens) {
+        config2.thinkingConfig = {
+          thinkingBudget: 4096
+        };
+        config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
+      } else {
+        config2.thinkingConfig = {
+          thinkingBudget: 1024
+        };
+      }
     }
     try {
       const response = await ai.models.generateContentStream({

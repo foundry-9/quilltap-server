@@ -220,6 +220,12 @@ async function processMessage(
 ): Promise<ProcessMessageResult> {
   const isContinueMode = options.continueMode === true
 
+  // Initial status — user sees this immediately after sending
+  safeEnqueue(controller, encodeStatusEvent(encoder, {
+    stage: 'initializing',
+    message: 'Loading chat...',
+  }))
+
   // Get chat metadata
   const chat = await repos.chats.findById(chatId)
   if (!chat) {
@@ -249,6 +255,14 @@ async function processMessage(
     userParticipantId,
     isMultiCharacter,
   } = participantResult
+
+  // Now that we know who's responding, update status with character name
+  safeEnqueue(controller, encodeStatusEvent(encoder, {
+    stage: 'resolving',
+    message: `Setting up ${character.name}...`,
+    characterName: character.name,
+    characterId: character.id,
+  }))
 
   // Validate API key for providers that require it
   let apiKey = ''
@@ -432,6 +446,16 @@ async function processMessage(
     }
   }
 
+  // Status: processing files
+  if (options.fileIds && options.fileIds.length > 0) {
+    safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage: 'processing_files',
+      message: 'Processing attachments...',
+      characterName: character.name,
+      characterId: character.id,
+    }))
+  }
+
   // Process file attachments
   const fileProcessing = await loadAndProcessFiles(
     repos,
@@ -563,6 +587,12 @@ async function processMessage(
   // Tool Injection
   // ============================================================================
   // Tools are always sent with every LLM prompt to ensure consistent availability
+  safeEnqueue(controller, encodeStatusEvent(encoder, {
+    stage: 'loading_tools',
+    message: `Loading tools for ${character.name}...`,
+    characterName: character.name,
+    characterId: character.id,
+  }))
 
   // Check if tool settings were just changed (for notification message)
   const toolSettingsChanged = chat.forceToolsOnNextMessage === true
@@ -871,8 +901,16 @@ async function processMessage(
   if (keepAliveInterval) {
     clearInterval(keepAliveInterval)
     keepAliveInterval = null
-
   }
+
+  // Update status now that context building is done — prevents
+  // "Calculating context budget..." from lingering through pre-send setup
+  safeEnqueue(controller, encodeStatusEvent(encoder, {
+    stage: 'preparing',
+    message: `Preparing request for ${character.name}...`,
+    characterName: character.name,
+    characterId: character.id,
+  }))
 
   // Create tool context
   const toolContext = createToolContext(
@@ -985,6 +1023,12 @@ async function processMessage(
   // Verify that the assembled payload fits within the model's context window
   // BEFORE sending to the API. This prevents silent failures with small models
   // that can't handle the payload even after compression.
+  safeEnqueue(controller, encodeStatusEvent(encoder, {
+    stage: 'validating',
+    message: `Validating context for ${character.name}...`,
+    characterName: character.name,
+    characterId: character.id,
+  }))
   const estimatedInputTokens = countMessagesTokens(
     formattedMessages.map(m => ({ content: m.content, role: m.role }))
   )
@@ -1276,18 +1320,8 @@ async function processMessage(
       await repos.chats.update(chatId, { agentTurnCount: toolIterations })
     }
 
-    // Send tool executing status for each detected tool
-    for (const toolCall of toolCalls) {
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'tool_executing',
-        message: `Running ${toolCall.name}...`,
-        toolName: toolCall.name,
-        characterName: character.name,
-        characterId: character.id,
-      }))
-    }
-
-    const results = await processToolCalls(toolCalls, toolContext, controller, encoder)
+    // Per-tool status updates are now emitted inside processToolCalls
+    const results = await processToolCalls(toolCalls, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
     toolMessages = [...toolMessages, ...results.toolMessages]
     generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
@@ -1329,10 +1363,20 @@ async function processMessage(
       }
     }
 
+    // Update status after tool processing — prevents "Running X..." from
+    // lingering through message assembly and the follow-up LLM call
+    safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage: 'sending',
+      message: `Sending to ${character.name}...`,
+      characterName: character.name,
+      characterId: character.id,
+    }))
+
     // Continue conversation with tool results
     currentResponse = ''
     currentRawResponse = null
 
+    let emittedStreamingStatus = false
     for await (const chunk of streamMessage({
       messages: currentMessages,
       connectionProfile: streamingState.effectiveProfile,
@@ -1346,6 +1390,16 @@ async function processMessage(
       characterId: character.id,
     })) {
       if (chunk.content) {
+        // Emit streaming status on first content in this tool iteration
+        if (!emittedStreamingStatus) {
+          emittedStreamingStatus = true
+          safeEnqueue(controller, encodeStatusEvent(encoder, {
+            stage: 'streaming',
+            message: `${character.name} is responding...`,
+            characterName: character.name,
+            characterId: character.id,
+          }))
+        }
         currentResponse += chunk.content
         streamingState.fullResponse += chunk.content
         controller.enqueue(encodeContentChunk(encoder, chunk.content))
@@ -1361,6 +1415,17 @@ async function processMessage(
           streamingState.thoughtSignature = chunk.thoughtSignature
         }
       }
+    }
+
+    // If the LLM returned tool calls without any content (silent tool use),
+    // emit a processing status so the user knows something is happening
+    if (!emittedStreamingStatus && currentRawResponse) {
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'processing_tools',
+        message: `${character.name} is using tools...`,
+        characterName: character.name,
+        characterId: character.id,
+      }))
     }
   }
 
@@ -1447,18 +1512,8 @@ async function processMessage(
         provider: streamingState.effectiveProfile.provider,
       })
 
-      // Send tool executing status for each detected tool
-      for (const toolCall of textToolCallRequests) {
-        safeEnqueue(controller, encodeStatusEvent(encoder, {
-          stage: 'tool_executing',
-          message: `Running ${toolCall.name}...`,
-          toolName: toolCall.name,
-          characterName: character.name,
-          characterId: character.id,
-        }))
-      }
-
-      const results = await processToolCalls(textToolCallRequests, toolContext, controller, encoder)
+      // Per-tool status updates are now emitted inside processToolCalls
+      const results = await processToolCalls(textToolCallRequests, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
       toolMessages = [...toolMessages, ...results.toolMessages]
       generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
@@ -1483,6 +1538,14 @@ async function processMessage(
           name: undefined,
         })
       }
+
+      // Update status after tool processing
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'sending',
+        message: `Sending to ${character.name}...`,
+        characterName: character.name,
+        characterId: character.id,
+      }))
 
       // Continue conversation with tool results
       let continuationResponse = ''
@@ -1531,18 +1594,8 @@ async function processMessage(
         tools: textBlockToolCalls.map(tc => tc.name),
       })
 
-      // Send tool executing status for each detected tool
-      for (const toolCall of textBlockToolCalls) {
-        safeEnqueue(controller, encodeStatusEvent(encoder, {
-          stage: 'tool_executing',
-          message: `Running ${toolCall.name}...`,
-          toolName: toolCall.name,
-          characterName: character.name,
-          characterId: character.id,
-        }))
-      }
-
-      const results = await processToolCalls(textBlockToolCalls, toolContext, controller, encoder)
+      // Per-tool status updates are now emitted inside processToolCalls
+      const results = await processToolCalls(textBlockToolCalls, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
       toolMessages = [...toolMessages, ...results.toolMessages]
       generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
@@ -1567,6 +1620,14 @@ async function processMessage(
           name: undefined,
         })
       }
+
+      // Update status after tool processing
+      safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'sending',
+        message: `Sending to ${character.name}...`,
+        characterName: character.name,
+        characterId: character.id,
+      }))
 
       // Continue conversation with tool results
       let continuationResponse = ''

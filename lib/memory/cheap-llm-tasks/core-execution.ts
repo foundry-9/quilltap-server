@@ -136,10 +136,15 @@ async function sendToProvider(
     })
   }
 
+  // Cheap LLM tasks use strictMaxTokens to prevent providers from applying
+  // model-specific minimums (e.g. reasoning model floors) that would cause
+  // unnecessary verbosity and latency for background tasks
+  const strictMaxTokens = true
+
   // Check if we already know this profile doesn't support custom temperature
   if (profilesWithoutCustomTemp.has(profileKey)) {
     const response: LLMResponse = await provider.sendMessage(
-      { messages, model: selection.modelName, maxTokens: 1000 },
+      { messages, model: selection.modelName, maxTokens: 1000, strictMaxTokens },
       apiKey
     )
     logCall(response)
@@ -149,7 +154,7 @@ async function sendToProvider(
   // Try with lower temperature for more consistent outputs
   try {
     const response: LLMResponse = await provider.sendMessage(
-      { messages, model: selection.modelName, temperature: 0.3, maxTokens: 1000 },
+      { messages, model: selection.modelName, temperature: 0.3, maxTokens: 1000, strictMaxTokens },
       apiKey
     )
     logCall(response, 0.3)
@@ -161,7 +166,7 @@ async function sendToProvider(
       profilesWithoutCustomTemp.add(profileKey)
 
       const response: LLMResponse = await provider.sendMessage(
-        { messages, model: selection.modelName, maxTokens: 1000 },
+        { messages, model: selection.modelName, maxTokens: 1000, strictMaxTokens },
         apiKey
       )
       logCall(response)

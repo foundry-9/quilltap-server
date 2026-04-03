@@ -637,6 +637,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   let memoryRecapTokens = 0
 
   if (options.generateMemoryRecap && character.id && options.cheapLLMSelection) {
+    // Emit status: memory recap generation (can be slow — involves an LLM call)
+    if (options.onStatusChange) {
+      options.onStatusChange('generating_recap', `Recalling ${character.name}'s memories...`)
+    }
+
     try {
       const recapResult = await generateMemoryRecap(
         character.id,
@@ -657,6 +662,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         characterId: character.id,
       }, error instanceof Error ? error : undefined)
     }
+  }
+
+  // Emit status: assembling context (after recap, before memory retrieval)
+  if (options.onStatusChange) {
+    options.onStatusChange('assembling_context', 'Assembling context...')
   }
 
   // 2. Retrieve and format relevant memories

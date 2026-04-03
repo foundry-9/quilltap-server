@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ChatCard, type ChatCardData } from '@/components/chat/ChatCard'
+import { showConfirmation } from '@/lib/alert'
+import { showErrorToast } from '@/lib/toast'
 
 interface Message {
   id: string
@@ -184,7 +186,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
   }
 
   const deleteChat = async (chatId: string) => {
-    const confirmed = confirm('Are you sure you want to delete this chat?')
+    const confirmed = await showConfirmation('Are you sure you want to delete this chat?')
     if (!confirmed) return
 
     try {
@@ -192,7 +194,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
       if (!res.ok) throw new Error('Failed to delete chat')
       setChats(chats.filter(c => c.id !== chatId))
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete chat')
+      showErrorToast(err instanceof Error ? err.message : 'Failed to delete chat')
     }
   }
 

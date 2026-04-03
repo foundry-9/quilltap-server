@@ -319,9 +319,17 @@ export class OpenAIProvider implements TextProvider {
         requestParams.temperature = params.temperature;
       }
     } else {
-      const minTokensForReasoning = 4096;
-      if ((params.maxTokens ?? 0) < minTokensForReasoning) {
-        requestParams.max_output_tokens = minTokensForReasoning;
+      if (!params.strictMaxTokens) {
+        // Full reasoning model minimum for chat messages
+        const minTokensForReasoning = 4096;
+        if ((params.maxTokens ?? 0) < minTokensForReasoning) {
+          requestParams.max_output_tokens = minTokensForReasoning;
+        }
+      } else {
+        // Strict mode: use low reasoning effort so the model doesn't burn
+        // the entire output budget on thinking. This is for background tasks
+        // (summarization, keyword extraction) that don't need deep reasoning.
+        requestParams.reasoning = { effort: 'low' };
       }
     }
 

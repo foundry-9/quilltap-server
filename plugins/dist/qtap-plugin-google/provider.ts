@@ -530,10 +530,17 @@ export class GoogleProvider implements TextProvider {
     // Configure thinking for thinking models
     // Gemini 3 (gemini-pro-latest) needs explicit thinking budget to ensure output
     if (this.isThinkingModel(params.model)) {
-      config.thinkingConfig = {
-        thinkingBudget: 4096,
-      };
-      config.maxOutputTokens = Math.max(config.maxOutputTokens, 8192);
+      if (!params.strictMaxTokens) {
+        config.thinkingConfig = {
+          thinkingBudget: 4096,
+        };
+        config.maxOutputTokens = Math.max(config.maxOutputTokens, 8192);
+      } else {
+        // Strict mode: minimal thinking budget for background tasks
+        config.thinkingConfig = {
+          thinkingBudget: 1024,
+        };
+      }
     }
 
     try {
@@ -639,10 +646,17 @@ export class GoogleProvider implements TextProvider {
 
     // Configure thinking for thinking models (same as sendMessage)
     if (this.isThinkingModel(params.model)) {
-      config.thinkingConfig = {
-        thinkingBudget: 4096,
-      };
-      config.maxOutputTokens = Math.max(config.maxOutputTokens, 8192);
+      if (!params.strictMaxTokens) {
+        config.thinkingConfig = {
+          thinkingBudget: 4096,
+        };
+        config.maxOutputTokens = Math.max(config.maxOutputTokens, 8192);
+      } else {
+        // Strict mode: minimal thinking budget for background tasks
+        config.thinkingConfig = {
+          thinkingBudget: 1024,
+        };
+      }
     }
 
     try {

@@ -7365,9 +7365,13 @@ var OpenAIProvider = class {
         requestParams.temperature = params.temperature;
       }
     } else {
-      const minTokensForReasoning = 4096;
-      if ((params.maxTokens ?? 0) < minTokensForReasoning) {
-        requestParams.max_output_tokens = minTokensForReasoning;
+      if (!params.strictMaxTokens) {
+        const minTokensForReasoning = 4096;
+        if ((params.maxTokens ?? 0) < minTokensForReasoning) {
+          requestParams.max_output_tokens = minTokensForReasoning;
+        }
+      } else {
+        requestParams.reasoning = { effort: "low" };
       }
     }
     const tools = [];
