@@ -13798,7 +13798,7 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
-// ../../../node_modules/@quilltap/plugin-utils/dist/index.mjs
+// node_modules/@quilltap/plugin-utils/dist/index.mjs
 var import_fs = require("fs");
 function getCoreLoggerFactory() {
   return globalThis.__quilltap_logger_factory ?? null;
@@ -14071,10 +14071,9 @@ var ProgressTokenSchema = z.union([z.string(), z.number().int()]);
 var CursorSchema = z.string();
 var TaskCreationParamsSchema = z.looseObject({
   /**
-   * Time in milliseconds to keep task results available after completion.
-   * If null, the task has unlimited lifetime until manually cleaned up.
+   * Requested duration in milliseconds to retain task from creation.
    */
-  ttl: z.union([z.number(), z.null()]).optional(),
+  ttl: z.number().optional(),
   /**
    * Time in milliseconds to wait between task status requests.
    */
@@ -14374,7 +14373,11 @@ var ClientCapabilitiesSchema = z.object({
   /**
    * Present if the client supports task creation.
    */
-  tasks: ClientTasksCapabilitySchema.optional()
+  tasks: ClientTasksCapabilitySchema.optional(),
+  /**
+   * Extensions that the client supports. Keys are extension identifiers (vendor-prefix/extension-name).
+   */
+  extensions: z.record(z.string(), AssertObjectSchema).optional()
 });
 var InitializeRequestParamsSchema = BaseRequestParamsSchema.extend({
   /**
@@ -14435,7 +14438,11 @@ var ServerCapabilitiesSchema = z.object({
   /**
    * Present if the server supports task creation.
    */
-  tasks: ServerTasksCapabilitySchema.optional()
+  tasks: ServerTasksCapabilitySchema.optional(),
+  /**
+   * Extensions that the server supports. Keys are extension identifiers (vendor-prefix/extension-name).
+   */
+  extensions: z.record(z.string(), AssertObjectSchema).optional()
 });
 var InitializeResultSchema = ResultSchema.extend({
   /**
@@ -14628,6 +14635,12 @@ var ResourceSchema = z.object({
    * The MIME type of this resource, if known.
    */
   mimeType: z.optional(z.string()),
+  /**
+   * The size of the raw resource content, in bytes (i.e., before base64 encoding or any tokenization), if known.
+   *
+   * This can be used by Hosts to display file sizes and estimate context window usage.
+   */
+  size: z.optional(z.number()),
   /**
    * Optional annotations for the client.
    */

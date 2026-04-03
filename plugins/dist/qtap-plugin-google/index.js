@@ -22967,10 +22967,10 @@ var ResourceScope;
 })(ResourceScope || (ResourceScope = {}));
 var ServiceTier;
 (function(ServiceTier2) {
-  ServiceTier2["SERVICE_TIER_UNSPECIFIED"] = "SERVICE_TIER_UNSPECIFIED";
-  ServiceTier2["SERVICE_TIER_FLEX"] = "SERVICE_TIER_FLEX";
-  ServiceTier2["SERVICE_TIER_STANDARD"] = "SERVICE_TIER_STANDARD";
-  ServiceTier2["SERVICE_TIER_PRIORITY"] = "SERVICE_TIER_PRIORITY";
+  ServiceTier2["UNSPECIFIED"] = "unspecified";
+  ServiceTier2["FLEX"] = "flex";
+  ServiceTier2["STANDARD"] = "standard";
+  ServiceTier2["PRIORITY"] = "priority";
 })(ServiceTier || (ServiceTier = {}));
 var FeatureSelectionPreference;
 (function(FeatureSelectionPreference2) {
@@ -30322,8 +30322,9 @@ function generateContentConfigToVertex(apiClient, fromObject, parentObject, root
   if (parentObject !== void 0 && fromModelArmorConfig != null) {
     setValueByPath(parentObject, ["modelArmorConfig"], fromModelArmorConfig);
   }
-  if (getValueByPath(fromObject, ["serviceTier"]) !== void 0) {
-    throw new Error("serviceTier parameter is not supported in Vertex AI.");
+  const fromServiceTier = getValueByPath(fromObject, ["serviceTier"]);
+  if (parentObject !== void 0 && fromServiceTier != null) {
+    setValueByPath(parentObject, ["serviceTier"], fromServiceTier);
   }
   return toObject;
 }
@@ -32962,7 +32963,7 @@ var CONTENT_TYPE_HEADER = "Content-Type";
 var SERVER_TIMEOUT_HEADER = "X-Server-Timeout";
 var USER_AGENT_HEADER = "User-Agent";
 var GOOGLE_API_CLIENT_HEADER = "x-goog-api-client";
-var SDK_VERSION = "1.47.0";
+var SDK_VERSION = "1.48.0";
 var LIBRARY_LABEL = `google-genai-sdk/${SDK_VERSION}`;
 var VERTEX_AI_API_DEFAULT_VERSION = "v1beta1";
 var GOOGLE_AI_API_DEFAULT_VERSION = "v1beta";
@@ -47036,7 +47037,7 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 
-// ../../../node_modules/@quilltap/plugin-utils/dist/index.mjs
+// node_modules/@quilltap/plugin-utils/dist/index.mjs
 var import_fs2 = require("fs");
 function parseGoogleToolCalls(response) {
   const toolCalls = [];
@@ -48040,7 +48041,7 @@ var GoogleImagenProvider = class {
   }
 };
 
-// ../../../node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
+// node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
 var TOOL_NAME_ALIASES = {
   // Direct mappings
   "search_memories": "search_memories",

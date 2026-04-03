@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-curl",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "HTTP request tool for LLMs",
   "main": "index.js",
   "scripts": {
@@ -13,6 +13,6 @@
   },
   "devDependencies": {
     "@types/html-to-text": "^9.0.4",
-    "esbuild": "^0.27.4"
+    "esbuild": "^0.27.7"
   }
 }

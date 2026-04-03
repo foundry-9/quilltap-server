@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- chore: update npm dependencies across root, packages, and plugins — next 16.2.2, esbuild 0.27.7, @playwright/test 1.59.1, dotenv 17.4.0, yauzl 3.3.0, @google/genai 1.48.0, @modelcontextprotocol/sdk 1.29.0, storybook 10.3.4; fix format-time tests for @sinonjs/fake-timers 15.3.0 instanceof Date regression
 - refactor: restructure chat-message extracted services — introduce `StreamingState` mutable context bag (eliminates 9-field destructure/reassign), decompose `FinalizeMessageResponseOptions` into `StreamingState`/`CompressionContext`/`TriggerContext` sub-objects, fix `as any` cast in danger-orchestrator with proper `CheapLLMSelection` type, consolidate scene-state tracking into single orchestrator call site, trim barrel over-exports to public API only; add `.next` to tsconfig exclude
 - refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting empty-response retry and uncensored failover handling into `provider-failover.service.ts`, with focused coverage for same-provider retries, Auto-Route fallback, and final empty-response messaging
 - refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting Concierge classification and uncensored provider-routing preflight into `danger-orchestrator.service.ts`, with focused coverage for mode handling, reroutes, and fail-open behavior
