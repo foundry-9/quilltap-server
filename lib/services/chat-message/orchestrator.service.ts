@@ -96,15 +96,8 @@ import { resolveUserIdentity } from './user-identity-resolver.service'
 import {
   executeTurnChain,
 } from './turn-orchestrator.service'
-import {
-  resolveDangerousContentSettings,
-} from '@/lib/services/dangerous-content/resolver.service'
-import {
-  classifyContent as classifyDangerousContent,
-} from '@/lib/services/dangerous-content/gatekeeper.service'
-import {
-  resolveProviderForDangerousContent,
-} from '@/lib/services/dangerous-content/provider-routing.service'
+import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service'
+import { resolveMessageDangerState } from './danger-orchestrator.service'
 import type { DangerFlag } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
@@ -369,175 +362,27 @@ async function processMessage(
   // Dangerous Content Classification & Routing
   // ============================================================================
 
-  let dangerFlags: DangerFlag[] | undefined
+  const dangerState = await resolveMessageDangerState({
+    repos,
+    chatId,
+    userId,
+    chat,
+    chatSettings,
+    character,
+    isContinueMode,
+    content: options.content,
+    cheapLLMSelection,
+    connectionProfile,
+    apiKey,
+    controller,
+    encoder,
+  })
+
+  let dangerFlags: DangerFlag[] | undefined = dangerState.dangerFlags
   // Effective profile/key - may be overridden by dangerous content routing
-  let effectiveProfile = connectionProfile
-  let effectiveApiKey = apiKey
-
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings)
-  const dangerSettings = dangerousContentResolved.settings
-
-  if (chat.isDangerousChat === true && dangerSettings.mode !== 'OFF' && !isContinueMode && options.content) {
-    // Chat is permanently dangerous — skip per-message classification to save tokens
-    logger.debug('[DangerousContent] Skipping per-message classification — chat permanently dangerous', {
-      chatId,
-      dangerCategories: chat.dangerCategories,
-    })
-
-    // Synthesize danger flags from stored chat-level categories
-    const categories = chat.dangerCategories && chat.dangerCategories.length > 0
-      ? chat.dangerCategories
-      : ['unspecified']
-    dangerFlags = categories.map(cat => ({
-      category: cat,
-      score: 1.0,
-      userOverridden: false,
-      wasRerouted: false,
-    }))
-
-    // If AUTO_ROUTE and current profile is NOT uncensored-compatible, reroute
-    if (dangerSettings.mode === 'AUTO_ROUTE' && !effectiveProfile.isDangerousCompatible) {
-      const routeResult = await resolveProviderForDangerousContent(
-        effectiveProfile,
-        effectiveApiKey,
-        dangerSettings,
-        userId
-      )
-
-      if (routeResult.rerouted) {
-        effectiveProfile = routeResult.connectionProfile
-        effectiveApiKey = routeResult.apiKey
-
-        dangerFlags = dangerFlags.map(flag => ({
-          ...flag,
-          wasRerouted: true,
-          reroutedProvider: routeResult.connectionProfile.provider,
-          reroutedModel: routeResult.connectionProfile.modelName,
-        }))
-
-        logger.info('[DangerousContent] Rerouted to uncensored provider (permanently dangerous chat)', {
-          chatId,
-          originalProfile: connectionProfile.name,
-          uncensoredProfile: routeResult.connectionProfile.name,
-        })
-      }
-    } else if (dangerSettings.mode === 'AUTO_ROUTE') {
-      logger.debug('[DangerousContent] Current provider is already uncensored-compatible, skipping reroute', {
-        chatId,
-        provider: effectiveProfile.provider,
-        model: effectiveProfile.modelName,
-      })
-    }
-  } else if (dangerSettings.mode !== 'OFF' && dangerSettings.scanTextChat && !isContinueMode && options.content && cheapLLMSelection) {
-    try {
-      // Send classification status
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'classifying',
-        message: 'Checking content...',
-        characterName: character.name,
-        characterId: character.id,
-      }))
-
-      const classificationResult = await classifyDangerousContent(
-        options.content,
-        cheapLLMSelection,
-        userId,
-        dangerSettings,
-        chatId
-      )
-
-      if (classificationResult.isDangerous) {
-        // Build danger flags for the message
-        dangerFlags = classificationResult.categories.map(cat => ({
-          category: cat.category,
-          score: cat.score,
-          userOverridden: false,
-          wasRerouted: false,
-        }))
-
-        logger.info('[DangerousContent] User message classified as dangerous', {
-          chatId,
-          score: classificationResult.score,
-          categories: classificationResult.categories.map(c => c.category),
-          mode: dangerSettings.mode,
-        })
-
-        // If AUTO_ROUTE, try to reroute to uncensored provider
-        if (dangerSettings.mode === 'AUTO_ROUTE') {
-          if (!effectiveProfile.isDangerousCompatible) {
-            safeEnqueue(controller, encodeStatusEvent(encoder, {
-              stage: 'rerouting',
-              message: 'Routing to uncensored provider...',
-              characterName: character.name,
-              characterId: character.id,
-            }))
-
-            const routeResult = await resolveProviderForDangerousContent(
-              effectiveProfile,
-              effectiveApiKey,
-              dangerSettings,
-              userId
-            )
-
-            if (routeResult.rerouted) {
-              effectiveProfile = routeResult.connectionProfile
-              effectiveApiKey = routeResult.apiKey
-
-              // Update danger flags with routing info
-              dangerFlags = dangerFlags.map(flag => ({
-                ...flag,
-                wasRerouted: true,
-                reroutedProvider: routeResult.connectionProfile.provider,
-                reroutedModel: routeResult.connectionProfile.modelName,
-              }))
-
-              logger.info('[DangerousContent] Rerouted to uncensored provider', {
-                chatId,
-                originalProfile: connectionProfile.name,
-                uncensoredProfile: routeResult.connectionProfile.name,
-                reason: routeResult.reason,
-              })
-            } else {
-              logger.warn('[DangerousContent] No uncensored provider available, using original', {
-                chatId,
-                reason: routeResult.reason,
-              })
-            }
-          } else {
-            logger.debug('[DangerousContent] Current provider is already uncensored-compatible, skipping reroute', {
-              chatId,
-              provider: effectiveProfile.provider,
-              model: effectiveProfile.modelName,
-            })
-          }
-        }
-
-        // Save DANGER_CLASSIFICATION system event for token tracking
-        if (classificationResult.usage) {
-          const classificationEvent = {
-            id: crypto.randomUUID(),
-            type: 'system' as const,
-            systemEventType: 'DANGER_CLASSIFICATION' as const,
-            description: `Content classified: score ${classificationResult.score.toFixed(2)}, categories: ${classificationResult.categories.map(c => c.category).join(', ')}`,
-            promptTokens: classificationResult.usage.promptTokens,
-            completionTokens: classificationResult.usage.completionTokens,
-            totalTokens: classificationResult.usage.totalTokens,
-            provider: cheapLLMSelection.provider,
-            modelName: cheapLLMSelection.modelName,
-            createdAt: new Date().toISOString(),
-          }
-          await repos.chats.addMessage(chatId, classificationEvent)
-        }
-
-      }
-    } catch (error) {
-      // Fail safe - never block on classification errors
-      logger.error('[DangerousContent] Classification failed, continuing with original provider', {
-        chatId,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
+  let effectiveProfile = dangerState.effectiveProfile
+  let effectiveApiKey = dangerState.effectiveApiKey
+  const dangerSettings = dangerState.dangerSettings
 
   // Get roleplay template
   const roleplayTemplate = await getRoleplayTemplate(repos, chat, chatSettings ? { defaultRoleplayTemplateId: chatSettings.defaultRoleplayTemplateId ?? undefined } : null)

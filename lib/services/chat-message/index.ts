@@ -39,6 +39,11 @@ export {
   calculateNextSpeaker,
 } from './message-finalizer.service'
 
+// Dangerous Content Coordination
+export {
+  resolveMessageDangerState,
+} from './danger-orchestrator.service'
+
 // Participant Resolution
 export {
   resolveRespondingParticipant,

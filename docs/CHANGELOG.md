@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting Concierge classification and uncensored provider-routing preflight into `danger-orchestrator.service.ts`, with focused coverage for mode handling, reroutes, and fail-open behavior
 - refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting assistant response persistence, completion events, token tracking, RNG follow-up, and memory/summary triggers into `message-finalizer.service.ts`, with targeted coverage for the new finalization flow
 - refactor: begin decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting multi-character turn chaining into `turn-orchestrator.service.ts`, adding targeted chain execution tests while preserving the existing message streaming API
 - refactor: split `lib/memory/cheap-llm-tasks` into domain-focused modules for shared execution, memory work, chat summarization/titles, image/scene handling, and compression while preserving the original import path as a compatibility entrypoint

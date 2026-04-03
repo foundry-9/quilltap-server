@@ -179,6 +179,16 @@ export interface ProcessMessageResult {
 }
 
 /**
+ * Resolved dangerous-content state for a message send.
+ */
+export interface DangerResolutionResult {
+  dangerSettings: import('@/lib/schemas/settings.types').DangerousContentSettings
+  dangerFlags?: import('@/lib/schemas/chat.types').DangerFlag[]
+  effectiveProfile: ConnectionProfile
+  effectiveApiKey: string
+}
+
+/**
  * SSE event: A chained turn is starting for a new character
  */
 export interface TurnStartEvent {
