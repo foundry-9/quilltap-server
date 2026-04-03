@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- refactor: restructure chat-message extracted services — introduce `StreamingState` mutable context bag (eliminates 9-field destructure/reassign), decompose `FinalizeMessageResponseOptions` into `StreamingState`/`CompressionContext`/`TriggerContext` sub-objects, fix `as any` cast in danger-orchestrator with proper `CheapLLMSelection` type, consolidate scene-state tracking into single orchestrator call site, trim barrel over-exports to public API only; add `.next` to tsconfig exclude
 - refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting empty-response retry and uncensored failover handling into `provider-failover.service.ts`, with focused coverage for same-provider retries, Auto-Route fallback, and final empty-response messaging
 - refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting Concierge classification and uncensored provider-routing preflight into `danger-orchestrator.service.ts`, with focused coverage for mode handling, reroutes, and fail-open behavior
 - refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting assistant response persistence, completion events, token tracking, RNG follow-up, and memory/summary triggers into `message-finalizer.service.ts`, with targeted coverage for the new finalization flow

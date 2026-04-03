@@ -1,5 +1,4 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
-import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 
 const mockStreamMessage = jest.fn()
 const mockResolveProviderForDangerousContent = jest.fn()
@@ -61,13 +60,23 @@ describe('provider-failover.service', () => {
       { done: true, usage: { totalTokens: 8 }, rawResponse: { retry: 1 } },
     ]))
 
-    const result = await attemptEmptyResponseRecovery({
+    const state = {
       fullResponse: '',
+      effectiveProfile: baseProfile,
+      effectiveApiKey: 'sk-safe',
+      usage: null,
+      cacheUsage: null,
+      attachmentResults: null,
+      rawResponse: null,
+      thoughtSignature: undefined,
+      hasStartedStreaming: false,
+    }
+
+    const result = await attemptEmptyResponseRecovery({
+      state,
       toolMessagesLength: 0,
       contentWasFlaggedDangerous: false,
       dangerSettings: { mode: 'OFF', uncensoredTextProfileId: 'unc-1' } as any,
-      effectiveProfile: baseProfile,
-      effectiveApiKey: 'sk-safe',
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
@@ -79,17 +88,11 @@ describe('provider-failover.service', () => {
       controller,
       encoder,
       preGeneratedAssistantMessageId: 'msg-1',
-      hasStartedStreaming: false,
-      usage: null,
-      cacheUsage: null,
-      attachmentResults: null,
-      rawResponse: null,
-      thoughtSignature: undefined,
     })
 
     expect(result.sameProviderRetryAttempted).toBe(true)
     expect(result.uncensoredRetryAttempted).toBe(false)
-    expect(result.fullResponse).toBe('Recovered reply')
+    expect(state.fullResponse).toBe('Recovered reply')
     expect(controller.enqueue).toHaveBeenCalledWith('Recovered reply')
   })
 
@@ -118,13 +121,23 @@ describe('provider-failover.service', () => {
       reason: 'rerouted to uncensored profile',
     })
 
-    const result = await attemptEmptyResponseRecovery({
+    const state = {
       fullResponse: '',
+      effectiveProfile: baseProfile,
+      effectiveApiKey: 'sk-safe',
+      usage: null,
+      cacheUsage: null,
+      attachmentResults: null,
+      rawResponse: null,
+      thoughtSignature: undefined,
+      hasStartedStreaming: false,
+    }
+
+    const result = await attemptEmptyResponseRecovery({
+      state,
       toolMessagesLength: 0,
       contentWasFlaggedDangerous: false,
       dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
-      effectiveProfile: baseProfile,
-      effectiveApiKey: 'sk-safe',
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
@@ -136,29 +149,33 @@ describe('provider-failover.service', () => {
       controller,
       encoder,
       preGeneratedAssistantMessageId: 'msg-1',
-      hasStartedStreaming: false,
-      usage: null,
-      cacheUsage: null,
-      attachmentResults: null,
-      rawResponse: null,
-      thoughtSignature: undefined,
     })
 
     expect(result.sameProviderRetryAttempted).toBe(true)
     expect(result.uncensoredRetryAttempted).toBe(true)
-    expect(result.fullResponse).toBe('Uncensored reply')
-    expect(result.effectiveProfile).toEqual(uncensoredProfile)
-    expect(result.effectiveApiKey).toBe('sk-uncensored')
+    expect(state.fullResponse).toBe('Uncensored reply')
+    expect(state.effectiveProfile).toEqual(uncensoredProfile)
+    expect(state.effectiveApiKey).toBe('sk-uncensored')
   })
 
   it('skips the same-provider retry for content already flagged as dangerous', async () => {
-    const result = await attemptEmptyResponseRecovery({
+    const state = {
       fullResponse: '',
+      effectiveProfile: baseProfile,
+      effectiveApiKey: 'sk-safe',
+      usage: null,
+      cacheUsage: null,
+      attachmentResults: null,
+      rawResponse: null,
+      thoughtSignature: undefined,
+      hasStartedStreaming: false,
+    }
+
+    const result = await attemptEmptyResponseRecovery({
+      state,
       toolMessagesLength: 0,
       contentWasFlaggedDangerous: true,
       dangerSettings: { mode: 'DETECT_ONLY', uncensoredTextProfileId: 'unc-1' } as any,
-      effectiveProfile: baseProfile,
-      effectiveApiKey: 'sk-safe',
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
@@ -170,12 +187,6 @@ describe('provider-failover.service', () => {
       controller,
       encoder,
       preGeneratedAssistantMessageId: 'msg-1',
-      hasStartedStreaming: false,
-      usage: null,
-      cacheUsage: null,
-      attachmentResults: null,
-      rawResponse: null,
-      thoughtSignature: undefined,
     })
 
     expect(result.sameProviderRetryAttempted).toBe(false)

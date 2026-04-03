@@ -39,7 +39,6 @@ jest.mock('@/lib/services/chat-message/memory-trigger.service', () => ({
   triggerUserControlledCharacterMemory: jest.fn().mockResolvedValue(undefined),
   triggerContextSummaryCheck: jest.fn().mockResolvedValue(undefined),
   triggerChatDangerClassification: jest.fn().mockResolvedValue(undefined),
-  triggerSceneStateTracking: jest.fn().mockResolvedValue(undefined),
 }))
 
 jest.mock('@/lib/services/token-tracking.service', () => ({
@@ -154,40 +153,48 @@ describe('message-finalizer.service', () => {
       userParticipantId: null,
       isMultiCharacter: false,
       isContinueMode: false,
-      fullResponse: 'BLOCK:Alice: Hello from Alice',
-      usage: { promptTokens: 11, completionTokens: 7, totalTokens: 18 },
-      cacheUsage: { cacheCreationInputTokens: 2, cacheReadInputTokens: 3 },
-      attachmentResults: { sent: [], failed: [] },
-      rawResponse: { provider: 'raw' },
-      thoughtSignature: 'thought-1',
       generatedImagePaths: [],
       toolMessages: [],
       preGeneratedAssistantMessageId: 'assistant-2',
-      effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
       connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
       controller,
       encoder,
-      existingMessages: [],
-      content: 'Hello there',
-      builtContext: { originalSystemPrompt: 'System prompt' } as any,
-      compressionEnabled: true,
-      cheapLLMSelection: { provider: 'OPENAI', modelName: 'gpt-4.1-mini' } as any,
-      contextCompressionSettings: {
-        enabled: true,
-        windowSize: 5,
-        compressionTargetTokens: 800,
-        systemPromptTargetTokens: 1500,
-        projectContextReinjectInterval: 5,
+      streaming: {
+        fullResponse: 'BLOCK:Alice: Hello from Alice',
+        effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+        effectiveApiKey: 'sk-test',
+        usage: { promptTokens: 11, completionTokens: 7, totalTokens: 18 },
+        cacheUsage: { cacheCreationInputTokens: 2, cacheReadInputTokens: 3 },
+        attachmentResults: { sent: [], failed: [] },
+        rawResponse: { provider: 'raw' },
+        thoughtSignature: 'thought-1',
+        hasStartedStreaming: true,
       },
-      allProfiles: [],
-      dangerSettings: { mode: 'OFF' } as any,
-      chatSettings: {
-        cheapLLMSettings: { strategy: 'USER_DEFINED' },
-        autoDetectRng: false,
-      } as any,
-      participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
-      resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
-      userCharacterId: undefined,
+      compression: {
+        existingMessages: [],
+        content: 'Hello there',
+        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        compressionEnabled: true,
+        cheapLLMSelection: { provider: 'OPENAI', modelName: 'gpt-4.1-mini', isLocal: false } as any,
+        contextCompressionSettings: {
+          enabled: true,
+          windowSize: 5,
+          compressionTargetTokens: 800,
+          systemPromptTargetTokens: 1500,
+          projectContextReinjectInterval: 5,
+        },
+        allProfiles: [],
+      },
+      triggers: {
+        dangerSettings: { mode: 'OFF' } as any,
+        chatSettings: {
+          cheapLLMSettings: { strategy: 'USER_DEFINED' },
+          autoDetectRng: false,
+        } as any,
+        participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
+        resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
+        userCharacterId: undefined,
+      },
     })
 
     expect(result).toEqual(expect.objectContaining({
@@ -195,6 +202,7 @@ describe('message-finalizer.service', () => {
       messageId: 'assistant-2',
       isMultiCharacter: false,
     }))
+    expect(result.sceneTrackingContext).toBeDefined()
     expect(tokenTracking.trackMessageTokenUsage).toHaveBeenCalledWith(
       'chat-1',
       'profile-1',
@@ -212,7 +220,6 @@ describe('message-finalizer.service', () => {
     expect(memoryTriggers.triggerMemoryExtraction).toHaveBeenCalled()
     expect(memoryTriggers.triggerContextSummaryCheck).toHaveBeenCalled()
     expect(memoryTriggers.triggerChatDangerClassification).toHaveBeenCalled()
-    expect(memoryTriggers.triggerSceneStateTracking).toHaveBeenCalled()
   })
 
   it('finalizeMessageResponse runs multi-character memory hooks and assistant RNG auto-detection', async () => {
@@ -243,44 +250,52 @@ describe('message-finalizer.service', () => {
       userParticipantId: 'participant-2',
       isMultiCharacter: true,
       isContinueMode: false,
-      fullResponse: 'Please roll 1d20',
-      usage: null,
-      cacheUsage: null,
-      attachmentResults: null,
-      rawResponse: { provider: 'raw' },
-      thoughtSignature: undefined,
       generatedImagePaths: [],
       toolMessages: [],
-      effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
       connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
       controller,
       encoder,
-      existingMessages: [
-        { type: 'message', role: 'ASSISTANT', content: 'Hi', participantId: 'participant-2' },
-      ],
-      content: 'hello',
-      builtContext: { originalSystemPrompt: 'System prompt' } as any,
-      compressionEnabled: false,
-      cheapLLMSelection: null,
-      contextCompressionSettings: {
-        enabled: true,
-        windowSize: 5,
-        compressionTargetTokens: 800,
-        systemPromptTargetTokens: 1500,
-        projectContextReinjectInterval: 5,
+      streaming: {
+        fullResponse: 'Please roll 1d20',
+        effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+        effectiveApiKey: 'sk-test',
+        usage: null,
+        cacheUsage: null,
+        attachmentResults: null,
+        rawResponse: { provider: 'raw' },
+        thoughtSignature: undefined,
+        hasStartedStreaming: true,
       },
-      allProfiles: [],
-      dangerSettings: { mode: 'OFF' } as any,
-      chatSettings: {
-        cheapLLMSettings: { strategy: 'USER_DEFINED' },
-        autoDetectRng: true,
-      } as any,
-      participantCharacters: new Map([
-        ['char-1', { id: 'char-1', name: 'Alice', pronouns: null }],
-        ['char-2', { id: 'char-2', name: 'Bob', pronouns: null }],
-      ]),
-      resolvedIdentity: { name: 'User', description: 'desc', characterId: 'char-2' },
-      userCharacterId: 'char-2',
+      compression: {
+        existingMessages: [
+          { type: 'message', role: 'ASSISTANT', content: 'Hi', participantId: 'participant-2' },
+        ] as any,
+        content: 'hello',
+        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        compressionEnabled: false,
+        cheapLLMSelection: null,
+        contextCompressionSettings: {
+          enabled: true,
+          windowSize: 5,
+          compressionTargetTokens: 800,
+          systemPromptTargetTokens: 1500,
+          projectContextReinjectInterval: 5,
+        },
+        allProfiles: [],
+      },
+      triggers: {
+        dangerSettings: { mode: 'OFF' } as any,
+        chatSettings: {
+          cheapLLMSettings: { strategy: 'USER_DEFINED' },
+          autoDetectRng: true,
+        } as any,
+        participantCharacters: new Map([
+          ['char-1', { id: 'char-1', name: 'Alice', pronouns: null }],
+          ['char-2', { id: 'char-2', name: 'Bob', pronouns: null }],
+        ]),
+        resolvedIdentity: { name: 'User', description: 'desc', characterId: 'char-2' },
+        userCharacterId: 'char-2',
+      },
     })
 
     expect(rngHandler.executeRngTool).toHaveBeenCalled()

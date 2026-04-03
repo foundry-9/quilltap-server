@@ -10,6 +10,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, ConnectionProfile, ChatSettings, Character } from '@/lib/schemas/types'
 import type { DangerFlag } from '@/lib/schemas/chat.types'
+import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 
 import { encodeStatusEvent, safeEnqueue } from './streaming.service'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
@@ -28,10 +29,7 @@ export interface ResolveMessageDangerStateOptions {
   character: Character
   isContinueMode: boolean
   content?: string
-  cheapLLMSelection: {
-    provider: string
-    modelName: string
-  } | null
+  cheapLLMSelection: CheapLLMSelection | null
   connectionProfile: ConnectionProfile
   apiKey: string
   controller: ReadableStreamDefaultController<Uint8Array>
@@ -127,7 +125,7 @@ export async function resolveMessageDangerState({
 
       const classificationResult = await classifyDangerousContent(
         content,
-        cheapLLMSelection as any,
+        cheapLLMSelection,
         userId,
         dangerSettings,
         chatId

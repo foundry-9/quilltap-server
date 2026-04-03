@@ -17,17 +17,15 @@ import {
   safeEnqueue,
   encodeContentChunk,
 } from './streaming.service'
-import type { EmptyResponseRecoveryResult } from './types'
+import type { StreamingState } from './types'
 
 const logger = createServiceLogger('ProviderFailover')
 
 export interface AttemptEmptyResponseRecoveryOptions {
-  fullResponse: string
+  state: StreamingState
   toolMessagesLength: number
   contentWasFlaggedDangerous: boolean
   dangerSettings: DangerousContentSettings
-  effectiveProfile: ConnectionProfile
-  effectiveApiKey: string
   connectionProfile: ConnectionProfile
   formattedMessages: Array<{
     role: string
@@ -47,34 +45,22 @@ export interface AttemptEmptyResponseRecoveryOptions {
   controller: ReadableStreamDefaultController<Uint8Array>
   encoder: TextEncoder
   preGeneratedAssistantMessageId?: string
-  hasStartedStreaming: boolean
-  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
-  cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
-  attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
-  rawResponse: unknown
-  thoughtSignature?: string
 }
 
-interface RestreamResult {
-  fullResponse: string
-  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
-  cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
-  attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
-  rawResponse: unknown
-  thoughtSignature?: string
-  hasStartedStreaming: boolean
+export interface EmptyResponseRecoveryFlags {
+  uncensoredRetryAttempted: boolean
+  sameProviderRetryAttempted: boolean
 }
 
 /**
  * Attempt to recover from an empty assistant response.
+ * Mutates `state` directly — the caller reads updated values from the same object.
  */
 export async function attemptEmptyResponseRecovery({
-  fullResponse,
+  state,
   toolMessagesLength,
   contentWasFlaggedDangerous,
   dangerSettings,
-  effectiveProfile,
-  effectiveApiKey,
   connectionProfile,
   formattedMessages,
   modelParams,
@@ -86,38 +72,20 @@ export async function attemptEmptyResponseRecovery({
   controller,
   encoder,
   preGeneratedAssistantMessageId,
-  hasStartedStreaming,
-  usage,
-  cacheUsage,
-  attachmentResults,
-  rawResponse,
-  thoughtSignature,
-}: AttemptEmptyResponseRecoveryOptions): Promise<EmptyResponseRecoveryResult> {
+}: AttemptEmptyResponseRecoveryOptions): Promise<EmptyResponseRecoveryFlags> {
   let uncensoredRetryAttempted = false
   let sameProviderRetryAttempted = false
 
-  if (fullResponse.trim().length !== 0 || toolMessagesLength > 0) {
-    return {
-      fullResponse,
-      effectiveProfile,
-      effectiveApiKey,
-      usage,
-      cacheUsage,
-      attachmentResults,
-      rawResponse,
-      thoughtSignature,
-      hasStartedStreaming,
-      uncensoredRetryAttempted,
-      sameProviderRetryAttempted,
-    }
+  if (state.fullResponse.trim().length !== 0 || toolMessagesLength > 0) {
+    return { uncensoredRetryAttempted, sameProviderRetryAttempted }
   }
 
   if (!contentWasFlaggedDangerous) {
     sameProviderRetryAttempted = true
     logger.warn('[EmptyResponse] Empty response from provider that passed moderation, retrying same provider', {
       chatId,
-      provider: effectiveProfile.provider,
-      model: effectiveProfile.modelName,
+      provider: state.effectiveProfile.provider,
+      model: state.effectiveProfile.modelName,
     })
 
     safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -128,10 +96,9 @@ export async function attemptEmptyResponseRecovery({
     }))
 
     try {
-      const retryResult = await restreamResponse({
-        fullResponse,
-        connectionProfile: effectiveProfile,
-        apiKey: effectiveApiKey,
+      await restreamInto(state, {
+        connectionProfile: state.effectiveProfile,
+        apiKey: state.effectiveApiKey,
         formattedMessages,
         modelParams,
         actualTools,
@@ -142,34 +109,20 @@ export async function attemptEmptyResponseRecovery({
         controller,
         encoder,
         preGeneratedAssistantMessageId,
-        hasStartedStreaming,
-        usage,
-        cacheUsage,
-        attachmentResults,
-        rawResponse,
-        thoughtSignature,
       })
 
-      fullResponse = retryResult.fullResponse
-      usage = retryResult.usage
-      cacheUsage = retryResult.cacheUsage
-      attachmentResults = retryResult.attachmentResults
-      rawResponse = retryResult.rawResponse
-      thoughtSignature = retryResult.thoughtSignature
-      hasStartedStreaming = retryResult.hasStartedStreaming
-
-      if (fullResponse.trim().length > 0) {
+      if (state.fullResponse.trim().length > 0) {
         logger.info('[EmptyResponse] Same-provider retry succeeded', {
           chatId,
-          provider: effectiveProfile.provider,
-          model: effectiveProfile.modelName,
-          responseLength: fullResponse.length,
+          provider: state.effectiveProfile.provider,
+          model: state.effectiveProfile.modelName,
+          responseLength: state.fullResponse.length,
         })
       } else {
         logger.warn('[EmptyResponse] Same-provider retry also returned empty', {
           chatId,
-          provider: effectiveProfile.provider,
-          model: effectiveProfile.modelName,
+          provider: state.effectiveProfile.provider,
+          model: state.effectiveProfile.modelName,
         })
       }
     } catch (retryError) {
@@ -181,31 +134,31 @@ export async function attemptEmptyResponseRecovery({
   }
 
   if (
-    fullResponse.trim().length === 0 &&
+    state.fullResponse.trim().length === 0 &&
     dangerSettings.mode === 'AUTO_ROUTE' &&
     dangerSettings.uncensoredTextProfileId
   ) {
     uncensoredRetryAttempted = true
     logger.warn('[DangerousContent] Empty response detected, attempting uncensored retry', {
       chatId,
-      originalProvider: effectiveProfile.provider,
-      originalModel: effectiveProfile.modelName,
+      originalProvider: state.effectiveProfile.provider,
+      originalModel: state.effectiveProfile.modelName,
       contentWasFlaggedDangerous,
       sameProviderRetryAttempted,
     })
 
     try {
       const routeResult = await resolveProviderForDangerousContent(
-        effectiveProfile,
-        effectiveApiKey,
+        state.effectiveProfile,
+        state.effectiveApiKey,
         dangerSettings,
         userId
       )
 
-      if (routeResult.rerouted && routeResult.connectionProfile.id === effectiveProfile.id) {
+      if (routeResult.rerouted && routeResult.connectionProfile.id === state.effectiveProfile.id) {
         logger.debug('[DangerousContent] Uncensored fallback resolved to same profile, skipping retry', {
           chatId,
-          profileId: effectiveProfile.id,
+          profileId: state.effectiveProfile.id,
         })
       } else if (routeResult.rerouted) {
         safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -215,8 +168,7 @@ export async function attemptEmptyResponseRecovery({
           characterId: character.id,
         }))
 
-        const retryResult = await restreamResponse({
-          fullResponse,
+        await restreamInto(state, {
           connectionProfile: routeResult.connectionProfile,
           apiKey: routeResult.apiKey,
           formattedMessages,
@@ -229,31 +181,17 @@ export async function attemptEmptyResponseRecovery({
           controller,
           encoder,
           preGeneratedAssistantMessageId,
-          hasStartedStreaming,
-          usage,
-          cacheUsage,
-          attachmentResults,
-          rawResponse,
-          thoughtSignature,
         })
 
-        fullResponse = retryResult.fullResponse
-        usage = retryResult.usage
-        cacheUsage = retryResult.cacheUsage
-        attachmentResults = retryResult.attachmentResults
-        rawResponse = retryResult.rawResponse
-        thoughtSignature = retryResult.thoughtSignature
-        hasStartedStreaming = retryResult.hasStartedStreaming
-
-        if (fullResponse.trim().length > 0) {
-          effectiveProfile = routeResult.connectionProfile
-          effectiveApiKey = routeResult.apiKey
+        if (state.fullResponse.trim().length > 0) {
+          state.effectiveProfile = routeResult.connectionProfile
+          state.effectiveApiKey = routeResult.apiKey
 
           logger.info('[DangerousContent] Uncensored retry succeeded', {
             chatId,
             uncensoredProvider: routeResult.connectionProfile.provider,
             uncensoredModel: routeResult.connectionProfile.modelName,
-            responseLength: fullResponse.length,
+            responseLength: state.fullResponse.length,
           })
         } else {
           logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
@@ -273,19 +211,7 @@ export async function attemptEmptyResponseRecovery({
     }
   }
 
-  return {
-    fullResponse,
-    effectiveProfile,
-    effectiveApiKey,
-    usage,
-    cacheUsage,
-    attachmentResults,
-    rawResponse,
-    thoughtSignature,
-    hasStartedStreaming,
-    uncensoredRetryAttempted,
-    sameProviderRetryAttempted,
-  }
+  return { uncensoredRetryAttempted, sameProviderRetryAttempted }
 }
 
 export function getEmptyResponseReason({
@@ -316,28 +242,7 @@ export function getEmptyResponseReason({
   return 'The AI model returned an empty response. This is a known issue with some providers. Please try resending your message.'
 }
 
-async function restreamResponse({
-  fullResponse,
-  connectionProfile,
-  apiKey,
-  formattedMessages,
-  modelParams,
-  actualTools,
-  useNativeWebSearch,
-  userId,
-  chatId,
-  character,
-  controller,
-  encoder,
-  preGeneratedAssistantMessageId,
-  hasStartedStreaming,
-  usage,
-  cacheUsage,
-  attachmentResults,
-  rawResponse,
-  thoughtSignature,
-}: {
-  fullResponse: string
+interface RestreamOptions {
   connectionProfile: ConnectionProfile
   apiKey: string
   formattedMessages: AttemptEmptyResponseRecoveryOptions['formattedMessages']
@@ -350,56 +255,48 @@ async function restreamResponse({
   controller: ReadableStreamDefaultController<Uint8Array>
   encoder: TextEncoder
   preGeneratedAssistantMessageId?: string
-  hasStartedStreaming: boolean
-  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
-  cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
-  attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
-  rawResponse: unknown
-  thoughtSignature?: string
-}): Promise<RestreamResult> {
+}
+
+/**
+ * Re-stream a response into the mutable StreamingState.
+ */
+async function restreamInto(
+  state: StreamingState,
+  opts: RestreamOptions
+): Promise<void> {
   for await (const chunk of streamMessage({
-    messages: formattedMessages,
-    connectionProfile,
-    apiKey,
-    modelParams,
-    tools: actualTools,
-    useNativeWebSearch,
-    userId,
-    messageId: preGeneratedAssistantMessageId,
-    chatId,
+    messages: opts.formattedMessages,
+    connectionProfile: opts.connectionProfile,
+    apiKey: opts.apiKey,
+    modelParams: opts.modelParams,
+    tools: opts.actualTools,
+    useNativeWebSearch: opts.useNativeWebSearch,
+    userId: opts.userId,
+    messageId: opts.preGeneratedAssistantMessageId,
+    chatId: opts.chatId,
   })) {
     if (chunk.content) {
-      if (!hasStartedStreaming) {
-        safeEnqueue(controller, encodeStatusEvent(encoder, {
+      if (!state.hasStartedStreaming) {
+        safeEnqueue(opts.controller, encodeStatusEvent(opts.encoder, {
           stage: 'streaming',
-          message: `${character.name} is responding...`,
-          characterName: character.name,
-          characterId: character.id,
+          message: `${opts.character.name} is responding...`,
+          characterName: opts.character.name,
+          characterId: opts.character.id,
         }))
-        hasStartedStreaming = true
+        state.hasStartedStreaming = true
       }
-      fullResponse += chunk.content
-      controller.enqueue(encodeContentChunk(encoder, chunk.content))
+      state.fullResponse += chunk.content
+      opts.controller.enqueue(encodeContentChunk(opts.encoder, chunk.content))
     }
 
     if (chunk.done) {
-      usage = chunk.usage || null
-      cacheUsage = chunk.cacheUsage || null
-      attachmentResults = chunk.attachmentResults || null
-      rawResponse = chunk.rawResponse
+      state.usage = chunk.usage || null
+      state.cacheUsage = chunk.cacheUsage || null
+      state.attachmentResults = chunk.attachmentResults || null
+      state.rawResponse = chunk.rawResponse
       if (chunk.thoughtSignature) {
-        thoughtSignature = chunk.thoughtSignature
+        state.thoughtSignature = chunk.thoughtSignature
       }
     }
-  }
-
-  return {
-    fullResponse,
-    usage,
-    cacheUsage,
-    attachmentResults,
-    rawResponse,
-    thoughtSignature,
-    hasStartedStreaming,
   }
 }

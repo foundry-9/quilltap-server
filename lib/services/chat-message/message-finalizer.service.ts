@@ -19,9 +19,8 @@ import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 
 import type { getRepositories } from '@/lib/repositories/factory'
-import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent, ChatSettings } from '@/lib/schemas/types'
-import type { DangerousContentSettings, ContextCompressionSettings } from '@/lib/schemas/settings.types'
-import type { BuiltContext, GeneratedImage, NextSpeakerInfo, ProcessMessageResult, ToolMessage } from './types'
+import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
+import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage } from './types'
 import { saveToolMessages } from './tool-execution.service'
 import { encodeDoneEvent } from './streaming.service'
 import {
@@ -30,7 +29,6 @@ import {
   triggerUserControlledCharacterMemory,
   triggerContextSummaryCheck,
   triggerChatDangerClassification,
-  triggerSceneStateTracking,
   type MemoryChatSettings,
 } from './memory-trigger.service'
 import { triggerAsyncCompression } from './compression-cache.service'
@@ -48,35 +46,15 @@ export interface FinalizeMessageResponseOptions {
   userParticipantId: string | null
   isMultiCharacter: boolean
   isContinueMode: boolean
-  fullResponse: string
-  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
-  cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
-  attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
-  rawResponse: unknown
-  thoughtSignature?: string
   generatedImagePaths: GeneratedImage[]
   toolMessages: ToolMessage[]
   preGeneratedAssistantMessageId?: string
-  effectiveProfile: ConnectionProfile
   connectionProfile: ConnectionProfile
   controller: ReadableStreamDefaultController<Uint8Array>
   encoder: TextEncoder
-  existingMessages: MessageEvent[]
-  content: string
-  builtContext: BuiltContext
-  compressionEnabled: boolean
-  cheapLLMSelection: any
-  contextCompressionSettings: ContextCompressionSettings
-  allProfiles: ConnectionProfile[]
-  dangerSettings: DangerousContentSettings
-  chatSettings: ChatSettings | null
-  participantCharacters: Map<string, Character>
-  resolvedIdentity: {
-    name: string
-    description: string
-    characterId?: string | null
-  }
-  userCharacterId?: string
+  streaming: StreamingState
+  compression: CompressionContext
+  triggers: TriggerContext
 }
 
 /**
@@ -92,32 +70,19 @@ export async function finalizeMessageResponse({
   userParticipantId,
   isMultiCharacter,
   isContinueMode,
-  fullResponse,
-  usage,
-  cacheUsage,
-  attachmentResults,
-  rawResponse,
-  thoughtSignature,
   generatedImagePaths,
   toolMessages,
   preGeneratedAssistantMessageId,
-  effectiveProfile,
   connectionProfile,
   controller,
   encoder,
-  existingMessages,
-  content,
-  builtContext,
-  compressionEnabled,
-  cheapLLMSelection,
-  contextCompressionSettings,
-  allProfiles,
-  dangerSettings,
-  chatSettings,
-  participantCharacters,
-  resolvedIdentity,
-  userCharacterId,
+  streaming,
+  compression,
+  triggers,
 }: FinalizeMessageResponseOptions): Promise<ProcessMessageResult> {
+  const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature } = streaming
+  const { existingMessages, content, builtContext, compressionEnabled, cheapLLMSelection, contextCompressionSettings, allProfiles } = compression
+  const { dangerSettings, chatSettings, participantCharacters, resolvedIdentity, userCharacterId } = triggers
   const normalizedResponse = normalizeContentBlockFormat(fullResponse)
   const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
 
@@ -345,16 +310,6 @@ export async function finalizeMessageResponse({
       chatSettings: memoryChatSettings,
     })
 
-    if (!isMultiCharacter) {
-      const participantCharacterIds = Array.from(participantCharacters.values()).map(c => c.id)
-      await triggerSceneStateTracking(repos, {
-        chatId,
-        userId,
-        connectionProfile,
-        chatSettings: memoryChatSettings,
-        characterIds: participantCharacterIds,
-      })
-    }
   }
 
   return {
@@ -363,6 +318,15 @@ export async function finalizeMessageResponse({
     messageId: assistantMessageId,
     userParticipantId,
     isPaused: chat.isPaused,
+    sceneTrackingContext: chatSettings ? {
+      connectionProfile,
+      memoryChatSettings: {
+        cheapLLMSettings: chatSettings.cheapLLMSettings,
+        dangerSettings,
+        isDangerousChat: chat.isDangerousChat === true,
+      },
+      characterIds: Array.from(participantCharacters.values()).map(c => c.id),
+    } : undefined,
   }
 }
 

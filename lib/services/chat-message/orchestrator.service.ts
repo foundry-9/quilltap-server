@@ -15,8 +15,8 @@ import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ConnectionProfile, ChatMetadataBase, Character, ChatSettings } from '@/lib/schemas/types'
-import { isParticipantPresent } from '@/lib/schemas/chat.types'
-import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult } from './types'
+
+import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState } from './types'
 
 import {
   resolveRespondingParticipant,
@@ -181,32 +181,18 @@ export async function handleSendMessage(
           ),
         })
 
-        // Trigger scene state tracking once after the complete chain
-        if (result.isMultiCharacter && result.hasContent) {
+        // Trigger scene state tracking once after processing (and after any turn chain)
+        if (result.hasContent && result.sceneTrackingContext) {
           try {
-            const chainChat = await repos.chats.findById(chatId)
-            if (chainChat) {
-              const chatSettings = await repos.chatSettings.findByUserId(userId)
-              if (chatSettings?.cheapLLMSettings) {
-                const chainCharacterIds = chainChat.participants
-                  .filter(p => isParticipantPresent(p.status) && p.characterId)
-                  .map(p => p.characterId)
-                const chainConnectionProfile = await repos.connections.findById(
-                  chainChat.participants[0]?.connectionProfileId || ''
-                )
-                if (chainConnectionProfile) {
-                  await triggerSceneStateTracking(repos, {
-                    chatId,
-                    userId,
-                    connectionProfile: chainConnectionProfile,
-                    chatSettings: { cheapLLMSettings: chatSettings.cheapLLMSettings },
-                    characterIds: chainCharacterIds,
-                  })
-                }
-              }
-            }
+            await triggerSceneStateTracking(repos, {
+              chatId,
+              userId,
+              connectionProfile: result.sceneTrackingContext.connectionProfile,
+              chatSettings: result.sceneTrackingContext.memoryChatSettings,
+              characterIds: result.sceneTrackingContext.characterIds,
+            })
           } catch (error) {
-            logger.warn('[TurnOrchestrator] Failed to trigger scene state tracking after chain', {
+            logger.warn('Failed to trigger scene state tracking', {
               chatId,
               error: error instanceof Error ? error.message : String(error),
             })
@@ -382,10 +368,20 @@ async function processMessage(
   })
 
   let dangerFlags: DangerFlag[] | undefined = dangerState.dangerFlags
-  // Effective profile/key - may be overridden by dangerous content routing
-  let effectiveProfile = dangerState.effectiveProfile
-  let effectiveApiKey = dangerState.effectiveApiKey
   const dangerSettings = dangerState.dangerSettings
+
+  // Mutable streaming state — threaded through failover and finalization by reference
+  const streamingState: StreamingState = {
+    fullResponse: '',
+    effectiveProfile: dangerState.effectiveProfile,
+    effectiveApiKey: dangerState.effectiveApiKey,
+    usage: null,
+    cacheUsage: null,
+    attachmentResults: null,
+    rawResponse: null,
+    thoughtSignature: undefined,
+    hasStartedStreaming: false,
+  }
 
   // Get roleplay template
   const roleplayTemplate = await getRoleplayTemplate(repos, chat, chatSettings ? { defaultRoleplayTemplateId: chatSettings.defaultRoleplayTemplateId ?? undefined } : null)
@@ -579,7 +575,7 @@ async function processMessage(
   // Check tool options
   const enabledToolOptions = determineEnabledToolOptions(
     imageProfileId,
-    effectiveProfile.allowWebSearch
+    streamingState.effectiveProfile.allowWebSearch
   )
 
   // Resolve help tools enabled from character (default: disabled)
@@ -588,7 +584,7 @@ async function processMessage(
   // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
   // Always pass disabledTools and disabledToolGroups for filtering
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
-    effectiveProfile,
+    streamingState.effectiveProfile,
     imageProfileId,
     imageProfile,
     userId,
@@ -609,19 +605,19 @@ async function processMessage(
   if (useTextBlockTools) {
     const textBlockOptions = determineTextBlockToolOptions(
       imageProfileId,
-      effectiveProfile.allowWebSearch,
+      streamingState.effectiveProfile.allowWebSearch,
       isMultiCharacter,
       !!chat.projectId,
       helpToolsEnabled
     )
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
-    logTextBlockToolUsage(effectiveProfile.provider, effectiveProfile.modelName, textBlockOptions)
+    logTextBlockToolUsage(streamingState.effectiveProfile.provider, streamingState.effectiveProfile.modelName, textBlockOptions)
   } else if (actualTools.length > 0) {
     toolInstructions = buildNativeToolSystemInstructions()
   }
 
   // Build message context
-  const modelParams = effectiveProfile.parameters as Record<string, unknown>
+  const modelParams = streamingState.effectiveProfile.parameters as Record<string, unknown>
   const contextChatSettings = chatSettings ? {
     cheapLLMSettings: chatSettings.cheapLLMSettings ? {
       embeddingProfileId: chatSettings.cheapLLMSettings.embeddingProfileId ?? undefined,
@@ -826,7 +822,7 @@ async function processMessage(
       chat,
       character,
       characterParticipant,
-      connectionProfile: effectiveProfile,
+      connectionProfile: streamingState.effectiveProfile,
       persona,
       isMultiCharacter,
       participantCharacters,
@@ -967,7 +963,7 @@ async function processMessage(
   // Send debug info
   controller.enqueue(encodeDebugInfo(encoder, {
     builtContext,
-    connectionProfile: effectiveProfile,
+    connectionProfile: streamingState.effectiveProfile,
     modelParams,
     messages: formattedMessages.map(m => ({
       role: m.role,
@@ -1000,8 +996,8 @@ async function processMessage(
     logger.warn('Context exceeds model safe input limit, payload may be rejected', {
       chatId,
       characterName: character.name,
-      provider: effectiveProfile.provider,
-      model: effectiveProfile.modelName,
+      provider: streamingState.effectiveProfile.provider,
+      model: streamingState.effectiveProfile.modelName,
       estimatedInputTokens,
       safeInputLimit,
       modelContextLimit,
@@ -1013,19 +1009,13 @@ async function processMessage(
     // Send a warning status to the client so the user knows what happened
     safeEnqueue(controller, encodeStatusEvent(encoder, {
       stage: 'warning',
-      message: `Context (~${Math.round(estimatedInputTokens / 1000)}k tokens) may exceed ${effectiveProfile.modelName} limit (~${Math.round(safeInputLimit / 1000)}k tokens)`,
+      message: `Context (~${Math.round(estimatedInputTokens / 1000)}k tokens) may exceed ${streamingState.effectiveProfile.modelName} limit (~${Math.round(safeInputLimit / 1000)}k tokens)`,
       characterName: character.name,
       characterId: character.id,
     }))
   }
 
-  // Stream the response
-  let fullResponse = ''
-  let usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null = null
-  let cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null = null
-  let attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null = null
-  let rawResponse: unknown = null
-  let thoughtSignature: string | undefined
+  // Stream the response (state is accumulated in streamingState)
 
   // Pre-generate assistant message ID so logs can reference it
   const preGeneratedAssistantMessageId = crypto.randomUUID()
@@ -1033,7 +1023,7 @@ async function processMessage(
   // Extract previous response ID for conversation chaining (OpenAI Responses API)
   // This allows OpenAI to use its internal cache, reducing input token costs
   let previousResponseId: string | undefined
-  if (effectiveProfile.provider === 'OPENAI') {
+  if (streamingState.effectiveProfile.provider === 'OPENAI') {
     // Find the last assistant message with a Responses API ID
     for (let i = existingMessages.length - 1; i >= 0; i--) {
       const msg = existingMessages[i]
@@ -1055,14 +1045,13 @@ async function processMessage(
     characterId: character.id,
   }))
 
-  // Track if streaming has started for status update
-  let hasStartedStreaming = false
+  // hasStartedStreaming is tracked in streamingState
 
   try {
     for await (const chunk of streamMessage({
       messages: formattedMessages,
-      connectionProfile: effectiveProfile,
-      apiKey: effectiveApiKey,
+      connectionProfile: streamingState.effectiveProfile,
+      apiKey: streamingState.effectiveApiKey,
       modelParams,
       tools: actualTools,
       useNativeWebSearch,
@@ -1074,26 +1063,26 @@ async function processMessage(
     })) {
       if (chunk.content) {
         // Send streaming status on first content
-        if (!hasStartedStreaming) {
+        if (!streamingState.hasStartedStreaming) {
           safeEnqueue(controller, encodeStatusEvent(encoder, {
             stage: 'streaming',
             message: `${character.name} is responding...`,
             characterName: character.name,
             characterId: character.id,
           }))
-          hasStartedStreaming = true
+          streamingState.hasStartedStreaming = true
         }
-        fullResponse += chunk.content
+        streamingState.fullResponse += chunk.content
         controller.enqueue(encodeContentChunk(encoder, chunk.content))
       }
 
       if (chunk.done) {
-        usage = chunk.usage || null
-        cacheUsage = chunk.cacheUsage || null
-        attachmentResults = chunk.attachmentResults || null
-        rawResponse = chunk.rawResponse
+        streamingState.usage = chunk.usage || null
+        streamingState.cacheUsage = chunk.cacheUsage || null
+        streamingState.attachmentResults = chunk.attachmentResults || null
+        streamingState.rawResponse = chunk.rawResponse
         if (chunk.thoughtSignature) {
-          thoughtSignature = chunk.thoughtSignature
+          streamingState.thoughtSignature = chunk.thoughtSignature
 
         }
       }
@@ -1104,8 +1093,8 @@ async function processMessage(
     if (isToolUnsupportedError(streamingError) && actualTools.length > 0) {
       logger.warn('Model does not support function calling, retrying without tools', {
         chatId,
-        provider: effectiveProfile.provider,
-        model: effectiveProfile.modelName,
+        provider: streamingState.effectiveProfile.provider,
+        model: streamingState.effectiveProfile.modelName,
         toolCount: actualTools.length,
         error: streamingError instanceof Error ? streamingError.message : String(streamingError),
       })
@@ -1120,8 +1109,8 @@ async function processMessage(
       try {
         for await (const chunk of streamMessage({
           messages: formattedMessages,
-          connectionProfile: effectiveProfile,
-          apiKey: effectiveApiKey,
+          connectionProfile: streamingState.effectiveProfile,
+          apiKey: streamingState.effectiveApiKey,
           modelParams,
           tools: [],
           useNativeWebSearch,
@@ -1130,41 +1119,41 @@ async function processMessage(
           chatId,
         })) {
           if (chunk.content) {
-            if (!hasStartedStreaming) {
+            if (!streamingState.hasStartedStreaming) {
               safeEnqueue(controller, encodeStatusEvent(encoder, {
                 stage: 'streaming',
                 message: `${character.name} is responding...`,
                 characterName: character.name,
                 characterId: character.id,
               }))
-              hasStartedStreaming = true
+              streamingState.hasStartedStreaming = true
             }
-            fullResponse += chunk.content
+            streamingState.fullResponse += chunk.content
             controller.enqueue(encodeContentChunk(encoder, chunk.content))
           }
 
           if (chunk.done) {
-            usage = chunk.usage || null
-            cacheUsage = chunk.cacheUsage || null
-            attachmentResults = chunk.attachmentResults || null
-            rawResponse = chunk.rawResponse
+            streamingState.usage = chunk.usage || null
+            streamingState.cacheUsage = chunk.cacheUsage || null
+            streamingState.attachmentResults = chunk.attachmentResults || null
+            streamingState.rawResponse = chunk.rawResponse
             if (chunk.thoughtSignature) {
-              thoughtSignature = chunk.thoughtSignature
+              streamingState.thoughtSignature = chunk.thoughtSignature
             }
           }
         }
 
         logger.info('Tool-unsupported retry succeeded. Consider configuring text-block tools for this model.', {
           chatId,
-          provider: effectiveProfile.provider,
-          model: effectiveProfile.modelName,
-          responseLength: fullResponse.length,
+          provider: streamingState.effectiveProfile.provider,
+          model: streamingState.effectiveProfile.modelName,
+          responseLength: streamingState.fullResponse.length,
         })
       } catch (retryError) {
         logger.error('Tool-unsupported retry also failed', {
           chatId,
-          provider: effectiveProfile.provider,
-          model: effectiveProfile.modelName,
+          provider: streamingState.effectiveProfile.provider,
+          model: streamingState.effectiveProfile.modelName,
           error: retryError instanceof Error ? retryError.message : String(retryError),
         })
         throw retryError
@@ -1174,8 +1163,8 @@ async function processMessage(
     else if (isRecoverableRequestError(streamingError)) {
       logger.info('Recoverable request error detected, attempting recovery', {
         chatId,
-        provider: effectiveProfile.provider,
-        model: effectiveProfile.modelName,
+        provider: streamingState.effectiveProfile.provider,
+        model: streamingState.effectiveProfile.modelName,
         attachmentCount: fileProcessing.attachedFiles.length,
         error: streamingError instanceof Error ? streamingError.message : String(streamingError),
       })
@@ -1184,8 +1173,8 @@ async function processMessage(
         controller,
         encoder,
         character,
-        connectionProfile: effectiveProfile,
-        apiKey: effectiveApiKey,
+        connectionProfile: streamingState.effectiveProfile,
+        apiKey: streamingState.effectiveApiKey,
         attachedFiles: fileProcessing.attachedFiles,
         originalMessage: options.content,
         error: streamingError,
@@ -1223,8 +1212,8 @@ async function processMessage(
   let toolMessages: ToolMessage[] = []
   let generatedImagePaths: GeneratedImage[] = []
   let currentMessages = [...formattedMessages]
-  let currentResponse = fullResponse
-  let currentRawResponse = rawResponse
+  let currentResponse = streamingState.fullResponse
+  let currentRawResponse = streamingState.rawResponse
   // Use agent mode max turns if enabled, otherwise default to 5
   const effectiveMaxTurns = agentMode.enabled ? agentMode.maxTurns : 5
   let toolIterations = 0
@@ -1233,7 +1222,7 @@ async function processMessage(
 
   // Tool call loop
   while (currentRawResponse && toolIterations < effectiveMaxTurns) {
-    const toolCalls = detectToolCallsInResponse(currentRawResponse, effectiveProfile.provider)
+    const toolCalls = detectToolCallsInResponse(currentRawResponse, streamingState.effectiveProfile.provider)
 
     if (toolCalls.length === 0) break
 
@@ -1265,7 +1254,7 @@ async function processMessage(
       })
 
       // Use the final response as the full response
-      fullResponse = agentFinalResponse
+      streamingState.fullResponse = agentFinalResponse
       break
     }
 
@@ -1316,12 +1305,12 @@ async function processMessage(
     if (currentResponse && currentResponse.trim().length > 0) {
       currentMessages = [
         ...currentMessages,
-        { role: 'assistant' as const, content: currentResponse, thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
+        { role: 'assistant' as const, content: currentResponse, thoughtSignature: streamingState.thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
       ]
     } else {
       currentMessages = [
         ...currentMessages,
-        { role: 'assistant' as const, content: '', thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
+        { role: 'assistant' as const, content: '', thoughtSignature: streamingState.thoughtSignature, name: undefined, toolCalls: assistantToolCalls }
       ]
     }
 
@@ -1346,8 +1335,8 @@ async function processMessage(
 
     for await (const chunk of streamMessage({
       messages: currentMessages,
-      connectionProfile: effectiveProfile,
-      apiKey: effectiveApiKey,
+      connectionProfile: streamingState.effectiveProfile,
+      apiKey: streamingState.effectiveApiKey,
       modelParams,
       tools: actualTools,
       useNativeWebSearch,
@@ -1358,18 +1347,18 @@ async function processMessage(
     })) {
       if (chunk.content) {
         currentResponse += chunk.content
-        fullResponse += chunk.content
+        streamingState.fullResponse += chunk.content
         controller.enqueue(encodeContentChunk(encoder, chunk.content))
       }
 
       if (chunk.done) {
-        usage = chunk.usage || null
-        cacheUsage = chunk.cacheUsage || null
-        attachmentResults = chunk.attachmentResults || null
+        streamingState.usage = chunk.usage || null
+        streamingState.cacheUsage = chunk.cacheUsage || null
+        streamingState.attachmentResults = chunk.attachmentResults || null
         currentRawResponse = chunk.rawResponse
-        rawResponse = chunk.rawResponse
+        streamingState.rawResponse = chunk.rawResponse
         if (chunk.thoughtSignature) {
-          thoughtSignature = chunk.thoughtSignature
+          streamingState.thoughtSignature = chunk.thoughtSignature
         }
       }
     }
@@ -1397,15 +1386,15 @@ async function processMessage(
       const forceFinalMessage = buildForceFinalMessage()
       currentMessages = [
         ...currentMessages,
-        { role: 'assistant' as const, content: currentResponse, thoughtSignature, name: undefined },
+        { role: 'assistant' as const, content: currentResponse, thoughtSignature: streamingState.thoughtSignature, name: undefined },
         { role: 'user' as const, content: forceFinalMessage, thoughtSignature: undefined, name: undefined }
       ]
 
       // Make one final call with force message
       for await (const chunk of streamMessage({
         messages: currentMessages,
-        connectionProfile: effectiveProfile,
-        apiKey: effectiveApiKey,
+        connectionProfile: streamingState.effectiveProfile,
+        apiKey: streamingState.effectiveApiKey,
         modelParams,
         tools: actualTools,
         useNativeWebSearch,
@@ -1414,27 +1403,27 @@ async function processMessage(
         chatId,
       })) {
         if (chunk.content) {
-          fullResponse += chunk.content
+          streamingState.fullResponse += chunk.content
           controller.enqueue(encodeContentChunk(encoder, chunk.content))
         }
 
         if (chunk.done) {
-          usage = chunk.usage || null
-          cacheUsage = chunk.cacheUsage || null
-          attachmentResults = chunk.attachmentResults || null
-          rawResponse = chunk.rawResponse
+          streamingState.usage = chunk.usage || null
+          streamingState.cacheUsage = chunk.cacheUsage || null
+          streamingState.attachmentResults = chunk.attachmentResults || null
+          streamingState.rawResponse = chunk.rawResponse
           if (chunk.thoughtSignature) {
-            thoughtSignature = chunk.thoughtSignature
+            streamingState.thoughtSignature = chunk.thoughtSignature
           }
 
           // Check if the final call includes submit_final_response
           if (chunk.rawResponse) {
-            const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, effectiveProfile.provider)
+            const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, streamingState.effectiveProfile.provider)
             const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
             if (submitCall) {
               const args = submitCall.arguments as { response?: string }
               if (args.response) {
-                fullResponse = args.response
+                streamingState.fullResponse = args.response
               }
             }
           }
@@ -1447,15 +1436,15 @@ async function processMessage(
 
   // Process text tool calls via provider plugin (catches spontaneous XML emissions)
   // Each plugin knows which formats its models emit (e.g., DeepSeek <function_calls>, Gemini <tool_use>)
-  const providerPlugin = getProvider(effectiveProfile.provider)
-  if (fullResponse && providerPlugin?.hasTextToolMarkers?.(fullResponse)) {
-    const textToolCallRequests = providerPlugin.parseTextToolCalls?.(fullResponse) ?? []
+  const providerPlugin = getProvider(streamingState.effectiveProfile.provider)
+  if (streamingState.fullResponse && providerPlugin?.hasTextToolMarkers?.(streamingState.fullResponse)) {
+    const textToolCallRequests = providerPlugin.parseTextToolCalls?.(streamingState.fullResponse) ?? []
 
     if (textToolCallRequests.length > 0) {
       logger.info('Detected text tool calls in response (via plugin)', {
         count: textToolCallRequests.length,
         tools: textToolCallRequests.map(tc => tc.name),
-        provider: effectiveProfile.provider,
+        provider: streamingState.effectiveProfile.provider,
       })
 
       // Send tool executing status for each detected tool
@@ -1473,7 +1462,7 @@ async function processMessage(
       toolMessages = [...toolMessages, ...results.toolMessages]
       generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
-      const strippedResponse = providerPlugin.stripTextToolMarkers?.(fullResponse) ?? fullResponse
+      const strippedResponse = providerPlugin.stripTextToolMarkers?.(streamingState.fullResponse) ?? streamingState.fullResponse
 
       // Add stripped response and tool results to conversation
       currentMessages = [...formattedMessages]
@@ -1481,7 +1470,7 @@ async function processMessage(
         currentMessages.push({
           role: 'assistant' as const,
           content: strippedResponse,
-          thoughtSignature,
+          thoughtSignature: streamingState.thoughtSignature,
           name: undefined,
         })
       }
@@ -1499,8 +1488,8 @@ async function processMessage(
       let continuationResponse = ''
       for await (const chunk of streamMessage({
         messages: currentMessages,
-        connectionProfile: effectiveProfile,
-        apiKey: effectiveApiKey,
+        connectionProfile: streamingState.effectiveProfile,
+        apiKey: streamingState.effectiveApiKey,
         modelParams,
         tools: actualTools,
         useNativeWebSearch,
@@ -1514,27 +1503,27 @@ async function processMessage(
         }
 
         if (chunk.done) {
-          usage = chunk.usage || null
-          cacheUsage = chunk.cacheUsage || null
-          rawResponse = chunk.rawResponse
+          streamingState.usage = chunk.usage || null
+          streamingState.cacheUsage = chunk.cacheUsage || null
+          streamingState.rawResponse = chunk.rawResponse
           if (chunk.thoughtSignature) {
-            thoughtSignature = chunk.thoughtSignature
+            streamingState.thoughtSignature = chunk.thoughtSignature
           }
         }
       }
 
-      fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
+      streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
       // Strip any remaining text tool markers from the continuation
       if (providerPlugin.stripTextToolMarkers) {
-        fullResponse = providerPlugin.stripTextToolMarkers(fullResponse)
+        streamingState.fullResponse = providerPlugin.stripTextToolMarkers(streamingState.fullResponse)
       }
     }
   }
 
   // Process text-block tool calls (runs for ALL providers, like XML parsing)
   // Text-block format: [[TOOL_NAME param="value"]]content[[/TOOL_NAME]]
-  if (fullResponse && hasTextBlockMarkers(fullResponse)) {
-    const textBlockToolCalls = parseTextBlocksFromResponse(fullResponse)
+  if (streamingState.fullResponse && hasTextBlockMarkers(streamingState.fullResponse)) {
+    const textBlockToolCalls = parseTextBlocksFromResponse(streamingState.fullResponse)
 
     if (textBlockToolCalls.length > 0) {
       logger.info('Detected text-block tool calls in response', {
@@ -1557,7 +1546,7 @@ async function processMessage(
       toolMessages = [...toolMessages, ...results.toolMessages]
       generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
-      const strippedResponse = stripTextBlockMarkersFromResponse(fullResponse)
+      const strippedResponse = stripTextBlockMarkersFromResponse(streamingState.fullResponse)
 
       // Add stripped response and tool results to conversation
       currentMessages = [...formattedMessages]
@@ -1565,7 +1554,7 @@ async function processMessage(
         currentMessages.push({
           role: 'assistant' as const,
           content: strippedResponse,
-          thoughtSignature,
+          thoughtSignature: streamingState.thoughtSignature,
           name: undefined,
         })
       }
@@ -1583,8 +1572,8 @@ async function processMessage(
       let continuationResponse = ''
       for await (const chunk of streamMessage({
         messages: currentMessages,
-        connectionProfile: effectiveProfile,
-        apiKey: effectiveApiKey,
+        connectionProfile: streamingState.effectiveProfile,
+        apiKey: streamingState.effectiveApiKey,
         modelParams,
         tools: useTextBlockTools ? [] : actualTools,
         useNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
@@ -1598,29 +1587,27 @@ async function processMessage(
         }
 
         if (chunk.done) {
-          usage = chunk.usage || null
-          cacheUsage = chunk.cacheUsage || null
-          rawResponse = chunk.rawResponse
+          streamingState.usage = chunk.usage || null
+          streamingState.cacheUsage = chunk.cacheUsage || null
+          streamingState.rawResponse = chunk.rawResponse
           if (chunk.thoughtSignature) {
-            thoughtSignature = chunk.thoughtSignature
+            streamingState.thoughtSignature = chunk.thoughtSignature
           }
         }
       }
 
-      fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
+      streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
       // Strip any remaining text-block markers from the continuation
-      fullResponse = stripTextBlockMarkersFromResponse(fullResponse)
+      streamingState.fullResponse = stripTextBlockMarkersFromResponse(streamingState.fullResponse)
     }
   }
 
   const contentWasFlaggedDangerous = !!(dangerFlags && dangerFlags.length > 0)
-  const recoveryResult = await attemptEmptyResponseRecovery({
-    fullResponse,
+  const { uncensoredRetryAttempted, sameProviderRetryAttempted } = await attemptEmptyResponseRecovery({
+    state: streamingState,
     toolMessagesLength: toolMessages.length,
     contentWasFlaggedDangerous,
     dangerSettings,
-    effectiveProfile,
-    effectiveApiKey,
     connectionProfile,
     formattedMessages,
     modelParams,
@@ -1632,30 +1619,12 @@ async function processMessage(
     controller,
     encoder,
     preGeneratedAssistantMessageId,
-    hasStartedStreaming,
-    usage,
-    cacheUsage,
-    attachmentResults,
-    rawResponse,
-    thoughtSignature,
   })
-
-  fullResponse = recoveryResult.fullResponse
-  effectiveProfile = recoveryResult.effectiveProfile
-  effectiveApiKey = recoveryResult.effectiveApiKey
-  usage = recoveryResult.usage
-  cacheUsage = recoveryResult.cacheUsage
-  attachmentResults = recoveryResult.attachmentResults
-  rawResponse = recoveryResult.rawResponse
-  thoughtSignature = recoveryResult.thoughtSignature
-  hasStartedStreaming = recoveryResult.hasStartedStreaming
-
-  const { uncensoredRetryAttempted, sameProviderRetryAttempted } = recoveryResult
 
   // Save assistant message
   let assistantMessageId: string | null = null
 
-  if (fullResponse && fullResponse.trim().length > 0) {
+  if (streamingState.fullResponse && streamingState.fullResponse.trim().length > 0) {
     return finalizeMessageResponse({
       repos,
       chatId,
@@ -1666,31 +1635,29 @@ async function processMessage(
       userParticipantId,
       isMultiCharacter,
       isContinueMode,
-      fullResponse,
-      usage,
-      cacheUsage,
-      attachmentResults,
-      rawResponse,
-      thoughtSignature,
       generatedImagePaths,
       toolMessages,
       preGeneratedAssistantMessageId,
-      effectiveProfile,
       connectionProfile,
       controller,
       encoder,
-      existingMessages: existingMessages as MessageEvent[],
-      content,
-      builtContext,
-      compressionEnabled,
-      cheapLLMSelection,
-      contextCompressionSettings,
-      allProfiles,
-      dangerSettings,
-      chatSettings,
-      participantCharacters,
-      resolvedIdentity,
-      userCharacterId,
+      streaming: streamingState,
+      compression: {
+        existingMessages: existingMessages as MessageEvent[],
+        content,
+        builtContext,
+        compressionEnabled,
+        cheapLLMSelection,
+        contextCompressionSettings,
+        allProfiles,
+      },
+      triggers: {
+        dangerSettings,
+        chatSettings,
+        participantCharacters,
+        resolvedIdentity,
+        userCharacterId,
+      },
     })
   } else if (toolMessages.length > 0) {
     // Save tool messages even without text response
@@ -1708,12 +1675,12 @@ async function processMessage(
     controller.enqueue(encodeDoneEvent(encoder, {
       messageId: toolSaveResult.firstToolMessageId,
       participantId: characterParticipant.id,
-      usage,
-      cacheUsage,
-      attachmentResults,
+      usage: streamingState.usage,
+      cacheUsage: streamingState.cacheUsage,
+      attachmentResults: streamingState.attachmentResults,
       toolsExecuted: true,
-      provider: effectiveProfile.provider,
-      modelName: effectiveProfile.modelName,
+      provider: streamingState.effectiveProfile.provider,
+      modelName: streamingState.effectiveProfile.modelName,
     }))
 
     return {
@@ -1735,20 +1702,20 @@ async function processMessage(
       sameProviderRetryAttempted,
       contentWasFlaggedDangerous,
       dangerMode: dangerSettings.mode,
-      provider: effectiveProfile.provider,
-      model: effectiveProfile.modelName,
+      provider: streamingState.effectiveProfile.provider,
+      model: streamingState.effectiveProfile.modelName,
     })
     controller.enqueue(encodeDoneEvent(encoder, {
       messageId: null,
       participantId: characterParticipant.id,
-      usage,
-      cacheUsage,
-      attachmentResults,
+      usage: streamingState.usage,
+      cacheUsage: streamingState.cacheUsage,
+      attachmentResults: streamingState.attachmentResults,
       toolsExecuted: false,
       emptyResponse: true,
       emptyResponseReason: emptyReason,
-      provider: effectiveProfile.provider,
-      modelName: effectiveProfile.modelName,
+      provider: streamingState.effectiveProfile.provider,
+      modelName: streamingState.effectiveProfile.modelName,
     }))
 
     return {
