@@ -13,7 +13,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "esbuild": "^0.27.7"
+    "esbuild": "^0.28.0"
   },
   "keywords": [
     "quilltap",

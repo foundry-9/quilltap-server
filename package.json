@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.0.0-dev.38",
+  "version": "4.0.0-dev.39",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -58,7 +58,6 @@
     "@quilltap/plugin-types": "^2.0.0",
     "@quilltap/plugin-utils": "^2.0.0",
     "@tanstack/react-virtual": "^3.13.23",
-    "@types/sharp": "^0.31.1",
     "@types/yauzl": "^2.10.3",
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
@@ -87,8 +86,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@jest/globals": "^30.2.0",
-    "@openrouter/sdk": "^0.9.11",
+    "@jest/globals": "^30.3.0",
+    "@openrouter/sdk": "^0.11.2",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4.2.2",
     "@testing-library/jest-dom": "^6.9.1",
@@ -102,7 +101,6 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/semver": "^7.7.1",
-    "@types/tar": "^6.1.13",
     "@vitest/mocker": "^4.1.2",
     "autoprefixer": "^10.4.27",
     "cross-env": "^10.1.0",
@@ -113,7 +111,7 @@
     "jest-environment-jsdom": "^30.3.0",
     "jsdom": "^28.1.0",
     "postcss": "^8.5.8",
-    "tailwindcss": "^4.1.18",
+    "tailwindcss": "^4.2.2",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

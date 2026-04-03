@@ -76,7 +76,7 @@ export class OpenRouterProvider implements TextProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: getQuilltapUserAgent(),
+      appTitle: getQuilltapUserAgent(),
     });
 
     // Strip attachments from messages and convert to OpenRouter format
@@ -200,7 +200,7 @@ export class OpenRouterProvider implements TextProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: getQuilltapUserAgent(),
+      appTitle: getQuilltapUserAgent(),
     });
 
     // Convert messages to SDK format
@@ -563,7 +563,7 @@ export class OpenRouterProvider implements TextProvider {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-        xTitle: getQuilltapUserAgent(),
+        appTitle: getQuilltapUserAgent(),
       });
       await client.models.list();
       return true;
@@ -582,7 +582,7 @@ export class OpenRouterProvider implements TextProvider {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-        xTitle: getQuilltapUserAgent(),
+        appTitle: getQuilltapUserAgent(),
       });
 
       const response = await client.models.list();

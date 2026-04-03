@@ -20303,7 +20303,7 @@ var OpenRouterProvider = class {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      xTitle: getQuilltapUserAgent()
+      appTitle: getQuilltapUserAgent()
     });
     const messages = params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
       if (m.role === "tool" && m.toolCallId) {
@@ -20398,7 +20398,7 @@ var OpenRouterProvider = class {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      xTitle: getQuilltapUserAgent()
+      appTitle: getQuilltapUserAgent()
     });
     const messages = params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
       if (m.role === "tool" && m.toolCallId) {
@@ -20678,7 +20678,7 @@ var OpenRouterProvider = class {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || "http://localhost:3000",
-        xTitle: getQuilltapUserAgent()
+        appTitle: getQuilltapUserAgent()
       });
       await client.models.list();
       return true;
@@ -20696,7 +20696,7 @@ var OpenRouterProvider = class {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || "http://localhost:3000",
-        xTitle: getQuilltapUserAgent()
+        appTitle: getQuilltapUserAgent()
       });
       const response = await client.models.list();
       const models = response.data?.map((m) => m.id) ?? [];
@@ -20728,7 +20728,7 @@ var OpenRouterEmbeddingProvider = class {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      xTitle: getQuilltapUserAgent()
+      appTitle: getQuilltapUserAgent()
     });
     const response = await client.embeddings.generate({
       requestBody: {
@@ -20777,7 +20777,7 @@ var OpenRouterEmbeddingProvider = class {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
-      xTitle: getQuilltapUserAgent()
+      appTitle: getQuilltapUserAgent()
     });
     const response = await client.embeddings.generate({
       requestBody: {
@@ -20828,7 +20828,7 @@ var OpenRouterEmbeddingProvider = class {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || "http://localhost:3000",
-        xTitle: getQuilltapUserAgent()
+        appTitle: getQuilltapUserAgent()
       });
       const response = await client.embeddings.listModels();
       const models = response.data?.map((m) => m.id) ?? [];
