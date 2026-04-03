@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- fix: new chat page (`/salon/new`) now applies character defaults for Play As, Scenario, and Timestamp Injection Mode — characters list API was missing `defaultPartnerId`, `defaultTimestampConfig`, `defaultScenarioId`, `defaultSystemPromptId`, and `defaultImageProfileId` fields
 - fix: update qtap-plugin-openrouter for @openrouter/sdk v0.11.2 breaking changes — fix removed `fromChatMessages` re-export (use deep import from `lib/chat-compat`), rename `chatGenerationParams` to `chatRequest` for `chat.send()`, update type imports (`ChatMessages`, `OpenResponsesResult`); bump plugin to 1.0.28
 - chore: update npm dependencies across root, packages, and plugins — @jest/globals 30.3.0, @openrouter/sdk 0.11.2, @anthropic-ai/sdk 0.82.0, tailwindcss 4.2.2, esbuild 0.28.0; remove deprecated @types/sharp and @types/tar stub packages; fix OpenRouter SDK xTitle→appTitle rename; bump qtap-plugin-openrouter to 1.0.27
 - chore: update npm dependencies across root, packages, and plugins — next 16.2.2, esbuild 0.27.7, @playwright/test 1.59.1, dotenv 17.4.0, yauzl 3.3.0, @google/genai 1.48.0, @modelcontextprotocol/sdk 1.29.0, storybook 10.3.4; fix format-time tests for @sinonjs/fake-timers 15.3.0 instanceof Date regression

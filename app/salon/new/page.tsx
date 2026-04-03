@@ -37,6 +37,7 @@ interface Character {
     title: string
     content: string
   }>
+  defaultPartnerId?: string | null
   defaultTimestampConfig?: TimestampConfig | null
   defaultScenarioId?: string | null
   defaultSystemPromptId?: string | null
@@ -230,6 +231,10 @@ export default function NewChatPage() {
 
     if (llmCharacters.length === 1) {
       const char = llmCharacters[0].character
+      // Pre-select default "Play As" character if set
+      if (char.defaultPartnerId) {
+        setSelectedUserCharacterId(char.defaultPartnerId)
+      }
       if (char.defaultTimestampConfig) {
         setTimestampConfig(char.defaultTimestampConfig)
       }
