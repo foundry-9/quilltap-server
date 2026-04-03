@@ -20,7 +20,7 @@ import { z } from 'zod'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ConnectionProfile, ChatMetadataBase, Character, ChatSettings } from '@/lib/schemas/types'
 import { isParticipantPresent } from '@/lib/schemas/chat.types'
-import type { SendMessageOptions, ToolMessage, GeneratedImage } from './types'
+import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult } from './types'
 import type { MemoryChatSettings } from './memory-trigger.service'
 
 import {
@@ -49,9 +49,6 @@ import {
   encodeErrorEvent,
   encodeKeepAlive,
   encodeStatusEvent,
-  encodeTurnStartEvent,
-  encodeTurnCompleteEvent,
-  encodeChainCompleteEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
@@ -107,9 +104,7 @@ import {
 } from './agent-mode-resolver.service'
 import { resolveUserIdentity } from './user-identity-resolver.service'
 import {
-  shouldChainNext,
-  persistTurnParticipantId,
-  DEFAULT_CHAIN_CONFIG,
+  executeTurnChain,
 } from './turn-orchestrator.service'
 import {
   resolveDangerousContentSettings,
@@ -182,104 +177,23 @@ export async function handleSendMessage(
       try {
         const result = await processMessage(repos, chatId, userId, options, controller, encoder)
 
-        // Server-side chain orchestration for multi-character chats
-        // After the first character responds, chain subsequent character responses
-        // in the same SSE stream instead of requiring client round-trips
-        if (result.isMultiCharacter && result.hasContent && !result.isPaused) {
-          const chainStartTime = Date.now()
-          let chainDepth = 0
-
-          // If the user just sent a message, ensure the chain loop knows a human is present
-          // even if no participant has controlledBy='user'. The sentinel '__user__' causes
-          // selectNextSpeaker to return user_turn/cycle_complete instead of looping forever.
-          const effectiveUserParticipantId = result.userParticipantId
-            ?? (options.continueMode ? null : '__user__')
-
-          while (true) {
-            const decision = await shouldChainNext(
-              repos,
-              chatId,
-              effectiveUserParticipantId,
-              chainDepth,
-              chainStartTime,
-              DEFAULT_CHAIN_CONFIG
-            )
-
-
-            if (!decision.chain || !decision.participantId) {
-              // Persist the final turn state
-              const finalNextSpeaker = decision.participantId || null
-              await persistTurnParticipantId(repos, chatId, finalNextSpeaker)
-
-              // Send chain complete event
-              safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
-                reason: decision.reason as 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete',
-                nextSpeakerId: finalNextSpeaker,
-                chainDepth,
-              }))
-              break
-            }
-
-            chainDepth++
-
-            // Send turn start event
-            safeEnqueue(controller, encodeTurnStartEvent(encoder, {
-              participantId: decision.participantId,
-              characterName: decision.characterName || 'Unknown',
-              chainDepth,
-            }))
-
-            // Process the chained response using continue mode
-            try {
-              const chainResult = await processMessage(
-                repos,
-                chatId,
-                userId,
-                {
-                  continueMode: true,
-                  respondingParticipantId: decision.participantId,
-                },
-                controller,
-                encoder
-              )
-
-              // Send turn complete event
-              safeEnqueue(controller, encodeTurnCompleteEvent(encoder, {
-                participantId: decision.participantId,
-                messageId: chainResult.messageId || '',
-                chainDepth,
-              }))
-
-              // If the chained response had no content (empty response), stop chaining
-              if (!chainResult.hasContent) {
-                logger.info('[TurnOrchestrator] Chain stopped: empty response', { chatId, chainDepth })
-                await persistTurnParticipantId(repos, chatId, null)
-                safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
-                  reason: 'error',
-                  nextSpeakerId: null,
-                  chainDepth,
-                }))
-                break
-              }
-            } catch (chainError) {
-              logger.error('[TurnOrchestrator] Chain error, stopping', {
-                chatId,
-                chainDepth,
-                error: chainError instanceof Error ? chainError.message : String(chainError),
-              })
-
-              // Pause chat on chain error
-              await repos.chats.update(chatId, { isPaused: true })
-              await persistTurnParticipantId(repos, chatId, null)
-              safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
-                reason: 'error',
-                nextSpeakerId: null,
-                chainDepth,
-              }))
-              break
-            }
-          }
-        }
+        await executeTurnChain({
+          repos,
+          chatId,
+          userId,
+          initialResult: result,
+          initialContinueMode: options.continueMode === true,
+          controller,
+          encoder,
+          processChainedMessage: (chainOptions) => processMessage(
+            repos,
+            chatId,
+            userId,
+            chainOptions,
+            controller,
+            encoder
+          ),
+        })
 
         // Trigger scene state tracking once after the complete chain
         if (result.isMultiCharacter && result.hasContent) {
@@ -319,22 +233,6 @@ export async function handleSendMessage(
       }
     },
   })
-}
-
-/**
- * Result returned by processMessage for chain orchestration
- */
-interface ProcessMessageResult {
-  /** Whether the chat has multiple characters */
-  isMultiCharacter: boolean
-  /** Whether the response had content (non-empty) */
-  hasContent: boolean
-  /** The assistant message ID (if content was generated) */
-  messageId: string | null
-  /** User participant ID for turn calculations */
-  userParticipantId: string | null
-  /** Whether the chat is paused */
-  isPaused: boolean
 }
 
 /**

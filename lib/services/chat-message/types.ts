@@ -163,6 +163,22 @@ export interface NextSpeakerInfo {
 }
 
 /**
+ * Result returned by the core message processor for chain orchestration
+ */
+export interface ProcessMessageResult {
+  /** Whether the chat has multiple characters */
+  isMultiCharacter: boolean
+  /** Whether the response had content (non-empty) */
+  hasContent: boolean
+  /** The assistant message ID (if content was generated) */
+  messageId: string | null
+  /** User participant ID for turn calculations */
+  userParticipantId: string | null
+  /** Whether the chat is paused */
+  isPaused: boolean
+}
+
+/**
  * SSE event: A chained turn is starting for a new character
  */
 export interface TurnStartEvent {

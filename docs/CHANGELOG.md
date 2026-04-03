@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- refactor: begin decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting multi-character turn chaining into `turn-orchestrator.service.ts`, adding targeted chain execution tests while preserving the existing message streaming API
 - refactor: split `lib/memory/cheap-llm-tasks` into domain-focused modules for shared execution, memory work, chat summarization/titles, image/scene handling, and compression while preserving the original import path as a compatibility entrypoint
 - refactor: move ZodError and unhandled error catching into API middleware; remove ~97 try-catch blocks from 60 route files (~1,084 lines of boilerplate eliminated)
 - style: convert 1,314 raw Tailwind visual classes to `qt-*` semantic theme classes across 234 files — backgrounds, text colors, border colors, and shadows now use theme-overridable CSS variables

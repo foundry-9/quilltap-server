@@ -14,6 +14,7 @@ export type {
   ToolProcessingResult,
   StreamingResult,
   NextSpeakerInfo,
+  ProcessMessageResult,
   StreamChunkData,
 } from './types'
 
@@ -23,6 +24,13 @@ export {
   sendMessageSchema,
   continueMessageSchema,
 } from './orchestrator.service'
+
+// Turn Orchestration
+export {
+  shouldChainNext,
+  persistTurnParticipantId,
+  executeTurnChain,
+} from './turn-orchestrator.service'
 
 // Participant Resolution
 export {
