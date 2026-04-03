@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- feat: version guard now writes `minServerVersion` into `.dbkey` files on every startup, allowing the Electron shell to reject incompatible server versions before opening the database
 - fix: add granular status events throughout chat message orchestrator — replaces stale "Calculating context budget..." indicator with accurate phase-by-phase progress (initializing, resolving, loading tools, gathering, generating recap, preparing, validating, sending); add per-tool status updates inside `processToolCalls` and streaming status in the tool loop; prevents status messages from lingering through long operations
 - fix: cheap LLM tasks on reasoning models (OpenAI gpt-5-nano, Google Gemini 3.x) now use `strictMaxTokens` flag via `LLMParams` to prevent providers from inflating output token limits — OpenAI uses `reasoning: { effort: 'low' }`, Google reduces thinking budget to 1024; fixes 32-second memory recap calls and empty responses caused by reasoning tokens consuming the entire output budget
 - fix: replace native `confirm()`/`alert()` with `showConfirmation()`/`showErrorToast()` on character conversations tab delete action — matches the modal pattern used elsewhere in the app
