@@ -7,8 +7,9 @@
  * Updated to use SDK v0.8.0 with callModel() and getTextStream() for improved streaming
  */
 
-import { OpenRouter, fromChatMessages } from '@openrouter/sdk';
-import type { ChatGenerationParams, Message, OpenResponsesNonStreamingResponse } from '@openrouter/sdk/models';
+import { OpenRouter } from '@openrouter/sdk';
+import { fromChatMessages } from '@openrouter/sdk/lib/chat-compat';
+import type { ChatMessages, OpenResponsesResult } from '@openrouter/sdk/models';
 import type {
   TextProvider,
   LLMParams,
@@ -160,7 +161,7 @@ export class OpenRouterProvider implements TextProvider {
     }
 
     const response = await client.chat.send({
-      chatGenerationParams: requestParams,
+      chatRequest: requestParams,
     });
 
     const choice = response.choices[0];
@@ -205,7 +206,7 @@ export class OpenRouterProvider implements TextProvider {
 
     // Convert messages to SDK format
     // Tool messages and assistant messages with toolCalls are handled in streamWithTools
-    const messages: Message[] = params.messages
+    const messages: ChatMessages[] = params.messages
       .filter(m => !(m.role === 'tool' && !m.toolCallId))
       .map((m) => {
         if (m.role === 'tool' && m.toolCallId) {
@@ -308,7 +309,7 @@ export class OpenRouterProvider implements TextProvider {
 
     // After text stream ends, get the complete response with usage data
     // The ReusableReadableStream allows concurrent consumption patterns
-    let response: OpenResponsesNonStreamingResponse;
+    let response: OpenResponsesResult;
     try {
       response = await result.getResponse();
     } catch (error) {
