@@ -9,19 +9,14 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider } from '@/lib/llm'
 import { requiresApiKey } from '@/lib/plugins/provider-validation'
 import {
-  selectNextSpeaker,
-  calculateTurnStateFromHistory,
-  getActiveCharacterParticipants,
   isMultiCharacterChat,
 } from '@/lib/chat/turn-manager'
-import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ConnectionProfile, ChatMetadataBase, Character, ChatSettings } from '@/lib/schemas/types'
 import { isParticipantPresent } from '@/lib/schemas/chat.types'
 import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult } from './types'
-import type { MemoryChatSettings } from './memory-trigger.service'
 
 import {
   resolveRespondingParticipant,
@@ -67,18 +62,10 @@ import {
 } from '@/lib/tools'
 import { getProvider } from '@/lib/plugins/provider-registry'
 import {
-  triggerMemoryExtraction,
-  triggerInterCharacterMemory,
-  triggerUserControlledCharacterMemory,
-  triggerContextSummaryCheck,
-  triggerChatDangerClassification,
   triggerSceneStateTracking,
 } from './memory-trigger.service'
-import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
-import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
-import { calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { extractMemorySearchKeywords, stripToolArtifacts, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
@@ -95,6 +82,9 @@ import {
   type RngToolCall,
 } from './rng-pattern-detector.service'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
+import {
+  finalizeMessageResponse,
+} from './message-finalizer.service'
 import {
   resolveAgentModeSetting,
   buildAgentModeInstructions,
@@ -1978,292 +1968,42 @@ async function processMessage(
   let assistantMessageId: string | null = null
 
   if (fullResponse && fullResponse.trim().length > 0) {
-    // Normalize content that may be wrapped in content block format
-    // e.g., [{'type': 'text', 'text': "actual content"}]
-    const normalizedResponse = normalizeContentBlockFormat(fullResponse)
-
-    // Strip any character name prefixes that the LLM might have echoed back
-    // This handles cases where LLMs mimic the [Name] prefix format from the input
-    const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
-
-    assistantMessageId = await saveAssistantMessage(
+    return finalizeMessageResponse({
       repos,
       chatId,
+      userId,
+      chat,
       character,
       characterParticipant,
-      cleanedResponse,
+      userParticipantId,
+      isMultiCharacter,
+      isContinueMode,
+      fullResponse,
       usage,
+      cacheUsage,
+      attachmentResults,
       rawResponse,
       thoughtSignature,
       generatedImagePaths,
       toolMessages,
       preGeneratedAssistantMessageId,
-      effectiveProfile.provider,
-      effectiveProfile.modelName
-    )
-
-    // ============================================================================
-    // Async Pre-Compression: Start EARLY for next message
-    // ============================================================================
-    // Trigger compression as soon as we have the response, BEFORE memory extraction
-    // and other async work. This gives maximum time for compression to complete
-    // before the user sends their next message.
-    if (compressionEnabled && cheapLLMSelection && builtContext.originalSystemPrompt) {
-      const updatedMessages = [
-        // Extract only visible conversation (USER/ASSISTANT, tool artifacts stripped)
-        ...extractVisibleConversation(existingMessages),
-        // Add the user message we just sent (if not continue mode)
-        ...(content && !isContinueMode ? [{
-          role: 'user' as const,
-          content,
-        }] : []),
-        // Add the assistant response we just received
-        {
-          role: 'assistant' as const,
-          content: cleanedResponse,
-        },
-      ]
-
-      // Calculate budget-driven compression target for async pre-compression
-      const asyncBudgetInfo = calculateMaxAvailable(effectiveProfile.provider, effectiveProfile.modelName, effectiveProfile)
-      const asyncCompressionTarget = Math.floor(asyncBudgetInfo.maxAvailable * CONTEXT_HISTORY_BUDGET_RATIO)
-
-      // Fire and forget - compression runs in background
-      triggerAsyncCompression({
-        chatId,
-        participantId: isMultiCharacter ? characterParticipant.id : undefined,
-        messages: updatedMessages,
-        systemPrompt: builtContext.originalSystemPrompt,
-        compressionOptions: {
-          enabled: contextCompressionSettings.enabled,
-          windowSize: contextCompressionSettings.windowSize,
-          compressionTargetTokens: asyncCompressionTarget,
-          systemPromptTargetTokens: contextCompressionSettings.systemPromptTargetTokens,
-          selection: cheapLLMSelection,
-          userId,
-          characterName: character.name,
-          userName: 'User',
-          dangerSettings,
-          availableProfiles: allProfiles,
-        },
-      })
-    }
-
-    // Track token usage for profile and chat aggregates
-    if (usage && (usage.promptTokens || usage.completionTokens)) {
-      // Estimate cost using available pricing data
-      const costResult = await estimateMessageCost(
-        effectiveProfile.provider,
-        effectiveProfile.modelName,
-        usage.promptTokens || 0,
-        usage.completionTokens || 0,
-        userId
-      )
-      await trackMessageTokenUsage(chatId, effectiveProfile.id, usage, costResult.cost, costResult.source)
-    }
-
-    // ============================================================================
-    // Auto-Detect RNG Patterns in Assistant Response
-    // ============================================================================
-    // When enabled, detect dice rolls, coin flips, and spin-the-bottle patterns
-    // in assistant messages and automatically execute them as RNG tool calls
-    const autoDetectRngInResponse = chatSettings?.autoDetectRng ?? true
-    if (autoDetectRngInResponse && cleanedResponse) {
-      const rngPatternsInResponse = detectAndConvertRngPatterns(cleanedResponse)
-      if (rngPatternsInResponse.length > 0) {
-        logger.info('Auto-detected RNG patterns in assistant response', {
-          chatId,
-          userId,
-          patternCount: rngPatternsInResponse.length,
-          patterns: rngPatternsInResponse.map(p => ({ type: p.type, rolls: p.rolls, matchText: p.matchText })),
-        })
-
-        // Execute each detected pattern and save as TOOL messages after the assistant message
-        for (const pattern of rngPatternsInResponse) {
-          const rngContext = { userId, chatId }
-          const result = await executeRngTool({ type: pattern.type, rolls: pattern.rolls }, rngContext)
-          const formattedResult = formatRngResults(result)
-
-          const toolMessageId = crypto.randomUUID()
-          const toolMessage = {
-            id: toolMessageId,
-            type: 'message' as const,
-            role: 'TOOL' as const,
-            content: JSON.stringify({
-              tool: 'rng',
-              initiatedBy: 'auto-detect-response',
-              success: result.success,
-              result: formattedResult,
-              prompt: pattern.matchText,
-              arguments: { type: pattern.type, rolls: pattern.rolls },
-            }),
-            createdAt: new Date().toISOString(),
-            attachments: [],
-          }
-
-          await repos.chats.addMessage(chatId, toolMessage)
-
-          // Add to toolMessages array so done event reflects the execution
-          toolMessages.push({
-            toolName: 'rng',
-            content: formattedResult,
-            success: result.success,
-            arguments: { type: pattern.type, rolls: pattern.rolls },
-          })
-        }
-      }
-    }
-
-    // Update chat timestamp
-    await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })
-
-    // Calculate next speaker
-    const turnInfo = await calculateNextSpeaker(
-      repos,
-      chatId,
-      chat,
-      character,
-      characterParticipant,
-      userParticipantId
-    )
-
-    // Send done event
-    controller.enqueue(encodeDoneEvent(encoder, {
-      messageId: assistantMessageId,
-      participantId: characterParticipant.id,
-      usage,
-      cacheUsage,
-      attachmentResults,
-      toolsExecuted: toolMessages.length > 0,
-      turn: turnInfo,
-      provider: effectiveProfile.provider,
-      modelName: effectiveProfile.modelName,
-      isSilentMessage: characterParticipant.status === 'silent' || undefined,
-    }))
-
-    // Trigger memory extraction
-    if (chatSettings) {
-      const memoryChatSettings: MemoryChatSettings = {
-        cheapLLMSettings: chatSettings.cheapLLMSettings,
-        dangerSettings,
-        isDangerousChat: chat.isDangerousChat === true,
-      }
-
-      // Build pronouns map for multi-character chats
-      const allCharacterPronouns = isMultiCharacter
-        ? Object.fromEntries(Array.from(participantCharacters.values()).map(c => [c.name, c.pronouns ?? null]))
-        : undefined
-
-      await triggerMemoryExtraction(repos, {
-        characterId: character.id,
-        characterName: character.name,
-        characterPronouns: character.pronouns,
-        personaName: resolvedIdentity.name !== 'User' ? resolvedIdentity.name : undefined,
-        userCharacterId,
-        allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
-        allCharacterPronouns,
-        chatId,
-        userMessage: isContinueMode ? '[Continue/Nudge - no user message]' : content,
-        assistantMessage: cleanedResponse,
-        sourceMessageId: assistantMessageId,
-        userId,
-        connectionProfile,
-        chatSettings: memoryChatSettings,
-      })
-
-      if (isMultiCharacter) {
-        await triggerInterCharacterMemory(repos, {
-          character,
-          characterParticipantId: characterParticipant.id,
-          assistantMessage: cleanedResponse,
-          assistantMessageId,
-          chatId,
-          userId,
-          connectionProfile,
-          chatSettings: memoryChatSettings,
-          existingMessages: existingMessages as MessageEvent[],
-          participants: chat.participants,
-          participantCharacters,
-        })
-      }
-
-      // Trigger memory extraction for user-controlled/impersonated characters
-      // If the user was typing as a character (not just the persona), that character
-      // should form memories about the exchange
-      if (!isContinueMode && chat.activeTypingParticipantId) {
-        const activeTypingParticipant = chat.participants.find(
-          p => p.id === chat.activeTypingParticipantId
-        )
-
-        // Check if the active typing participant is a character (not persona)
-        // and is different from the responding character
-        if (
-          activeTypingParticipant &&
-          activeTypingParticipant.type === 'CHARACTER' &&
-          activeTypingParticipant.characterId &&
-          activeTypingParticipant.id !== characterParticipant.id
-        ) {
-          // Get the character data for the user-controlled character
-          const userControlledCharacter = participantCharacters.get(activeTypingParticipant.characterId)
-            || await repos.characters.findById(activeTypingParticipant.characterId)
-
-          if (userControlledCharacter) {
-
-            await triggerUserControlledCharacterMemory(repos, {
-              userControlledCharacter,
-              userControlledParticipantId: activeTypingParticipant.id,
-              userTypedMessage: content,
-              respondingCharacter: character,
-              llmResponse: cleanedResponse,
-              llmResponseMessageId: assistantMessageId,
-              chatId,
-              userId,
-              chatSettings: memoryChatSettings,
-              allCharacterNames: isMultiCharacter
-                ? Array.from(participantCharacters.values()).map(c => c.name)
-                : [userControlledCharacter.name, character.name],
-            })
-          }
-        }
-      }
-
-      await triggerContextSummaryCheck(repos, {
-        chatId,
-        provider: connectionProfile.provider,
-        modelName: connectionProfile.modelName,
-        userId,
-        connectionProfile,
-        chatSettings: memoryChatSettings,
-      })
-
-      // Trigger chat-level danger classification (runs after context summary in job queue)
-      await triggerChatDangerClassification(repos, {
-        chatId,
-        userId,
-        connectionProfile,
-        chatSettings: memoryChatSettings,
-      })
-
-      // Trigger scene state tracking (single-character chats only;
-      // multi-character chats trigger once after the chain completes)
-      if (!isMultiCharacter) {
-        const participantCharacterIds = Array.from(participantCharacters.values()).map(c => c.id)
-        await triggerSceneStateTracking(repos, {
-          chatId,
-          userId,
-          connectionProfile,
-          chatSettings: memoryChatSettings,
-          characterIds: participantCharacterIds,
-        })
-      }
-    }
-    return {
-      isMultiCharacter,
-      hasContent: true,
-      messageId: assistantMessageId,
-      userParticipantId,
-      isPaused: chat.isPaused,
-    }
+      effectiveProfile,
+      connectionProfile,
+      controller,
+      encoder,
+      existingMessages: existingMessages as MessageEvent[],
+      content,
+      builtContext,
+      compressionEnabled,
+      cheapLLMSelection,
+      contextCompressionSettings,
+      allProfiles,
+      dangerSettings,
+      chatSettings,
+      participantCharacters,
+      resolvedIdentity,
+      userCharacterId,
+    })
   } else if (toolMessages.length > 0) {
     // Save tool messages even without text response
     const toolSaveResult = await saveToolMessages(
@@ -2337,130 +2077,6 @@ async function processMessage(
       userParticipantId,
       isPaused: chat.isPaused,
     }
-  }
-}
-
-/**
- * Save assistant message to the chat
- */
-async function saveAssistantMessage(
-  repos: ReturnType<typeof getRepositories>,
-  chatId: string,
-  character: { id: string; name: string },
-  characterParticipant: { id: string; status?: string },
-  content: string,
-  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null,
-  rawResponse: unknown,
-  thoughtSignature: string | undefined,
-  generatedImagePaths: GeneratedImage[],
-  toolMessages: ToolMessage[],
-  preGeneratedMessageId?: string,
-  provider?: string,
-  modelName?: string
-): Promise<string> {
-  const assistantMessageId = preGeneratedMessageId || crypto.randomUUID()
-  const assistantAttachments = generatedImagePaths.map(img => img.id)
-
-  const assistantMessage = {
-    id: assistantMessageId,
-    type: 'message' as const,
-    role: 'ASSISTANT' as const,
-    content,
-    createdAt: new Date().toISOString(),
-    tokenCount: usage?.totalTokens || null,
-    promptTokens: usage?.promptTokens || null,
-    completionTokens: usage?.completionTokens || null,
-    rawResponse: (rawResponse as Record<string, unknown>) || null,
-    attachments: assistantAttachments,
-    thoughtSignature: thoughtSignature || null,
-    participantId: characterParticipant.id,
-    provider: provider || null,
-    modelName: modelName || null,
-    isSilentMessage: characterParticipant.status === 'silent' || null,
-  }
-
-  await repos.chats.addMessage(chatId, assistantMessage)
-
-  // Save tool messages
-  if (toolMessages.length > 0) {
-    await saveToolMessages(
-      repos,
-      chatId,
-      '',
-      toolMessages,
-      generatedImagePaths,
-      character.id
-    )
-  }
-
-  // Link images to assistant message
-  for (const imageId of assistantAttachments) {
-    try {
-      await repos.files.addLink(imageId, assistantMessageId)
-    } catch (error) {
-      logger.warn('Failed to link image to assistant message', {
-        imageId,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-
-  return assistantMessageId
-}
-
-/**
- * Calculate next speaker for multi-character chats
- */
-async function calculateNextSpeaker(
-  repos: ReturnType<typeof getRepositories>,
-  chatId: string,
-  chat: ChatMetadataBase,
-  character: Character,
-  characterParticipant: { id: string },
-  userParticipantId: string | null
-): Promise<{
-  nextSpeakerId: string | null
-  reason: string
-  cycleComplete: boolean
-  isUsersTurn: boolean
-}> {
-  const updatedMessages = await repos.chats.getMessages(chatId)
-  const messageEvents = updatedMessages.filter(
-    (m): m is typeof m & { type: 'message' } => m.type === 'message'
-  ) as unknown as MessageEvent[]
-
-  const turnState = calculateTurnStateFromHistory({
-    messages: messageEvents,
-    participants: chat.participants,
-    userParticipantId,
-  })
-
-  const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants)
-  const charactersMap = new Map<string, Character>()
-
-  for (const p of activeCharacterParticipants) {
-    if (p.characterId) {
-      const char = p.id === characterParticipant.id
-        ? character
-        : await repos.characters.findById(p.characterId)
-      if (char) {
-        charactersMap.set(p.characterId, char)
-      }
-    }
-  }
-
-  const nextSpeakerResult = selectNextSpeaker(
-    chat.participants,
-    charactersMap,
-    turnState,
-    userParticipantId
-  )
-
-  return {
-    nextSpeakerId: nextSpeakerResult.nextSpeakerId,
-    reason: nextSpeakerResult.reason,
-    cycleComplete: nextSpeakerResult.cycleComplete,
-    isUsersTurn: nextSpeakerResult.nextSpeakerId === null,
   }
 }
 

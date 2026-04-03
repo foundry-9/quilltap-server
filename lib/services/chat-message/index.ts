@@ -32,6 +32,13 @@ export {
   executeTurnChain,
 } from './turn-orchestrator.service'
 
+// Message Finalization
+export {
+  finalizeMessageResponse,
+  saveAssistantMessage,
+  calculateNextSpeaker,
+} from './message-finalizer.service'
+
 // Participant Resolution
 export {
   resolveRespondingParticipant,
