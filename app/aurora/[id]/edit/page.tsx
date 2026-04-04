@@ -12,6 +12,7 @@ import { AIWizardModal, type GeneratedCharacterData, normalizeGeneratedScenarios
 import LLMLogsSection from '@/components/characters/LLMLogsSection'
 import { useCharacterEdit } from './hooks'
 import { CharacterBasicInfo } from './components'
+import type { CharacterScenario } from './types'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 
 /**
@@ -147,6 +148,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     const normalizedScenarios = normalizeGeneratedScenarios(data.scenarios)
     if (normalizedScenarios.length > 0) {
       let scenariosSaved = 0
+      const savedScenarios: CharacterScenario[] = []
       for (const scenario of normalizedScenarios) {
         try {
           const res = await fetch(`/api/v1/characters/${id}/scenarios`, {
@@ -154,7 +156,20 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: scenario.title, content: scenario.content }),
           })
-          if (res.ok) scenariosSaved++
+          if (res.ok) {
+            const resData = await res.json()
+            scenariosSaved++
+            // Collect saved scenario with its server-assigned ID
+            if (resData.scenario) {
+              savedScenarios.push({
+                id: resData.scenario.id,
+                title: resData.scenario.title,
+                content: resData.scenario.content,
+                createdAt: resData.scenario.createdAt,
+                updatedAt: resData.scenario.updatedAt,
+              })
+            }
+          }
         } catch (err) {
           console.error('Failed to create scenario', {
             error: err instanceof Error ? err.message : String(err),
@@ -163,8 +178,9 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       }
       if (scenariosSaved > 0) {
         showSuccessToast(`${scenariosSaved} scenario${scenariosSaved > 1 ? 's' : ''} created`)
-        // Re-fetch character data so the form shows the new scenarios
-        await fetchCharacter()
+        // Update scenarios in form state directly instead of re-fetching
+        // (fetchCharacter would overwrite wizard-applied text fields that haven't been saved yet)
+        handleScenariosChange([...(formData.scenarios || []), ...savedScenarios])
       }
     }
   }

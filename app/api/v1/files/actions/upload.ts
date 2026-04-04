@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { badRequest, forbidden, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, serverError, successResponse } from '@/lib/api/responses';
 import {
-  ensureFileWritePermission,
   inferMimeType,
   normalizeAndValidateFolderPath,
   saveFileEntry,
@@ -45,15 +44,10 @@ export async function handleUploadFile(
     }
 
     const targetProjectId = projectId || null;
-    const canWrite = await ensureFileWritePermission(ctx, targetProjectId);
-    if (!canWrite) {
-      logger.info('[Files v1] Upload permission denied', {
-        projectId: targetProjectId,
-        userId: ctx.user.id,
-        filename: file.name,
-      });
-      return forbidden('File write permission required. Please grant permission first.');
-    }
+
+    // Note: No file write permission check here. This endpoint is for user-initiated
+    // uploads (already authenticated via createAuthenticatedHandler). The file write
+    // permission system gates AI-initiated writes through the tool executor, not here.
 
     const arrayBuffer = await file.arrayBuffer();
     const contentBuffer = Buffer.from(arrayBuffer);

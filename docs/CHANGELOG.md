@@ -4,6 +4,8 @@
 
 ### 4.0-dev
 
+- fix: remove erroneous file write permission check from user-initiated file uploads — the Prospero AI permission gate was blocking document uploads in the AI Wizard and Summon from Lore source file uploads; user-initiated uploads are already authenticated and don't need the AI write permission
+- fix: AI Wizard on character edit page no longer loses generated description, personality, and system prompt — `fetchCharacter()` was called after saving scenarios which reset form state to DB values before the user could save; now updates scenarios in form state directly
 - docs: update 4.0.0 release notes with post-draft changes — shell version gating, granular status events, reasoning model handling, character defaults fix, provider recommendations, semantic theme classes, chat orchestrator decomposition, centralized API error handling
 - feat: version guard now writes `minServerVersion` into `.dbkey` files on every startup, allowing the Electron shell to reject incompatible server versions before opening the database
 - fix: add granular status events throughout chat message orchestrator — replaces stale "Calculating context budget..." indicator with accurate phase-by-phase progress (initializing, resolving, loading tools, gathering, generating recap, preparing, validating, sending); add per-tool status updates inside `processToolCalls` and streaming status in the tool loop; prevents status messages from lingering through long operations
