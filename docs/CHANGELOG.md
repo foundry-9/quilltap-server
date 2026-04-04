@@ -4,6 +4,7 @@
 
 ### 4.0-dev
 
+- fix: Summon from Lore no longer loses character fields during validation repair — memory assembly set null values for optional UUID fields (`chatId`, `projectId`) causing schema validation failures; the repair process then sent the unrelated **characters** array to the LLM which corrupted description, personality, and system prompt; now omits optional null fields and repair targets only the sections with actual errors
 - fix: remove erroneous file write permission check from user-initiated file uploads — the Prospero AI permission gate was blocking document uploads in the AI Wizard and Summon from Lore source file uploads; user-initiated uploads are already authenticated and don't need the AI write permission
 - fix: AI Wizard on character edit page no longer loses generated description, personality, and system prompt — `fetchCharacter()` was called after saving scenarios which reset form state to DB values before the user could save; now updates scenarios in form state directly
 - docs: update 4.0.0 release notes with post-draft changes — shell version gating, granular status events, reasoning model handling, character defaults fix, provider recommendations, semantic theme classes, chat orchestrator decomposition, centralized API error handling
