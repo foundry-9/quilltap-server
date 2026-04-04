@@ -2,7 +2,9 @@
 
 ## Recent Changes
 
-### 4.0-dev
+### 4.1-dev
+
+### 4.0.0
 
 - fix: Summon from Lore no longer loses character fields during validation repair — memory assembly set null values for optional UUID fields (`chatId`, `projectId`) causing schema validation failures; the repair process then sent the unrelated **characters** array to the LLM which corrupted description, personality, and system prompt; now omits optional null fields and repair targets only the sections with actual errors
 - fix: remove erroneous file write permission check from user-initiated file uploads — the Prospero AI permission gate was blocking document uploads in the AI Wizard and Summon from Lore source file uploads; user-initiated uploads are already authenticated and don't need the AI write permission
