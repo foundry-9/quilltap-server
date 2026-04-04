@@ -21,7 +21,6 @@ import {
   encodeContentChunk,
   encodeDoneEvent,
   encodeErrorEvent,
-  encodeStatusEvent,
   encodeTurnStartEvent,
   encodeTurnCompleteEvent,
   encodeChainCompleteEvent,
@@ -472,13 +471,7 @@ async function processHelpResponse(
       await repos.chats.addMessage(chatId, assistantMessage)
       conversationMessages.push({ role: 'assistant', content: currentResponse })
 
-      // Send status event for tool execution
-      safeEnqueue(controller, encodeStatusEvent(encoder, {
-        stage: 'tool_execution',
-        message: 'Using tools...',
-        characterName: character.name,
-        characterId: character.id,
-      }))
+      // Per-tool status updates are now emitted inside processToolCalls
 
       // Execute tools
       const toolContext = createToolContext(
@@ -496,6 +489,7 @@ async function processHelpResponse(
         toolContext,
         controller,
         encoder,
+        { characterName: character.name, characterId: character.id },
       )
 
       // Save tool messages

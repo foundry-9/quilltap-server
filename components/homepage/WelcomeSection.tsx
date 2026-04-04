@@ -12,7 +12,7 @@ export function WelcomeSection({ displayName }: WelcomeSectionProps) {
       <h1 className="qt-heading-1 mb-2">
         Welcome back, <span className="text-primary">{displayName}</span>!
       </h1>
-      <p className="text-muted-foreground">
+      <p className="qt-text-secondary">
         What would you like to do today?
       </p>
     </div>

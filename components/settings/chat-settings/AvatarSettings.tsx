@@ -31,7 +31,7 @@ export function AvatarSettings({
           {AVATAR_MODES.map((mode) => (
             <label
               key={mode.value}
-              className="flex items-start gap-3 p-4 border border-border rounded hover:bg-accent cursor-pointer transition-colors"
+              className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors"
             >
               <input
                 type="radio"
@@ -62,7 +62,7 @@ export function AvatarSettings({
           {AVATAR_STYLES.map((style) => (
             <label
               key={style.value}
-              className="flex items-start gap-3 p-4 border border-border rounded hover:bg-accent cursor-pointer transition-colors"
+              className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors"
             >
               <input
                 type="radio"

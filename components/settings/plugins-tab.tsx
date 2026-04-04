@@ -94,7 +94,7 @@ function PluginToggle({
         relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
         transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring
         focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed
-        ${enabled ? 'bg-primary' : 'bg-muted'}
+        ${enabled ? 'bg-primary' : 'qt-bg-muted'}
       `}
       role="switch"
       aria-checked={enabled}
@@ -474,8 +474,8 @@ export default function PluginsTab() {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="flex items-center gap-3">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-r-transparent"></div>
-          <p className="text-muted-foreground">Loading plugins...</p>
+          <div className="h-6 w-6 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
+          <p className="qt-text-secondary">Loading plugins...</p>
         </div>
       </div>
     )
@@ -493,21 +493,21 @@ export default function PluginsTab() {
             </div>
             <div>
               <p className="qt-text-label">Enabled</p>
-              <p className="text-2xl font-bold text-success">{stats.enabled}</p>
+              <p className="text-2xl font-bold qt-text-success">{stats.enabled}</p>
             </div>
             <div>
               <p className="qt-text-label">Upgrades</p>
-              <p className={`text-2xl font-bold ${availableUpgrades.length > 0 ? 'text-warning' : 'text-muted-foreground'}`}>
+              <p className={`text-2xl font-bold ${availableUpgrades.length > 0 ? 'qt-text-warning' : 'qt-text-secondary'}`}>
                 {availableUpgrades.length}
               </p>
             </div>
             <div>
               <p className="qt-text-label">Disabled</p>
-              <p className="text-2xl font-bold text-muted-foreground">{stats.disabled}</p>
+              <p className="text-2xl font-bold qt-text-secondary">{stats.disabled}</p>
             </div>
             <div>
               <p className="qt-text-label">Errors</p>
-              <p className={`text-2xl font-bold ${stats.errors > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+              <p className={`text-2xl font-bold ${stats.errors > 0 ? 'qt-text-destructive' : 'qt-text-secondary'}`}>
                 {stats.errors}
               </p>
             </div>
@@ -516,14 +516,14 @@ export default function PluginsTab() {
       )}
 
       {/* Tab Navigation */}
-      <div className="border-b border-border">
+      <div className="border-b qt-border-default">
         <div className="flex gap-4">
           <button
             onClick={() => setActiveTab('installed')}
             className={`pb-2 px-1 text-sm font-medium transition-colors relative ${
               activeTab === 'installed'
                 ? 'text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'qt-text-secondary hover:text-foreground'
             }`}
           >
             Installed
@@ -536,7 +536,7 @@ export default function PluginsTab() {
             className={`pb-2 px-1 text-sm font-medium transition-colors relative ${
               activeTab === 'upgrades'
                 ? 'text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'qt-text-secondary hover:text-foreground'
             }`}
           >
             Upgrades{availableUpgrades.length > 0 && ` (${availableUpgrades.length})`}
@@ -549,7 +549,7 @@ export default function PluginsTab() {
             className={`pb-2 px-1 text-sm font-medium transition-colors relative ${
               activeTab === 'browse'
                 ? 'text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'qt-text-secondary hover:text-foreground'
             }`}
           >
             Browse npm
@@ -576,7 +576,7 @@ export default function PluginsTab() {
           {plugins.length === 0 ? (
             <div className="qt-card p-8 text-center">
               <svg
-                className="mx-auto h-12 w-12 text-muted-foreground/50"
+                className="mx-auto h-12 w-12 qt-text-secondary/50"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -694,7 +694,7 @@ export default function PluginsTab() {
 
           {/* Last checked timestamp */}
           {upgradesLastChecked && (
-            <p className="qt-text-small text-muted-foreground">
+            <p className="qt-text-small qt-text-secondary">
               Last checked: {new Date(upgradesLastChecked).toLocaleString()}
             </p>
           )}
@@ -730,14 +730,14 @@ export default function PluginsTab() {
           {upgradesLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex items-center gap-3">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-r-transparent"></div>
-                <p className="text-muted-foreground">Checking for updates...</p>
+                <div className="h-6 w-6 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
+                <p className="qt-text-secondary">Checking for updates...</p>
               </div>
             </div>
           ) : availableUpgrades.length === 0 ? (
             <div className="qt-card p-8 text-center">
               <svg
-                className="mx-auto h-12 w-12 text-success"
+                className="mx-auto h-12 w-12 qt-text-success"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -787,7 +787,7 @@ export default function PluginsTab() {
                     {/* Version transition */}
                     <div className="flex items-center gap-2 mt-2">
                       <span className="qt-badge-secondary font-mono text-xs">v{upgrade.currentVersion}</span>
-                      <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                       </svg>
                       <span className={`font-mono text-xs ${upgrade.isNonBreaking ? 'qt-badge-success' : 'qt-badge-warning'}`}>
@@ -807,7 +807,7 @@ export default function PluginsTab() {
                           href={upgrade.repository}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                          className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
                         >
                           Repository
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -820,7 +820,7 @@ export default function PluginsTab() {
                           href={upgrade.changelogUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                          className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
                         >
                           Changelog
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -832,7 +832,7 @@ export default function PluginsTab() {
                         href={upgrade.npmUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                        className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
                       >
                         npm
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -880,7 +880,7 @@ export default function PluginsTab() {
             >
               {searching ? (
                 <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-r-transparent" />
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-primary-foreground border-r-transparent" />
                   Searching...
                 </>
               ) : (
@@ -890,7 +890,7 @@ export default function PluginsTab() {
           </div>
 
           {/* Quick Search Hint */}
-          <p className="qt-text-small text-muted-foreground">
+          <p className="qt-text-small qt-text-secondary">
             Leave empty and click Search to see all available plugins.
           </p>
 
@@ -899,7 +899,7 @@ export default function PluginsTab() {
             {searchResults.length === 0 && !searching && (
               <div className="qt-card p-8 text-center">
                 <svg
-                  className="mx-auto h-12 w-12 text-muted-foreground/50"
+                  className="mx-auto h-12 w-12 qt-text-secondary/50"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -953,7 +953,7 @@ export default function PluginsTab() {
                   }
                 >
                   {/* Author and update info */}
-                  <div className="flex items-center gap-4 qt-text-small text-muted-foreground mt-1">
+                  <div className="flex items-center gap-4 qt-text-small qt-text-secondary mt-1">
                     {plugin.author && <span>by {plugin.author}</span>}
                     {plugin.updated && (
                       <span>Updated {new Date(plugin.updated).toLocaleDateString()}</span>

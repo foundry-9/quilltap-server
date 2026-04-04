@@ -103,14 +103,14 @@ export async function handleParticipantUpdate(
 
   if (participantData.connectionProfileId) {
     const profile = await repos.connections.findById(participantData.connectionProfileId);
-    if (!profile || profile.userId !== userId) {
+    if (!profile) {
       return { error: 'Connection profile not found', status: 404 };
     }
   }
 
   if (participantData.imageProfileId) {
     const profile = await repos.imageProfiles.findById(participantData.imageProfileId);
-    if (!profile || profile.userId !== userId) {
+    if (!profile) {
       return { error: 'Image profile not found', status: 404 };
     }
   }
@@ -209,7 +209,7 @@ export async function handleAddParticipant(
   }
 
   const character = await repos.characters.findById(data.characterId);
-  if (!character || character.userId !== userId) {
+  if (!character) {
     return { error: 'Character not found', status: 404 };
   }
 
@@ -222,7 +222,7 @@ export async function handleAddParticipant(
 
   if (data.connectionProfileId) {
     const profile = await repos.connections.findById(data.connectionProfileId);
-    if (!profile || profile.userId !== userId) {
+    if (!profile) {
       return { error: 'Connection profile not found', status: 404 };
     }
   }
@@ -311,7 +311,7 @@ export async function processChatUpdates(
   if (typeof validatedData.imageProfileId !== 'undefined') {
     if (validatedData.imageProfileId !== null) {
       const profile = await repos.imageProfiles.findById(validatedData.imageProfileId);
-      if (!profile || profile.userId !== userId) {
+      if (!profile) {
         return { error: 'Image profile not found', status: 404 };
       }
     }
@@ -333,7 +333,7 @@ export async function processChatUpdates(
     if (validatedData.chat.projectId !== undefined) {
       if (validatedData.chat.projectId !== null) {
         const project = await repos.projects.findById(validatedData.chat.projectId);
-        if (!project || project.userId !== userId) {
+        if (!project) {
           return { error: 'Project not found', status: 404 };
         }
 

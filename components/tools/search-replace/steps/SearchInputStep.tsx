@@ -102,7 +102,7 @@ export function SearchInputStep({
       </div>
 
       {/* Preview */}
-      <div className="p-4 rounded-lg bg-muted/50">
+      <div className="p-4 rounded-lg qt-bg-muted/50">
         <div className="font-medium qt-text-primary mb-2">Preview</div>
 
         {!searchText.trim() ? (
@@ -114,7 +114,7 @@ export function SearchInputStep({
             Searching...
           </p>
         ) : previewError ? (
-          <p className="text-sm text-destructive">
+          <p className="text-sm qt-text-destructive">
             {previewError}
           </p>
         ) : preview ? (
@@ -141,7 +141,7 @@ export function SearchInputStep({
                     </span>
                   </div>
                 )}
-                <div className="pt-2 border-t border-border">
+                <div className="pt-2 border-t qt-border-default">
                   <div className="flex justify-between font-medium">
                     <span className="qt-text-primary">Total:</span>
                     <span className="text-primary">

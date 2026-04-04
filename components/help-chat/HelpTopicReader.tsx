@@ -202,7 +202,7 @@ export function HelpTopicReader({
           </svg>
           {categoryLabel}
         </button>
-        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+        <div className="flex-1 flex items-center justify-center qt-text-secondary text-sm">
           Loading...
         </div>
       </div>
@@ -218,7 +218,7 @@ export function HelpTopicReader({
           </svg>
           {categoryLabel}
         </button>
-        <div className="flex-1 flex items-center justify-center text-destructive text-sm">
+        <div className="flex-1 flex items-center justify-center qt-text-destructive text-sm">
           {error}
         </div>
       </div>

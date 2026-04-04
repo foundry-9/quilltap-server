@@ -232,7 +232,8 @@ CREATE TABLE "chats" (
   "turnQueue" TEXT DEFAULT '[]',
   "sceneState" TEXT DEFAULT NULL,
   "chatType" TEXT DEFAULT 'salon',
-  "helpPageUrl" TEXT DEFAULT NULL
+  "helpPageUrl" TEXT DEFAULT NULL,
+  "scenarioText" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");
@@ -338,7 +339,10 @@ CREATE TABLE "connection_profiles" (
   "updatedAt" TEXT NOT NULL,
   "isDangerousCompatible" INTEGER DEFAULT 0,
   "allowToolUse" INTEGER DEFAULT 1,
-  "sortIndex" INTEGER DEFAULT 0
+  "sortIndex" INTEGER DEFAULT 0,
+  "modelClass" TEXT DEFAULT NULL,
+  "maxContext" INTEGER DEFAULT NULL,
+  "maxTokens" INTEGER DEFAULT NULL
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);

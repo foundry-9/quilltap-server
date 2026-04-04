@@ -278,7 +278,7 @@ async function generateImagesWithProvider(
   try {
     return await Promise.all(
       generationResponse.images.map((img) =>
-        saveGeneratedImage(img.data, img.mimeType, userId, chatId, {
+        saveGeneratedImage(img.data || img.b64Json || '', img.mimeType || 'image/png', userId, chatId, {
           prompt: toolInput.prompt,
           revisedPrompt: img.revisedPrompt,
           model: imageProfile.modelName,

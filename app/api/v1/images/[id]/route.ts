@@ -14,7 +14,7 @@ import { getFilePath } from '@/lib/api/middleware/file-path';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { successResponse, notFound, badRequest, serverError, validationError, forbidden } from '@/lib/api/responses';
+import { successResponse, notFound, badRequest, serverError, forbidden } from '@/lib/api/responses';
 
 const addTagSchema = z.object({
   tagType: z.enum(['CHARACTER', 'PERSONA', 'CHAT', 'THEME']),
@@ -37,16 +37,6 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
     const image = await repos.files.findById(id);
 
     if (!image) {
-      return notFound('Image');
-    }
-
-    // Verify image belongs to user
-    if (image.userId !== user.id) {
-      logger.warn('[Images v1] User tried to access image they do not own', {
-        imageId: id,
-        userId: user.id,
-        ownerId: image.userId,
-      });
       return notFound('Image');
     }
 
@@ -116,16 +106,6 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (re
     const image = await repos.files.findById(id);
 
     if (!image) {
-      return notFound('Image');
-    }
-
-    // Verify image belongs to user
-    if (image.userId !== user.id) {
-      logger.warn('[Images v1] User tried to delete image they do not own', {
-        imageId: id,
-        userId: user.id,
-        ownerId: image.userId,
-      });
       return notFound('Image');
     }
 
@@ -234,7 +214,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
 
   // Verify ownership first
   const image = await repos.files.findById(id);
-  if (!image || image.userId !== user.id) {
+  if (!image) {
     return notFound('Image');
   }
 
@@ -255,62 +235,53 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
 // ============================================================================
 
 async function handleAddTag(req: NextRequest, user: any, repos: any, imageId: string, image: any): Promise<NextResponse> {
-  try {
-    const body = await req.json();
-    const { tagType, tagId } = addTagSchema.parse(body);
+  const body = await req.json();
+  const { tagType, tagId } = addTagSchema.parse(body);
 
-    // Verify file is an image
-    if (image.category !== 'IMAGE') {
-      return badRequest('File is not an image');
-    }
-
-    // Verify the tagged entity exists and belongs to user
-    const entityError = await verifyTaggedEntity(tagType, tagId, user.id, repos);
-    if (entityError) {
-      return entityError;
-    }
-
-    // Check if tag already exists
-    const alreadyTagged = image.tags && image.tags.includes(tagId);
-
-    if (alreadyTagged) {
-      return successResponse({
-        data: {
-          imageId,
-          tagType,
-          tagId,
-          alreadyTagged: true,
-        },
-      });
-    }
-
-    // Add tag to file using repository
-    await repos.files.addTag(imageId, tagId);
-
-    logger.info('[Images v1] Tag added to image', {
-      imageId,
-      tagId,
-      tagType,
-    });
-
-    return successResponse(
-      {
-        data: {
-          imageId,
-          tagType,
-          tagId,
-        },
-      },
-      201
-    );
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Images v1] Error adding tag', { imageId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to add tag');
+  // Verify file is an image
+  if (image.category !== 'IMAGE') {
+    return badRequest('File is not an image');
   }
+
+  // Verify the tagged entity exists and belongs to user
+  const entityError = await verifyTaggedEntity(tagType, tagId, user.id, repos);
+  if (entityError) {
+    return entityError;
+  }
+
+  // Check if tag already exists
+  const alreadyTagged = image.tags && image.tags.includes(tagId);
+
+  if (alreadyTagged) {
+    return successResponse({
+      data: {
+        imageId,
+        tagType,
+        tagId,
+        alreadyTagged: true,
+      },
+    });
+  }
+
+  // Add tag to file using repository
+  await repos.files.addTag(imageId, tagId);
+
+  logger.info('[Images v1] Tag added to image', {
+    imageId,
+    tagId,
+    tagType,
+  });
+
+  return successResponse(
+    {
+      data: {
+        imageId,
+        tagType,
+        tagId,
+      },
+    },
+    201
+  );
 }
 
 // ============================================================================
@@ -318,27 +289,18 @@ async function handleAddTag(req: NextRequest, user: any, repos: any, imageId: st
 // ============================================================================
 
 async function handleRemoveTag(req: NextRequest, user: any, repos: any, imageId: string, image: any): Promise<NextResponse> {
-  try {
-    const body = await req.json();
-    const { tagId } = removeTagSchema.parse(body);
+  const body = await req.json();
+  const { tagId } = removeTagSchema.parse(body);
 
-    // Remove the tag using repository
-    await repos.files.removeTag(imageId, tagId);
+  // Remove the tag using repository
+  await repos.files.removeTag(imageId, tagId);
 
-    logger.info('[Images v1] Tag removed from image', {
-      imageId,
-      tagId,
-    });
+  logger.info('[Images v1] Tag removed from image', {
+    imageId,
+    tagId,
+  });
 
-    return successResponse({ success: true });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Images v1] Error removing tag', { imageId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to remove tag');
-  }
+  return successResponse({ success: true });
 }
 
 // ============================================================================
@@ -356,20 +318,10 @@ async function verifyTaggedEntity(
     if (!character) {
       return notFound('Character');
     }
-    // Security: verify character belongs to user
-    if (character.userId !== userId) {
-      logger.warn('[Images v1] User tried to tag with character they do not own', { characterId: tagId, userId });
-      return forbidden();
-    }
   } else if (tagType === 'CHAT') {
     const chat = await repos.chats.findById(tagId);
     if (!chat) {
       return notFound('Chat');
-    }
-    // Security: verify chat belongs to user
-    if (chat.userId !== userId) {
-      logger.warn('[Images v1] User tried to tag with chat they do not own', { chatId: tagId, userId });
-      return forbidden();
     }
   }
 

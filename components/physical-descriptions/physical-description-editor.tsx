@@ -94,9 +94,9 @@ export function PhysicalDescriptionEditor({
   }
 
   const charCountClass = (current: number, max: number) => {
-    if (current > max) return 'text-destructive'
-    if (current > max * 0.9) return 'text-warning'
-    return 'text-muted-foreground'
+    if (current > max) return 'qt-text-destructive'
+    if (current > max * 0.9) return 'qt-text-warning'
+    return 'qt-text-secondary'
   }
 
   return (
@@ -123,7 +123,7 @@ export function PhysicalDescriptionEditor({
               <button
                 type="button"
                 onClick={onClose}
-                className="text-muted-foreground hover:text-foreground"
+                className="qt-text-secondary hover:text-foreground"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -278,11 +278,11 @@ export function PhysicalDescriptionEditor({
               </button>
             </div>
             {showFullDescPreview ? (
-              <div className="w-full px-3 py-2 border border-border bg-muted text-foreground rounded-lg min-h-[120px] prose qt-prose-auto prose-sm max-w-none">
+              <div className="w-full px-3 py-2 border qt-border-default qt-bg-muted text-foreground rounded-lg min-h-[120px] prose qt-prose-auto prose-sm max-w-none">
                 {formData.fullDescription ? (
                   <MessageContent content={formData.fullDescription} />
                 ) : (
-                  <span className="text-muted-foreground italic">No content</span>
+                  <span className="qt-text-secondary italic">No content</span>
                 )}
               </div>
             ) : (

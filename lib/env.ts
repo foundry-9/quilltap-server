@@ -26,16 +26,6 @@ const envSchema = z
     // read directly from process.env at runtime by lib/encryption.ts.
     // See app/setup/page.tsx for the setup wizard.
 
-    // Rate Limiting (optional)
-    RATE_LIMIT_API_MAX: z.string().regex(/^\d+$/).optional(),
-    RATE_LIMIT_API_WINDOW: z.string().regex(/^\d+$/).optional(),
-    RATE_LIMIT_AUTH_MAX: z.string().regex(/^\d+$/).optional(),
-    RATE_LIMIT_AUTH_WINDOW: z.string().regex(/^\d+$/).optional(),
-    RATE_LIMIT_CHAT_MAX: z.string().regex(/^\d+$/).optional(),
-    RATE_LIMIT_CHAT_WINDOW: z.string().regex(/^\d+$/).optional(),
-    RATE_LIMIT_GENERAL_MAX: z.string().regex(/^\d+$/).optional(),
-    RATE_LIMIT_GENERAL_WINDOW: z.string().regex(/^\d+$/).optional(),
-
     // Logging (optional)
     LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).optional().default('info'),
     LOG_OUTPUT: z.enum(['console', 'file', 'both']).optional().default('console'),

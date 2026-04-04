@@ -4,11 +4,13 @@
  * Shared interfaces for the chat message service layer.
  */
 
-import type { ChatMetadataBase, ChatParticipantBase, Character, ConnectionProfile, MessageEvent, TimestampConfig } from '@/lib/schemas/types'
+import type { ChatMetadataBase, ChatParticipantBase, Character, ChatSettings, ConnectionProfile, MessageEvent, TimestampConfig } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
 import type { getRepositories } from '@/lib/repositories/factory'
+import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import type { DangerousContentSettings, ContextCompressionSettings } from '@/lib/schemas/settings.types'
 
 /**
  * Context passed through the message handling pipeline
@@ -160,6 +162,79 @@ export interface NextSpeakerInfo {
   reason: string
   cycleComplete: boolean
   isUsersTurn: boolean
+}
+
+/**
+ * Result returned by the core message processor for chain orchestration
+ */
+export interface ProcessMessageResult {
+  /** Whether the chat has multiple characters */
+  isMultiCharacter: boolean
+  /** Whether the response had content (non-empty) */
+  hasContent: boolean
+  /** The assistant message ID (if content was generated) */
+  messageId: string | null
+  /** User participant ID for turn calculations */
+  userParticipantId: string | null
+  /** Whether the chat is paused */
+  isPaused: boolean
+  /** Scene tracking context for the orchestrator to trigger after chain completion */
+  sceneTrackingContext?: {
+    connectionProfile: ConnectionProfile
+    memoryChatSettings: import('./memory-trigger.service').MemoryChatSettings
+    characterIds: string[]
+  }
+}
+
+/**
+ * Resolved dangerous-content state for a message send.
+ */
+export interface DangerResolutionResult {
+  dangerSettings: import('@/lib/schemas/settings.types').DangerousContentSettings
+  dangerFlags?: import('@/lib/schemas/chat.types').DangerFlag[]
+  effectiveProfile: ConnectionProfile
+  effectiveApiKey: string
+}
+
+/**
+ * Mutable streaming state threaded through the message processing pipeline.
+ * Passed by reference to sub-services (failover, finalizer) which mutate it directly,
+ * eliminating large destructure/reassign patterns.
+ */
+export interface StreamingState {
+  fullResponse: string
+  effectiveProfile: ConnectionProfile
+  effectiveApiKey: string
+  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | null
+  cacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | null
+  attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } | null
+  rawResponse: unknown
+  thoughtSignature?: string
+  hasStartedStreaming: boolean
+}
+
+/**
+ * Compression-related context for message finalization.
+ */
+export interface CompressionContext {
+  existingMessages: MessageEvent[]
+  content: string
+  builtContext: BuiltContext
+  compressionEnabled: boolean
+  cheapLLMSelection: CheapLLMSelection | null
+  contextCompressionSettings: ContextCompressionSettings
+  allProfiles: ConnectionProfile[]
+}
+
+/**
+ * Background trigger context for memory, danger classification, and scene tracking.
+ */
+export interface TriggerContext {
+  dangerSettings: DangerousContentSettings
+  chatSettings: ChatSettings | null
+  participantCharacters: Map<string, Character>
+  resolvedIdentity: { name: string; description: string; characterId?: string | null }
+  userCharacterId?: string
 }
 
 /**

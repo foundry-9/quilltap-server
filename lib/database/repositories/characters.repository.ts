@@ -915,7 +915,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
 
         await this.update(characterId, { scenarios });
 
-        logger.debug('Scenario added to character', { characterId, scenarioId: scenario.id, title: data.title });
         return scenario;
       },
       'Error adding scenario',
@@ -962,7 +961,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         scenarios[index] = updated;
         await this.update(characterId, { scenarios });
 
-        logger.debug('Scenario updated on character', { characterId, scenarioId });
         return updated;
       },
       'Error updating scenario',
@@ -995,7 +993,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
 
         await this.update(characterId, { scenarios: filtered });
 
-        logger.debug('Scenario removed from character', { characterId, scenarioId });
         return true;
       },
       'Error removing scenario',

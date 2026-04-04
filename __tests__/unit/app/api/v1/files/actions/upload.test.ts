@@ -18,33 +18,27 @@ describe('files upload action', () => {
   beforeEach(() => {
     ctx = {
       user: { id: 'user-1' },
-      repos: {
-        filePermissions: {
-          canWriteFile: jest.fn(),
-        },
-      },
+      repos: {},
     };
   });
 
-  it('rejects uploads without write permission', async () => {
-    ctx.repos.filePermissions.canWriteFile.mockResolvedValue(false);
-
-    const mockFile = {
-      name: 'notes.txt',
-      type: 'text/plain',
-      arrayBuffer: jest.fn(),
-    } as unknown as File;
-
-    const formData = {
-      get: (key: string) => {
-        if (key === 'file') {
-          return mockFile;
-        }
-        if (key === 'projectId') {
-          return 'project-1';
-        }
-        return null;
+  it('rejects uploads without multipart/form-data content type', async () => {
+    const request = {
+      headers: {
+        get: () => 'application/json',
       },
+    } as unknown as NextRequest;
+
+    const response = await handleUploadFile(request, ctx);
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('Expected multipart/form-data content type');
+  });
+
+  it('rejects uploads without a file', async () => {
+    const formData = {
+      get: () => null,
     } as unknown as FormData;
 
     const request = {
@@ -57,13 +51,37 @@ describe('files upload action', () => {
     const response = await handleUploadFile(request, ctx);
     const body = await response.json();
 
-    expect(response.status).toBe(403);
-    expect(body.error).toBe('File write permission required. Please grant permission first.');
-    expect(ctx.repos.filePermissions.canWriteFile).toHaveBeenCalledWith(
-      'user-1',
-      'project-1',
-      undefined
-    );
-    expect(mockFile.arrayBuffer).not.toHaveBeenCalled();
+    expect(response.status).toBe(400);
+    expect(body.error).toBe('No file provided');
+  });
+
+  it('does not require file write permission for user-initiated uploads', async () => {
+    // User-initiated uploads should not go through the AI file write permission system.
+    // The upload endpoint is protected by authentication (createAuthenticatedHandler),
+    // not by the Prospero file write permission gate.
+    const mockFile = {
+      name: 'notes.txt',
+      type: 'text/plain',
+      arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(0)),
+    } as unknown as File;
+
+    const formData = {
+      get: (key: string) => {
+        if (key === 'file') return mockFile;
+        return null;
+      },
+    } as unknown as FormData;
+
+    const request = {
+      headers: {
+        get: () => 'multipart/form-data; boundary=test',
+      },
+      formData: async () => formData,
+    } as unknown as NextRequest;
+
+    // This will fail because we haven't mocked the full file storage pipeline,
+    // but the important thing is it does NOT return 403
+    const response = await handleUploadFile(request, ctx);
+    expect(response.status).not.toBe(403);
   });
 });

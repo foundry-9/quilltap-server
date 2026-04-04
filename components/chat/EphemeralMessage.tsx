@@ -65,7 +65,7 @@ export function EphemeralMessage({ message, onDismiss }: EphemeralMessageProps) 
         className="
           inline-flex items-center gap-2 px-4 py-1.5
           qt-text-xs italic
-          bg-muted/50 rounded-full
+          qt-bg-muted/50 rounded-full
           animate-in fade-in slide-in-from-bottom-2 duration-300
         "
       >
@@ -75,7 +75,7 @@ export function EphemeralMessage({ message, onDismiss }: EphemeralMessageProps) 
         {onDismiss && (
           <button
             onClick={() => onDismiss(message.id)}
-            className="ml-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+            className="ml-1 qt-text-secondary/50 hover:qt-text-secondary transition-colors"
             title="Dismiss"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

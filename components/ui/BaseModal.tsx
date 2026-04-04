@@ -108,7 +108,7 @@ export function BaseModal({
             <button
               type="button"
               onClick={onClose}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
+              className="absolute top-4 right-4 qt-text-secondary hover:text-foreground transition-colors"
               aria-label="Close"
             >
               <svg

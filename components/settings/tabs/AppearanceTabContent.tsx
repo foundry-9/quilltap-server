@@ -31,7 +31,7 @@ export function AppearanceTabContent() {
         <CollapsibleCard title="Avatar Settings" description="Configure avatar display mode and style" sectionId="avatar-settings" forceOpen={activeSection === 'avatar-settings'}>
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="text-muted-foreground">Loading settings...</div>
+              <div className="qt-text-secondary">Loading settings...</div>
             </div>
           ) : settings ? (
             <AvatarSettings

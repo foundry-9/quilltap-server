@@ -113,7 +113,7 @@ export function PromptList({
                 <button
                   type="button"
                   onClick={() => onDeleteToggle(deleteConfirm === prompt.id ? null : prompt.id)}
-                  className="qt-button-icon qt-button-ghost hover:text-destructive"
+                  className="qt-button-icon qt-button-ghost hover:qt-text-destructive"
                   title="Delete"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -121,7 +121,7 @@ export function PromptList({
                   </svg>
                 </button>
                 {deleteConfirm === prompt.id && (
-                  <div className="absolute right-0 top-full mt-1 p-3 bg-card border border-border rounded-lg qt-shadow-lg z-10 min-w-[180px]">
+                  <div className="absolute right-0 top-full mt-1 p-3 qt-bg-card border qt-border-default rounded-lg qt-shadow-lg z-10 min-w-[180px]">
                     <p className="text-sm text-foreground mb-2">Delete this prompt?</p>
                     <div className="flex gap-2">
                       <button

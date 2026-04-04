@@ -36,7 +36,7 @@ export function ChatTabContent() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="text-muted-foreground">Loading settings...</div>
+        <div className="qt-text-secondary">Loading settings...</div>
       </div>
     )
   }

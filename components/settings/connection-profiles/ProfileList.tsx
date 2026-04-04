@@ -34,6 +34,8 @@ interface ProfileListProps {
   onAddClick: () => void
   onReorder?: (order: Array<{ id: string; sortIndex: number }>) => void
   onResetSort?: () => void
+  onAutoConfigure?: (profileId: string) => void
+  autoConfiguringId?: string | null
 }
 
 /**
@@ -53,6 +55,8 @@ export function ProfileList({
   onAddClick,
   onReorder,
   onResetSort,
+  onAutoConfigure,
+  autoConfiguringId,
 }: ProfileListProps) {
   // Helper to check if a provider requires an API key
   const providerRequiresApiKey = (providerName: string): boolean => {
@@ -159,6 +163,8 @@ export function ProfileList({
                   deleteConfirming={deleteConfirming}
                   onDeleteConfirmChange={onDeleteConfirmChange}
                   isDeleting={isDeleting}
+                  onAutoConfigure={onAutoConfigure}
+                  isAutoConfiguring={autoConfiguringId === profile.id}
                 />
               ))}
             </div>

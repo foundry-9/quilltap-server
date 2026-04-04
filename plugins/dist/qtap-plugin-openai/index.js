@@ -7140,7 +7140,6 @@ var OpenAIProvider = class {
   constructor() {
     this.supportsFileAttachments = true;
     this.supportedMimeTypes = OPENAI_SUPPORTED_MIME_TYPES;
-    this.supportsImageGeneration = true;
     this.supportsWebSearch = true;
   }
   /**
@@ -7366,9 +7365,13 @@ var OpenAIProvider = class {
         requestParams.temperature = params.temperature;
       }
     } else {
-      const minTokensForReasoning = 4096;
-      if ((params.maxTokens ?? 0) < minTokensForReasoning) {
-        requestParams.max_output_tokens = minTokensForReasoning;
+      if (!params.strictMaxTokens) {
+        const minTokensForReasoning = 4096;
+        if ((params.maxTokens ?? 0) < minTokensForReasoning) {
+          requestParams.max_output_tokens = minTokensForReasoning;
+        }
+      } else {
+        requestParams.reasoning = { effort: "low" };
       }
     }
     const tools = [];
@@ -7552,37 +7555,6 @@ var OpenAIProvider = class {
       logger.error("Failed to fetch OpenAI models", { context: "OpenAIProvider.getAvailableModels" }, error instanceof Error ? error : void 0);
       return [];
     }
-  }
-  async generateImage(params, apiKey) {
-    const client = new OpenAI({
-      apiKey,
-      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
-    });
-    const response = await client.images.generate({
-      model: params.model ?? "dall-e-3",
-      prompt: params.prompt,
-      n: params.n ?? 1,
-      size: params.size ?? "1024x1024",
-      quality: params.quality ?? "standard",
-      style: params.style ?? "vivid",
-      response_format: "b64_json"
-    });
-    const images = await Promise.all(
-      (response.data || []).map(async (image) => {
-        if (!image.b64_json) {
-          throw new Error("No base64 image data in response");
-        }
-        return {
-          data: image.b64_json,
-          mimeType: "image/png",
-          revisedPrompt: image.revised_prompt
-        };
-      })
-    );
-    return {
-      images,
-      raw: response
-    };
   }
 };
 

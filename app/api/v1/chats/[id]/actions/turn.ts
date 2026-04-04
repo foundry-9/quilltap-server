@@ -5,9 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, validationError, serverError } from '@/lib/api/responses';
+import { notFound, badRequest } from '@/lib/api/responses';
 import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
@@ -33,117 +32,109 @@ export async function handleTurnAction(
   chat: ChatMetadata,
   { repos }: AuthenticatedContext
 ): Promise<NextResponse> {
-  try {
-    const body = await req.json();
-    const parsed = turnActionSchema.parse(body);
-    const turnAction = parsed.action;
-    const participantId = 'participantId' in parsed ? parsed.participantId : undefined;
+  const body = await req.json();
+  const parsed = turnActionSchema.parse(body);
+  const turnAction = parsed.action;
+  const participantId = 'participantId' in parsed ? parsed.participantId : undefined;
 
-    // For non-query actions, validate the target participant
-    if (turnAction !== 'query') {
-      const participant = chat.participants.find((p) => p.id === participantId);
-      if (!participant) {
-        return notFound('Participant');
-      }
-      if (!isParticipantPresent(participant.status)) {
-        return badRequest('Participant is not active');
-      }
+  // For non-query actions, validate the target participant
+  if (turnAction !== 'query') {
+    const participant = chat.participants.find((p) => p.id === participantId);
+    if (!participant) {
+      return notFound('Participant');
     }
-
-    const userParticipant = findUserParticipant(chat.participants);
-    const userParticipantId = userParticipant?.id ?? null;
-
-    const messages = await repos.chats.getMessages(chatId);
-    const messageEvents = messages.filter(
-      (m): m is typeof m & { type: 'message' } => m.type === 'message'
-    ) as unknown as MessageEvent[];
-
-    let turnState = calculateTurnStateFromHistory({
-      messages: messageEvents,
-      participants: chat.participants,
-      userParticipantId,
-    });
-
-    switch (turnAction) {
-      case 'nudge':
-        turnState = nudgeParticipant(turnState, participantId!);
-        break;
-      case 'queue':
-        turnState = addToQueue(turnState, participantId!);
-        break;
-      case 'dequeue':
-        turnState = removeFromQueue(turnState, participantId!);
-        break;
-      case 'query':
-        // Read-only: just compute next speaker from current state
-        break;
+    if (!isParticipantPresent(participant.status)) {
+      return badRequest('Participant is not active');
     }
-
-    const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants);
-    const charactersMap = new Map<string, Character>();
-    for (const p of activeCharacterParticipants) {
-      if (p.characterId) {
-        const char = await repos.characters.findById(p.characterId);
-        if (char) {
-          charactersMap.set(p.characterId, char);
-        }
-      }
-    }
-
-    const nextSpeakerResult = selectNextSpeaker(chat.participants, charactersMap, turnState, userParticipantId);
-
-    // Persist turn queue and last turn participant for state-modifying actions
-    if (turnAction !== 'query') {
-      await repos.chats.update(chatId, {
-        turnQueue: JSON.stringify(turnState.queue),
-        lastTurnParticipantId: nextSpeakerResult.nextSpeakerId ?? null,
-      });
-    }
-
-    // Determine the next speaker's character info
-    const nextSpeakerParticipant = nextSpeakerResult.nextSpeakerId
-      ? chat.participants.find(p => p.id === nextSpeakerResult.nextSpeakerId)
-      : null;
-    const nextSpeakerCharacter = nextSpeakerParticipant?.characterId
-      ? charactersMap.get(nextSpeakerParticipant.characterId)
-      : null;
-
-    const response: Record<string, unknown> = {
-      success: true,
-      action: turnAction,
-      turn: {
-        nextSpeakerId: nextSpeakerResult.nextSpeakerId,
-        nextSpeakerName: nextSpeakerCharacter?.name ?? null,
-        nextSpeakerControlledBy: nextSpeakerParticipant?.controlledBy ?? null,
-        reason: nextSpeakerResult.reason,
-        explanation: getSelectionExplanation(nextSpeakerResult),
-        cycleComplete: nextSpeakerResult.cycleComplete,
-        isUsersTurn: nextSpeakerResult.nextSpeakerId === null,
-      },
-      state: {
-        queue: turnState.queue,
-      },
-    };
-
-    // Include affected participant info for non-query actions
-    if (participantId) {
-      const affectedCharacter = chat.participants.find(p => p.id === participantId);
-      const affectedCharacterData = affectedCharacter?.characterId
-        ? charactersMap.get(affectedCharacter.characterId)
-        : null;
-      response.participant = {
-        id: participantId,
-        name: affectedCharacterData?.name ?? 'Unknown',
-        queuePosition: getQueuePosition(turnState, participantId),
-      };
-    }
-
-    return NextResponse.json(response);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-    logger.error('[Chats v1] Error processing turn action', { chatId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to process turn action');
   }
+
+  const userParticipant = findUserParticipant(chat.participants);
+  const userParticipantId = userParticipant?.id ?? null;
+
+  const messages = await repos.chats.getMessages(chatId);
+  const messageEvents = messages.filter(
+    (m): m is typeof m & { type: 'message' } => m.type === 'message'
+  ) as unknown as MessageEvent[];
+
+  let turnState = calculateTurnStateFromHistory({
+    messages: messageEvents,
+    participants: chat.participants,
+    userParticipantId,
+  });
+
+  switch (turnAction) {
+    case 'nudge':
+      turnState = nudgeParticipant(turnState, participantId!);
+      break;
+    case 'queue':
+      turnState = addToQueue(turnState, participantId!);
+      break;
+    case 'dequeue':
+      turnState = removeFromQueue(turnState, participantId!);
+      break;
+    case 'query':
+      // Read-only: just compute next speaker from current state
+      break;
+  }
+
+  const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants);
+  const charactersMap = new Map<string, Character>();
+  for (const p of activeCharacterParticipants) {
+    if (p.characterId) {
+      const char = await repos.characters.findById(p.characterId);
+      if (char) {
+        charactersMap.set(p.characterId, char);
+      }
+    }
+  }
+
+  const nextSpeakerResult = selectNextSpeaker(chat.participants, charactersMap, turnState, userParticipantId);
+
+  // Persist turn queue and last turn participant for state-modifying actions
+  if (turnAction !== 'query') {
+    await repos.chats.update(chatId, {
+      turnQueue: JSON.stringify(turnState.queue),
+      lastTurnParticipantId: nextSpeakerResult.nextSpeakerId ?? null,
+    });
+  }
+
+  // Determine the next speaker's character info
+  const nextSpeakerParticipant = nextSpeakerResult.nextSpeakerId
+    ? chat.participants.find(p => p.id === nextSpeakerResult.nextSpeakerId)
+    : null;
+  const nextSpeakerCharacter = nextSpeakerParticipant?.characterId
+    ? charactersMap.get(nextSpeakerParticipant.characterId)
+    : null;
+
+  const response: Record<string, unknown> = {
+    success: true,
+    action: turnAction,
+    turn: {
+      nextSpeakerId: nextSpeakerResult.nextSpeakerId,
+      nextSpeakerName: nextSpeakerCharacter?.name ?? null,
+      nextSpeakerControlledBy: nextSpeakerParticipant?.controlledBy ?? null,
+      reason: nextSpeakerResult.reason,
+      explanation: getSelectionExplanation(nextSpeakerResult),
+      cycleComplete: nextSpeakerResult.cycleComplete,
+      isUsersTurn: nextSpeakerResult.nextSpeakerId === null,
+    },
+    state: {
+      queue: turnState.queue,
+    },
+  };
+
+  // Include affected participant info for non-query actions
+  if (participantId) {
+    const affectedCharacter = chat.participants.find(p => p.id === participantId);
+    const affectedCharacterData = affectedCharacter?.characterId
+      ? charactersMap.get(affectedCharacter.characterId)
+      : null;
+    response.participant = {
+      id: participantId,
+      name: affectedCharacterData?.name ?? 'Unknown',
+      queuePosition: getQueuePosition(turnState, participantId),
+    };
+  }
+
+  return NextResponse.json(response);
 }

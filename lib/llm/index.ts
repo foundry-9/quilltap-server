@@ -5,7 +5,7 @@
  */
 
 // Provider interface and base class
-export type { LLMProvider } from './base'
+export type { TextProvider, LLMProvider } from './base'
 export { BaseLLMProvider } from './base'
 
 // Factory (now uses plugin registry)
@@ -55,6 +55,15 @@ export {
   supportsImageGeneration,
   getImageCapableProviders,
 } from './image-capable'
+
+// Model classes
+export type { ModelClass } from './model-classes'
+export {
+  MODEL_CLASSES,
+  MODEL_CLASS_NAMES,
+  getModelClass,
+  isValidModelClassName,
+} from './model-classes'
 
 // Context and pricing utilities
 export {

@@ -113,8 +113,11 @@ if (existsSync(PLUGINS_DIST)) {
 
 const standaloneNodeModules = join(STAGING_DIR, 'node_modules');
 if (existsSync(standaloneNodeModules)) {
-  // Remove native modules — they'll be resolved from the npm package's node_modules
-  const nativeModulesToStrip = ['better-sqlite3', 'sharp'];
+  // Remove native-only modules — they'll be resolved from the npm package's node_modules.
+  // NOTE: sharp's JS wrapper and its pure-JS dependency @img/colour are kept in the
+  // tarball. Only the platform-specific native binaries (@img/sharp-*, @img/sharp-libvips-*)
+  // and better-sqlite3 (entirely native) are stripped.
+  const nativeModulesToStrip = ['better-sqlite3'];
   for (const mod of nativeModulesToStrip) {
     const modPath = join(standaloneNodeModules, mod);
     if (existsSync(modPath)) {
@@ -123,11 +126,28 @@ if (existsSync(standaloneNodeModules)) {
     }
   }
 
-  // Remove @img/sharp-* platform-specific packages
+  // Strip native .node binaries from sharp (keep JS wrapper)
+  const sharpBuildDir = join(standaloneNodeModules, 'sharp', 'build');
+  if (existsSync(sharpBuildDir)) {
+    rmSync(sharpBuildDir, { recursive: true, force: true });
+    console.log('    Stripped: sharp/build (native binaries)');
+  }
+  const sharpPrebuildsDir = join(standaloneNodeModules, 'sharp', 'prebuilds');
+  if (existsSync(sharpPrebuildsDir)) {
+    rmSync(sharpPrebuildsDir, { recursive: true, force: true });
+    console.log('    Stripped: sharp/prebuilds (native binaries)');
+  }
+
+  // Remove @img/sharp-* platform-specific native packages but keep @img/colour (pure JS)
   const imgDir = join(standaloneNodeModules, '@img');
   if (existsSync(imgDir)) {
-    rmSync(imgDir, { recursive: true, force: true });
-    console.log('    Stripped: @img/sharp-*');
+    for (const entry of readdirSync(imgDir)) {
+      if (entry.startsWith('sharp-')) {
+        const entryPath = join(imgDir, entry);
+        rmSync(entryPath, { recursive: true, force: true });
+        console.log(`    Stripped: @img/${entry}`);
+      }
+    }
   }
 
   // Clean up unnecessary files to reduce size

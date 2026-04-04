@@ -7,6 +7,7 @@ import { safeJsonParse } from '@/lib/fetch-helpers'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
 import { triggerDownload } from '@/lib/download-utils'
+import { copyImageToClipboard } from '@/lib/clipboard-utils'
 
 interface ChatFile {
   id: string
@@ -93,9 +94,7 @@ export default function ChatGalleryImageViewModal({
 
   const handleCopyToClipboard = async () => {
     try {
-      const response = await fetch(file.url)
-      const blob = await response.blob()
-      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+      await copyImageToClipboard(file.url)
       showSuccessToast('Image copied to clipboard')
     } catch (error) {
       console.error('Failed to copy image to clipboard:', { error: error instanceof Error ? error.message : String(error) })
@@ -282,7 +281,7 @@ export default function ChatGalleryImageViewModal({
             disabled={isTagging || checkingTags}
             className={`p-2 rounded-full qt-text-overlay transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
               isTaggedToCharacter
-                ? 'bg-primary hover:bg-primary/90'
+                ? 'bg-primary hover:qt-bg-primary/90'
                 : 'qt-bg-overlay-btn hover:qt-bg-overlay-btn'
             }`}
             title={isTaggedToCharacter ? `Remove from ${characterName || 'character'}'s gallery` : `Add to ${characterName || 'character'}'s gallery`}
@@ -302,7 +301,7 @@ export default function ChatGalleryImageViewModal({
             disabled={isTagging || checkingTags}
             className={`p-2 rounded-full qt-text-overlay transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
               isTaggedToPersona
-                ? 'bg-primary hover:bg-primary/90'
+                ? 'bg-primary hover:qt-bg-primary/90'
                 : 'qt-bg-overlay-btn hover:qt-bg-overlay-btn'
             }`}
             title={isTaggedToPersona ? `Remove from ${personaName || 'persona'}'s gallery` : `Add to ${personaName || 'persona'}'s gallery`}
@@ -367,7 +366,7 @@ export default function ChatGalleryImageViewModal({
             e.stopPropagation()
             handleDeleteClick()
           }}
-          className="p-2 bg-destructive/80 hover:bg-destructive rounded-full qt-text-overlay transition-colors cursor-pointer"
+          className="p-2 qt-bg-destructive/80 hover:bg-destructive rounded-full qt-text-overlay transition-colors cursor-pointer"
           title="Delete image permanently"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

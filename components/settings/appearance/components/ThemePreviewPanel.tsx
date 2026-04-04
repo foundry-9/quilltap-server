@@ -186,7 +186,7 @@ export function ThemePreviewPanel({
       {/* Preview container with scoped class */}
       {/* Override height: 100dvh that some themes set on root */}
       <div
-        className={`${scopeClass} rounded-lg border border-border overflow-hidden`}
+        className={`${scopeClass} rounded-lg border qt-border-default overflow-hidden`}
         style={{ height: 'auto', minHeight: 'auto', maxHeight: 'none' }}
       >
         <ThemePreviewElements />

@@ -298,7 +298,7 @@ export default function AddCharacterDialog({
                 {/* Character grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-64 overflow-y-auto p-1">
                   {regularCharacters.length === 0 && npcCharacters.length === 0 ? (
-                    <div className="col-span-full text-center py-8 text-muted-foreground">
+                    <div className="col-span-full text-center py-8 qt-text-secondary">
                       {searchTerm ? 'No matching characters found' : 'All your characters are already in this chat'}
                     </div>
                   ) : (
@@ -315,8 +315,8 @@ export default function AddCharacterDialog({
                             className={`
                               p-3 rounded-lg border text-left transition-all
                               ${isSelected
-                                ? 'border-primary bg-primary/10 ring-2 ring-primary'
-                                : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                                ? 'qt-border-primary qt-bg-primary/10 ring-2 ring-primary'
+                                : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
                               }
                               disabled:opacity-50 disabled:cursor-not-allowed
                             `}
@@ -358,9 +358,9 @@ export default function AddCharacterDialog({
                         <>
                           {/* Divider */}
                           <div className="col-span-full flex items-center gap-2 my-2">
-                            <div className="flex-1 border-t border-border"></div>
-                            <span className="qt-text-xs text-muted-foreground font-medium">NPCs</span>
-                            <div className="flex-1 border-t border-border"></div>
+                            <div className="flex-1 border-t qt-border-default"></div>
+                            <span className="qt-text-xs qt-text-secondary font-medium">NPCs</span>
+                            <div className="flex-1 border-t qt-border-default"></div>
                           </div>
 
                           {/* NPC Characters */}
@@ -375,8 +375,8 @@ export default function AddCharacterDialog({
                                 className={`
                                   p-3 rounded-lg border text-left transition-all
                                   ${isSelected
-                                    ? 'border-primary bg-primary/10 ring-2 ring-primary'
-                                    : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                                    ? 'qt-border-primary qt-bg-primary/10 ring-2 ring-primary'
+                                    : 'qt-border-default hover:qt-border-primary/50 hover:qt-bg-muted/50'
                                   }
                                   disabled:opacity-50 disabled:cursor-not-allowed
                                 `}
@@ -419,11 +419,11 @@ export default function AddCharacterDialog({
                       <button
                         onClick={() => setIsCreateNPCOpen(true)}
                         disabled={isAdding}
-                        className="p-3 rounded-lg border border-dashed border-border hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="p-3 rounded-lg border border-dashed qt-border-default hover:qt-border-primary/50 hover:qt-bg-primary/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <div className="flex items-center gap-3">
                           {/* User Plus Icon */}
-                          <div className="w-10 h-10 flex items-center justify-center rounded bg-primary/10 text-primary flex-shrink-0">
+                          <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 text-primary flex-shrink-0">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                             </svg>
@@ -434,7 +434,7 @@ export default function AddCharacterDialog({
                             <div className="font-semibold text-primary truncate">
                               Create New NPC
                             </div>
-                            <div className="qt-text-xs text-muted-foreground truncate">
+                            <div className="qt-text-xs qt-text-secondary truncate">
                               Add an ad-hoc character
                             </div>
                           </div>
@@ -478,7 +478,7 @@ export default function AddCharacterDialog({
                     ) : null
                   })()}
                   {connectionProfiles.length === 0 && (
-                    <p className="text-sm text-warning mt-1">
+                    <p className="text-sm qt-text-warning mt-1">
                       No connection profiles available. Create one in Settings to use LLM control.
                     </p>
                   )}
@@ -511,7 +511,7 @@ export default function AddCharacterDialog({
               {selectedCharacterId && (
                 <div>
                   <label htmlFor="joinScenario" className="block text-sm qt-text-primary mb-2">
-                    How did they join? <span className="text-muted-foreground font-normal">(optional)</span>
+                    How did they join? <span className="qt-text-secondary font-normal">(optional)</span>
                   </label>
                   <textarea
                     id="joinScenario"

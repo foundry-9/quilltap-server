@@ -212,7 +212,7 @@ export function ProfileModal({
                 ))}
               </select>
               {currentProviderInfo?.description && (
-                <p className="mt-1 qt-text-xs text-warning">
+                <p className="mt-1 qt-text-xs qt-text-warning">
                   {currentProviderInfo.description}
                 </p>
               )}
@@ -238,7 +238,7 @@ export function ProfileModal({
                   ))}
                 </select>
                 {filteredApiKeys.length === 0 && (
-                  <p className="mt-1 qt-text-xs text-muted-foreground">
+                  <p className="mt-1 qt-text-xs qt-text-secondary">
                     No {form.formData.provider} API keys found. Add one in the API Keys tab first.
                   </p>
                 )}
@@ -379,7 +379,7 @@ export function ProfileModal({
         embedded with a different model and may not search correctly until they
         are re-embedded with the new profile.
       </p>
-      <p className="mt-3 text-muted-foreground qt-text-small">
+      <p className="mt-3 qt-text-secondary qt-text-small">
         This will queue a background job to re-embed all character memories.
         You can monitor progress in the Tasks Queue under Data &amp; System settings.
       </p>

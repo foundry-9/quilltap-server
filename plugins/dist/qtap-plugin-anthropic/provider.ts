@@ -6,7 +6,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
-import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types'
+import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types'
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils'
 
 const logger = createPluginLogger('qtap-plugin-anthropic')
@@ -49,10 +49,9 @@ interface AnthropicProfileParams {
   cacheTTL?: '5m' | '1h'
 }
 
-export class AnthropicProvider implements LLMProvider {
+export class AnthropicProvider implements TextProvider {
   readonly supportsFileAttachments = true
   readonly supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES
-  readonly supportsImageGeneration = false
   readonly supportsWebSearch = false
 
   /**
@@ -639,8 +638,4 @@ export class AnthropicProvider implements LLMProvider {
     }
   }
 
-  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    logger.error('Image generation not supported by Anthropic', { context: 'AnthropicProvider.generateImage' })
-    throw new Error('Anthropic does not support image generation. Claude can analyze images but cannot generate them.')
-  }
 }

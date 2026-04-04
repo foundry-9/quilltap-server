@@ -149,40 +149,40 @@ export default function FileConflictDialog({
     >
       <div className="space-y-4">
         {/* Conflict explanation */}
-        <p className="text-muted-foreground">
+        <p className="qt-text-secondary">
           {getConflictDescription(conflict.conflictType)}
         </p>
 
         {/* Existing file info */}
-        <div className="p-3 bg-muted rounded-lg">
+        <div className="p-3 qt-bg-muted rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-lg">📄</span>
             <span className="font-medium">Existing File</span>
           </div>
           <div className="qt-text-sm space-y-1 ml-7">
             <div className="font-medium">{conflict.existingFile.filename}</div>
-            <div className="qt-text-xs text-muted-foreground">
+            <div className="qt-text-xs qt-text-secondary">
               {formatFileSize(conflict.existingFile.size)} • Uploaded {formatDate(conflict.existingFile.createdAt)}
             </div>
           </div>
         </div>
 
         {/* New file info */}
-        <div className="p-3 bg-muted rounded-lg">
+        <div className="p-3 qt-bg-muted rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-lg">📎</span>
             <span className="font-medium">New File</span>
           </div>
           <div className="qt-text-sm space-y-1 ml-7">
             <div className="font-medium">{conflict.newFile.filename}</div>
-            <div className="qt-text-xs text-muted-foreground">
+            <div className="qt-text-xs qt-text-secondary">
               {formatFileSize(conflict.newFile.size)}
             </div>
           </div>
         </div>
 
         {/* Resolution options explanation */}
-        <div className="qt-text-xs text-muted-foreground space-y-1 border-t pt-3">
+        <div className="qt-text-xs qt-text-secondary space-y-1 border-t pt-3">
           <p><strong>Replace:</strong> Delete the existing file and upload the new one.</p>
           <p><strong>Keep Both:</strong> Upload the new file with a modified name (e.g., &quot;file (1).pdf&quot;).</p>
           <p><strong>Skip Upload:</strong> Cancel and keep the existing file.</p>

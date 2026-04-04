@@ -19,9 +19,8 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 - **Design Documentation**: Storybook
 - **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern
 - **User Documentation**: Found in `/help/` and maintained and searchable using MessagePack
-- **Electron**: Electron front-end to Lima/WSL2 backend is primary way to use app
-- **Virtualization**: Lima + VZ (macOS) / WSL2 (Windows) for self-contained app distribution
-- **Native Modules**: `better-sqlite3` (compiled via node-gyp) and `sharp` (pre-built platform binaries via `@img/sharp-{platform}-{arch}`). Both require special handling in `scripts/build-electron-server.ts` — better-sqlite3 is rebuilt against Electron's Node ABI, and sharp's platform-specific binaries must be installed for the target platform. When adding new native modules, update both `next.config.js` (`serverExternalPackages` + `outputFileTracingIncludes`) and the Electron build script.
+- **Electron**: Desktop shell lives in a separate repository ([quilltap-shell](https://github.com/foundry-9/quilltap-shell)); this repo produces the standalone tarball it consumes
+- **Native Modules**: `better-sqlite3` (compiled via node-gyp) and `sharp` (pre-built platform binaries via `@img/sharp-{platform}-{arch}`). Both require special handling in standalone and Docker builds — sharp's platform-specific binaries must be installed for the target platform. When adding new native modules, update `next.config.js` (`serverExternalPackages` + `outputFileTracingIncludes`).
 
 ## API Architecture
 
@@ -180,6 +179,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 - All user-visible changes **MUST** be documented in help files found in `help/*.md`
 - Help files have a `url` field in their frontmatter and an "In-Chat Navigation" section with an exact `help_navigate` tool call. When creating or modifying help files, ensure the `url` frontmatter points to the correct page (with `?tab=` and `&section=` parameters for settings deep-linking), and that the "In-Chat Navigation" section contains the matching `help_navigate(url: "...")` call.
 - All writing for users is to be in the style of "steampunk + roaring 20s + Great Gatsby + Wodehouse + Lemony Snicket"
+- **IMPORTANT**: We need the human developer's confirmation that they have walked through the release checklist in [DEVELOPMENT.md](./docs/developer/DEVELOPMENT.md#checklist-before-release) when they are ready to run the command `tag-for-release` in production - if they want to go through them, then go through that list with them. Don't do anything there on your own unless they ask you to; this is up to the developer.
 
 ## Best Practices and Principles
 

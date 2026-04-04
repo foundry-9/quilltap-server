@@ -181,7 +181,7 @@ export default function FilePreviewPdf({
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center w-full h-full min-h-[400px] text-center text-muted-foreground">
+      <div className="flex flex-col items-center justify-center w-full h-full min-h-[400px] text-center qt-text-secondary">
         <div className="text-4xl mb-2">{'\u{1F4C4}'}</div>
         <p>{error}</p>
         <a
@@ -202,14 +202,14 @@ export default function FilePreviewPdf({
     >
       {isLoading && (
         <div className="flex items-center justify-center h-full">
-          <div className="animate-pulse text-muted-foreground">Loading PDF...</div>
+          <div className="animate-pulse qt-text-secondary">Loading PDF...</div>
         </div>
       )}
 
       {!isLoading && numPages > 0 && (
         <>
           {/* Controls */}
-          <div className="flex items-center gap-4 mb-4 p-2 bg-muted rounded">
+          <div className="flex items-center gap-4 mb-4 p-2 qt-bg-muted rounded">
             {/* Page navigation */}
             <div className="flex items-center gap-2">
               <button
@@ -220,7 +220,7 @@ export default function FilePreviewPdf({
               >
                 {'\u2190'}
               </button>
-              <span className="text-sm text-muted-foreground min-w-[80px] text-center">
+              <span className="text-sm qt-text-secondary min-w-[80px] text-center">
                 {currentPage} / {numPages}
               </span>
               <button
@@ -234,7 +234,7 @@ export default function FilePreviewPdf({
             </div>
 
             {/* Zoom controls */}
-            <div className="flex items-center gap-2 border-l border-border pl-4">
+            <div className="flex items-center gap-2 border-l qt-border-default pl-4">
               <button
                 onClick={zoomOut}
                 disabled={scale <= 0.5}
@@ -243,7 +243,7 @@ export default function FilePreviewPdf({
               >
                 -
               </button>
-              <span className="text-sm text-muted-foreground min-w-[50px] text-center">
+              <span className="text-sm qt-text-secondary min-w-[50px] text-center">
                 {Math.round(scale * 100)}%
               </span>
               <button

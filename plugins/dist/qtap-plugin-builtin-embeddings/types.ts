@@ -6,6 +6,7 @@
 
 export type {
   LLMProviderPlugin,
+  TextProviderPlugin,
   EmbeddingModelInfo,
   EmbeddingResult,
   EmbeddingOptions,

@@ -194,7 +194,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
   return (
     <div className="space-y-6">
       {/* Primary Name Change Section */}
-      <div className="bg-card rounded-lg border border-border p-4">
+      <div className="qt-bg-card rounded-lg border qt-border-default p-4">
         <h3 className="qt-text-section mb-4 text-foreground">
           Rename Character
         </h3>
@@ -211,7 +211,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
               type="text"
               value={characterName}
               disabled
-              className="w-full px-3 py-2 border border-border bg-muted text-foreground rounded-lg"
+              className="w-full px-3 py-2 border qt-border-default qt-bg-muted text-foreground rounded-lg"
             />
           </div>
           <div>
@@ -223,7 +223,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Enter new name"
-              className="w-full px-3 py-2 border border-border bg-card text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full px-3 py-2 border qt-border-default qt-bg-card text-foreground rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
         </div>
@@ -233,14 +233,14 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
             type="checkbox"
             checked={caseSensitive}
             onChange={(e) => setCaseSensitive(e.target.checked)}
-            className="w-4 h-4 rounded border-border text-primary focus:ring-ring"
+            className="w-4 h-4 rounded qt-border-default text-primary focus:ring-ring"
           />
           Case sensitive matching
         </label>
       </div>
 
       {/* Additional Replacements Section */}
-      <div className="bg-card rounded-lg border border-border p-4">
+      <div className="qt-bg-card rounded-lg border qt-border-default p-4">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="qt-text-section text-foreground">
@@ -263,7 +263,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
         </div>
 
         {additionalReplacements.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic py-4 text-center">
+          <p className="text-sm qt-text-secondary italic py-4 text-center">
             No additional replacements. Click &quot;Add&quot; to add nicknames or aliases to replace.
           </p>
         ) : (
@@ -271,7 +271,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
             {additionalReplacements.map((replacement, index) => (
               <div
                 key={replacement.id}
-                className="flex items-start gap-3 p-3 bg-muted rounded-lg"
+                className="flex items-start gap-3 p-3 qt-bg-muted rounded-lg"
               >
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
@@ -283,7 +283,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                       value={replacement.oldValue}
                       onChange={(e) => updateAdditionalReplacement(replacement.id, 'oldValue', e.target.value)}
                       placeholder="e.g., Snips"
-                      className="w-full px-2 py-1.5 text-sm border border-border bg-card text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="w-full px-2 py-1.5 text-sm border qt-border-default qt-bg-card text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                   </div>
                   <div>
@@ -295,7 +295,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                       value={replacement.newValue}
                       onChange={(e) => updateAdditionalReplacement(replacement.id, 'newValue', e.target.value)}
                       placeholder="e.g., Ace"
-                      className="w-full px-2 py-1.5 text-sm border border-border bg-card text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="w-full px-2 py-1.5 text-sm border qt-border-default qt-bg-card text-foreground rounded focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                   </div>
                 </div>
@@ -305,14 +305,14 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                       type="checkbox"
                       checked={replacement.caseSensitive}
                       onChange={(e) => updateAdditionalReplacement(replacement.id, 'caseSensitive', e.target.checked)}
-                      className="w-3 h-3 rounded border-border text-primary"
+                      className="w-3 h-3 rounded qt-border-default text-primary"
                     />
                     Aa
                   </label>
                   <button
                     type="button"
                     onClick={() => removeAdditionalReplacement(replacement.id)}
-                    className="p-1 text-destructive hover:text-destructive/80"
+                    className="p-1 qt-text-destructive hover:qt-text-destructive/80"
                     title="Remove"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -339,7 +339,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
           type="button"
           onClick={handlePreview}
           disabled={!hasValidInput || isLoading || isExecuting}
-          className="flex-1 px-4 py-2.5 bg-muted text-foreground rounded-lg hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+          className="flex-1 px-4 py-2.5 qt-bg-muted text-foreground rounded-lg hover:qt-bg-muted disabled:opacity-50 disabled:cursor-not-allowed font-medium"
         >
           {isLoading ? 'Loading Preview...' : 'Preview Changes'}
         </button>
@@ -347,36 +347,36 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
 
       {/* Preview Results */}
       {preview && (
-        <div className="bg-card rounded-lg border border-border p-4">
+        <div className="qt-bg-card rounded-lg border qt-border-default p-4">
           <h3 className="qt-text-section mb-4 text-foreground">
             Preview Results
           </h3>
 
           {/* Summary */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-            <div className="bg-muted rounded p-3 text-center">
-              <div className="text-2xl font-bold text-info">{preview.summary.characterFields}</div>
+            <div className="qt-bg-muted rounded p-3 text-center">
+              <div className="text-2xl font-bold qt-text-info">{preview.summary.characterFields}</div>
               <div className="text-xs qt-text-muted">Character Fields</div>
             </div>
-            <div className="bg-muted rounded p-3 text-center">
+            <div className="qt-bg-muted rounded p-3 text-center">
               <div className="text-2xl font-bold text-primary">{preview.summary.physicalDescriptions}</div>
               <div className="text-xs qt-text-muted">Descriptions</div>
             </div>
-            <div className="bg-muted rounded p-3 text-center">
-              <div className="text-2xl font-bold text-success">{preview.summary.memories}</div>
+            <div className="qt-bg-muted rounded p-3 text-center">
+              <div className="text-2xl font-bold qt-text-success">{preview.summary.memories}</div>
               <div className="text-xs qt-text-muted">Memories</div>
             </div>
-            <div className="bg-muted rounded p-3 text-center">
-              <div className="text-2xl font-bold text-warning">{preview.summary.chatTitles}</div>
+            <div className="qt-bg-muted rounded p-3 text-center">
+              <div className="text-2xl font-bold qt-text-warning">{preview.summary.chatTitles}</div>
               <div className="text-xs qt-text-muted">Chat Titles</div>
             </div>
-            <div className="bg-muted rounded p-3 text-center">
-              <div className="text-2xl font-bold text-destructive">{preview.summary.chatMessages}</div>
+            <div className="qt-bg-muted rounded p-3 text-center">
+              <div className="text-2xl font-bold qt-text-destructive">{preview.summary.chatMessages}</div>
               <div className="text-xs qt-text-muted">Messages</div>
             </div>
-            <div className="qt-bg-info/10 rounded p-3 text-center border border-info">
-              <div className="text-2xl font-bold text-info">{preview.summary.total}</div>
-              <div className="text-xs text-info font-medium">Total</div>
+            <div className="qt-bg-info/10 rounded p-3 text-center border qt-border-info">
+              <div className="text-2xl font-bold qt-text-info">{preview.summary.total}</div>
+              <div className="text-xs qt-text-info font-medium">Total</div>
             </div>
           </div>
 
@@ -386,9 +386,9 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
               <h4 className="qt-text-label mb-2 text-foreground">
                 Replacements ({preview.replacements.length})
               </h4>
-              <div className="max-h-80 overflow-y-auto border border-border rounded-lg">
+              <div className="max-h-80 overflow-y-auto border qt-border-default rounded-lg">
                 <table className="w-full text-sm">
-                  <thead className="bg-muted sticky top-0">
+                  <thead className="qt-bg-muted sticky top-0">
                     <tr>
                       <th className="text-left px-3 py-2 qt-text-muted">Location</th>
                       <th className="text-left px-3 py-2 qt-text-muted">Field</th>
@@ -398,15 +398,15 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                   </thead>
                   <tbody className="divide-y divide-border">
                     {preview.replacements.slice(0, 100).map((r, i) => (
-                      <tr key={i} className="hover:bg-muted">
+                      <tr key={i} className="hover:qt-bg-muted">
                         <td className="px-3 py-2 text-foreground">{r.location}</td>
-                        <td className="px-3 py-2 text-muted-foreground font-mono text-xs">{r.field}</td>
+                        <td className="px-3 py-2 qt-text-secondary font-mono text-xs">{r.field}</td>
                         <td className="px-3 py-2">
-                          <span className="text-destructive line-through">{r.oldText}</span>
-                          <span className="mx-1 text-muted-foreground">→</span>
-                          <span className="text-success">{r.newText}</span>
+                          <span className="qt-text-destructive line-through">{r.oldText}</span>
+                          <span className="mx-1 qt-text-secondary">→</span>
+                          <span className="qt-text-success">{r.newText}</span>
                         </td>
-                        <td className="px-3 py-2 text-muted-foreground text-xs max-w-xs truncate" title={r.context}>
+                        <td className="px-3 py-2 qt-text-secondary text-xs max-w-xs truncate" title={r.context}>
                           {r.context}
                         </td>
                       </tr>
@@ -414,14 +414,14 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                   </tbody>
                 </table>
                 {preview.replacements.length > 100 && (
-                  <div className="px-3 py-2 bg-muted text-sm qt-text-muted text-center">
+                  <div className="px-3 py-2 qt-bg-muted text-sm qt-text-muted text-center">
                     ...and {preview.replacements.length - 100} more
                   </div>
                 )}
               </div>
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 qt-text-secondary">
               No occurrences found for the specified replacements.
             </div>
           )}

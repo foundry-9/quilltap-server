@@ -56,7 +56,7 @@ export function ProvidersTabContent() {
         <CollapsibleCard title="Cheap LLM Settings" description="Configure the lightweight LLM used for background tasks" sectionId="cheap-llm" forceOpen={activeSection === 'cheap-llm'}>
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="text-muted-foreground">Loading settings...</div>
+              <div className="qt-text-secondary">Loading settings...</div>
             </div>
           ) : settings ? (
             <CheapLLMSettings

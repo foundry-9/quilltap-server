@@ -61,17 +61,6 @@ async function handleGet(
       return notFound('File');
     }
 
-    // Verify the user has access to this file
-    if (fileEntry.userId !== user.id) {
-      logger.warn('[Files v1] Proxy: Unauthorized file access attempt', {
-        userId: user.id,
-        fileUserId: fileEntry.userId,
-        fileId: fileEntry.id,
-        storageKey,
-      });
-      return forbidden();
-    }
-
     // Download the file content using the file storage manager
     let buffer: Buffer;
     try {

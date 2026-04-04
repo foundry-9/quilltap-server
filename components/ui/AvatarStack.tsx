@@ -110,7 +110,7 @@ export function AvatarStack({
 
     return (
       <div
-        className={`overflow-hidden bg-muted flex items-center justify-center flex-shrink-0 ${style === 'CIRCULAR' ? 'rounded-full' : ''} ${className}`}
+        className={`overflow-hidden qt-bg-muted flex items-center justify-center flex-shrink-0 ${style === 'CIRCULAR' ? 'rounded-full' : ''} ${className}`}
         style={{
           width: `${width}px`,
           height: `${height}px`,
@@ -125,7 +125,7 @@ export function AvatarStack({
             className="w-full h-full object-cover"
           />
         ) : (
-          <span className={`font-bold text-muted-foreground ${config.textSize}`}>
+          <span className={`font-bold qt-text-secondary ${config.textSize}`}>
             {entity.name.charAt(0).toUpperCase()}
           </span>
         )}
@@ -154,7 +154,7 @@ export function AvatarStack({
         return (
           <div
             key={entity.id}
-            className={`overflow-hidden bg-muted flex items-center justify-center flex-shrink-0 border-2 border-card ${style === 'CIRCULAR' ? 'rounded-full' : ''}`}
+            className={`overflow-hidden qt-bg-muted flex items-center justify-center flex-shrink-0 border-2 border-card ${style === 'CIRCULAR' ? 'rounded-full' : ''}`}
             style={{
               width: `${stackWidth}px`,
               height: `${stackHeight}px`,
@@ -171,7 +171,7 @@ export function AvatarStack({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <span className={`font-bold text-muted-foreground ${config.stackTextSize}`}>
+              <span className={`font-bold qt-text-secondary ${config.stackTextSize}`}>
                 {entity.name.charAt(0).toUpperCase()}
               </span>
             )}

@@ -279,13 +279,13 @@ export default function StateEditorModal({
         <div className="space-y-4">
           {/* Info section for chat state inheritance */}
           {entityType === 'chat' && projectState !== null && (
-            <div className="qt-text-xs p-3 bg-muted rounded-md">
+            <div className="qt-text-xs p-3 qt-bg-muted rounded-md">
               <p className="mb-1">
                 <strong>Note:</strong> This chat is part of a project. The merged state shown
                 below combines project state with chat-specific state (chat values override project values).
               </p>
               {Object.keys(projectState).length > 0 && (
-                <p className="text-muted-foreground">
+                <p className="qt-text-secondary">
                   Inherited from project: {Object.keys(projectState).join(', ')}
                 </p>
               )}
@@ -297,7 +297,7 @@ export default function StateEditorModal({
             <label className="qt-label mb-2 flex items-center justify-between">
               <span>State (JSON)</span>
               {!hasState && !isEditing && (
-                <span className="qt-text-xs text-muted-foreground">No state data</span>
+                <span className="qt-text-xs qt-text-secondary">No state data</span>
               )}
             </label>
             <textarea
@@ -306,19 +306,19 @@ export default function StateEditorModal({
               readOnly={!isEditing}
               rows={12}
               className={`qt-textarea font-mono text-sm w-full ${
-                isEditing ? '' : 'bg-muted cursor-default'
-              } ${jsonError ? 'border-destructive' : ''}`}
+                isEditing ? '' : 'qt-bg-muted cursor-default'
+              } ${jsonError ? 'qt-border-destructive' : ''}`}
               placeholder={isEditing ? '{\n  "key": "value"\n}' : 'No state data'}
             />
             {jsonError && isEditing && (
-              <p className="qt-text-xs text-destructive mt-1">
+              <p className="qt-text-xs qt-text-destructive mt-1">
                 {jsonError}
               </p>
             )}
           </div>
 
           {/* Help text */}
-          <div className="qt-text-xs text-muted-foreground">
+          <div className="qt-text-xs qt-text-secondary">
             <p className="mb-1">
               State is persistent JSON data that can be used for games, inventory tracking,
               session data, and other information.

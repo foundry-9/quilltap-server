@@ -66,7 +66,7 @@ export function PhysicalDescriptionCard({
         <div className="flex items-center gap-2">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="p-2 text-muted-foreground hover:text-foreground rounded"
+            className="p-2 qt-text-secondary hover:text-foreground rounded"
             title={expanded ? 'Collapse' : 'Expand'}
           >
             <svg
@@ -90,7 +90,7 @@ export function PhysicalDescriptionCard({
           <button
             onClick={() => onDelete(description.id)}
             disabled={isDeleting}
-            className="p-2 text-destructive hover:bg-destructive/10 rounded disabled:opacity-50"
+            className="p-2 qt-text-destructive hover:qt-bg-destructive/10 rounded disabled:opacity-50"
             title="Delete"
           >
             {isDeleting ? (
@@ -107,7 +107,7 @@ export function PhysicalDescriptionCard({
       </div>
 
       {expanded && (
-        <div className="mt-4 space-y-4 border-t border-border pt-4">
+        <div className="mt-4 space-y-4 border-t qt-border-default pt-4">
           {description.shortPrompt && (
             <div>
               <h4 className="qt-text-label-xs uppercase tracking-wide mb-1">

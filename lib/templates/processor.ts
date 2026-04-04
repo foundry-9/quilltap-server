@@ -103,7 +103,7 @@ export function buildTemplateContext({
     char: character.name,
     description: character.description || '',
     personality: character.personality || '',
-    scenario: scenario || character.scenarios?.[0]?.content || '',
+    scenario: scenario || '',
 
     // Persona data
     user: persona?.name || 'User',
@@ -168,7 +168,7 @@ export function processCharacterTemplates({
   return {
     description: processTemplate(character.description || '', context),
     personality: processTemplate(character.personality || '', context),
-    scenario: processTemplate(scenario || character.scenarios?.[0]?.content || '', context),
+    scenario: processTemplate(scenario || '', context),
     firstMessage: processTemplate(character.firstMessage || '', context),
     exampleDialogues: processTemplate(character.exampleDialogues || '', context),
     systemPrompt: processTemplate(systemPrompt || '', context),

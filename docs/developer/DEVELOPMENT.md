@@ -36,39 +36,14 @@ quilltap/
 │   ├── physical-descriptions/ # Physical description components
 │   ├── homepage/             # Home page components
 │   └── character-delete-dialog.tsx # Character deletion confirmation dialog
-├── electron/                 # Electron main process (launcher, VM management)
-│   ├── main.ts               # Electron entry point, orchestrates boot sequence
-│   ├── vm-manager.ts         # IVMManager interface + createVMManager() factory
-│   ├── lima-manager.ts       # macOS: Lima VM lifecycle (create, start, stop, status)
-│   ├── wsl-manager.ts        # Windows: WSL2 distro lifecycle (import, start, terminate)
-│   ├── embedded-manager.ts   # Embedded server using Electron's Node.js (ELECTRON_RUN_AS_NODE=1)
-│   ├── docker-manager.ts     # Docker image/container lifecycle management
-│   ├── health-checker.ts     # Polls /api/health until app is ready
-│   ├── download-manager.ts   # Downloads rootfs tarball with progress/retry
-│   ├── disk-utils.ts         # Disk usage checks and free space validation
-│   ├── startup-log.ts        # Startup logging and boot diagnostics
-│   ├── crash-guard.ts        # Crash recovery and automatic restart handling
-│   ├── settings.ts           # Persistent Electron app settings storage
-│   ├── constants.ts          # Shared constants (ports, timeouts, platform-aware paths)
-│   ├── types.ts              # TypeScript types for Electron IPC
-│   ├── preload.ts            # Context-isolated IPC bridge for splash screen
-│   ├── splash/               # Splash screen HTML/CSS/JS/images
-│   ├── resources/            # App icons (icns, ico, png) and staged Lima binaries
-│   ├── entitlements.mac.plist # macOS code signing entitlements
-│   ├── notarize.js           # macOS notarization script for release builds
-│   └── tsconfig.json         # Electron-specific TypeScript config
-├── lima/                     # Lima/WSL2 VM configuration
-│   ├── quilltap.yaml         # Lima VM template (macOS: Alpine Linux, VZ hypervisor, mounts)
-│   └── wsl-init.sh           # WSL2 init script (Windows: starts Node.js server)
 ├── lib/                      # Domain logic and utilities
 │   ├── auth/                 # Single-user mode and session management
 │   ├── chat/                 # Chat logic (context-manager, turn-manager, tool execution)
-│   ├── file-storage/         # File storage manager (local, S3, plugin backends)
+│   ├── file-storage/         # File storage manager (local filesystem)
 │   ├── llm/                  # LLM utilities (formatting, pricing, streaming)
 │   ├── memory/               # Memory and embedding logic
 │   ├── paths.ts              # Platform-aware data directory resolution
 │   ├── plugins/              # Plugin registry and loader
-│   ├── s3/                   # S3 storage utilities
 │   ├── sillytavern/          # SillyTavern import/export
 │   ├── tools/                # Tool definitions (image generation, web search, memory)
 │   └── backup/               # Backup and restore logic
@@ -92,15 +67,11 @@ quilltap/
 │   └── complete/             # Completed feature specifications
 ├── docker/                   # Docker configuration (entrypoint script)
 ├── scripts/                  # Utility scripts (migrations, cleanup, builds)
-│   ├── build-rootfs.ts       # Build Docker image and export rootfs tarball
-│   ├── build-electron-server.ts # Stage Next.js standalone output for Electron embedding (native module rebuild)
-│   └── stage-lima.ts         # Download and stage Lima binaries into electron/resources/
 ├── public/                   # Static assets (icons, manifest)
 ├── website/                  # Website assets (images, splash graphics)
 ├── certs/                    # Development TLS certificates
 ├── logs/                     # Application log files (when LOG_OUTPUT includes file)
-├── Dockerfile                # Production Docker build (also used for rootfs)
-├── electron-builder.yml      # Electron Builder packaging configuration
+├── Dockerfile                # Production Docker build
 ├── proxy.ts                  # Local HTTPS proxy helper for dev
 ├── jest.config.ts            # Jest unit test configuration
 ├── jest.integration.config.ts # Jest integration test configuration
@@ -116,13 +87,7 @@ quilltap/
 
 - **Node.js 22+**
 - **SQLite with SQLCipher** (automatic with better-sqlite3-multiple-ciphers) — note that the standard `sqlite3` CLI cannot open Quilltap's encrypted database files; use `npx quilltap db` for direct database access
-- **File storage**: Local filesystem (default) or optionally S3-compatible storage
-
-For Electron development:
-
-- **Docker** — Required for building the rootfs tarball (with buildx support)
-- **macOS**: **Xcode Command Line Tools** — Install via `xcode-select --install` (Lima is downloaded automatically during build)
-- **Windows**: **WSL2** — Run `wsl --install` in PowerShell as Administrator
+- **File storage**: Local filesystem
 
 ### Running Locally
 
@@ -153,103 +118,9 @@ docker run -d --name quilltap -p 3000:3000 -v ~/.quilltap:/app/quilltap foundry9
 docker logs -f quilltap
 ```
 
-### Running with Electron (Primary Distribution)
+### Running with the Desktop App (Electron)
 
-Quilltap's primary distribution is an Electron app with three runtime modes for the backend:
-
-**Runtime Modes:**
-
-| Mode | Backend | Platforms | Notes |
-|------|---------|-----------|-------|
-| **VM** | Lima (macOS) or WSL2 (Windows) Alpine Linux guest | macOS, Windows | Primary mode — runs in a lightweight VM |
-| **Docker** | Docker container | All | Optional — uses local Docker daemon |
-| **Embedded** | Electron's bundled Node.js (`ELECTRON_RUN_AS_NODE=1`) | All | Direct mode — no VM or container needed |
-
-```text
-# VM mode (macOS)
-Electron (host) → Lima VM (Alpine Linux guest) → Node.js + Quilltap (port 3000)
-                    ↕ VirtioFS file sharing        ↕ Port forward: 5050 → 3000
-
-# VM mode (Windows)
-Electron (host) → WSL2 distro (Alpine Linux)   → Node.js + Quilltap (port 5050)
-                    ↕ Plan 9 / /mnt/c/ auto-mount  ↕ WSL2 localhost forwarding
-
-# Embedded mode (all platforms)
-Electron (host) → process.execPath with ELECTRON_RUN_AS_NODE=1 → server.js (port 5050)
-```
-
-The VM manager interface (`electron/vm-manager.ts`) abstracts the platform differences. `LimaManager` handles macOS, `WSLManager` handles Windows. `EmbeddedManager` (`electron/embedded-manager.ts`) spawns the staged Next.js standalone server using Electron's bundled Node.js. The factory function `createVMManager()` selects the right backend at runtime.
-
-**Per-instance window bounds** are persisted — each data directory remembers its own window size, position, and maximized state across restarts.
-
-**Development mode** (skip the VM, connect to your local dev server):
-
-```bash
-# Terminal 1: Start the Next.js dev server
-npm run dev
-
-# Terminal 2: Launch Electron pointing at localhost:3000
-npm run electron:dev
-```
-
-In dev mode (`ELECTRON_DEV=1`), Electron skips all VM operations and connects directly to `http://localhost:3000`.
-
-**Building the full Electron app:**
-
-```bash
-# --- macOS ---
-
-# 1. Build the rootfs tarball (Docker image → Alpine guest filesystem)
-npm run build:electron:rootfs
-
-# 2. Build the Electron app (downloads Lima from GitHub, compiles + packages)
-npm run electron:build:mac
-
-# --- Windows ---
-
-# 1. Build the amd64 rootfs tarball (uses wsl2 Docker target)
-npm run build:electron:rootfs -- --platform linux/amd64
-
-# 2. Build the Electron app (compiles + packages NSIS installer)
-npm run electron:build:win
-```
-
-**Key paths (macOS):**
-
-| What                 | Where                                                               |
-| -------------------- | ------------------------------------------------------------------- |
-| Lima home directory  | `~/.qtlima/` (short path due to macOS 104-char socket limit)        |
-| VM template          | `lima/quilltap.yaml`                                                |
-| Rootfs cache         | `~/Library/Caches/Quilltap/lima-images/quilltap-linux-arm64.tar.gz` |
-| Lima binary cache    | `~/Library/Caches/Quilltap/lima-binaries/` (downloaded from GitHub) |
-| Staged Lima binaries | `electron/resources/lima/`                                          |
-| CLT verified marker  | `~/.qtlima/.clt-verified`                                           |
-| Compiled Electron JS | `dist-electron/`                                                    |
-
-**Key paths (Windows):**
-
-| What                 | Where                                                           |
-| -------------------- | --------------------------------------------------------------- |
-| WSL2 distro install  | `~/.qtvm/quilltap/`                                             |
-| Rootfs cache         | `%LOCALAPPDATA%\Quilltap\vm-images\quilltap-linux-amd64.tar.gz` |
-| App data             | `%APPDATA%\Quilltap\`                                           |
-| Compiled Electron JS | `dist-electron/`                                                |
-
-**VM details (macOS):**
-
-- **Guest OS**: Alpine Linux 3.21 (aarch64)
-- **Resources**: 2 CPUs, 2GB RAM, 10GB disk
-- **Hypervisor**: VZ (Virtualization.framework, no QEMU)
-- **File sharing**: VirtioFS — mounts `~/Library/Application Support/Quilltap` into the guest at `/data/quilltap`
-- **Port forwarding**: Host 5050 → Guest 3000
-
-**VM details (Windows):**
-
-- **Guest OS**: Alpine Linux 3.21 (x86_64) via WSL2
-- **Hypervisor**: Hyper-V (via WSL2, built into Windows 10/11)
-- **File sharing**: Plan 9 auto-mount — Windows drives available at `/mnt/c/`, `/mnt/d/`, etc.
-- **Port forwarding**: WSL2 automatic localhost forwarding (port 5050)
-- **Init script**: `lima/wsl-init.sh` (baked into rootfs, runs Node.js server directly)
+The Quilltap desktop app (Electron shell) lives in a separate repository. This repo produces a standalone tarball that the Electron shell consumes. See `npm run build:standalone` for details.
 
 ### Testing
 
@@ -352,34 +223,25 @@ The SQLite database file location depends on platform:
 | **macOS**   | `~/Library/Application Support/Quilltap/data/quilltap.db`                 |
 | **Windows** | `%APPDATA%\Quilltap\data\quilltap.db`                                     |
 | **Docker**  | `/app/quilltap/data/quilltap.db`                                          |
-| **Lima VM** | `/data/quilltap/data/quilltap.db` (maps to macOS path via VirtioFS)       |
-| **WSL2**    | Accessed via `/mnt/c/Users/.../AppData/Roaming/Quilltap/data/quilltap.db` |
 
 Override with `QUILLTAP_DATA_DIR` (non-Docker environments).
 
 ### File Storage
 
-Files are stored on the local filesystem by default, with optional S3-compatible storage:
-
-**Local Filesystem (Default)**:
+Files are stored on the local filesystem:
 
 - Files stored in platform-specific data directory (e.g., `~/.quilltap/files/` on Linux)
 - No additional configuration required
-
-**S3-Compatible Storage (Optional)**:
-
-- Configure via mount points in Settings > Storage
-- Supports AWS S3, MinIO, Cloudflare R2, etc.
 
 ## Plugin Development
 
 Plugins are self-contained modules in `plugins/src/` that provide:
 
 - **LLM Providers** - Connect to AI services (OpenAI, Anthropic, Google, etc.)
-- **Storage Backends** - S3-compatible file storage
 - **Themes** - Visual theme packs (deprecated as plugins; use `.qtap-theme` bundles instead)
 - **Roleplay Templates** - Message formatting templates
 - **Tool Providers** - Custom LLM tools (MCP connector, etc.)
+- **System Prompts** - Custom system prompt templates for characters
 
 See [plugins/README.md](plugins/README.md) for the plugin developer guide.
 
@@ -437,13 +299,13 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
 9. If we updated any packages (in `packages/`), make sure that those are published to npmjs and properly installed in any NPM package.json files that exist throughout the application, including other packages, plugins, and the primary one at the root level
 10. Verify that the backup/restore system includes everything that can be backed up (usually everything but things that are so secret they need to be encrypted, like API keys)
 11. Make sure that lint/test/build in Github Actions are working
-12. Remove all log.debug calls made during this development cycle (i.e., since the last release)
-13. Check the following Markdown files to be sure they are up-to-date:
+12. Check the following Markdown files to be sure they are up-to-date:
     - [README](../../README.md)
     - [Changelog](../CHANGELOG.md)
     - [API Documentation](API.md)
     - [Developer Documentation](DEVELOPMENT.md)
     - [Claude instructions](../../CLAUDE.md)
+    - [Release notes for this release](../releases/) **MUST EXIST FOR PRODUCTION RELEASE** and must match the version number in package.json exactly, or the version we are going to release at any rate
 
 ## Git and Github release instructions
 
@@ -512,9 +374,6 @@ git push --tags
 # Time to push to Docker
 npm run build:docker
 
-# Time to build Electron
-npm run build:electron
-
 # Now let's get back to work!
 git checkout main
 ```
@@ -581,4 +440,4 @@ git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
 - [Backup & Restore Guide](../BACKUP-RESTORE.md) - Data backup procedures
 - [Plugin Developer Guide](../../plugins/README.md) - Creating plugins
 - [Database Encryption](DATABASE_ENCRYPTION.md) - SQLCipher encryption architecture, .dbkey file management, and passphrase handling
-- [Roadmap](features/ROADMAP.md) - Planned features including Electron/Lima phases
+- [Roadmap](features/ROADMAP.md) - Planned features

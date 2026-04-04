@@ -21,7 +21,7 @@ export function WizardCompleteStep({
       <div className="flex flex-col items-center justify-center py-6">
         <div className="w-12 h-12 rounded-full qt-bg-success/10 flex items-center justify-center mb-4">
           <svg
-            className="w-6 h-6 text-success"
+            className="w-6 h-6 qt-text-success"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -35,7 +35,7 @@ export function WizardCompleteStep({
           </svg>
         </div>
         <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-        <p className="qt-text-small text-muted-foreground mt-2 text-center">
+        <p className="qt-text-small qt-text-secondary mt-2 text-center">
           {description}
         </p>
       </div>

@@ -93,7 +93,7 @@ export function TemplateHighlighter({
         parts.push(
           <span
             key={`char-${index}`}
-            className="px-0.5 rounded border-b-2 qt-badge-chat border-info"
+            className="px-0.5 rounded border-b-2 qt-badge-chat qt-border-info"
             title={`Could be replaced with {{char}}`}
           >
             {matchedText}
@@ -103,7 +103,7 @@ export function TemplateHighlighter({
         parts.push(
           <span
             key={`user-${index}`}
-            className="px-0.5 rounded border-b-2 qt-badge-persona border-success"
+            className="px-0.5 rounded border-b-2 qt-badge-persona qt-border-success"
             title={`Could be replaced with {{user}}`}
           >
             {matchedText}
@@ -319,7 +319,7 @@ export function TemplateDisplay({
           parts.push(
             <span
               key={`char-template-${index}`}
-              className="px-0.5 rounded border-b-2 qt-badge-chat border-info"
+              className="px-0.5 rounded border-b-2 qt-badge-chat qt-border-info"
               title="Character name (from {{char}})"
             >
               {contentMatch.replacement}
@@ -331,7 +331,7 @@ export function TemplateDisplay({
           parts.push(
             <span
               key={`user-template-${index}`}
-              className="px-0.5 rounded border-b-2 qt-badge-persona border-success"
+              className="px-0.5 rounded border-b-2 qt-badge-persona qt-border-success"
               title={personaName ? `Persona name (from {{user}})` : 'User (no default persona set)'}
             >
               {contentMatch.replacement}
@@ -343,7 +343,7 @@ export function TemplateDisplay({
           parts.push(
             <span
               key={`char-hardcoded-${index}`}
-              className="px-0.5 rounded border-b-2 border-dashed qt-bg-warning/10 border-warning"
+              className="px-0.5 rounded border-b-2 border-dashed qt-bg-warning/10 qt-border-warning"
               title="Hard-coded character name - consider replacing with {{char}}"
             >
               {contentMatch.originalText}
@@ -355,7 +355,7 @@ export function TemplateDisplay({
           parts.push(
             <span
               key={`user-hardcoded-${index}`}
-              className="px-0.5 rounded border-b-2 border-dashed qt-bg-warning/10 border-warning"
+              className="px-0.5 rounded border-b-2 border-dashed qt-bg-warning/10 qt-border-warning"
               title="Hard-coded persona name - consider replacing with {{user}}"
             >
               {contentMatch.originalText}

@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { validationError, serverError, notFound } from '@/lib/api/responses';
+import { serverError, notFound } from '@/lib/api/responses';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
 /**
@@ -39,7 +39,7 @@ export async function handleGetState(
 ): Promise<NextResponse> {
   try {
     const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
+    if (!chat) {
       return notFound('Chat');
     }
 
@@ -78,37 +78,29 @@ export async function handleSetState(
   chatId: string,
   { user, repos }: AuthenticatedContext
 ): Promise<NextResponse> {
-  try {
-    const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
-      return notFound('Chat');
-    }
-
-    const body = await req.json();
-    const validated = setStateRequestSchema.parse(body);
-
-    // Update state
-    const updatedChat = await repos.chats.update(chatId, {
-      state: validated.state,
-    });
-
-    logger.info('[Chats v1] State updated', {
-      chatId,
-      userId: user.id,
-      stateKeys: Object.keys(validated.state),
-    });
-
-    return NextResponse.json({
-      success: true,
-      state: updatedChat?.state || validated.state,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-    logger.error('[Chats v1] Error setting state', { chatId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to set state');
+  const chat = await repos.chats.findById(chatId);
+  if (!chat) {
+    return notFound('Chat');
   }
+
+  const body = await req.json();
+  const validated = setStateRequestSchema.parse(body);
+
+  // Update state
+  const updatedChat = await repos.chats.update(chatId, {
+    state: validated.state,
+  });
+
+  logger.info('[Chats v1] State updated', {
+    chatId,
+    userId: user.id,
+    stateKeys: Object.keys(validated.state),
+  });
+
+  return NextResponse.json({
+    success: true,
+    state: updatedChat?.state || validated.state,
+  });
 }
 
 /**
@@ -120,7 +112,7 @@ export async function handleResetState(
 ): Promise<NextResponse> {
   try {
     const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
+    if (!chat) {
       return notFound('Chat');
     }
 

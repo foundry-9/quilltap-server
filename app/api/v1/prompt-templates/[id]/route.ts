@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, serverError, validationError } from '@/lib/api/responses';
+import { notFound, forbidden, serverError } from '@/lib/api/responses';
 
 // ============================================================================
 // Schemas
@@ -32,35 +32,17 @@ type UpdateTemplateInput = z.infer<typeof updateTemplateSchema>;
 
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
-    try {
+    const template = await repos.promptTemplates.findById(id);
 
-      const template = await repos.promptTemplates.findById(id);
-
-      if (!template) {
-        logger.warn('[Prompt Templates v1] Template not found', {
-          templateId: id,
-          userId: user.id,
-        });
-        return notFound('Template');
-      }
-
-      // Users can access built-in templates or their own templates
-      if (!template.isBuiltIn && template.userId !== user.id) {
-        logger.warn('[Prompt Templates v1] Forbidden access to template', {
-          templateId: id,
-          userId: user.id,
-          ownerId: template.userId,
-        });
-        return forbidden();
-      }return NextResponse.json({ template });
-    } catch (error) {
-      logger.error(
-        '[Prompt Templates v1] Error fetching template',
-        { templateId: id, userId: user.id },
-        error instanceof Error ? error : undefined
-      );
-      return serverError('Failed to fetch prompt template');
+    if (!template) {
+      logger.warn('[Prompt Templates v1] Template not found', {
+        templateId: id,
+        userId: user.id,
+      });
+      return notFound('Template');
     }
+
+    return NextResponse.json({ template });
   }
 );
 
@@ -70,78 +52,55 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
-    try {
+    const body = await req.json();
+    const validatedData = updateTemplateSchema.parse(body);
 
-      const body = await req.json();
-      const validatedData = updateTemplateSchema.parse(body);
+    const existingTemplate = await repos.promptTemplates.findById(id);
 
-      const existingTemplate = await repos.promptTemplates.findById(id);
-
-      if (!existingTemplate) {
-        logger.warn('[Prompt Templates v1] Template not found for update', {
-          templateId: id,
-          userId: user.id,
-        });
-        return notFound('Template');
-      }
-
-      // Cannot update built-in templates
-      if (existingTemplate.isBuiltIn) {
-        logger.warn('[Prompt Templates v1] Attempted to update built-in template', {
-          templateId: id,
-          userId: user.id,
-        });
-        return forbidden('Cannot update built-in templates');
-      }
-
-      // Can only update own templates
-      if (existingTemplate.userId !== user.id) {
-        logger.warn('[Prompt Templates v1] Forbidden update attempt on template', {
-          templateId: id,
-          userId: user.id,
-          ownerId: existingTemplate.userId,
-        });
-        return forbidden();
-      }
-
-      const updates: any = {};
-      if (validatedData.name !== undefined) updates.name = validatedData.name;
-      if (validatedData.content !== undefined) updates.content = validatedData.content;
-      if (validatedData.description !== undefined)
-        updates.description = validatedData.description || null;
-      if (validatedData.category !== undefined) updates.category = validatedData.category || null;
-      if (validatedData.modelHint !== undefined)
-        updates.modelHint = validatedData.modelHint || null;
-      updates.updatedAt = new Date();
-
-      const template = await repos.promptTemplates.update(id, updates);
-
-      if (!template) {
-        logger.error('[Prompt Templates v1] Failed to update template', {
-          templateId: id,
-          userId: user.id,
-        });
-        return serverError('Failed to update template');
-      }
-
-      logger.info('[Prompt Templates v1] Template updated', {
+    if (!existingTemplate) {
+      logger.warn('[Prompt Templates v1] Template not found for update', {
         templateId: id,
         userId: user.id,
-        updatedFields: Object.keys(updates),
       });
-
-      return NextResponse.json({ template });
-    } catch (error) {
-      if (error instanceof z.ZodError) {return validationError(error);
-      }
-
-      logger.error(
-        '[Prompt Templates v1] Error updating template',
-        { templateId: id, userId: user.id },
-        error instanceof Error ? error : undefined
-      );
-      return serverError('Failed to update prompt template');
+      return notFound('Template');
     }
+
+    // Cannot update built-in templates
+    if (existingTemplate.isBuiltIn) {
+      logger.warn('[Prompt Templates v1] Attempted to update built-in template', {
+        templateId: id,
+        userId: user.id,
+      });
+      return forbidden('Cannot update built-in templates');
+    }
+
+    const updates: any = {};
+    if (validatedData.name !== undefined) updates.name = validatedData.name;
+    if (validatedData.content !== undefined) updates.content = validatedData.content;
+    if (validatedData.description !== undefined)
+      updates.description = validatedData.description || null;
+    if (validatedData.category !== undefined) updates.category = validatedData.category || null;
+    if (validatedData.modelHint !== undefined)
+      updates.modelHint = validatedData.modelHint || null;
+    updates.updatedAt = new Date();
+
+    const template = await repos.promptTemplates.update(id, updates);
+
+    if (!template) {
+      logger.error('[Prompt Templates v1] Failed to update template', {
+        templateId: id,
+        userId: user.id,
+      });
+      return serverError('Failed to update template');
+    }
+
+    logger.info('[Prompt Templates v1] Template updated', {
+      templateId: id,
+      userId: user.id,
+      updatedFields: Object.keys(updates),
+    });
+
+    return NextResponse.json({ template });
   }
 );
 
@@ -151,57 +110,37 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
 
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id }) => {
-    try {
+    const existingTemplate = await repos.promptTemplates.findById(id);
 
-      const existingTemplate = await repos.promptTemplates.findById(id);
-
-      if (!existingTemplate) {
-        logger.warn('[Prompt Templates v1] Template not found for deletion', {
-          templateId: id,
-          userId: user.id,
-        });
-        return notFound('Template');
-      }
-
-      // Cannot delete built-in templates
-      if (existingTemplate.isBuiltIn) {
-        logger.warn('[Prompt Templates v1] Attempted to delete built-in template', {
-          templateId: id,
-          userId: user.id,
-        });
-        return forbidden('Cannot delete built-in templates');
-      }
-
-      // Can only delete own templates
-      if (existingTemplate.userId !== user.id) {
-        logger.warn('[Prompt Templates v1] Forbidden delete attempt on template', {
-          templateId: id,
-          userId: user.id,
-          ownerId: existingTemplate.userId,
-        });
-        return forbidden();
-      }
-
-      const deleted = await repos.promptTemplates.delete(id);
-
-      if (!deleted) {
-        logger.error('[Prompt Templates v1] Failed to delete template', {
-          templateId: id,
-          userId: user.id,
-        });
-        return serverError('Failed to delete template');
-      }
-
-      logger.info('[Prompt Templates v1] Template deleted', { templateId: id, userId: user.id });
-
-      return NextResponse.json({ success: true });
-    } catch (error) {
-      logger.error(
-        '[Prompt Templates v1] Error deleting template',
-        { templateId: id, userId: user.id },
-        error instanceof Error ? error : undefined
-      );
-      return serverError('Failed to delete prompt template');
+    if (!existingTemplate) {
+      logger.warn('[Prompt Templates v1] Template not found for deletion', {
+        templateId: id,
+        userId: user.id,
+      });
+      return notFound('Template');
     }
+
+    // Cannot delete built-in templates
+    if (existingTemplate.isBuiltIn) {
+      logger.warn('[Prompt Templates v1] Attempted to delete built-in template', {
+        templateId: id,
+        userId: user.id,
+      });
+      return forbidden('Cannot delete built-in templates');
+    }
+
+    const deleted = await repos.promptTemplates.delete(id);
+
+    if (!deleted) {
+      logger.error('[Prompt Templates v1] Failed to delete template', {
+        templateId: id,
+        userId: user.id,
+      });
+      return serverError('Failed to delete template');
+    }
+
+    logger.info('[Prompt Templates v1] Template deleted', { templateId: id, userId: user.id });
+
+    return NextResponse.json({ success: true });
   }
 );

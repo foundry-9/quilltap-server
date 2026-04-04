@@ -13,9 +13,12 @@ import { withCollectionActionDispatch } from '@/lib/api/middleware/actions';
 import { successResponse, errorResponse } from '@/lib/api/responses';
 import {
   getBaseDataDirWithSource,
+  getElectronShellVersion,
   getHostDataDir,
   getPlatform,
+  getShellCapabilities,
   isDockerEnvironment,
+  isElectronShell,
   isLimaEnvironment,
   Platform,
 } from '@/lib/paths';
@@ -39,6 +42,12 @@ interface DataDirInfo {
   isDocker: boolean;
   /** Whether running inside a VM (Lima on macOS or WSL2 on Windows) */
   isVM: boolean;
+  /** Whether the server was spawned by the Quilltap Electron shell */
+  isElectronShell: boolean;
+  /** quilltap-shell version string, if running under Electron */
+  shellVersion: string | null;
+  /** Capability flags advertised by the shell */
+  shellCapabilities: string[];
   /** Whether the "open" action is supported */
   canOpen: boolean;
   /** Host-side data directory path (for display in footer) */
@@ -64,6 +73,9 @@ export const GET = createContextHandler(async () => {
     platform,
     isDocker,
     isVM,
+    isElectronShell: isElectronShell(),
+    shellVersion: getElectronShellVersion(),
+    shellCapabilities: [...getShellCapabilities()],
     canOpen: !isDocker,
     hostPath,
   };

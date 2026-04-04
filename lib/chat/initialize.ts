@@ -101,8 +101,8 @@ export async function buildChatContext(
     }
   }
 
-  // Resolve scenario content: custom text overrides first scenario in array
-  const resolvedScenario = customScenario || character.scenarios?.[0]?.content || undefined
+  // Use the scenario explicitly provided by the caller (already resolved from scenarioId or custom text)
+  const resolvedScenario = customScenario || undefined
 
   // Build system prompt (pass userCharacter as 'persona' for template compatibility)
   const systemPrompt = buildSystemPrompt({

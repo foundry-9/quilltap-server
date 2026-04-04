@@ -10,7 +10,7 @@
  * - Embeddings support through compatible models
  */
 
-import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
+import type { TextProviderPlugin, EmbeddingModelInfo } from './types';
 import { OllamaProvider } from './provider';
 import { OllamaEmbeddingProvider } from './embedding-provider';
 import {
@@ -90,7 +90,7 @@ const cheapModels = {
  * The Ollama Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
-export const plugin: LLMProviderPlugin = {
+export const plugin: TextProviderPlugin = {
   metadata,
 
   icon: {

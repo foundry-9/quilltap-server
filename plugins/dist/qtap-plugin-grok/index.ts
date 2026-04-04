@@ -10,7 +10,7 @@
  * - Web search integration (Live Search API)
  */
 
-import type { LLMProviderPlugin, ImageProviderConstraints } from './types';
+import type { TextProviderPlugin, ImageProviderConstraints } from './types';
 import { GrokProvider } from './provider';
 import { GrokImageProvider } from './image-provider';
 import {
@@ -103,7 +103,7 @@ const cheapModels = {
  * The Grok Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
-export const plugin: LLMProviderPlugin = {
+export const plugin: TextProviderPlugin = {
   metadata,
 
   icon: {

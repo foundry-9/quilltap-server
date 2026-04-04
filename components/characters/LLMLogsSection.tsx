@@ -53,10 +53,10 @@ export default function LLMLogsSection({ characterId }: LLMLogsSectionProps) {
   }
 
   return (
-    <div className="mt-8 border border-border rounded-lg overflow-hidden">
+    <div className="mt-8 border qt-border-default rounded-lg overflow-hidden">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-3 flex items-center justify-between bg-muted/30 hover:bg-muted/50 transition-colors"
+        className="w-full px-4 py-3 flex items-center justify-between qt-bg-muted/30 hover:qt-bg-muted/50 transition-colors"
       >
         <div className="flex items-center gap-2">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,7 +69,7 @@ export default function LLMLogsSection({ characterId }: LLMLogsSectionProps) {
           </svg>
           <span className="font-medium">LLM Logs</span>
           {logs.length > 0 && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">{logs.length}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full qt-bg-primary/10 text-primary">{logs.length}</span>
           )}
         </div>
         <svg
@@ -85,7 +85,7 @@ export default function LLMLogsSection({ characterId }: LLMLogsSectionProps) {
       {isExpanded && (
         <div className="p-4">
           {loading ? (
-            <div className="text-center py-4 text-muted-foreground">
+            <div className="text-center py-4 qt-text-secondary">
               <svg className="animate-spin h-5 w-5 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path
@@ -97,7 +97,7 @@ export default function LLMLogsSection({ characterId }: LLMLogsSectionProps) {
               Loading...
             </div>
           ) : logs.length === 0 ? (
-            <p className="text-center py-4 text-muted-foreground text-sm">
+            <p className="text-center py-4 qt-text-secondary text-sm">
               No LLM logs for this character yet. Use the AI wizard to generate character content.
             </p>
           ) : (
@@ -106,21 +106,21 @@ export default function LLMLogsSection({ characterId }: LLMLogsSectionProps) {
                 <div
                   key={log.id}
                   onClick={() => handleViewLog(log)}
-                  className="p-3 border border-border rounded hover:bg-muted/30 cursor-pointer transition-colors"
+                  className="p-3 border qt-border-default rounded hover:qt-bg-muted/30 cursor-pointer transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 text-xs rounded bg-primary/10 text-primary">
+                      <span className="px-2 py-0.5 text-xs rounded qt-bg-primary/10 text-primary">
                         {log.type === 'CHARACTER_WIZARD' ? 'Wizard' : log.type}
                       </span>
                       <span className="text-sm">
                         {log.provider}/{log.modelName}
                       </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">{formatDate(log.createdAt)}</span>
+                    <span className="text-xs qt-text-secondary">{formatDate(log.createdAt)}</span>
                   </div>
                   {log.usage && (
-                    <div className="mt-1 text-xs text-muted-foreground">
+                    <div className="mt-1 text-xs qt-text-secondary">
                       {log.usage.totalTokens.toLocaleString()} tokens
                       {log.durationMs && ` • ${(log.durationMs / 1000).toFixed(1)}s`}
                     </div>

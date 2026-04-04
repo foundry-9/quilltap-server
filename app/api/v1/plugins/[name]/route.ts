@@ -86,138 +86,126 @@ async function handleGetConfig(req: NextRequest, context: any, name: string) {
 async function handleSetConfig(req: NextRequest, context: any, name: string) {
   const { user, repos } = context;
 
-  try {
-
-    if (!pluginRegistry.has(name)) {
-      logger.warn('[Plugins v1] Plugin not found for config update', {
-        pluginName: name,
-        userId: user.id,
-      });
-      return notFound('Plugin');
-    }
-
-    const plugin = pluginRegistry.get(name);
-    if (!plugin) {
-      return notFound('Plugin');
-    }
-
-    // Parse request body
-    const body = await req.json();
-    const parseResult = setConfigSchema.safeParse(body);
-
-    if (!parseResult.success) {return validationError(parseResult.error);
-    }
-
-    const { config } = parseResult.data;
-
-    // Validate config against schema
-    const configSchema = plugin.manifest.configSchema || [];
-    const validatedConfig: Record<string, unknown> = {};
-    const errors: string[] = [];
-
-    for (const field of configSchema) {
-      const value = config[field.key];
-
-      // Apply default if not provided
-      if (value === undefined || value === null) {
-        if (field.default !== undefined) {
-          validatedConfig[field.key] = field.default;
-        }
-        continue;
-      }
-
-      // Type validation based on field type
-      switch (field.type) {
-        case 'text':
-        case 'textarea':
-        case 'password':
-        case 'url':
-        case 'email':
-          if (typeof value !== 'string') {
-            errors.push(`${field.key}: expected string`);
-          } else {
-            validatedConfig[field.key] = value;
-          }
-          break;
-
-        case 'number':
-          if (typeof value !== 'number') {
-            errors.push(`${field.key}: expected number`);
-          } else {
-            if (field.min !== undefined && value < field.min) {
-              errors.push(`${field.key}: value must be at least ${field.min}`);
-            } else if (field.max !== undefined && value > field.max) {
-              errors.push(`${field.key}: value must be at most ${field.max}`);
-            } else {
-              validatedConfig[field.key] = value;
-            }
-          }
-          break;
-
-        case 'boolean':
-          if (typeof value !== 'boolean') {
-            errors.push(`${field.key}: expected boolean`);
-          } else {
-            validatedConfig[field.key] = value;
-          }
-          break;
-
-        case 'select':
-          if (field.options && Array.isArray(field.options)) {
-            const validValues = field.options.map((o: any) =>
-              typeof o === 'object' ? o.value : o
-            );
-            if (!validValues.includes(value)) {
-              errors.push(`${field.key}: invalid option`);
-            } else {
-              validatedConfig[field.key] = value;
-            }
-          } else {
-            validatedConfig[field.key] = value;
-          }
-          break;
-
-        default:
-          validatedConfig[field.key] = value;
-      }
-    }
-
-    if (errors.length > 0) {return NextResponse.json(
-        { error: 'Validation failed', details: errors },
-        { status: 400 }
-      );
-    }
-
-    // Upsert the configuration
-    const updatedConfig = await repos.pluginConfigs.upsertForUserPlugin(
-      user.id,
-      name,
-      validatedConfig
-    );
-
-    logger.info('[Plugins v1] Plugin config updated', {
+  if (!pluginRegistry.has(name)) {
+    logger.warn('[Plugins v1] Plugin not found for config update', {
       pluginName: name,
       userId: user.id,
-      fieldCount: Object.keys(validatedConfig).length,
     });
+    return notFound('Plugin');
+  }
 
-    return NextResponse.json({
-      success: true,
-      pluginName: name,
-      config: updatedConfig.config,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
+  const plugin = pluginRegistry.get(name);
+  if (!plugin) {
+    return notFound('Plugin');
+  }
+
+  // Parse request body
+  const body = await req.json();
+  const parseResult = setConfigSchema.safeParse(body);
+
+  if (!parseResult.success) {
+    return validationError(parseResult.error);
+  }
+
+  const { config } = parseResult.data;
+
+  // Validate config against schema
+  const configSchema = plugin.manifest.configSchema || [];
+  const validatedConfig: Record<string, unknown> = {};
+  const errors: string[] = [];
+
+  for (const field of configSchema) {
+    const value = config[field.key];
+
+    // Apply default if not provided
+    if (value === undefined || value === null) {
+      if (field.default !== undefined) {
+        validatedConfig[field.key] = field.default;
+      }
+      continue;
     }
 
-    logger.error(
-      '[Plugins v1] Error setting plugin config',
-      { pluginName: name, userId: user.id },
-      error instanceof Error ? error : undefined
-    );
-    return serverError('Failed to update plugin configuration');
+    // Type validation based on field type
+    switch (field.type) {
+      case 'text':
+      case 'textarea':
+      case 'password':
+      case 'url':
+      case 'email':
+        if (typeof value !== 'string') {
+          errors.push(`${field.key}: expected string`);
+        } else {
+          validatedConfig[field.key] = value;
+        }
+        break;
+
+      case 'number':
+        if (typeof value !== 'number') {
+          errors.push(`${field.key}: expected number`);
+        } else {
+          if (field.min !== undefined && value < field.min) {
+            errors.push(`${field.key}: value must be at least ${field.min}`);
+          } else if (field.max !== undefined && value > field.max) {
+            errors.push(`${field.key}: value must be at most ${field.max}`);
+          } else {
+            validatedConfig[field.key] = value;
+          }
+        }
+        break;
+
+      case 'boolean':
+        if (typeof value !== 'boolean') {
+          errors.push(`${field.key}: expected boolean`);
+        } else {
+          validatedConfig[field.key] = value;
+        }
+        break;
+
+      case 'select':
+        if (field.options && Array.isArray(field.options)) {
+          const validValues = field.options.map((o: any) =>
+            typeof o === 'object' ? o.value : o
+          );
+          if (!validValues.includes(value)) {
+            errors.push(`${field.key}: invalid option`);
+          } else {
+            validatedConfig[field.key] = value;
+          }
+        } else {
+          validatedConfig[field.key] = value;
+        }
+        break;
+
+      default:
+        validatedConfig[field.key] = value;
+    }
   }
+
+  if (errors.length > 0) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: errors },
+      { status: 400 }
+    );
+  }
+
+  // Upsert the configuration
+  const updatedConfig = await repos.pluginConfigs.upsertForUserPlugin(
+    user.id,
+    name,
+    validatedConfig
+  );
+
+  logger.info('[Plugins v1] Plugin config updated', {
+    pluginName: name,
+    userId: user.id,
+    fieldCount: Object.keys(validatedConfig).length,
+  });
+
+  return NextResponse.json({
+    success: true,
+    pluginName: name,
+    config: updatedConfig.config,
+  });
 }
 
 // ============================================================================

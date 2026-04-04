@@ -33,7 +33,7 @@ export function StoryBackgroundsSettings({
       <div className="space-y-6">
         {/* Enabled Toggle */}
         <div>
-          <label className="flex items-start gap-3 p-4 border border-border rounded hover:bg-accent cursor-pointer">
+          <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer">
             <input
               type="checkbox"
               checked={storyBackgroundsSettings.enabled}
@@ -66,7 +66,7 @@ export function StoryBackgroundsSettings({
             value={storyBackgroundsSettings.defaultImageProfileId ?? ''}
             onChange={(e) => onProfileChange(e.target.value || null)}
             disabled={saving || loadingProfiles || !storyBackgroundsSettings.enabled}
-            className="w-full max-w-md rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+            className="w-full max-w-md rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground focus:qt-border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
           >
             <option value="">Use default profile</option>
             {imageProfiles.map((profile) => (
@@ -76,14 +76,14 @@ export function StoryBackgroundsSettings({
             ))}
           </select>
           {imageProfiles.length === 0 && !loadingProfiles && (
-            <p className="qt-text-small text-warning">
+            <p className="qt-text-small qt-text-warning">
               No image profiles configured. Please create an image generation profile in the Profiles settings.
             </p>
           )}
         </div>
 
         {/* Info Box */}
-        <div className="rounded-lg border border-border bg-muted/50 p-4">
+        <div className="rounded-lg border qt-border-default qt-bg-muted/50 p-4">
           <h4 className="font-medium text-foreground mb-2">How Story Backgrounds Work</h4>
           <ul className="qt-text-small space-y-1 list-disc list-inside">
             <li>Backgrounds are generated automatically when the chat title is updated</li>

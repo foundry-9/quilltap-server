@@ -311,7 +311,7 @@ export function ImageProfileForm({
           className="qt-input"
         />
         {validationErrors.name && (
-          <p className="text-destructive text-sm mt-1">{validationErrors.name}</p>
+          <p className="qt-text-destructive text-sm mt-1">{validationErrors.name}</p>
         )}
       </div>
 
@@ -333,7 +333,7 @@ export function ImageProfileForm({
           ))}
         </select>
         {validationErrors.provider && (
-          <p className="text-destructive text-sm mt-1">{validationErrors.provider}</p>
+          <p className="qt-text-destructive text-sm mt-1">{validationErrors.provider}</p>
         )}
       </div>
 
@@ -365,10 +365,10 @@ export function ImageProfileForm({
           </button>
         </div>
         {validationErrors.apiKeyId && (
-          <p className="text-destructive text-sm mt-1">{validationErrors.apiKeyId}</p>
+          <p className="qt-text-destructive text-sm mt-1">{validationErrors.apiKeyId}</p>
         )}
         {keyValidationStatus && (
-          <p className={`text-sm mt-1 ${keyValidationStatus.startsWith('✓') ? 'text-success' : 'text-destructive'}`}>
+          <p className={`text-sm mt-1 ${keyValidationStatus.startsWith('✓') ? 'qt-text-success' : 'qt-text-destructive'}`}>
             {keyValidationStatus}
           </p>
         )}
@@ -394,7 +394,7 @@ export function ImageProfileForm({
           )}
         </select>
         {validationErrors.modelName && (
-          <p className="text-destructive text-sm mt-1">{validationErrors.modelName}</p>
+          <p className="qt-text-destructive text-sm mt-1">{validationErrors.modelName}</p>
         )}
       </div>
 

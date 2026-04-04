@@ -150,12 +150,12 @@ export default function FileWriteApprovalModal({
     >
       <div className="space-y-4">
         {/* File info */}
-        <div className="p-3 bg-muted rounded-lg">
+        <div className="p-3 qt-bg-muted rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-lg">📁</span>
             <span className="font-medium">{request.filename}</span>
           </div>
-          <div className="qt-text-xs text-muted-foreground space-y-1">
+          <div className="qt-text-xs qt-text-secondary space-y-1">
             <div>Type: {request.mimeType}</div>
             <div>
               Location: {isProjectFile ? request.projectName || 'Project' : 'General Files'}
@@ -168,7 +168,7 @@ export default function FileWriteApprovalModal({
         {/* Content preview */}
         <div>
           <label className="qt-label mb-2">Content Preview</label>
-          <div className="bg-background border border-border rounded-lg p-3 max-h-40 overflow-y-auto">
+          <div className="bg-background border qt-border-default rounded-lg p-3 max-h-40 overflow-y-auto">
             <pre className="text-xs font-mono whitespace-pre-wrap break-words">
               {contentPreview}
             </pre>
@@ -176,7 +176,7 @@ export default function FileWriteApprovalModal({
         </div>
 
         {/* Permission info */}
-        <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+        <div className="p-3 qt-bg-primary/5 border qt-border-primary/20 rounded-lg">
           <div className="flex items-start gap-2">
             <svg className="w-5 h-5 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -197,7 +197,7 @@ export default function FileWriteApprovalModal({
           </div>
         </div>
 
-        <p className="qt-text-xs text-muted-foreground">
+        <p className="qt-text-xs qt-text-secondary">
           You can manage or revoke file write permissions in Settings.
         </p>
       </div>

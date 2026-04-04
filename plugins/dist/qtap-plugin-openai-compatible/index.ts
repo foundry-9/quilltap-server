@@ -10,7 +10,7 @@
  * Key difference from OpenAI plugin: baseUrl is REQUIRED for configuration
  */
 
-import type { LLMProviderPlugin } from './types';
+import type { TextProviderPlugin } from './types';
 import { OpenAICompatibleProvider } from './provider';
 import {
   createPluginLogger,
@@ -96,7 +96,7 @@ const cheapModels = {
  * KEY DIFFERENCE: This plugin REQUIRES a baseUrl parameter in createProvider
  * because it needs to know where the compatible API is running.
  */
-export const plugin: LLMProviderPlugin = {
+export const plugin: TextProviderPlugin = {
   metadata,
 
   icon: {

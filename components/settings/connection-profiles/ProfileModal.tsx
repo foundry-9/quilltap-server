@@ -7,6 +7,7 @@ import { BaseModal } from '@/components/ui/BaseModal'
 import { ModelSelector, type ModelInfo } from '../model-selector'
 import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
 import { FormActions } from '@/components/ui/FormActions'
+import { MODEL_CLASSES, getModelClass } from '@/lib/llm/model-classes'
 import type { ApiKey, ProviderConfig, ProfileFormData, ConnectionProfile } from './types'
 
 interface ProfileModalProps {
@@ -28,9 +29,11 @@ interface ProfileModalProps {
     connectError: string | null
     fetchModelsLoading: boolean
     testMessageLoading: boolean
+    autoConfigureLoading: boolean
     handleConnect: (callback: (data: any) => void) => Promise<any>
     handleFetchModels: (callback: (data: any) => void) => Promise<any>
     handleTestMessage: (callback: (data: any) => void) => Promise<any>
+    handleAutoConfigure: (callback: (data: any) => void) => Promise<any>
     handleSubmit: (editingId: string | null, onSuccess: () => void) => Promise<any>
     getProviderRequirements: (provider: string) => any
   }
@@ -57,6 +60,9 @@ export function ProfileModal({
 
   // Test message states
   const [testMessageResult, setTestMessageResult] = useState<string | null>(null)
+
+  // Auto-configure states
+  const [autoConfigureMessage, setAutoConfigureMessage] = useState<string | null>(null)
 
   // Note: No need for state reset effect - modal is keyed by profile.id so it remounts fresh
 
@@ -118,6 +124,21 @@ export function ProfileModal({
       setTestMessageResult(null)
     }
   }, [operations])
+
+  const handleAutoConfigureClick = useCallback(async () => {
+    const result = await operations.handleAutoConfigure((data) => {
+      form.setField('temperature', data.suggestions.temperature)
+      form.setField('maxTokens', data.suggestions.maxTokens)
+      form.setField('topP', data.suggestions.topP)
+      form.setField('maxContext', String(data.suggestions.maxContext))
+      form.setField('modelClass', data.suggestions.modelClass)
+      form.setField('isDangerousCompatible', data.suggestions.isDangerousCompatible)
+      setAutoConfigureMessage('Configuration applied successfully!')
+    })
+    if (!result) {
+      setAutoConfigureMessage(null)
+    }
+  }, [operations, form])
 
   const handleFormSubmit = async () => {
     const result = await operations.handleSubmit(profile?.id || null, () => {
@@ -312,7 +333,7 @@ export function ProfileModal({
             })()}
 
             {/* Connection Testing Section */}
-            <div className="border border-border rounded-lg p-4 bg-muted/50">
+            <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
               <h4 className="font-medium text-sm mb-3">Connection Testing</h4>
 
               <div className="flex flex-wrap gap-3 mb-3">
@@ -320,7 +341,7 @@ export function ProfileModal({
                   type="button"
                   onClick={handleConnectClick}
                   disabled={operations.connectLoading}
-                  className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+                  className="qt-button-primary disabled:qt-bg-muted disabled:qt-text-secondary disabled:cursor-not-allowed"
                 >
                   {operations.connectLoading ? 'Connecting...' : 'Connect'}
                 </button>
@@ -334,7 +355,7 @@ export function ProfileModal({
                     if (reqs.requiresApiKey && !isConnected) return true
                     return false
                   })()}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:qt-bg-primary/90 disabled:qt-bg-muted disabled:qt-text-secondary disabled:cursor-not-allowed"
                 >
                   {operations.fetchModelsLoading ? 'Fetching...' : 'Fetch Models'}
                 </button>
@@ -343,9 +364,18 @@ export function ProfileModal({
                   type="button"
                   onClick={handleTestMessageClick}
                   disabled={!isConnected || operations.testMessageLoading || !form.formData.modelName}
-                  className="qt-button-primary disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+                  className="qt-button-primary disabled:qt-bg-muted disabled:qt-text-secondary disabled:cursor-not-allowed"
                 >
                   {operations.testMessageLoading ? 'Testing...' : 'Test Message'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleAutoConfigureClick}
+                  disabled={!form.formData.modelName || operations.autoConfigureLoading}
+                  className="qt-button-primary disabled:qt-bg-muted disabled:qt-text-secondary disabled:cursor-not-allowed"
+                >
+                  {operations.autoConfigureLoading ? 'Auto-Configuring...' : 'Auto-Configure'}
                 </button>
               </div>
 
@@ -371,6 +401,12 @@ export function ProfileModal({
               {testMessageResult && (
                 <div className="text-sm qt-alert-info">
                   ✓ {testMessageResult}
+                </div>
+              )}
+
+              {autoConfigureMessage && (
+                <div className="text-sm qt-alert-success">
+                  {autoConfigureMessage}
                 </div>
               )}
 
@@ -436,7 +472,7 @@ export function ProfileModal({
             </div>
 
             {/* Model Parameters */}
-            <div className="border-t border-border pt-4">
+            <div className="border-t qt-border-default pt-4">
               <h4 className="font-medium text-sm mb-3">Model Parameters (Optional)</h4>
               <div className="grid grid-cols-3 gap-4">
                 <div>
@@ -471,7 +507,7 @@ export function ProfileModal({
                   />
                   <p className="qt-text-xs mt-1">
                     {getSelectedModelInfo()?.maxOutputTokens
-                      ? `Model limit: ${getSelectedModelInfo()?.maxOutputTokens?.toLocaleString()}`
+                      ? `Reported model limit: ${getSelectedModelInfo()?.maxOutputTokens?.toLocaleString()}`
                       : 'Max output tokens'}
                   </p>
                 </div>
@@ -573,6 +609,56 @@ export function ProfileModal({
               )}
             </div>
 
+            {/* Model Class and Max Context */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="modelClass" className="block qt-text-label mb-2">
+                  Model Class
+                </label>
+                <select
+                  id="modelClass"
+                  name="modelClass"
+                  value={form.formData.modelClass}
+                  onChange={(e) => form.setField('modelClass', e.target.value)}
+                  className="qt-select"
+                >
+                  <option value="">(None)</option>
+                  {MODEL_CLASSES.map((mc) => (
+                    <option key={mc.name} value={mc.name}>
+                      {mc.name} (Tier {mc.tier})
+                    </option>
+                  ))}
+                </select>
+                {form.formData.modelClass && (() => {
+                  const mc = getModelClass(form.formData.modelClass)
+                  if (!mc) return null
+                  return (
+                    <p className="qt-text-xs mt-1">
+                      Context: {mc.maxContext.toLocaleString()} | Output: {mc.maxOutput.toLocaleString()} | Quality: {mc.quality} | Tags: {mc.tags.join(', ')}
+                    </p>
+                  )
+                })()}
+              </div>
+              <div>
+                <label htmlFor="maxContext" className="block qt-text-label mb-2">
+                  Max Context (tokens)
+                </label>
+                <input
+                  type="number"
+                  id="maxContext"
+                  name="maxContext"
+                  value={form.formData.maxContext}
+                  onChange={(e) => form.setField('maxContext', e.target.value)}
+                  placeholder="e.g., 128000"
+                  min="1"
+                  className="qt-input"
+                />
+                <p className="qt-text-xs mt-1">
+                  Override context window size. Leave blank to use provider default.
+                </p>
+              </div>
+            </div>
+
             {/* OpenRouter-specific options */}
             {form.formData.provider === 'OPENROUTER' && (
               <OpenRouterOptions formData={form.formData} fetchedModels={fetchedModels} onSetField={form.setField} />
@@ -607,7 +693,7 @@ function OpenRouterOptions({
   onSetField: (name: keyof ProfileFormData, value: any) => void
 }) {
   return (
-    <div className="border border-border rounded-lg p-4 bg-muted/50">
+    <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
       <h4 className="font-medium text-sm mb-3">OpenRouter Options</h4>
 
       <div className="flex items-center gap-2 mb-4">
@@ -649,7 +735,7 @@ function OpenRouterOptions({
       {fetchedModels.length > 0 && (
         <div className="mb-4">
           <label className="block qt-text-label mb-2">Fallback Models (max 2)</label>
-          <div className="space-y-1 max-h-32 overflow-y-auto border border-border rounded p-2 bg-background">
+          <div className="space-y-1 max-h-32 overflow-y-auto border qt-border-default rounded p-2 bg-background">
             {fetchedModels
               .filter((model) => model !== formData.modelName)
               .slice(0, 50)
@@ -660,7 +746,7 @@ function OpenRouterOptions({
                   <label
                     key={model}
                     className={`flex items-center gap-2 p-1 rounded ${
-                      isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-muted'
+                      isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:qt-bg-muted'
                     }`}
                   >
                     <input
@@ -698,7 +784,7 @@ function AnthropicOptions({
   onSetField: (name: keyof ProfileFormData, value: any) => void
 }) {
   return (
-    <div className="border border-border rounded-lg p-4 bg-muted/50">
+    <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
       <h4 className="font-medium text-sm mb-3">Anthropic Options</h4>
 
       <div className="flex items-center gap-2 mb-3">

@@ -7128,7 +7128,6 @@ var OllamaProvider = class {
   constructor(baseUrl) {
     this.supportsFileAttachments = false;
     this.supportedMimeTypes = [];
-    this.supportsImageGeneration = false;
     this.supportsWebSearch = false;
     this.baseUrl = baseUrl.replace(/\/+$/, "");
   }
@@ -7404,10 +7403,6 @@ var OllamaProvider = class {
       logger.error("Failed to fetch Ollama models", { context: "OllamaProvider.getAvailableModels", baseUrl: this.baseUrl }, error instanceof Error ? error : void 0);
       return [];
     }
-  }
-  async generateImage(params, apiKey) {
-    logger.warn("Image generation not supported", { context: "OllamaProvider.generateImage" });
-    throw new Error("Ollama does not support image generation. Use a multimodal model for image analysis.");
   }
 };
 

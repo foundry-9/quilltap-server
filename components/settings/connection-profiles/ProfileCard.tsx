@@ -5,6 +5,7 @@ import { ProfileCard as BaseProfileCard, ProfileCardBadge } from '@/components/u
 import { TagBadge } from '@/components/tags/tag-badge'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
 import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
+import { getModelClass } from '@/lib/llm/model-classes'
 import { formatTokenCount } from '@/lib/utils/format-tokens'
 import type { ConnectionProfile } from './types'
 
@@ -18,6 +19,8 @@ interface ProfileCardProps {
   deleteConfirming: string | null
   onDeleteConfirmChange: (profileId: string | null) => void
   isDeleting: boolean
+  onAutoConfigure?: (profileId: string) => void
+  isAutoConfiguring?: boolean
 }
 
 /**
@@ -28,7 +31,7 @@ const DragHandle = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTML
     return (
       <button
         ref={ref}
-        className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-accent/50 text-muted-foreground hover:text-foreground transition-colors touch-none"
+        className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-accent/50 qt-text-secondary hover:text-foreground transition-colors touch-none"
         aria-label="Drag to reorder"
         {...props}
       >
@@ -57,6 +60,8 @@ function ProfileCardContent({
   deleteConfirming,
   onDeleteConfirmChange,
   isDeleting,
+  onAutoConfigure,
+  isAutoConfiguring,
 }: ProfileCardProps) {
   // Check if API key is missing when provider requires one
   const isMissingApiKey = providerRequiresApiKey && !profile.apiKey
@@ -77,6 +82,12 @@ function ProfileCardContent({
   if (profile.allowToolUse === false) {
     badges.push({ text: 'No Tools', variant: 'destructive' })
   }
+  if (profile.modelClass) {
+    const mc = getModelClass(profile.modelClass)
+    if (mc) {
+      badges.push({ text: `${mc.name} (Tier ${mc.tier})`, variant: 'default' })
+    }
+  }
 
   return (
     <BaseProfileCard
@@ -85,6 +96,13 @@ function ProfileCardContent({
       badges={badges}
       actions={[
         { label: 'Edit', onClick: () => onEdit(profile), variant: 'primary' },
+        ...(onAutoConfigure ? [{
+          label: 'Auto-Configure',
+          onClick: () => onAutoConfigure(profile.id),
+          variant: 'secondary' as const,
+          loading: isAutoConfiguring,
+          loadingLabel: 'Configuring...',
+        }] : []),
       ]}
       deleteConfig={{
         isConfirming: deleteConfirming === profile.id,
@@ -113,7 +131,7 @@ function ProfileCardContent({
             <span>{profile.messageCount} message{profile.messageCount === 1 ? '' : 's'}</span>
           )}
           {profile.messageCount !== undefined && profile.totalTokens !== undefined && (
-            <span className="text-muted-foreground"> • </span>
+            <span className="qt-text-secondary"> • </span>
           )}
           {profile.totalTokens !== undefined && profile.totalTokens > 0 && (
             <span>{formatTokenCount(profile.totalTokens)} tokens</span>

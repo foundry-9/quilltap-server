@@ -148,36 +148,36 @@ export function FileWritePermissionPrompt({
       ref={promptRef}
       className="mx-4 my-3 animate-in fade-in slide-in-from-bottom-4 duration-300"
     >
-      <div className="qt-card border-2 border-primary/50 bg-primary/5 rounded-lg p-4 qt-shadow-lg">
+      <div className="qt-card border-2 qt-border-primary/50 qt-bg-primary/5 rounded-lg p-4 qt-shadow-lg">
         {/* Header */}
         <div className="flex items-start gap-3">
-          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+          <div className="flex-shrink-0 w-10 h-10 rounded-full qt-bg-primary/20 flex items-center justify-center">
             <span className="text-xl">📝</span>
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-foreground">
               File Write Permission Required
             </h3>
-            <p className="qt-text-sm text-muted-foreground mt-1">
+            <p className="qt-text-sm qt-text-secondary mt-1">
               The AI wants to create a file. Please review and approve or deny this request.
             </p>
           </div>
         </div>
 
         {/* File info */}
-        <div className="mt-3 p-3 bg-background/50 rounded-md border border-border">
+        <div className="mt-3 p-3 bg-background/50 rounded-md border qt-border-default">
           <div className="flex items-center gap-2">
             <span className="text-lg">📁</span>
             <span className="font-medium truncate">{request.filename}</span>
           </div>
-          <div className="qt-text-xs text-muted-foreground mt-1">
+          <div className="qt-text-xs qt-text-secondary mt-1">
             <span>Location: {locationText}</span>
             {request.folderPath !== '/' && (
               <span> / {request.folderPath}</span>
             )}
           </div>
           {request.content && (
-            <div className="qt-text-xs text-muted-foreground mt-1">
+            <div className="qt-text-xs qt-text-secondary mt-1">
               Size: {request.content.length.toLocaleString()} characters
             </div>
           )}
@@ -243,7 +243,7 @@ export function FileWritePermissionPrompt({
         </div>
 
         {/* Hint about more options */}
-        <p className="qt-text-xs text-muted-foreground mt-3">
+        <p className="qt-text-xs qt-text-secondary mt-3">
           Click &quot;View Details & Options&quot; to preview file content or grant broader permissions.
         </p>
       </div>

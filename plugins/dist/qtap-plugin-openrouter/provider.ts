@@ -7,15 +7,14 @@
  * Updated to use SDK v0.8.0 with callModel() and getTextStream() for improved streaming
  */
 
-import { OpenRouter, fromChatMessages } from '@openrouter/sdk';
-import type { ChatGenerationParams, Message, OpenResponsesNonStreamingResponse } from '@openrouter/sdk/models';
+import { OpenRouter } from '@openrouter/sdk';
+import { fromChatMessages } from '@openrouter/sdk/lib/chat-compat';
+import type { ChatMessages, OpenResponsesResult } from '@openrouter/sdk/models';
 import type {
-  LLMProvider,
+  TextProvider,
   LLMParams,
   LLMResponse,
   StreamChunk,
-  ImageGenParams,
-  ImageGenResponse,
 } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
@@ -44,10 +43,9 @@ interface OpenRouterProfileParams {
   topP?: number;
 }
 
-export class OpenRouterProvider implements LLMProvider {
+export class OpenRouterProvider implements TextProvider {
   readonly supportsFileAttachments = false; // Model-dependent, conservative default
   readonly supportedMimeTypes: string[] = [];
-  readonly supportsImageGeneration = true;
   readonly supportsWebSearch = true;
 
   /**
@@ -79,7 +77,7 @@ export class OpenRouterProvider implements LLMProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: getQuilltapUserAgent(),
+      appTitle: getQuilltapUserAgent(),
     });
 
     // Strip attachments from messages and convert to OpenRouter format
@@ -163,7 +161,7 @@ export class OpenRouterProvider implements LLMProvider {
     }
 
     const response = await client.chat.send({
-      chatGenerationParams: requestParams,
+      chatRequest: requestParams,
     });
 
     const choice = response.choices[0];
@@ -203,12 +201,12 @@ export class OpenRouterProvider implements LLMProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: getQuilltapUserAgent(),
+      appTitle: getQuilltapUserAgent(),
     });
 
     // Convert messages to SDK format
     // Tool messages and assistant messages with toolCalls are handled in streamWithTools
-    const messages: Message[] = params.messages
+    const messages: ChatMessages[] = params.messages
       .filter(m => !(m.role === 'tool' && !m.toolCallId))
       .map((m) => {
         if (m.role === 'tool' && m.toolCallId) {
@@ -311,7 +309,7 @@ export class OpenRouterProvider implements LLMProvider {
 
     // After text stream ends, get the complete response with usage data
     // The ReusableReadableStream allows concurrent consumption patterns
-    let response: OpenResponsesNonStreamingResponse;
+    let response: OpenResponsesResult;
     try {
       response = await result.getResponse();
     } catch (error) {
@@ -566,7 +564,7 @@ export class OpenRouterProvider implements LLMProvider {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-        xTitle: getQuilltapUserAgent(),
+        appTitle: getQuilltapUserAgent(),
       });
       await client.models.list();
       return true;
@@ -585,7 +583,7 @@ export class OpenRouterProvider implements LLMProvider {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-        xTitle: getQuilltapUserAgent(),
+        appTitle: getQuilltapUserAgent(),
       });
 
       const response = await client.models.list();
@@ -601,67 +599,4 @@ export class OpenRouterProvider implements LLMProvider {
     }
   }
 
-  async generateImage(
-    params: ImageGenParams,
-    apiKey: string
-  ): Promise<ImageGenResponse> {
-    const client = new OpenRouter({
-      apiKey,
-      httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: getQuilltapUserAgent(),
-    });
-
-    const requestBody: any = {
-      model: params.model ?? 'google/gemini-2.5-flash-image-preview',
-      messages: [{ role: 'user', content: params.prompt }],
-      modalities: ['image', 'text'], // Required for image generation
-      stream: false,
-    };
-
-    // Add image configuration if aspect ratio is specified
-    if (params.aspectRatio) {
-      requestBody.imageConfig = { aspectRatio: params.aspectRatio };
-    }
-
-    const response = (await client.chat.send({
-      chatGenerationParams: requestBody,
-    })) as any;
-
-    const choice = response.choices?.[0];
-    if (!choice) {
-      throw new Error('No choices in OpenRouter response');
-    }
-
-    const images = [];
-
-    // Check if response includes images
-    if (
-      (choice.message as any).images &&
-      Array.isArray((choice.message as any).images)
-    ) {
-      for (const image of (choice.message as any).images) {
-        if (image.imageUrl?.url || image.image_url?.url) {
-          // Extract base64 data from data URL
-          const dataUrl = image.imageUrl?.url || image.image_url?.url;
-          if (dataUrl.startsWith('data:image/')) {
-            const [, base64] = dataUrl.split(',');
-            const mimeType =
-              dataUrl.match(/data:(image\/[^;]+)/)?.[1] || 'image/png';
-            images.push({
-              data: base64,
-              mimeType,
-            });
-          }
-        }
-      }
-    }
-
-    if (images.length === 0) {
-      throw new Error('No images returned from OpenRouter');
-    }
-    return {
-      images,
-      raw: response,
-    };
-  }
 }

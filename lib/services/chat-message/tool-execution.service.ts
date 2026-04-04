@@ -9,6 +9,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext } from '@/lib/chat/tool-executor'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ToolMessage, GeneratedImage, ToolProcessingResult } from './types'
+import { encodeStatusEvent } from './streaming.service'
 
 const logger = createServiceLogger('ToolExecutionService')
 
@@ -26,7 +27,8 @@ export async function processToolCalls(
   toolCalls: Array<{ name: string; arguments: Record<string, unknown>; callId?: string }>,
   toolContext: ToolExecutionContext,
   controller: StreamController,
-  encoder: TextEncoder
+  encoder: TextEncoder,
+  statusContext?: { characterName: string; characterId: string }
 ): Promise<ToolProcessingResult> {
   const toolMessages: ToolMessage[] = []
   const generatedImagePaths: GeneratedImage[] = []
@@ -42,6 +44,18 @@ export async function processToolCalls(
 
   for (let toolIndex = 0; toolIndex < toolCalls.length; toolIndex++) {
     const toolCall = toolCalls[toolIndex]
+
+    // Update status for each tool as it starts executing
+    if (statusContext) {
+      controller.enqueue(encodeStatusEvent(encoder, {
+        stage: 'tool_executing',
+        message: `Running ${toolCall.name}...`,
+        toolName: toolCall.name,
+        characterName: statusContext.characterName,
+        characterId: statusContext.characterId,
+      }))
+    }
+
     const toolResult = await executeToolCallWithContext(toolCall, toolContext)
 
     // Debug: Log what we received from executeToolCallWithContext

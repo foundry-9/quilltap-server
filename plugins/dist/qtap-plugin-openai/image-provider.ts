@@ -7,12 +7,12 @@
  */
 
 import OpenAI from 'openai';
-import type { ImageGenProvider as ImageGenProviderBase, ImageGenParams, ImageGenResponse } from './types';
+import type { ImageProvider, ImageGenParams, ImageGenResponse } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-openai');
 
-export class OpenAIImageProvider implements ImageGenProviderBase {
+export class OpenAIImageProvider implements ImageProvider {
   readonly provider = 'OPENAI';
   readonly supportedModels = ['gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini', 'dall-e-3', 'dall-e-2'];
 

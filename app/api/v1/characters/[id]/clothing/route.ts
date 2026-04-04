@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { notFound, serverError, validationError, created } from '@/lib/api/responses';
+import { notFound, serverError, created } from '@/lib/api/responses';
 
 const createClothingRecordSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -39,36 +39,27 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 // POST /api/v1/characters/[id]/clothing
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    try {
-      const character = await repos.characters.findById(id);
+    const character = await repos.characters.findById(id);
 
-      if (!checkOwnership(character, user.id)) {
-        return notFound('Character');
-      }
+    if (!checkOwnership(character, user.id)) {
+      return notFound('Character');
+    }
 
-      const body = await req.json();
-      const validatedData = createClothingRecordSchema.parse(body);
+    const body = await req.json();
+    const validatedData = createClothingRecordSchema.parse(body);
 
-      const record = await repos.characters.addClothingRecord(id, validatedData);
+    const record = await repos.characters.addClothingRecord(id, validatedData);
 
-      if (!record) {
-        return serverError('Failed to create clothing record');
-      }
-
-      logger.info('[Characters v1] Clothing record created', {
-        characterId: id,
-        recordId: record.id,
-        name: validatedData.name,
-      });
-
-      return created({ clothingRecord: record });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return validationError(error);
-      }
-
-      logger.error('[Characters v1] Error creating clothing record', { characterId: id }, error instanceof Error ? error : undefined);
+    if (!record) {
       return serverError('Failed to create clothing record');
     }
+
+    logger.info('[Characters v1] Clothing record created', {
+      characterId: id,
+      recordId: record.id,
+      name: validatedData.name,
+    });
+
+    return created({ clothingRecord: record });
   }
 );

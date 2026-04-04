@@ -31,12 +31,12 @@ export function GalleryImage({
         onClick={() => {
           onImageClick(index)
         }}
-        className={`relative aspect-square w-full overflow-hidden rounded-lg bg-muted hover:ring-2 hover:ring-primary focus:outline-none focus:ring-2 focus:ring-ring transition-all ${
+        className={`relative aspect-square w-full overflow-hidden rounded-lg qt-bg-muted hover:ring-2 hover:ring-primary focus:outline-none focus:ring-2 focus:ring-ring transition-all ${
           isAvatar ? 'ring-2 ring-success' : ''
         } ${!isTagged ? 'opacity-60' : ''}`}
       >
         {isMissingImage ? (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+          <div className="absolute inset-0 flex items-center justify-center qt-text-secondary">
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
@@ -56,7 +56,7 @@ export function GalleryImage({
 
         {/* Avatar Badge */}
         {isAvatar && (
-          <div className="absolute top-1 left-1 bg-success text-success-foreground text-xs px-1.5 py-0.5 rounded font-medium">
+          <div className="absolute top-1 left-1 bg-success qt-text-success-foreground text-xs px-1.5 py-0.5 rounded font-medium">
             Avatar
           </div>
         )}
@@ -81,8 +81,8 @@ export function GalleryImage({
           disabled={isUpdating}
           className={`p-1.5 rounded-full qt-shadow-md transition-colors ${
             isTagged
-              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'bg-card text-muted-foreground hover:bg-accent'
+              ? 'bg-primary text-primary-foreground hover:qt-bg-primary/90'
+              : 'qt-bg-card qt-text-secondary hover:bg-accent'
           } ${isUpdating ? 'opacity-50' : ''}`}
           title={isTagged ? `Remove from ${entityName}` : `Tag to ${entityName}`}
         >
@@ -109,7 +109,7 @@ export function GalleryImage({
               onSetAvatar(e)
             }}
             disabled={isUpdating}
-            className={`p-1.5 rounded-full qt-shadow-md bg-card text-muted-foreground hover:bg-success hover:text-success-foreground transition-colors ${isUpdating ? 'opacity-50' : ''}`}
+            className={`p-1.5 rounded-full qt-shadow-md qt-bg-card qt-text-secondary hover:bg-success hover:qt-text-success-foreground transition-colors ${isUpdating ? 'opacity-50' : ''}`}
             title="Set as avatar"
           >
             {isDeletingImage ? (
@@ -134,8 +134,8 @@ export function GalleryImage({
             disabled={isDeletingImage}
             className={`p-1.5 rounded-full qt-shadow-md transition-colors ${
               isConfirmingDelete
-                ? 'bg-destructive text-destructive-foreground'
-                : 'bg-card text-muted-foreground hover:bg-destructive hover:text-destructive-foreground'
+                ? 'bg-destructive qt-text-destructive-foreground'
+                : 'qt-bg-card qt-text-secondary hover:bg-destructive hover:qt-text-destructive-foreground'
             } ${isDeletingImage ? 'opacity-50' : ''}`}
             title={isConfirmingDelete ? 'Click again to confirm delete' : 'Delete image'}
           >

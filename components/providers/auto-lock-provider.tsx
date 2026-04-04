@@ -79,7 +79,7 @@ export function AutoLockProvider() {
 
     // Create a toast notification
     const toast = document.createElement('div');
-    toast.className = 'fixed bottom-4 right-4 z-[9999] qt-card p-4 shadow-lg border qt-border max-w-sm animate-in slide-in-from-bottom-2';
+    toast.className = 'fixed bottom-4 right-4 z-[9999] qt-card p-4 qt-shadow-lg border qt-border max-w-sm animate-in slide-in-from-bottom-2';
     toast.innerHTML = `
       <div class="flex items-start gap-3">
         <div class="flex-1">

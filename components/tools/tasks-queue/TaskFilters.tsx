@@ -145,7 +145,7 @@ export function TaskFilters({
           type="checkbox"
           checked={autoRefresh}
           onChange={(e) => onAutoRefreshChange(e.target.checked)}
-          className="rounded border-border text-primary focus:ring-ring"
+          className="rounded qt-border-default text-primary focus:ring-ring"
         />
         Auto-refresh (5s)
       </label>
@@ -155,15 +155,15 @@ export function TaskFilters({
         <span
           className={`qt-text-small flex items-center gap-1.5 ml-auto ${
             data.processorStatus?.running
-              ? 'text-success'
-              : 'text-muted-foreground'
+              ? 'qt-text-success'
+              : 'qt-text-secondary'
           }`}
         >
           <span
             className={`w-2 h-2 rounded-full ${
               data.processorStatus?.running
                 ? 'bg-success animate-pulse'
-                : 'bg-muted-foreground'
+                : 'qt-bg-muted-foreground'
             }`}
           />
           {data.processorStatus?.running ? 'Queue Running' : 'Queue Stopped'}

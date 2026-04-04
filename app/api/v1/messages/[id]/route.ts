@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, getActionParam } from '@/lib/api/middleware';
-import { badRequest, notFound, serverError, validationError } from '@/lib/api/responses';
+import { badRequest, notFound, serverError } from '@/lib/api/responses';
 import { createLLMProvider } from '@/lib/llm';
 import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoriesBySourceMessageWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
 import { z } from 'zod';
@@ -92,37 +92,32 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id: messageId }) => {
-    try {
-      const body = await req.json();
-      const { content } = editMessageSchema.parse(body);const result = await findMessageInUserChats(repos, user.id, messageId);
-      if (!result) {
-        return notFound('Message');
-      }
-
-      // Update the message content
-      const updatedMessage: MessageEvent = {
-        ...result.message,
-        content,
-      };
-
-      // Update the message in the array
-      result.allMessages[result.messageIndex] = updatedMessage;
-
-      // Rewrite all messages
-      await repos.chats.clearMessages(result.chat.id);
-      for (const msg of result.allMessages) {
-        await repos.chats.addMessage(result.chat.id, msg);
-      }
-
-      // Update chat's updatedAt timestamp
-      await repos.chats.update(result.chat.id, {});return NextResponse.json({ message: updatedMessage });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return validationError(error);
-      }
-      logger.error('[Messages API v1] Error updating message', {}, error instanceof Error ? error : undefined);
-      return serverError('Failed to update message');
+    const body = await req.json();
+    const { content } = editMessageSchema.parse(body);
+    const result = await findMessageInUserChats(repos, user.id, messageId);
+    if (!result) {
+      return notFound('Message');
     }
+
+    // Update the message content
+    const updatedMessage: MessageEvent = {
+      ...result.message,
+      content,
+    };
+
+    // Update the message in the array
+    result.allMessages[result.messageIndex] = updatedMessage;
+
+    // Rewrite all messages
+    await repos.chats.clearMessages(result.chat.id);
+    for (const msg of result.allMessages) {
+      await repos.chats.addMessage(result.chat.id, msg);
+    }
+
+    // Update chat's updatedAt timestamp
+    await repos.chats.update(result.chat.id, {});
+
+    return NextResponse.json({ message: updatedMessage });
   }
 );
 
@@ -250,24 +245,16 @@ async function handleSwipeAction(
   { user, repos }: { user: { id: string }; repos: any },
   messageId: string
 ): Promise<NextResponse> {
-  try {
-    const body = await req.json().catch(() => ({}));
-    const parsed = swipeActionSchema.safeParse(body);
+  const body = await req.json().catch(() => ({}));
+  const parsed = swipeActionSchema.safeParse(body);
 
-    // If swipeIndex is provided, this is a switch operation (like PUT)
-    if (parsed.success && parsed.data.swipeIndex !== undefined) {
-      return handleSwitchSwipe(repos, user.id, messageId, parsed.data.swipeIndex);
-    }
-
-    // Otherwise, generate a new swipe
-    return handleGenerateSwipe(repos, user.id, messageId);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-    logger.error('[Messages API v1] Error in swipe action', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to process swipe');
+  // If swipeIndex is provided, this is a switch operation (like PUT)
+  if (parsed.success && parsed.data.swipeIndex !== undefined) {
+    return handleSwitchSwipe(repos, user.id, messageId, parsed.data.swipeIndex);
   }
+
+  // Otherwise, generate a new swipe
+  return handleGenerateSwipe(repos, user.id, messageId);
 }
 
 async function handleGenerateSwipe(
@@ -375,7 +362,7 @@ async function handleGenerateSwipe(
     swipeGroupId,
     swipeIndex: newSwipeIndex,
     tokenCount: response.usage.totalTokens,
-    rawResponse: response.raw,
+    rawResponse: response.raw as Record<string, unknown> | null | undefined,
     attachments: [],
     createdAt: result.message.createdAt, // Keep same timestamp as original
   };
@@ -430,79 +417,73 @@ async function handleReattributeAction(
   { user, repos }: { user: { id: string }; repos: any },
   messageId: string
 ): Promise<NextResponse> {
-  try {
-    const body = await req.json();
-    const { newParticipantId } = reattributeActionSchema.parse(body);const result = await findMessageInUserChats(repos, user.id, messageId);
-    if (!result) {
-      return notFound('Message');
-    }
+  const body = await req.json();
+  const { newParticipantId } = reattributeActionSchema.parse(body);
+  const result = await findMessageInUserChats(repos, user.id, messageId);
+  if (!result) {
+    return notFound('Message');
+  }
 
-    // Validate the target participant exists in the chat
-    const targetParticipant = result.chat.participants.find(
-      (p: ChatParticipant) => p.id === newParticipantId
-    );
+  // Validate the target participant exists in the chat
+  const targetParticipant = result.chat.participants.find(
+    (p: ChatParticipant) => p.id === newParticipantId
+  );
 
-    if (!targetParticipant) {
-      logger.warn('[Messages API v1] Target participant not found in chat', {
-        messageId,
-        chatId: result.chat.id,
-        newParticipantId,
-      });
-      return badRequest('Target participant not found in chat');
-    }
-
-    // Find and delete memories associated with this message
-    const memoriesFromMessage = await repos.memories.findBySourceMessageId(messageId);
-    let memoriesDeleted = 0;for (const memory of memoriesFromMessage) {
-      try {
-        const deleted = await deleteMemoryWithVector(memory.characterId, memory.id);
-        if (deleted) {
-          memoriesDeleted++;
-        }
-      } catch (error) {
-        logger.error('[Messages API v1] Failed to delete memory during re-attribution', {
-          memoryId: memory.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-
-    // Update the message's participantId
-    const updatedMessage: MessageEvent = {
-      ...result.message,
-      participantId: newParticipantId,
-    };
-
-    // Update the message in the array
-    result.allMessages[result.messageIndex] = updatedMessage;
-
-    // Rewrite all messages
-    await repos.chats.clearMessages(result.chat.id);
-    for (const msg of result.allMessages) {
-      await repos.chats.addMessage(result.chat.id, msg);
-    }
-
-    // Update chat's updatedAt timestamp
-    await repos.chats.update(result.chat.id, {});
-
-    logger.info('[Messages API v1] Message re-attributed successfully', {
+  if (!targetParticipant) {
+    logger.warn('[Messages API v1] Target participant not found in chat', {
       messageId,
       chatId: result.chat.id,
-      oldParticipantId: result.message.participantId,
       newParticipantId,
-      memoriesDeleted,
     });
-
-    return NextResponse.json({
-      success: true,
-      message: updatedMessage,
-      memoriesDeleted,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-    logger.error('[Messages API v1] Error re-attributing message', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to re-attribute message');
+    return badRequest('Target participant not found in chat');
   }
+
+  // Find and delete memories associated with this message
+  const memoriesFromMessage = await repos.memories.findBySourceMessageId(messageId);
+  let memoriesDeleted = 0;
+  for (const memory of memoriesFromMessage) {
+    try {
+      const deleted = await deleteMemoryWithVector(memory.characterId, memory.id);
+      if (deleted) {
+        memoriesDeleted++;
+      }
+    } catch (error) {
+      logger.error('[Messages API v1] Failed to delete memory during re-attribution', {
+        memoryId: memory.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Update the message's participantId
+  const updatedMessage: MessageEvent = {
+    ...result.message,
+    participantId: newParticipantId,
+  };
+
+  // Update the message in the array
+  result.allMessages[result.messageIndex] = updatedMessage;
+
+  // Rewrite all messages
+  await repos.chats.clearMessages(result.chat.id);
+  for (const msg of result.allMessages) {
+    await repos.chats.addMessage(result.chat.id, msg);
+  }
+
+  // Update chat's updatedAt timestamp
+  await repos.chats.update(result.chat.id, {});
+
+  logger.info('[Messages API v1] Message re-attributed successfully', {
+    messageId,
+    chatId: result.chat.id,
+    oldParticipantId: result.message.participantId,
+    newParticipantId,
+    memoriesDeleted,
+  });
+
+  return NextResponse.json({
+    success: true,
+    message: updatedMessage,
+    memoriesDeleted,
+  });
 }

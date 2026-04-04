@@ -23,7 +23,7 @@ export function LoadingState({
   const getContent = () => {
     switch (variant) {
       case 'text':
-        return <p className="text-sm text-muted-foreground">{message}</p>
+        return <p className="text-sm qt-text-secondary">{message}</p>
 
       case 'dots': {
         // Create animated dots effect
@@ -37,7 +37,7 @@ export function LoadingState({
         return (
           <div>
             <style>{style}</style>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm qt-text-secondary">
               {message}
               <span className="inline-block" style={{ minWidth: '0.75rem' }}>
                 <span className="animate-bounce" style={{ animationDelay: '0s' }}>.</span>
@@ -54,7 +54,7 @@ export function LoadingState({
         return (
           <div className="flex flex-col items-center gap-3">
             <div className="qt-spinner text-primary" />
-            {message && <p className="text-sm text-muted-foreground">{message}</p>}
+            {message && <p className="text-sm qt-text-secondary">{message}</p>}
           </div>
         )
     }

@@ -14,10 +14,10 @@
  * @module plugins/provider-registry
  */
 
-import type { LLMProviderPlugin, ProviderMetadata, AttachmentSupport, ProviderConfigRequirements, ImageProviderConstraints, MessageFormatSupport, CheapModelConfig, ToolFormatType } from './interfaces/provider-plugin';
-import type { LLMProvider } from '@/lib/llm/base';
-import type { ImageGenProvider } from '@/lib/image-gen/base';
-import type { EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
+import type { TextProviderPlugin, TextProvider, ImageProvider, ProviderMetadata, AttachmentSupport, ProviderConfigRequirements, ImageProviderConstraints, MessageFormatSupport, CheapModelConfig, ToolFormatType, EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
+
+// Backward-compatible alias used throughout this file
+type LLMProviderPlugin = TextProviderPlugin;
 import { getErrorMessage } from '@/lib/errors';
 import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
 import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
@@ -95,7 +95,7 @@ class ProviderRegistry extends AbstractProviderRegistry<LLMProviderPlugin> {
   /**
    * Create an LLMProvider instance from a registered plugin
    */
-  createLLMProvider(name: string, baseUrl?: string): LLMProvider {
+  createLLMProvider(name: string, baseUrl?: string): TextProvider {
     const plugin = this.requireProvider(name);
 
     try {
@@ -113,7 +113,7 @@ class ProviderRegistry extends AbstractProviderRegistry<LLMProviderPlugin> {
   /**
    * Create an ImageGenProvider instance from a registered plugin
    */
-  createImageProvider(name: string, baseUrl?: string): ImageGenProvider {
+  createImageProvider(name: string, baseUrl?: string): ImageProvider {
     const plugin = this.requireProvider(name);
 
     if (!plugin.capabilities.imageGeneration) {
@@ -391,14 +391,14 @@ export function getProviderNames(): string[] {
 /**
  * Create an LLMProvider instance
  */
-export function createLLMProvider(name: string, baseUrl?: string): LLMProvider {
+export function createLLMProvider(name: string, baseUrl?: string): TextProvider {
   return providerRegistry.createLLMProvider(name, baseUrl);
 }
 
 /**
  * Create an ImageGenProvider instance
  */
-export function createImageProvider(name: string, baseUrl?: string): ImageGenProvider {
+export function createImageProvider(name: string, baseUrl?: string): ImageProvider {
   return providerRegistry.createImageProvider(name, baseUrl);
 }
 

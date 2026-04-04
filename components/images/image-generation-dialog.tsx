@@ -371,10 +371,10 @@ export function ImageGenerationDialog({
                       <img
                         src={img.data}
                         alt="Generated"
-                        className="w-full h-48 object-cover bg-muted rounded"
+                        className="w-full h-48 object-cover qt-bg-muted rounded"
                       />
                       {img.revisedPrompt && (
-                        <div className="px-3 py-2 border-t border-border mt-2">
+                        <div className="px-3 py-2 border-t qt-border-default mt-2">
                           <p className="qt-text-xs">
                             <span className="font-semibold">Revised:</span> {img.revisedPrompt}
                           </p>

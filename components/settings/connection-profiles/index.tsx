@@ -7,6 +7,8 @@ import { ProfileList } from './ProfileList'
 import { ProfileModal } from './ProfileModal'
 import { useConnectionProfiles } from './hooks/useConnectionProfiles'
 import { useProfileForm } from './hooks/useProfileForm'
+import { fetchJson } from '@/lib/fetch-helpers'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import type { ConnectionProfile } from './types'
 
 // Re-export for barrel exports
@@ -53,12 +55,14 @@ export default function ConnectionProfilesTab() {
     connectOp,
     fetchModelsOp,
     testMessageOp,
+    autoConfigureOp,
     getProviderRequirements,
     resetForm,
     loadProfileIntoForm,
     handleConnect,
     handleFetchModels,
     handleTestMessage,
+    handleAutoConfigure,
     handleSubmit,
   } = useProfileForm(providers)
 
@@ -66,6 +70,7 @@ export default function ConnectionProfilesTab() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProfile, setEditingProfile] = useState<ConnectionProfile | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
+  const [autoConfiguringId, setAutoConfiguringId] = useState<string | null>(null)
 
   // Trigger auto-association on mount (fire and forget)
   useEffect(() => {
@@ -116,6 +121,26 @@ export default function ConnectionProfilesTab() {
     [handleDelete]
   )
 
+  const handleAutoConfigureCard = useCallback(async (profileId: string) => {
+    setAutoConfiguringId(profileId)
+    try {
+      const result = await fetchJson<any>(
+        `/api/v1/connection-profiles/${profileId}?action=auto-configure`,
+        { method: 'POST' }
+      )
+      if (!result.ok) {
+        showErrorToast(result.error || 'Auto-configure failed')
+      } else {
+        showSuccessToast('Profile auto-configured successfully')
+        fetchProfiles()
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Auto-configure failed')
+    } finally {
+      setAutoConfiguringId(null)
+    }
+  }, [fetchProfiles])
+
   if (fetchOp.loading) {
     return <LoadingState message="Loading connection profiles..." />
   }
@@ -153,6 +178,8 @@ export default function ConnectionProfilesTab() {
         onAddClick={handleOpenModal}
         onReorder={reorderProfiles}
         onResetSort={resetSort}
+        onAutoConfigure={handleAutoConfigureCard}
+        autoConfiguringId={autoConfiguringId}
       />
 
       {/* Profile Modal - key ensures remount when switching profiles */}
@@ -176,9 +203,11 @@ export default function ConnectionProfilesTab() {
           connectError: connectOp.error,
           fetchModelsLoading: fetchModelsOp.loading,
           testMessageLoading: testMessageOp.loading,
+          autoConfigureLoading: autoConfigureOp.loading,
           handleConnect,
           handleFetchModels,
           handleTestMessage,
+          handleAutoConfigure,
           handleSubmit,
           getProviderRequirements,
         }}

@@ -73,16 +73,6 @@ describe('Environment Validation', () => {
     }
   });
 
-  it('should accept optional rate limit configuration', async () => {
-    process.env.RATE_LIMIT_API_MAX = '100';
-    process.env.RATE_LIMIT_API_WINDOW = '60';
-
-    jest.resetModules();
-
-    const { validateEnv } = await import('@/lib/env');
-    expect(() => validateEnv()).not.toThrow();
-  });
-
   it('should accept optional log level', async () => {
     process.env.LOG_LEVEL = 'debug';
 

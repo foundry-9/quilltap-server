@@ -91,7 +91,7 @@ export function ChatCostSummary({
       return null // Don't show loading state in header
     }
     return (
-      <div className={`text-xs text-muted-foreground animate-pulse ${className}`}>
+      <div className={`text-xs qt-text-secondary animate-pulse ${className}`}>
         Loading cost data...
       </div>
     )
@@ -107,7 +107,7 @@ export function ChatCostSummary({
       <div
         className={`
           flex items-center gap-2
-          text-xs text-muted-foreground
+          text-xs qt-text-secondary
           ${className}
         `}
       >
@@ -115,18 +115,18 @@ export function ChatCostSummary({
         <span className="md:hidden">{formatTokenCount(costData.totalTokens)}</span>
         {costData.estimatedCostUSD !== null && (
           <>
-            <span className="text-muted-foreground/50">•</span>
+            <span className="qt-text-secondary/50">•</span>
             <span>{formatCostForDisplay(costData.estimatedCostUSD)}</span>
             {costData.priceSource === 'openrouter-estimate' && (
               <span
-                className="text-warning cursor-help"
+                className="qt-text-warning cursor-help"
                 title="Cost estimated using OpenRouter pricing data. Actual cost may vary."
               >
                 <EstimateWarningIcon />
               </span>
             )}
             {costData.priceSource === 'unavailable' && (
-              <span className="text-muted-foreground/50" title="Pricing data unavailable">*</span>
+              <span className="qt-text-secondary/50" title="Pricing data unavailable">*</span>
             )}
           </>
         )}
@@ -139,8 +139,8 @@ export function ChatCostSummary({
     <div
       className={`
         flex items-center gap-3 px-3 py-2
-        text-xs text-muted-foreground
-        bg-muted/30 border border-border/50 rounded-lg
+        text-xs qt-text-secondary
+        qt-bg-muted/30 border qt-border-default/50 rounded-lg
         ${className}
       `}
     >
@@ -148,7 +148,7 @@ export function ChatCostSummary({
         <span className="font-medium">Total:</span>
         <span>{formatTokenCount(costData.totalTokens)} tokens</span>
       </div>
-      <div className="hidden sm:flex items-center gap-1 text-muted-foreground/70">
+      <div className="hidden sm:flex items-center gap-1 qt-text-secondary/70">
         <span>({formatTokenCount(costData.promptTokens)} in</span>
         <span>/</span>
         <span>{formatTokenCount(costData.completionTokens)} out)</span>
@@ -159,14 +159,14 @@ export function ChatCostSummary({
           <span>{formatCostForDisplay(costData.estimatedCostUSD)}</span>
           {costData.priceSource === 'openrouter-estimate' && (
             <span
-              className="text-warning cursor-help"
+              className="qt-text-warning cursor-help"
               title="Cost estimated using OpenRouter pricing data. Actual cost may vary."
             >
               <EstimateWarningIcon />
             </span>
           )}
           {costData.priceSource === 'unavailable' && (
-            <span className="text-muted-foreground/50" title="Pricing data unavailable">*</span>
+            <span className="qt-text-secondary/50" title="Pricing data unavailable">*</span>
           )}
         </div>
       )}

@@ -28,7 +28,7 @@ export function ExportTypeStep({
 }: ExportTypeStepProps) {
   return (
     <div className="space-y-4">
-      <p className="qt-text-small text-muted-foreground">
+      <p className="qt-text-small qt-text-secondary">
         Select the type of data you want to export.
       </p>
       <div className="space-y-2">
@@ -37,8 +37,8 @@ export function ExportTypeStep({
             key={type}
             className={`flex items-center p-4 border-2 rounded-lg cursor-pointer transition-colors ${
               entityType === type
-                ? 'border-primary bg-accent'
-                : 'border-border bg-background hover:border-primary/50'
+                ? 'qt-border-primary bg-accent'
+                : 'qt-border-default bg-background hover:qt-border-primary/50'
             }`}
           >
             <input

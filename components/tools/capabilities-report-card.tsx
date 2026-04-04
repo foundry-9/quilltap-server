@@ -192,7 +192,7 @@ export function CapabilitiesReportCard() {
 
       {/* Error Message */}
       {error && (
-        <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded mb-4">
+        <div className="qt-bg-destructive/10 border qt-border-destructive qt-text-destructive px-4 py-3 rounded mb-4">
           {error}
         </div>
       )}
@@ -255,7 +255,7 @@ export function CapabilitiesReportCard() {
         </h3>
 
         {loading && !generating ? (
-          <div className="text-center py-6 text-muted-foreground">
+          <div className="text-center py-6 qt-text-secondary">
             <svg
               className="animate-spin h-6 w-6 mx-auto mb-2"
               fill="none"
@@ -280,7 +280,7 @@ export function CapabilitiesReportCard() {
         ) : reports.length === 0 ? (
           <div className="qt-card p-6 text-center">
             <svg
-              className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50"
+              className="w-12 h-12 mx-auto mb-3 qt-text-secondary/50"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -301,7 +301,7 @@ export function CapabilitiesReportCard() {
             {reports.map((report) => (
               <div
                 key={report.id}
-                className="qt-card p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                className="qt-card p-4 flex items-center justify-between hover:qt-bg-muted/50 transition-colors"
               >
                 <div className="flex-1 min-w-0">
                   <p className="qt-text-primary truncate">

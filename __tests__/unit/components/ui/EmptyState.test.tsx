@@ -97,7 +97,7 @@ describe('EmptyState', () => {
     )
 
     const emptyState = container.querySelector('.qt-empty-state')
-    expect(emptyState).toHaveClass('bg-muted', 'border', 'border-border')
+    expect(emptyState).toHaveClass('qt-bg-muted', 'border', 'qt-border-default')
   })
 
   it('applies dashed variant classes', () => {
@@ -109,8 +109,8 @@ describe('EmptyState', () => {
     )
 
     const emptyState = container.querySelector('.qt-empty-state')
-    expect(emptyState).toHaveClass('border', 'border-dashed', 'border-border')
-    expect(emptyState).not.toHaveClass('bg-muted')
+    expect(emptyState).toHaveClass('border', 'border-dashed', 'qt-border-default')
+    expect(emptyState).not.toHaveClass('qt-bg-muted')
   })
 
   it('applies muted variant classes', () => {
@@ -122,7 +122,7 @@ describe('EmptyState', () => {
     )
 
     const emptyState = container.querySelector('.qt-empty-state')
-    expect(emptyState).toHaveClass('bg-muted/50')
+    expect(emptyState).toHaveClass('qt-bg-muted/50')
   })
 
   it('applies qt-empty-state class', () => {

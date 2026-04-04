@@ -430,7 +430,7 @@ export function ParticipantCard({
               className={`
                 flex-1
                 ${queuePosition > 0
-                  ? 'qt-badge-info hover:bg-info/20'
+                  ? 'qt-badge-info hover:qt-bg-info/20'
                   : 'qt-button qt-button-secondary qt-button-sm'
                 }
                 disabled:opacity-50 disabled:cursor-not-allowed
@@ -455,7 +455,7 @@ export function ParticipantCard({
             className={`
               flex-1
               ${queuePosition > 0
-                ? 'qt-badge-info hover:bg-info/20'
+                ? 'qt-badge-info hover:qt-bg-info/20'
                 : isCurrentTurn
                   ? 'qt-participant-turn-indicator cursor-default'
                   : 'qt-button qt-button-secondary qt-button-sm'

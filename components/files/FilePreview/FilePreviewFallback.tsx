@@ -36,14 +36,14 @@ export default function FilePreviewFallback({
       </h3>
 
       {/* File metadata */}
-      <div className="text-muted-foreground space-y-1 mb-6">
+      <div className="qt-text-secondary space-y-1 mb-6">
         <p>{getFileTypeLabel(file.mimeType)}</p>
         <p>{formatFileSize(file.size)}</p>
         <p>Added {formatFileDate(file.createdAt)}</p>
       </div>
 
       {/* Preview not available message */}
-      <p className="text-muted-foreground mb-4">
+      <p className="qt-text-secondary mb-4">
         Preview not available for this file type
       </p>
 

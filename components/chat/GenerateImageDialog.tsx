@@ -219,7 +219,7 @@ export default function GenerateImageDialog({
               {personaParticipant?.persona && (
                 <button
                   onClick={() => insertPlaceholder('me')}
-                  className="w-full px-3 py-2 text-left text-sm bg-primary/10 hover:bg-primary/20 text-primary rounded border border-primary/30 transition-colors"
+                  className="w-full px-3 py-2 text-left text-sm qt-bg-primary/10 hover:qt-bg-primary/20 text-primary rounded border qt-border-primary/30 transition-colors"
                   disabled={isGenerating}
                 >
                   <div className="font-medium">{personaParticipant.persona.name}</div>
@@ -246,7 +246,7 @@ export default function GenerateImageDialog({
               <div className="relative pt-4" ref={dropdownRef}>
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="w-full px-3 py-2 text-sm text-foreground bg-muted hover:bg-muted/80 rounded border border-input transition-colors flex items-center justify-between"
+                  className="w-full px-3 py-2 text-sm text-foreground qt-bg-muted hover:qt-bg-muted/80 rounded border border-input transition-colors flex items-center justify-between"
                   disabled={isGenerating}
                 >
                   <span>Other Characters...</span>
@@ -256,8 +256,8 @@ export default function GenerateImageDialog({
                 </button>
 
                 {isDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg qt-shadow-lg max-h-64 overflow-hidden flex flex-col z-10">
-                    <div className="p-2 border-b border-border">
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-background border qt-border-default rounded-lg qt-shadow-lg max-h-64 overflow-hidden flex flex-col z-10">
+                    <div className="p-2 border-b qt-border-default">
                       <input
                         type="text"
                         placeholder="Search..."
@@ -276,7 +276,7 @@ export default function GenerateImageDialog({
                           <span className={`px-1.5 py-0.5 text-xs rounded ${
                             entity.type === 'character'
                               ? 'bg-accent text-accent-foreground'
-                              : 'bg-primary/20 text-primary'
+                              : 'qt-bg-primary/20 text-primary'
                           }`}>
                             {entity.type === 'character' ? 'C' : 'P'}
                           </span>
@@ -318,7 +318,7 @@ export default function GenerateImageDialog({
         {/* Footer */}
         <div className="qt-dialog-footer flex items-center justify-between">
           {!imageProfileId && (
-            <p className="text-sm text-warning">
+            <p className="text-sm qt-text-warning">
               Configure an image profile in Chat Settings to generate images
             </p>
           )}

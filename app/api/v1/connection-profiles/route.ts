@@ -18,7 +18,9 @@ import { requiresBaseUrl, testProviderConnection, validateProviderConfig } from 
 import { ProviderEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { badRequest, serverError, notFound, validationError } from '@/lib/api/responses';
+import { badRequest, serverError, notFound, successResponse, created } from '@/lib/api/responses';
+import { isValidModelClassName } from '@/lib/llm/model-classes';
+import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -45,7 +47,7 @@ const testMessageSchema = z.object({
     .optional(),
 });
 
-  const CONNECTION_PROFILE_POST_ACTIONS = ['test-connection', 'test-message', 'reorder', 'reset-sort'] as const;
+  const CONNECTION_PROFILE_POST_ACTIONS = ['test-connection', 'test-message', 'reorder', 'reset-sort', 'auto-configure'] as const;
   type ConnectionProfilePostAction = typeof CONNECTION_PROFILE_POST_ACTIONS[number];
 
 /**
@@ -117,13 +119,13 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
         matchingTagCount: profile.tags.filter((t) => t && allTagIds.has(t.tagId)).length,
       }));
 
-      return NextResponse.json({
+      return successResponse({
         profiles: profilesWithMatches,
         count: profilesWithMatches.length,
       });
     }
 
-    return NextResponse.json({
+    return successResponse({
       profiles: enrichedProfiles,
       count: enrichedProfiles.length,
     });
@@ -154,6 +156,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       allowWebSearch = false,
       useNativeWebSearch = false,
       allowToolUse = true,
+      modelClass = null,
+      maxContext = null,
     } = body;
 
     // Validation
@@ -179,6 +183,21 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
       if (apiKey.provider !== provider) {
         return badRequest('API key provider does not match profile provider');
+      }
+    }
+
+    // Validate modelClass if provided
+    if (modelClass !== null && modelClass !== undefined && modelClass !== '') {
+      if (!isValidModelClassName(modelClass)) {
+        return badRequest(`Invalid model class: ${modelClass}`);
+      }
+    }
+
+    // Validate maxContext if provided
+    if (maxContext !== null && maxContext !== undefined) {
+      const parsed = typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext;
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        return badRequest('maxContext must be a positive integer');
       }
     }
 
@@ -218,6 +237,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       allowWebSearch,
       useNativeWebSearch,
       allowToolUse,
+      modelClass: modelClass || null,
+      maxContext: maxContext ? (typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext) : null,
       tags: [],
       sortIndex: maxSortIndex + 1,
       totalTokens: 0,
@@ -234,7 +255,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       provider: profile.provider,
     });
 
-    return NextResponse.json({ profile: { ...profile, apiKey } }, { status: 201 });
+    return created({ profile: { ...profile, apiKey } });
   } catch (error) {
     logger.error('[Connection Profiles v1] Error creating profile', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to create connection profile');
@@ -247,73 +268,64 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 async function handleTestConnection(req: NextRequest, context: AuthenticatedContext) {
   const { user, repos } = context;
 
-  try {
-    const body = await req.json();
-    const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body);// Get API key if provided
-    let decryptedKey = '';
-    if (apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId);
+  const body = await req.json();
+  const { provider, apiKeyId, baseUrl } = testConnectionSchema.parse(body);// Get API key if provided
+  let decryptedKey = '';
+  if (apiKeyId) {
+    const apiKey = await repos.connections.findApiKeyById(apiKeyId);
 
-      if (!apiKey) {
-        return notFound('API key');
-      }
-
-      decryptedKey = apiKey.key_value;
+    if (!apiKey) {
+      return notFound('API key');
     }
 
-    // Validate configuration
-    const configValidation = validateProviderConfig(provider, {
-      apiKey: decryptedKey,
-      baseUrl,
-    });
+    decryptedKey = apiKey.key_value;
+  }
 
-    if (!configValidation.valid) {
-      logger.warn('[Connection Profiles v1] Config validation failed', {
-        provider,
-        errors: configValidation.errors,
-      });
-      return NextResponse.json(
-        {
-          valid: false,
-          provider,
-          error: configValidation.errors[0] || 'Configuration validation failed',
-        },
-        { status: 400 }
-      );
-    }
+  // Validate configuration
+  const configValidation = validateProviderConfig(provider, {
+    apiKey: decryptedKey,
+    baseUrl,
+  });
 
-    // Test the connection
-    const result = await testProviderConnection(provider, decryptedKey, baseUrl);
-
-    if (result.valid) {
-      logger.info('[Connection Profiles v1] Connection test successful', { provider });
-      return NextResponse.json({
-        valid: true,
-        provider,
-        message: `Successfully connected to ${provider}`,
-      });
-    }
-
-    logger.warn('[Connection Profiles v1] Connection test failed', {
+  if (!configValidation.valid) {
+    logger.warn('[Connection Profiles v1] Config validation failed', {
       provider,
-      error: result.error,
+      errors: configValidation.errors,
     });
-    return NextResponse.json(
+    return successResponse(
       {
         valid: false,
         provider,
-        error: result.error,
+        error: configValidation.errors[0] || 'Configuration validation failed',
       },
-      { status: 400 }
+      400
     );
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Connection Profiles v1] Error testing connection', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to test connection');
   }
+
+  // Test the connection
+  const result = await testProviderConnection(provider, decryptedKey, baseUrl);
+
+  if (result.valid) {
+    logger.info('[Connection Profiles v1] Connection test successful', { provider });
+    return successResponse({
+      valid: true,
+      provider,
+      message: `Successfully connected to ${provider}`,
+    });
+  }
+
+  logger.warn('[Connection Profiles v1] Connection test failed', {
+    provider,
+    error: result.error,
+  });
+  return successResponse(
+    {
+      valid: false,
+      provider,
+      error: result.error,
+    },
+    400
+  );
 }
 
 /**
@@ -322,104 +334,95 @@ async function handleTestConnection(req: NextRequest, context: AuthenticatedCont
 async function handleTestMessage(req: NextRequest, context: AuthenticatedContext) {
   const { user, repos } = context;
 
-  try {
-    const body = await req.json();
-    const { provider, apiKeyId, baseUrl, modelName, parameters = {} } = testMessageSchema.parse(body);
+  const body = await req.json();
+  const { provider, apiKeyId, baseUrl, modelName, parameters = {} } = testMessageSchema.parse(body);
 
-    // Get API key if provided
-    let decryptedKey = '';
-    if (apiKeyId) {
-      const apiKey = await repos.connections.findApiKeyById(apiKeyId);
+  // Get API key if provided
+  let decryptedKey = '';
+  if (apiKeyId) {
+    const apiKey = await repos.connections.findApiKeyById(apiKeyId);
 
-      if (!apiKey) {
-        return notFound('API key');
-      }
-
-      decryptedKey = apiKey.key_value;
+    if (!apiKey) {
+      return notFound('API key');
     }
 
-    // Validate configuration
-    const configValidation = validateProviderConfig(provider, {
-      apiKey: decryptedKey,
-      baseUrl,
-    });
-    if (!configValidation.valid) {
-      return badRequest(configValidation.errors[0]);
-    }
+    decryptedKey = apiKey.key_value;
+  }
 
-    // Create provider instance
-    const llmProvider = await createLLMProvider(provider, baseUrl);
+  // Validate configuration
+  const configValidation = validateProviderConfig(provider, {
+    apiKey: decryptedKey,
+    baseUrl,
+  });
+  if (!configValidation.valid) {
+    return badRequest(configValidation.errors[0]);
+  }
 
-    // Send test message
-    const testPrompt = 'Hello! Please respond with a brief greeting to confirm the connection is working.';
+  // Create provider instance
+  const llmProvider = await createLLMProvider(provider, baseUrl);
 
-    const requestParams = {
-      model: modelName,
-      messages: [
-        {
-          role: 'user' as const,
-          content: testPrompt,
-        },
-      ],
-      temperature: parameters.temperature,
-      maxTokens: parameters.max_tokens || 50,
-      topP: parameters.top_p,
-    };try {
-      const response = await llmProvider.sendMessage(requestParams, decryptedKey);
+  // Send test message
+  const testPrompt = 'Hello! Please respond with a brief greeting to confirm the connection is working.';
 
-      if (!response) {
-        return NextResponse.json(
-          {
-            success: false,
-            provider,
-            error: 'No response received from model',
-          },
-          { status: 500 }
-        );
-      }
+  const requestParams = {
+    model: modelName,
+    messages: [
+      {
+        role: 'user' as const,
+        content: testPrompt,
+      },
+    ],
+    temperature: parameters.temperature,
+    maxTokens: parameters.max_tokens || 50,
+    topP: parameters.top_p,
+  };try {
+    const response = await llmProvider.sendMessage(requestParams, decryptedKey);
 
-      if (response.content !== undefined && response.content !== null) {
-        const preview = response.content.substring(0, 100);
-        const isTruncated = response.content.length > 100;
-        const suffix = isTruncated ? '...' : '';
-        const message =
-          preview.length === 0
-            ? 'Test message successful! Model responded but returned empty content.'
-            : `Test message successful! Model responded: "${preview}${suffix}"`;
-
-        return NextResponse.json({
-          success: true,
-          provider,
-          modelName,
-          message,
-          responsePreview: response.content.substring(0, 200),
-        });
-      }
-
-      return NextResponse.json(
+    if (!response) {
+      return successResponse(
         {
           success: false,
           provider,
           error: 'No response received from model',
         },
-        { status: 500 }
+        500
       );
-    } catch (error) {return NextResponse.json(
-        {
-          success: false,
-          provider,
-          error: error instanceof Error ? error.message : 'Failed to send test message',
-        },
-        { status: 500 }
-      );
-    }
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
     }
 
-    logger.error('[Connection Profiles v1] Error in test message', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to test message');
+    if (response.content !== undefined && response.content !== null) {
+      const preview = response.content.substring(0, 100);
+      const isTruncated = response.content.length > 100;
+      const suffix = isTruncated ? '...' : '';
+      const message =
+        preview.length === 0
+          ? 'Test message successful! Model responded but returned empty content.'
+          : `Test message successful! Model responded: "${preview}${suffix}"`;
+
+      return successResponse({
+        success: true,
+        provider,
+        modelName,
+        message,
+        responsePreview: response.content.substring(0, 200),
+      });
+    }
+
+    return successResponse(
+      {
+        success: false,
+        provider,
+        error: 'No response received from model',
+      },
+      500
+    );
+  } catch (error) {return successResponse(
+      {
+        success: false,
+        provider,
+        error: error instanceof Error ? error.message : 'Failed to send test message',
+      },
+      500
+    );
   }
 }
 
@@ -463,7 +466,7 @@ async function handleReorder(req: NextRequest, context: AuthenticatedContext) {
       profileCount: order.length,
     });
 
-    return NextResponse.json({ success: true, updated: order.length });
+    return successResponse({ success: true, updated: order.length });
   } catch (error) {
     logger.error('[Connection Profiles v1] Error reordering profiles', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to reorder profiles');
@@ -514,10 +517,44 @@ async function handleResetSort(req: NextRequest, context: AuthenticatedContext) 
       profileCount: updates.length,
     });
 
-    return NextResponse.json({ success: true, updated: updates.length });
+    return successResponse({ success: true, updated: updates.length });
   } catch (error) {
     logger.error('[Connection Profiles v1] Error resetting sort order', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to reset sort order');
+  }
+}
+
+/**
+ * Auto-configure profile suggestions based on provider and model
+ */
+async function handleAutoConfigure(req: NextRequest, context: AuthenticatedContext) {
+  const { user } = context;
+
+  try {
+    const body = await req.json();
+    const { provider, modelName } = body;
+
+    // Validation
+    if (!provider || typeof provider !== 'string') {
+      return badRequest('Provider is required');
+    }
+
+    if (!modelName || typeof modelName !== 'string') {
+      return badRequest('Model name is required');
+    }
+
+    // Call auto-configure service
+    const result = await autoConfigureProfile(provider, modelName, user.id);
+
+    logger.info('[Connection Profiles v1] Auto-configure suggestions generated', {
+      provider,
+      modelName,
+    });
+
+    return successResponse({ suggestions: result });
+  } catch (error) {
+    logger.error('[Connection Profiles v1] Error auto-configuring profile', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to auto-configure profile');
   }
 }
 
@@ -536,6 +573,7 @@ export const POST = createAuthenticatedHandler(async (req, context) => {
     'test-message': () => handleTestMessage(req, context),
     reorder: () => handleReorder(req, context),
     'reset-sort': () => handleResetSort(req, context),
+    'auto-configure': () => handleAutoConfigure(req, context),
   };
 
   return actionHandlers[action]();

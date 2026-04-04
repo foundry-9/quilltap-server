@@ -138,7 +138,7 @@ export default function CreateFolderModal({
         />
       </div>
 
-      <p className="qt-text-xs text-muted-foreground">
+      <p className="qt-text-xs qt-text-secondary">
         Will be created in: <span className="font-mono">{currentFolder}</span>
       </p>
     </BaseModal>

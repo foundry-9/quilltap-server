@@ -109,7 +109,7 @@ export function TimestampConfigCard({
           {TIMESTAMP_MODES.map((mode) => (
             <label
               key={mode.value}
-              className={`flex items-start gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer transition-colors ${
+              className={`flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors ${
                 disabled ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -178,7 +178,7 @@ export function TimestampConfigCard({
                 onChange={(e) => handleCustomFormatChange(e.target.value)}
                 placeholder="e.g., 'PPpp' or 'yyyy-MM-dd HH:mm:ss'"
                 disabled={isDisabled}
-                className="w-full px-3 py-2 border border-border rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 border qt-border-default rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <p className="qt-text-secondary mt-1 text-xs">
                 Uses date-fns format tokens. See{' '}
@@ -217,7 +217,7 @@ export function TimestampConfigCard({
                   }
                 })()}
                 disabled={isDisabled}
-                className="flex-1 px-3 py-2 border border-border rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="flex-1 px-3 py-2 border qt-border-default rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <button
                 type="button"
@@ -231,7 +231,7 @@ export function TimestampConfigCard({
                   }
                 }}
                 disabled={isDisabled}
-                className="px-3 py-2 text-xs border border-border rounded hover:bg-accent transition-colors qt-text-secondary whitespace-nowrap"
+                className="px-3 py-2 text-xs border qt-border-default rounded hover:bg-accent transition-colors qt-text-secondary whitespace-nowrap"
                 title="Set to your browser's detected timezone"
               >
                 Detect
@@ -244,7 +244,7 @@ export function TimestampConfigCard({
                     onChange({ ...currentConfig, timezone: null })
                   }}
                   disabled={isDisabled}
-                  className="px-3 py-2 text-xs border border-border rounded hover:bg-accent transition-colors qt-text-secondary whitespace-nowrap"
+                  className="px-3 py-2 text-xs border qt-border-default rounded hover:bg-accent transition-colors qt-text-secondary whitespace-nowrap"
                   title="Clear timezone override (use server default)"
                 >
                   Clear
@@ -274,7 +274,7 @@ export function TimestampConfigCard({
             <label className="block qt-text-label mb-2">
               Injection Method
             </label>
-            <label className="flex items-start gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer transition-colors">
+            <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors">
               <input
                 type="checkbox"
                 checked={currentConfig.autoPrepend}
@@ -300,7 +300,7 @@ export function TimestampConfigCard({
             <label className="block qt-text-label mb-2">
               Fictional Time
             </label>
-            <label className="flex items-start gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer transition-colors">
+            <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors">
               <input
                 type="checkbox"
                 checked={currentConfig.useFictionalTime}
@@ -335,7 +335,7 @@ export function TimestampConfigCard({
                   handleFictionalBaseTimestampChange(e.target.value)
                 }
                 disabled={isDisabled}
-                className="w-full px-3 py-2 border border-border rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 border qt-border-default rounded bg-background qt-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <p className="qt-text-secondary mt-1 text-xs">
                 Set the initial timestamp for fictional time. It will advance

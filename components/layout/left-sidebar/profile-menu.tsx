@@ -128,7 +128,7 @@ export function ProfileMenu() {
           />
         ) : (
           <div className="qt-left-sidebar-profile-avatar flex items-center justify-center">
-            <ProfileIcon className="w-4 h-4 text-muted-foreground" />
+            <ProfileIcon className="w-4 h-4 qt-text-secondary" />
           </div>
         )}
 
@@ -138,20 +138,20 @@ export function ProfileMenu() {
               <span className="qt-left-sidebar-profile-name">{user.name || 'User'}</span>
               <span className="qt-left-sidebar-profile-email">{user.email}</span>
             </div>
-            <ChevronUpIcon className={`w-4 h-4 text-muted-foreground ml-auto transition-transform ${isOpen ? '' : 'rotate-180'}`} />
+            <ChevronUpIcon className={`w-4 h-4 qt-text-secondary ml-auto transition-transform ${isOpen ? '' : 'rotate-180'}`} />
           </>
         )}
       </button>
 
       {/* Dropdown menu */}
       {isOpen && (
-        <div className={`absolute bottom-full mb-2 bg-popover border border-border rounded-lg qt-shadow-lg overflow-hidden z-50 ${isCollapsed ? 'left-0 w-48' : 'left-0 right-0'}`}>
+        <div className={`absolute bottom-full mb-2 bg-popover border qt-border-default rounded-lg qt-shadow-lg overflow-hidden z-50 ${isCollapsed ? 'left-0 w-48' : 'left-0 right-0'}`}>
           <div className="p-2 space-y-1">
             {/* Profile link */}
             <button
               type="button"
               onClick={handleProfileClick}
-              className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors"
+              className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md hover:qt-bg-muted transition-colors"
             >
               <ProfileIcon className="w-4 h-4" />
               Profile
@@ -161,7 +161,7 @@ export function ProfileMenu() {
             <button
               type="button"
               onClick={handleAboutClick}
-              className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md hover:bg-muted transition-colors"
+              className="flex items-center gap-3 w-full px-3 py-2 text-sm rounded-md hover:qt-bg-muted transition-colors"
             >
               <InfoIcon className="w-4 h-4" />
               About

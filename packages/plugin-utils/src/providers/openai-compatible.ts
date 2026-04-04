@@ -29,12 +29,10 @@
 
 import OpenAI from 'openai';
 import type {
-  LLMProvider,
+  TextProvider,
   LLMParams,
   LLMResponse,
   StreamChunk,
-  ImageGenParams,
-  ImageGenResponse,
   PluginLogger,
 } from '@quilltap/plugin-types';
 import { createPluginLogger } from '../logging';
@@ -92,13 +90,11 @@ export interface OpenAICompatibleProviderConfig {
  * File attachments and image generation are not supported by default,
  * as support varies across OpenAI-compatible implementations.
  */
-export class OpenAICompatibleProvider implements LLMProvider {
+export class OpenAICompatibleProvider implements TextProvider {
   /** File attachments are not supported by default */
   readonly supportsFileAttachments = false;
   /** No MIME types are supported for attachments */
   readonly supportedMimeTypes: string[] = [];
-  /** Image generation is not supported by default */
-  readonly supportsImageGeneration = false;
   /** Web search is not supported */
   readonly supportsWebSearch = false;
 
@@ -439,13 +435,4 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
   }
 
-  /**
-   * Image generation is not supported by default.
-   * @throws Error indicating image generation is not supported
-   */
-  async generateImage(_params: ImageGenParams, _apiKey: string): Promise<ImageGenResponse> {
-    throw new Error(
-      `${this.providerName} image generation support varies by implementation (not yet implemented)`
-    );
-  }
 }

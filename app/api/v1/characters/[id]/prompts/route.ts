@@ -5,11 +5,10 @@
  * POST /api/v1/characters/[id]/prompts - Add a new system prompt to a character
  */
 
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { notFound, serverError, validationError, created } from '@/lib/api/responses';
+import { notFound, serverError, created, successResponse } from '@/lib/api/responses';
 
 const createPromptSchema = z.object({
   name: z.string().min(1).max(100),
@@ -28,7 +27,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Character');
       }
 
-      const prompts = character.systemPrompts || [];return NextResponse.json({ prompts });
+      const prompts = character.systemPrompts || [];return successResponse({ prompts });
     } catch (error) {
       logger.error('[Characters v1] Error fetching character prompts', { characterId }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch character prompts');
@@ -39,44 +38,35 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 // POST /api/v1/characters/[id]/prompts
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   async (request, { user, repos }, { id: characterId }) => {
-    try {
-      const body = await request.json();
-      const validated = createPromptSchema.parse(body);// First verify the character exists and belongs to the user
-      const character = await repos.characters.findById(characterId);
+    const body = await request.json();
+    const validated = createPromptSchema.parse(body);// First verify the character exists and belongs to the user
+    const character = await repos.characters.findById(characterId);
 
-      if (!checkOwnership(character, user.id)) {
-        return notFound('Character');
-      }
+    if (!checkOwnership(character, user.id)) {
+      return notFound('Character');
+    }
 
-      const prompt = await repos.characters.addSystemPrompt(characterId, {
-        name: validated.name,
-        content: validated.content,
-        isDefault: validated.isDefault,
-      });
+    const prompt = await repos.characters.addSystemPrompt(characterId, {
+      name: validated.name,
+      content: validated.content,
+      isDefault: validated.isDefault,
+    });
 
-      if (!prompt) {
-        logger.error('[Characters v1] Failed to add system prompt to character', {
-          characterId,
-          userId: user.id,
-        });
-        return serverError('Failed to add system prompt');
-      }
-
-      logger.info('[Characters v1] System prompt added to character', {
+    if (!prompt) {
+      logger.error('[Characters v1] Failed to add system prompt to character', {
         characterId,
         userId: user.id,
-        promptId: prompt.id,
-        promptName: validated.name,
       });
-
-      return created({ prompt });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        logger.warn('[Characters v1] Invalid character prompt data', { errors: error.issues });
-        return validationError(error);
-      }
-      logger.error('[Characters v1] Error adding character prompt', {}, error instanceof Error ? error : undefined);
-      return serverError('Failed to add character prompt');
+      return serverError('Failed to add system prompt');
     }
+
+    logger.info('[Characters v1] System prompt added to character', {
+      characterId,
+      userId: user.id,
+      promptId: prompt.id,
+      promptName: validated.name,
+    });
+
+    return created({ prompt });
   }
 );

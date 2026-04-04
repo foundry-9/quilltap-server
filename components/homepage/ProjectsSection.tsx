@@ -19,7 +19,7 @@ export function ProjectsSection({ projects }: ProjectsSectionProps) {
       </div>
       <div className="qt-homepage-section-content">
         {projects.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground">
+          <div className="text-center py-6 qt-text-secondary">
             <p className="text-sm">No projects yet</p>
             <p className="text-xs">Create a project to organize your chats</p>
           </div>

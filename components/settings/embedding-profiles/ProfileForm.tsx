@@ -155,7 +155,7 @@ export function ProfileForm({
 
   return (
     <>
-    <div className="border border-border rounded-lg p-6 bg-card">
+    <div className="border qt-border-default rounded-lg p-6 qt-bg-card">
       <h3 className="text-md font-semibold text-foreground mb-4">
         {profile?.id ? 'Edit Profile' : 'Create New Profile'}
       </h3>
@@ -198,7 +198,7 @@ export function ProfileForm({
             <option value="OLLAMA">Ollama (Local)</option>
           </select>
           {isBuiltin && (
-            <p className="mt-1 qt-text-xs text-info">
+            <p className="mt-1 qt-text-xs qt-text-info">
               Built-in embeddings use TF-IDF with BM25 enhancement. No API key required, works offline.
               The vocabulary will be automatically built from your memories.
             </p>
@@ -225,7 +225,7 @@ export function ProfileForm({
               ))}
             </select>
             {filteredApiKeys.length === 0 && (
-              <p className="mt-1 qt-text-xs text-warning">
+              <p className="mt-1 qt-text-xs qt-text-warning">
                 No {form.formData.provider} API keys found. Add one in the API Keys tab first.
               </p>
             )}
@@ -378,7 +378,7 @@ export function ProfileForm({
         embedded with a different model and may not search correctly until they
         are re-embedded with the new profile.
       </p>
-      <p className="mt-3 text-muted-foreground qt-text-small">
+      <p className="mt-3 qt-text-secondary qt-text-small">
         This will queue a background job to re-embed all character memories.
         You can monitor progress in the Tasks Queue under Data &amp; System settings.
       </p>

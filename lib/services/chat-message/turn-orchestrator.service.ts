@@ -8,6 +8,13 @@ import {
 } from '@/lib/chat/turn-manager'
 import type { Character, MessageEvent } from '@/lib/schemas/types'
 import type { getRepositories } from '@/lib/repositories/factory'
+import type { ProcessMessageResult } from './types'
+import {
+  encodeTurnStartEvent,
+  encodeTurnCompleteEvent,
+  encodeChainCompleteEvent,
+  safeEnqueue,
+} from './streaming.service'
 
 export interface ChainConfig {
   maxChainDepth: number      // default 20
@@ -216,5 +223,118 @@ export async function persistTurnParticipantId(
       participantId,
       error: error instanceof Error ? error.message : String(error),
     })
+  }
+}
+
+export interface ExecuteTurnChainOptions {
+  repos: ReturnType<typeof getRepositories>
+  chatId: string
+  userId: string
+  initialResult: ProcessMessageResult
+  initialContinueMode: boolean
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+  processChainedMessage: (options: {
+    continueMode: true
+    respondingParticipantId: string
+  }) => Promise<ProcessMessageResult>
+  decideNextTurn?: typeof shouldChainNext
+  persistTurnParticipant?: typeof persistTurnParticipantId
+}
+
+/**
+ * Continue multi-character turn chains inside a single SSE stream.
+ */
+export async function executeTurnChain({
+  repos,
+  chatId,
+  userId,
+  initialResult,
+  initialContinueMode,
+  controller,
+  encoder,
+  processChainedMessage,
+  decideNextTurn = shouldChainNext,
+  persistTurnParticipant = persistTurnParticipantId,
+}: ExecuteTurnChainOptions): Promise<void> {
+  if (!initialResult.isMultiCharacter || !initialResult.hasContent || initialResult.isPaused) {
+    return
+  }
+
+  const chainStartTime = Date.now()
+  let chainDepth = 0
+
+  const effectiveUserParticipantId = initialResult.userParticipantId
+    ?? (initialContinueMode ? null : '__user__')
+
+  while (true) {
+    const decision = await decideNextTurn(
+      repos,
+      chatId,
+      effectiveUserParticipantId,
+      chainDepth,
+      chainStartTime,
+      DEFAULT_CHAIN_CONFIG
+    )
+
+    if (!decision.chain || !decision.participantId) {
+      const finalNextSpeaker = decision.participantId || null
+      await persistTurnParticipant(repos, chatId, finalNextSpeaker)
+
+      safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+        reason: decision.reason as 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete',
+        nextSpeakerId: finalNextSpeaker,
+        chainDepth,
+      }))
+      break
+    }
+
+    chainDepth++
+
+    safeEnqueue(controller, encodeTurnStartEvent(encoder, {
+      participantId: decision.participantId,
+      characterName: decision.characterName || 'Unknown',
+      chainDepth,
+    }))
+
+    try {
+      const chainResult = await processChainedMessage({
+        continueMode: true,
+        respondingParticipantId: decision.participantId,
+      })
+
+      safeEnqueue(controller, encodeTurnCompleteEvent(encoder, {
+        participantId: decision.participantId,
+        messageId: chainResult.messageId || '',
+        chainDepth,
+      }))
+
+      if (!chainResult.hasContent) {
+        logger.info('[TurnOrchestrator] Chain stopped: empty response', { chatId, chainDepth, userId })
+        await persistTurnParticipant(repos, chatId, null)
+        safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+          reason: 'error',
+          nextSpeakerId: null,
+          chainDepth,
+        }))
+        break
+      }
+    } catch (chainError) {
+      logger.error('[TurnOrchestrator] Chain error, stopping', {
+        chatId,
+        chainDepth,
+        userId,
+        error: chainError instanceof Error ? chainError.message : String(chainError),
+      })
+
+      await repos.chats.update(chatId, { isPaused: true })
+      await persistTurnParticipant(repos, chatId, null)
+      safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+        reason: 'error',
+        nextSpeakerId: null,
+        chainDepth,
+      }))
+      break
+    }
   }
 }

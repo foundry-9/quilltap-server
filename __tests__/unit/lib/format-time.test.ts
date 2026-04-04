@@ -12,10 +12,14 @@ describe('formatMessageTime', () => {
     return date.toISOString();
   };
 
+  // Pre-compute timestamps before fake timers replace Date
+  const BASE_TIME = new Date('2026-01-22T12:00:00Z').getTime(); // 1769083200000
+
   beforeEach(() => {
     // Mock Date.now() to have consistent test results
+    // Pass timestamp as number to avoid instanceof issues with fake timers
     jest.useFakeTimers();
-    jest.setSystemTime(new Date('2026-01-22T12:00:00Z'));
+    jest.setSystemTime(BASE_TIME);
   });
 
   afterEach(() => {
@@ -79,35 +83,35 @@ describe('formatMessageTime', () => {
 
   describe('older messages (not today)', () => {
     it('should show date for yesterday', () => {
-      jest.setSystemTime(new Date('2026-01-22T12:00:00Z'));
+      jest.setSystemTime(new Date('2026-01-22T12:00:00Z').getTime());
       const yesterday = new Date('2026-01-21T12:00:00Z').toISOString();
       const result = formatMessageTime(yesterday);
       expect(result).toBe('Jan 21');
     });
 
     it('should show date for last week', () => {
-      jest.setSystemTime(new Date('2026-01-22T12:00:00Z'));
+      jest.setSystemTime(new Date('2026-01-22T12:00:00Z').getTime());
       const lastWeek = new Date('2026-01-15T12:00:00Z').toISOString();
       const result = formatMessageTime(lastWeek);
       expect(result).toBe('Jan 15');
     });
 
     it('should show date without year for current year', () => {
-      jest.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+      jest.setSystemTime(new Date('2026-06-15T12:00:00Z').getTime());
       const earlier = new Date('2026-03-10T12:00:00Z').toISOString();
       const result = formatMessageTime(earlier);
       expect(result).toBe('Mar 10');
     });
 
     it('should include year for previous year', () => {
-      jest.setSystemTime(new Date('2026-01-22T12:00:00Z'));
+      jest.setSystemTime(new Date('2026-01-22T12:00:00Z').getTime());
       const lastYear = new Date('2025-12-25T12:00:00Z').toISOString();
       const result = formatMessageTime(lastYear);
       expect(result).toBe('Dec 25, 2025');
     });
 
     it('should include year for much older messages', () => {
-      jest.setSystemTime(new Date('2026-01-22T12:00:00Z'));
+      jest.setSystemTime(new Date('2026-01-22T12:00:00Z').getTime());
       const old = new Date('2023-05-10T12:00:00Z').toISOString();
       const result = formatMessageTime(old);
       expect(result).toBe('May 10, 2023');
@@ -119,7 +123,7 @@ describe('formatMessageTime', () => {
       // Test that crossing calendar day boundary shows date, not relative time
       // Use local timezone to ensure consistent behavior across environments
       const now = new Date('2026-01-22T00:05:00');
-      jest.setSystemTime(now);
+      jest.setSystemTime(now.getTime());
       // Create a date from yesterday (local time) - clearly a different calendar day
       const yesterday = new Date('2026-01-21T23:50:00');
       const result = formatMessageTime(yesterday.toISOString());
@@ -130,7 +134,7 @@ describe('formatMessageTime', () => {
     it('should handle messages from earlier today', () => {
       // Test that messages from earlier today show relative time
       const now = new Date('2026-01-22T12:00:00');
-      jest.setSystemTime(now);
+      jest.setSystemTime(now.getTime());
       // Midnight of the same calendar day (local time)
       const midnight = new Date('2026-01-22T00:00:00');
       const result = formatMessageTime(midnight.toISOString());
@@ -152,7 +156,7 @@ describe('formatMessageTime', () => {
     });
 
     it('should handle leap year dates', () => {
-      jest.setSystemTime(new Date('2024-03-01T12:00:00Z'));
+      jest.setSystemTime(new Date('2024-03-01T12:00:00Z').getTime());
       const leapDay = new Date('2024-02-29T12:00:00Z').toISOString();
       const result = formatMessageTime(leapDay);
       expect(result).toBe('Feb 29');

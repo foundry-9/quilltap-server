@@ -5,9 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, validationError, serverError } from '@/lib/api/responses';
+import { notFound, serverError } from '@/lib/api/responses';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { avatarOverrideSchema, removeAvatarSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
@@ -22,7 +21,7 @@ export async function handleGetAvatars(
   try {
 
     const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
+    if (!chat) {
       return notFound('Chat');
     }
 
@@ -66,61 +65,52 @@ export async function handleSetAvatar(
   chatId: string,
   { user, repos }: AuthenticatedContext
 ): Promise<NextResponse> {
-  try {
-    const body = await req.json();
-    const { characterId, imageId } = avatarOverrideSchema.parse(body);
+  const body = await req.json();
+  const { characterId, imageId } = avatarOverrideSchema.parse(body);
 
-
-    // Verify character exists and belongs to user
-    const character = await repos.characters.findById(characterId);
-    if (!character || character.userId !== user.id) {
-      return notFound('Character');
-    }
-
-    // Verify image exists in repository and belongs to user
-    const fileEntry = await repos.files.findById(imageId);
-    if (!fileEntry || fileEntry.userId !== user.id) {
-      return notFound('Image');
-    }
-
-    // Update character's avatarOverrides array
-    const existingOverrides = character.avatarOverrides || [];
-    const overrideIndex = existingOverrides.findIndex(o => o.chatId === chatId);
-
-    let updatedOverrides;
-    if (overrideIndex >= 0) {
-      // Update existing override
-      updatedOverrides = [...existingOverrides];
-      updatedOverrides[overrideIndex] = { chatId, imageId };
-    } else {
-      // Add new override
-      updatedOverrides = [...existingOverrides, { chatId, imageId }];
-    }
-
-    await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
-
-    const override = {
-      chatId,
-      characterId,
-      imageId,
-      character: { id: character.id, name: character.name },
-      image: {
-        id: fileEntry.id,
-        filepath: getFilePath(fileEntry),
-        url: null,
-      },
-    };
-
-    logger.info('[Chats v1] Avatar override set', { chatId, characterId, imageId });
-
-    return NextResponse.json({ data: override });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-    logger.error('[Chats v1] Error setting avatar override', { chatId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to set avatar override');
+  // Verify character exists and belongs to user
+  const character = await repos.characters.findById(characterId);
+  if (!character) {
+    return notFound('Character');
   }
+
+  // Verify image exists in repository and belongs to user
+  const fileEntry = await repos.files.findById(imageId);
+  if (!fileEntry) {
+    return notFound('Image');
+  }
+
+  // Update character's avatarOverrides array
+  const existingOverrides = character.avatarOverrides || [];
+  const overrideIndex = existingOverrides.findIndex(o => o.chatId === chatId);
+
+  let updatedOverrides;
+  if (overrideIndex >= 0) {
+    // Update existing override
+    updatedOverrides = [...existingOverrides];
+    updatedOverrides[overrideIndex] = { chatId, imageId };
+  } else {
+    // Add new override
+    updatedOverrides = [...existingOverrides, { chatId, imageId }];
+  }
+
+  await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
+
+  const override = {
+    chatId,
+    characterId,
+    imageId,
+    character: { id: character.id, name: character.name },
+    image: {
+      id: fileEntry.id,
+      filepath: getFilePath(fileEntry),
+      url: null,
+    },
+  };
+
+  logger.info('[Chats v1] Avatar override set', { chatId, characterId, imageId });
+
+  return NextResponse.json({ data: override });
 }
 
 /**
@@ -131,31 +121,22 @@ export async function handleRemoveAvatar(
   chatId: string,
   { user, repos }: AuthenticatedContext
 ): Promise<NextResponse> {
-  try {
-    const body = await req.json();
-    const { characterId } = removeAvatarSchema.parse(body);
+  const body = await req.json();
+  const { characterId } = removeAvatarSchema.parse(body);
 
-
-    // Verify character exists and belongs to user
-    const character = await repos.characters.findById(characterId);
-    if (!character || character.userId !== user.id) {
-      return notFound('Character');
-    }
-
-    // Remove avatar override from character's avatarOverrides array
-    const existingOverrides = character.avatarOverrides || [];
-    const updatedOverrides = existingOverrides.filter(o => o.chatId !== chatId);
-
-    await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
-
-    logger.info('[Chats v1] Avatar override removed', { chatId, characterId });
-
-    return NextResponse.json({ data: { success: true } });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-    logger.error('[Chats v1] Error removing avatar override', { chatId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to remove avatar override');
+  // Verify character exists and belongs to user
+  const character = await repos.characters.findById(characterId);
+  if (!character) {
+    return notFound('Character');
   }
+
+  // Remove avatar override from character's avatarOverrides array
+  const existingOverrides = character.avatarOverrides || [];
+  const updatedOverrides = existingOverrides.filter(o => o.chatId !== chatId);
+
+  await repos.characters.update(characterId, { avatarOverrides: updatedOverrides });
+
+  logger.info('[Chats v1] Avatar override removed', { chatId, characterId });
+
+  return NextResponse.json({ data: { success: true } });
 }

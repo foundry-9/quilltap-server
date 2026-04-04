@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { formatMessageTime } from '@/lib/format-time'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
+import { copyImageToClipboard } from '@/lib/clipboard-utils'
 
 interface ToolMessageProps {
   readonly message: {
@@ -62,17 +63,11 @@ async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 /**
- * Copy image to clipboard from URL
+ * Copy image to clipboard from URL (wrapper for local use with boolean return)
  */
-async function copyImageToClipboard(imageUrl: string): Promise<boolean> {
+async function copyImageToClipboardLocal(imageUrl: string): Promise<boolean> {
   try {
-    const response = await fetch(imageUrl)
-    const blob = await response.blob()
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        [blob.type]: blob,
-      }),
-    ])
+    await copyImageToClipboardLocal(imageUrl)
     return true
   } catch {
     return false
@@ -155,89 +150,89 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
     generate_image: {
       displayName: 'Image Generation',
       icon: '🎨',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     search_memories: {
       displayName: 'Memory Search',
       icon: '🧠',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     search_web: {
       displayName: 'Web Search',
       icon: '🔍',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     project_info: {
       displayName: 'Project Info',
       icon: '📋',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     file_management: {
       displayName: 'File Management',
       icon: '📁',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     rng: {
       displayName: 'Random Number Generator',
       icon: '🎲',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     state: {
       displayName: 'State Manager',
       icon: '🗃️',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     help_search: {
       displayName: 'Help Search',
       icon: '📖',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     help_settings: {
       displayName: 'Settings Reader',
       icon: '⚙️',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     help_navigate: {
       displayName: 'Navigation',
       icon: '🧭',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     chdir: {
       displayName: 'Change Directory',
       icon: '📂',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     exec_sync: {
       displayName: 'Shell Command',
       icon: '🔧',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     exec_async: {
       displayName: 'Background Command',
       icon: '🔧',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     async_result: {
       displayName: 'Process Status',
       icon: '🔧',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     sudo_sync: {
       displayName: 'Sudo Command',
       icon: '🔐',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
     cp_host: {
       displayName: 'File Transfer',
       icon: '📋',
-      bgColor: 'bg-muted border border-border',
+      bgColor: 'qt-bg-muted border qt-border-default',
     },
   }
 
   const info = toolInfo[toolData.toolName!] || {
     displayName: toolData.toolName,
     icon: '⚙️',
-    bgColor: 'bg-muted border border-border',
+    bgColor: 'qt-bg-muted border qt-border-default',
   }
 
   // Copy handlers
@@ -263,7 +258,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
 
   const handleCopyImage = useCallback(async (filepath: string) => {
     const imageUrl = filepath.startsWith('/') ? filepath : `/${filepath}`
-    const success = await copyImageToClipboard(imageUrl)
+    const success = await copyImageToClipboardLocal(imageUrl)
     if (success) {
       showSuccessToast('Image copied to clipboard')
     } else {
@@ -278,9 +273,9 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   // Embedded layout - more compact, no avatar
   if (embedded) {
     return (
-      <div className="qt-chat-tool-embedded rounded-lg border border-border bg-muted/50 overflow-hidden">
+      <div className="qt-chat-tool-embedded rounded-lg border qt-border-default qt-bg-muted/50 overflow-hidden">
         {/* Tool header - compact */}
-        <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border">
+        <div className="flex items-center gap-2 px-3 py-2 qt-bg-muted/30 border-b qt-border-default">
           <span className="text-base">{info.icon}</span>
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {showCharacterName && (
@@ -307,7 +302,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
             {toolData.success ? 'Success' : 'Failed'}
           </span>
           {toolData.provider && toolData.model && (
-            <span className="qt-text-label-xs text-muted-foreground hidden sm:inline">
+            <span className="qt-text-label-xs qt-text-secondary hidden sm:inline">
               {toolData.provider} {toolData.model}
             </span>
           )}
@@ -327,13 +322,13 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                   <span>Request</span>
                 </button>
                 {!showRequest && (
-                  <span className="qt-text-xs text-muted-foreground truncate flex-1">
+                  <span className="qt-text-xs qt-text-secondary truncate flex-1">
                     {requestPreview}
                   </span>
                 )}
                 <button
                   onClick={handleCopyRequest}
-                  className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  className="p-1 qt-text-secondary hover:text-foreground transition-colors"
                   title="Copy request"
                   type="button"
                 >
@@ -343,7 +338,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                 </button>
               </div>
               {showRequest && (
-                <div className="mt-2 bg-background rounded p-2 border border-border">
+                <div className="mt-2 bg-background rounded p-2 border qt-border-default">
                   <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words">
                     {formatRequestContent(toolData)}
                   </pre>
@@ -365,19 +360,19 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                   <span>Response</span>
                 </button>
                 {!showResponse && toolData.result && (
-                  <span className="qt-text-xs text-muted-foreground truncate flex-1">
+                  <span className="qt-text-xs qt-text-secondary truncate flex-1">
                     {responsePreview}
                   </span>
                 )}
                 {!showResponse && toolData.toolName === 'generate_image' && imageAttachments.length > 0 && (
-                  <span className="qt-text-xs text-muted-foreground">
+                  <span className="qt-text-xs qt-text-secondary">
                     {imageAttachments.length} image{imageAttachments.length > 1 ? 's' : ''}
                   </span>
                 )}
                 {toolData.result && (
                   <button
                     onClick={handleCopyResponse}
-                    className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1 qt-text-secondary hover:text-foreground transition-colors"
                     title="Copy response"
                     type="button"
                   >
@@ -388,15 +383,15 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                 )}
               </div>
               {showResponse && (
-                <div className="mt-2 bg-background rounded p-2 border border-border">
+                <div className="mt-2 bg-background rounded p-2 border qt-border-default">
                   {/* Image thumbnails for generate_image */}
                   {toolData.toolName === 'generate_image' && imageAttachments.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
                       {imageAttachments.map((attachment) => (
                         <div key={attachment.id} className="relative group/thumb">
                           {missingImages.has(attachment.id) ? (
-                            <div className="w-16 h-16 flex items-center justify-center bg-muted rounded">
-                              <svg className="w-6 h-6 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="w-16 h-16 flex items-center justify-center qt-bg-muted rounded">
+                              <svg className="w-6 h-6 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
                             </div>
@@ -407,7 +402,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                                   const normalizedPath = attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`
                                   onImageClick?.(normalizedPath, attachment.filename, attachment.id)
                                 }}
-                                className="block rounded overflow-hidden border border-border hover:border-primary/50 transition-colors"
+                                className="block rounded overflow-hidden border qt-border-default hover:qt-border-primary/50 transition-colors"
                                 type="button"
                               >
                                 <img
@@ -419,7 +414,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                               </button>
                               <button
                                 onClick={() => handleCopyImage(attachment.filepath)}
-                                className="absolute -top-1 -right-1 p-1 bg-background border border-border rounded qt-shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                                className="absolute -top-1 -right-1 p-1 bg-background border qt-border-default rounded qt-shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                                 title="Copy image"
                                 type="button"
                               >
@@ -452,7 +447,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   return (
     <div className="qt-chat-message-row-tool">
       {/* Tool icon avatar with tooltip */}
-      <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-muted text-lg relative group cursor-help">
+      <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full qt-bg-muted text-lg relative group cursor-help">
 
         {info.icon}
         {toolData.provider && toolData.model && (
@@ -510,13 +505,13 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                   <span>Tool Request</span>
                 </button>
                 {!showRequest && (
-                  <span className="qt-text-xs text-muted-foreground truncate flex-1">
+                  <span className="qt-text-xs qt-text-secondary truncate flex-1">
                     {requestPreview}
                   </span>
                 )}
                 <button
                   onClick={handleCopyRequest}
-                  className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  className="p-1 qt-text-secondary hover:text-foreground transition-colors"
                   title="Copy request"
                   type="button"
                 >
@@ -526,7 +521,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                 </button>
               </div>
               {showRequest && (
-                <div className="mt-2 bg-background rounded p-3 border border-border">
+                <div className="mt-2 bg-background rounded p-3 border qt-border-default">
                   <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words">
                     {formatRequestContent(toolData)}
                   </pre>
@@ -549,19 +544,19 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                   <span>Tool Response</span>
                 </button>
                 {!showResponse && toolData.result && (
-                  <span className="qt-text-xs text-muted-foreground truncate flex-1">
+                  <span className="qt-text-xs qt-text-secondary truncate flex-1">
                     {responsePreview}
                   </span>
                 )}
                 {!showResponse && toolData.toolName === 'generate_image' && imageAttachments.length > 0 && !toolData.result && (
-                  <span className="qt-text-xs text-muted-foreground">
+                  <span className="qt-text-xs qt-text-secondary">
                     {imageAttachments.length} image{imageAttachments.length > 1 ? 's' : ''}
                   </span>
                 )}
                 {toolData.result && (
                   <button
                     onClick={handleCopyResponse}
-                    className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1 qt-text-secondary hover:text-foreground transition-colors"
                     title="Copy response"
                     type="button"
                   >
@@ -572,15 +567,15 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                 )}
               </div>
               {showResponse && (
-                <div className="mt-2 bg-background rounded p-3 border border-border tool-response-content">
+                <div className="mt-2 bg-background rounded p-3 border qt-border-default tool-response-content">
                   {/* For image generation, show image thumbnails */}
                   {toolData.toolName === 'generate_image' && imageAttachments.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-3">
                       {imageAttachments.map((attachment) => (
-                        <div key={attachment.id} className="relative group/thumb overflow-hidden rounded border border-border hover:border-primary/50 transition-colors">
+                        <div key={attachment.id} className="relative group/thumb overflow-hidden rounded border qt-border-default hover:qt-border-primary/50 transition-colors">
                           {missingImages.has(attachment.id) ? (
-                            <div className="w-20 h-20 flex items-center justify-center bg-muted">
-                              <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="w-20 h-20 flex items-center justify-center qt-bg-muted">
+                              <svg className="w-8 h-8 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
@@ -599,7 +594,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                                 className="relative group/thumb overflow-hidden rounded cursor-pointer block"
                                 type="button"
                               >
-                                <div className="relative w-20 h-20 bg-muted">
+                                <div className="relative w-20 h-20 qt-bg-muted">
                                   <img
                                     src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
                                     alt={attachment.filename}
@@ -615,7 +610,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                               </button>
                               <button
                                 onClick={() => handleCopyImage(attachment.filepath)}
-                                className="absolute -top-1 -right-1 p-1 bg-background border border-border rounded qt-shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity z-10"
+                                className="absolute -top-1 -right-1 p-1 bg-background border qt-border-default rounded qt-shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity z-10"
                                 title="Copy image"
                                 type="button"
                               >
@@ -644,10 +639,10 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
           {toolData.toolName !== 'generate_image' && imageAttachments.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3">
               {imageAttachments.map((attachment) => (
-                <div key={attachment.id} className="relative group/thumb overflow-hidden rounded border border-border hover:border-primary/50 transition-colors">
+                <div key={attachment.id} className="relative group/thumb overflow-hidden rounded border qt-border-default hover:qt-border-primary/50 transition-colors">
                   {missingImages.has(attachment.id) ? (
-                    <div className="w-20 h-20 flex items-center justify-center bg-muted">
-                      <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-20 h-20 flex items-center justify-center qt-bg-muted">
+                      <svg className="w-8 h-8 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -666,7 +661,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                       className="relative group/thumb overflow-hidden rounded cursor-pointer block"
                       type="button"
                     >
-                      <div className="relative w-20 h-20 bg-muted">
+                      <div className="relative w-20 h-20 qt-bg-muted">
                         {missingImages.has(attachment.id) ? (
                           <DeletedImagePlaceholder
                             imageId={attachment.id}

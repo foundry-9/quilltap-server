@@ -92,7 +92,7 @@ export function SidebarSection({
         <h3 className="qt-left-sidebar-section-title">{title}</h3>
         {showCollapseToggle && (
           <ChevronIcon
-            className="w-3 h-3 text-muted-foreground flex-shrink-0"
+            className="w-3 h-3 qt-text-secondary flex-shrink-0"
             rotated={!isSectionCollapsed}
           />
         )}

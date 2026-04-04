@@ -113,7 +113,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
             </h2>
             <button
               onClick={onClose}
-              className="text-muted-foreground hover:text-foreground"
+              className="qt-text-secondary hover:text-foreground"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -126,7 +126,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
         </div>
 
         {/* Options */}
-        <div className="qt-dialog-body border-b border-border space-y-4">
+        <div className="qt-dialog-body border-b qt-border-default space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="qt-label mb-1">
@@ -174,7 +174,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
               min={0}
               max={0.7}
               step={0.1}
-              className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
+              className="w-full h-2 qt-bg-muted rounded-lg appearance-none cursor-pointer"
             />
             <div className="flex justify-between qt-text-xs mt-1">
               <span>0%</span>

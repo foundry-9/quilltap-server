@@ -84,7 +84,7 @@ export function SpeakerSelector({
           flex items-center gap-2 px-3 py-2 rounded-lg transition-colors
           ${disabled
             ? 'opacity-50 cursor-not-allowed'
-            : 'qt-button qt-button-secondary hover:bg-muted'
+            : 'qt-button qt-button-secondary hover:qt-bg-muted'
           }
         `}
         aria-expanded={isOpen}
@@ -130,8 +130,8 @@ export function SpeakerSelector({
                   className={`
                     w-full flex items-center gap-3 px-3 py-2 text-left transition-colors
                     ${isActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'hover:bg-muted'
+                      ? 'qt-bg-primary/10 text-primary'
+                      : 'hover:qt-bg-muted'
                     }
                   `}
                   role="option"

@@ -56,17 +56,17 @@ function ProgressStep({
     (stepKey === 'generating' && currentStep === null);
 
   return (
-    <div className={`flex items-center gap-3 py-2 px-3 rounded-md transition-colors ${isActive ? 'bg-primary/10' : isDone ? 'opacity-60' : 'opacity-40'}`}>
+    <div className={`flex items-center gap-3 py-2 px-3 rounded-md transition-colors ${isActive ? 'qt-bg-primary/10' : isDone ? 'opacity-60' : 'opacity-40'}`}>
       <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
         {isActive ? (
           <SpinnerIcon className="w-4 h-4 text-primary" />
         ) : isDone ? (
           <CheckIcon className="w-4 h-4 qt-text-success" />
         ) : (
-          <div className="w-2 h-2 rounded-full bg-muted-foreground" />
+          <div className="w-2 h-2 rounded-full qt-bg-muted-foreground" />
         )}
       </div>
-      <span className={`text-sm ${isActive ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+      <span className={`text-sm ${isActive ? 'text-foreground font-medium' : 'qt-text-secondary'}`}>
         {label}
       </span>
     </div>
@@ -190,14 +190,14 @@ export function CharacterOptimizerModal({
               </div>
 
               {profiles.length === 0 ? (
-                <div className="qt-card p-4 border-destructive/30 bg-destructive/5">
-                  <div className="flex items-center gap-2 text-destructive mb-2">
+                <div className="qt-card p-4 qt-border-destructive/30 qt-bg-destructive/5">
+                  <div className="flex items-center gap-2 qt-text-destructive mb-2">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                     <span className="text-sm font-semibold">No Connection Profile Available</span>
                   </div>
-                  <p className="qt-body-sm text-muted-foreground">
+                  <p className="qt-body-sm qt-text-secondary">
                     The refinement proceedings require an AI connection profile to be configured.
                     Please visit The Foundry&rsquo;s Connection Profiles section to establish one
                     before proceeding.
@@ -242,7 +242,7 @@ export function CharacterOptimizerModal({
                     onChange={(e) => setMaxMemories(Number(e.target.value))}
                     className="qt-range w-full accent-primary"
                   />
-                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <div className="flex justify-between text-[10px] qt-text-secondary">
                     <span>5</span>
                     <span>200</span>
                   </div>
@@ -255,7 +255,7 @@ export function CharacterOptimizerModal({
                   <summary className="px-4 py-3 cursor-pointer text-sm font-medium qt-label select-none">
                     Filter Memories
                   </summary>
-                  <div className="px-4 pb-4 flex flex-col gap-4 border-t border-border pt-3">
+                  <div className="px-4 pb-4 flex flex-col gap-4 border-t qt-border-default pt-3">
                     {/* Text / semantic search */}
                     <div className="flex flex-col gap-2">
                       <label className="qt-label" htmlFor="optimizer-search-query">
@@ -270,7 +270,7 @@ export function CharacterOptimizerModal({
                         onChange={(e) => setSearchQuery(e.target.value)}
                         maxLength={500}
                       />
-                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <label className="flex items-center gap-2 text-sm qt-text-secondary">
                         <input
                           type="checkbox"
                           className="qt-checkbox"
@@ -355,10 +355,10 @@ export function CharacterOptimizerModal({
 
               {optimizer.noSuggestionsMessage && !optimizer.loading && (
                 <div className="qt-card p-4 text-center flex flex-col items-center gap-3">
-                  <svg className="w-10 h-10 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-10 h-10 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <p className="qt-body-sm text-muted-foreground leading-relaxed max-w-sm">
+                  <p className="qt-body-sm qt-text-secondary leading-relaxed max-w-sm">
                     {optimizer.noSuggestionsMessage}
                   </p>
                   <button type="button" onClick={handleClose} className="qt-button-secondary qt-button-sm">
@@ -368,8 +368,8 @@ export function CharacterOptimizerModal({
               )}
 
               {optimizer.error && (
-                <div className="qt-card p-3 border-destructive/30 bg-destructive/5">
-                  <p className="text-sm text-destructive">{optimizer.error}</p>
+                <div className="qt-card p-3 qt-border-destructive/30 qt-bg-destructive/5">
+                  <p className="text-sm qt-text-destructive">{optimizer.error}</p>
                 </div>
               )}
             </div>
@@ -395,9 +395,9 @@ export function CharacterOptimizerModal({
                             ? 'w-6 h-2.5 bg-primary'
                             : hasDecision
                             ? decision === 'rejected'
-                              ? 'w-2.5 h-2.5 bg-destructive/60'
+                              ? 'w-2.5 h-2.5 qt-bg-destructive/60'
                               : 'w-2.5 h-2.5 bg-green-500/60'
-                            : 'w-2.5 h-2.5 bg-muted-foreground/30 hover:bg-muted-foreground/60'
+                            : 'w-2.5 h-2.5 qt-bg-muted-foreground/30 hover:qt-bg-muted-foreground/60'
                         }`}
                       />
                     );
@@ -465,8 +465,8 @@ export function CharacterOptimizerModal({
               )}
 
               {optimizer.error && !applySuccess && (
-                <div className="qt-card p-3 border-destructive/30 bg-destructive/5">
-                  <p className="text-sm text-destructive">{optimizer.error}</p>
+                <div className="qt-card p-3 qt-border-destructive/30 qt-bg-destructive/5">
+                  <p className="text-sm qt-text-destructive">{optimizer.error}</p>
                 </div>
               )}
             </>

@@ -38,18 +38,18 @@ export function ConfirmationStep({
       </div>
 
       {/* Summary */}
-      <div className="p-4 rounded-lg border border-border bg-background">
+      <div className="p-4 rounded-lg border qt-border-default bg-background">
         <div className="space-y-3">
           <div>
             <div className="text-sm qt-text-secondary">Find:</div>
-            <div className="font-mono qt-text-primary bg-muted px-2 py-1 rounded mt-1">
+            <div className="font-mono qt-text-primary qt-bg-muted px-2 py-1 rounded mt-1">
               &quot;{searchText}&quot;
             </div>
           </div>
           <div>
             <div className="text-sm qt-text-secondary">Replace with:</div>
-            <div className="font-mono qt-text-primary bg-muted px-2 py-1 rounded mt-1">
-              {replaceText ? `"${replaceText}"` : <span className="italic text-muted-foreground">(delete)</span>}
+            <div className="font-mono qt-text-primary qt-bg-muted px-2 py-1 rounded mt-1">
+              {replaceText ? `"${replaceText}"` : <span className="italic qt-text-secondary">(delete)</span>}
             </div>
           </div>
         </div>
@@ -57,7 +57,7 @@ export function ConfirmationStep({
 
       {/* Stats */}
       {preview && (
-        <div className="p-4 rounded-lg bg-muted/50">
+        <div className="p-4 rounded-lg qt-bg-muted/50">
           <div className="font-medium qt-text-primary mb-3">Changes to be made:</div>
           <div className="space-y-2 text-sm">
             {preview.messageMatches > 0 && (
@@ -76,7 +76,7 @@ export function ConfirmationStep({
                 </span>
               </div>
             )}
-            <div className="pt-2 border-t border-border">
+            <div className="pt-2 border-t qt-border-default">
               <div className="flex justify-between font-medium">
                 <span className="qt-text-primary">Total changes:</span>
                 <span className="text-primary">
@@ -89,14 +89,14 @@ export function ConfirmationStep({
       )}
 
       {/* Warning */}
-      <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+      <div className="p-4 rounded-lg qt-bg-destructive/10 border qt-border-destructive/20">
         <div className="flex gap-3">
-          <div className="text-destructive text-xl">⚠️</div>
+          <div className="qt-text-destructive text-xl">⚠️</div>
           <div>
-            <div className="font-medium text-destructive mb-1">
+            <div className="font-medium qt-text-destructive mb-1">
               This action cannot be undone
             </div>
-            <p className="text-sm text-destructive/80">
+            <p className="text-sm qt-text-destructive/80">
               The changes will be applied immediately and permanently.
               Make sure you have reviewed the search and replace text carefully.
             </p>

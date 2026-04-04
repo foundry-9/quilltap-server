@@ -89,30 +89,30 @@ describe('LoadingState', () => {
     expect(wrapper).toHaveClass('py-8')
   })
 
-  it('applies text-muted-foreground to message in spinner variant', () => {
+  it('applies qt-text-secondary to message in spinner variant', () => {
     const { container } = render(
       <LoadingState variant="spinner" message="Loading" />
     )
 
-    const message = container.querySelector('.text-muted-foreground')
+    const message = container.querySelector('.qt-text-secondary')
     expect(message).toBeInTheDocument()
   })
 
-  it('applies text-muted-foreground to message in text variant', () => {
+  it('applies qt-text-secondary to message in text variant', () => {
     const { container } = render(
       <LoadingState variant="text" message="Loading" />
     )
 
-    const message = container.querySelector('.text-muted-foreground')
+    const message = container.querySelector('.qt-text-secondary')
     expect(message).toBeInTheDocument()
   })
 
-  it('applies text-muted-foreground to message in dots variant', () => {
+  it('applies qt-text-secondary to message in dots variant', () => {
     const { container } = render(
       <LoadingState variant="dots" message="Loading" />
     )
 
-    const message = container.querySelector('.text-muted-foreground')
+    const message = container.querySelector('.qt-text-secondary')
     expect(message).toBeInTheDocument()
   })
 

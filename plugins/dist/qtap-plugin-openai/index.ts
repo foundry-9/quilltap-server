@@ -10,7 +10,7 @@
  * - Web search integration
  */
 
-import type { LLMProviderPlugin, EmbeddingModelInfo } from './types';
+import type { TextProviderPlugin, EmbeddingModelInfo } from './types';
 import { OpenAIProvider } from './provider';
 import { OpenAIImageProvider } from './image-provider';
 import { OpenAIEmbeddingProvider } from './embedding-provider';
@@ -94,7 +94,7 @@ const cheapModels = {
 // Re-export moderation provider for plugin system discovery
 export { moderationPlugin } from './moderation-provider';
 
-export const plugin: LLMProviderPlugin = {
+export const plugin: TextProviderPlugin = {
   metadata,
 
   icon: {

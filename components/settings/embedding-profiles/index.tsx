@@ -94,7 +94,7 @@ export default function EmbeddingProfilesTab() {
             onClick: handleOpenModal,
           }}
         />
-        <p className="qt-text-small text-muted-foreground">
+        <p className="qt-text-small qt-text-secondary">
           Manage text embedding connections for semantic search (OpenAI or Ollama)
         </p>
       </div>

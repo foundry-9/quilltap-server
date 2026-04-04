@@ -305,7 +305,7 @@ export default function CreateNPCDialog({
               {/* Name (required) */}
               <div>
                 <label htmlFor="npc-name" className="block text-sm qt-text-primary mb-2">
-                  Name <span className="text-destructive">*</span>
+                  Name <span className="qt-text-destructive">*</span>
                 </label>
                 <input
                   ref={nameInputRef}
@@ -322,7 +322,7 @@ export default function CreateNPCDialog({
               {/* Description (required) */}
               <div>
                 <label htmlFor="npc-description" className="block text-sm qt-text-primary mb-2">
-                  Description <span className="text-destructive">*</span>
+                  Description <span className="qt-text-destructive">*</span>
                 </label>
                 <textarea
                   id="npc-description"
@@ -341,7 +341,7 @@ export default function CreateNPCDialog({
               {/* Physical Description (optional) */}
               <div>
                 <label htmlFor="npc-physical" className="block text-sm qt-text-primary mb-2">
-                  Physical Description <span className="text-muted-foreground font-normal">(optional)</span>
+                  Physical Description <span className="qt-text-secondary font-normal">(optional)</span>
                 </label>
                 <textarea
                   id="npc-physical"
@@ -357,7 +357,7 @@ export default function CreateNPCDialog({
               {/* Scenario (optional) */}
               <div>
                 <label htmlFor="npc-scenario" className="block text-sm qt-text-primary mb-2">
-                  Scenario <span className="text-muted-foreground font-normal">(optional)</span>
+                  Scenario <span className="qt-text-secondary font-normal">(optional)</span>
                 </label>
                 <textarea
                   id="npc-scenario"
@@ -373,7 +373,7 @@ export default function CreateNPCDialog({
               {/* System Prompt (optional) */}
               <div>
                 <label htmlFor="npc-system-prompt" className="block text-sm qt-text-primary mb-2">
-                  System Prompt <span className="text-muted-foreground font-normal">(optional)</span>
+                  System Prompt <span className="qt-text-secondary font-normal">(optional)</span>
                 </label>
                 <textarea
                   id="npc-system-prompt"
@@ -389,7 +389,7 @@ export default function CreateNPCDialog({
               {/* Connection Profile (required) */}
               <div>
                 <label htmlFor="npc-profile" className="block text-sm qt-text-primary mb-2">
-                  Connection Profile <span className="text-destructive">*</span>
+                  Connection Profile <span className="qt-text-destructive">*</span>
                 </label>
                 <select
                   id="npc-profile"
@@ -406,7 +406,7 @@ export default function CreateNPCDialog({
                   ))}
                 </select>
                 {connectionProfiles.length === 0 && (
-                  <p className="text-sm text-warning mt-1">
+                  <p className="text-sm qt-text-warning mt-1">
                     No connection profiles available. Please create one in Settings.
                   </p>
                 )}
@@ -415,7 +415,7 @@ export default function CreateNPCDialog({
               {/* Avatar (optional) */}
               <div>
                 <label className="block text-sm qt-text-primary mb-2">
-                  Avatar <span className="text-muted-foreground font-normal">(optional)</span>
+                  Avatar <span className="qt-text-secondary font-normal">(optional)</span>
                 </label>
                 <div className="flex items-center gap-3">
                   <button
@@ -438,7 +438,7 @@ export default function CreateNPCDialog({
                     disabled={isCreating}
                   />
                   {avatarFile ? (
-                    <span className="text-sm text-success flex items-center gap-2">
+                    <span className="text-sm qt-text-success flex items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>

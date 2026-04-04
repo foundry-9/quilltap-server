@@ -10,7 +10,7 @@
  * - Web search integration via Google Search
  */
 
-import type { LLMProviderPlugin, ImageGenerationModelInfo } from './types';
+import type { TextProviderPlugin, ImageGenerationModelInfo } from './types';
 import { GoogleProvider } from './provider';
 import { GoogleImagenProvider } from './image-provider';
 import {
@@ -94,7 +94,7 @@ const cheapModels = {
  * The Google Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
-export const plugin: LLMProviderPlugin = {
+export const plugin: TextProviderPlugin = {
   metadata,
 
   icon: {

@@ -36,19 +36,19 @@ export function TokenBadge({
 
   return (
     <div
-      className={`inline-flex items-center gap-2 text-xs text-muted-foreground ${className}`}
+      className={`inline-flex items-center gap-2 text-xs qt-text-secondary ${className}`}
     >
       {showTokens && (
         <span className="inline-flex items-center gap-1">
           <span title="Prompt tokens">{formatTokenCount(prompt)}</span>
           <span>/</span>
           <span title="Completion tokens">{formatTokenCount(completion)}</span>
-          <span className="text-muted-foreground/60">tokens</span>
+          <span className="qt-text-secondary/60">tokens</span>
         </span>
       )}
       {showCost && estimatedCostUSD !== null && estimatedCostUSD !== undefined && (
         <span
-          className="text-muted-foreground/80"
+          className="qt-text-secondary/80"
           title="Estimated cost"
         >
           {formatCostForDisplay(estimatedCostUSD)}

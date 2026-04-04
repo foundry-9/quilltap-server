@@ -42,7 +42,7 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
             className="w-10 h-10 rounded-full object-cover flex-shrink-0"
           />
         ) : (
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <div className="w-10 h-10 rounded-full qt-bg-primary/10 flex items-center justify-center flex-shrink-0">
             <span className="text-lg">{TYPE_ICONS.characters}</span>
           </div>
         )}
@@ -51,7 +51,7 @@ function CharacterResultCard({ result, query, onResultClick }: { result: Charact
             <span className="qt-text-primary truncate">
               {result.name}
             </span>
-            {result.isFavorite && <span className="text-warning">★</span>}
+            {result.isFavorite && <span className="qt-text-warning">★</span>}
             <span className="text-xs px-1.5 py-0.5 rounded qt-badge-character">
               {TYPE_LABELS.characters}
             </span>
@@ -89,7 +89,7 @@ function ChatResultCard({ result, query, onResultClick }: { result: ChatSearchRe
       className="block p-3 hover:bg-accent rounded-lg transition-colors"
     >
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-full bg-info/10 flex items-center justify-center flex-shrink-0">
+        <div className="w-10 h-10 rounded-full qt-bg-info/10 flex items-center justify-center flex-shrink-0">
           <span className="text-lg">{TYPE_ICONS.chats}</span>
         </div>
         <div className="flex-1 min-w-0">
@@ -163,7 +163,7 @@ function TagResultCard({ result, query, onResultClick }: { result: TagSearchResu
               {TYPE_LABELS.tags}
             </span>
             {result.quickHide && (
-              <span className="qt-text-xs px-1.5 py-0.5 bg-muted rounded">
+              <span className="qt-text-xs px-1.5 py-0.5 qt-bg-muted rounded">
                 Quick Hide
               </span>
             )}
@@ -187,7 +187,7 @@ function MemoryResultCard({ result, query, onResultClick }: { result: MemorySear
       className="block p-3 hover:bg-accent rounded-lg transition-colors"
     >
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+        <div className="w-10 h-10 rounded-full qt-bg-destructive/10 flex items-center justify-center flex-shrink-0">
           <span className="text-lg">{TYPE_ICONS.memories}</span>
         </div>
         <div className="flex-1 min-w-0">
@@ -250,7 +250,7 @@ function MessageResultCard({ result, query, onResultClick }: { result: MessageSe
       className="block p-3 hover:bg-accent rounded-lg transition-colors"
     >
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center flex-shrink-0">
+        <div className="w-10 h-10 rounded-full qt-bg-warning/10 flex items-center justify-center flex-shrink-0">
           <span className="text-lg">{TYPE_ICONS.messages}</span>
         </div>
         <div className="flex-1 min-w-0">

@@ -139,7 +139,7 @@ export function ContextCompressionSettingsComponent({
         <div className="flex items-center justify-between">
           <div>
             <label className="qt-text-label block">Enable Context Compression</label>
-            <p className="qt-text-xs text-muted-foreground mt-1">
+            <p className="qt-text-xs qt-text-secondary mt-1">
               When enabled, older messages beyond the sliding window are compressed to save tokens.
             </p>
           </div>
@@ -150,7 +150,7 @@ export function ContextCompressionSettingsComponent({
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
               compressionSettings.enabled
                 ? 'bg-primary'
-                : 'bg-muted'
+                : 'qt-bg-muted'
             } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
             role="switch"
             aria-checked={compressionSettings.enabled}
@@ -167,7 +167,7 @@ export function ContextCompressionSettingsComponent({
         <div className={!compressionSettings.enabled ? 'opacity-50 pointer-events-none' : ''}>
           <label className="qt-text-label block mb-2">
             Sliding Window Size
-            <span className="qt-text-xs text-muted-foreground ml-2">
+            <span className="qt-text-xs qt-text-secondary ml-2">
               ({displayWindowSize} messages)
             </span>
           </label>
@@ -184,11 +184,11 @@ export function ContextCompressionSettingsComponent({
             disabled={!compressionSettings.enabled}
             className="w-full cursor-pointer"
           />
-          <div className="flex justify-between qt-text-xs text-muted-foreground mt-1">
+          <div className="flex justify-between qt-text-xs qt-text-secondary mt-1">
             <span>3 (more aggressive)</span>
             <span>10 (more context)</span>
           </div>
-          <p className="qt-text-xs text-muted-foreground mt-2">
+          <p className="qt-text-xs qt-text-secondary mt-2">
             Number of recent messages to keep in full context. Messages older than this are compressed.
           </p>
         </div>
@@ -197,7 +197,7 @@ export function ContextCompressionSettingsComponent({
         <div className={!compressionSettings.enabled ? 'opacity-50 pointer-events-none' : ''}>
           <label className="qt-text-label block mb-2">
             History Compression Target
-            <span className="qt-text-xs text-muted-foreground ml-2">
+            <span className="qt-text-xs qt-text-secondary ml-2">
               (~{displayCompressionTarget} tokens)
             </span>
           </label>
@@ -215,11 +215,11 @@ export function ContextCompressionSettingsComponent({
             disabled={!compressionSettings.enabled}
             className="w-full cursor-pointer"
           />
-          <div className="flex justify-between qt-text-xs text-muted-foreground mt-1">
+          <div className="flex justify-between qt-text-xs qt-text-secondary mt-1">
             <span>300 (minimal)</span>
             <span>2000 (detailed)</span>
           </div>
-          <p className="qt-text-xs text-muted-foreground mt-2">
+          <p className="qt-text-xs qt-text-secondary mt-2">
             Target token count for compressed conversation history.
           </p>
         </div>
@@ -228,7 +228,7 @@ export function ContextCompressionSettingsComponent({
         <div className={!compressionSettings.enabled ? 'opacity-50 pointer-events-none' : ''}>
           <label className="qt-text-label block mb-2">
             Project Context Re-injection
-            <span className="qt-text-xs text-muted-foreground ml-2">
+            <span className="qt-text-xs qt-text-secondary ml-2">
               (every {displayProjectContextInterval === 0 ? 'never' : `${displayProjectContextInterval} messages`})
             </span>
           </label>
@@ -245,11 +245,11 @@ export function ContextCompressionSettingsComponent({
             disabled={!compressionSettings.enabled}
             className="w-full cursor-pointer"
           />
-          <div className="flex justify-between qt-text-xs text-muted-foreground mt-1">
+          <div className="flex justify-between qt-text-xs qt-text-secondary mt-1">
             <span>{displayWindowSize} (minimum)</span>
             <span>20 (less frequent)</span>
           </div>
-          <p className="qt-text-xs text-muted-foreground mt-2">
+          <p className="qt-text-xs qt-text-secondary mt-2">
             How often to re-inject project instructions into the system prompt. Set to the window size to ensure
             project context is always present in recent messages.
           </p>
@@ -258,7 +258,7 @@ export function ContextCompressionSettingsComponent({
         {/* Info Box */}
         <div className="qt-bg-muted rounded-lg p-4 qt-text-small">
           <p className="font-medium mb-2">How it works:</p>
-          <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+          <ul className="list-disc list-inside space-y-1 qt-text-secondary">
             <li>The AI keeps full access to your most recent {displayWindowSize} messages</li>
             <li>Older messages are summarized together by a fast, inexpensive LLM</li>
             <li>Tool definitions are never compressed</li>

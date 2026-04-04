@@ -25,7 +25,7 @@ export function SystemPromptsEditor({
   }
 
   if (editor.loading) {
-    return <div className="text-center py-8 text-muted-foreground">Loading prompts...</div>
+    return <div className="text-center py-8 qt-text-secondary">Loading prompts...</div>
   }
 
   return (

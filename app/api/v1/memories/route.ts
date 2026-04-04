@@ -27,7 +27,7 @@ import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types';
 
 // =============================================================================
@@ -136,29 +136,21 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   const action = getActionParam(req);
 
-  try {
-    // Action-based operations
-    if (action === 'search') {
-      return handleSearch(req, { user, repos });
-    }
-
-    if (action === 'housekeep') {
-      return handleHousekeep(req, { user, repos });
-    }
-
-    if (action === 'embeddings') {
-      return handleGenerateEmbeddings(req, { user, repos });
-    }
-
-    // Default: Create memory
-    return handleCreateMemory(req, { user, repos });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-    logger.error('[Memories API] Error in POST', {}, error instanceof Error ? error : undefined);
-    return serverError('Operation failed');
+  // Action-based operations
+  if (action === 'search') {
+    return handleSearch(req, { user, repos });
   }
+
+  if (action === 'housekeep') {
+    return handleHousekeep(req, { user, repos });
+  }
+
+  if (action === 'embeddings') {
+    return handleGenerateEmbeddings(req, { user, repos });
+  }
+
+  // Default: Create memory
+  return handleCreateMemory(req, { user, repos });
 });
 
 // =============================================================================
@@ -202,9 +194,6 @@ async function listMemoriesByCharacter(
   const character = await repos.characters.findById(characterId);
   if (!character) {
     return notFound('Character');
-  }
-  if (character.userId !== user.id) {
-    return forbidden();
   }
 
   // Get query params for filtering
@@ -279,7 +268,7 @@ async function countMemoriesByChat(
 ) {
   // Verify chat ownership
   const chat = await repos.chats.findById(chatId);
-  if (!chat || chat.userId !== user.id) {
+  if (!chat) {
     return notFound('Chat');
   }
 
@@ -371,9 +360,6 @@ async function handleCreateMemory(
   if (!character) {
     return notFound('Character');
   }
-  if (character.userId !== user.id) {
-    return forbidden();
-  }
 
   // Create memory with embedding generation
   const memory = await createMemoryWithEmbedding(
@@ -415,9 +401,6 @@ async function handleSearch(
   const character = await repos.characters.findById(characterId);
   if (!character) {
     return notFound('Character');
-  }
-  if (character.userId !== user.id) {
-    return forbidden();
   }
 
   // Semantic search
@@ -473,7 +456,7 @@ async function handleHousekeep(
 
   // Verify character ownership
   const character = await repos.characters.findById(characterId);
-  if (!character || character.userId !== user.id) {
+  if (!character) {
     return notFound('Character');
   }
 
@@ -520,7 +503,7 @@ async function handleHousekeepPreview(
 
   // Verify character ownership
   const character = await repos.characters.findById(characterId);
-  if (!character || character.userId !== user.id) {
+  if (!character) {
     return notFound('Character');
   }
 
@@ -586,9 +569,6 @@ async function handleGenerateEmbeddings(
   if (!character) {
     return notFound('Character');
   }
-  if (character.userId !== user.id) {
-    return forbidden();
-  }
 
   // Check embedding profile
   const defaultProfile = await repos.embeddingProfiles.findDefault(user.id);
@@ -640,9 +620,6 @@ async function handleEmbeddingStatus(
   if (!character) {
     return notFound('Character');
   }
-  if (character.userId !== user.id) {
-    return forbidden();
-  }
 
   // Get memory stats
   const memories = await repos.memories.findByCharacterId(characterId);
@@ -676,9 +653,6 @@ async function handleRebuildIndex(
   if (!character) {
     return notFound('Character');
   }
-  if (character.userId !== user.id) {
-    return forbidden();
-  }
 
   // Rebuild the vector index
   const result = await rebuildVectorIndex(characterId, { userId: user.id });
@@ -696,7 +670,7 @@ async function handleDeleteByChatId(
 ) {
   // Verify chat ownership
   const chat = await repos.chats.findById(chatId);
-  if (!chat || chat.userId !== user.id) {
+  if (!chat) {
     return notFound('Chat');
   }
 

@@ -39,10 +39,10 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, isDel
   const [expanded, setExpanded] = useState(false)
 
   const importanceColor = memory.importance >= 0.7
-    ? 'text-destructive'
+    ? 'qt-text-destructive'
     : memory.importance >= 0.4
-      ? 'text-warning'
-      : 'text-muted-foreground'
+      ? 'qt-text-warning'
+      : 'qt-text-secondary'
 
   const importanceLabel = memory.importance >= 0.7
     ? 'High'
@@ -73,8 +73,8 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, isDel
           </span>
           <span className={`text-xs px-2 py-0.5 rounded-full ${
             memory.source === 'AUTO'
-              ? 'qt-bg-info/10 text-info'
-              : 'qt-bg-success/10 text-success'
+              ? 'qt-bg-info/10 qt-text-info'
+              : 'qt-bg-success/10 qt-text-success'
           }`}>
             {memory.source === 'AUTO' ? 'Auto' : 'Manual'}
           </span>
@@ -120,7 +120,7 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, isDel
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-border">
+      <div className="flex items-center justify-between pt-2 border-t qt-border-default">
         <div className="flex items-center gap-2">
           <span className="qt-text-xs">
             {formatDate(memory.createdAt)}
@@ -157,7 +157,7 @@ export function MemoryCard({ memory, onEdit, onDelete, onNavigateToSource, isDel
             <button
               onClick={() => onDelete(memory.id)}
               disabled={isDeleting}
-              className="text-xs text-destructive hover:underline disabled:opacity-50"
+              className="text-xs qt-text-destructive hover:underline disabled:opacity-50"
             >
               {isDeleting ? 'Deleting...' : 'Delete'}
             </button>

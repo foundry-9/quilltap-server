@@ -85,7 +85,7 @@ export function CharactersSection({ characters }: CharactersSectionProps) {
       </div>
       <div ref={containerRef} className="qt-homepage-section-content">
         {visibleCharacters.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground">
+          <div className="text-center py-6 qt-text-secondary">
             <p className="text-sm">No favorite characters</p>
             <Link href="/aurora" className="text-xs text-primary hover:underline">
               Mark some as favorites

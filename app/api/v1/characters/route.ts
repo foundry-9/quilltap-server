@@ -16,7 +16,7 @@ import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/charac
 import { runCharacterWizard, runCharacterWizardStreaming, type WizardRequest, type WizardProgressEvent } from '@/lib/services/character-wizard.service';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { badRequest, serverError, notFound, validationError } from '@/lib/api/responses';
+import { badRequest, serverError, notFound } from '@/lib/api/responses';
 import { executeCascadeDelete } from '@/lib/cascade-delete';
 import { getSeedImports } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
@@ -348,7 +348,12 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           isFavorite: character.isFavorite,
           controlledBy: character.controlledBy ?? 'llm',
           defaultConnectionProfileId: character.defaultConnectionProfileId || null,
+          defaultPartnerId: character.defaultPartnerId || null,
           defaultPartnerName,
+          defaultTimestampConfig: character.defaultTimestampConfig || null,
+          defaultScenarioId: character.defaultScenarioId || null,
+          defaultSystemPromptId: character.defaultSystemPromptId || null,
+          defaultImageProfileId: character.defaultImageProfileId || null,
           npc: character.npc ?? false,
           createdAt: character.createdAt,
           tags: character.tags || [],
@@ -387,107 +392,89 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   const { user, repos } = context;
 
-  try {
-    const body = await req.json();
-    const validatedData = createCharacterSchema.parse(body);
+  const body = await req.json();
+  const validatedData = createCharacterSchema.parse(body);
 
-    // Normalize scenarios: fill in missing id/createdAt/updatedAt
-    const now = new Date().toISOString();
-    const normalizedScenarios = (validatedData.scenarios || []).map(s => ({
-      id: s.id ?? crypto.randomUUID(),
-      title: s.title,
-      content: s.content,
-      createdAt: now,
-      updatedAt: now,
-    }));
+  // Normalize scenarios: fill in missing id/createdAt/updatedAt
+  const now = new Date().toISOString();
+  const normalizedScenarios = (validatedData.scenarios || []).map(s => ({
+    id: s.id ?? crypto.randomUUID(),
+    title: s.title,
+    content: s.content,
+    createdAt: now,
+    updatedAt: now,
+  }));
 
-    const character = await repos.characters.create({
-      userId: user.id,
-      name: validatedData.name,
-      title: validatedData.title || null,
-      description: validatedData.description || null,
-      personality: validatedData.personality || null,
-      scenarios: normalizedScenarios,
-      firstMessage: validatedData.firstMessage || null,
-      exampleDialogues: validatedData.exampleDialogues || null,
-      avatarUrl: validatedData.avatarUrl || null,
-      defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
-      controlledBy: validatedData.controlledBy || 'llm',
-      isFavorite: false,
-      npc: validatedData.npc ?? false,
-      tags: [] as string[],
-      personaLinks: [] as { personaId: string; isDefault: boolean }[],
-      avatarOverrides: [] as { chatId: string; imageId: string }[],
-      defaultImageId: null,
-      physicalDescriptions: validatedData.physicalDescriptions || [],
-      clothingRecords: validatedData.clothingRecords || [],
-      systemPrompts: validatedData.systemPrompts || [],
-    });
+  const character = await repos.characters.create({
+    userId: user.id,
+    name: validatedData.name,
+    title: validatedData.title || null,
+    description: validatedData.description || null,
+    personality: validatedData.personality || null,
+    scenarios: normalizedScenarios,
+    firstMessage: validatedData.firstMessage || null,
+    exampleDialogues: validatedData.exampleDialogues || null,
+    avatarUrl: validatedData.avatarUrl || null,
+    defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
+    controlledBy: validatedData.controlledBy || 'llm',
+    isFavorite: false,
+    npc: validatedData.npc ?? false,
+    tags: [] as string[],
+    personaLinks: [] as { personaId: string; isDefault: boolean }[],
+    avatarOverrides: [] as { chatId: string; imageId: string }[],
+    defaultImageId: null,
+    physicalDescriptions: validatedData.physicalDescriptions || [],
+    clothingRecords: validatedData.clothingRecords || [],
+    systemPrompts: validatedData.systemPrompts || [],
+  });
 
-    logger.info('[Characters v1] Character created', {
-      characterId: character.id,
-      name: character.name,
-      controlledBy: character.controlledBy || 'llm',
-      npc: character.npc,
-    });
+  logger.info('[Characters v1] Character created', {
+    characterId: character.id,
+    name: character.name,
+    controlledBy: character.controlledBy || 'llm',
+    npc: character.npc,
+  });
 
-    return NextResponse.json({ character }, { status: 201 });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Characters v1] Error creating character', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to create character');
-  }
+  return NextResponse.json({ character }, { status: 201 });
 }
 
 async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext) {
   const { user, repos } = context;
 
-  try {
-    const body = await req.json();
-    const validatedData = quickCreateSchema.parse(body);
+  const body = await req.json();
+  const validatedData = quickCreateSchema.parse(body);
 
-    logger.info('[Characters v1] Quick creating character', {
-      userId: user.id,
-      name: validatedData.name,
-    });
+  logger.info('[Characters v1] Quick creating character', {
+    userId: user.id,
+    name: validatedData.name,
+  });
 
-    const character = await repos.characters.create({
-      userId: user.id,
-      name: validatedData.name,
-      title: null,
-      description: 'Character created during chat import',
-      personality: null,
-      scenarios: [],
-      firstMessage: null,
-      exampleDialogues: null,
-      avatarUrl: null,
-      defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
-      isFavorite: false,
-      tags: [] as string[],
-      personaLinks: [] as { personaId: string; isDefault: boolean }[],
-      avatarOverrides: [] as { chatId: string; imageId: string }[],
-      defaultImageId: null,
-      physicalDescriptions: [],
-      clothingRecords: [],
-    });
+  const character = await repos.characters.create({
+    userId: user.id,
+    name: validatedData.name,
+    title: null,
+    description: 'Character created during chat import',
+    personality: null,
+    scenarios: [],
+    firstMessage: null,
+    exampleDialogues: null,
+    avatarUrl: null,
+    defaultConnectionProfileId: validatedData.defaultConnectionProfileId || null,
+    isFavorite: false,
+    tags: [] as string[],
+    personaLinks: [] as { personaId: string; isDefault: boolean }[],
+    avatarOverrides: [] as { chatId: string; imageId: string }[],
+    defaultImageId: null,
+    physicalDescriptions: [],
+    clothingRecords: [],
+  });
 
-    logger.info('[Characters v1] Quick create completed', {
-      characterId: character.id,
-      name: character.name,
-    });
+  logger.info('[Characters v1] Quick create completed', {
+    characterId: character.id,
+    name: character.name,
+  });
 
-    return NextResponse.json({ character }, { status: 201 });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Characters v1] Error in quick create', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to create character');
-  }
+  return NextResponse.json({ character }, { status: 201 });
 }
 
 async function handleImport(req: NextRequest, context: AuthenticatedContext) {
@@ -581,92 +568,63 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
 async function handleAiWizard(req: NextRequest, context: AuthenticatedContext) {
   const { user, repos } = context;
 
-  try {
-    const body = await req.json();
-    const request = wizardRequestSchema.parse(body) as WizardRequest;
+  const body = await req.json();
+  const request = wizardRequestSchema.parse(body) as WizardRequest;
 
-    logger.info('[Characters v1] AI Wizard starting', {
-      userId: user.id,
-      characterName: request.characterName,
-      fieldsToGenerate: request.fieldsToGenerate,
-      sourceType: request.sourceType,
-    });
+  logger.info('[Characters v1] AI Wizard starting', {
+    userId: user.id,
+    characterName: request.characterName,
+    fieldsToGenerate: request.fieldsToGenerate,
+    sourceType: request.sourceType,
+  });
 
-    const result = await runCharacterWizard(request, user.id, repos);
+  const result = await runCharacterWizard(request, user.id, repos);
 
-    return NextResponse.json(result);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    const errorMessage = error instanceof Error ? error.message : 'Generation failed';
-
-    // Handle specific error types with appropriate responses
-    if (errorMessage.includes('not found')) {
-      return notFound(errorMessage.replace(' not found', ''));
-    }
-    if (errorMessage.includes('required')) {
-      return badRequest(errorMessage);
-    }
-
-    logger.error('[Characters v1] AI Wizard failed', { error: errorMessage });
-    return serverError(errorMessage);
-  }
+  return NextResponse.json(result);
 }
 
 async function handleAiWizardStream(req: NextRequest, context: AuthenticatedContext) {
   const { user, repos } = context;
 
-  try {
-    const body = await req.json();
-    const request = wizardRequestSchema.parse(body) as WizardRequest;
+  const body = await req.json();
+  const request = wizardRequestSchema.parse(body) as WizardRequest;
 
-    logger.info('[Characters v1] AI Wizard starting (streaming)', {
-      userId: user.id,
-      characterName: request.characterName,
-      fieldsToGenerate: request.fieldsToGenerate,
-      sourceType: request.sourceType,
-    });
+  logger.info('[Characters v1] AI Wizard starting (streaming)', {
+    userId: user.id,
+    characterName: request.characterName,
+    fieldsToGenerate: request.fieldsToGenerate,
+    sourceType: request.sourceType,
+  });
 
-    const encoder = new TextEncoder();
+  const encoder = new TextEncoder();
 
-    const stream = new ReadableStream({
-      async start(controller) {
-        const enqueue = (event: WizardProgressEvent) => {
-          try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-          } catch {
-            // Stream may be closed
-          }
-        };
-
-        await runCharacterWizardStreaming(request, user.id, repos, enqueue);
-
+  const stream = new ReadableStream({
+    async start(controller) {
+      const enqueue = (event: WizardProgressEvent) => {
         try {
-          controller.close();
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
         } catch {
-          // Stream may already be closed
+          // Stream may be closed
         }
-      },
-    });
+      };
 
-    return new NextResponse(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
+      await runCharacterWizardStreaming(request, user.id, repos, enqueue);
 
-    const errorMessage = error instanceof Error ? error.message : 'Generation failed';
-    logger.error('[Characters v1] AI Wizard stream failed', { error: errorMessage });
-    return serverError(errorMessage);
-  }
+      try {
+        controller.close();
+      } catch {
+        // Stream may already be closed
+      }
+    },
+  });
+
+  return new NextResponse(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
 }
 
 export const POST = createAuthenticatedHandler(async (req, context) => {
