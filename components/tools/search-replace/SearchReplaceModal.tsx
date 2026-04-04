@@ -198,7 +198,7 @@ export function SearchReplaceModal({
                           ? 'bg-primary text-primary-foreground'
                           : isActive
                             ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground'
+                            : 'qt-bg-muted qt-text-secondary'
                         }
                       `}
                     >
@@ -211,7 +211,7 @@ export function SearchReplaceModal({
                   {index < 2 && (
                     <div className={`
                       flex-1 h-0.5 mx-4
-                      ${isComplete ? 'bg-primary' : 'bg-muted'}
+                      ${isComplete ? 'bg-primary' : 'qt-bg-muted'}
                     `} />
                   )}
                 </div>

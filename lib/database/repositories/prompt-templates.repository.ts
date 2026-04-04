@@ -103,8 +103,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
           return;
         }
 
-        logger.debug('System prompt registry not available, falling back to filesystem loader');
-
         const collection = await this.getCollection();
 
         for (const sample of samplePrompts) {

@@ -18,6 +18,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
   const connectOp = useAsyncOperation<any>()
   const fetchModelsOp = useAsyncOperation<any>()
   const testMessageOp = useAsyncOperation<any>()
+  const autoConfigureOp = useAsyncOperation<any>()
 
   // Get provider config requirements - returns defaults if provider not found
   const getProviderRequirements = useCallback(
@@ -54,6 +55,8 @@ export function useProfileForm(providers: ProviderConfig[]) {
         allowToolUse: profile.allowToolUse ?? true,
         allowWebSearch: profile.allowWebSearch ?? false,
         useNativeWebSearch: profile.useNativeWebSearch ?? false,
+        modelClass: profile.modelClass ?? '',
+        maxContext: profile.maxContext ? String(profile.maxContext) : '',
         // OpenRouter-specific fields
         fallbackModels: profile.parameters?.fallbackModels ?? [],
         enableZDR: profile.parameters?.providerPreferences?.dataCollection === 'deny',
@@ -115,6 +118,8 @@ export function useProfileForm(providers: ProviderConfig[]) {
       allowToolUse: form.formData.allowToolUse,
       allowWebSearch: form.formData.allowWebSearch,
       useNativeWebSearch: form.formData.useNativeWebSearch,
+      modelClass: form.formData.modelClass || null,
+      maxContext: form.formData.maxContext ? parseInt(form.formData.maxContext, 10) : null,
       parameters,
     }
 
@@ -254,6 +259,43 @@ export function useProfileForm(providers: ProviderConfig[]) {
     [form.formData, testMessageOp]
   )
 
+  const handleAutoConfigure = useCallback(
+    async (onSuccess?: (data: any) => void) => {
+      const result = await autoConfigureOp.execute(async () => {
+        // Validate required fields
+        if (!form.formData.provider) {
+          throw new Error('Provider is required')
+        }
+
+        if (!form.formData.modelName) {
+          throw new Error('Model name is required')
+        }
+
+        const fetchResult = await fetchJson<any>('/api/v1/connection-profiles?action=auto-configure', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: form.formData.provider,
+            modelName: form.formData.modelName,
+          }),
+        })
+
+        if (!fetchResult.ok) {
+          throw new Error(fetchResult.error || 'Auto-configure failed')
+        }
+
+        return fetchResult.data
+      })
+
+      if (result && onSuccess) {
+        onSuccess(result)
+      }
+
+      return result
+    },
+    [form.formData, autoConfigureOp]
+  )
+
   const handleSubmit = useCallback(
     async (editingId: string | null, onSuccess?: () => void) => {
       const result = await saveOp.execute(async () => {
@@ -289,6 +331,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
     connectOp,
     fetchModelsOp,
     testMessageOp,
+    autoConfigureOp,
     getProviderRequirements,
     resetForm,
     loadProfileIntoForm,
@@ -296,6 +339,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
     handleConnect,
     handleFetchModels,
     handleTestMessage,
+    handleAutoConfigure,
     handleSubmit,
   }
 }

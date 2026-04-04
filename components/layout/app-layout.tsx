@@ -50,7 +50,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   if (status === 'loading') {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+        <div className="animate-pulse qt-text-secondary">Loading...</div>
       </div>
     )
   }

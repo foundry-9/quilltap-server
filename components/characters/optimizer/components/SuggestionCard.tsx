@@ -51,12 +51,12 @@ const FIELD_BADGE_CLASS: Record<string, string> = {
 function SignificanceBar({ significance }: { significance: number }) {
   const level = significance >= 0.6 ? 'high' : significance >= 0.3 ? 'medium' : 'low';
   const label = level === 'high' ? 'High Significance' : level === 'medium' ? 'Moderate Significance' : 'Minor Significance';
-  const barClass = level === 'high' ? 'bg-destructive' : level === 'medium' ? 'bg-amber-500' : 'bg-muted-foreground';
+  const barClass = level === 'high' ? 'bg-destructive' : level === 'medium' ? 'bg-amber-500' : 'qt-bg-muted-foreground';
   const barWidth = level === 'high' ? 'w-full' : level === 'medium' ? 'w-2/3' : 'w-1/3';
 
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+      <div className="flex-1 h-1.5 qt-bg-muted rounded-full overflow-hidden">
         <div className={`h-full ${barWidth} ${barClass} rounded-full transition-all`} />
       </div>
       <span className="qt-caption">{label}</span>
@@ -70,7 +70,7 @@ function MemoryExcerpts({ excerpts }: { excerpts: string[] }) {
   if (excerpts.length === 0) return null;
 
   return (
-    <div className="border-t border-border pt-3">
+    <div className="border-t qt-border-default pt-3">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
@@ -95,7 +95,7 @@ function MemoryExcerpts({ excerpts }: { excerpts: string[] }) {
           {excerpts.map((excerpt, idx) => (
             <blockquote
               key={idx}
-              className="border-l-2 border-primary/40 pl-3 py-1 qt-body-sm italic text-muted-foreground leading-relaxed"
+              className="border-l-2 qt-border-primary/40 pl-3 py-1 qt-body-sm italic qt-text-secondary leading-relaxed"
             >
               &ldquo;{excerpt}&rdquo;
             </blockquote>
@@ -143,7 +143,7 @@ export function SuggestionCard({
   const isEdited = decision === 'edited';
 
   return (
-    <div className={`qt-card flex flex-col gap-4 ${isAccepted || isEdited ? 'border-green-500/40' : isRejected ? 'border-destructive/30 opacity-75' : ''}`}>
+    <div className={`qt-card flex flex-col gap-4 ${editing ? 'flex-1' : ''} ${isAccepted || isEdited ? 'border-green-500/40' : isRejected ? 'qt-border-destructive/30 opacity-75' : ''}`}>
       {/* Header: field badge + progress */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className={`${fieldBadge} text-xs`}>{displayLabel}</span>
@@ -161,14 +161,14 @@ export function SuggestionCard({
           {suggestion.currentValue ? (
             <div className="flex flex-col gap-1">
               <span className="qt-caption uppercase tracking-wider">Present Wording</span>
-              <p className="qt-body-sm bg-muted/50 rounded-md p-3 leading-relaxed border border-border/50">
+              <p className="qt-body-sm qt-bg-muted/50 rounded-md p-3 leading-relaxed border qt-border-default/50">
                 {suggestion.currentValue}
               </p>
             </div>
           ) : (
             <div className="flex flex-col gap-1">
               <span className="qt-caption uppercase tracking-wider">Present Wording</span>
-              <p className="qt-body-sm italic text-muted-foreground bg-muted/30 rounded-md p-3 border border-dashed border-border">
+              <p className="qt-body-sm italic qt-text-secondary qt-bg-muted/30 rounded-md p-3 border border-dashed qt-border-default">
                 (This field is presently unoccupied — the suggestion would furnish it anew)
               </p>
             </div>
@@ -180,7 +180,7 @@ export function SuggestionCard({
             </span>
             <p className={`qt-body-sm rounded-md p-3 leading-relaxed border ${
               isEdited
-                ? 'bg-primary/5 border-primary/30'
+                ? 'qt-bg-primary/5 qt-border-primary/30'
                 : 'bg-green-500/5 border-green-500/20'
             }`}>
               {isEdited && editedValue ? editedValue : suggestion.proposedValue}
@@ -191,7 +191,7 @@ export function SuggestionCard({
         <div className="flex flex-col gap-2 flex-1 min-h-0">
           <span className="qt-caption uppercase tracking-wider">Amend the Proposed Wording</span>
           <textarea
-            className="qt-textarea text-sm min-h-[120px] flex-1 resize-none"
+            className="qt-textarea text-sm min-h-[200px] flex-1 resize-y"
             value={draftValue}
             onChange={(e) => setDraftValue(e.target.value)}
             autoFocus
@@ -211,7 +211,7 @@ export function SuggestionCard({
       {!editing && (
         <div className="flex flex-col gap-1">
           <span className="qt-caption uppercase tracking-wider">Rationale</span>
-          <p className="qt-body-sm text-muted-foreground leading-relaxed">{suggestion.rationale}</p>
+          <p className="qt-body-sm qt-text-secondary leading-relaxed">{suggestion.rationale}</p>
         </div>
       )}
 
@@ -220,7 +220,7 @@ export function SuggestionCard({
 
       {/* Action buttons */}
       {!editing && (
-        <div className="flex gap-2 flex-wrap pt-1 border-t border-border">
+        <div className="flex gap-2 flex-wrap pt-1 border-t qt-border-default">
           {!isAccepted && !isEdited && (
             <button
               type="button"
@@ -262,7 +262,7 @@ export function SuggestionCard({
             <button
               type="button"
               onClick={onAccept}
-              className="qt-button-ghost qt-button-sm flex-1 min-w-[80px] text-destructive"
+              className="qt-button-ghost qt-button-sm flex-1 min-w-[80px] qt-text-destructive"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

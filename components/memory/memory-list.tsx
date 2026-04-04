@@ -134,7 +134,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         {memories.length > 0 && (
           <button
             onClick={() => setShowHousekeeping(true)}
-            className="px-3 py-1.5 bg-muted text-foreground text-sm rounded-lg hover:bg-accent"
+            className="px-3 py-1.5 qt-bg-muted text-foreground text-sm rounded-lg hover:bg-accent"
             title="Clean up old and low-importance memories"
           >
             Cleanup

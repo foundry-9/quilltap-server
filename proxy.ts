@@ -1,5 +1,5 @@
 /**
- * Next.js Proxy for rate limiting, security headers, and CORS
+ * Next.js Proxy for security headers and CORS
  * Runs on Edge Runtime before requests reach API routes
  *
  * Note: Authentication is no longer handled here (single-user mode only)
@@ -7,12 +7,6 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import {
-  checkRateLimit,
-  getClientIdentifier,
-  RATE_LIMITS,
-  createRateLimitResponse,
-} from './lib/rate-limit';
 
 /**
  * Security headers to add to all responses
@@ -41,34 +35,8 @@ const securityHeaders = {
   ].join('; '),
 };
 
-/**
- * Paths that should be rate limited
- */
-const RATE_LIMITED_PATHS = {
-  api: /^\/api\//,
-  chat: /^\/api\/chats\/[^/]+\/messages/,
-};
-
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  // Apply rate limiting based on path
-  const clientId = getClientIdentifier(request);
-
-  // Chat endpoints (streaming) - special rate limit
-  if (RATE_LIMITED_PATHS.chat.test(pathname)) {
-    const result = checkRateLimit(clientId, RATE_LIMITS.chat);
-    if (!result.success) {
-      return createRateLimitResponse(result);
-    }
-  }
-  // Other API endpoints - normal rate limit
-  else if (RATE_LIMITED_PATHS.api.test(pathname)) {
-    const result = checkRateLimit(clientId, RATE_LIMITS.api);
-    if (!result.success) {
-      return createRateLimitResponse(result);
-    }
-  }
 
   // Handle preflight OPTIONS requests early
   if (pathname.startsWith('/api/') && request.method === 'OPTIONS') {

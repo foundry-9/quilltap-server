@@ -131,10 +131,10 @@ function ColorModeOption({ mode, label, icon, isActive, onSelect }: ColorModeOpt
       onClick={onSelect}
       className={`
         w-full flex items-center gap-3 px-3 py-2 text-left transition-colors rounded-md
-        ${isActive ? 'bg-accent' : 'hover:bg-muted'}
+        ${isActive ? 'bg-accent' : 'hover:qt-bg-muted'}
       `}
     >
-      <span className="w-4 h-4 flex-shrink-0 text-muted-foreground">{icon}</span>
+      <span className="w-4 h-4 flex-shrink-0 qt-text-secondary">{icon}</span>
       <span className="text-sm qt-text-primary flex-1">{label}</span>
       {isActive && (
         <svg className="w-4 h-4 text-primary flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -203,7 +203,7 @@ function ThemeOption({ theme, isActive, onSelect, resolvedColorMode, headingFont
       onClick={onSelect}
       className={`
         w-full flex items-center gap-3 px-3 py-2 text-left transition-colors rounded-md
-        ${isActive ? 'bg-accent' : 'hover:bg-muted'}
+        ${isActive ? 'bg-accent' : 'hover:qt-bg-muted'}
       `}
       style={{
         // Apply theme colors as inline styles for preview
@@ -315,7 +315,7 @@ export function NavUserMenuThemeContent({ onThemeSelected }: NavUserMenuThemeCon
 
       {/* Divider if there are plugin themes */}
       {themes.length > 0 && (
-        <div className="my-2 border-t border-border" />
+        <div className="my-2 border-t qt-border-default" />
       )}
 
       {/* Plugin theme options */}
@@ -338,7 +338,7 @@ export function NavUserMenuThemeContent({ onThemeSelected }: NavUserMenuThemeCon
       )}
 
       {/* Divider before color mode options */}
-      <div className="my-2 border-t border-border" />
+      <div className="my-2 border-t qt-border-default" />
 
       {/* Color mode options */}
       {COLOR_MODE_OPTIONS.map(({ mode, label, icon }) => (

@@ -184,7 +184,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
         </div>
 
         <div className="qt-dialog-body">
-          <div className="bg-muted/50 rounded-lg p-4">
+          <div className="qt-bg-muted/50 rounded-lg p-4">
             <p className="qt-text-small">
               This will analyze each message exchange using AI to extract meaningful memories,
               just like live chats. The analysis runs in the background.
@@ -194,7 +194,7 @@ export function MemoryCreationDialog({ chat, onClose }: MemoryCreationDialogProp
                 <strong>{messagePairCount}</strong> message pair{messagePairCount === 1 ? '' : 's'} will be analyzed for <strong>{firstCharacter.name}</strong>.
               </p>
             ) : (
-              <p className="qt-text-small text-destructive mt-2">
+              <p className="qt-text-small qt-text-destructive mt-2">
                 No character with a connection profile found. Cannot analyze messages.
               </p>
             )}

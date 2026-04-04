@@ -71,7 +71,7 @@ export async function handlePost(
 
   // Verify ownership first
   const chat = await repos.chats.findById(chatId);
-  if (!chat || chat.userId !== user.id) {
+  if (!chat) {
     return notFound('Chat');
   }
 

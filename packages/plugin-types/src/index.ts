@@ -12,38 +12,68 @@
  */
 
 // ============================================================================
-// LLM Types
+// Provider Interfaces — The Four Canonical Shapes
 // ============================================================================
 
 export type {
-  // Core message types
-  FileAttachment,
+  // Shape 1: Text -> Text
+  TextProvider,
   LLMMessage,
   JSONSchemaDefinition,
   ResponseFormat,
   LLMParams,
-
-  // Response types
-  TokenUsage,
-  CacheUsage,
-  AttachmentResults,
   LLMResponse,
   StreamChunk,
 
-  // Image generation types
+  // Shape 2: Text -> Image
+  ImageProvider,
   ImageGenParams,
   GeneratedImage,
   ImageGenResponse,
 
-  // Model metadata
+  // Shape 3: Text -> Vector
+  EmbeddingProvider,
+  EmbeddingResult,
+  EmbeddingOptions,
+  LocalEmbeddingProviderState,
+  LocalEmbeddingProvider,
+
+  // Shape 4: Text + Candidates -> Scores
+  ScoringProvider,
+  ScoringTask,
+  ScoringInput,
+  CategoryScore,
+  ScoringResult,
+
+  // Common types shared across shapes
+  FileAttachment,
+  TokenUsage,
+  CacheUsage,
+  AttachmentResults,
   ModelWarningLevel,
   ModelWarning,
   ModelMetadata,
+} from './providers';
 
-  // Provider interfaces
-  LLMProvider,
-  ImageGenProvider,
-} from './llm/base';
+export { isLocalEmbeddingProvider } from './providers';
+
+// ============================================================================
+// Deprecated Provider Aliases (backward compatibility)
+// ============================================================================
+
+/**
+ * @deprecated Use `TextProvider` instead
+ */
+export type { TextProvider as LLMProvider } from './providers';
+
+/**
+ * @deprecated Use `ImageProvider` instead
+ */
+export type { ImageProvider as ImageGenProvider } from './providers';
+
+// ============================================================================
+// LLM Tool Types
+// ============================================================================
 
 export type {
   // Tool definitions
@@ -59,23 +89,13 @@ export type {
   ToolFormatOptions,
 } from './llm/tools';
 
-export type {
-  // Embedding types
-  EmbeddingResult,
-  EmbeddingOptions,
-  EmbeddingProvider,
-  LocalEmbeddingProviderState,
-  LocalEmbeddingProvider,
-} from './llm/embeddings';
-
-export { isLocalEmbeddingProvider } from './llm/embeddings';
-
 // ============================================================================
 // Plugin Types
 // ============================================================================
 
 export type {
-  // Provider plugin types
+  // Text provider plugin types (primary)
+  TextProviderPlugin,
   ProviderMetadata,
   ProviderConfigRequirements,
   ProviderCapabilities,
@@ -87,13 +107,22 @@ export type {
   ImageProviderConstraints,
   IconProps,
   PluginIconData,
-  LLMProviderPlugin,
   ProviderPluginExport,
   // Runtime configuration types
   MessageFormatSupport,
   CheapModelConfig,
   ToolFormatType,
+  // Deprecated alias
+  LLMProviderPlugin,
 } from './plugins/provider';
+
+export type {
+  // Scoring provider plugin types (primary)
+  ScoringProviderMetadata,
+  ScoringProviderConfigRequirements,
+  ScoringProviderPlugin,
+  ScoringProviderPluginExport,
+} from './plugins/scoring-provider';
 
 export type {
   // Manifest types
@@ -161,7 +190,7 @@ export type {
 } from './plugins/search-provider';
 
 export type {
-  // Moderation provider plugin types
+  // Moderation provider plugin types (deprecated, use scoring)
   ModerationProviderMetadata,
   ModerationProviderConfigRequirements,
   ModerationCategoryResult,
@@ -199,4 +228,4 @@ export { createConsoleLogger, createNoopLogger } from './common/logger';
  * Version of the plugin-types package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_TYPES_VERSION = '1.18.0';
+export const PLUGIN_TYPES_VERSION = '2.0.0';

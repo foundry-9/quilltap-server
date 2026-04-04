@@ -60,21 +60,21 @@ export function ImportPreviewStep({
   return (
     <div className="space-y-4">
       {/* Manifest Info */}
-      <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+      <div className="p-4 qt-bg-muted/50 rounded-lg space-y-2">
         <div>
-          <p className="qt-text-small text-muted-foreground">Export Type</p>
+          <p className="qt-text-small qt-text-secondary">Export Type</p>
           <p className="font-medium text-foreground">
             {preview.manifest.exportType}
           </p>
         </div>
         <div>
-          <p className="qt-text-small text-muted-foreground">Created</p>
+          <p className="qt-text-small qt-text-secondary">Created</p>
           <p className="font-medium text-foreground">
             {formatDate(preview.manifest.createdAt)}
           </p>
         </div>
         <div>
-          <p className="qt-text-small text-muted-foreground">App Version</p>
+          <p className="qt-text-small qt-text-secondary">App Version</p>
           <p className="font-medium text-foreground">
             {preview.manifest.appVersion}
           </p>
@@ -93,13 +93,13 @@ export function ImportPreviewStep({
           return (
             <div
               key={entityKey}
-              className="p-4 border border-border rounded-lg space-y-2"
+              className="p-4 border qt-border-default rounded-lg space-y-2"
             >
               <div className="flex items-center justify-between">
                 <h4 className="font-medium text-foreground">
                   {ENTITY_TYPE_LABELS[displayType]}
                 </h4>
-                <span className="qt-text-small text-muted-foreground">
+                <span className="qt-text-small qt-text-secondary">
                   {selectedCount} of {entities.length}
                 </span>
               </div>
@@ -107,7 +107,7 @@ export function ImportPreviewStep({
                 {entities.map((entity) => (
                   <label
                     key={entity.id}
-                    className="flex items-center gap-2 p-2 hover:bg-muted/50 rounded cursor-pointer"
+                    className="flex items-center gap-2 p-2 hover:qt-bg-muted/50 rounded cursor-pointer"
                   >
                     <input
                       type="checkbox"
@@ -119,7 +119,7 @@ export function ImportPreviewStep({
                       {entity.name || entity.title}
                     </span>
                     {entity.exists && (
-                      <span className="text-xs qt-bg-warning/10 text-warning px-2 py-1 rounded">
+                      <span className="text-xs qt-bg-warning/10 qt-text-warning px-2 py-1 rounded">
                         Exists
                       </span>
                     )}

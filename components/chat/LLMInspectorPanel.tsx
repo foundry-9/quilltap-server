@@ -131,7 +131,7 @@ export default function LLMInspectorPanel({
       >
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 qt-border-primary" />
           </div>
         ) : !loggingEnabled ? (
           <div className="text-center py-12 px-4">

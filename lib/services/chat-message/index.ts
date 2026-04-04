@@ -13,7 +13,11 @@ export type {
   GeneratedImage,
   ToolProcessingResult,
   StreamingResult,
+  StreamingState,
+  CompressionContext,
+  TriggerContext,
   NextSpeakerInfo,
+  ProcessMessageResult,
   StreamChunkData,
 } from './types'
 

@@ -33,9 +33,9 @@ export function ProjectItem({ project }: ProjectItemProps) {
   return (
     <Link
       href={`/prospero/${project.id}`}
-      className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+      className="flex items-center gap-3 p-2 rounded-lg hover:qt-bg-muted/50 transition-colors"
     >
-      <div className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md bg-muted">
+      <div className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md qt-bg-muted">
         <FolderIcon className="w-5 h-5" color={project.color} />
       </div>
       <div className="flex-1 min-w-0">

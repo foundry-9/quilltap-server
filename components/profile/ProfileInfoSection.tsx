@@ -85,7 +85,7 @@ function InfoField({
   }
 
   return (
-    <div className="flex items-center justify-between py-3 border-b border-border last:border-b-0">
+    <div className="flex items-center justify-between py-3 border-b qt-border-default last:border-b-0">
       <div>
         <dt className="qt-text-label text-sm">{label}</dt>
         <dd className="qt-text-primary font-mono text-sm mt-1">{value}</dd>

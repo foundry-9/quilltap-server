@@ -5,6 +5,7 @@
  */
 
 export type {
+  TextProviderPlugin,
   ProviderMetadata,
   ProviderConfigRequirements,
   ProviderCapabilities,
@@ -17,6 +18,13 @@ export type {
   LLMProviderPlugin,
   ProviderPluginExport,
 } from './provider';
+
+export type {
+  ScoringProviderMetadata,
+  ScoringProviderConfigRequirements,
+  ScoringProviderPlugin,
+  ScoringProviderPluginExport,
+} from './scoring-provider';
 
 export type {
   PluginCapability,

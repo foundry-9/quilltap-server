@@ -30,7 +30,7 @@ export function WizardStepIndicator({ currentStep, completedSteps = [] }: Wizard
                   ${isActive
                     ? 'qt-bg-primary/10 ring-2 ring-[var(--color-primary)] qt-text-primary'
                     : isCompleted
-                      ? 'bg-[var(--qt-color-primary)] text-white'
+                      ? 'bg-[var(--qt-color-primary)] qt-text-overlay'
                       : 'qt-bg-muted qt-text-muted'
                   }
                 `}

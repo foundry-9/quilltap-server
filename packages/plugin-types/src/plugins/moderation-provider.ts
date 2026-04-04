@@ -1,18 +1,23 @@
 /**
  * Moderation Provider Plugin types for Quilltap plugin development
  *
- * Defines the interfaces and types needed to create pluggable content
- * moderation backends as Quilltap plugins (e.g., OpenAI moderation endpoint).
+ * @deprecated Use ScoringProviderPlugin from './scoring-provider' instead.
+ * This module is kept for backward compatibility. The moderation-specific
+ * types map directly to the generalized scoring types:
+ *
+ * - ModerationProviderPlugin -> ScoringProviderPlugin
+ * - ModerationResult -> ScoringResult
+ * - ModerationCategoryResult -> CategoryScore
  *
  * @module @quilltap/plugin-types/plugins/moderation-provider
  */
 
 // ============================================================================
-// METADATA
+// METADATA (kept for backward compatibility)
 // ============================================================================
 
 /**
- * Moderation provider metadata for UI display and identification
+ * @deprecated Use ScoringProviderMetadata instead
  */
 export interface ModerationProviderMetadata {
   /** Internal identifier for the moderation provider (e.g., 'OPENAI') */
@@ -39,11 +44,11 @@ export interface ModerationProviderMetadata {
 }
 
 // ============================================================================
-// CONFIGURATION
+// CONFIGURATION (kept for backward compatibility)
 // ============================================================================
 
 /**
- * Configuration requirements for a moderation provider
+ * @deprecated Use ScoringProviderConfigRequirements instead
  */
 export interface ModerationProviderConfigRequirements {
   /** Whether this moderation provider requires an API key */
@@ -60,14 +65,11 @@ export interface ModerationProviderConfigRequirements {
 }
 
 // ============================================================================
-// MODERATION RESULTS
+// MODERATION RESULTS (kept for backward compatibility)
 // ============================================================================
 
 /**
- * A single moderation category result
- *
- * Categories are provider-specific (e.g., OpenAI returns 'hate', 'sexual',
- * 'violence', etc.; other providers may return different categories).
+ * @deprecated Use CategoryScore from providers/scoring instead
  */
 export interface ModerationCategoryResult {
   /** Category name as returned by the provider (e.g., 'sexual', 'violence', 'hate') */
@@ -81,11 +83,7 @@ export interface ModerationCategoryResult {
 }
 
 /**
- * Result from a moderation provider's content classification
- *
- * This is the generic result type returned by all moderation providers.
- * The categories array contains provider-specific category names and scores.
- * The consuming system (the Concierge) maps these to its own category structure.
+ * @deprecated Use ScoringResult from providers/scoring instead
  */
 export interface ModerationResult {
   /** Whether the content was flagged by the moderation provider */
@@ -96,39 +94,14 @@ export interface ModerationResult {
 }
 
 // ============================================================================
-// MODERATION PROVIDER PLUGIN
+// MODERATION PROVIDER PLUGIN (kept for backward compatibility)
 // ============================================================================
 
 /**
- * Main Moderation Provider Plugin Interface
+ * @deprecated Use ScoringProviderPlugin instead.
  *
- * Plugins implementing this interface provide content moderation backends
- * for Quilltap's Concierge system. The moderation provider is used
- * as an alternative to the Cheap LLM classification approach.
- *
- * @example
- * ```typescript
- * import type { ModerationProviderPlugin } from '@quilltap/plugin-types';
- *
- * export const moderationPlugin: ModerationProviderPlugin = {
- *   metadata: {
- *     providerName: 'OPENAI',
- *     displayName: 'OpenAI Moderation',
- *     description: 'Free content moderation via OpenAI moderation endpoint',
- *     abbreviation: 'OAI',
- *     colors: { bg: 'bg-green-100', text: 'text-green-800', icon: 'text-green-600' },
- *   },
- *   config: {
- *     requiresApiKey: true,
- *     apiKeyLabel: 'OpenAI API Key',
- *     requiresBaseUrl: false,
- *   },
- *   moderate: async (content, apiKey) => {
- *     // ... call moderation API ...
- *     return { flagged: false, categories: [] };
- *   },
- * };
- * ```
+ * Legacy moderation provider plugin interface. New plugins should implement
+ * ScoringProviderPlugin with a ScoringProvider that handles task: 'moderation'.
  */
 export interface ModerationProviderPlugin {
   /** Moderation provider metadata for UI display and identification */
@@ -154,9 +127,6 @@ export interface ModerationProviderPlugin {
   /**
    * Validate an API key for this moderation provider (optional)
    *
-   * Should test the API key by making a minimal API call to verify
-   * that it is valid and has proper permissions.
-   *
    * @param apiKey The API key to validate
    * @param baseUrl Optional base URL for the moderation API
    * @returns Promise resolving to true if valid, false otherwise
@@ -165,7 +135,7 @@ export interface ModerationProviderPlugin {
 }
 
 /**
- * Standard export type for moderation provider plugins
+ * @deprecated Use ScoringProviderPluginExport instead
  */
 export interface ModerationProviderPluginExport {
   /** The moderation provider plugin instance */

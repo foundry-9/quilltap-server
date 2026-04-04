@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { notFound, serverError, validationError } from '@/lib/api/responses';
+import { notFound, serverError } from '@/lib/api/responses';
 
 const updateClothingRecordSchema = z.object({
   name: z.string().min(1).optional(),
@@ -45,36 +45,27 @@ export const GET = createAuthenticatedParamsHandler<{ id: string; recordId: stri
 // PUT /api/v1/characters/[id]/clothing/[recordId]
 export const PUT = createAuthenticatedParamsHandler<{ id: string; recordId: string }>(
   async (req, { user, repos }, { id, recordId }) => {
-    try {
-      const character = await repos.characters.findById(id);
+    const character = await repos.characters.findById(id);
 
-      if (!checkOwnership(character, user.id)) {
-        return notFound('Character');
-      }
-
-      const body = await req.json();
-      const validatedData = updateClothingRecordSchema.parse(body);
-
-      const record = await repos.characters.updateClothingRecord(id, recordId, validatedData);
-
-      if (!record) {
-        return notFound('Clothing record');
-      }
-
-      logger.info('[Characters v1] Clothing record updated', {
-        characterId: id,
-        recordId,
-      });
-
-      return NextResponse.json({ clothingRecord: record });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return validationError(error);
-      }
-
-      logger.error('[Characters v1] Error updating clothing record', { characterId: id, recordId }, error instanceof Error ? error : undefined);
-      return serverError('Failed to update clothing record');
+    if (!checkOwnership(character, user.id)) {
+      return notFound('Character');
     }
+
+    const body = await req.json();
+    const validatedData = updateClothingRecordSchema.parse(body);
+
+    const record = await repos.characters.updateClothingRecord(id, recordId, validatedData);
+
+    if (!record) {
+      return notFound('Clothing record');
+    }
+
+    logger.info('[Characters v1] Clothing record updated', {
+      characterId: id,
+      recordId,
+    });
+
+    return NextResponse.json({ clothingRecord: record });
   }
 );
 

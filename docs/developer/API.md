@@ -1,6 +1,6 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v3.2.
+Complete API reference for Quilltap v4.0-dev.
 
 ## Table of Contents
 
@@ -19,9 +19,15 @@ Complete API reference for Quilltap v3.2.
   - [Embedding Profiles](#embedding-profiles)
   - [Image Profiles](#image-profiles)
   - [Models](#models)
+  - [Model Classes](#model-classes)
   - [Characters](#characters)
+  - [Character Descriptions](#character-descriptions)
+  - [Character System Prompts](#character-system-prompts)
+  - [Character Scenarios](#character-scenarios)
   - [NPCs](#npcs)
   - [Chats](#chats)
+  - [Chat Files](#chat-files)
+  - [Chat File Operations](#chat-file-operations)
   - [Messages](#messages)
   - [Memories](#memories)
   - [Tags](#tags)
@@ -36,10 +42,23 @@ Complete API reference for Quilltap v3.2.
   - [Tools & Backup (Legacy)](#tools--backup)
   - [LLM Logs](#llm-logs)
   - [Themes](#themes)
+  - [Themes (v1)](#themes-v1)
   - [Search](#search)
+  - [Search & Replace](#search--replace)
   - [LLM Tools](#llm-tools)
   - [Plugins](#plugins)
+  - [Plugins (v1)](#plugins-v1)
   - [Projects](#projects)
+  - [Help Docs](#help-docs)
+  - [Help Chats](#help-chats)
+  - [System Deployment](#system-deployment)
+  - [System Plugin Initialization](#system-plugin-initialization)
+  - [System Plugin Upgrades](#system-plugin-upgrades)
+  - [System Pepper Vault (Deprecated)](#system-pepper-vault-deprecated)
+  - [Shell: Sudo Approval](#shell-sudo-approval)
+  - [Shell: Workspace Acknowledgement](#shell-workspace-acknowledgement)
+  - [File Proxy](#file-proxy)
+  - [File Write Permissions](#file-write-permissions)
 
 ## API Versioning
 
@@ -845,6 +864,23 @@ Fetch models directly from a provider (live query, not cached).
 
 ---
 
+### Model Classes
+
+#### `GET /api/v1/model-classes`
+
+List all available model class definitions. Model classes define categories of models (e.g., "budget", "standard", "premium") with associated capabilities and pricing tiers.
+
+**Response**: `200 OK`
+
+```json
+{
+  "modelClasses": [...],
+  "count": 5
+}
+```
+
+---
+
 ### Characters
 
 #### `GET /api/v1/characters`
@@ -1078,6 +1114,285 @@ Updates a clothing record. All fields are optional.
 ##### `DELETE /api/v1/characters/[id]/clothing/[recordId]`
 
 Deletes a clothing record. Returns `{ success: true }`.
+
+---
+
+### Character Descriptions
+
+Multi-tiered description records for characters, providing varying levels of detail for different context window sizes.
+
+#### `GET /api/v1/characters/[id]/descriptions`
+
+Get all descriptions for a character.
+
+**Response**: `200 OK`
+
+```json
+{
+  "descriptions": [...]
+}
+```
+
+#### `POST /api/v1/characters/[id]/descriptions`
+
+Create a new description.
+
+**Request Body**:
+
+```json
+{
+  "name": "Default Description",
+  "usageContext": "General usage",
+  "shortPrompt": "Brief description (max 350 chars)",
+  "mediumPrompt": "Medium description (max 500 chars)",
+  "longPrompt": "Longer description (max 750 chars)",
+  "completePrompt": "Complete description (max 1000 chars)",
+  "fullDescription": "Full unrestricted description"
+}
+```
+
+**Validation**:
+- `name`: Required, min 1 character
+- `usageContext`: Optional, max 200 characters
+- `shortPrompt`: Optional, max 350 characters
+- `mediumPrompt`: Optional, max 500 characters
+- `longPrompt`: Optional, max 750 characters
+- `completePrompt`: Optional, max 1000 characters
+- `fullDescription`: Optional, no max length
+
+**Response**: `201 Created`
+
+```json
+{
+  "description": { ... }
+}
+```
+
+#### `GET /api/v1/characters/[id]/descriptions/[descId]`
+
+Get a specific description.
+
+**Response**: `200 OK`
+
+```json
+{
+  "description": { ... }
+}
+```
+
+#### `PUT /api/v1/characters/[id]/descriptions/[descId]`
+
+Update a description. All fields are optional.
+
+**Request Body**:
+
+```json
+{
+  "name": "Updated Name",
+  "usageContext": "Updated context",
+  "shortPrompt": "Updated short prompt"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "description": { ... }
+}
+```
+
+#### `DELETE /api/v1/characters/[id]/descriptions/[descId]`
+
+Delete a description.
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true
+}
+```
+
+---
+
+### Character System Prompts
+
+System prompts are named prompt templates stored on a character, used to configure LLM behavior.
+
+#### `GET /api/v1/characters/[id]/prompts`
+
+Get all system prompts for a character.
+
+**Response**: `200 OK`
+
+```json
+{
+  "prompts": [
+    {
+      "id": "prompt-uuid",
+      "name": "Default",
+      "content": "You are Alice, a helpful assistant.",
+      "isDefault": true
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/characters/[id]/prompts`
+
+Add a new system prompt to a character.
+
+**Request Body**:
+
+```json
+{
+  "name": "Custom Prompt",
+  "content": "You are Alice, speaking formally.",
+  "isDefault": false
+}
+```
+
+**Validation**:
+- `name`: Required, 1-100 characters
+- `content`: Required, min 1 character
+- `isDefault`: Optional boolean (defaults to false)
+
+**Response**: `201 Created`
+
+```json
+{
+  "prompt": { ... }
+}
+```
+
+#### `GET /api/v1/characters/[id]/prompts/[promptId]`
+
+Get a specific system prompt.
+
+**Response**: `200 OK`
+
+```json
+{
+  "prompt": { ... }
+}
+```
+
+#### `PUT /api/v1/characters/[id]/prompts/[promptId]`
+
+Update a system prompt. All fields are optional.
+
+**Request Body**:
+
+```json
+{
+  "name": "Updated Name",
+  "content": "Updated content",
+  "isDefault": true
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "prompt": { ... }
+}
+```
+
+#### `DELETE /api/v1/characters/[id]/prompts/[promptId]`
+
+Delete a system prompt.
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true
+}
+```
+
+---
+
+### Character Scenarios
+
+Scenarios are named narrative contexts that can be selected when starting a chat with a character.
+
+#### `GET /api/v1/characters/[id]/scenarios`
+
+Get all scenarios for a character.
+
+**Response**: `200 OK`
+
+```json
+{
+  "scenarios": [
+    {
+      "id": "scenario-uuid",
+      "title": "Coffee Shop Meeting",
+      "content": "You meet in a quiet coffee shop..."
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/characters/[id]/scenarios`
+
+Add a new scenario.
+
+**Request Body**:
+
+```json
+{
+  "title": "Coffee Shop Meeting",
+  "content": "You meet in a quiet coffee shop..."
+}
+```
+
+**Validation**:
+- `title`: Required, 1-200 characters
+- `content`: Required, min 1 character
+
+**Response**: `201 Created`
+
+```json
+{
+  "scenario": { ... }
+}
+```
+
+#### `PUT /api/v1/characters/[id]/scenarios?scenarioId=xxx`
+
+Update a scenario. Requires `scenarioId` query parameter.
+
+**Request Body**:
+
+```json
+{
+  "title": "Updated Title",
+  "content": "Updated content"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "scenario": { ... }
+}
+```
+
+#### `DELETE /api/v1/characters/[id]/scenarios?scenarioId=xxx`
+
+Remove a scenario. Requires `scenarioId` query parameter.
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Scenario removed"
+}
+```
 
 ---
 
@@ -1403,6 +1718,117 @@ Set the active speaker when impersonating multiple characters.
 ```json
 {
   "participantId": "participant-uuid"
+}
+```
+
+---
+
+### Chat Files
+
+Upload and list files associated with a chat.
+
+#### `GET /api/v1/chats/[id]/files`
+
+List files for a chat, including both uploaded attachments and generated images. Files are sorted by creation time, newest first.
+
+**Response**: `200 OK`
+
+```json
+{
+  "files": [
+    {
+      "id": "file-uuid",
+      "filename": "document.pdf",
+      "filepath": "/api/v1/files/file-uuid",
+      "mimeType": "application/pdf",
+      "size": 12345,
+      "url": "/api/v1/files/file-uuid",
+      "createdAt": "2026-01-15T12:00:00.000Z",
+      "type": "chatFile"
+    }
+  ]
+}
+```
+
+**File Types**:
+- `chatFile` - User-uploaded attachment
+- `generatedImage` - AI-generated image
+
+#### `POST /api/v1/chats/[id]/files`
+
+Upload a file for a chat. Uses `multipart/form-data`.
+
+**Request**: `multipart/form-data`
+- `file` (required) - The file to upload
+- `resolution` (optional) - Conflict resolution: `"replace"`, `"rename"`, `"skip"`
+- `conflictingFileId` (optional) - ID of the conflicting file when resolving duplicates
+
+**Response (success)**: `200 OK`
+
+```json
+{
+  "file": {
+    "id": "file-uuid",
+    "filename": "document.pdf",
+    "filepath": "/api/v1/files/file-uuid",
+    "mimeType": "application/pdf",
+    "size": 12345,
+    "url": "/api/v1/files/file-uuid"
+  }
+}
+```
+
+**Response (duplicate detected)**: `200 OK`
+
+```json
+{
+  "duplicate": true,
+  "conflictType": "exact_match",
+  "existingFile": { ... },
+  "newFile": { ... }
+}
+```
+
+---
+
+### Chat File Operations
+
+Operations on individual chat file entries.
+
+#### `POST /api/v1/chat-files/[id]?action=tag`
+
+Tag a chat file with a character association.
+
+**Request Body**:
+
+```json
+{
+  "tagType": "CHARACTER",
+  "tagId": "character-uuid"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "data": {
+    "fileId": "file-uuid",
+    "tagType": "CHARACTER",
+    "tagId": "character-uuid"
+  }
+}
+```
+
+#### `DELETE /api/v1/chat-files/[id]`
+
+Delete a chat file and its physical storage.
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true
 }
 ```
 
@@ -2579,6 +3005,188 @@ Update theme preference.
 
 ---
 
+### Themes (v1)
+
+Modern theme management API with bundle support and registry integration.
+
+#### `GET /api/v1/themes`
+
+List all installed themes with statistics.
+
+**Authentication**: Not required (runs before auth is available)
+
+**Response**: `200 OK`
+
+```json
+{
+  "themes": [...],
+  "stats": {
+    "total": 6,
+    "withDarkMode": 4,
+    "withCssOverrides": 5
+  }
+}
+```
+
+#### `GET /api/v1/themes?action=registry`
+
+Browse themes from all enabled registry sources.
+
+**Query Parameters**:
+- `q` (optional) - Search query to filter registry themes
+
+**Response**: `200 OK`
+
+```json
+{
+  "themes": [...]
+}
+```
+
+#### `GET /api/v1/themes?action=registry-sources`
+
+List configured theme registry sources.
+
+**Response**: `200 OK`
+
+```json
+{
+  "sources": [...]
+}
+```
+
+#### `GET /api/v1/themes?action=updates`
+
+Check for available theme updates across installed bundle themes.
+
+**Response**: `200 OK`
+
+```json
+{
+  "updates": [...]
+}
+```
+
+#### `POST /api/v1/themes?action=install`
+
+Install a `.qtap-theme` bundle via multipart upload.
+
+**Request**: `multipart/form-data`
+- `theme` (required) - The `.qtap-theme` file
+
+**Response**: `201 Created`
+
+```json
+{
+  "message": "Theme installed successfully",
+  "themeId": "my-theme",
+  "version": "1.0.0"
+}
+```
+
+#### `POST /api/v1/themes?action=install-from-url`
+
+Install a `.qtap-theme` bundle from a URL.
+
+**Request Body**:
+
+```json
+{
+  "url": "https://example.com/my-theme.qtap-theme"
+}
+```
+
+**Response**: `201 Created`
+
+```json
+{
+  "message": "Theme installed successfully",
+  "themeId": "my-theme",
+  "version": "1.0.0"
+}
+```
+
+#### `POST /api/v1/themes?action=add-source`
+
+Add a theme registry source.
+
+**Request Body**:
+
+```json
+{
+  "name": "My Registry",
+  "url": "https://registry.example.com/themes.json",
+  "publicKey": "optional-ed25519-public-key"
+}
+```
+
+**Response**: `201 Created`
+
+```json
+{
+  "message": "Registry source added",
+  "source": { ... }
+}
+```
+
+#### `POST /api/v1/themes?action=remove-source`
+
+Remove a theme registry source.
+
+**Request Body**:
+
+```json
+{
+  "name": "My Registry"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Registry source \"My Registry\" removed"
+}
+```
+
+#### `POST /api/v1/themes?action=refresh`
+
+Refresh all registry indexes.
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Refreshed registries, found 12 themes",
+  "themeCount": 12
+}
+```
+
+#### `POST /api/v1/themes?action=install-registry`
+
+Install a theme from a registry source.
+
+**Request Body**:
+
+```json
+{
+  "themeId": "theme-id",
+  "registryUrl": "https://registry.example.com/themes.json"
+}
+```
+
+**Response**: `201 Created`
+
+```json
+{
+  "message": "Theme installed from registry",
+  "themeId": "theme-id",
+  "version": "1.0.0"
+}
+```
+
+---
+
 ### Search
 
 #### `GET /api/v1/ui/search?q=query`
@@ -2588,6 +3196,48 @@ Global search across characters and chats.
 **Query Parameters**:
 - `q` - Search query (required)
 - `type` - Filter by type: `characters`, `chats`
+
+---
+
+### Search & Replace
+
+Bulk search-and-replace across chat messages and memories.
+
+#### `POST /api/v1/search-replace?action=execute`
+
+Execute a search/replace operation.
+
+**Request Body**:
+
+```json
+{
+  "scope": { "type": "chat", "chatId": "chat-uuid" },
+  "searchText": "old name",
+  "replaceText": "new name",
+  "includeMessages": true,
+  "includeMemories": true
+}
+```
+
+**Scope Options**:
+- `{ "type": "chat", "chatId": "uuid" }` - Scope to a specific chat
+- `{ "type": "character", "characterId": "uuid" }` - Scope to a specific character
+
+**Response**: `200 OK`
+
+Returns execution results with counts of replacements made.
+
+#### `POST /api/v1/search-replace?action=preview`
+
+Preview counts for a search/replace operation without executing.
+
+**Request Body**: Same as `execute`.
+
+**Response**: `200 OK`
+
+Returns preview counts of matches found.
+
+**Note**: A POST with no action parameter returns `400 Bad Request` with message "Action parameter required: execute or preview".
 
 ---
 
@@ -2881,6 +3531,142 @@ Get all installed plugins with metadata.
 
 ---
 
+### Plugins (v1)
+
+Modern plugin management API under `/api/v1/`.
+
+#### `GET /api/v1/plugins`
+
+List all registered plugins with system stats.
+
+**Query Parameters**:
+- `filter=installed` - List only enabled/installed plugins
+
+**Response**: `200 OK`
+
+```json
+{
+  "plugins": [...],
+  "stats": {
+    "total": 15,
+    "enabled": 14,
+    "disabled": 1,
+    "errors": 0,
+    "initialized": true
+  },
+  "errors": [],
+  "count": 15
+}
+```
+
+#### `GET /api/v1/plugins?action=check-upgrades`
+
+Check for available plugin upgrades with enhanced metadata including breaking change detection.
+
+**Response**: `200 OK`
+
+```json
+{
+  "upgrades": [
+    {
+      "packageName": "qtap-plugin-example",
+      "currentVersion": "1.0.0",
+      "latestVersion": "1.1.0",
+      "isNonBreaking": true
+    }
+  ],
+  "lastChecked": "2026-01-15T12:00:00.000Z",
+  "count": 1
+}
+```
+
+#### `POST /api/v1/plugins?action=search`
+
+Search the npm registry for Quilltap plugins.
+
+**Request Body**:
+
+```json
+{
+  "query": "openai",
+  "type": "all"
+}
+```
+
+**Validation**:
+- `query`: Required, min 1 character
+- `type`: Optional, one of `"provider"`, `"theme"`, `"tool"`, `"all"` (default: `"all"`)
+
+**Response**: `200 OK`
+
+```json
+{
+  "results": [
+    {
+      "name": "qtap-plugin-openai",
+      "version": "1.0.5",
+      "description": "OpenAI provider plugin",
+      "author": "Foundry 9",
+      "keywords": ["quilltap", "plugin", "openai"],
+      "updated": "2026-01-15",
+      "score": 0.95,
+      "links": { ... }
+    }
+  ],
+  "count": 1
+}
+```
+
+#### `POST /api/v1/plugins?action=install`
+
+Install a plugin from npm.
+
+**Request Body**:
+
+```json
+{
+  "packageName": "qtap-plugin-example",
+  "version": "1.0.0"
+}
+```
+
+**Response**: `201 Created`
+
+```json
+{
+  "success": true,
+  "message": "Plugin installed successfully",
+  "plugin": {
+    "name": "qtap-plugin-example",
+    "version": "1.0.0",
+    "manifest": { ... }
+  }
+}
+```
+
+#### `POST /api/v1/plugins?action=uninstall`
+
+Uninstall a plugin.
+
+**Request Body**:
+
+```json
+{
+  "packageName": "qtap-plugin-example"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Plugin uninstalled successfully"
+}
+```
+
+---
+
 ### Projects
 
 Project management endpoints for organizing chats, files, and characters.
@@ -3004,6 +3790,566 @@ When a new chat is created within a project, it inherits these default tool sett
 
 ---
 
+### Help Docs
+
+Help documentation endpoints for in-app help system.
+
+#### `GET /api/v1/help-docs`
+
+List all help documents (metadata only). Loads and caches the help bundle on first request.
+
+**Response**: `200 OK`
+
+```json
+{
+  "documents": [...]
+}
+```
+
+#### `GET /api/v1/help-docs?action=chat-count`
+
+Get the count of salon chats (non-help chats) for the current user.
+
+**Response**: `200 OK`
+
+```json
+{
+  "count": 42
+}
+```
+
+---
+
+### Help Chats
+
+Help chat system for in-app character-assisted help with tool use and streaming responses.
+
+#### `GET /api/v1/help-chats`
+
+List help chats for the current user, sorted by most recently updated.
+
+**Response**: `200 OK`
+
+```json
+{
+  "chats": [
+    {
+      "id": "chat-uuid",
+      "title": "Help: Alice",
+      "updatedAt": "2026-01-15T12:00:00.000Z",
+      "participants": [...],
+      "messageCount": 5,
+      "helpPageUrl": "/settings?tab=chat"
+    }
+  ]
+}
+```
+
+#### `GET /api/v1/help-chats?action=eligibility`
+
+Check which characters are eligible for help chats (have help tools enabled and tool-capable connection profiles).
+
+**Response**: `200 OK`
+
+```json
+{
+  "eligible": true,
+  "characters": [
+    {
+      "id": "char-uuid",
+      "name": "Alice",
+      "avatarUrl": "/api/v1/files/file-uuid",
+      "defaultHelpToolsEnabled": true,
+      "connectionProfileId": "profile-uuid",
+      "hasToolCapableProfile": true
+    }
+  ],
+  "reasons": []
+}
+```
+
+#### `POST /api/v1/help-chats`
+
+Create a new help chat.
+
+**Request Body**:
+
+```json
+{
+  "characterIds": ["char-uuid-1"],
+  "pageUrl": "/settings?tab=chat"
+}
+```
+
+**Validation**:
+- `characterIds`: Required, array of UUIDs, min 1 character
+- `pageUrl`: Required string
+- At least one character must have `defaultHelpToolsEnabled: true`
+
+**Response**: `201 Created`
+
+```json
+{
+  "chat": { ... }
+}
+```
+
+#### `GET /api/v1/help-chats/[id]`
+
+Get help chat details with enriched participants and message count.
+
+**Response**: `200 OK`
+
+```json
+{
+  "chat": { ... }
+}
+```
+
+#### `PATCH /api/v1/help-chats/[id]`
+
+Rename a help chat.
+
+**Request Body**:
+
+```json
+{
+  "title": "New Title"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "chat": { ... }
+}
+```
+
+#### `PATCH /api/v1/help-chats/[id]?action=update-context`
+
+Update the page context for a help chat. Injects a system message noting the navigation.
+
+**Request Body**:
+
+```json
+{
+  "pageUrl": "/settings?tab=system"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "chat": { ... }
+}
+```
+
+#### `DELETE /api/v1/help-chats/[id]`
+
+Delete a help chat.
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Help chat deleted successfully"
+}
+```
+
+#### `GET /api/v1/help-chats/[id]/messages`
+
+Load messages for a help chat.
+
+**Response**: `200 OK`
+
+```json
+{
+  "messages": [...]
+}
+```
+
+#### `POST /api/v1/help-chats/[id]/messages`
+
+Send a message to a help chat and receive a streaming response.
+
+**Request Body**:
+
+```json
+{
+  "content": "How do I configure a connection profile?",
+  "fileIds": ["file-uuid"]
+}
+```
+
+**Response**: Server-Sent Events (`text/event-stream`)
+
+Streams the help character's response in real-time, including tool calls (help search, file management, etc.).
+
+---
+
+### System Deployment
+
+#### `GET /api/v1/system/deployment`
+
+Returns deployment information. This endpoint is unauthenticated as it is needed during app initialization.
+
+**Authentication**: Not required
+
+**Response**: `200 OK`
+
+```json
+{
+  "isUserManaged": true,
+  "isHosted": false
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `isUserManaged` | `true` for self-hosted deployments |
+| `isHosted` | `true` for hosted/cloud deployments (inverse of `isUserManaged`) |
+
+---
+
+### System Plugin Initialization
+
+#### `GET /api/v1/system/plugins/initialize`
+
+Returns the current plugin initialization status without triggering initialization.
+
+**Authentication**: Not required (runs during startup before auth is available)
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "state": { ... }
+}
+```
+
+#### `POST /api/v1/system/plugins/initialize`
+
+Triggers plugin system initialization. Scans and loads all plugins. This endpoint is idempotent.
+
+**Authentication**: Not required (runs during startup before auth is available)
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "result": {
+    "success": true,
+    "warnings": [],
+    "errors": []
+  }
+}
+```
+
+---
+
+### System Plugin Upgrades
+
+Plugin upgrade notification management. Unauthenticated as it runs during startup.
+
+#### `GET /api/v1/system/plugins/upgrades`
+
+Returns pending upgrade notifications from server startup. Returns null results if already notified or no upgrades occurred.
+
+**Authentication**: Not required
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "ready": true,
+  "results": {
+    "upgraded": [
+      {
+        "name": "qtap-plugin-openai",
+        "from": "1.0.4",
+        "to": "1.0.5"
+      }
+    ],
+    "failed": []
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `ready` | `false` if server startup is not yet complete |
+| `results` | `null` if no un-notified upgrades exist |
+
+#### `POST /api/v1/system/plugins/upgrades`
+
+Mark upgrade notifications as acknowledged. Call this after showing toast notifications to prevent re-notification.
+
+**Authentication**: Not required
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Upgrades marked as notified"
+}
+```
+
+---
+
+### System Pepper Vault (Deprecated)
+
+> **Deprecated**: This endpoint has been replaced by `/api/v1/system/unlock`. All methods return `410 Gone`.
+
+#### `GET /api/v1/system/pepper-vault`
+
+**Response**: `410 Gone`
+
+```json
+{
+  "error": "Gone",
+  "message": "The pepper-vault endpoint has been replaced by /api/v1/system/unlock",
+  "replacement": "/api/v1/system/unlock"
+}
+```
+
+#### `POST /api/v1/system/pepper-vault`
+
+**Response**: `410 Gone` (same body as GET)
+
+---
+
+### Shell: Sudo Approval
+
+Handles user approval or denial of pending sudo commands from the shell tool.
+
+#### `POST /api/v1/shell/sudo-approval?action=complete`
+
+Complete a pending sudo command by approving or denying it.
+
+**Request Body**:
+
+```json
+{
+  "chatId": "chat-uuid",
+  "decision": "approve",
+  "pendingSudoCommand": {
+    "command": "npm install",
+    "parameters": ["-g", "typescript"],
+    "timeout_ms": 60000
+  }
+}
+```
+
+**Validation**:
+- `chatId`: Required UUID
+- `decision`: Required, `"approve"` or `"deny"`
+- `pendingSudoCommand.command`: Required, min 1 character
+- `pendingSudoCommand.parameters`: Optional array of strings
+- `pendingSudoCommand.timeout_ms`: Optional integer, 1000-300000
+
+**Response (approved)**: `200 OK`
+
+```json
+{
+  "action": "approved",
+  "result": { ... },
+  "toolMessageId": "message-uuid"
+}
+```
+
+**Response (denied)**: `200 OK`
+
+```json
+{
+  "action": "denied",
+  "message": "Sudo command denied",
+  "toolMessageId": "message-uuid"
+}
+```
+
+**Note**: A POST without `?action=complete` returns `400 Bad Request`.
+
+---
+
+### Shell: Workspace Acknowledgement
+
+Records user acknowledgement of workspace security implications for the shell tool.
+
+#### `POST /api/v1/shell/workspace-acknowledgement`
+
+Record workspace security acknowledgement for a chat.
+
+**Request Body**:
+
+```json
+{
+  "chatId": "chat-uuid"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "acknowledged": true,
+  "message": "Workspace acknowledgement recorded"
+}
+```
+
+Sets `workspaceWarningAcknowledged: true` in the chat state.
+
+---
+
+### File Proxy
+
+Serves files stored in the local filesystem through the API with authentication and ownership verification.
+
+#### `GET /api/v1/files/proxy/[...key]`
+
+Download a file by storage key. The key is the path segments of the file's storage key.
+
+**Response**: File binary with appropriate headers:
+- `Content-Type` - File MIME type
+- `Content-Length` - File size
+- `Content-Disposition` - Inline with filename (supports RFC 5987 for Unicode filenames)
+- `Cache-Control` - `public, max-age=31536000, immutable`
+
+**Error Responses**:
+- `404 Not Found` - File not found in database or storage key not provided
+- `403 Forbidden` - File does not belong to the authenticated user
+
+---
+
+### File Write Permissions
+
+Manages file write permissions that control whether LLM tools can create/modify files.
+
+#### `GET /api/v1/files/write-permissions`
+
+List all file write permissions for the current user, enriched with project and file names.
+
+**Response**: `200 OK`
+
+```json
+{
+  "permissions": [
+    {
+      "id": "perm-uuid",
+      "scope": "PROJECT",
+      "projectId": "project-uuid",
+      "projectName": "My Project",
+      "fileId": null,
+      "filename": null,
+      "grantedAt": "2026-01-15T12:00:00.000Z",
+      "grantedInChatId": "chat-uuid",
+      "createdAt": "2026-01-15T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/files/write-permissions`
+
+Grant a new file write permission (default POST, no action parameter).
+
+**Request Body**:
+
+```json
+{
+  "scope": "PROJECT",
+  "fileId": null,
+  "projectId": "project-uuid",
+  "grantedInChatId": "chat-uuid"
+}
+```
+
+**Scope Values**:
+- `SINGLE_FILE` - Permission for a single file (requires `fileId`)
+- `PROJECT` - Permission for all files in a project (requires `projectId`)
+- `GENERAL` - Permission for all user files
+
+**Response**: `201 Created`
+
+```json
+{
+  "permission": { ... }
+}
+```
+
+#### `POST /api/v1/files/write-permissions?action=revoke`
+
+Revoke a file write permission.
+
+**Request Body**:
+
+```json
+{
+  "permissionId": "perm-uuid"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Permission revoked"
+}
+```
+
+#### `POST /api/v1/files/write-permissions?action=complete`
+
+Complete a pending file write request (approve or deny). On approval, grants the appropriate permission and executes the file write.
+
+**Request Body**:
+
+```json
+{
+  "chatId": "chat-uuid",
+  "action": "approve",
+  "pendingWrite": {
+    "filename": "notes.txt",
+    "content": "File content here",
+    "mimeType": "text/plain",
+    "folderPath": "/",
+    "projectId": null
+  }
+}
+```
+
+**Response (approved)**: `200 OK`
+
+```json
+{
+  "action": "approved",
+  "file": {
+    "id": "file-uuid",
+    "filename": "notes.txt",
+    "folderPath": "/",
+    "projectId": null
+  },
+  "toolMessageId": "message-uuid",
+  "message": "File \"notes.txt\" created successfully"
+}
+```
+
+**Response (denied)**: `200 OK`
+
+```json
+{
+  "action": "denied",
+  "message": "File write request denied",
+  "toolMessageId": "message-uuid"
+}
+```
+
+---
+
 ## SDK Examples
 
 ### JavaScript/TypeScript
@@ -3072,7 +4418,7 @@ characters = data['characters']
 
 ## Versioning
 
-Current API version: **v2.10**
+Current API version: **v4.0-dev**
 
 All core endpoints use the `/api/v1/` prefix. Legacy routes (without prefix) were removed in v2.8.
 

@@ -54,10 +54,10 @@ export default function DeletedImagePlaceholder({
 
   return (
     <div
-      className={`flex flex-col items-center justify-center bg-muted border-2 border-dashed border-muted-foreground rounded-lg ${isCompact ? 'p-1' : 'p-6'} ${className}`}
+      className={`flex flex-col items-center justify-center qt-bg-muted border-2 border-dashed border-muted-foreground rounded-lg ${isCompact ? 'p-1' : 'p-6'} ${className}`}
       style={style}
     >
-      <svg className={`text-muted-foreground ${isCompact ? 'w-6 h-6 mb-1' : 'w-12 h-12 mb-2'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className={`qt-text-secondary ${isCompact ? 'w-6 h-6 mb-1' : 'w-12 h-12 mb-2'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -73,7 +73,7 @@ export default function DeletedImagePlaceholder({
       )}
       <button
         onClick={handleCleanup}
-        className={`bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded transition-colors ${isCompact ? 'px-1.5 py-0.5 text-[9px]' : 'px-3 py-1 text-xs'}`}
+        className={`bg-destructive hover:qt-bg-destructive/90 qt-text-destructive-foreground rounded transition-colors ${isCompact ? 'px-1.5 py-0.5 text-[9px]' : 'px-3 py-1 text-xs'}`}
       >
         Remove
       </button>

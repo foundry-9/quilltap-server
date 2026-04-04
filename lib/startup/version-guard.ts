@@ -20,6 +20,7 @@
 
 import semver from 'semver';
 import { logger } from '@/lib/logger';
+import { getDbKeyPath, getLLMLogsDbKeyPath } from '@/lib/startup/dbkey';
 
 /** Version assumed for databases without an instance_settings table */
 const LEGACY_ASSUMED_VERSION = '3.3.0-dev.127';
@@ -177,11 +178,52 @@ export function storeCurrentVersion(): void {
     log.info('Stored current version in instance_settings', {
       version: currentVersion,
     });
+
+    // Also write minServerVersion into .dbkey files so the shell can
+    // reject launches before even opening the database.
+    storeMinServerVersionInDbKeys(currentVersion, log);
   } catch (error) {
     log.error('Failed to store current version in instance_settings', {
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+/**
+ * Patch a .dbkey JSON file on disk, setting `minServerVersion` to the given version.
+ *
+ * Reads the existing JSON, adds/updates the `minServerVersion` field, and writes
+ * it back. Preserves all other fields and file permissions (0o600).
+ */
+function patchDbKeyFileVersion(filePath: string, version: string, log: ReturnType<typeof logger.child>): void {
+  const fs = require('fs');
+
+  try {
+    if (!fs.existsSync(filePath)) {
+      log.debug('Skipping minServerVersion patch — .dbkey file does not exist', { path: filePath });
+      return;
+    }
+
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(content);
+    data.minServerVersion = version;
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), { mode: 0o600 });
+
+    log.info('Wrote minServerVersion to .dbkey file', { path: filePath, minServerVersion: version });
+  } catch (error) {
+    log.error('Failed to write minServerVersion to .dbkey file', {
+      path: filePath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Write `minServerVersion` into both the main and LLM logs .dbkey files.
+ */
+function storeMinServerVersionInDbKeys(version: string, log: ReturnType<typeof logger.child>): void {
+  patchDbKeyFileVersion(getDbKeyPath(), version, log);
+  patchDbKeyFileVersion(getLLMLogsDbKeyPath(), version, log);
 }
 
 /**

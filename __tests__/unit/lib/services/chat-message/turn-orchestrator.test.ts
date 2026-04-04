@@ -1,6 +1,7 @@
 import {
   shouldChainNext,
   persistTurnParticipantId,
+  executeTurnChain,
   DEFAULT_CHAIN_CONFIG,
 } from '@/lib/services/chat-message/turn-orchestrator.service';
 import * as turnManager from '@/lib/chat/turn-manager';
@@ -24,6 +25,15 @@ jest.mock('@/lib/chat/turn-manager', () => ({
   getActiveCharacterParticipants: jest.fn().mockReturnValue([]),
   isAllLLMChat: jest.fn().mockReturnValue(false),
   shouldPauseForAllLLM: jest.fn().mockReturnValue(false),
+}));
+
+jest.mock('@/lib/services/chat-message/streaming.service', () => ({
+  encodeTurnStartEvent: jest.fn((_encoder: TextEncoder, data: unknown) => data),
+  encodeTurnCompleteEvent: jest.fn((_encoder: TextEncoder, data: unknown) => data),
+  encodeChainCompleteEvent: jest.fn((_encoder: TextEncoder, data: unknown) => data),
+  safeEnqueue: jest.fn((controller: { enqueue: (chunk: unknown) => void }, chunk: unknown) => {
+    controller.enqueue(chunk);
+  }),
 }));
 
 const llmParticipant = {
@@ -207,6 +217,120 @@ describe('turn-orchestrator.service', () => {
       expect(result.chain).toBe(true);
       expect(result.characterName).toBe('Alice');
       expect(result.reason).toBe('continue');
+    });
+  });
+
+  describe('executeTurnChain', () => {
+    const encoder = new TextEncoder();
+
+    const initialResult = {
+      isMultiCharacter: true,
+      hasContent: true,
+      messageId: 'msg-1',
+      userParticipantId: 'user-p-1',
+      isPaused: false,
+    };
+
+    it('processes chained turns and emits completion events', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest
+        .fn()
+        .mockResolvedValueOnce({ chain: true, participantId: 'llm-1', characterName: 'Alice', reason: 'continue' })
+        .mockResolvedValueOnce({ chain: false, participantId: null, reason: 'cycle_complete' });
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      const processChainedMessage = jest.fn().mockResolvedValue({
+        ...initialResult,
+        messageId: 'msg-2',
+      });
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult,
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage,
+        decideNextTurn,
+        persistTurnParticipant,
+      });
+
+      expect(processChainedMessage).toHaveBeenCalledWith({
+        continueMode: true,
+        respondingParticipantId: 'llm-1',
+      });
+      expect(persistTurnParticipant).toHaveBeenCalledWith(repos, 'chat-1', null);
+      expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        participantId: 'llm-1',
+        chainDepth: 1,
+      }));
+    });
+
+    it('stops immediately when chaining should not continue', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest.fn().mockResolvedValue({
+        chain: false,
+        participantId: null,
+        reason: 'user_turn',
+      });
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      const processChainedMessage = jest.fn();
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult,
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage,
+        decideNextTurn,
+        persistTurnParticipant,
+      });
+
+      expect(processChainedMessage).not.toHaveBeenCalled();
+      expect(persistTurnParticipant).toHaveBeenCalledWith(repos, 'chat-1', null);
+      expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        reason: 'user_turn',
+        nextSpeakerId: null,
+      }));
+    });
+
+    it('pauses the chat and stops when a chained turn throws', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest.fn().mockResolvedValue({
+        chain: true,
+        participantId: 'llm-1',
+        characterName: 'Alice',
+        reason: 'continue',
+      });
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      const processChainedMessage = jest.fn().mockRejectedValue(new Error('boom'));
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult,
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage,
+        decideNextTurn,
+        persistTurnParticipant,
+      });
+
+      expect(repos.chats.update).toHaveBeenCalledWith('chat-1', { isPaused: true });
+      expect(persistTurnParticipant).toHaveBeenCalledWith(repos, 'chat-1', null);
+      expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        reason: 'error',
+        nextSpeakerId: null,
+      }));
     });
   });
 

@@ -16,7 +16,6 @@
     "packages/**",
     "plugins/**",
     "migrations/lib/**",
-    "electron/**",
     "**/*.d.ts"
   ],
   "ignoreDependencies": [

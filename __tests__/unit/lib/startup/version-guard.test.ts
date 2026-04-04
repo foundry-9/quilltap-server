@@ -4,6 +4,7 @@
  * Tests cover:
  * - checkVersionGuard with various version comparisons
  * - storeCurrentVersion upsert behavior
+ * - storeCurrentVersion writes minServerVersion to .dbkey files
  * - Fail-open behavior on errors
  * - Semver prerelease comparison edge cases
  */
@@ -39,10 +40,22 @@ jest.mock('@/migrations/lib/database-utils', () => ({
   sqliteTableExists: (...args: unknown[]) => mockSqliteTableExists(args[0] as string),
 }));
 
-// Mock fs for getAppVersion() which reads package.json
+// Mock fs for getAppVersion() which reads package.json, and for .dbkey file patching
 const mockReadFileSync = jest.fn<(path: string, encoding: string) => string>();
+const mockExistsSync = jest.fn<(path: string) => boolean>().mockReturnValue(false);
+const mockWriteFileSync = jest.fn();
 jest.mock('fs', () => ({
   readFileSync: (...args: unknown[]) => mockReadFileSync(args[0] as string, args[1] as string),
+  existsSync: (...args: unknown[]) => mockExistsSync(args[0] as string),
+  writeFileSync: (...args: unknown[]) => mockWriteFileSync(...args),
+}));
+
+// Mock dbkey path functions
+const MOCK_DBKEY_PATH = '/mock/data/quilltap.dbkey';
+const MOCK_LLM_DBKEY_PATH = '/mock/data/quilltap-llm-logs.dbkey';
+jest.mock('@/lib/startup/dbkey', () => ({
+  getDbKeyPath: () => MOCK_DBKEY_PATH,
+  getLLMLogsDbKeyPath: () => MOCK_LLM_DBKEY_PATH,
 }));
 
 // ============================================================================
@@ -282,6 +295,104 @@ describe('Version Guard', () => {
       mockGetSQLiteDatabase.mockImplementation(() => { throw new Error('db error'); });
 
       expect(() => versionGuard.storeCurrentVersion()).not.toThrow();
+    });
+
+    describe('minServerVersion in .dbkey files', () => {
+      let db: ReturnType<typeof createMockDb>;
+
+      beforeEach(() => {
+        db = createMockDb();
+        mockGetSQLiteDatabase.mockReturnValue(db);
+        setAppVersion('3.4.0');
+        mockExistsSync.mockReturnValue(false);
+        mockWriteFileSync.mockClear();
+      });
+
+      it('should write minServerVersion to both .dbkey files when they exist', () => {
+        const existingDbKey = { version: 1, algorithm: 'aes-256-gcm', salt: 'abc' };
+        mockExistsSync.mockReturnValue(true);
+        mockReadFileSync.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('.dbkey')) {
+            return JSON.stringify(existingDbKey);
+          }
+          // package.json
+          return JSON.stringify({ version: '3.4.0' });
+        });
+
+        versionGuard.storeCurrentVersion();
+
+        // Should have written to both .dbkey files
+        expect(mockWriteFileSync).toHaveBeenCalledTimes(2);
+
+        // Check main .dbkey
+        const [mainPath, mainContent, mainOpts] = mockWriteFileSync.mock.calls[0];
+        expect(mainPath).toBe(MOCK_DBKEY_PATH);
+        const mainData = JSON.parse(mainContent as string);
+        expect(mainData.minServerVersion).toBe('3.4.0');
+        expect(mainData.version).toBe(1);
+        expect(mainData.algorithm).toBe('aes-256-gcm');
+        expect((mainOpts as { mode: number }).mode).toBe(0o600);
+
+        // Check LLM logs .dbkey
+        const [llmPath, llmContent] = mockWriteFileSync.mock.calls[1];
+        expect(llmPath).toBe(MOCK_LLM_DBKEY_PATH);
+        const llmData = JSON.parse(llmContent as string);
+        expect(llmData.minServerVersion).toBe('3.4.0');
+      });
+
+      it('should skip .dbkey files that do not exist', () => {
+        mockExistsSync.mockReturnValue(false);
+
+        versionGuard.storeCurrentVersion();
+
+        expect(mockWriteFileSync).not.toHaveBeenCalled();
+      });
+
+      it('should update minServerVersion when one already exists', () => {
+        const existingDbKey = { version: 1, minServerVersion: '3.3.0', salt: 'abc' };
+        mockExistsSync.mockReturnValue(true);
+        mockReadFileSync.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('.dbkey')) {
+            return JSON.stringify(existingDbKey);
+          }
+          return JSON.stringify({ version: '3.4.0' });
+        });
+
+        versionGuard.storeCurrentVersion();
+
+        const [, mainContent] = mockWriteFileSync.mock.calls[0];
+        const mainData = JSON.parse(mainContent as string);
+        expect(mainData.minServerVersion).toBe('3.4.0');
+      });
+
+      it('should not throw when .dbkey write fails', () => {
+        mockExistsSync.mockReturnValue(true);
+        mockReadFileSync.mockImplementation((filePath: string) => {
+          if (filePath.endsWith('.dbkey')) {
+            return JSON.stringify({ version: 1 });
+          }
+          return JSON.stringify({ version: '3.4.0' });
+        });
+        mockWriteFileSync.mockImplementation(() => { throw new Error('disk full'); });
+
+        expect(() => versionGuard.storeCurrentVersion()).not.toThrow();
+      });
+
+      it('should handle only main .dbkey existing but not LLM logs', () => {
+        mockExistsSync.mockImplementation((filePath: string) => filePath === MOCK_DBKEY_PATH);
+        mockReadFileSync.mockImplementation((filePath: string) => {
+          if (filePath === MOCK_DBKEY_PATH) {
+            return JSON.stringify({ version: 1 });
+          }
+          return JSON.stringify({ version: '3.4.0' });
+        });
+
+        versionGuard.storeCurrentVersion();
+
+        // Only the main .dbkey should be written
+        expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
+        expect(mockWriteFileSync.mock.calls[0][0]).toBe(MOCK_DBKEY_PATH);
+      });
     });
   });
 });

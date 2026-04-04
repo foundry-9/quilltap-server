@@ -76,7 +76,7 @@ describe('MemoryCard', () => {
       const highImportanceMemory = { ...mockMemory, importance: 0.8 };
       const { container } = render(<MemoryCard memory={highImportanceMemory} />);
 
-      const importanceElement = container.querySelector('.text-destructive');
+      const importanceElement = container.querySelector('.qt-text-destructive');
       expect(importanceElement).toBeInTheDocument();
       expect(screen.getByText('High')).toBeInTheDocument();
     });
@@ -85,7 +85,7 @@ describe('MemoryCard', () => {
       const mediumImportanceMemory = { ...mockMemory, importance: 0.5 };
       const { container } = render(<MemoryCard memory={mediumImportanceMemory} />);
 
-      const importanceElement = container.querySelector('.text-warning');
+      const importanceElement = container.querySelector('.qt-text-warning');
       expect(importanceElement).toBeInTheDocument();
       expect(screen.getByText('Medium')).toBeInTheDocument();
     });
@@ -94,7 +94,7 @@ describe('MemoryCard', () => {
       const lowImportanceMemory = { ...mockMemory, importance: 0.2 };
       const { container } = render(<MemoryCard memory={lowImportanceMemory} />);
 
-      const importanceElement = container.querySelector('.text-muted-foreground');
+      const importanceElement = container.querySelector('.qt-text-secondary');
       expect(importanceElement).toBeInTheDocument();
       expect(screen.getByText('Low')).toBeInTheDocument();
     });
@@ -239,7 +239,7 @@ describe('MemoryCard', () => {
       // Component should use semantic qt-* classes that work in both light and dark mode
       expect(container.innerHTML).toMatch(/qt-card/);
       expect(container.innerHTML).toMatch(/qt-text-label/);
-      expect(container.innerHTML).toMatch(/border-border/);
+      expect(container.innerHTML).toMatch(/qt-border-default/);
     });
   });
 });

@@ -6,6 +6,7 @@ export default defineConfig({
     'llm/index': 'src/llm/index.ts',
     'plugins/index': 'src/plugins/index.ts',
     'common/index': 'src/common/index.ts',
+    'providers/index': 'src/providers/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,

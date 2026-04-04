@@ -13,7 +13,7 @@ import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import type { ChatEvent } from '@/lib/schemas/types';
-import { notFound, badRequest, serverError, validationError, successResponse, messageResponse } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, successResponse, messageResponse } from '@/lib/api/responses';
 import { enrichParticipantSummary } from '@/lib/services/chat-enrichment.service';
 
 const logger = createServiceLogger('HelpChatsItemRoute');
@@ -53,11 +53,6 @@ async function verifyHelpChat(
     return notFound('Help chat');
   }
 
-  if ((chat as any).userId !== user.id) {
-    logger.debug('Help chat ownership mismatch', { chatId: id, userId: user.id });
-    return notFound('Help chat');
-  }
-
   if ((chat as any).chatType !== 'help') {
     return notFound('Help chat');
   }
@@ -79,31 +74,23 @@ async function handleGet(
 ): Promise<NextResponse> {
   const { repos } = context;
 
-  try {
-    const result = await verifyHelpChat(id, context);
-    if (result instanceof NextResponse) return result;
-    const { chat } = result;
+  const result = await verifyHelpChat(id, context);
+  if (result instanceof NextResponse) return result;
+  const { chat } = result;
 
-    const enrichedParticipants = await Promise.all(
-      chat.participants.map((p: any) => enrichParticipantSummary(p, repos))
-    );
+  const enrichedParticipants = await Promise.all(
+    chat.participants.map((p: any) => enrichParticipantSummary(p, repos))
+  );
 
-    const messages = await repos.chats.getMessages(id);
+  const messages = await repos.chats.getMessages(id);
 
-    return successResponse({
-      chat: {
-        ...chat,
-        participants: enrichedParticipants,
-        messageCount: messages.length,
-      },
-    });
-  } catch (error) {
-    logger.error('Error getting help chat', {
-      chatId: id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return serverError('Failed to get help chat');
-  }
+  return successResponse({
+    chat: {
+      ...chat,
+      participants: enrichedParticipants,
+      messageCount: messages.length,
+    },
+  });
 }
 
 /**
@@ -116,36 +103,24 @@ async function handleRename(
 ): Promise<NextResponse> {
   const { repos } = context;
 
-  try {
-    const result = await verifyHelpChat(id, context);
-    if (result instanceof NextResponse) return result;
+  const result = await verifyHelpChat(id, context);
+  if (result instanceof NextResponse) return result;
 
-    const body = await req.json();
-    const validatedData = renameSchema.parse(body);
+  const body = await req.json();
+  const validatedData = renameSchema.parse(body);
 
-    const updated = await repos.chats.update(id, {
-      title: validatedData.title,
-      isManuallyRenamed: true,
-    });
+  const updated = await repos.chats.update(id, {
+    title: validatedData.title,
+    isManuallyRenamed: true,
+  });
 
-    if (!updated) {
-      return serverError('Failed to update help chat');
-    }
-
-    logger.info('Help chat renamed', { chatId: id, title: validatedData.title });
-
-    return successResponse({ chat: updated });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('Error renaming help chat', {
-      chatId: id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return serverError('Failed to rename help chat');
+  if (!updated) {
+    return serverError('Failed to update help chat');
   }
+
+  logger.info('Help chat renamed', { chatId: id, title: validatedData.title });
+
+  return successResponse({ chat: updated });
 }
 
 /**
@@ -158,47 +133,35 @@ async function handleUpdateContext(
 ): Promise<NextResponse> {
   const { repos } = context;
 
-  try {
-    const result = await verifyHelpChat(id, context);
-    if (result instanceof NextResponse) return result;
+  const result = await verifyHelpChat(id, context);
+  if (result instanceof NextResponse) return result;
 
-    const body = await req.json();
-    const validatedData = updateContextSchema.parse(body);
+  const body = await req.json();
+  const validatedData = updateContextSchema.parse(body);
 
-    // Update the helpPageUrl on the chat
-    const updated = await repos.chats.update(id, {
-      helpPageUrl: validatedData.pageUrl,
-    });
+  // Update the helpPageUrl on the chat
+  const updated = await repos.chats.update(id, {
+    helpPageUrl: validatedData.pageUrl,
+  });
 
-    if (!updated) {
-      return serverError('Failed to update help chat context');
-    }
-
-    // Inject a system message noting the navigation
-    const systemMessage: ChatEvent = {
-      type: 'message',
-      id: crypto.randomUUID(),
-      role: 'SYSTEM',
-      content: `[System: User navigated to ${validatedData.pageUrl}]`,
-      attachments: [],
-      createdAt: new Date().toISOString(),
-    };
-    await repos.chats.addMessage(id, systemMessage);
-
-    logger.info('Help chat context updated', { chatId: id, pageUrl: validatedData.pageUrl });
-
-    return successResponse({ chat: updated });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('Error updating help chat context', {
-      chatId: id,
-      error: error instanceof Error ? error.message : String(error),
-    });
+  if (!updated) {
     return serverError('Failed to update help chat context');
   }
+
+  // Inject a system message noting the navigation
+  const systemMessage: ChatEvent = {
+    type: 'message',
+    id: crypto.randomUUID(),
+    role: 'SYSTEM',
+    content: `[System: User navigated to ${validatedData.pageUrl}]`,
+    attachments: [],
+    createdAt: new Date().toISOString(),
+  };
+  await repos.chats.addMessage(id, systemMessage);
+
+  logger.info('Help chat context updated', { chatId: id, pageUrl: validatedData.pageUrl });
+
+  return successResponse({ chat: updated });
 }
 
 /**
@@ -211,25 +174,17 @@ async function handleDelete(
 ): Promise<NextResponse> {
   const { repos } = context;
 
-  try {
-    const result = await verifyHelpChat(id, context);
-    if (result instanceof NextResponse) return result;
+  const result = await verifyHelpChat(id, context);
+  if (result instanceof NextResponse) return result;
 
-    const deleted = await repos.chats.delete(id);
-    if (!deleted) {
-      return serverError('Failed to delete help chat');
-    }
-
-    logger.info('Help chat deleted', { chatId: id });
-
-    return messageResponse('Help chat deleted successfully');
-  } catch (error) {
-    logger.error('Error deleting help chat', {
-      chatId: id,
-      error: error instanceof Error ? error.message : String(error),
-    });
+  const deleted = await repos.chats.delete(id);
+  if (!deleted) {
     return serverError('Failed to delete help chat');
   }
+
+  logger.info('Help chat deleted', { chatId: id });
+
+  return messageResponse('Help chat deleted successfully');
 }
 
 // ============================================================================

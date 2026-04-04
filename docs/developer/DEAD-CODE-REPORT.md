@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-03-24
+**Last Updated**: 2026-04-02
 **Tool Used**: knip
-**Codebase**: Quilltap v3.3.0-dev
+**Codebase**: Quilltap v4.0.0-dev
 
 ---
 
@@ -14,8 +14,34 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 |----------|--------|
 | Unused Files | Cleaned up 2026-03-24 |
 | Migration Scripts | Deleted (migrations complete) |
-| Unused Dependencies | @aws-sdk/client-s3, svgo removed 2026-03-05; bcrypt, qrcode, ts-jest removed 2026-01-30 |
-| Unused Exports | Low priority, ~813 remaining (mostly barrel re-exports) |
+| Unused Dependencies | @quilltap/theme-storybook removed 2026-04-02; @aws-sdk/client-s3, svgo removed 2026-03-05; bcrypt, qrcode, ts-jest removed 2026-01-30 |
+| Unused Exports | Low priority, ~780 remaining (mostly barrel re-exports) |
+
+---
+
+## Cleanup Completed (2026-04-02)
+
+### Files Removed
+
+| File | Reason |
+|------|--------|
+| `lib/image-gen/base.ts` | Unused abstract base class; image providers implement `ImageProvider` from `@quilltap/plugin-types` directly |
+
+### Dependencies Removed
+
+| Dependency | Reason |
+|------------|--------|
+| `@quilltap/theme-storybook` | Listed in root package.json but never imported by the app; no `.storybook` directory exists |
+
+### API Conformance Fixes
+
+Replaced `NextResponse.json()` with response helpers from `@/lib/api/responses` in 9 route files for consistency:
+- `characters/[id]/descriptions/route.ts` and `[descId]/route.ts`
+- `characters/[id]/prompts/route.ts` and `[promptId]/route.ts`
+- `model-classes/route.ts`
+- `connection-profiles/route.ts`
+- `plugins/route.ts`
+- `system/plugins/initialize/route.ts` and `upgrades/route.ts`
 
 ---
 
@@ -62,11 +88,7 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 ### Known False Positives (Current)
 
-These are flagged by knip but are actually used:
-
-| Item | How It's Used |
-|------|---------------|
-| `@electron/notarize` (devDep) | Used by `electron/notarize.js` (Electron is in knip ignore list) |
+None currently tracked (Electron infrastructure moved to quilltap-shell repo).
 
 ---
 

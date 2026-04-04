@@ -27,7 +27,7 @@ export function ImageProfileParameters({
   switch (provider) {
     case 'OPENAI':
       return (
-        <div className="space-y-4 border-t border-border pt-4">
+        <div className="space-y-4 border-t qt-border-default pt-4">
           <h3 className="text-sm qt-text-primary">Image Parameters (Optional)</h3>
 
           {/* Quality */}
@@ -84,7 +84,7 @@ export function ImageProfileParameters({
     case 'GOOGLE':
     case 'GOOGLE_IMAGEN':
       return (
-        <div className="space-y-4 border-t border-border pt-4">
+        <div className="space-y-4 border-t qt-border-default pt-4">
           <h3 className="text-sm qt-text-primary">Image Parameters (Optional)</h3>
 
           {/* Aspect Ratio */}
@@ -125,7 +125,7 @@ export function ImageProfileParameters({
 
     case 'GROK':
       return (
-        <div className="border-t border-border pt-4">
+        <div className="border-t qt-border-default pt-4">
           <p className="qt-text-small">
             Grok supports basic text-to-image generation with minimal parameters.
             Configuration is handled through the main prompt.

@@ -552,20 +552,13 @@ function assembleQtapExport(
       memories.push({
         id: crypto.randomUUID(),
         characterId,
-        aboutCharacterId: null,
-        chatId: null,
-        projectId: null,
         content: mem.content,
         summary: mem.summary,
         keywords: mem.keywords,
         tags: [],
         importance: Math.max(0, Math.min(1, mem.importance)),
-        embedding: null,
         source: 'MANUAL',
-        sourceMessageId: null,
-        lastAccessedAt: null,
         reinforcementCount: 1,
-        lastReinforcedAt: null,
         relatedMemoryIds: [],
         reinforcedImportance: Math.max(0, Math.min(1, mem.importance)),
         createdAt: now,
@@ -992,19 +985,44 @@ export async function runAIImportStreaming(
       });
 
       // Step 10: Repair (LLM call to fix validation errors, up to MAX_REPAIR_ATTEMPTS)
+      // Determine which data sections have errors based on error paths
+      const dataObj = exportData.data as unknown as Record<string, unknown>;
+      const errorSections = new Set<string>();
+      for (const err of validationResult.errors) {
+        // Error paths look like "/data/memories/0/chatId: must be string"
+        const match = err.match(/^\/data\/(\w+)\//);
+        if (match) errorSections.add(match[1]);
+      }
+
       let repaired = false;
       for (let attempt = 0; attempt < MAX_REPAIR_ATTEMPTS && !repaired; attempt++) {
         onProgress({ type: 'step_start', step: 'repair' });
         try {
+          // Only repair sections that actually have errors
+          const sectionsToRepair: Record<string, unknown> = {};
+          for (const section of errorSections) {
+            if (dataObj[section]) {
+              sectionsToRepair[section] = dataObj[section];
+            }
+          }
+
+          if (Object.keys(sectionsToRepair).length === 0) {
+            // No identifiable sections to repair — skip LLM repair
+            logger.warn('[AIImport] No repairable sections identified from error paths', {
+              errors: validationResult.errors.slice(0, 5),
+            });
+            break;
+          }
+
           const repairPrompt = `The following .qtap export data has validation errors. Fix the issues and return the corrected data as JSON.
 
 Validation errors:
 ${validationResult.errors.join('\n')}
 
-Current data (character section only):
-${JSON.stringify((exportData.data as unknown as Record<string, unknown>).characters, null, 2)}
+Current data (sections with errors only):
+${JSON.stringify(sectionsToRepair, null, 2)}
 
-Return ONLY the corrected characters array as JSON. Do not change the structure, only fix the values that cause validation errors.`;
+Return ONLY a JSON object with the same section keys (${Object.keys(sectionsToRepair).join(', ')}), containing the corrected arrays. Do not change the structure, only fix the values that cause validation errors. If a field should be absent rather than null, remove it entirely.`;
 
           const raw = await callLLM(
             provider, apiKey, profile.modelName,
@@ -1013,8 +1031,13 @@ Return ONLY the corrected characters array as JSON. Do not change the structure,
             { temperature: 0.5, maxTokens: 2000, ...llmOpts }
           );
 
-          const repairedChars = parseLLMJson<unknown[]>(raw);
-          (exportData.data as unknown as Record<string, unknown>).characters = repairedChars;
+          const repairedSections = parseLLMJson<Record<string, unknown>>(raw);
+          // Only apply repaired sections, don't touch other sections
+          for (const section of Object.keys(sectionsToRepair)) {
+            if (repairedSections[section]) {
+              dataObj[section] = repairedSections[section];
+            }
+          }
 
           const revalidation = validateQtapExport(exportData);
           if (revalidation.valid) {

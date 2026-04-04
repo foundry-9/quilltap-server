@@ -19,7 +19,7 @@ function PreviewCard({
   value: number | string
 }) {
   return (
-    <div className="bg-muted p-4 rounded-lg">
+    <div className="qt-bg-muted p-4 rounded-lg">
       <p className="text-2xl font-bold text-foreground">{value}</p>
       <p className="qt-text-xs mt-1">{label}</p>
     </div>
@@ -90,8 +90,8 @@ export function RestoreProgress({
   if (restoreSummary) {
     return (
       <div className="space-y-4">
-        <div className="qt-bg-success/20 border border-success/30 rounded-lg p-4">
-          <p className="text-sm font-medium text-success">
+        <div className="qt-bg-success/20 border qt-border-success/30 rounded-lg p-4">
+          <p className="text-sm font-medium qt-text-success">
             Backup restored successfully!
           </p>
         </div>
@@ -109,11 +109,11 @@ export function RestoreProgress({
 
         {/* Warnings */}
         {restoreSummary.warnings && restoreSummary.warnings.length > 0 && (
-          <div className="qt-bg-warning/20 border border-warning/30 rounded-lg p-4">
-            <p className="text-sm font-medium text-warning mb-2">
+          <div className="qt-bg-warning/20 border qt-border-warning/30 rounded-lg p-4">
+            <p className="text-sm font-medium qt-text-warning mb-2">
               Warnings ({restoreSummary.warnings.length}):
             </p>
-            <ul className="text-sm text-warning space-y-1 max-h-40 overflow-y-auto">
+            <ul className="text-sm qt-text-warning space-y-1 max-h-40 overflow-y-auto">
               {restoreSummary.warnings.map((warning, idx) => (
                 <li key={idx} className="flex gap-2">
                   <span className="flex-shrink-0">•</span>
@@ -130,8 +130,8 @@ export function RestoreProgress({
   // Error state
   if (error) {
     return (
-      <div className="p-4 bg-destructive/10 border border-destructive rounded-lg">
-        <p className="text-sm text-destructive">{error}</p>
+      <div className="p-4 qt-bg-destructive/10 border qt-border-destructive rounded-lg">
+        <p className="text-sm qt-text-destructive">{error}</p>
       </div>
     )
   }
@@ -139,7 +139,7 @@ export function RestoreProgress({
   // Loading preview
   if (loadingPreview) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
+      <div className="text-center py-8 qt-text-secondary">
         Loading preview...
       </div>
     )

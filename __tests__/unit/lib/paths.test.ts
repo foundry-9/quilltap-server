@@ -272,4 +272,90 @@ describe('lib/paths', () => {
       expect(typeof result).toBe('boolean');
     });
   });
+
+  describe('isElectronShell', () => {
+    it('should return true when QUILLTAP_SHELL is set', async () => {
+      process.env.QUILLTAP_SHELL = '1.0.0';
+
+      const { isElectronShell } = await import('@/lib/paths');
+      expect(isElectronShell()).toBe(true);
+    });
+
+    it('should return false when QUILLTAP_SHELL is not set', async () => {
+      delete process.env.QUILLTAP_SHELL;
+
+      const { isElectronShell } = await import('@/lib/paths');
+      expect(isElectronShell()).toBe(false);
+    });
+  });
+
+  describe('getElectronShellVersion', () => {
+    it('should return the version string when QUILLTAP_SHELL is set', async () => {
+      process.env.QUILLTAP_SHELL = '2.1.3';
+
+      const { getElectronShellVersion } = await import('@/lib/paths');
+      expect(getElectronShellVersion()).toBe('2.1.3');
+    });
+
+    it('should return null when QUILLTAP_SHELL is not set', async () => {
+      delete process.env.QUILLTAP_SHELL;
+
+      const { getElectronShellVersion } = await import('@/lib/paths');
+      expect(getElectronShellVersion()).toBeNull();
+    });
+  });
+
+  describe('getShellCapabilities', () => {
+    it('should return a set of capabilities from comma-delimited string', async () => {
+      process.env.QUILLTAP_SHELL_CAPABILITIES = 'OPENS_FS_PATH,DOWNLOADS_FILE';
+
+      const { getShellCapabilities } = await import('@/lib/paths');
+      const caps = getShellCapabilities();
+      expect(caps).toEqual(new Set(['OPENS_FS_PATH', 'DOWNLOADS_FILE']));
+    });
+
+    it('should return an empty set when not set', async () => {
+      delete process.env.QUILLTAP_SHELL_CAPABILITIES;
+
+      const { getShellCapabilities } = await import('@/lib/paths');
+      expect(getShellCapabilities()).toEqual(new Set());
+    });
+
+    it('should trim whitespace around flags', async () => {
+      process.env.QUILLTAP_SHELL_CAPABILITIES = ' FOO , BAR ';
+
+      const { getShellCapabilities } = await import('@/lib/paths');
+      expect(getShellCapabilities()).toEqual(new Set(['FOO', 'BAR']));
+    });
+
+    it('should ignore empty segments from trailing commas', async () => {
+      process.env.QUILLTAP_SHELL_CAPABILITIES = 'FOO,,BAR,';
+
+      const { getShellCapabilities } = await import('@/lib/paths');
+      expect(getShellCapabilities()).toEqual(new Set(['FOO', 'BAR']));
+    });
+  });
+
+  describe('hasShellCapability', () => {
+    it('should return true for a present capability', async () => {
+      process.env.QUILLTAP_SHELL_CAPABILITIES = 'OPENS_FS_PATH,DOWNLOADS_FILE';
+
+      const { hasShellCapability } = await import('@/lib/paths');
+      expect(hasShellCapability('OPENS_FS_PATH')).toBe(true);
+    });
+
+    it('should return false for a missing capability', async () => {
+      process.env.QUILLTAP_SHELL_CAPABILITIES = 'OPENS_FS_PATH';
+
+      const { hasShellCapability } = await import('@/lib/paths');
+      expect(hasShellCapability('DOWNLOADS_FILE')).toBe(false);
+    });
+
+    it('should return false when env var is not set', async () => {
+      delete process.env.QUILLTAP_SHELL_CAPABILITIES;
+
+      const { hasShellCapability } = await import('@/lib/paths');
+      expect(hasShellCapability('OPENS_FS_PATH')).toBe(false);
+    });
+  });
 });

@@ -28,7 +28,7 @@ export function LLMLoggingSettingsComponent({
     >
       <div className="space-y-3">
         {/* Enable logging toggle */}
-        <label className="flex items-start gap-3 p-4 border border-border rounded hover:bg-accent cursor-pointer transition-colors">
+        <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors">
           <input
             type="checkbox"
             checked={loggingSettings.enabled}
@@ -45,7 +45,7 @@ export function LLMLoggingSettingsComponent({
         </label>
 
         {/* Verbose mode toggle */}
-        <label className={`flex items-start gap-3 p-4 border border-border rounded hover:bg-accent cursor-pointer transition-colors ${!loggingSettings.enabled ? 'opacity-50' : ''}`}>
+        <label className={`flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors ${!loggingSettings.enabled ? 'opacity-50' : ''}`}>
           <input
             type="checkbox"
             checked={loggingSettings.verboseMode}
@@ -62,7 +62,7 @@ export function LLMLoggingSettingsComponent({
         </label>
 
         {/* Retention days input */}
-        <div className={`p-4 border border-border rounded ${!loggingSettings.enabled ? 'opacity-50' : ''}`}>
+        <div className={`p-4 border qt-border-default rounded ${!loggingSettings.enabled ? 'opacity-50' : ''}`}>
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <div className="font-medium">Log Retention</div>
@@ -78,16 +78,16 @@ export function LLMLoggingSettingsComponent({
                 value={loggingSettings.retentionDays}
                 onChange={(e) => onLLMLoggingChange('retentionDays', parseInt(e.target.value, 10) || 0)}
                 disabled={saving || !loggingSettings.enabled}
-                className="w-20 px-2 py-1 border border-border rounded text-center"
+                className="w-20 px-2 py-1 border qt-border-default rounded text-center"
               />
-              <span className="text-muted-foreground">days</span>
+              <span className="qt-text-secondary">days</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 p-4 border border-border rounded bg-muted/50">
-        <p className="qt-text-small text-muted-foreground">
+      <div className="mt-4 p-4 border qt-border-default rounded qt-bg-muted/50">
+        <p className="qt-text-small qt-text-secondary">
           <strong>Privacy Note:</strong> LLM logs contain your conversations and API responses.
           They are stored locally in your database and included in backups.
           Logs are automatically cleaned up based on your retention settings.

@@ -12,7 +12,7 @@
  */
 
 import type {
-  LLMProviderPlugin,
+  TextProviderPlugin,
   EmbeddingModelInfo,
   ImageGenerationModelInfo,
 } from './types';
@@ -103,7 +103,7 @@ const cheapModels = {
  * Implements the LLMProviderPlugin interface for Quilltap
  * Provides access to cutting-edge and open-source models via unified API
  */
-export const plugin: LLMProviderPlugin = {
+export const plugin: TextProviderPlugin = {
   metadata,
 
   icon: {

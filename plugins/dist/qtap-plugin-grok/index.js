@@ -7135,7 +7135,6 @@ var GrokProvider = class {
     this.baseUrl = "https://api.x.ai/v1";
     this.supportsFileAttachments = true;
     this.supportedMimeTypes = GROK_SUPPORTED_MIME_TYPES;
-    this.supportsImageGeneration = true;
     this.supportsWebSearch = true;
   }
   /**
@@ -7504,38 +7503,6 @@ ${textContent}`
       logger.error("Failed to fetch Grok models", { context: "GrokProvider.getAvailableModels" }, error instanceof Error ? error : void 0);
       return [];
     }
-  }
-  async generateImage(params, apiKey) {
-    if (!apiKey) {
-      throw new Error("Grok provider requires an API key");
-    }
-    const client = new OpenAI({
-      apiKey,
-      baseURL: this.baseUrl,
-      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
-    });
-    const response = await client.images.generate({
-      model: params.model ?? "grok-2-image",
-      prompt: params.prompt,
-      n: params.n ?? 1,
-      response_format: "b64_json"
-    });
-    const images = await Promise.all(
-      (response.data || []).map(async (image) => {
-        if (!image.b64_json) {
-          throw new Error("No base64 image data in response");
-        }
-        return {
-          data: image.b64_json,
-          mimeType: "image/jpeg",
-          revisedPrompt: image.revised_prompt
-        };
-      })
-    );
-    return {
-      images,
-      raw: response
-    };
   }
 };
 

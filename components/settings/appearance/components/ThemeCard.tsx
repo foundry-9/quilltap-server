@@ -182,7 +182,7 @@ export function ThemeCard({
         className={`
           relative flex flex-col p-4 rounded-lg border-2 transition-all
           w-full col-span-full
-          ${isActive ? 'border-primary bg-accent' : 'border-border'}
+          ${isActive ? 'qt-border-primary bg-accent' : 'qt-border-default'}
         `}
       >
         {/* Header with theme name, apply, and close buttons */}
@@ -200,7 +200,7 @@ export function ThemeCard({
             {(() => {
               const badge = isDefault ? { label: 'Built-in', deprecated: false } : getSourceBadge(theme?.source, theme?.deprecated)
               return badge ? (
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.deprecated ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground'}`}>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.deprecated ? 'qt-bg-warning/15 qt-text-warning' : 'qt-bg-muted qt-text-secondary'}`}>
                   {badge.label}
                   {badge.deprecated && ' (deprecated)'}
                 </span>
@@ -224,7 +224,7 @@ export function ThemeCard({
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onUninstall(); }}
-                className="qt-button-ghost qt-button-sm text-xs text-destructive hover:text-destructive"
+                className="qt-button-ghost qt-button-sm text-xs qt-text-destructive hover:qt-text-destructive"
                 title="Uninstall theme"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -257,7 +257,7 @@ export function ThemeCard({
             <button
               type="button"
               onClick={handleCloseClick}
-              className="qt-button-ghost p-1 text-muted-foreground hover:text-foreground"
+              className="qt-button-ghost p-1 qt-text-secondary hover:text-foreground"
               aria-label="Close preview"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -321,7 +321,7 @@ export function ThemeCard({
         className={`
           relative flex flex-col items-start p-4 rounded-lg border-2 transition-all
           text-left w-full overflow-hidden
-          ${isActive ? 'border-primary' : 'border-border hover:border-input'}
+          ${isActive ? 'qt-border-primary' : 'qt-border-default hover:border-input'}
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
         `}
         style={{

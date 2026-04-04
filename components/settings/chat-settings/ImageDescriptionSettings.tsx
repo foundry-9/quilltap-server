@@ -57,7 +57,7 @@ export function ImageDescriptionSettings({
             })}
           </select>
           {visionProfiles.length === 0 && (
-            <p className="mt-1 text-xs text-warning">
+            <p className="mt-1 text-xs qt-text-warning">
               No vision-capable profiles found. Create an OpenAI, Anthropic, Google, or Grok profile in the Connection Profiles tab.
             </p>
           )}

@@ -84,7 +84,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
               <h2 className="qt-dialog-title">Create Backup</h2>
               <button
                 onClick={handleClose}
-                className="text-muted-foreground hover:text-foreground"
+                className="qt-text-secondary hover:text-foreground"
                 aria-label="Close dialog"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -99,7 +99,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
 
           {/* Body */}
           <div className="qt-dialog-body space-y-4">
-            <div className="p-4 bg-muted/50 rounded-lg">
+            <div className="p-4 qt-bg-muted/50 rounded-lg">
               <p className="text-sm qt-text-primary mb-2">
                 Your backup will include:
               </p>
@@ -115,8 +115,8 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
 
             {/* Error Display */}
             {error && (
-              <div className="p-3 bg-destructive/10 border border-destructive rounded-lg">
-                <p className="text-sm text-destructive">{error}</p>
+              <div className="p-3 qt-bg-destructive/10 border qt-border-destructive rounded-lg">
+                <p className="text-sm qt-text-destructive">{error}</p>
               </div>
             )}
           </div>

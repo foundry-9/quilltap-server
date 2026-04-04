@@ -106,7 +106,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
             </h2>
             <button
               onClick={onClose}
-              className="text-muted-foreground hover:text-foreground"
+              className="qt-text-secondary hover:text-foreground"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -186,7 +186,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 step="0.1"
                 value={form.formData.importance}
                 onChange={form.handleChange}
-                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
+                className="w-full h-2 qt-bg-muted rounded-lg appearance-none cursor-pointer"
               />
               <div className="flex justify-between qt-text-xs mt-1">
                 <span>Low</span>
@@ -199,8 +199,8 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
             </div>
 
             {error && (
-              <div className="rounded-md bg-destructive/10 p-3">
-                <p className="text-sm text-destructive">{error}</p>
+              <div className="rounded-md qt-bg-destructive/10 p-3">
+                <p className="text-sm qt-text-destructive">{error}</p>
               </div>
             )}
 

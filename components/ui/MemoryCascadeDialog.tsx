@@ -70,7 +70,7 @@ export function MemoryCascadeDialog({
             />
             <div>
               <span className="qt-text-small font-medium">Delete memories too</span>
-              <p className="qt-text-xs text-muted-foreground mt-0.5">
+              <p className="qt-text-xs qt-text-secondary mt-0.5">
                 Permanently remove associated memories
               </p>
             </div>
@@ -87,7 +87,7 @@ export function MemoryCascadeDialog({
             />
             <div>
               <span className="qt-text-small font-medium">Keep memories</span>
-              <p className="qt-text-xs text-muted-foreground mt-0.5">
+              <p className="qt-text-xs qt-text-secondary mt-0.5">
                 Memories will be orphaned (no link to source message)
               </p>
             </div>
@@ -104,7 +104,7 @@ export function MemoryCascadeDialog({
             />
             <div>
               <span className="qt-text-small font-medium">Delete and regenerate</span>
-              <p className="qt-text-xs text-muted-foreground mt-0.5">
+              <p className="qt-text-xs qt-text-secondary mt-0.5">
                 Delete old memories and extract new ones from conversation context
               </p>
             </div>
@@ -117,7 +117,7 @@ export function MemoryCascadeDialog({
             checked={rememberChoice}
             onChange={(e) => setRememberChoice(e.target.checked)}
           />
-          <span className="qt-text-xs text-muted-foreground">
+          <span className="qt-text-xs qt-text-secondary">
             Remember this choice (can be changed in Settings)
           </span>
         </label>

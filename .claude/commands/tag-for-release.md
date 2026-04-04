@@ -1,5 +1,7 @@
 # Tag for Production Release
 
+This command uses a linear git strategy. After creating the release commit on `release`, main stays perfectly linear (no merge-back). Use `git log <tag>..main` to see commits since a release. The squash onto release uses a tree-copy approach immune to stale merge bases.
+
 ## If current branch is `main`
 
 This is how we tag a commit in main for release.
@@ -13,8 +15,10 @@ The following commands need to be run, one at a time. Modify as needed to deal w
 ```bash
 # Don't just run this script; run the commands one at a time.
 git checkout release
-# This brings in all the changes without the history
-git merge --squash --strategy-option=theirs main
+# Tree-copy: make release's working tree identical to main's
+git rm -rf .
+git checkout main -- .
+git add -A
 # Remove the detritus after the release
 sed -i '' -E 's/("version": "[^"]*)-[^"]*"/\1"/' package.json
 # Update package-lock.json to be up-to-date
@@ -66,8 +70,7 @@ Next we need to start the new dev line in branch `main`.
 NEWDEVVERSION=$(echo "$NEWRELEASE" | awk -F. '{print $1"."$2+1".0"}')
 echo "New dev release is $NEWDEVVERSION"
 git checkout main
-# Should just bring over the one updated commit for the release itself
-git merge --strategy-option=theirs release
+# No merge-back — main stays linear
 # Make this the new first dev version
 sed -i '' -E 's/("version": ")[^"]*"/\1'"$NEWDEVVERSION"'-dev.0"/' package.json
 # Update package-lock.json again
@@ -114,8 +117,10 @@ git tag -s -m "$NEWDEVVERSION-dev" $NEWDEVVERSION-dev
 # Let's set up the bugfix version too
 git checkout bugfix
 echo "New bugfix release is $NEWRELEASE-bugfix.0"
-# Merge everything that release has
-git merge --strategy-option=theirs release
+# Tree-copy: make bugfix's working tree identical to release's
+git rm -rf .
+git checkout release -- .
+git add -A
 # make this the new first bugfix version
 sed -i '' -E 's/("version": ")[^"]*"/\1'"$NEWRELEASE"'-bugfix.0"/' package.json
 # Update package-lock.json again
@@ -146,8 +151,10 @@ git push --tags
 ```bash
 # Don't just run this script; run the commands one at a time.
 git checkout release
-# This brings in all the changes without the history
-git merge --squash --strategy-option=theirs bugfix
+# Tree-copy: make release's working tree identical to bugfix's
+git rm -rf .
+git checkout bugfix -- .
+git add -A
 # Remove the detritus after the release
 node -e "const p=require('./package.json');const v=p.version.split('-')[0].split('.');v[2]++;p.version=v.join('.');require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
 # Update package-lock.json to be up-to-date
@@ -169,8 +176,10 @@ git tag -s -m "$NEWRELEASE" $NEWRELEASE
 ```bash
 # Let's set up the bugfix version again
 git checkout bugfix
-# Merge everything that release has
-git merge --strategy-option=theirs release
+# Tree-copy: make bugfix's working tree identical to release's
+git rm -rf .
+git checkout release -- .
+git add -A
 # make this the new first bugfix version
 sed -i '' -E 's/("version": ")[^"]*"/\1'"$NEWRELEASE"'-bugfix.0"/' package.json
 echo "New bugfix release is $NEWRELEASE-bugfix.0"
@@ -185,9 +194,4 @@ git commit --no-verify -m "bugfix: started $NEWRELEASE bug branch"
 
 ### Now we need to pull the changes from release into dev
 
-```bash
-git checkout main
-git merge release
-```
-
-If there are conflicts, resolve them preserving the `main` branch's dev versioning (package.json, README badge) while accepting the bugfix code changes.
+No merge needed — main stays linear. The bugfix code is already on `release` and will be picked up in the next main-to-release squash. If the bugfix is urgent and needed on `main` immediately, cherry-pick the specific commits from `bugfix` onto `main`.

@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, validationError, serverError, successResponse, badRequest } from '@/lib/api/responses';
+import { notFound, successResponse, badRequest } from '@/lib/api/responses';
 import { TagVisualStyleSchema } from '@/lib/schemas/common.types';
 
 // ============================================================================
@@ -28,50 +28,44 @@ const updateTagSchema = z.object({
 // ============================================================================
 
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
-  try {
+  const tag = await repos.tags.findById(id);
 
-    const tag = await repos.tags.findById(id);
-
-    if (!checkOwnership(tag, user.id)) {
-      return notFound('Tag');
-    }
-
-    // Get usage counts across all taggable entity types
-    const [allCharacters, allChats, allConnections, allImageProfiles, allEmbeddingProfiles, allFiles] = await Promise.all([
-      repos.characters.findAll(),
-      repos.chats.findAll(),
-      repos.connections.findAll(),
-      repos.imageProfiles.findAll(),
-      repos.embeddingProfiles.findAll(),
-      repos.files.findAll(),
-    ]);
-
-    const characterTags = allCharacters.filter(c => c.tags.includes(tag.id)).length;
-    const chatTags = allChats.filter(c => c.tags.includes(tag.id)).length;
-    const connectionProfileTags = allConnections.filter(c => c.tags.includes(tag.id)).length;
-    const imageProfileTags = allImageProfiles.filter(c => c.tags.includes(tag.id)).length;
-    const embeddingProfileTags = allEmbeddingProfiles.filter(c => c.tags.includes(tag.id)).length;
-    const fileTags = allFiles.filter(c => c.tags.includes(tag.id)).length;
-
-    const enrichedTag = {
-      ...tag,
-      _count: {
-        characterTags,
-        chatTags,
-        connectionProfileTags,
-        imageProfileTags,
-        embeddingProfileTags,
-        fileTags,
-      },
-      totalUsage: characterTags + chatTags + connectionProfileTags + imageProfileTags + embeddingProfileTags + fileTags,
-    };
-
-
-    return successResponse({ tag: enrichedTag });
-  } catch (error) {
-    logger.error('[Tags v1] Error fetching tag', { tagId: id }, error instanceof Error ? error : undefined);
-    return serverError('Failed to fetch tag');
+  if (!checkOwnership(tag, user.id)) {
+    return notFound('Tag');
   }
+
+  // Get usage counts across all taggable entity types
+  const [allCharacters, allChats, allConnections, allImageProfiles, allEmbeddingProfiles, allFiles] = await Promise.all([
+    repos.characters.findAll(),
+    repos.chats.findAll(),
+    repos.connections.findAll(),
+    repos.imageProfiles.findAll(),
+    repos.embeddingProfiles.findAll(),
+    repos.files.findAll(),
+  ]);
+
+  const characterTags = allCharacters.filter(c => c.tags.includes(tag.id)).length;
+  const chatTags = allChats.filter(c => c.tags.includes(tag.id)).length;
+  const connectionProfileTags = allConnections.filter(c => c.tags.includes(tag.id)).length;
+  const imageProfileTags = allImageProfiles.filter(c => c.tags.includes(tag.id)).length;
+  const embeddingProfileTags = allEmbeddingProfiles.filter(c => c.tags.includes(tag.id)).length;
+  const fileTags = allFiles.filter(c => c.tags.includes(tag.id)).length;
+
+  const enrichedTag = {
+    ...tag,
+    _count: {
+      characterTags,
+      chatTags,
+      connectionProfileTags,
+      imageProfileTags,
+      embeddingProfileTags,
+      fileTags,
+    },
+    totalUsage: characterTags + chatTags + connectionProfileTags + imageProfileTags + embeddingProfileTags + fileTags,
+  };
+
+
+  return successResponse({ tag: enrichedTag });
 });
 
 // ============================================================================
@@ -79,39 +73,29 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 // ============================================================================
 
 export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
-  try {
+  const existingTag = await repos.tags.findById(id);
 
-    const existingTag = await repos.tags.findById(id);
-
-    if (!checkOwnership(existingTag, user.id)) {
-      return notFound('Tag');
-    }
-
-    const body = await req.json();
-    const validatedData = updateTagSchema.parse(body);
-
-    // If name is being changed, ensure it doesn't conflict
-    if (validatedData.name && validatedData.name !== existingTag.name) {
-      const existingByName = await repos.tags.findByName(user.id, validatedData.name);
-      if (existingByName && existingByName.id !== id) {
-        return badRequest('A tag with this name already exists');
-      }
-    }
-
-    // Update - the repository will automatically handle nameLower if name is provided
-    const tag = await repos.tags.update(id, validatedData);
-
-    logger.info('[Tags v1] Tag updated', { tagId: id, userId: user.id });
-
-    return successResponse({ tag });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Tags v1] Error updating tag', { tagId: id }, error instanceof Error ? error : undefined);
-    return serverError('Failed to update tag');
+  if (!checkOwnership(existingTag, user.id)) {
+    return notFound('Tag');
   }
+
+  const body = await req.json();
+  const validatedData = updateTagSchema.parse(body);
+
+  // If name is being changed, ensure it doesn't conflict
+  if (validatedData.name && validatedData.name !== existingTag.name) {
+    const existingByName = await repos.tags.findByName(user.id, validatedData.name);
+    if (existingByName && existingByName.id !== id) {
+      return badRequest('A tag with this name already exists');
+    }
+  }
+
+  // Update - the repository will automatically handle nameLower if name is provided
+  const tag = await repos.tags.update(id, validatedData);
+
+  logger.info('[Tags v1] Tag updated', { tagId: id, userId: user.id });
+
+  return successResponse({ tag });
 });
 
 // ============================================================================
@@ -119,71 +103,65 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
 // ============================================================================
 
 export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(async (req, { user, repos }, { id }) => {
-  try {
+  const existingTag = await repos.tags.findById(id);
 
-    const existingTag = await repos.tags.findById(id);
-
-    if (!checkOwnership(existingTag, user.id)) {
-      return notFound('Tag');
-    }
-
-    // Remove this tag from all entities that reference it
-    const allCharacters = await repos.characters.findAll();
-    for (const character of allCharacters) {
-      if (character.tags.includes(id)) {
-        const updatedTags = character.tags.filter((t: string) => t !== id);
-        await repos.characters.update(character.id, { tags: updatedTags });
-      }
-    }
-
-    const allChats = await repos.chats.findAll();
-    for (const chat of allChats) {
-      if (chat.tags.includes(id)) {
-        const updatedTags = chat.tags.filter((t: string) => t !== id);
-        await repos.chats.update(chat.id, { tags: updatedTags });
-      }
-    }
-
-    const allConnections = await repos.connections.findAll();
-    for (const connection of allConnections) {
-      if (connection.tags.includes(id)) {
-        const updatedTags = connection.tags.filter((t: string) => t !== id);
-        await repos.connections.update(connection.id, { tags: updatedTags });
-      }
-    }
-
-    const allImageProfiles = await repos.imageProfiles.findAll();
-    for (const profile of allImageProfiles) {
-      if (profile.tags.includes(id)) {
-        const updatedTags = profile.tags.filter((t: string) => t !== id);
-        await repos.imageProfiles.update(profile.id, { tags: updatedTags });
-      }
-    }
-
-    const allEmbeddingProfiles = await repos.embeddingProfiles.findAll();
-    for (const profile of allEmbeddingProfiles) {
-      if (profile.tags.includes(id)) {
-        const updatedTags = profile.tags.filter((t: string) => t !== id);
-        await repos.embeddingProfiles.update(profile.id, { tags: updatedTags });
-      }
-    }
-
-    const allFiles = await repos.files.findAll();
-    for (const file of allFiles) {
-      if (file.tags.includes(id)) {
-        const updatedTags = file.tags.filter((t: string) => t !== id);
-        await repos.files.update(file.id, { tags: updatedTags });
-      }
-    }
-
-    // Delete the tag
-    await repos.tags.delete(id);
-
-    logger.info('[Tags v1] Tag deleted', { tagId: id, userId: user.id });
-
-    return successResponse({ success: true });
-  } catch (error) {
-    logger.error('[Tags v1] Error deleting tag', { tagId: id }, error instanceof Error ? error : undefined);
-    return serverError('Failed to delete tag');
+  if (!checkOwnership(existingTag, user.id)) {
+    return notFound('Tag');
   }
+
+  // Remove this tag from all entities that reference it
+  const allCharacters = await repos.characters.findAll();
+  for (const character of allCharacters) {
+    if (character.tags.includes(id)) {
+      const updatedTags = character.tags.filter((t: string) => t !== id);
+      await repos.characters.update(character.id, { tags: updatedTags });
+    }
+  }
+
+  const allChats = await repos.chats.findAll();
+  for (const chat of allChats) {
+    if (chat.tags.includes(id)) {
+      const updatedTags = chat.tags.filter((t: string) => t !== id);
+      await repos.chats.update(chat.id, { tags: updatedTags });
+    }
+  }
+
+  const allConnections = await repos.connections.findAll();
+  for (const connection of allConnections) {
+    if (connection.tags.includes(id)) {
+      const updatedTags = connection.tags.filter((t: string) => t !== id);
+      await repos.connections.update(connection.id, { tags: updatedTags });
+    }
+  }
+
+  const allImageProfiles = await repos.imageProfiles.findAll();
+  for (const profile of allImageProfiles) {
+    if (profile.tags.includes(id)) {
+      const updatedTags = profile.tags.filter((t: string) => t !== id);
+      await repos.imageProfiles.update(profile.id, { tags: updatedTags });
+    }
+  }
+
+  const allEmbeddingProfiles = await repos.embeddingProfiles.findAll();
+  for (const profile of allEmbeddingProfiles) {
+    if (profile.tags.includes(id)) {
+      const updatedTags = profile.tags.filter((t: string) => t !== id);
+      await repos.embeddingProfiles.update(profile.id, { tags: updatedTags });
+    }
+  }
+
+  const allFiles = await repos.files.findAll();
+  for (const file of allFiles) {
+    if (file.tags.includes(id)) {
+      const updatedTags = file.tags.filter((t: string) => t !== id);
+      await repos.files.update(file.id, { tags: updatedTags });
+    }
+  }
+
+  // Delete the tag
+  await repos.tags.delete(id);
+
+  logger.info('[Tags v1] Tag deleted', { tagId: id, userId: user.id });
+
+  return successResponse({ success: true });
 });

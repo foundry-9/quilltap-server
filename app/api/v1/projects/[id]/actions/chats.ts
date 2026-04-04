@@ -7,10 +7,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { checkOwnership, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { notFound, validationError, serverError, successResponse } from '@/lib/api/responses';
+import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { addChatSchema, removeChatSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -135,35 +134,26 @@ export async function handleAddChat(
   projectId: string,
   { user, repos }: AuthenticatedContext
 ): Promise<NextResponse> {
-  try {
-    const project = await repos.projects.findById(projectId);
-    if (!checkOwnership(project, user.id)) {
-      return notFound('Project');
-    }
-
-    const body = await req.json();
-    const { chatId } = addChatSchema.parse(body);
-
-    // Check chat exists and is owned by user
-    const chat = await repos.chats.findById(chatId);
-    if (!chat || chat.userId !== user.id) {
-      return notFound('Chat');
-    }
-
-    // Associate chat with project
-    await repos.chats.update(chatId, { projectId });
-
-    logger.info('[Projects v1] Chat added to project', { projectId, chatId });
-
-    return successResponse({ success: true });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Projects v1] Error adding chat', { projectId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to add chat');
+  const project = await repos.projects.findById(projectId);
+  if (!checkOwnership(project, user.id)) {
+    return notFound('Project');
   }
+
+  const body = await req.json();
+  const { chatId } = addChatSchema.parse(body);
+
+  // Check chat exists and is owned by user
+  const chat = await repos.chats.findById(chatId);
+  if (!chat) {
+    return notFound('Chat');
+  }
+
+  // Associate chat with project
+  await repos.chats.update(chatId, { projectId });
+
+  logger.info('[Projects v1] Chat added to project', { projectId, chatId });
+
+  return successResponse({ success: true });
 }
 
 /**
@@ -174,27 +164,18 @@ export async function handleRemoveChat(
   projectId: string,
   { user, repos }: AuthenticatedContext
 ): Promise<NextResponse> {
-  try {
-    const project = await repos.projects.findById(projectId);
-    if (!checkOwnership(project, user.id)) {
-      return notFound('Project');
-    }
-
-    const body = await req.json();
-    const { chatId } = removeChatSchema.parse(body);
-
-    // Remove projectId from chat
-    await repos.chats.update(chatId, { projectId: null });
-
-    logger.info('[Projects v1] Chat removed from project', { projectId, chatId });
-
-    return successResponse({ success: true });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Projects v1] Error removing chat', { projectId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to remove chat');
+  const project = await repos.projects.findById(projectId);
+  if (!checkOwnership(project, user.id)) {
+    return notFound('Project');
   }
+
+  const body = await req.json();
+  const { chatId } = removeChatSchema.parse(body);
+
+  // Remove projectId from chat
+  await repos.chats.update(chatId, { projectId: null });
+
+  logger.info('[Projects v1] Chat removed from project', { projectId, chatId });
+
+  return successResponse({ success: true });
 }

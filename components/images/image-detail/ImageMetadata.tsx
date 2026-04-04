@@ -48,7 +48,7 @@ export function ImageMetadata({
     <div className="qt-panel qt-bg-overlay-medium backdrop-blur-sm w-full max-w-2xl">
       <div className="flex flex-col gap-4">
         {loadingEntities && (
-          <p className="text-muted-foreground text-sm">Loading characters...</p>
+          <p className="qt-text-secondary text-sm">Loading characters...</p>
         )}
 
         {/* Section 1: Tagged Characters */}
@@ -64,13 +64,13 @@ export function ImageMetadata({
                 return (
                   <div
                     key={character.id}
-                    className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded"
+                    className="flex items-center gap-2 px-3 py-2 qt-bg-muted/50 rounded"
                   >
                     <span className="flex-1 text-foreground font-medium text-sm">
                       {character.name}
                     </span>
                     {isAvatar ? (
-                      <span className="text-xs bg-success text-success-foreground px-2 py-0.5 rounded">
+                      <span className="text-xs bg-success qt-text-success-foreground px-2 py-0.5 rounded">
                         Avatar
                       </span>
                     ) : (
@@ -80,7 +80,7 @@ export function ImageMetadata({
                           onSetAsAvatar('character', character.id)
                         }}
                         disabled={isSettingAvatar}
-                        className="px-2 py-1 bg-success hover:bg-success/90 text-success-foreground rounded text-xs font-medium transition-colors disabled:opacity-50"
+                        className="px-2 py-1 bg-success hover:qt-bg-success/90 qt-text-success-foreground rounded text-xs font-medium transition-colors disabled:opacity-50"
                         title="Set as avatar"
                       >
                         {isSettingAvatar ? '...' : 'Set Avatar'}
@@ -92,7 +92,7 @@ export function ImageMetadata({
                         onToggleCharacterTag(character.id)
                       }}
                       disabled={isLoading}
-                      className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/20 rounded transition-colors disabled:opacity-50"
+                      className="w-6 h-6 flex items-center justify-center qt-text-secondary hover:qt-text-destructive hover:qt-bg-destructive/20 rounded transition-colors disabled:opacity-50"
                       title="Remove tag"
                     >
                       {isLoading ? '...' : '×'}
@@ -137,7 +137,7 @@ export function ImageMetadata({
 
         {/* No characters available message */}
         {!loadingEntities && characters.length === 0 && (
-          <p className="text-muted-foreground text-sm">No characters available for tagging.</p>
+          <p className="qt-text-secondary text-sm">No characters available for tagging.</p>
         )}
       </div>
     </div>

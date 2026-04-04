@@ -288,7 +288,7 @@ export function ToolSettingsContent({
     <div className="space-y-4">
       {/* Description and quick actions */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm qt-text-secondary">
           {description || `${enabledCount} of ${availableCount} tools enabled`}
         </p>
         <div className="flex gap-2">
@@ -331,14 +331,14 @@ export function ToolSettingsContent({
       </div>
 
       {availableTools.length === 0 && !loading && (
-        <div className="text-center py-4 text-muted-foreground">
+        <div className="text-center py-4 qt-text-secondary">
           No tools available
         </div>
       )}
 
       {/* Info note */}
       {footerNote && (
-        <p className="text-xs text-muted-foreground pt-2 border-t border-border">
+        <p className="text-xs qt-text-secondary pt-2 border-t qt-border-default">
           {footerNote}
         </p>
       )}
@@ -387,17 +387,17 @@ function GroupSection({
   const ChevronIcon = isExpanded ? ChevronDownIcon : ChevronRightIcon
 
   return (
-    <div className="border border-border rounded-lg overflow-hidden">
+    <div className="border qt-border-default rounded-lg overflow-hidden">
       {/* Group header */}
-      <div className="flex items-center gap-2 p-3 bg-muted/30 hover:bg-muted/50 transition-colors">
+      <div className="flex items-center gap-2 p-3 qt-bg-muted/30 hover:qt-bg-muted/50 transition-colors">
         <button
           type="button"
           onClick={onToggleExpand}
           className="flex items-center gap-2 flex-1 text-left"
         >
-          <ChevronIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+          <ChevronIcon className="w-4 h-4 qt-text-secondary shrink-0" />
           <span className="font-medium text-sm">{group.displayName}</span>
-          <span className="text-xs text-muted-foreground">({enabledToolCount}/{availableToolCount})</span>
+          <span className="text-xs qt-text-secondary">({enabledToolCount}/{availableToolCount})</span>
         </button>
         <TriStateCheckbox
           state={checkState}
@@ -469,17 +469,17 @@ function SubgroupSection({
   const enabledCount = countableTools.filter(isToolEnabled).length
 
   return (
-    <div className="ml-4 border-l-2 border-border/50">
+    <div className="ml-4 border-l-2 qt-border-default/50">
       {/* Subgroup header */}
-      <div className="flex items-center gap-2 p-2 pl-3 hover:bg-muted/30 rounded-r transition-colors">
+      <div className="flex items-center gap-2 p-2 pl-3 hover:qt-bg-muted/30 rounded-r transition-colors">
         <button
           type="button"
           onClick={onToggleExpand}
           className="flex items-center gap-2 flex-1 text-left"
         >
-          <ChevronIcon className="w-3 h-3 text-muted-foreground shrink-0" />
+          <ChevronIcon className="w-3 h-3 qt-text-secondary shrink-0" />
           <span className="text-sm font-medium text-foreground/80">{subgroup.displayName}</span>
-          <span className="text-xs text-muted-foreground">({enabledCount}/{totalCount})</span>
+          <span className="text-xs qt-text-secondary">({enabledCount}/{totalCount})</span>
         </button>
         <TriStateCheckbox
           state={checkState}
@@ -522,7 +522,7 @@ function TriStateCheckbox({ state, onChange, label }: Readonly<TriStateCheckboxP
         e.stopPropagation()
         onChange()
       }}
-      className="relative flex items-center justify-center w-5 h-5 rounded border border-input hover:border-primary transition-colors"
+      className="relative flex items-center justify-center w-5 h-5 rounded border border-input hover:qt-border-primary transition-colors"
       aria-label={label}
       aria-checked={state === 'checked' ? true : state === 'indeterminate' ? 'mixed' : false}
     >
@@ -568,11 +568,11 @@ function ToolToggle({ tool, isEnabled, onToggle, indentLevel, showAvailability }
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-medium text-sm text-foreground">{tool.name}</span>
-            <span className="text-xs text-warning">(unavailable)</span>
+            <span className="text-xs qt-text-warning">(unavailable)</span>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{tool.description}</p>
+          <p className="text-xs qt-text-secondary mt-0.5 line-clamp-2">{tool.description}</p>
           {tool.unavailableReason && (
-            <p className="text-xs text-warning mt-1 italic">
+            <p className="text-xs qt-text-warning mt-1 italic">
               {tool.unavailableReason}
             </p>
           )}
@@ -584,7 +584,7 @@ function ToolToggle({ tool, isEnabled, onToggle, indentLevel, showAvailability }
   return (
     <label
       htmlFor={checkboxId}
-      className={`flex items-start gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer transition-colors ${paddingClass}`}
+      className={`flex items-start gap-3 p-2 rounded hover:qt-bg-muted/30 cursor-pointer transition-colors ${paddingClass}`}
     >
       <input
         type="checkbox"
@@ -597,7 +597,7 @@ function ToolToggle({ tool, isEnabled, onToggle, indentLevel, showAvailability }
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm text-foreground">{tool.name}</span>
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{tool.description}</p>
+        <p className="text-xs qt-text-secondary mt-0.5 line-clamp-2">{tool.description}</p>
       </div>
     </label>
   )

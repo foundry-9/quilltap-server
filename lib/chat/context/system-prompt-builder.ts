@@ -60,7 +60,9 @@ export function buildSystemPrompt(
   /** Status change notifications to include (e.g., "Alice is now silent") */
   statusChangeNotifications?: string[],
   /** The responding character's own participation status */
-  respondingCharacterStatus?: 'active' | 'silent' | 'absent' | 'removed'
+  respondingCharacterStatus?: 'active' | 'silent' | 'absent' | 'removed',
+  /** Scenario text override (from chat-level scenario selection) */
+  scenarioText?: string | null
 ): string {
   const parts: string[] = []
 
@@ -70,7 +72,7 @@ export function buildSystemPrompt(
     user: persona?.name || 'User',
     description: character.description || '',
     personality: character.personality || '',
-    scenario: character.scenarios?.[0]?.content || '',
+    scenario: scenarioText || character.scenarios?.[0]?.content || '',
     persona: persona?.description || '',
   }
 
@@ -206,9 +208,9 @@ export function buildSystemPrompt(
   // Scenario/setting - use first scenario in the array, process templates
   // A scenario describes the environment, setting, and circumstances of the interaction —
   // it provides context for where the conversation takes place without changing who the character is.
-  const defaultScenarioContent = character.scenarios?.[0]?.content
-  if (defaultScenarioContent) {
-    const processedScenario = processTemplate(defaultScenarioContent, templateContext)
+  const scenarioContent = scenarioText || character.scenarios?.[0]?.content
+  if (scenarioContent) {
+    const processedScenario = processTemplate(scenarioContent, templateContext)
     parts.push(`\n## Scenario\nThe following describes the setting and circumstances of this interaction. Stay in character as defined above — the scenario provides environmental context, not a change in personality.\n\n${processedScenario}`)
   }
 

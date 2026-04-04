@@ -477,9 +477,18 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   }
 
   const imageData = generationResponse.images[0];
-  const buffer = Buffer.from(imageData.data, 'base64');
+  const rawData = imageData.data || imageData.b64Json;
+  if (!rawData) {
+    logger.warn('[StoryBackground] Generated image has no data', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+    });
+    return;
+  }
+  const buffer = Buffer.from(rawData, 'base64');
   const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
-  const ext = imageData.mimeType.split('/')[1] || 'png';
+  const mimeType = imageData.mimeType || 'image/png';
+  const ext = mimeType.split('/')[1] || 'png';
   const originalFilename = `story_background_${Date.now()}.${ext}`;
   const fileId = crypto.randomUUID();
 
@@ -491,7 +500,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     const uploadResult = await fileStorageManager.uploadFile({
       filename: originalFilename,
       content: buffer,
-      contentType: imageData.mimeType,
+      contentType: mimeType,
       projectId: payload.projectId ?? null,
       folderPath: '/story-backgrounds/',
     });
@@ -522,7 +531,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       userId: job.userId,
       sha256,
       originalFilename,
-      mimeType: imageData.mimeType,
+      mimeType,
       size: buffer.length,
       width: 1792,
       height: 1024,

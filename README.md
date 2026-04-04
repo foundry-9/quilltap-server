@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting everything between sessions. 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap/releases/latest)
-[![This Version](https://img.shields.io/badge/version-3.3.0-green.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.0.0-green.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.com/channels/1476289075152556205/1476290238187049184)
@@ -59,39 +59,22 @@ There are several paths to the same destination. Which one you choose depends on
 
 That second question deserves a moment of your attention. As AI models grow more capable — reading files, writing code, using tools — the question of *where* that code executes becomes important. A virtual machine is a genuine locked room: if an AI-generated script misbehaves, it misbehaves inside a contained environment with no access to your host system. Docker provides a similar boundary, though somewhat thinner. Running directly on your machine provides no boundary at all.
 
-| | Desktop App (Direct) | Desktop App (VM) | Docker | Node.js (`npx`) |
-| --- | --- | --- | --- | --- |
-| **You install** | Nothing extra — Electron bundles Node.js | macOS: Xcode CLI Tools · Windows: WSL2 · Linux: Docker Engine | Docker Desktop or Docker Engine | Node.js 22+ |
-| **First launch** | Fastest — uses Electron's embedded Node.js | Slowest — downloads a VM image (~150 MB), boots a Linux guest | Fast — pulls the container image | Fast — downloads app files, runs directly |
-| **AI sandbox** | ❌ No isolation (runs with your permissions) | ✅ Full VM isolation | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
-| **Native window** | Yes (Electron) | Yes (Electron) | Yes (Electron) or browser | Yes (Electron) or browser |
-| **Best for** | Most users — fastest start, zero prerequisites | Safety-conscious users — best sandbox | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
+| | Desktop App | Docker | Node.js (`npx`) |
+| --- | --- | --- | --- |
+| **You install** | Download from GitHub | Docker Desktop or Docker Engine | Node.js 22+ |
+| **First launch** | Double-click the app | Fast — pulls the container image | Fast — downloads app files, runs directly |
+| **AI sandbox** | ✅ VM isolation (Lima/WSL2) or container | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
+| **Best for** | Most users — native window, managed updates | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
 
-> **Our recommendation:** For most people, the desktop app in **Direct mode** is the fastest and easiest way to get started — no VM, no Docker, no Node.js install, just download and run. If you use AI tools that read and write files on your behalf and want a genuine sandbox around that behavior, switch to **VM mode** from the splash screen. The Electron app lets you toggle between VM, Docker, and Direct runtimes at any time — no commitment required.
+> **Our recommendation:** The Desktop App provides the best experience for most people — a native window with managed updates and optional VM isolation for AI sandboxing. If you're deploying to a server or already live in Docker, the container image is excellent. If you have Node.js and simply want to kick the tires, `npx quilltap` will have you running in under a minute.
 
-### Desktop App (Recommended)
+### Desktop App
 
-Download the latest release from the [Releases page](https://github.com/foundry-9/quilltap/releases) for your platform:
-
-- **macOS:** `.dmg` installer.
-- **Windows:** `.exe` installer.
-- **Linux:** `.AppImage` (make executable and run) or `.deb` package.
-
-Launch the app. It presents a splash screen where you choose your data directory and runtime mode, then boots the backend and opens your workspace. The setup wizard handles the rest.
-
-**Runtime modes** (switchable from the splash screen at any time):
-
-- **Direct** — Uses Electron's embedded Node.js. Zero prerequisites, fastest startup. Runs with your user permissions (no sandbox).
-- **VM** — macOS: [Lima](https://lima-vm.io/) with Apple's Virtualization.framework (requires Xcode Command Line Tools — the app will offer to install them). Windows: WSL2 (if not enabled, run `wsl --install` in PowerShell as Administrator and restart). Full sandbox isolation.
-- **Docker** — Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine. Linux uses Docker as its default runtime backend.
-
-The desktop app manages multiple data directories from its splash screen — separate everything by purpose, by project, by world, or however your brain organizes things. Each directory remembers its own runtime mode and window position.
+The Quilltap desktop app (Electron) is available from the [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository. It provides a native window on macOS, Windows, and Linux, with automatic updates, instance management, and optional VM-based isolation (Lima on macOS, WSL2 on Windows) for sandboxed AI execution.
 
 ### Docker
 
-**With the Electron app:** The desktop app includes a runtime switcher on the splash screen. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), launch Quilltap, and switch the runtime to "Docker." Same native window, different engine underneath.
-
-**Standalone with Docker:** The [foundry9/quilltap](https://hub.docker.com/r/foundry9/quilltap) image is available on Docker Hub. Use the included startup scripts for the smoothest experience:
+The [foundry9/quilltap](https://hub.docker.com/r/foundry9/quilltap) image is available on Docker Hub. Use the included startup scripts for the smoothest experience:
 
 ```bash
 # Linux / macOS
@@ -116,7 +99,7 @@ docker run -d \
 
 Open [http://localhost:3000](http://localhost:3000) and the setup wizard will guide you through first-time configuration.
 
-> **Timezone tip:** Set `QUILLTAP_TIMEZONE` to your IANA timezone (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) so timestamps in chats show your local time instead of UTC. The Electron desktop app detects this automatically.
+> **Timezone tip:** Set `QUILLTAP_TIMEZONE` to your IANA timezone (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) so timestamps in chats show your local time instead of UTC.
 
 ### The Quick Route: npx
 
@@ -150,7 +133,7 @@ npm run dev        # Development mode with hot reload
 npm run build && npm run start   # Production build
 ```
 
-Requires **Node.js 22+** and **git**. See the [Development Guide](docs/developer/DEVELOPMENT.md) for building Electron installers, rootfs tarballs, and Docker images from source.
+Requires **Node.js 22+** and **git**. See the [Development Guide](docs/developer/DEVELOPMENT.md) for building Docker images from source.
 
 ---
 
@@ -170,6 +153,8 @@ Connect to any major AI provider — or several at once. Quilltap uses a three-m
 | **OpenRouter** | 200+ models through a unified API with automatic pricing. |
 | **OpenAI-Compatible** | LM Studio, vLLM, Together AI, Groq, and any compatible endpoint. |
 
+Each connection profile is classified into a **model class** — Compact, Standard, Extended, or Deep — that defines its context window and output capacity. Don't know the right settings for your model? **Auto-configure** searches the web for your model's specifications, sends the results to your default LLM for analysis, and applies optimal settings automatically. Budget-driven **context compression** uses your profile's context window and output limits to intelligently compress conversation history and recalled memories when they approach capacity, rather than using arbitrary message counts.
+
 Agent Mode lets the AI use tools iteratively — web search, image generation, file management, memory search, and any MCP server you connect. The Run Tool feature lets you invoke any tool directly from the chat toolbar. The plugin system means additional providers and tools can be added without waiting for us.
 
 ### Writer's Workspace
@@ -182,7 +167,7 @@ Semantic search finds content by meaning across your entire project: not just th
 
 Create AI characters with personality, backstory, system prompts, pronouns, aliases, and physical descriptions. Each character maintains their own long-term memory — they remember your conversations, your preferences, your history together. When you come back after a week away, they know what you talked about last time. In multi-character chats, characters also form memories about each other — learning names, personalities, and shared experiences the way people do.
 
-Characters aren't limited to a single personality template. Each can have multiple named system prompts and scenarios, letting you shift context — the same companion in different settings, or different facets of the same relationship. The AI Character Import wizard can generate a complete character from source material (wiki pages, documents, freeform text).
+Characters aren't limited to a single personality template. Each can have multiple named system prompts and scenarios, letting you shift context — the same companion in different settings, or different facets of the same relationship. The AI Character Import wizard can generate a complete character from source material (wiki pages, documents, freeform text). The **Non-Quilltap Prompt generator** exports any character as a standalone system prompt for use in other AI tools — taking your character with you when you need to.
 
 The Concierge system ensures that your conversations are never arbitrarily refused. Instead of blocking content, it routes intelligently — detecting content type and, when configured, directing requests to providers that can handle them. You set the boundaries. The software respects them.
 
@@ -216,8 +201,8 @@ All Quilltap data — database, files, logs — resides in a single directory. T
 
 | Platform | Default Location | Override |
 | -------- | ---------------- | -------- |
-| **macOS (Electron)** | `~/Library/Application Support/Quilltap` | Splash screen directory chooser or `QUILLTAP_DATA_DIR` |
-| **Windows (Electron)** | `%APPDATA%\Quilltap` | Splash screen directory chooser or `QUILLTAP_DATA_DIR` |
+| **macOS** | `~/Library/Application Support/Quilltap` | `QUILLTAP_DATA_DIR` |
+| **Windows** | `%APPDATA%\Quilltap` | `QUILLTAP_DATA_DIR` |
 | **Linux** | `~/.quilltap` | `QUILLTAP_DATA_DIR` |
 | **Docker** | Mount a host directory to `/app/quilltap` | Volume mount (`-v`) |
 
@@ -277,8 +262,7 @@ Quilltap is a single Next.js 16 application (App Router) that serves both the UI
 
 - **Frontend:** React 19, TypeScript, Tailwind CSS 4 with a semantic `qt-*` class system for full theme overrideability
 - **Backend:** Next.js API routes, SQLite with SQLCipher encryption (better-sqlite3-multiple-ciphers) with WAL mode, Zod schema validation
-- **Desktop:** Electron shell with three runtime modes — embedded Node.js (Direct), VM backends (Lima/VZ on macOS, WSL2 on Windows), or Docker
-- **Build:** GitHub Actions CI/CD with automated releases — rootfs tarballs, Electron installers (macOS DMG, Windows NSIS, Linux AppImage/deb), Docker multi-arch images, and npm package all built from a single tag push
+- **Build:** GitHub Actions CI/CD with automated releases — Docker multi-arch images and npm package built from a single tag push
 
 The entire provider system is plugin-based — every bundled provider (Anthropic, OpenAI, Google, xAI, Ollama, OpenRouter, OpenAI-Compatible) is a plugin with the same API surface available to third-party authors.
 
@@ -309,13 +293,11 @@ See the [Development Guide](docs/developer/DEVELOPMENT.md) for local setup, test
 
 ## Troubleshooting
 
-**Desktop app won't start (macOS):** Ensure Xcode Command Line Tools are installed — the app will prompt you if they're missing. Check Console.app for Lima-related errors. Try deleting the VM; the app will recreate it on next launch.
-
-**Desktop app won't start (Windows):** Ensure WSL2 is installed: run `wsl --install` in PowerShell as Administrator. Check if the distro exists: `wsl --list --verbose`. See the [Windows Troubleshooting Guide](docs/WINDOWS.md).
-
 **Docker container issues:** Check `docker logs quilltap`. Verify port 3000 isn't already in use. For local services (Ollama, etc.), use the startup scripts — they handle port forwarding automatically.
 
-**General:** The footer shows your data directory path and backend mode (VM/Docker/local) — useful for debugging. If none of the above resolves your predicament: [GitHub Issues](https://github.com/foundry-9/quilltap/issues).
+**Desktop app issues:** See the [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository for desktop-specific troubleshooting.
+
+**General:** The footer shows your data directory path and backend mode — useful for debugging. If none of the above resolves your predicament: [GitHub Issues](https://github.com/foundry-9/quilltap/issues).
 
 ---
 
@@ -328,7 +310,6 @@ See the [Development Guide](docs/developer/DEVELOPMENT.md) for local setup, test
 - [File LLM Access](docs/developer/FILE_LLM_ACCESS.md) — How AI reads your files
 - [Database Architecture](docs/developer/DATABASE_ABSTRACTION.md) — SQLite backend and protection
 - [Prompt Architecture](docs/developer/PROMPT_ARCHITECTURE.md) — How system prompts are assembled
-- [Windows Troubleshooting](docs/WINDOWS.md) — WSL2 setup and common issues
 - [Changelog](docs/CHANGELOG.md) — Release history
 - [Roadmap](docs/developer/features/ROADMAP.md) — What's coming
 
@@ -336,7 +317,7 @@ See the [Development Guide](docs/developer/DEVELOPMENT.md) for local setup, test
 
 ## Tech Stack
 
-Next.js 16 (App Router) · React 19 · TypeScript · SQLite with SQLCipher (better-sqlite3-multiple-ciphers) · Tailwind CSS 4 · Electron · Lima/VZ (macOS) · WSL2 (Windows) · Docker (Linux) · Zod · GitHub Actions
+Next.js 16 (App Router) · React 19 · TypeScript · SQLite with SQLCipher (better-sqlite3-multiple-ciphers) · Tailwind CSS 4 · Docker · Zod · GitHub Actions
 
 ---
 
@@ -369,11 +350,11 @@ Quilltap stands on the shoulders of these excellent open source projects, and is
 
 **UI:** Tailwind CSS, React Markdown, React Syntax Highlighter, PDF.js, sharp, Lucide Icons
 
-**Desktop & Infrastructure:** Electron, Lima, Docker
+**Infrastructure:** Docker
 
 **Testing:** Jest, Playwright, Testing Library
 
-**Build & Tooling:** tsx, electron-builder, cross-env
+**Build & Tooling:** tsx, cross-env
 
 Special thanks to [SillyTavern](https://github.com/SillyTavern/SillyTavern) for pioneering this space and inspiring character format compatibility. One does not forget those who blazed the trail.
 

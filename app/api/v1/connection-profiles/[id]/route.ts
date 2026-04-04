@@ -6,6 +6,7 @@
  * DELETE /api/v1/connection-profiles/[id] - Delete a profile
  * POST /api/v1/connection-profiles/[id]?action=add-tag - Add a tag
  * POST /api/v1/connection-profiles/[id]?action=remove-tag - Remove a tag
+ * POST /api/v1/connection-profiles/[id]?action=auto-configure - Auto-configure profile settings
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -13,7 +14,9 @@ import { createAuthenticatedParamsHandler, AuthenticatedContext } from '@/lib/ap
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { notFound, forbidden, badRequest, serverError } from '@/lib/api/responses';
+import { isValidModelClassName } from '@/lib/llm/model-classes';
+import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -28,7 +31,7 @@ const removeTagSchema = z.object({
   tagId: z.uuid(),
 });
 
-const CONNECTION_PROFILE_ITEM_POST_ACTIONS = ['add-tag', 'remove-tag'] as const;
+const CONNECTION_PROFILE_ITEM_POST_ACTIONS = ['add-tag', 'remove-tag', 'auto-configure'] as const;
 type ConnectionProfileItemPostAction = typeof CONNECTION_PROFILE_ITEM_POST_ACTIONS[number];
 
 /**
@@ -71,7 +74,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
     try {const profile = await repos.connections.findById(id);
 
-      if (!profile || profile.userId !== user.id) {
+      if (!profile) {
         return notFound('Connection profile');
       }
 
@@ -93,7 +96,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     try {// Verify ownership
       const existingProfile = await repos.connections.findById(id);
 
-      if (!existingProfile || existingProfile.userId !== user.id) {
+      if (!existingProfile) {
         return notFound('Connection profile');
       }
 
@@ -111,6 +114,8 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         allowWebSearch,
         useNativeWebSearch,
         allowToolUse,
+        modelClass,
+        maxContext,
         sortIndex,
       } = body;
 
@@ -221,6 +226,29 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         updateData.allowToolUse = allowToolUse;
       }
 
+      if (modelClass !== undefined) {
+        if (modelClass === null || modelClass === '') {
+          updateData.modelClass = null;
+        } else {
+          if (!isValidModelClassName(modelClass)) {
+            return badRequest(`Invalid model class: ${modelClass}`);
+          }
+          updateData.modelClass = modelClass;
+        }
+      }
+
+      if (maxContext !== undefined) {
+        if (maxContext === null || maxContext === '' || maxContext === 0) {
+          updateData.maxContext = null;
+        } else {
+          const parsed = typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext;
+          if (!Number.isInteger(parsed) || parsed <= 0) {
+            return badRequest('maxContext must be a positive integer');
+          }
+          updateData.maxContext = parsed;
+        }
+      }
+
       if (sortIndex !== undefined) {
         if (typeof sortIndex !== 'number' || !Number.isInteger(sortIndex) || sortIndex < 0) {
           return badRequest('sortIndex must be a non-negative integer');
@@ -255,7 +283,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
     try {// Verify ownership
       const existingProfile = await repos.connections.findById(id);
 
-      if (!existingProfile || existingProfile.userId !== user.id) {
+      if (!existingProfile) {
         return notFound('Connection profile');
       }
 
@@ -284,9 +312,6 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     if (!profile) {
       return notFound('Connection profile');
     }
-    if (profile.userId !== user.id) {
-      return forbidden();
-    }
 
     if (!isValidAction(action, CONNECTION_PROFILE_ITEM_POST_ACTIONS)) {
       return badRequest(`Unknown action: ${action}. Available actions: ${CONNECTION_PROFILE_ITEM_POST_ACTIONS.join(', ')}`);
@@ -294,56 +319,87 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
     const actionHandlers: Record<ConnectionProfileItemPostAction, () => Promise<NextResponse>> = {
       'add-tag': async () => {
-        try {
-          const body = await req.json();
-          const validatedData = addTagSchema.parse(body);
+        const body = await req.json();
+        const validatedData = addTagSchema.parse(body);
 
-          // Verify tag exists and belongs to user
-          const tag = await repos.tags.findById(validatedData.tagId);
-          if (!tag) {
-            return notFound('Tag');
-          }
-          if (tag.userId !== user.id) {
-            return forbidden();
-          }
-
-          // Add tag to profile
-          await repos.connections.addTag(id, validatedData.tagId);
-
-          logger.info('[Connection Profiles v1] Tag added to profile', {
-            profileId: id,
-            tagId: validatedData.tagId,
-          });
-
-          return NextResponse.json({ success: true, tag }, { status: 201 });
-        } catch (error) {
-          if (error instanceof z.ZodError) {
-            return validationError(error);
-          }
-          logger.error('[Connection Profiles v1] Error adding tag', { profileId: id }, error instanceof Error ? error : undefined);
-          return serverError('Failed to add tag to connection profile');
+        // Verify tag exists and belongs to user
+        const tag = await repos.tags.findById(validatedData.tagId);
+        if (!tag) {
+          return notFound('Tag');
         }
+
+        // Add tag to profile
+        await repos.connections.addTag(id, validatedData.tagId);
+
+        logger.info('[Connection Profiles v1] Tag added to profile', {
+          profileId: id,
+          tagId: validatedData.tagId,
+        });
+
+        return NextResponse.json({ success: true, tag }, { status: 201 });
       },
       'remove-tag': async () => {
+        const body = await req.json();
+        const validatedData = removeTagSchema.parse(body);
+
+        // Remove tag from profile
+        await repos.connections.removeTag(id, validatedData.tagId);
+
+        logger.info('[Connection Profiles v1] Tag removed from profile', {
+          profileId: id,
+          tagId: validatedData.tagId,
+        });
+
+        return NextResponse.json({ success: true });
+      },
+      'auto-configure': async () => {
         try {
-          const body = await req.json();
-          const validatedData = removeTagSchema.parse(body);
+          // Call auto-configure service
+          const result = await autoConfigureProfile(profile.provider, profile.modelName, user.id);
 
-          // Remove tag from profile
-          await repos.connections.removeTag(id, validatedData.tagId);
+          // Merge result into profile
+          const existingParams = typeof profile.parameters === 'string' ? JSON.parse(profile.parameters) : (profile.parameters || {});
+          const updateData: Record<string, unknown> = {
+            maxContext: result.maxContext,
+            maxTokens: result.maxTokens,
+            modelClass: result.modelClass,
+            isDangerousCompatible: result.isDangerousCompatible,
+            parameters: {
+              ...existingParams,
+              temperature: result.temperature,
+              max_tokens: result.maxTokens,
+              top_p: result.topP,
+            },
+          };
 
-          logger.info('[Connection Profiles v1] Tag removed from profile', {
+          // Update the profile
+          const updatedProfile = await repos.connections.update(id, updateData);
+
+          if (!updatedProfile) {
+            return serverError('Failed to update connection profile with auto-configure results');
+          }
+
+          // Enrich and return the profile
+          const enrichedProfile = await enrichProfile(updatedProfile, repos);
+
+          logger.info('[Connection Profiles v1] Profile auto-configured', {
             profileId: id,
-            tagId: validatedData.tagId,
+            provider: profile.provider,
+            modelName: profile.modelName,
+            result: {
+              maxContext: result.maxContext,
+              maxTokens: result.maxTokens,
+              temperature: result.temperature,
+              topP: result.topP,
+              modelClass: result.modelClass,
+              isDangerousCompatible: result.isDangerousCompatible,
+            },
           });
 
-          return NextResponse.json({ success: true });
+          return NextResponse.json({ profile: enrichedProfile, autoConfigureResult: result }, { status: 200 });
         } catch (error) {
-          if (error instanceof z.ZodError) {
-            return validationError(error);
-          }
-          logger.error('[Connection Profiles v1] Error removing tag', { profileId: id }, error instanceof Error ? error : undefined);
-          return serverError('Failed to remove tag from connection profile');
+          logger.error('[Connection Profiles v1] Error auto-configuring profile', { profileId: id }, error instanceof Error ? error : undefined);
+          return serverError(error instanceof Error ? error.message : 'Failed to auto-configure connection profile');
         }
       },
     };

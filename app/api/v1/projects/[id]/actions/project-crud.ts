@@ -7,10 +7,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { checkOwnership, enrichWithDefaultImage } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { notFound, validationError, serverError, successResponse } from '@/lib/api/responses';
+import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { updateProjectSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -87,29 +86,20 @@ export async function handlePutDefault(
   projectId: string,
   { user, repos }: AuthenticatedContext
 ): Promise<NextResponse> {
-  try {
-    const existingProject = await repos.projects.findById(projectId);
+  const existingProject = await repos.projects.findById(projectId);
 
-    if (!checkOwnership(existingProject, user.id)) {
-      return notFound('Project');
-    }
-
-    const body = await req.json();
-    const validatedData = updateProjectSchema.parse(body);
-
-    const project = await repos.projects.update(projectId, validatedData);
-
-    logger.info('[Projects v1] Project updated', { projectId, userId: user.id });
-
-    return successResponse({ project });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Projects v1] Error updating project', { projectId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to update project');
+  if (!checkOwnership(existingProject, user.id)) {
+    return notFound('Project');
   }
+
+  const body = await req.json();
+  const validatedData = updateProjectSchema.parse(body);
+
+  const project = await repos.projects.update(projectId, validatedData);
+
+  logger.info('[Projects v1] Project updated', { projectId, userId: user.id });
+
+  return successResponse({ project });
 }
 
 /**

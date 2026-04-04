@@ -5,22 +5,29 @@
  */
 
 export type {
+  // New canonical names
+  TextProvider,
+  ImageProvider,
+  // Common types
   FileAttachment,
+  TokenUsage,
+  CacheUsage,
+  AttachmentResults,
+  ModelWarningLevel,
+  ModelWarning,
+  ModelMetadata,
+  // Text provider types
   LLMMessage,
   JSONSchemaDefinition,
   ResponseFormat,
   LLMParams,
-  TokenUsage,
-  CacheUsage,
-  AttachmentResults,
   LLMResponse,
   StreamChunk,
+  // Image provider types
   ImageGenParams,
   GeneratedImage,
   ImageGenResponse,
-  ModelWarningLevel,
-  ModelWarning,
-  ModelMetadata,
+  // Deprecated aliases
   LLMProvider,
   ImageGenProvider,
 } from './base';

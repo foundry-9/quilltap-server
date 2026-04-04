@@ -22,11 +22,11 @@ export function RestoreItemSelector({
           Select Backup File
         </label>
         <div
-          className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-input transition-colors"
+          className="border-2 border-dashed qt-border-default rounded-lg p-6 text-center cursor-pointer hover:border-input transition-colors"
           onClick={() => fileInputRef.current?.click()}
         >
           <svg
-            className="w-12 h-12 mx-auto text-muted-foreground mb-2"
+            className="w-12 h-12 mx-auto qt-text-secondary mb-2"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -45,7 +45,7 @@ export function RestoreItemSelector({
             Supports .zip backup files
           </p>
           {selectedFile && (
-            <p className="text-sm text-success mt-2">
+            <p className="text-sm qt-text-success mt-2">
               Selected: {selectedFile.name}
             </p>
           )}
@@ -60,8 +60,8 @@ export function RestoreItemSelector({
       </div>
 
       {error && (
-        <div className="p-3 bg-destructive/10 border border-destructive rounded-lg">
-          <p className="text-sm text-destructive">{error}</p>
+        <div className="p-3 qt-bg-destructive/10 border qt-border-destructive rounded-lg">
+          <p className="text-sm qt-text-destructive">{error}</p>
         </div>
       )}
     </div>

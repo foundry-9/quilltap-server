@@ -110,10 +110,10 @@ export default function SudoApprovalModal({
       }
     >
       <div className="space-y-4">
-        <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+        <div className="flex items-start gap-3 p-3 rounded-lg qt-bg-destructive/10 border qt-border-destructive/20">
           <span className="text-lg flex-shrink-0 mt-0.5">&#9888;&#65039;</span>
           <div className="text-sm">
-            <p className="font-semibold text-destructive">Elevated Privileges Required</p>
+            <p className="font-semibold qt-text-destructive">Elevated Privileges Required</p>
             <p className="qt-text-muted mt-1">
               This command will execute with root (superuser) privileges inside the VM.
               While the VM sandbox prevents direct harm to your host system, elevated
@@ -124,7 +124,7 @@ export default function SudoApprovalModal({
 
         <div>
           <p className="qt-text-label-sm mb-2">Command to execute:</p>
-          <div className="bg-muted rounded-lg p-3 border border-border">
+          <div className="qt-bg-muted rounded-lg p-3 border qt-border-default">
             <pre className="text-sm font-mono text-foreground whitespace-pre-wrap break-all">
               {fullCommand}
             </pre>
@@ -132,7 +132,7 @@ export default function SudoApprovalModal({
         </div>
 
         {pendingSudoCommand.timeout_ms && (
-          <p className="qt-text-xs text-muted-foreground">
+          <p className="qt-text-xs qt-text-secondary">
             Timeout: {(pendingSudoCommand.timeout_ms / 1000).toFixed(0)} seconds
           </p>
         )}

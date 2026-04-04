@@ -58,7 +58,7 @@ export function ApplyConfirmation({
   if (changes.length === 0) {
     return (
       <div className="flex flex-col items-center gap-4 py-8 text-center">
-        <svg className="w-12 h-12 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-12 h-12 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
         <div className="flex flex-col gap-1">
@@ -78,7 +78,7 @@ export function ApplyConfirmation({
   return (
     <div className="flex flex-col gap-4">
       {/* Summary header */}
-      <div className="qt-card p-4 bg-primary/5 border-primary/20">
+      <div className="qt-card p-4 qt-bg-primary/5 qt-border-primary/20">
         <div className="flex items-center gap-2 mb-1">
           <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -87,7 +87,7 @@ export function ApplyConfirmation({
             {changes.length} {changes.length === 1 ? 'Amendment' : 'Amendments'} Awaiting Commission
           </h3>
         </div>
-        <p className="qt-body-sm text-muted-foreground">
+        <p className="qt-body-sm qt-text-secondary">
           The following refinements shall be inscribed permanently into the character record.
           This act, once performed, admits of no mechanical undoing — though you may of course
           return and amend matters by hand thereafter.
@@ -113,7 +113,7 @@ export function ApplyConfirmation({
                   <span className="qt-badge-success text-xs">Newly Added</span>
                 )}
               </div>
-              <p className="qt-body-sm text-muted-foreground leading-relaxed">
+              <p className="qt-body-sm qt-text-secondary leading-relaxed">
                 {truncate(finalValue)}
               </p>
             </div>

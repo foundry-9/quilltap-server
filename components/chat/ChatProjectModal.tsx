@@ -187,7 +187,7 @@ export default function ChatProjectModal({
           )}
         </div>
 
-        <p className="qt-text-xs text-muted-foreground">
+        <p className="qt-text-xs qt-text-secondary">
           Organize this chat by assigning it to a project, or remove it from its current project.
         </p>
       </div>

@@ -185,10 +185,10 @@ export default function MoveToProjectModal({
             ))}
           </select>
           {loading && (
-            <p className="qt-text-xs mt-1 text-muted-foreground">Loading projects...</p>
+            <p className="qt-text-xs mt-1 qt-text-secondary">Loading projects...</p>
           )}
           {!loading && availableProjects.length === 0 && !currentProjectId && (
-            <p className="qt-text-xs mt-1 text-muted-foreground">No projects found. Create a project first.</p>
+            <p className="qt-text-xs mt-1 qt-text-secondary">No projects found. Create a project first.</p>
           )}
         </div>
 
@@ -205,7 +205,7 @@ export default function MoveToProjectModal({
           </div>
         )}
 
-        <p className="qt-text-xs text-muted-foreground">
+        <p className="qt-text-xs qt-text-secondary">
           {isGeneralFilesSelected
             ? 'The file will be moved to General Files. Any existing links to chats or characters will be preserved.'
             : 'The file will be moved to the selected project. Any existing links to chats or characters will be preserved.'}

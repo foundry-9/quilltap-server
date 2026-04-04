@@ -57,7 +57,7 @@ export function FieldSelectionStep({
         <h3 className="text-lg font-semibold text-foreground mb-2">
           Background Context
         </h3>
-        <p className="text-sm text-muted-foreground mb-3">
+        <p className="text-sm qt-text-secondary mb-3">
           Provide context about the character&apos;s world, scenario, backstory, or any details
           that should inform the generation.
         </p>
@@ -77,7 +77,7 @@ export function FieldSelectionStep({
             <h3 className="text-lg font-semibold text-foreground">
               Fields to Generate
             </h3>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm qt-text-secondary">
               Select which fields you want the AI to generate.
             </p>
           </div>
@@ -89,7 +89,7 @@ export function FieldSelectionStep({
             >
               Select all
             </button>
-            <span className="text-muted-foreground">|</span>
+            <span className="qt-text-secondary">|</span>
             <button
               type="button"
               onClick={onClearAll}
@@ -129,10 +129,10 @@ export function FieldSelectionStep({
                 key={field}
                 className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
                   isDisabled
-                    ? 'border-border bg-muted/30 opacity-60 cursor-not-allowed'
+                    ? 'qt-border-default qt-bg-muted/30 opacity-60 cursor-not-allowed'
                     : selected
-                    ? 'border-primary bg-primary/5 cursor-pointer'
-                    : 'border-border hover:border-muted-foreground/50 cursor-pointer'
+                    ? 'qt-border-primary qt-bg-primary/5 cursor-pointer'
+                    : 'qt-border-default hover:border-muted-foreground/50 cursor-pointer'
                 }`}
               >
                 <input
@@ -148,10 +148,10 @@ export function FieldSelectionStep({
                       {FIELD_LABELS[field]}
                     </span>
                     {statusText && (
-                      <span className="text-xs text-muted-foreground">{statusText}</span>
+                      <span className="text-xs qt-text-secondary">{statusText}</span>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <p className="text-sm qt-text-secondary mt-0.5">
                     {FIELD_DESCRIPTIONS[field]}
                   </p>
                 </div>
@@ -162,14 +162,14 @@ export function FieldSelectionStep({
       </div>
 
       {/* Summary */}
-      <div className="p-4 rounded-lg border border-border bg-muted/20">
+      <div className="p-4 rounded-lg border qt-border-default qt-bg-muted/20">
         <h4 className="font-medium text-foreground mb-2">Generation Summary</h4>
         {selectedFields.size === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm qt-text-secondary">
             No fields selected. Please select at least one field to generate.
           </p>
         ) : (
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm qt-text-secondary">
             <p>
               Will generate <span className="font-medium text-foreground">{selectedFields.size}</span> field{selectedFields.size !== 1 ? 's' : ''}:
             </p>

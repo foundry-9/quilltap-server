@@ -136,14 +136,14 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
             <form onSubmit={handleSubmit}>
               <div className="px-6 py-4 space-y-4">
                 {/* Upload Mode Toggle */}
-                <div className="flex space-x-2 border-b border-border">
+                <div className="flex space-x-2 border-b qt-border-default">
                   <button
                     type="button"
                     onClick={() => setUploadMode('file')}
                     className={`px-4 py-2 font-medium transition-colors ${
                       uploadMode === 'file'
-                        ? 'text-primary border-b-2 border-primary'
-                        : 'text-muted-foreground hover:text-foreground'
+                        ? 'text-primary border-b-2 qt-border-primary'
+                        : 'qt-text-secondary hover:text-foreground'
                     }`}
                   >
                     Upload File
@@ -153,8 +153,8 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                     onClick={() => setUploadMode('url')}
                     className={`px-4 py-2 font-medium transition-colors ${
                       uploadMode === 'url'
-                        ? 'text-primary border-b-2 border-primary'
-                        : 'text-muted-foreground hover:text-foreground'
+                        ? 'text-primary border-b-2 qt-border-primary'
+                        : 'qt-text-secondary hover:text-foreground'
                     }`}
                   >
                     Import from URL
@@ -164,8 +164,8 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                     onClick={() => setShowGeneration(true)}
                     className={`px-4 py-2 font-medium transition-colors ${
                       showGeneration
-                        ? 'text-primary border-b-2 border-primary'
-                        : 'text-muted-foreground hover:text-foreground'
+                        ? 'text-primary border-b-2 qt-border-primary'
+                        : 'qt-text-secondary hover:text-foreground'
                     }`}
                   >
                     Generate with AI
@@ -183,7 +183,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
                       type="file"
                       accept="image/*"
                       onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                      className="block w-full text-sm text-foreground border border-input rounded-lg cursor-pointer bg-muted focus:outline-none"
+                      className="block w-full text-sm text-foreground border border-input rounded-lg cursor-pointer qt-bg-muted focus:outline-none"
                     />
                     {selectedFile && (
                       <p className="mt-2 qt-text-small">
@@ -209,7 +209,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
 
                 {/* Context Info */}
                 {contextType && contextId && (
-                  <div className="bg-accent border border-border rounded-md p-3">
+                  <div className="bg-accent border qt-border-default rounded-md p-3">
                     <p className="text-sm text-primary">
                       This image will be automatically tagged with this {contextType.toLowerCase()}.
                     </p>

@@ -19,11 +19,11 @@ export function ResultsStep({ result, error }: ResultsStepProps) {
     return (
       <div className="space-y-6 py-4">
         <div className="flex flex-col items-center justify-center">
-          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full qt-bg-destructive/10 flex items-center justify-center mb-4">
             <span className="text-2xl">❌</span>
           </div>
 
-          <h3 className="text-destructive text-lg font-medium mb-2">
+          <h3 className="qt-text-destructive text-lg font-medium mb-2">
             Operation Failed
           </h3>
 
@@ -70,7 +70,7 @@ export function ResultsStep({ result, error }: ResultsStepProps) {
       </div>
 
       {/* Stats */}
-      <div className="p-4 rounded-lg bg-muted/50">
+      <div className="p-4 rounded-lg qt-bg-muted/50">
         <div className="space-y-2 text-sm">
           {result.messagesUpdated > 0 && (
             <div className="flex justify-between">
@@ -88,7 +88,7 @@ export function ResultsStep({ result, error }: ResultsStepProps) {
               </span>
             </div>
           )}
-          <div className="pt-2 border-t border-border">
+          <div className="pt-2 border-t qt-border-default">
             <div className="flex justify-between font-medium">
               <span className="qt-text-primary">Total:</span>
               <span className="text-primary">
@@ -101,11 +101,11 @@ export function ResultsStep({ result, error }: ResultsStepProps) {
 
       {/* Errors */}
       {hasErrors && (
-        <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
-          <div className="font-medium text-destructive mb-2">
+        <div className="p-4 rounded-lg qt-bg-destructive/10 border qt-border-destructive/20">
+          <div className="font-medium qt-text-destructive mb-2">
             Warnings ({result.errors.length})
           </div>
-          <ul className="text-sm text-destructive/80 space-y-1 list-disc list-inside">
+          <ul className="text-sm qt-text-destructive/80 space-y-1 list-disc list-inside">
             {result.errors.map((err, index) => (
               <li key={index}>{err}</li>
             ))}

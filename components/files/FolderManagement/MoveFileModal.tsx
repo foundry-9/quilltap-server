@@ -115,10 +115,10 @@ export default function MoveFileModal({
       footer={footer}
     >
       <div className="mb-4">
-        <p className="qt-text-small text-muted-foreground mb-2">
+        <p className="qt-text-small qt-text-secondary mb-2">
           Moving: <span className="font-medium text-foreground">{file.originalFilename}</span>
         </p>
-        <p className="qt-text-xs text-muted-foreground">
+        <p className="qt-text-xs qt-text-secondary">
           Current location: <span className="font-mono">{currentFolder}</span>
         </p>
       </div>
@@ -144,7 +144,7 @@ export default function MoveFileModal({
       </div>
 
       {hasChange && (
-        <p className="qt-text-xs text-muted-foreground">
+        <p className="qt-text-xs qt-text-secondary">
           Will move to: <span className="font-mono">{selectedFolder}</span>
         </p>
       )}

@@ -151,7 +151,7 @@ export function ProfileEditSection({
           {/* Avatar Section */}
           <div className="flex items-center gap-6">
             <div className="relative">
-              <div className="w-24 h-24 rounded-full overflow-hidden bg-muted flex items-center justify-center">
+              <div className="w-24 h-24 rounded-full overflow-hidden qt-bg-muted flex items-center justify-center">
                 {avatarSrc ? (
                   <Image
                     key={avatarRefreshKey}
@@ -163,12 +163,12 @@ export function ProfileEditSection({
                     unoptimized
                   />
                 ) : (
-                  <UserIcon className="w-12 h-12 text-muted-foreground" />
+                  <UserIcon className="w-12 h-12 qt-text-secondary" />
                 )}
               </div>
               <button
                 onClick={() => setShowAvatarSelector(true)}
-                className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground qt-shadow-lg hover:bg-primary/90 transition-colors"
+                className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground qt-shadow-lg hover:qt-bg-primary/90 transition-colors"
                 title="Change avatar"
                 aria-label="Change avatar"
               >
@@ -201,7 +201,7 @@ export function ProfileEditSection({
               className="qt-input w-full"
               maxLength={100}
             />
-            <p className="qt-text-xs text-muted-foreground mt-1">
+            <p className="qt-text-xs qt-text-secondary mt-1">
               This name is displayed throughout the application
             </p>
           </div>
@@ -219,13 +219,13 @@ export function ProfileEditSection({
               placeholder="Enter your email address"
               className="qt-input w-full"
             />
-            <p className="qt-text-xs text-muted-foreground mt-1">
+            <p className="qt-text-xs qt-text-secondary mt-1">
               Your email may be used for account recovery
             </p>
           </div>
 
           {/* Save Button */}
-          <div className="flex justify-end pt-4 border-t border-border">
+          <div className="flex justify-end pt-4 border-t qt-border-default">
             <button
               onClick={handleSave}
               disabled={saving || !hasChanges}

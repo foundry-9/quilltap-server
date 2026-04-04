@@ -60,7 +60,7 @@ export default function BackupRestoreCard() {
       </div>
 
       {/* Info Section */}
-      <div className="mt-6 p-4 bg-muted/30 rounded-lg">
+      <div className="mt-6 p-4 qt-bg-muted/30 rounded-lg">
         <p className="qt-text-small">
           Backups include all your characters, chats, files, settings, and plugins.
           Store your backup files safely - they contain everything needed to restore your Quilltap environment.

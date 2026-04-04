@@ -148,7 +148,7 @@ export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntity
           <button
             type="button"
             onClick={onCancel}
-            className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="p-0.5 rounded hover:bg-accent qt-text-secondary hover:text-foreground transition-colors"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />
@@ -171,17 +171,17 @@ export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntity
 
         <div className="qt-help-entity-picker-list">
           {loading && (
-            <div className="text-xs text-muted-foreground text-center py-3 italic">
+            <div className="text-xs qt-text-secondary text-center py-3 italic">
               Loading...
             </div>
           )}
           {error && (
-            <div className="text-xs text-destructive text-center py-3">
+            <div className="text-xs qt-text-destructive text-center py-3">
               {error}
             </div>
           )}
           {!loading && !error && filtered.length === 0 && (
-            <div className="text-xs text-muted-foreground text-center py-3">
+            <div className="text-xs qt-text-secondary text-center py-3">
               {filter ? 'No matches' : `No ${route?.entityLabel?.toLowerCase() || 'item'}s found`}
             </div>
           )}

@@ -94,7 +94,7 @@ export function CharacterDeleteDialog({
               Loading...
             </div>
           ) : error ? (
-            <div className="py-4 text-destructive">
+            <div className="py-4 qt-text-destructive">
               {error}
             </div>
           ) : (
@@ -146,9 +146,9 @@ export function CharacterDeleteDialog({
                         type="checkbox"
                         checked={deleteChats}
                         onChange={(e) => setDeleteChats(e.target.checked)}
-                        className="w-4 h-4 rounded border-border text-destructive focus:ring-destructive"
+                        className="w-4 h-4 rounded qt-border-default qt-text-destructive focus:ring-destructive"
                       />
-                      <span className="text-muted-foreground">
+                      <span className="qt-text-secondary">
                         Delete exclusive chats
                       </span>
                     </label>
@@ -160,9 +160,9 @@ export function CharacterDeleteDialog({
                         type="checkbox"
                         checked={deleteImages}
                         onChange={(e) => setDeleteImages(e.target.checked)}
-                        className="w-4 h-4 rounded border-border text-destructive focus:ring-destructive"
+                        className="w-4 h-4 rounded qt-border-default qt-text-destructive focus:ring-destructive"
                       />
-                      <span className="text-muted-foreground">
+                      <span className="qt-text-secondary">
                         Delete exclusive images
                       </span>
                     </label>

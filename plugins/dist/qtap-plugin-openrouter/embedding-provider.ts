@@ -55,7 +55,7 @@ export class OpenRouterEmbeddingProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: getQuilltapUserAgent(),
+      appTitle: getQuilltapUserAgent(),
     });
 
     const response = await client.embeddings.generate({
@@ -122,7 +122,7 @@ export class OpenRouterEmbeddingProvider {
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-      xTitle: getQuilltapUserAgent(),
+      appTitle: getQuilltapUserAgent(),
     });
 
     const response = await client.embeddings.generate({
@@ -183,7 +183,7 @@ export class OpenRouterEmbeddingProvider {
       const client = new OpenRouter({
         apiKey,
         httpReferer: process.env.BASE_URL || 'http://localhost:3000',
-        xTitle: getQuilltapUserAgent(),
+        appTitle: getQuilltapUserAgent(),
       });
 
       const response = await client.embeddings.listModels();

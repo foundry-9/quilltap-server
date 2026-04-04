@@ -53,7 +53,7 @@ export default function FilePreviewActions({
   }, [file.id, currentIndex, totalFiles])
 
   return (
-    <div className="flex items-center justify-between p-4 border-b border-border">
+    <div className="flex items-center justify-between p-4 border-b qt-border-default">
       {/* Left: Navigation */}
       <div className="flex items-center gap-2">
         <button
@@ -64,7 +64,7 @@ export default function FilePreviewActions({
         >
           {'\u2190'} {/* left arrow */}
         </button>
-        <span className="qt-text-small text-muted-foreground">
+        <span className="qt-text-small qt-text-secondary">
           {currentIndex + 1} of {totalFiles}
         </span>
         <button
@@ -105,7 +105,7 @@ export default function FilePreviewActions({
         <button
           onClick={onDelete}
           disabled={isDeleting}
-          className="qt-button qt-button-secondary p-2 text-destructive hover:bg-destructive hover:text-destructive-foreground disabled:opacity-50"
+          className="qt-button qt-button-secondary p-2 qt-text-destructive hover:bg-destructive hover:qt-text-destructive-foreground disabled:opacity-50"
           title="Delete"
         >
           {isDeleting ? '\u23F3' : '\u{1F5D1}\uFE0F'} {/* hourglass or trash */}

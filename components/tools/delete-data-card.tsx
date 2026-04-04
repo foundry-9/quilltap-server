@@ -148,7 +148,7 @@ export function DeleteDataCard() {
               Permanently delete all your data including characters, personas, chats, files, API keys, and backups. This action cannot be undone.
             </p>
           </div>
-          <div className="flex-shrink-0 text-destructive">
+          <div className="flex-shrink-0 qt-text-destructive">
             <svg
               className="w-8 h-8"
               fill="none"
@@ -187,13 +187,13 @@ export function DeleteDataCard() {
 
           {/* Dialog */}
           <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
-            <div className="bg-card rounded-lg qt-shadow-lg w-full max-w-md">
+            <div className="qt-bg-card rounded-lg qt-shadow-lg w-full max-w-md">
               {/* Header */}
-              <div className="px-6 py-4 border-b border-border">
+              <div className="px-6 py-4 border-b qt-border-default">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-destructive/10 rounded-full flex items-center justify-center">
-                      <svg className="w-5 h-5 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-10 h-10 qt-bg-destructive/10 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 qt-text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
                     </div>
@@ -203,7 +203,7 @@ export function DeleteDataCard() {
                   </div>
                   <button
                     onClick={handleClose}
-                    className="qt-button qt-button-ghost text-muted-foreground hover:text-foreground p-1"
+                    className="qt-button qt-button-ghost qt-text-secondary hover:text-foreground p-1"
                     aria-label="Close dialog"
                   >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -229,55 +229,55 @@ export function DeleteDataCard() {
                         <p className="qt-text-small">
                           The following data will be permanently deleted:
                         </p>
-                        <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
+                        <div className="qt-bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Characters</span>
+                            <span className="qt-text-secondary">Characters</span>
                             <span className="qt-text-primary">{preview.characters}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Chats</span>
+                            <span className="qt-text-secondary">Chats</span>
                             <span className="qt-text-primary">{preview.chats}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Tags</span>
+                            <span className="qt-text-secondary">Tags</span>
                             <span className="qt-text-primary">{preview.tags}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Files</span>
+                            <span className="qt-text-secondary">Files</span>
                             <span className="qt-text-primary">{preview.files}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Memories</span>
+                            <span className="qt-text-secondary">Memories</span>
                             <span className="qt-text-primary">{preview.memories}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">API Keys</span>
+                            <span className="qt-text-secondary">API Keys</span>
                             <span className="qt-text-primary">{preview.apiKeys}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Backups</span>
+                            <span className="qt-text-secondary">Backups</span>
                             <span className="qt-text-primary">{preview.backups}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Connection Profiles</span>
+                            <span className="qt-text-secondary">Connection Profiles</span>
                             <span className="qt-text-primary">{preview.profiles.connection}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Image Profiles</span>
+                            <span className="qt-text-secondary">Image Profiles</span>
                             <span className="qt-text-primary">{preview.profiles.image}</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Embedding Profiles</span>
+                            <span className="qt-text-secondary">Embedding Profiles</span>
                             <span className="qt-text-primary">{preview.profiles.embedding}</span>
                           </div>
                           {preview.templates && (preview.templates.prompt > 0 || preview.templates.roleplay > 0) && (
                             <>
                               <div className="flex justify-between">
-                                <span className="text-muted-foreground">Prompt Templates</span>
+                                <span className="qt-text-secondary">Prompt Templates</span>
                                 <span className="qt-text-primary">{preview.templates.prompt}</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-muted-foreground">Roleplay Templates</span>
+                                <span className="qt-text-secondary">Roleplay Templates</span>
                                 <span className="qt-text-primary">{preview.templates.roleplay}</span>
                               </div>
                             </>
@@ -285,38 +285,38 @@ export function DeleteDataCard() {
                           {preview.sync && (preview.sync.instances > 0 || preview.sync.mappings > 0 || preview.sync.operations > 0) && (
                             <>
                               <div className="flex justify-between">
-                                <span className="text-muted-foreground">Sync Instances (reset)</span>
+                                <span className="qt-text-secondary">Sync Instances (reset)</span>
                                 <span className="qt-text-primary">{preview.sync.instances}</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-muted-foreground">Sync Mappings</span>
+                                <span className="qt-text-secondary">Sync Mappings</span>
                                 <span className="qt-text-primary">{preview.sync.mappings}</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-muted-foreground">Sync Operations</span>
+                                <span className="qt-text-secondary">Sync Operations</span>
                                 <span className="qt-text-primary">{preview.sync.operations}</span>
                               </div>
-                              <div className="text-xs text-muted-foreground mt-1 italic">
+                              <div className="text-xs qt-text-secondary mt-1 italic">
                                 Sync instances will be reset (not deleted) - you can sync again to restore data from remote
                               </div>
                             </>
                           )}
-                          <div className="border-t border-border pt-2 mt-2">
+                          <div className="border-t qt-border-default pt-2 mt-2">
                             <div className="flex justify-between font-semibold">
                               <span className="text-foreground">Total Items</span>
-                              <span className="text-destructive">{getTotalCount(preview)}</span>
+                              <span className="qt-text-destructive">{getTotalCount(preview)}</span>
                             </div>
                           </div>
                         </div>
-                        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
-                          <p className="text-sm text-destructive font-medium">
+                        <div className="qt-bg-destructive/10 border qt-border-destructive/30 rounded-lg p-3">
+                          <p className="text-sm qt-text-destructive font-medium">
                             This action cannot be undone. All your data will be permanently deleted.
                           </p>
                         </div>
                       </div>
                     ) : error ? (
-                      <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
-                        <p className="text-sm text-destructive">{error}</p>
+                      <div className="p-3 qt-bg-destructive/10 border qt-border-destructive/30 rounded-lg">
+                        <p className="text-sm qt-text-destructive">{error}</p>
                       </div>
                     ) : null}
                   </>
@@ -325,7 +325,7 @@ export function DeleteDataCard() {
                 {step === 'confirm' && (
                   <div className="space-y-4">
                     <p className="qt-text-small">
-                      To confirm deletion, please type <span className="font-mono font-semibold text-destructive">DELETE</span> below:
+                      To confirm deletion, please type <span className="font-mono font-semibold qt-text-destructive">DELETE</span> below:
                     </p>
                     <input
                       type="text"
@@ -336,8 +336,8 @@ export function DeleteDataCard() {
                       autoFocus
                     />
                     {error && (
-                      <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
-                        <p className="text-sm text-destructive">{error}</p>
+                      <div className="p-3 qt-bg-destructive/10 border qt-border-destructive/30 rounded-lg">
+                        <p className="text-sm qt-text-destructive">{error}</p>
                       </div>
                     )}
                   </div>
@@ -345,7 +345,7 @@ export function DeleteDataCard() {
 
                 {step === 'deleting' && (
                   <div className="flex flex-col items-center justify-center py-8 space-y-4">
-                    <svg className="w-12 h-12 animate-spin text-destructive" fill="none" viewBox="0 0 24 24">
+                    <svg className="w-12 h-12 animate-spin qt-text-destructive" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
@@ -357,7 +357,7 @@ export function DeleteDataCard() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-center">
                       <div className="w-16 h-16 qt-bg-success/10 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-8 h-8 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
@@ -373,7 +373,7 @@ export function DeleteDataCard() {
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 bg-muted border-t border-border flex gap-3 justify-end">
+              <div className="px-6 py-4 qt-bg-muted border-t qt-border-default flex gap-3 justify-end">
                 {step === 'preview' && (
                   <>
                     <button

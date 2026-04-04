@@ -37,7 +37,7 @@ export function AgentModeSettings({
       <div className="space-y-6">
         {/* Default Enabled Toggle */}
         <div>
-          <label className="flex items-start gap-3 p-4 border border-border rounded hover:bg-accent cursor-pointer">
+          <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer">
             <input
               type="checkbox"
               checked={agentModeSettings.defaultEnabled}
@@ -70,7 +70,7 @@ export function AgentModeSettings({
             value={agentModeSettings.maxTurns}
             onChange={(e) => onMaxTurnsChange(parseInt(e.target.value, 10))}
             disabled={saving}
-            className="w-full max-w-xs rounded-lg border border-border bg-card px-3 py-2 text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground focus:qt-border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             {MAX_TURNS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -81,12 +81,12 @@ export function AgentModeSettings({
         </div>
 
         {/* Info Box */}
-        <div className="rounded-lg border border-border bg-muted/50 p-4">
+        <div className="rounded-lg border qt-border-default qt-bg-muted/50 p-4">
           <h4 className="font-medium text-foreground mb-2">How Agent Mode Works</h4>
           <ul className="qt-text-small space-y-1 list-disc list-inside">
             <li>The AI uses tools iteratively to gather information and verify results</li>
             <li>Each tool use counts as one &quot;turn&quot; toward the maximum</li>
-            <li>When ready, the AI calls <code className="bg-muted px-1 rounded">submit_final_response</code> to deliver its answer</li>
+            <li>When ready, the AI calls <code className="qt-bg-muted px-1 rounded">submit_final_response</code> to deliver its answer</li>
             <li>If the turn limit is reached, the AI is prompted to submit its best answer</li>
             <li>Agent mode can be enabled/disabled per-character, per-project, or per-chat</li>
           </ul>

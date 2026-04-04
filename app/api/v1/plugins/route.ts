@@ -16,7 +16,7 @@ import { installPluginFromNpm, uninstallPlugin } from '@/lib/plugins/installer';
 import { checkForUpdatesWithMetadata } from '@/lib/plugins/version-checker';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { badRequest, serverError, validationError } from '@/lib/api/responses';
+import { badRequest, serverError, successResponse, created } from '@/lib/api/responses';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 
 const PLUGINS_GET_ACTIONS = ['check-upgrades'] as const;
@@ -80,169 +80,130 @@ async function searchNpm(searchText: string): Promise<any[]> {
 }
 
 async function handleSearch(req: NextRequest, context: any) {
-  try {
-    const body = await req.json();
-    const validatedData = searchPluginsSchema.parse(body);// Perform multiple searches to find both scoped and unscoped plugins
-    const query = validatedData.query.trim();
-    const searchQueries = query
-      ? [
-          `qtap-plugin-${query}`,
-          `@quilltap/ ${query}`,
-        ]
-      : [
-          '@quilltap/',
-          'qtap-plugin-',
-        ];
+  const body = await req.json();
+  const validatedData = searchPluginsSchema.parse(body);
+  // Perform multiple searches to find both scoped and unscoped plugins
+  const query = validatedData.query.trim();
+  const searchQueries = query
+    ? [
+        `qtap-plugin-${query}`,
+        `@quilltap/ ${query}`,
+      ]
+    : [
+        '@quilltap/',
+        'qtap-plugin-',
+      ];
 
-    // Run searches in parallel
-    const searchPromises = searchQueries.map(q => searchNpm(q));
-    const results = await Promise.all(searchPromises);
+  // Run searches in parallel
+  const searchPromises = searchQueries.map(q => searchNpm(q));
+  const results = await Promise.all(searchPromises);
 
-    // Combine and deduplicate results
-    const allObjects = results.flat();
-    const seenNames = new Set<string>();
-    const uniqueObjects = allObjects.filter(obj => {
-      const name = obj.package?.name;
-      if (!name || seenNames.has(name)) return false;
-      seenNames.add(name);
-      return true;
-    });
+  // Combine and deduplicate results
+  const allObjects = results.flat();
+  const seenNames = new Set<string>();
+  const uniqueObjects = allObjects.filter(obj => {
+    const name = obj.package?.name;
+    if (!name || seenNames.has(name)) return false;
+    seenNames.add(name);
+    return true;
+  });
 
-    // Filter to only qtap-plugin-* packages and transform results
-    const plugins = uniqueObjects
-      .filter((obj: any) => obj.package?.name && isQuilltapPlugin(obj.package.name))
-      .map((obj: any) => ({
-        name: obj.package.name,
-        version: obj.package.version,
-        description: obj.package.description || 'No description available',
-        author: typeof obj.package.author === 'string'
-          ? obj.package.author
-          : obj.package.author?.name || obj.package.publisher?.username || 'Unknown',
-        keywords: obj.package.keywords || [],
-        updated: obj.package.date || '',
-        score: obj.score?.final || 0,
-        links: obj.package.links,
-      }));return NextResponse.json({
-      results: plugins,
-      count: plugins.length,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
+  // Filter to only qtap-plugin-* packages and transform results
+  const plugins = uniqueObjects
+    .filter((obj: any) => obj.package?.name && isQuilltapPlugin(obj.package.name))
+    .map((obj: any) => ({
+      name: obj.package.name,
+      version: obj.package.version,
+      description: obj.package.description || 'No description available',
+      author: typeof obj.package.author === 'string'
+        ? obj.package.author
+        : obj.package.author?.name || obj.package.publisher?.username || 'Unknown',
+      keywords: obj.package.keywords || [],
+      updated: obj.package.date || '',
+      score: obj.score?.final || 0,
+      links: obj.package.links,
+    }));
 
-    logger.error(
-      '[Plugins v1] Error searching plugins',
-      { userId: context.user.id },
-      error instanceof Error ? error : undefined
-    );
-    return serverError('Failed to search plugins');
-  }
+  return successResponse({
+    results: plugins,
+    count: plugins.length,
+  });
 }
 
 async function handleInstall(req: NextRequest, context: any) {
-  try {
-    const body = await req.json();
-    const validatedData = installPluginSchema.parse(body);
+  const body = await req.json();
+  const validatedData = installPluginSchema.parse(body);
 
-    logger.info('[Plugins v1] POST install', {
+  logger.info('[Plugins v1] POST install', {
+    userId: context.user.id,
+    packageName: validatedData.packageName,
+    version: validatedData.version,
+  });
+
+  // Call the actual install function
+  const result = await installPluginFromNpm(validatedData.packageName);
+
+  if (!result.success) {
+    logger.warn('[Plugins v1] Plugin install failed', {
       userId: context.user.id,
       packageName: validatedData.packageName,
-      version: validatedData.version,
+      error: result.error,
     });
-
-    // Call the actual install function
-    const result = await installPluginFromNpm(validatedData.packageName);
-
-    if (!result.success) {
-      logger.warn('[Plugins v1] Plugin install failed', {
-        userId: context.user.id,
-        packageName: validatedData.packageName,
-        error: result.error,
-      });
-      return badRequest(result.error || 'Failed to install plugin');
-    }
-
-    logger.info('[Plugins v1] Plugin installed successfully', {
-      userId: context.user.id,
-      packageName: validatedData.packageName,
-    });
-
-    // Reinitialize plugin system to reflect changes (force rescan)
-    await initializePlugins(true);
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'Plugin installed successfully',
-        plugin: {
-          name: result.manifest?.name,
-          version: result.version,
-          manifest: result.manifest,
-        },
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error(
-      '[Plugins v1] Error installing plugin',
-      { userId: context.user.id },
-      error instanceof Error ? error : undefined
-    );
-    return serverError('Failed to install plugin');
+    return badRequest(result.error || 'Failed to install plugin');
   }
+
+  logger.info('[Plugins v1] Plugin installed successfully', {
+    userId: context.user.id,
+    packageName: validatedData.packageName,
+  });
+
+  // Reinitialize plugin system to reflect changes (force rescan)
+  await initializePlugins(true);
+
+  return created({
+    success: true,
+    message: 'Plugin installed successfully',
+    plugin: {
+      name: result.manifest?.name,
+      version: result.version,
+      manifest: result.manifest,
+    },
+  });
 }
 
 async function handleUninstall(req: NextRequest, context: any) {
-  try {
-    const body = await req.json();
-    const validatedData = uninstallPluginSchema.parse(body);
+  const body = await req.json();
+  const validatedData = uninstallPluginSchema.parse(body);
 
-    logger.info('[Plugins v1] POST uninstall', {
+  logger.info('[Plugins v1] POST uninstall', {
+    userId: context.user.id,
+    packageName: validatedData.packageName,
+  });
+
+  // Call the actual uninstall function
+  const result = await uninstallPlugin(validatedData.packageName);
+
+  if (!result.success) {
+    logger.warn('[Plugins v1] Plugin uninstall failed', {
       userId: context.user.id,
       packageName: validatedData.packageName,
+      error: result.error,
     });
-
-    // Call the actual uninstall function
-    const result = await uninstallPlugin(validatedData.packageName);
-
-    if (!result.success) {
-      logger.warn('[Plugins v1] Plugin uninstall failed', {
-        userId: context.user.id,
-        packageName: validatedData.packageName,
-        error: result.error,
-      });
-      return badRequest(result.error || 'Failed to uninstall plugin');
-    }
-
-    logger.info('[Plugins v1] Plugin uninstalled successfully', {
-      userId: context.user.id,
-      packageName: validatedData.packageName,
-    });
-
-    // Reinitialize plugin system to reflect changes (force rescan)
-    await initializePlugins(true);
-
-    return NextResponse.json({
-      success: true,
-      message: 'Plugin uninstalled successfully',
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error(
-      '[Plugins v1] Error uninstalling plugin',
-      { userId: context.user.id },
-      error instanceof Error ? error : undefined
-    );
-    return serverError('Failed to uninstall plugin');
+    return badRequest(result.error || 'Failed to uninstall plugin');
   }
+
+  logger.info('[Plugins v1] Plugin uninstalled successfully', {
+    userId: context.user.id,
+    packageName: validatedData.packageName,
+  });
+
+  // Reinitialize plugin system to reflect changes (force rescan)
+  await initializePlugins(true);
+
+  return successResponse({
+    success: true,
+    message: 'Plugin uninstalled successfully',
+  });
 }
 
 /**
@@ -263,7 +224,7 @@ async function handleCheckUpgrades(context: any) {
       breakingUpgrades: upgrades.filter(u => !u.isNonBreaking).length,
     });
 
-    return NextResponse.json({
+    return successResponse({
       upgrades,
       lastChecked: new Date().toISOString(),
       count: upgrades.length,
@@ -310,7 +271,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, context) 
       filteredPlugins = plugins.filter((p: any) => p.enabled);
     }
 
-    return NextResponse.json({
+    return successResponse({
       plugins: filteredPlugins,
       stats: state.stats,
       errors: state.errors,

@@ -218,7 +218,7 @@ export default function ImageProfilesTab() {
 
                 {/* Parameters Display */}
                 {Object.keys(profile.parameters).length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-border">
+                  <div className="mt-3 pt-3 border-t qt-border-default">
                     <p className="qt-text-xs uppercase mb-2">Parameters</p>
                     <div className="space-y-1">
                       {Object.entries(profile.parameters).map(([key, value]) => (

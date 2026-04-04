@@ -5,15 +5,14 @@
  * Supports any Ollama-compatible models running on a local or remote server
  */
 
-import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, ImageGenParams, ImageGenResponse } from './types';
+import type { TextProvider, LLMParams, LLMResponse, StreamChunk } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-ollama');
 
-export class OllamaProvider implements LLMProvider {
+export class OllamaProvider implements TextProvider {
   readonly supportsFileAttachments = false;
   readonly supportedMimeTypes: string[] = [];
-  readonly supportsImageGeneration = false;
   readonly supportsWebSearch = false;
   private baseUrl: string;
 
@@ -358,8 +357,4 @@ export class OllamaProvider implements LLMProvider {
     }
   }
 
-  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    logger.warn('Image generation not supported', { context: 'OllamaProvider.generateImage' });
-    throw new Error('Ollama does not support image generation. Use a multimodal model for image analysis.');
-  }
 }

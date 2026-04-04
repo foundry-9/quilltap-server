@@ -151,7 +151,7 @@ export function SearchBar() {
       <div ref={containerRef} className="relative hidden md:block">
         <div className="relative">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -177,7 +177,7 @@ export function SearchBar() {
 
         {/* Dropdown results */}
         {showDropdown && (query.length >= 2 || hasSearched) && (
-          <div className="absolute top-full left-0 mt-2 w-96 bg-background rounded-lg qt-shadow-lg border border-border overflow-hidden z-50">
+          <div className="absolute top-full left-0 mt-2 w-96 bg-background rounded-lg qt-shadow-lg border qt-border-default overflow-hidden z-50">
             <div className="max-h-96 overflow-y-auto">
               {hasSearched ? (
                 <SearchResults
@@ -195,7 +195,7 @@ export function SearchBar() {
               )}
             </div>
             {results?.length > 0 && (
-              <div className="px-3 py-2 border-t border-border bg-muted">
+              <div className="px-3 py-2 border-t qt-border-default qt-bg-muted">
                 <button
                   onClick={() => {
                     setDialogInitialQuery(query)
@@ -219,7 +219,7 @@ export function SearchBar() {
           setDialogInitialQuery('')
           setIsDialogOpen(true)
         }}
-        className="md:hidden p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
+        className="md:hidden p-2 qt-text-secondary hover:text-foreground hover:bg-accent rounded-md transition-colors"
         aria-label="Search"
       >
         <svg

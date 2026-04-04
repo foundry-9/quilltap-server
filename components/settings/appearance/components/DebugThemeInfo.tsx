@@ -26,19 +26,19 @@ export function DebugThemeInfo({
   themesCount,
 }: DebugThemeInfoProps) {
   return (
-    <section className="border-t border-border pt-8">
+    <section className="border-t qt-border-default pt-8">
       <details className="text-sm">
-        <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+        <summary className="cursor-pointer qt-text-secondary hover:text-foreground">
           Debug: Current Theme State
         </summary>
-        <div className="mt-2 p-3 bg-muted rounded-lg font-mono qt-text-xs space-y-2">
+        <div className="mt-2 p-3 qt-bg-muted rounded-lg font-mono qt-text-xs space-y-2">
           <div>Active Theme ID: {activeThemeId ?? 'default'}</div>
           <div>Color Mode: {colorMode}</div>
           <div>Resolved Mode: {resolvedColorMode}</div>
           <div>Available Themes: {themesCount}</div>
 
           {/* Visual test: These boxes use CSS variables directly */}
-          <div className="mt-4 pt-4 border-t border-border">
+          <div className="mt-4 pt-4 border-t qt-border-default">
             <div className="qt-text-xs font-semibold mb-2">
               CSS Variable Test (should change with theme):
             </div>

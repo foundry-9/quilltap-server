@@ -29,15 +29,15 @@ export function ImportFileStep({
 }: ImportFileStepProps) {
   return (
     <div className="space-y-4">
-      <p className="qt-text-small text-muted-foreground">
+      <p className="qt-text-small qt-text-secondary">
         Select a Quilltap export file (.qtap) to import.
       </p>
 
       <div
         className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
           dragActive
-            ? 'border-primary bg-primary/10'
-            : 'border-border hover:border-primary/50'
+            ? 'qt-border-primary qt-bg-primary/10'
+            : 'qt-border-default hover:qt-border-primary/50'
         }`}
         onClick={() => fileInputRef.current?.click()}
         onDragEnter={onDragEnter}
@@ -53,7 +53,7 @@ export function ImportFileStep({
           className="hidden"
         />
         <svg
-          className="w-12 h-12 mx-auto mb-3 text-muted-foreground"
+          className="w-12 h-12 mx-auto mb-3 qt-text-secondary"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -68,17 +68,17 @@ export function ImportFileStep({
         <p className="text-foreground font-medium">
           Drag and drop a .qtap file here
         </p>
-        <p className="text-muted-foreground text-sm mt-1">
+        <p className="qt-text-secondary text-sm mt-1">
           or click to browse
         </p>
       </div>
 
       {selectedFile && (
-        <div className="p-4 bg-muted/50 rounded-lg">
+        <div className="p-4 qt-bg-muted/50 rounded-lg">
           <p className="font-medium text-foreground truncate">
             {selectedFile.name}
           </p>
-          <p className="qt-text-small text-muted-foreground mt-1">
+          <p className="qt-text-small qt-text-secondary mt-1">
             {formatFileSize(selectedFile.size)}
           </p>
         </div>

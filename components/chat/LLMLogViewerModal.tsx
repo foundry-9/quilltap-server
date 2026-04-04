@@ -127,14 +127,14 @@ export default function LLMLogViewerModal({
   const renderResponseTab = () => (
     <div className="space-y-4">
       {currentLog.response.error && (
-        <div className="p-3 bg-destructive/10 border border-destructive/20 rounded">
-          <h4 className="text-sm font-medium text-destructive mb-1">Error</h4>
+        <div className="p-3 qt-bg-destructive/10 border qt-border-destructive/20 rounded">
+          <h4 className="text-sm font-medium qt-text-destructive mb-1">Error</h4>
           <p className="text-sm qt-text">{currentLog.response.error}</p>
         </div>
       )}
 
       {!currentLog.response.error && (
-        <div className="p-3 bg-success/10 border border-success/20 rounded">
+        <div className="p-3 qt-bg-success/10 border qt-border-success/20 rounded">
           <p className="text-sm qt-text font-medium">Request completed successfully</p>
         </div>
       )}
@@ -279,7 +279,7 @@ export default function LLMLogViewerModal({
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
                 activeTab === tab
-                  ? 'border-primary qt-text'
+                  ? 'qt-border-primary qt-text'
                   : 'border-transparent qt-text-secondary hover:qt-text'
               }`}
             >

@@ -131,6 +131,12 @@ import { convertScenarioToScenariosMigration } from './convert-scenario-to-scena
 import { addCharacterTimestampConfigFieldMigration } from './add-character-timestamp-config-field';
 // Add defaultScenarioId and defaultSystemPromptId fields to characters
 import { addCharacterDefaultIdsFieldsMigration } from './add-character-default-ids-fields';
+// Add scenarioText field to chats for persisting selected scenario content
+import { addChatScenarioTextFieldMigration } from './add-chat-scenario-text-field';
+// Add modelClass field to connection profiles for capability tier classification
+import { addConnectionProfileModelClassFieldMigration } from './add-connection-profile-model-class-field';
+// Add maxTokens field to connection profiles for budget-driven compression
+import { addConnectionProfileMaxTokensFieldMigration } from './add-connection-profile-max-tokens-field';
 
 /**
  * All available migrations.
@@ -257,6 +263,12 @@ export const migrations: Migration[] = [
   addCharacterTimestampConfigFieldMigration,
   // Add defaultScenarioId and defaultSystemPromptId fields to characters
   addCharacterDefaultIdsFieldsMigration,
+  // Add scenarioText field to chats for persisting selected scenario content
+  addChatScenarioTextFieldMigration,
+  // Add modelClass field to connection profiles for capability tier classification
+  addConnectionProfileModelClassFieldMigration,
+  // Add maxTokens field to connection profiles for budget-driven compression
+  addConnectionProfileMaxTokensFieldMigration,
 ];
 
 export {
@@ -378,4 +390,10 @@ export {
   addCharacterTimestampConfigFieldMigration,
   // Add defaultScenarioId and defaultSystemPromptId fields to characters
   addCharacterDefaultIdsFieldsMigration,
+  // Add scenarioText field to chats for persisting selected scenario content
+  addChatScenarioTextFieldMigration,
+  // Add modelClass field to connection profiles for capability tier classification
+  addConnectionProfileModelClassFieldMigration,
+  // Add maxTokens field to connection profiles for budget-driven compression
+  addConnectionProfileMaxTokensFieldMigration,
 };

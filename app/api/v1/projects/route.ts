@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { created, notFound, validationError, serverError, badRequest } from '@/lib/api/responses';
+import { created, notFound, serverError, badRequest } from '@/lib/api/responses';
 
 // ============================================================================
 // Schemas
@@ -72,39 +72,30 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 // ============================================================================
 
 export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
-  try {
-    const body = await req.json();
-    const validatedData = createProjectSchema.parse(body);
+  const body = await req.json();
+  const validatedData = createProjectSchema.parse(body);
 
 
-    const project = await repos.projects.create({
-      userId: user.id,
-      name: validatedData.name,
-      description: validatedData.description || null,
-      instructions: validatedData.instructions || null,
-      allowAnyCharacter: validatedData.allowAnyCharacter,
-      characterRoster: validatedData.characterRoster,
-      color: validatedData.color || null,
-      icon: validatedData.icon || null,
-      defaultDisabledTools: [],
-      defaultDisabledToolGroups: [],
-      state: {},
-      backgroundDisplayMode: 'theme',
-    });
+  const project = await repos.projects.create({
+    userId: user.id,
+    name: validatedData.name,
+    description: validatedData.description || null,
+    instructions: validatedData.instructions || null,
+    allowAnyCharacter: validatedData.allowAnyCharacter,
+    characterRoster: validatedData.characterRoster,
+    color: validatedData.color || null,
+    icon: validatedData.icon || null,
+    defaultDisabledTools: [],
+    defaultDisabledToolGroups: [],
+    state: {},
+    backgroundDisplayMode: 'theme',
+  });
 
-    logger.info('[Projects v1] Project created', {
-      projectId: project.id,
-      name: project.name,
-      userId: user.id,
-    });
+  logger.info('[Projects v1] Project created', {
+    projectId: project.id,
+    name: project.name,
+    userId: user.id,
+  });
 
-    return created({ project });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-
-    logger.error('[Projects v1] Error creating project', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to create project');
-  }
+  return created({ project });
 });

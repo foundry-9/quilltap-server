@@ -126,12 +126,12 @@ export function UpgradeConfirmModal({
       <div className="space-y-4">
         {/* Warning banner */}
         <div className="qt-alert-warning flex items-start gap-3">
-          <WarningIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-warning" />
+          <WarningIcon className="w-5 h-5 flex-shrink-0 mt-0.5 qt-text-warning" />
           <div>
             <h4 className="font-medium text-foreground">
               Breaking Changes Detected
             </h4>
-            <p className="qt-text-small mt-1 text-muted-foreground">
+            <p className="qt-text-small mt-1 qt-text-secondary">
               This is a major version upgrade which may include breaking changes.
               We recommend reviewing the changelog before upgrading.
             </p>
@@ -141,7 +141,7 @@ export function UpgradeConfirmModal({
         {/* Plugin info */}
         <div className="qt-card p-4">
           <h3 className="font-semibold text-foreground">{upgrade.pluginTitle}</h3>
-          <p className="qt-text-small text-muted-foreground mt-1">{upgrade.packageName}</p>
+          <p className="qt-text-small qt-text-secondary mt-1">{upgrade.packageName}</p>
 
           {upgrade.pluginDescription && (
             <p className="qt-text-small mt-2">{upgrade.pluginDescription}</p>
@@ -150,7 +150,7 @@ export function UpgradeConfirmModal({
           {/* Version transition */}
           <div className="flex items-center gap-2 mt-4">
             <span className="qt-badge-secondary font-mono">v{upgrade.currentVersion}</span>
-            <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
             </svg>
             <span className="qt-badge-warning font-mono">v{upgrade.latestVersion}</span>
@@ -193,7 +193,7 @@ export function UpgradeConfirmModal({
         </div>
 
         {/* Additional warning text */}
-        <p className="qt-text-small text-muted-foreground">
+        <p className="qt-text-small qt-text-secondary">
           After upgrading, the plugin will be reloaded. Some settings or behaviors
           may change. Make sure to test the plugin after the upgrade completes.
         </p>

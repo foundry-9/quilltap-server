@@ -85,7 +85,7 @@ export function TasksQueueCard() {
 
       {/* Error Message */}
       {error && (
-        <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded mb-4">
+        <div className="qt-bg-destructive/10 border qt-border-destructive qt-text-destructive px-4 py-3 rounded mb-4">
           {error}
         </div>
       )}
@@ -118,7 +118,7 @@ export function TasksQueueCard() {
             <div className="qt-text-xs">Est. Tokens</div>
           </div>
           <div className="qt-card p-3 text-center">
-            <div className="text-2xl font-bold text-success">
+            <div className="text-2xl font-bold qt-text-success">
               {data.stats.completed}
             </div>
             <div className="qt-text-xs">Completed</div>
@@ -130,26 +130,26 @@ export function TasksQueueCard() {
       {data && (
         <div className="flex flex-wrap gap-4 qt-text-small mb-4">
           <span>
-            <span className="text-info font-medium">
+            <span className="qt-text-info font-medium">
               {data.stats.processing}
             </span>{' '}
             processing
           </span>
           <span>
-            <span className="text-warning font-medium">
+            <span className="qt-text-warning font-medium">
               {data.stats.pending}
             </span>{' '}
             pending
           </span>
           <span>
-            <span className="text-destructive font-medium">
+            <span className="qt-text-destructive font-medium">
               {data.stats.failed}
             </span>{' '}
             failed
           </span>
           {data.stats.paused > 0 && (
             <span>
-              <span className="text-warning font-medium">
+              <span className="qt-text-warning font-medium">
                 {data.stats.paused}
               </span>{' '}
               paused
@@ -157,7 +157,7 @@ export function TasksQueueCard() {
           )}
           {data.stats.dead > 0 && (
             <span>
-              <span className="text-muted-foreground font-medium">{data.stats.dead}</span> dead
+              <span className="qt-text-secondary font-medium">{data.stats.dead}</span> dead
             </span>
           )}
         </div>
@@ -168,7 +168,7 @@ export function TasksQueueCard() {
         <h3 className="text-lg font-semibold text-foreground mb-3">Queue Items</h3>
 
         {loading && !data ? (
-          <div className="text-center py-6 text-muted-foreground">
+          <div className="text-center py-6 qt-text-secondary">
             <svg
               className="animate-spin h-6 w-6 mx-auto mb-2"
               fill="none"
@@ -193,7 +193,7 @@ export function TasksQueueCard() {
         ) : !data || data.jobs.length === 0 ? (
           <div className="qt-card p-6 text-center">
             <svg
-              className="w-12 h-12 mx-auto mb-3 text-muted-foreground/50"
+              className="w-12 h-12 mx-auto mb-3 qt-text-secondary/50"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -205,7 +205,7 @@ export function TasksQueueCard() {
                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
               />
             </svg>
-            <p className="text-muted-foreground">Queue is empty. All tasks completed!</p>
+            <p className="qt-text-secondary">Queue is empty. All tasks completed!</p>
           </div>
         ) : (
           <div className="space-y-2 max-h-[300px] overflow-y-auto">

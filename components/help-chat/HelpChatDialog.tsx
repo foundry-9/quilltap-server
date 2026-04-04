@@ -274,7 +274,7 @@ export function HelpChatDialog() {
           <button
             type="button"
             onClick={handleNewChat}
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1 rounded hover:bg-accent qt-text-secondary hover:text-foreground transition-colors"
             title="New help chat"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -332,7 +332,7 @@ export function HelpChatDialog() {
               /* Launcher view */
               <div className="flex flex-col h-full">
                 {/* Character selection */}
-                <div className="p-3 border-b border-border">
+                <div className="p-3 border-b qt-border-default">
                   <div className="qt-help-section-label">Help Characters</div>
                   <div className="flex flex-wrap gap-2">
                     {eligibleCharacters.filter(c => c.hasToolCapableProfile).map(char => {
@@ -346,7 +346,7 @@ export function HelpChatDialog() {
                           data-selected={isSelected}
                           title={char.name}
                         >
-                          <div className="w-5 h-5 rounded-full bg-muted overflow-hidden flex-shrink-0">
+                          <div className="w-5 h-5 rounded-full qt-bg-muted overflow-hidden flex-shrink-0">
                             {char.avatarUrl ? (
                               <img src={char.avatarUrl} alt="" className="w-full h-full object-cover" />
                             ) : (
@@ -360,7 +360,7 @@ export function HelpChatDialog() {
                       )
                     })}
                     {eligibleCharacters.filter(c => c.hasToolCapableProfile).length === 0 && (
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs qt-text-secondary">
                         No eligible help characters. Enable help tools on a character with a tool-capable connection profile.
                       </div>
                     )}
@@ -385,13 +385,13 @@ export function HelpChatDialog() {
                             >
                               {chat.title || 'Untitled'}
                             </button>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs qt-text-secondary">
                               {chat.messageCount}
                             </span>
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); handleDeleteChat(chat.id) }}
-                              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-all"
+                              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:qt-bg-destructive/20 qt-text-secondary hover:qt-text-destructive transition-all"
                               title="Delete"
                             >
                               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

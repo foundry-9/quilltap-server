@@ -9,6 +9,7 @@
 
 // Export all provider plugin types and interfaces
 export type {
+  TextProviderPlugin,
   ProviderMetadata,
   AttachmentSupport,
   ProviderConfigRequirements,

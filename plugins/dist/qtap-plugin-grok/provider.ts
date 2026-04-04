@@ -8,7 +8,7 @@
  */
 
 import OpenAI from 'openai';
-import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types';
+import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-grok');
@@ -27,11 +27,10 @@ type ResponsesTool = OpenAI.Responses.Tool;
 type ResponsesResponse = OpenAI.Responses.Response;
 type ResponsesStreamEvent = OpenAI.Responses.ResponseStreamEvent;
 
-export class GrokProvider implements LLMProvider {
+export class GrokProvider implements TextProvider {
   private readonly baseUrl = 'https://api.x.ai/v1';
   readonly supportsFileAttachments = true;
   readonly supportedMimeTypes = GROK_SUPPORTED_MIME_TYPES;
-  readonly supportsImageGeneration = true;
   readonly supportsWebSearch = true;
 
   /**
@@ -473,40 +472,4 @@ export class GrokProvider implements LLMProvider {
     }
   }
 
-  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    if (!apiKey) {
-      throw new Error('Grok provider requires an API key');
-    }
-
-    const client = new OpenAI({
-      apiKey,
-      baseURL: this.baseUrl,
-      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
-    });
-
-    const response = await client.images.generate({
-      model: params.model ?? 'grok-2-image',
-      prompt: params.prompt,
-      n: params.n ?? 1,
-      response_format: 'b64_json',
-    });
-
-    const images = await Promise.all(
-      (response.data || []).map(async (image) => {
-        if (!image.b64_json) {
-          throw new Error('No base64 image data in response');
-        }
-
-        return {
-          data: image.b64_json,
-          mimeType: 'image/jpeg',
-          revisedPrompt: image.revised_prompt,
-        };
-      })
-    );
-    return {
-      images,
-      raw: response,
-    };
-  }
 }

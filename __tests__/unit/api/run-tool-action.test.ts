@@ -93,26 +93,18 @@ describe('handleRunTool', () => {
   });
 
   describe('input validation', () => {
-    it('returns validation error when toolName is missing', async () => {
+    it('throws ZodError when toolName is missing', async () => {
       const req = createRequest({ arguments: {} });
       const ctx = createMockContext();
 
-      const res = await handleRunTool(req, 'chat-123', ctx);
-      const data = await res.json();
-
-      expect(res.status).toBe(400);
-      expect(data.error).toBe('Validation error');
+      await expect(handleRunTool(req, 'chat-123', ctx)).rejects.toThrow();
     });
 
-    it('returns validation error when toolName is empty string', async () => {
+    it('throws ZodError when toolName is empty string', async () => {
       const req = createRequest({ toolName: '', arguments: {} });
       const ctx = createMockContext();
 
-      const res = await handleRunTool(req, 'chat-123', ctx);
-      const data = await res.json();
-
-      expect(res.status).toBe(400);
-      expect(data.error).toBe('Validation error');
+      await expect(handleRunTool(req, 'chat-123', ctx)).rejects.toThrow();
     });
 
     it('defaults arguments to empty object when not provided', async () => {
@@ -321,20 +313,16 @@ describe('handleRunTool', () => {
   });
 
   describe('error handling', () => {
-    it('returns server error when tool execution throws', async () => {
+    it('throws when tool execution fails', async () => {
       mockExecuteToolCallWithContext.mockRejectedValue(new Error('Tool crashed'));
 
       const req = createRequest({ toolName: 'search_memories', arguments: {} });
       const ctx = createMockContext();
 
-      const res = await handleRunTool(req, 'chat-123', ctx);
-      const data = await res.json();
-
-      expect(res.status).toBe(500);
-      expect(data.error).toContain('Failed to execute tool');
+      await expect(handleRunTool(req, 'chat-123', ctx)).rejects.toThrow('Tool crashed');
     });
 
-    it('returns server error when request body is invalid JSON', async () => {
+    it('throws when request body is invalid JSON', async () => {
       const req = new NextRequest('http://localhost:3000/api/v1/chats/chat-123?action=run-tool', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -342,9 +330,7 @@ describe('handleRunTool', () => {
       });
       const ctx = createMockContext();
 
-      const res = await handleRunTool(req, 'chat-123', ctx);
-
-      expect(res.status).toBe(500);
+      await expect(handleRunTool(req, 'chat-123', ctx)).rejects.toThrow();
     });
 
     it('builds human-readable prompt description with arguments', async () => {

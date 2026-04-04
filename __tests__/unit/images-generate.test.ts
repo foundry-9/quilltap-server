@@ -5,7 +5,7 @@
 
 import { POST } from '@/app/api/v1/images/route'
 import { getServerSession } from '@/lib/auth/session'
-import { createLLMProvider } from '@/lib/llm'
+import { createImageProvider } from '@/lib/llm'
 import { getRepositories, getRepositoriesSafe } from '@/lib/repositories/factory'
 import { fileStorageManager } from '@/lib/file-storage/manager'
 import { getInheritedTags } from '@/lib/files/tag-inheritance'
@@ -19,7 +19,7 @@ const mockRepos = createMockRepositoryContainer()
 // @/lib/file-storage/manager, and @/lib/files/tag-inheritance are defined in jest.setup.ts
 
 const mockGetServerSession = jest.mocked(getServerSession)
-const mockCreateLLMProvider = jest.mocked(createLLMProvider)
+const mockCreateImageProvider = jest.mocked(createImageProvider)
 const mockGetRepositories = jest.mocked(getRepositories)
 const mockGetRepositoriesSafe = jest.mocked(getRepositoriesSafe)
 const mockFileStorageManager = jest.mocked(fileStorageManager)
@@ -157,11 +157,9 @@ describe('POST /api/v1/images?action=generate', () => {
       apiKey: null,
     } as any)
 
-    const mockProvider = {
-      supportsImageGeneration: false,
-    } as any
-
-    mockCreateLLMProvider.mockReturnValueOnce(mockProvider)
+    mockCreateImageProvider.mockImplementationOnce(() => {
+      throw new Error('ANTHROPIC does not support image generation');
+    })
 
     const request = createMockRequest({
       prompt: 'test prompt',
@@ -204,7 +202,6 @@ describe('POST /api/v1/images?action=generate', () => {
 
 
     const mockProvider = {
-      supportsImageGeneration: true,
       generateImage: jest.fn().mockResolvedValueOnce({
         images: [
           {
@@ -217,7 +214,7 @@ describe('POST /api/v1/images?action=generate', () => {
       }),
     }
 
-    mockCreateLLMProvider.mockReturnValueOnce(mockProvider)
+    mockCreateImageProvider.mockReturnValueOnce(mockProvider)
 
     mockImagesRepo.create.mockResolvedValueOnce({
       id: 'test-image-id',
@@ -296,7 +293,6 @@ describe('POST /api/v1/images?action=generate', () => {
 
 
     const mockProvider = {
-      supportsImageGeneration: true,
       generateImage: jest.fn().mockResolvedValueOnce({
         images: [
           {
@@ -308,7 +304,7 @@ describe('POST /api/v1/images?action=generate', () => {
       }),
     }
 
-    mockCreateLLMProvider.mockReturnValueOnce(mockProvider)
+    mockCreateImageProvider.mockReturnValueOnce(mockProvider)
 
     mockImagesRepo.create.mockResolvedValueOnce({
       id: 'test-image-id',
@@ -381,7 +377,6 @@ describe('POST /api/v1/images?action=generate', () => {
 
 
     const mockProvider = {
-      supportsImageGeneration: true,
       generateImage: jest.fn().mockResolvedValueOnce({
         images: [
           {
@@ -393,7 +388,7 @@ describe('POST /api/v1/images?action=generate', () => {
       }),
     }
 
-    mockCreateLLMProvider.mockReturnValueOnce(mockProvider)
+    mockCreateImageProvider.mockReturnValueOnce(mockProvider)
 
     mockImagesRepo.create.mockResolvedValueOnce({
       id: 'test-image-id',

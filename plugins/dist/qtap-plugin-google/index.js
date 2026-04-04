@@ -22967,10 +22967,10 @@ var ResourceScope;
 })(ResourceScope || (ResourceScope = {}));
 var ServiceTier;
 (function(ServiceTier2) {
-  ServiceTier2["SERVICE_TIER_UNSPECIFIED"] = "SERVICE_TIER_UNSPECIFIED";
-  ServiceTier2["SERVICE_TIER_FLEX"] = "SERVICE_TIER_FLEX";
-  ServiceTier2["SERVICE_TIER_STANDARD"] = "SERVICE_TIER_STANDARD";
-  ServiceTier2["SERVICE_TIER_PRIORITY"] = "SERVICE_TIER_PRIORITY";
+  ServiceTier2["UNSPECIFIED"] = "unspecified";
+  ServiceTier2["FLEX"] = "flex";
+  ServiceTier2["STANDARD"] = "standard";
+  ServiceTier2["PRIORITY"] = "priority";
 })(ServiceTier || (ServiceTier = {}));
 var FeatureSelectionPreference;
 (function(FeatureSelectionPreference2) {
@@ -30322,8 +30322,9 @@ function generateContentConfigToVertex(apiClient, fromObject, parentObject, root
   if (parentObject !== void 0 && fromModelArmorConfig != null) {
     setValueByPath(parentObject, ["modelArmorConfig"], fromModelArmorConfig);
   }
-  if (getValueByPath(fromObject, ["serviceTier"]) !== void 0) {
-    throw new Error("serviceTier parameter is not supported in Vertex AI.");
+  const fromServiceTier = getValueByPath(fromObject, ["serviceTier"]);
+  if (parentObject !== void 0 && fromServiceTier != null) {
+    setValueByPath(parentObject, ["serviceTier"], fromServiceTier);
   }
   return toObject;
 }
@@ -32962,7 +32963,7 @@ var CONTENT_TYPE_HEADER = "Content-Type";
 var SERVER_TIMEOUT_HEADER = "X-Server-Timeout";
 var USER_AGENT_HEADER = "User-Agent";
 var GOOGLE_API_CLIENT_HEADER = "x-goog-api-client";
-var SDK_VERSION = "1.47.0";
+var SDK_VERSION = "1.48.0";
 var LIBRARY_LABEL = `google-genai-sdk/${SDK_VERSION}`;
 var VERTEX_AI_API_DEFAULT_VERSION = "v1beta1";
 var GOOGLE_AI_API_DEFAULT_VERSION = "v1beta";
@@ -47197,7 +47198,6 @@ var GoogleProvider = class {
   constructor() {
     this.supportsFileAttachments = true;
     this.supportedMimeTypes = GOOGLE_SUPPORTED_MIME_TYPES;
-    this.supportsImageGeneration = true;
     this.supportsWebSearch = true;
   }
   /**
@@ -47538,10 +47538,16 @@ var GoogleProvider = class {
       config2.stopSequences = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
     if (this.isThinkingModel(params.model)) {
-      config2.thinkingConfig = {
-        thinkingBudget: 4096
-      };
-      config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
+      if (!params.strictMaxTokens) {
+        config2.thinkingConfig = {
+          thinkingBudget: 4096
+        };
+        config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
+      } else {
+        config2.thinkingConfig = {
+          thinkingBudget: 1024
+        };
+      }
     }
     try {
       const response = await ai.models.generateContent({
@@ -47623,10 +47629,16 @@ var GoogleProvider = class {
       config2.stopSequences = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
     if (this.isThinkingModel(params.model)) {
-      config2.thinkingConfig = {
-        thinkingBudget: 4096
-      };
-      config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
+      if (!params.strictMaxTokens) {
+        config2.thinkingConfig = {
+          thinkingBudget: 4096
+        };
+        config2.maxOutputTokens = Math.max(config2.maxOutputTokens, 8192);
+      } else {
+        config2.thinkingConfig = {
+          thinkingBudget: 1024
+        };
+      }
     }
     try {
       const response = await ai.models.generateContentStream({
@@ -47742,53 +47754,6 @@ var GoogleProvider = class {
         "imagen-4",
         "imagen-4-fast"
       ];
-    }
-  }
-  async generateImage(params, apiKey) {
-    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
-    const modelName = params.model ?? "gemini-2.5-flash-image";
-    const config2 = {
-      temperature: 0.7,
-      safetySettings: SAFETY_CATEGORIES.map((category) => ({
-        category,
-        threshold: "BLOCK_NONE"
-      }))
-    };
-    try {
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: params.prompt,
-        config: config2
-      });
-      const images = [];
-      const candidates = response.candidates ?? [];
-      for (const candidate of candidates) {
-        const parts = candidate.content?.parts ?? [];
-        for (const part of parts) {
-          if (part.inlineData && part.inlineData.data) {
-            images.push({
-              data: part.inlineData.data,
-              mimeType: part.inlineData.mimeType || "image/png"
-            });
-          }
-        }
-      }
-      if (images.length === 0) {
-        logger.error("No images generated in response", { context: "GoogleProvider.generateImage" });
-        throw new Error("No images generated in response");
-      }
-      return {
-        images,
-        // Convert SDK response class to plain object for Zod validation
-        raw: JSON.parse(JSON.stringify(response))
-      };
-    } catch (error) {
-      logger.error("Error generating image with Google Gemini", {
-        context: "GoogleProvider.generateImage",
-        model: modelName,
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
     }
   }
   /**

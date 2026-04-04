@@ -8,9 +8,7 @@
  */
 
 import { logger } from '@/lib/logger';
-import type { LLMProvider } from './base';
-import type { ImageGenProvider } from '@/lib/image-gen/base';
-import type { EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
+import type { TextProvider, ImageProvider, EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { searchProviderRegistry } from '@/lib/plugins/search-provider-registry';
 
@@ -51,7 +49,7 @@ export function isProviderFromPlugin(provider: string): boolean {
 export async function createLLMProvider(
   provider: string,
   baseUrl?: string
-): Promise<LLMProvider> {
+): Promise<TextProvider> {
   try {
     // Check if registry is initialized, if not, initialize it
     if (!providerRegistry.isInitialized()) {
@@ -85,7 +83,7 @@ export async function createLLMProvider(
 export function createImageProvider(
   provider: string,
   baseUrl?: string
-): ImageGenProvider {
+): ImageProvider {
   // Map legacy provider names if needed
   const providerName = provider.toUpperCase() === 'GOOGLE_IMAGEN' ? 'GOOGLE' : provider;
 

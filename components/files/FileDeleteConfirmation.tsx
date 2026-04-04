@@ -47,7 +47,7 @@ export default function FileDeleteConfirmation({
       <button
         onClick={onConfirm}
         disabled={isDeleting}
-        className="qt-button bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+        className="qt-button bg-destructive qt-text-destructive-foreground hover:qt-bg-destructive/90 disabled:opacity-50"
       >
         {isDeleting ? 'Deleting...' : 'Delete Anyway'}
       </button>
@@ -76,7 +76,7 @@ export default function FileDeleteConfirmation({
               {associations.characters.map((char) => (
                 <li key={char.id} className="qt-text-small">
                   <span className="font-medium">{char.name}</span>
-                  {char.usage && <span className="text-muted-foreground"> — {char.usage}</span>}
+                  {char.usage && <span className="qt-text-secondary"> — {char.usage}</span>}
                 </li>
               ))}
             </ul>
@@ -98,7 +98,7 @@ export default function FileDeleteConfirmation({
         )}
 
         {/* Explanation text */}
-        <p className="qt-text-small text-muted-foreground pt-2">
+        <p className="qt-text-small qt-text-secondary pt-2">
           Deleting will remove these associations. Messages will show a note indicating the
           attachment was deleted.
         </p>

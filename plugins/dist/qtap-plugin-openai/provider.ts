@@ -10,7 +10,7 @@
  */
 
 import OpenAI from 'openai';
-import type { LLMProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage, ImageGenParams, ImageGenResponse } from './types';
+import type { TextProvider, LLMParams, LLMResponse, StreamChunk, LLMMessage } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 
 const logger = createPluginLogger('qtap-plugin-openai');
@@ -38,10 +38,9 @@ type ResponsesTool = OpenAI.Responses.Tool;
 type ResponsesResponse = OpenAI.Responses.Response;
 type ResponsesStreamEvent = OpenAI.Responses.ResponseStreamEvent;
 
-export class OpenAIProvider implements LLMProvider {
+export class OpenAIProvider implements TextProvider {
   readonly supportsFileAttachments = true;
   readonly supportedMimeTypes = OPENAI_SUPPORTED_MIME_TYPES;
-  readonly supportsImageGeneration = true;
   readonly supportsWebSearch = true;
 
   /**
@@ -320,9 +319,17 @@ export class OpenAIProvider implements LLMProvider {
         requestParams.temperature = params.temperature;
       }
     } else {
-      const minTokensForReasoning = 4096;
-      if ((params.maxTokens ?? 0) < minTokensForReasoning) {
-        requestParams.max_output_tokens = minTokensForReasoning;
+      if (!params.strictMaxTokens) {
+        // Full reasoning model minimum for chat messages
+        const minTokensForReasoning = 4096;
+        if ((params.maxTokens ?? 0) < minTokensForReasoning) {
+          requestParams.max_output_tokens = minTokensForReasoning;
+        }
+      } else {
+        // Strict mode: use low reasoning effort so the model doesn't burn
+        // the entire output budget on thinking. This is for background tasks
+        // (summarization, keyword extraction) that don't need deep reasoning.
+        requestParams.reasoning = { effort: 'low' };
       }
     }
 
@@ -547,38 +554,4 @@ export class OpenAIProvider implements LLMProvider {
     }
   }
 
-  async generateImage(params: ImageGenParams, apiKey: string): Promise<ImageGenResponse> {
-    const client = new OpenAI({
-      apiKey,
-      defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
-    });
-
-    const response = await client.images.generate({
-      model: params.model ?? 'dall-e-3',
-      prompt: params.prompt,
-      n: params.n ?? 1,
-      size: (params.size ?? '1024x1024') as '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792',
-      quality: params.quality ?? 'standard',
-      style: params.style ?? 'vivid',
-      response_format: 'b64_json',
-    });
-
-    const images = await Promise.all(
-      (response.data || []).map(async (image) => {
-        if (!image.b64_json) {
-          throw new Error('No base64 image data in response');
-        }
-
-        return {
-          data: image.b64_json,
-          mimeType: 'image/png',
-          revisedPrompt: image.revised_prompt,
-        };
-      })
-    );
-    return {
-      images,
-      raw: response,
-    };
-  }
 }

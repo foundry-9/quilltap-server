@@ -30,7 +30,7 @@ export function TokenDisplaySettingsComponent({
         {TOKEN_DISPLAY_OPTIONS.map((option) => (
           <label
             key={option.key}
-            className="flex items-start gap-3 p-4 border border-border rounded hover:bg-accent cursor-pointer transition-colors"
+            className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors"
           >
             <input
               type="checkbox"
@@ -49,8 +49,8 @@ export function TokenDisplaySettingsComponent({
         ))}
       </div>
 
-      <div className="mt-4 p-4 border border-border rounded bg-muted/50">
-        <p className="qt-text-small text-muted-foreground">
+      <div className="mt-4 p-4 border qt-border-default rounded qt-bg-muted/50">
+        <p className="qt-text-small qt-text-secondary">
           <strong>Note:</strong> Cost estimates are based on pricing data from OpenRouter when available,
           or fallback pricing for other providers. Actual costs may vary slightly.
         </p>

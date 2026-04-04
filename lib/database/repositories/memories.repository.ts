@@ -258,16 +258,16 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * Uses reinforcedImportance when available, otherwise importance.
    *
    * @param characterId The character ID
-   * @param limits Optional per-tier limits (defaults: high=50, medium=20, low=10)
+   * @param limits Optional per-tier limits (defaults: highLimit=20, mediumLimit=10, lowLimit=5)
    * @returns Promise with high, medium, and low importance memory arrays
    */
   async findRecentByImportanceTier(
     characterId: string,
     limits: { high?: number; medium?: number; low?: number } = {}
   ): Promise<{ high: Memory[]; medium: Memory[]; low: Memory[] }> {
-    const highLimit = limits.high ?? 50;
-    const mediumLimit = limits.medium ?? 20;
-    const lowLimit = limits.low ?? 10;
+    const highLimit = limits.high ?? 20;
+    const mediumLimit = limits.medium ?? 10;
+    const lowLimit = limits.low ?? 5;
 
     const [high, medium, low] = await Promise.all([
       this.safeQuery(

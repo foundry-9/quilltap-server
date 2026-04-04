@@ -73,8 +73,8 @@ export function RestoreDialog({
         <label
           className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
             state.restoreMode === 'replace'
-              ? 'border-destructive bg-destructive/10'
-              : 'border-border bg-background'
+              ? 'qt-border-destructive qt-bg-destructive/10'
+              : 'qt-border-default bg-background'
           }`}
         >
           <input
@@ -99,8 +99,8 @@ export function RestoreDialog({
         <label
           className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
             state.restoreMode === 'import'
-              ? 'border-primary bg-accent'
-              : 'border-border bg-background'
+              ? 'qt-border-primary bg-accent'
+              : 'qt-border-default bg-background'
           }`}
         >
           <input
@@ -124,8 +124,8 @@ export function RestoreDialog({
 
       {/* Replace Mode Warning */}
       {state.restoreMode === 'replace' && (
-        <div className="bg-destructive/10 border border-destructive rounded-lg p-4">
-          <p className="text-sm font-medium text-destructive mb-3">
+        <div className="qt-bg-destructive/10 border qt-border-destructive rounded-lg p-4">
+          <p className="text-sm font-medium qt-text-destructive mb-3">
             Warning: This will DELETE all your current data!
           </p>
           <label className="flex items-center gap-2 cursor-pointer">
@@ -133,9 +133,9 @@ export function RestoreDialog({
               type="checkbox"
               checked={state.confirmReplace}
               onChange={(e) => actions.setConfirmReplace(e.target.checked)}
-              className="w-4 h-4 text-destructive rounded focus:ring-ring"
+              className="w-4 h-4 qt-text-destructive rounded focus:ring-ring"
             />
-            <span className="text-sm text-destructive">
+            <span className="text-sm qt-text-destructive">
               I understand this action cannot be undone
             </span>
           </label>
@@ -143,8 +143,8 @@ export function RestoreDialog({
       )}
 
       {state.error && (
-        <div className="p-3 bg-destructive/10 border border-destructive rounded-lg">
-          <p className="text-sm text-destructive">{state.error}</p>
+        <div className="p-3 qt-bg-destructive/10 border qt-border-destructive rounded-lg">
+          <p className="text-sm qt-text-destructive">{state.error}</p>
         </div>
       )}
     </div>
@@ -176,7 +176,7 @@ export function RestoreDialog({
               <button
                 onClick={handleClose}
                 disabled={state.restoring || state.uploading}
-                className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                className="qt-text-secondary hover:text-foreground disabled:opacity-50"
                 aria-label="Close dialog"
               >
                 <svg

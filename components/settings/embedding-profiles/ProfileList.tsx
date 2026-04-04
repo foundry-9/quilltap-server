@@ -206,22 +206,22 @@ export function ProfileList({
 
                 {/* Embedding progress for BUILTIN profiles without vocabulary */}
                 {profile.provider === 'BUILTIN' && !profile.vocabularyStats && (
-                  <p className="qt-text-xs text-muted-foreground">
+                  <p className="qt-text-xs qt-text-secondary">
                     Vocabulary not yet fitted. Add some memories to get started.
                   </p>
                 )}
 
                 {/* Embedding stats if available */}
                 {profile.embeddingStats && profile.embeddingStats.total > 0 && (
-                  <div className="qt-text-xs text-muted-foreground">
+                  <div className="qt-text-xs qt-text-secondary">
                     Embedded: {profile.embeddingStats.embedded}/{profile.embeddingStats.total}
                     {profile.embeddingStats.pending > 0 && (
-                      <span className="text-warning ml-2">
+                      <span className="qt-text-warning ml-2">
                         ({profile.embeddingStats.pending} pending)
                       </span>
                     )}
                     {profile.embeddingStats.failed > 0 && (
-                      <span className="text-destructive ml-2">
+                      <span className="qt-text-destructive ml-2">
                         ({profile.embeddingStats.failed} failed)
                       </span>
                     )}

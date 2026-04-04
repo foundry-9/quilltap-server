@@ -20,7 +20,7 @@ import {
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import { isDockerEnvironment, isLimaEnvironment, getDataDir, getSQLiteDatabasePath, getLLMLogsDatabasePath, getBackupsDir } from '@/lib/paths';
+import { isDockerEnvironment, isElectronShell, isLimaEnvironment, getDataDir, getElectronShellVersion, getShellCapabilities, getSQLiteDatabasePath, getLLMLogsDatabasePath, getBackupsDir } from '@/lib/paths';
 import { getHasUserPassphrase } from '@/lib/startup/dbkey';
 import { getAllThemes, getThemeStats } from '@/lib/themes/theme-registry';
 import { parseBackupFilename, parseLLMLogsBackupFilename } from '@/lib/database/backends/sqlite/physical-backup';
@@ -140,6 +140,8 @@ export interface RuntimeEnvironmentInfo {
   totalMemoryBytes: number;
   freeMemoryBytes: number;
   runtimeType: 'docker' | 'lima' | 'electron' | 'node';
+  electronShellVersion: string | null;
+  shellCapabilities: string[];
   uptimeSeconds: number;
   dataDirectory: string;
   timezone: string;
@@ -685,7 +687,7 @@ function collectRuntimeEnvironment(): RuntimeEnvironmentInfo {
     runtimeType = 'docker';
   } else if (isLimaEnvironment()) {
     runtimeType = 'lima';
-  } else if (process.env.ELECTRON_DEV) {
+  } else if (isElectronShell()) {
     runtimeType = 'electron';
   }
 
@@ -698,6 +700,8 @@ function collectRuntimeEnvironment(): RuntimeEnvironmentInfo {
     totalMemoryBytes: os.totalmem(),
     freeMemoryBytes: os.freemem(),
     runtimeType,
+    electronShellVersion: getElectronShellVersion(),
+    shellCapabilities: [...getShellCapabilities()],
     uptimeSeconds: process.uptime(),
     dataDirectory: getDataDir(),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,

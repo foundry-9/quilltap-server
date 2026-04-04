@@ -7,7 +7,7 @@
  */
 
 import type {
-  ImageGenProvider as ImageGenProviderBase,
+  ImageProvider,
   ImageGenParams,
   ImageGenResponse,
 } from './types';
@@ -38,7 +38,7 @@ const IMAGEN_MODEL_MAP: Record<string, string> = {
   'imagen-4-fast': 'imagen-4.0-fast-generate-001',
 };
 
-export class GoogleImagenProvider implements ImageGenProviderBase {
+export class GoogleImagenProvider implements ImageProvider {
   readonly provider = 'GOOGLE';
   readonly supportedModels = [...IMAGEN_MODELS, ...GEMINI_IMAGE_MODELS];
 

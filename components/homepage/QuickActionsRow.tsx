@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { CreateProjectDialog } from '@/app/(authenticated)/prospero/components'
+import { CreateProjectDialog } from '@/app/prospero/components'
 import type { QuickActionsRowProps } from './types'
 
 // Chat icon

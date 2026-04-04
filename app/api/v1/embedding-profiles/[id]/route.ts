@@ -25,7 +25,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 
       const profile = await repos.embeddingProfiles.findById(id);
 
-      if (!profile || profile.userId !== user.id) {
+      if (!profile) {
         return notFound('Embedding profile');
       }
 
@@ -53,7 +53,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify ownership
       const existingProfile = await repos.embeddingProfiles.findById(id);
 
-      if (!existingProfile || existingProfile.userId !== user.id) {
+      if (!existingProfile) {
         return notFound('Embedding profile');
       }
 
@@ -199,7 +199,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       // Verify ownership
       const existingProfile = await repos.embeddingProfiles.findById(id);
 
-      if (!existingProfile || existingProfile.userId !== user.id) {
+      if (!existingProfile) {
         return notFound('Embedding profile');
       }
 
@@ -227,7 +227,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         // Verify ownership
         const profile = await repos.embeddingProfiles.findById(id);
 
-        if (!profile || profile.userId !== user.id) {
+        if (!profile) {
           return notFound('Embedding profile');
         }
 
@@ -259,7 +259,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         // Verify ownership
         const profile = await repos.embeddingProfiles.findById(id);
 
-        if (!profile || profile.userId !== user.id) {
+        if (!profile) {
           return notFound('Embedding profile');
         }
 

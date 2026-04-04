@@ -53,7 +53,7 @@ export function ClothingRecordList({ entityId, refreshKey }: ClothingRecordListP
 
   const hangerIcon = (
     <svg
-      className="w-12 h-12 text-muted-foreground mx-auto"
+      className="w-12 h-12 qt-text-secondary mx-auto"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"

@@ -35,12 +35,12 @@ export function EmptyState({
 
     switch (variant) {
       case 'dashed':
-        return `${baseClasses} border border-dashed border-border bg-transparent`
+        return `${baseClasses} border border-dashed qt-border-default bg-transparent`
       case 'muted':
-        return `${baseClasses} bg-muted/50`
+        return `${baseClasses} qt-bg-muted/50`
       case 'default':
       default:
-        return `${baseClasses} bg-muted border border-border`
+        return `${baseClasses} qt-bg-muted border qt-border-default`
     }
   }
 

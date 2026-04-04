@@ -171,12 +171,12 @@ export function MemoryDedupCard() {
 
           {/* Dialog */}
           <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto">
-            <div className="bg-card rounded-lg qt-shadow-lg w-full max-w-lg">
+            <div className="qt-bg-card rounded-lg qt-shadow-lg w-full max-w-lg">
               {/* Header */}
-              <div className="px-6 py-4 border-b border-border">
+              <div className="px-6 py-4 border-b qt-border-default">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                    <div className="w-10 h-10 qt-bg-primary/10 rounded-full flex items-center justify-center">
                       <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           strokeLinecap="round"
@@ -192,7 +192,7 @@ export function MemoryDedupCard() {
                   </div>
                   <button
                     onClick={handleClose}
-                    className="qt-button qt-button-ghost text-muted-foreground hover:text-foreground p-1"
+                    className="qt-button qt-button-ghost qt-text-secondary hover:text-foreground p-1"
                     aria-label="Close dialog"
                   >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -219,8 +219,8 @@ export function MemoryDedupCard() {
                 {step === 'preview' && (
                   <>
                     {error ? (
-                      <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
-                        <p className="text-sm text-destructive">{error}</p>
+                      <div className="p-3 qt-bg-destructive/10 border qt-border-destructive/30 rounded-lg">
+                        <p className="text-sm qt-text-destructive">{error}</p>
                       </div>
                     ) : preview ? (
                       <div className="space-y-4">
@@ -229,15 +229,15 @@ export function MemoryDedupCard() {
                         </p>
 
                         {/* Results table */}
-                        <div className="max-h-64 overflow-y-auto border border-border rounded-lg">
+                        <div className="max-h-64 overflow-y-auto border qt-border-default rounded-lg">
                           <table className="w-full text-sm">
-                            <thead className="bg-muted sticky top-0">
+                            <thead className="qt-bg-muted sticky top-0">
                               <tr>
-                                <th className="text-left px-3 py-2 text-muted-foreground font-medium">Character</th>
-                                <th className="text-right px-3 py-2 text-muted-foreground font-medium">Memories</th>
-                                <th className="text-right px-3 py-2 text-muted-foreground font-medium">Clusters</th>
-                                <th className="text-right px-3 py-2 text-muted-foreground font-medium">Removable</th>
-                                <th className="text-right px-3 py-2 text-muted-foreground font-medium">Details</th>
+                                <th className="text-left px-3 py-2 qt-text-secondary font-medium">Character</th>
+                                <th className="text-right px-3 py-2 qt-text-secondary font-medium">Memories</th>
+                                <th className="text-right px-3 py-2 qt-text-secondary font-medium">Clusters</th>
+                                <th className="text-right px-3 py-2 qt-text-secondary font-medium">Removable</th>
+                                <th className="text-right px-3 py-2 qt-text-secondary font-medium">Details</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -254,7 +254,7 @@ export function MemoryDedupCard() {
                                 </tr>
                               ))}
                             </tbody>
-                            <tfoot className="bg-muted border-t border-border">
+                            <tfoot className="qt-bg-muted border-t qt-border-default">
                               <tr className="font-semibold">
                                 <td className="px-3 py-2 text-foreground">Total</td>
                                 <td className="text-right px-3 py-2 text-foreground">{preview.totalOriginal}</td>
@@ -269,7 +269,7 @@ export function MemoryDedupCard() {
                         </div>
 
                         {totalRemovable > 0 && (
-                          <div className="bg-primary/10 border border-primary/30 rounded-lg p-3">
+                          <div className="qt-bg-primary/10 border qt-border-primary/30 rounded-lg p-3">
                             <p className="text-sm text-foreground">
                               <span className="font-semibold">{preview.totalRemoved}</span> duplicate memories
                               can be removed. <span className="font-semibold">{preview.totalMergedDetails}</span> unique
@@ -279,8 +279,8 @@ export function MemoryDedupCard() {
                         )}
 
                         {totalRemovable === 0 && (
-                          <div className="bg-muted rounded-lg p-3">
-                            <p className="text-sm text-muted-foreground">
+                          <div className="qt-bg-muted rounded-lg p-3">
+                            <p className="text-sm qt-text-secondary">
                               No duplicate memories found at this threshold. Try lowering the threshold to find more matches.
                             </p>
                           </div>
@@ -307,21 +307,21 @@ export function MemoryDedupCard() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-center">
                       <div className="w-16 h-16 qt-bg-success/10 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-8 h-8 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
                     </div>
 
                     {/* Results table */}
-                    <div className="max-h-64 overflow-y-auto border border-border rounded-lg">
+                    <div className="max-h-64 overflow-y-auto border qt-border-default rounded-lg">
                       <table className="w-full text-sm">
-                        <thead className="bg-muted sticky top-0">
+                        <thead className="qt-bg-muted sticky top-0">
                           <tr>
-                            <th className="text-left px-3 py-2 text-muted-foreground font-medium">Character</th>
-                            <th className="text-right px-3 py-2 text-muted-foreground font-medium">Before</th>
-                            <th className="text-right px-3 py-2 text-muted-foreground font-medium">Removed</th>
-                            <th className="text-right px-3 py-2 text-muted-foreground font-medium">After</th>
+                            <th className="text-left px-3 py-2 qt-text-secondary font-medium">Character</th>
+                            <th className="text-right px-3 py-2 qt-text-secondary font-medium">Before</th>
+                            <th className="text-right px-3 py-2 qt-text-secondary font-medium">Removed</th>
+                            <th className="text-right px-3 py-2 qt-text-secondary font-medium">After</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -329,16 +329,16 @@ export function MemoryDedupCard() {
                             <tr key={char.characterId}>
                               <td className="px-3 py-2 text-foreground truncate max-w-[150px]">{char.characterName}</td>
                               <td className="text-right px-3 py-2 qt-text-primary">{char.originalCount}</td>
-                              <td className="text-right px-3 py-2 text-destructive">{char.removedCount}</td>
+                              <td className="text-right px-3 py-2 qt-text-destructive">{char.removedCount}</td>
                               <td className="text-right px-3 py-2 qt-text-primary">{char.finalCount}</td>
                             </tr>
                           ))}
                         </tbody>
-                        <tfoot className="bg-muted border-t border-border">
+                        <tfoot className="qt-bg-muted border-t qt-border-default">
                           <tr className="font-semibold">
                             <td className="px-3 py-2 text-foreground">Total</td>
                             <td className="text-right px-3 py-2 text-foreground">{result.totalOriginal}</td>
-                            <td className="text-right px-3 py-2 text-destructive">{result.totalRemoved}</td>
+                            <td className="text-right px-3 py-2 qt-text-destructive">{result.totalRemoved}</td>
                             <td className="text-right px-3 py-2 text-foreground">{result.totalFinal}</td>
                           </tr>
                         </tfoot>
@@ -353,7 +353,7 @@ export function MemoryDedupCard() {
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 bg-muted border-t border-border flex gap-3 justify-end">
+              <div className="px-6 py-4 qt-bg-muted border-t qt-border-default flex gap-3 justify-end">
                 {step === 'preview' && (
                   <>
                     <button onClick={handleClose} className="qt-button qt-button-secondary">

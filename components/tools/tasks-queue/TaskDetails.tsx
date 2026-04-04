@@ -24,15 +24,15 @@ export function TaskDetails({
   const getStatusColor = (status: string): string => {
     switch (status) {
       case 'PROCESSING':
-        return 'text-info'
+        return 'qt-text-info'
       case 'PENDING':
-        return 'text-warning'
+        return 'qt-text-warning'
       case 'FAILED':
-        return 'text-destructive'
+        return 'qt-text-destructive'
       case 'PAUSED':
-        return 'text-warning'
+        return 'qt-text-warning'
       default:
-        return 'text-muted-foreground'
+        return 'qt-text-secondary'
     }
   }
 
@@ -53,7 +53,7 @@ export function TaskDetails({
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-muted"
+            className="p-1 rounded hover:qt-bg-muted"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -95,7 +95,7 @@ export function TaskDetails({
           {job.lastError && (
             <div className="mb-4">
               <span className="qt-text-xs">Last Error</span>
-              <div className="text-sm text-destructive qt-bg-destructive/10 p-2 rounded mt-1">
+              <div className="text-sm qt-text-destructive qt-bg-destructive/10 p-2 rounded mt-1">
                 {job.lastError}
               </div>
             </div>
@@ -104,14 +104,14 @@ export function TaskDetails({
           {/* Job parameters */}
           <div>
             <span className="qt-text-xs">Job Parameters</span>
-            <pre className="mt-1 p-3 bg-muted rounded text-xs overflow-x-auto whitespace-pre-wrap break-words">
+            <pre className="mt-1 p-3 qt-bg-muted rounded text-xs overflow-x-auto whitespace-pre-wrap break-words">
               {JSON.stringify(job.payload, null, 2)}
             </pre>
           </div>
         </div>
 
         {/* Dialog Footer */}
-        <div className="flex items-center justify-between p-4 border-t bg-muted/30">
+        <div className="flex items-center justify-between p-4 border-t qt-bg-muted/30">
           <button
             onClick={onClose}
             className="qt-button qt-button-secondary"

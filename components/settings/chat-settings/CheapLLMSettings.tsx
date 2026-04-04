@@ -43,7 +43,7 @@ export function CheapLLMSettings({
             ].map((strategy) => (
               <label
                 key={strategy.value}
-                className="flex items-start gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer transition-colors"
+                className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors"
               >
                 <input
                   type="radio"
@@ -88,7 +88,7 @@ export function CheapLLMSettings({
               })}
             </select>
             {connectionProfiles.length === 0 && !loadingProfiles && (
-              <p className="mt-1 qt-text-xs text-warning">
+              <p className="mt-1 qt-text-xs qt-text-warning">
                 No connection profiles found. Create one in the Connection Profiles tab first.
               </p>
             )}
@@ -122,7 +122,7 @@ export function CheapLLMSettings({
         </div>
 
         {/* Fallback to Local */}
-        <label className="flex items-center gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer transition-colors">
+        <label className="flex items-center gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors">
           <input
             type="checkbox"
             checked={settings?.cheapLLMSettings.fallbackToLocal ?? true}
@@ -151,7 +151,7 @@ export function CheapLLMSettings({
             ].map((provider) => (
               <label
                 key={provider.value}
-                className="flex items-start gap-3 p-3 border border-border rounded hover:bg-accent cursor-pointer transition-colors"
+                className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors"
               >
                 <input
                   type="radio"
@@ -200,7 +200,7 @@ export function CheapLLMSettings({
             })}
           </select>
           {embeddingProfiles.length === 0 && (
-            <p className="mt-1 text-xs text-warning">
+            <p className="mt-1 text-xs qt-text-warning">
               No embedding profiles found. Create one in the Embedding Profiles tab.
             </p>
           )}

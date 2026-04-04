@@ -19,7 +19,7 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
       <div className="flex flex-col items-center justify-center py-6">
         <div className="w-12 h-12 rounded-full qt-bg-success/10 flex items-center justify-center mb-4">
           <svg
-            className="w-6 h-6 text-success"
+            className="w-6 h-6 qt-text-success"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -38,7 +38,7 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
       </div>
 
       {/* Import Summary */}
-      <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+      <div className="p-4 qt-bg-muted/50 rounded-lg space-y-2">
         {Object.entries(importResult.imported).map(([key, value]) => {
           if (value === 0) return null
           return (
@@ -46,7 +46,7 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
               <span className="text-foreground capitalize">
                 {key.replace(/([A-Z])/g, ' $1').trim()}
               </span>
-              <span className="font-medium text-success">
+              <span className="font-medium qt-text-success">
                 +{value}
               </span>
             </div>
@@ -59,7 +59,7 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
               <span className="text-foreground capitalize">
                 {key.replace(/([A-Z])/g, ' $1').trim()} (skipped)
               </span>
-              <span className="font-medium text-muted-foreground">
+              <span className="font-medium qt-text-secondary">
                 {value}
               </span>
             </div>
@@ -69,13 +69,13 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
 
       {/* Warnings */}
       {importResult.warnings && importResult.warnings.length > 0 && (
-        <div className="p-4 qt-bg-warning/10 border border-warning/30 rounded-lg">
-          <h4 className="font-medium text-warning mb-2">
+        <div className="p-4 qt-bg-warning/10 border qt-border-warning/30 rounded-lg">
+          <h4 className="font-medium qt-text-warning mb-2">
             Warnings
           </h4>
           <ul className="space-y-1">
             {importResult.warnings.map((warning, idx) => (
-              <li key={idx} className="text-sm text-warning">
+              <li key={idx} className="text-sm qt-text-warning">
                 • {warning}
               </li>
             ))}

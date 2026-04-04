@@ -5,23 +5,30 @@ import { usePathname } from 'next/navigation';
 import packageJson from '@/package.json';
 import { showSuccessToast } from '@/lib/toast';
 
-type BackendMode = 'local' | 'Docker' | 'VM';
+type BackendMode = 'local' | 'Docker' | 'VM' | 'Electron' | 'Electron+Docker' | 'Electron+VM';
 
 export default function FooterWrapper() {
   const pathname = usePathname();
   const [backendMode, setBackendMode] = useState<BackendMode | null>(null);
+  const [shellVersion, setShellVersion] = useState<string | null>(null);
   const [hostPath, setHostPath] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/v1/system/data-dir')
       .then((res) => res.json())
       .then((data) => {
+        const isShell = data.isElectronShell;
         if (data.isVM) {
-          setBackendMode('VM');
+          setBackendMode(isShell ? 'Electron+VM' : 'VM');
         } else if (data.isDocker) {
-          setBackendMode('Docker');
+          setBackendMode(isShell ? 'Electron+Docker' : 'Docker');
+        } else if (isShell) {
+          setBackendMode('Electron');
         } else {
           setBackendMode('local');
+        }
+        if (isShell && data.shellVersion) {
+          setShellVersion(data.shellVersion);
         }
         if (data.hostPath) {
           setHostPath(data.hostPath);
@@ -45,7 +52,7 @@ export default function FooterWrapper() {
   return (
     <footer className="qt-footer">
       <div className="qt-footer-container">
-        <span>v{packageJson.version}{backendMode ? ` (${backendMode})` : ''}</span>
+        <span>v{packageJson.version}{backendMode ? ` (${backendMode})` : ''}{shellVersion ? ` shell v${shellVersion}` : ''}</span>
         {hostPath && (
           <button
             className="qt-footer-path"

@@ -53,7 +53,7 @@ export function PromptModal({
         {/* Name field */}
         <div>
           <label className="qt-label mb-1">
-            Name <span className="text-destructive">*</span>
+            Name <span className="qt-text-destructive">*</span>
           </label>
           <input
             type="text"
@@ -90,7 +90,7 @@ export function PromptModal({
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="block text-sm qt-text-primary">
-              Content <span className="text-destructive">*</span>
+              Content <span className="qt-text-destructive">*</span>
             </label>
             <button
               type="button"

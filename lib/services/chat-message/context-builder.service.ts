@@ -73,6 +73,8 @@ export interface BuildMessageContextOptions {
   uncensoredFallbackOptions?: UncensoredFallbackOptions
   /** Status change notifications to include in prompt */
   statusChangeNotifications?: string[]
+  /** Optional callback to emit status events during context building phases */
+  onStatusChange?: (stage: string, message: string) => void
 }
 
 /**
@@ -366,6 +368,8 @@ export async function buildMessageContext(
     timezone,
     // Project context
     projectContext,
+    // Connection profile (for budget-driven compression)
+    connectionProfile,
     // Context compression
     contextCompressionSettings,
     cheapLLMSelection,
@@ -379,6 +383,8 @@ export async function buildMessageContext(
     uncensoredFallbackOptions,
     // Status change notifications
     statusChangeNotifications: options.statusChangeNotifications,
+    // Status callback for streaming events
+    onStatusChange: options.onStatusChange,
   })
 
   // Log context building results for debugging

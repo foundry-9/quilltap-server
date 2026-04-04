@@ -233,7 +233,7 @@ export function RngDropdown({
                   type="button"
                   onClick={() => handleDiceRoll(dice.sides)}
                   disabled={isLoading}
-                  className="flex-1 px-2 py-1.5 text-left text-sm hover:bg-muted transition-colors disabled:opacity-50 rounded"
+                  className="flex-1 px-2 py-1.5 text-left text-sm hover:qt-bg-muted transition-colors disabled:opacity-50 rounded"
                   role="menuitem"
                 >
                   Roll {diceRolls[dice.sides] || 1}{dice.label}
@@ -243,7 +243,7 @@ export function RngDropdown({
                     type="button"
                     onClick={() => adjustDiceCount(dice.sides, 1)}
                     disabled={isLoading || (diceRolls[dice.sides] || 1) >= 100}
-                    className="px-1.5 py-0.5 text-xs hover:bg-muted transition-colors disabled:opacity-30 rounded-t border border-b-0"
+                    className="px-1.5 py-0.5 text-xs hover:qt-bg-muted transition-colors disabled:opacity-30 rounded-t border border-b-0"
                     title="Increase dice count"
                     aria-label={`Increase ${dice.label} count`}
                   >
@@ -255,7 +255,7 @@ export function RngDropdown({
                     type="button"
                     onClick={() => adjustDiceCount(dice.sides, -1)}
                     disabled={isLoading || (diceRolls[dice.sides] || 1) <= 1}
-                    className="px-1.5 py-0.5 text-xs hover:bg-muted transition-colors disabled:opacity-30 rounded-b border"
+                    className="px-1.5 py-0.5 text-xs hover:qt-bg-muted transition-colors disabled:opacity-30 rounded-b border"
                     title="Decrease dice count"
                     aria-label={`Decrease ${dice.label} count`}
                   >
@@ -274,7 +274,7 @@ export function RngDropdown({
                 type="button"
                 onClick={() => handleOtherOption(option)}
                 disabled={isLoading}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors disabled:opacity-50"
+                className="w-full px-3 py-2 text-left text-sm hover:qt-bg-muted transition-colors disabled:opacity-50"
                 role="menuitem"
               >
                 {option.label}
@@ -289,7 +289,7 @@ export function RngDropdown({
               type="button"
               onClick={() => setIsCustomOpen(!isCustomOpen)}
               disabled={isLoading}
-              className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors disabled:opacity-50 flex items-center justify-between"
+              className="w-full px-3 py-2 text-left text-sm hover:qt-bg-muted transition-colors disabled:opacity-50 flex items-center justify-between"
               role="menuitem"
             >
               <span>Custom Roll</span>
@@ -340,7 +340,7 @@ export function RngDropdown({
 
             {/* Error message */}
             {error && (
-              <div className="px-3 py-2 text-xs text-destructive border-t">
+              <div className="px-3 py-2 text-xs qt-text-destructive border-t">
                 {error}
               </div>
             )}

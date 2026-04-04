@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, validationError, serverError, successResponse } from '@/lib/api/responses';
+import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -30,75 +30,62 @@ export async function handleToggleAgentMode(
   chatId: string,
   { user, repos }: AuthenticatedContext
 ): Promise<NextResponse> {
-  try {
-    const body = await req.json();
-    const validatedData = toggleAgentModeSchema.parse(body);
+  const body = await req.json();
+  const validatedData = toggleAgentModeSchema.parse(body);
 
-    // Fetch the chat to verify it exists and user has access
-    const chat = await repos.chats.findById(chatId);
-    if (!chat) {
-      return notFound('Chat');
-    }
-
-    if (chat.userId !== user.id) {
-      logger.warn('[Chats v1] Unauthorized agent mode toggle attempt', { chatId, userId: user.id });
-      return forbidden();
-    }
-
-    // Update the chat with new agent mode setting
-    const enabled = validatedData.enabled;
-    const updatedChat = await repos.chats.update(chatId, {
-      agentModeEnabled: enabled,
-    });
-
-    if (!updatedChat) {
-      return serverError('Failed to update chat');
-    }
-
-    // Resolve the cascade to return the effective state
-    let primaryCharacter = null;
-    const characterParticipant = updatedChat.participants.find(
-      (p) => p.type === 'CHARACTER' && p.characterId
-    );
-    if (characterParticipant?.characterId) {
-      try {
-        primaryCharacter = await repos.characters.findById(characterParticipant.characterId);
-      } catch {
-        // Character might have been deleted
-      }
-    }
-
-    let project = null;
-    if (updatedChat.projectId) {
-      try {
-        project = await repos.projects.findById(updatedChat.projectId);
-      } catch {
-        // Project might have been deleted
-      }
-    }
-
-    const chatSettings = await repos.chatSettings.findByUserId(user.id);
-    const resolved = resolveAgentModeSetting(updatedChat, project, primaryCharacter, chatSettings);
-
-    logger.info('[Chats v1] Agent mode toggled', {
-      chatId,
-      agentModeEnabled: enabled,
-      resolvedAgentModeEnabled: resolved.enabled,
-      agentModeSource: resolved.enabledSource,
-      chatTitle: updatedChat.title,
-    });
-
-    return successResponse({
-      agentModeEnabled: updatedChat.agentModeEnabled,
-      resolvedAgentModeEnabled: resolved.enabled,
-      agentModeSource: resolved.enabledSource,
-      message: enabled === null ? 'Agent mode set to inherit' : enabled ? 'Agent mode enabled' : 'Agent mode disabled',
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return validationError(error);
-    }
-    logger.error('[Chats v1] Error toggling agent mode', { chatId }, error instanceof Error ? error : undefined);
-    return serverError('Failed to toggle agent mode');
+  // Fetch the chat to verify it exists and user has access
+  const chat = await repos.chats.findById(chatId);
+  if (!chat) {
+    return notFound('Chat');
   }
+
+  // Update the chat with new agent mode setting
+  const enabled = validatedData.enabled;
+  const updatedChat = await repos.chats.update(chatId, {
+    agentModeEnabled: enabled,
+  });
+
+  if (!updatedChat) {
+    return serverError('Failed to update chat');
+  }
+
+  // Resolve the cascade to return the effective state
+  let primaryCharacter = null;
+  const characterParticipant = updatedChat.participants.find(
+    (p) => p.type === 'CHARACTER' && p.characterId
+  );
+  if (characterParticipant?.characterId) {
+    try {
+      primaryCharacter = await repos.characters.findById(characterParticipant.characterId);
+    } catch {
+      // Character might have been deleted
+    }
+  }
+
+  let project = null;
+  if (updatedChat.projectId) {
+    try {
+      project = await repos.projects.findById(updatedChat.projectId);
+    } catch {
+      // Project might have been deleted
+    }
+  }
+
+  const chatSettings = await repos.chatSettings.findByUserId(user.id);
+  const resolved = resolveAgentModeSetting(updatedChat, project, primaryCharacter, chatSettings);
+
+  logger.info('[Chats v1] Agent mode toggled', {
+    chatId,
+    agentModeEnabled: enabled,
+    resolvedAgentModeEnabled: resolved.enabled,
+    agentModeSource: resolved.enabledSource,
+    chatTitle: updatedChat.title,
+  });
+
+  return successResponse({
+    agentModeEnabled: updatedChat.agentModeEnabled,
+    resolvedAgentModeEnabled: resolved.enabled,
+    agentModeSource: resolved.enabledSource,
+    message: enabled === null ? 'Agent mode set to inherit' : enabled ? 'Agent mode enabled' : 'Agent mode disabled',
+  });
 }
