@@ -324,7 +324,7 @@ async function handleChangePassphrase(body: Record<string, unknown>): Promise<Ne
   }
 
   unlockLogger.info('Passphrase changed successfully');
-  return successResponse({});
+  return successResponse({ success: true });
 }
 
 /**
