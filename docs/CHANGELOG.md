@@ -2,6 +2,10 @@
 
 ## Recent Changes
 
+### 4.0.1
+
+- fix: passphrase change API returned empty object without `success` field, causing frontend to report failure even when the change succeeded
+
 ### 4.0.0
 
 - fix: Summon from Lore no longer loses character fields during validation repair — memory assembly set null values for optional UUID fields (`chatId`, `projectId`) causing schema validation failures; the repair process then sent the unrelated **characters** array to the LLM which corrupted description, personality, and system prompt; now omits optional null fields and repair targets only the sections with actual errors
