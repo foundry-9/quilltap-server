@@ -266,6 +266,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
             );
 
             const messageCount = messages.filter((msg) => msg.type === 'message' && msg.role !== 'SYSTEM' && msg.role !== 'TOOL').length;
+            const memoryCount = await repos.memories.countByChatId(chat.id);
 
             const recentMessages = messages
               .filter((msg) => msg.type === 'message')
@@ -308,6 +309,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
               isDangerousChat: chat.isDangerousChat === true,
               _count: {
                 messages: messageCount,
+                memories: memoryCount,
               },
             };
           })

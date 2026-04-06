@@ -57,6 +57,8 @@ export interface ChatCardData {
   id: string
   title: string | null
   messageCount: number
+  /** Number of memories associated with this chat */
+  memoryCount?: number
   participants: ChatCardParticipant[]
   tags?: ChatCardTag[]
   updatedAt: string
@@ -87,6 +89,8 @@ export interface ChatCardProps {
   onDelete?: (chatId: string) => void
   /** Callback for remove action (unlink from project) */
   onRemove?: (chatId: string) => void
+  /** Callback for memory re-extraction action */
+  onReextractMemories?: (chatId: string) => void
   /** Whether this card should be highlighted (e.g., newly imported) */
   highlighted?: boolean
   /** Ref to forward to the card element */
@@ -187,6 +191,7 @@ export function ChatCard({
   actionType = 'delete',
   onDelete,
   onRemove,
+  onReextractMemories,
   highlighted = false,
   cardRef,
   characterName,
@@ -261,9 +266,30 @@ export function ChatCard({
               <h3 className="qt-card-title truncate">
                 {displayTitle}
               </h3>
-              <span className="chat-card__badge inline-flex items-center rounded-full qt-bg-primary/10 px-3 py-1 qt-body-sm font-semibold flex-shrink-0">
+              <span className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-primary/10 px-2.5 py-0.5 qt-body-sm font-semibold flex-shrink-0" title="Messages">
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
                 {chat.messageCount}
               </span>
+              {chat.memoryCount !== undefined && (
+                <button
+                  type="button"
+                  className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-primary/10 px-2.5 py-0.5 qt-body-sm font-semibold flex-shrink-0 hover:qt-bg-primary/20 transition-colors cursor-pointer"
+                  title="Memories — click to delete and re-extract"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onReextractMemories?.(chat.id)
+                  }}
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                  </svg>
+                  {chat.memoryCount}
+                </button>
+              )}
               {chat.isDangerousChat && (
                 <span className="qt-text-destructive text-sm flex-shrink-0" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>
               )}

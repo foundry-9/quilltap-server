@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ChatCard, type ChatCardData } from '@/components/chat/ChatCard'
 import { showConfirmation } from '@/lib/alert'
-import { showErrorToast } from '@/lib/toast'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 
 interface Message {
   id: string
@@ -46,6 +47,7 @@ interface Chat {
   isDangerousChat?: boolean
   _count?: {
     messages: number
+    memories?: number
   }
 }
 
@@ -76,6 +78,7 @@ function transformChatToCardData(chat: Chat): ChatCardData {
     id: chat.id,
     title: chat.title,
     messageCount: chat._count?.messages ?? chat.messages.length,
+    memoryCount: chat._count?.memories ?? 0,
     // No participants for character view - avatars not shown
     participants: [],
     tags: chat.tags,
@@ -198,6 +201,38 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
     }
   }
 
+  const handleReextractMemories = async (chatId: string) => {
+    const confirmed = await showConfirmation(
+      'This will delete all existing memories from this chat and re-extract them from the conversation. Are you sure?'
+    )
+    if (!confirmed) return
+
+    try {
+      // Delete existing memories for this chat
+      await fetch(`/api/v1/memories?chatId=${chatId}`, { method: 'DELETE' })
+
+      // Queue new memory extraction
+      const res = await fetch(`/api/v1/chats/${chatId}?action=queue-memories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          characterId,
+          characterName,
+        }),
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        showSuccessToast(`Queued ${data.jobCount} memory extraction jobs`)
+        notifyQueueChange()
+      } else {
+        showErrorToast(data.error || 'Failed to queue memory extraction')
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to re-extract memories')
+    }
+  }
+
   if (loading && chats.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -298,6 +333,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
               useRelativeDates={true}
               actionType="delete"
               onDelete={deleteChat}
+              onReextractMemories={handleReextractMemories}
               characterName={characterName}
             />
           ))}
