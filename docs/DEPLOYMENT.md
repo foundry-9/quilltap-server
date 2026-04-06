@@ -433,5 +433,5 @@ Before going live, verify:
 
 - **Documentation**: [README.md](../README.md)
 - **Backup Guide**: [BACKUP-RESTORE.md](BACKUP-RESTORE.md)
-- **GitHub Issues**: https://github.com/foundry-9/quilltap/issues
+- **GitHub Issues**: https://github.com/foundry-9/quilltap-server/issues
 - **Email Support**: charles.sebold@foundry-9.com

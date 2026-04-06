@@ -19,7 +19,7 @@ const { extractTarGz } = require('./tar-extract');
 
 const MAX_RETRIES = 3;
 const PROGRESS_THROTTLE_MS = 250;
-const GITHUB_REPO = 'foundry-9/quilltap';
+const GITHUB_REPO = 'foundry-9/quilltap-server';
 
 /**
  * Get the platform-specific cache directory for standalone files.

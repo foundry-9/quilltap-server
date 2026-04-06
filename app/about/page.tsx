@@ -22,7 +22,7 @@ export default function AboutPage() {
       <div className="qt-card p-6 mb-6">
         <div className="flex flex-wrap items-center gap-3">
           <a
-            href="https://github.com/foundry-9/quilltap/blob/main/LICENSE"
+            href="https://github.com/foundry-9/quilltap-server/blob/main/LICENSE"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -32,7 +32,7 @@ export default function AboutPage() {
             />
           </a>
           <a
-            href="https://github.com/foundry-9/quilltap"
+            href="https://github.com/foundry-9/quilltap-server"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -216,7 +216,7 @@ export default function AboutPage() {
             Quilltap Website
           </a>
           <a
-            href="https://github.com/foundry-9/quilltap/releases"
+            href="https://github.com/foundry-9/quilltap-server/releases"
             target="_blank"
             rel="noopener noreferrer"
             className="qt-button qt-button-secondary"
@@ -227,7 +227,7 @@ export default function AboutPage() {
             Download Latest Release
           </a>
           <a
-            href="https://github.com/foundry-9/quilltap"
+            href="https://github.com/foundry-9/quilltap-server"
             target="_blank"
             rel="noopener noreferrer"
             className="qt-button qt-button-secondary"
@@ -247,7 +247,7 @@ export default function AboutPage() {
             GitHub Repository
           </a>
           <a
-            href="https://github.com/foundry-9/quilltap/issues"
+            href="https://github.com/foundry-9/quilltap-server/issues"
             target="_blank"
             rel="noopener noreferrer"
             className="qt-button qt-button-secondary"

@@ -273,5 +273,5 @@ Check the browser console for plugin loading messages:
 
 ## Support
 
-- [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
+- [GitHub Issues](https://github.com/foundry-9/quilltap-server/issues)
 - [Plugin Manifest Schema](../public/schemas/plugin-manifest.schema.json)

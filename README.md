@@ -7,7 +7,7 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 No subscriptions. No data harvested. No forgetting everything between sessions. No landlords.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap/releases/latest)
+[![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
 [![This Version](https://img.shields.io/badge/version-4.1.0--dev.1-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
@@ -78,10 +78,10 @@ The [foundry9/quilltap](https://hub.docker.com/r/foundry9/quilltap) image is ava
 
 ```bash
 # Linux / macOS
-curl -fsSL https://raw.githubusercontent.com/foundry-9/quilltap/refs/heads/main/scripts/start-quilltap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/foundry-9/quilltap-server/refs/heads/main/scripts/start-quilltap.sh | bash
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/foundry-9/quilltap/refs/heads/main/scripts/start-quilltap.ps1 | iex
+irm https://raw.githubusercontent.com/foundry-9/quilltap-server/refs/heads/main/scripts/start-quilltap.ps1 | iex
 ```
 
 The scripts auto-detect your platform, set the correct data directory, and find local services like Ollama — forwarding their ports into the container automatically.
@@ -125,8 +125,8 @@ quilltap
 For developers, tinkerers, and those who read `man` pages recreationally:
 
 ```bash
-git clone https://github.com/foundry-9/quilltap.git
-cd quilltap
+git clone https://github.com/foundry-9/quilltap-server.git
+cd quilltap-server
 npm install
 npm run dev        # Development mode with hot reload
 # or
@@ -269,8 +269,8 @@ The entire provider system is plugin-based — every bundled provider (Anthropic
 ### Getting started with development
 
 ```bash
-git clone https://github.com/foundry-9/quilltap.git
-cd quilltap
+git clone https://github.com/foundry-9/quilltap-server.git
+cd quilltap-server
 npm install
 npm run dev
 ```
@@ -297,7 +297,7 @@ See the [Development Guide](docs/developer/DEVELOPMENT.md) for local setup, test
 
 **Desktop app issues:** See the [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository for desktop-specific troubleshooting.
 
-**General:** The footer shows your data directory path and backend mode — useful for debugging. If none of the above resolves your predicament: [GitHub Issues](https://github.com/foundry-9/quilltap/issues).
+**General:** The footer shows your data directory path and backend mode — useful for debugging. If none of the above resolves your predicament: [GitHub Issues](https://github.com/foundry-9/quilltap-server/issues).
 
 ---
 
@@ -331,7 +331,7 @@ Copyright © 2025, 2026 Foundry-9 LLC
 
 ## Support
 
-- **Issues:** [GitHub Issues](https://github.com/foundry-9/quilltap/issues)
+- **Issues:** [GitHub Issues](https://github.com/foundry-9/quilltap-server/issues)
 - **Discord:** [Join us](https://discord.com/channels/1476289075152556205/1476290238187049184)
 - **Website:** [quilltap.ai](https://quilltap.ai)
 - **Author:** Charles Sebold ([charles.sebold@foundry-9.com](mailto:charles.sebold@foundry-9.com))
