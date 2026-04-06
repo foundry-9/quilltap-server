@@ -4426,5 +4426,5 @@ The API follows semantic versioning. Breaking changes are avoided where possible
 
 ## Support
 
-- Report issues: https://github.com/foundry-9/quilltap/issues
-- Documentation: https://github.com/foundry-9/quilltap/tree/main/docs
+- Report issues: https://github.com/foundry-9/quilltap-server/issues
+- Documentation: https://github.com/foundry-9/quilltap-server/tree/main/docs

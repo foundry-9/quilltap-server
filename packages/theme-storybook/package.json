@@ -65,12 +65,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/foundry-9/quilltap.git",
+    "url": "https://github.com/foundry-9/quilltap-server.git",
     "directory": "packages/theme-storybook"
   },
-  "homepage": "https://github.com/foundry-9/quilltap/tree/main/packages/theme-storybook#readme",
+  "homepage": "https://github.com/foundry-9/quilltap-server/tree/main/packages/theme-storybook#readme",
   "bugs": {
-    "url": "https://github.com/foundry-9/quilltap/issues"
+    "url": "https://github.com/foundry-9/quilltap-server/issues"
   },
   "engines": {
     "node": ">=18.0.0"

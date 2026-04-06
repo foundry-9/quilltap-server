@@ -10,7 +10,7 @@ Use the scaffolding tool to create a new theme plugin in seconds:
 npm init quilltap-theme my-theme
 ```
 
-This creates a complete, ready-to-customize theme plugin. See [create-quilltap-theme](https://github.com/foundry-9/quilltap/tree/main/packages/create-quilltap-theme) for more options.
+This creates a complete, ready-to-customize theme plugin. See [create-quilltap-theme](https://github.com/foundry-9/quilltap-server/tree/main/packages/create-quilltap-theme) for more options.
 
 If you prefer to set up manually or want to understand all the pieces, continue reading below.
 
@@ -1255,9 +1255,9 @@ npm run build
 
 ## Resources
 
-- [Quilltap Plugin Manifest Reference](https://github.com/foundry-9/quilltap/blob/main/docs/PLUGIN_MANIFEST.md)
-- [Theme Utility Classes](https://github.com/foundry-9/quilltap/blob/main/features/complete/theme-utility-classes.md)
-- [@quilltap/plugin-types Package](https://github.com/foundry-9/quilltap/tree/main/packages/plugin-types)
-- [@quilltap/theme-storybook Package](https://github.com/foundry-9/quilltap/tree/main/packages/theme-storybook)
+- [Quilltap Plugin Manifest Reference](https://github.com/foundry-9/quilltap-server/blob/main/docs/PLUGIN_MANIFEST.md)
+- [Theme Utility Classes](https://github.com/foundry-9/quilltap-server/blob/main/features/complete/theme-utility-classes.md)
+- [@quilltap/plugin-types Package](https://github.com/foundry-9/quilltap-server/tree/main/packages/plugin-types)
+- [@quilltap/theme-storybook Package](https://github.com/foundry-9/quilltap-server/tree/main/packages/theme-storybook)
 - [HSL Color Picker](https://hslpicker.com/)
 - [Contrast Checker](https://webaim.org/resources/contrastchecker/)

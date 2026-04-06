@@ -187,7 +187,7 @@ Every Quilltap plugin needs a `quilltap-manifest.json` file:
 
 - [Plugin Development Guide](https://docs.quilltap.io/plugins/development)
 - [API Reference](https://docs.quilltap.io/plugins/api)
-- [Example Plugins](https://github.com/foundry-9/quilltap/tree/main/plugins/dist)
+- [Example Plugins](https://github.com/foundry-9/quilltap-server/tree/main/plugins/dist)
 
 ## License
 

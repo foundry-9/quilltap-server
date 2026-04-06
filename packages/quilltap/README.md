@@ -65,7 +65,7 @@ quilltap --update
 
 ## How It Works
 
-The `quilltap` npm package is a lightweight CLI launcher (~10 KB). On first run, it downloads the pre-built application from [GitHub Releases](https://github.com/foundry-9/quilltap/releases) and caches it in a platform-specific directory. Native modules (`better-sqlite3`, `sharp`) are compiled for your platform when you install the npm package.
+The `quilltap` npm package is a lightweight CLI launcher (~10 KB). On first run, it downloads the pre-built application from [GitHub Releases](https://github.com/foundry-9/quilltap-server/releases) and caches it in a platform-specific directory. Native modules (`better-sqlite3`, `sharp`) are compiled for your platform when you install the npm package.
 
 ### Cache Locations
 
@@ -112,14 +112,14 @@ quilltap themes registry add <url>      # Add a registry source
 
 ## Other Ways to Run Quilltap
 
-- **Electron desktop app** (macOS, Windows) - [Download](https://github.com/foundry-9/quilltap/releases)
+- **Electron desktop app** (macOS, Windows) - [Download](https://github.com/foundry-9/quilltap-server/releases)
 - **Docker** - `docker run -d -p 3000:3000 -v /path/to/data:/app/quilltap foundry9/quilltap`
 
 ## Links
 
 - **Website:** [quilltap.ai](https://quilltap.ai)
-- **GitHub:** [github.com/foundry-9/quilltap](https://github.com/foundry-9/quilltap)
-- **Issues:** [github.com/foundry-9/quilltap/issues](https://github.com/foundry-9/quilltap/issues)
+- **GitHub:** [github.com/foundry-9/quilltap-server](https://github.com/foundry-9/quilltap-server)
+- **Issues:** [github.com/foundry-9/quilltap-server/issues](https://github.com/foundry-9/quilltap-server/issues)
 
 ## License
 

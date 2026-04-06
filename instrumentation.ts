@@ -372,6 +372,22 @@ export async function register() {
       await migrationRunner.cleanup();
 
       // ================================================================
+      // PHASE 1.1: Auto-repair TEXT embeddings
+      // ================================================================
+      // Hot-reloads can cause embeddings to be written as JSON text instead
+      // of Float32 BLOBs. This converts any TEXT embeddings back to BLOBs.
+      try {
+        const { repairTextEmbeddings } = await import('./lib/startup/repair-text-embeddings');
+        await repairTextEmbeddings();
+      } catch (repairError) {
+        // Non-fatal — don't block startup
+        logger.warn('TEXT embedding repair failed, continuing startup', {
+          context: 'instrumentation.register',
+          error: repairError instanceof Error ? repairError.message : String(repairError),
+        });
+      }
+
+      // ================================================================
       // PHASE 1.25: Seed Initial Data (first startup only)
       // ================================================================
       // Seeds default character(s) when database is empty

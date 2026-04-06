@@ -54,17 +54,19 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
 
   if (result.success) {
     if (result.memoryCreated) {
-      logger.info('[MemoryExtraction] Memory created', {
+      logger.info('[MemoryExtraction] Memories created', {
         jobId: job.id,
-        memoryId: result.memoryId,
+        memoryIds: result.memoryIds,
+        count: result.memoryIds.length,
         chatId: payload.chatId,
         characterId: payload.characterId,
         relatedMemoryIds: result.relatedMemoryIds,
       });
     } else if (result.memoryReinforced) {
-      logger.info('[MemoryExtraction] Memory reinforced', {
+      logger.info('[MemoryExtraction] Memories reinforced', {
         jobId: job.id,
-        reinforcedMemoryId: result.reinforcedMemoryId,
+        reinforcedMemoryIds: result.reinforcedMemoryIds,
+        count: result.reinforcedMemoryIds.length,
         chatId: payload.chatId,
         characterId: payload.characterId,
       });

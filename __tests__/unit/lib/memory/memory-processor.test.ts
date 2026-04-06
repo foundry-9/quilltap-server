@@ -111,6 +111,8 @@ describe('Memory Processor Types', () => {
         success: true,
         memoryCreated: true,
         memoryReinforced: false,
+        memoryIds: ['mem-123'],
+        reinforcedMemoryIds: [],
         memoryId: 'mem-123',
         usage: {
           promptTokens: 100,
@@ -122,6 +124,7 @@ describe('Memory Processor Types', () => {
       expect(result.success).toBe(true)
       expect(result.memoryCreated).toBe(true)
       expect(result.memoryReinforced).toBe(false)
+      expect(result.memoryIds).toEqual(['mem-123'])
       expect(result.memoryId).toBe('mem-123')
       expect(result.usage?.totalTokens).toBe(150)
     })
@@ -131,6 +134,8 @@ describe('Memory Processor Types', () => {
         success: true,
         memoryCreated: false,
         memoryReinforced: false,
+        memoryIds: [],
+        reinforcedMemoryIds: [],
         usage: {
           promptTokens: 50,
           completionTokens: 10,
@@ -141,6 +146,7 @@ describe('Memory Processor Types', () => {
       expect(result.success).toBe(true)
       expect(result.memoryCreated).toBe(false)
       expect(result.memoryReinforced).toBe(false)
+      expect(result.memoryIds).toEqual([])
       expect(result.memoryId).toBeUndefined()
     })
 
@@ -149,6 +155,8 @@ describe('Memory Processor Types', () => {
         success: false,
         memoryCreated: false,
         memoryReinforced: false,
+        memoryIds: [],
+        reinforcedMemoryIds: [],
         error: 'API rate limit exceeded',
       }
 
@@ -163,6 +171,8 @@ describe('Memory Processor Types', () => {
         success: true,
         memoryCreated: false,
         memoryReinforced: true,
+        memoryIds: [],
+        reinforcedMemoryIds: ['mem-existing-456'],
         reinforcedMemoryId: 'mem-existing-456',
         relatedMemoryIds: ['mem-related-1', 'mem-related-2'],
         usage: {
@@ -175,9 +185,34 @@ describe('Memory Processor Types', () => {
       expect(result.success).toBe(true)
       expect(result.memoryCreated).toBe(false)
       expect(result.memoryReinforced).toBe(true)
+      expect(result.reinforcedMemoryIds).toEqual(['mem-existing-456'])
       expect(result.reinforcedMemoryId).toBe('mem-existing-456')
       expect(result.relatedMemoryIds).toEqual(['mem-related-1', 'mem-related-2'])
       expect(result.usage?.totalTokens).toBe(110)
+    })
+
+    it('should represent multiple memories created from one extraction', () => {
+      const result: MemoryProcessingResult = {
+        success: true,
+        memoryCreated: true,
+        memoryReinforced: true,
+        memoryIds: ['mem-1', 'mem-2', 'mem-3'],
+        reinforcedMemoryIds: ['mem-existing-1'],
+        memoryId: 'mem-1',
+        reinforcedMemoryId: 'mem-existing-1',
+        relatedMemoryIds: ['mem-related-1'],
+        usage: {
+          promptTokens: 200,
+          completionTokens: 100,
+          totalTokens: 300,
+        },
+      }
+
+      expect(result.memoryIds).toHaveLength(3)
+      expect(result.reinforcedMemoryIds).toHaveLength(1)
+      // Backward compat: memoryId is first element
+      expect(result.memoryId).toBe(result.memoryIds[0])
+      expect(result.reinforcedMemoryId).toBe(result.reinforcedMemoryIds[0])
     })
   })
 })
@@ -291,6 +326,8 @@ describe('Memory Inter-Character Tracking Types (v2.7-dev)', () => {
         success: true,
         memoryCreated: true,
         memoryReinforced: false,
+        memoryIds: ['mem-inter-char'],
+        reinforcedMemoryIds: [],
         memoryId: 'mem-inter-char',
         // The memory itself would have:
         // - characterId: 'char-luna' (who holds this memory)
@@ -304,7 +341,7 @@ describe('Memory Inter-Character Tracking Types (v2.7-dev)', () => {
 
       expect(memoryResult.success).toBe(true)
       expect(memoryResult.memoryCreated).toBe(true)
-      expect(memoryResult.memoryId).toBe('mem-inter-char')
+      expect(memoryResult.memoryIds).toEqual(['mem-inter-char'])
     })
 
     it('should handle memory processing for user-controlled character interactions', () => {
