@@ -120,13 +120,14 @@ describe('Cheap LLM Tasks Service', () => {
       )
 
       expect(result.success).toBe(true)
-      expect(result.result).toEqual({
+      // Result is now an array of significant candidates
+      expect(result.result).toEqual([{
         significant: true,
         content: 'User mentioned they have a cat named Whiskers',
         summary: 'User has a cat named Whiskers',
         keywords: ['cat', 'pet', 'Whiskers'],
         importance: 0.7,
-      })
+      }])
       expect(result.usage).toEqual({ promptTokens: 100, completionTokens: 50, totalTokens: 150 })
     })
 
@@ -147,7 +148,8 @@ describe('Cheap LLM Tasks Service', () => {
       )
 
       expect(result.success).toBe(true)
-      expect(result.result?.significant).toBe(false)
+      // Non-significant candidates are filtered out, returning empty array
+      expect(result.result).toEqual([])
     })
 
     it('should handle JSON wrapped in markdown code blocks', async () => {
@@ -167,8 +169,9 @@ describe('Cheap LLM Tasks Service', () => {
       )
 
       expect(result.success).toBe(true)
-      expect(result.result?.significant).toBe(true)
-      expect(result.result?.content).toBe('Test')
+      // Backward compat: single object wrapped in array, filtered to significant only
+      expect(result.result).toHaveLength(1)
+      expect(result.result?.[0]?.content).toBe('Test')
     })
 
     it('should handle malformed JSON gracefully', async () => {
@@ -188,7 +191,8 @@ describe('Cheap LLM Tasks Service', () => {
       )
 
       expect(result.success).toBe(true)
-      expect(result.result?.significant).toBe(false)
+      // Malformed JSON returns empty array
+      expect(result.result).toEqual([])
     })
 
     it('should work with local Ollama provider', async () => {

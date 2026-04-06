@@ -54,7 +54,7 @@ beforeEach(() => {
   };
 
   mockGetRepositories.mockReturnValue(repositories as any);
-  mockProcessMessageForMemory.mockResolvedValue({ success: true, memoryCreated: false, memoryReinforced: false });
+  mockProcessMessageForMemory.mockResolvedValue({ success: true, memoryCreated: false, memoryReinforced: false, memoryIds: [], reinforcedMemoryIds: [] });
 });
 
 describe('handleMemoryExtraction', () => {
@@ -78,6 +78,8 @@ describe('handleMemoryExtraction', () => {
       success: true,
       memoryCreated: true,
       memoryReinforced: false,
+      memoryIds: ['mem-9'],
+      reinforcedMemoryIds: [],
       memoryId: 'mem-9',
       debugLogs: ['log entry'],
     });
@@ -119,6 +121,8 @@ describe('handleMemoryExtraction', () => {
       success: true,
       memoryCreated: false,
       memoryReinforced: false,
+      memoryIds: [],
+      reinforcedMemoryIds: [],
       debugLogs: ['log entry'],
     });
 

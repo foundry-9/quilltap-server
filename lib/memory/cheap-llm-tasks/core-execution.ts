@@ -98,7 +98,8 @@ async function sendToProvider(
   userId: string,
   taskType?: string,
   chatId?: string,
-  messageId?: string
+  messageId?: string,
+  maxTokens?: number
 ): Promise<ProviderResponse> {
   const apiKey = await getApiKeyForSelection(selection, userId)
   if (apiKey === null) {
@@ -111,6 +112,7 @@ async function sendToProvider(
   )
 
   const profileKey = `${selection.provider}:${selection.modelName}`
+  const effectiveMaxTokens = maxTokens ?? 1000
 
   const logCall = (response: LLMResponse, temperature?: number) => {
     logLLMCall({
@@ -123,7 +125,7 @@ async function sendToProvider(
       request: {
         messages: messages.map(m => ({ role: m.role, content: m.content })),
         ...(temperature !== undefined ? { temperature } : {}),
-        maxTokens: 1000,
+        maxTokens: effectiveMaxTokens,
       },
       response: {
         content: response.content,
@@ -144,7 +146,7 @@ async function sendToProvider(
   // Check if we already know this profile doesn't support custom temperature
   if (profilesWithoutCustomTemp.has(profileKey)) {
     const response: LLMResponse = await provider.sendMessage(
-      { messages, model: selection.modelName, maxTokens: 1000, strictMaxTokens },
+      { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens },
       apiKey
     )
     logCall(response)
@@ -154,7 +156,7 @@ async function sendToProvider(
   // Try with lower temperature for more consistent outputs
   try {
     const response: LLMResponse = await provider.sendMessage(
-      { messages, model: selection.modelName, temperature: 0.3, maxTokens: 1000, strictMaxTokens },
+      { messages, model: selection.modelName, temperature: 0.3, maxTokens: effectiveMaxTokens, strictMaxTokens },
       apiKey
     )
     logCall(response, 0.3)
@@ -166,7 +168,7 @@ async function sendToProvider(
       profilesWithoutCustomTemp.add(profileKey)
 
       const response: LLMResponse = await provider.sendMessage(
-        { messages, model: selection.modelName, maxTokens: 1000, strictMaxTokens },
+        { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens },
         apiKey
       )
       logCall(response)
@@ -230,10 +232,11 @@ export async function executeCheapLLMTask<T>(
   taskType?: string,
   chatId?: string,
   messageId?: string,
-  uncensoredFallback?: UncensoredFallbackOptions
+  uncensoredFallback?: UncensoredFallbackOptions,
+  maxTokens?: number
 ): Promise<CheapLLMTaskResult<T>> {
   try {
-    let response = await sendToProvider(selection, messages, userId, taskType, chatId, messageId)
+    let response = await sendToProvider(selection, messages, userId, taskType, chatId, messageId, maxTokens)
 
     // Check if we should retry with an uncensored provider
     const uncensoredSelection = shouldAttemptUncensoredFallback(response.content, selection, uncensoredFallback)
@@ -247,7 +250,7 @@ export async function executeCheapLLMTask<T>(
         uncensoredModel: uncensoredSelection.modelName,
       })
 
-      const retryResponse = await sendToProvider(uncensoredSelection, messages, userId, taskType, chatId, messageId)
+      const retryResponse = await sendToProvider(uncensoredSelection, messages, userId, taskType, chatId, messageId, maxTokens)
 
       if (retryResponse.content.trim() === '') {
         throw new Error(`Empty response from both safe provider (${selection.provider}/${selection.modelName}) and uncensored provider (${uncensoredSelection.provider}/${uncensoredSelection.modelName})`)

@@ -15,11 +15,13 @@ import type {
 } from './types'
 
 /**
- * Memory extraction prompt template for user memories
+ * Memory extraction prompt for user memories.
+ * Returns a prompt instructing the LLM to extract an array of discrete facts.
  */
-const USER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about the USER (the human participant) from a conversation.
+function getUserMemoryExtractionPrompt(maxMemories: number): string {
+  return `You are extracting memories about the USER (the human participant) from a conversation.
 
-TASK: Identify if there is something significant about the USER that should be remembered.
+TASK: Identify ALL significant discrete facts about the USER that should be remembered. Break the exchange down into individual facts — each one gets its own memory object.
 
 WHAT TO LOOK FOR (about the USER only):
 - Personal information the USER shares (preferences, history, relationships, traits)
@@ -38,26 +40,32 @@ EXAMPLE OF CORRECT ATTRIBUTION:
 - "Friday (the character) says: I see you have 39 files" → This is the CHARACTER's observation, NOT a user fact ✗
 - "The user says: That's interesting" → USER showed interest, but no significant personal fact
 
-If the USER reveals something significant about themselves, respond with JSON only:
-{
-  "significant": true,
-  "content": "What we learned about the user FROM THEIR OWN WORDS",
-  "summary": "Brief 1-sentence summary",
-  "keywords": ["keyword1", "keyword2"],
-  "importance": 0.0-1.0
+Respond with a JSON array of memory objects. Each distinct fact should be its own object.
+Return at most ${maxMemories} memories. If nothing is significant, return an empty array [].
+
+[
+  {
+    "significant": true,
+    "content": "What we learned about the user FROM THEIR OWN WORDS",
+    "summary": "Brief 1-sentence summary",
+    "keywords": ["keyword1", "keyword2"],
+    "importance": 0.0-1.0
+  }
+]
+
+If nothing significant about the USER (from their own words), respond with: []
+
+JSON array only - no other text.`
 }
 
-If nothing significant about the USER (from their own words), respond:
-{ "significant": false }
-
-JSON only - no other text.`
-
 /**
- * Memory extraction prompt template for character memories
+ * Memory extraction prompt for character memories.
+ * Returns a prompt instructing the LLM to extract an array of discrete facts.
  */
-const CHARACTER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories about a specific CHARACTER from a conversation.
+function getCharacterMemoryExtractionPrompt(maxMemories: number): string {
+  return `You are extracting memories about a specific CHARACTER from a conversation.
 
-TASK: Identify if the specified CHARACTER reveals something significant about themselves.
+TASK: Identify ALL significant discrete facts that the specified CHARACTER reveals about themselves. Break the exchange down into individual facts — each one gets its own memory object.
 
 WHAT TO LOOK FOR (about the CHARACTER only):
 - Personal information the CHARACTER shares (preferences, history, relationships, traits, background)
@@ -77,25 +85,31 @@ EXAMPLE OF CORRECT ATTRIBUTION:
 - "The user says: You're very organized" → This is the USER's opinion, NOT a character self-revelation ✗
 - "Friday (the character) says: *adjusts glasses thoughtfully*" → CHARACTER behavior: uses glasses, thoughtful mannerisms ✓
 
-If the CHARACTER reveals something significant about themselves, respond with JSON only:
-{
-  "significant": true,
-  "content": "What we learned about the character FROM THEIR OWN WORDS/ACTIONS",
-  "summary": "Brief 1-sentence summary",
-  "keywords": ["keyword1", "keyword2"],
-  "importance": 0.0-1.0
+Respond with a JSON array of memory objects. Each distinct fact should be its own object.
+Return at most ${maxMemories} memories. If nothing is significant, return an empty array [].
+
+[
+  {
+    "significant": true,
+    "content": "What we learned about the character FROM THEIR OWN WORDS/ACTIONS",
+    "summary": "Brief 1-sentence summary",
+    "keywords": ["keyword1", "keyword2"],
+    "importance": 0.0-1.0
+  }
+]
+
+If nothing significant about the CHARACTER (from their own words/actions), respond with: []
+
+JSON array only - no other text.`
 }
 
-If nothing significant about the CHARACTER (from their own words/actions), respond:
-{ "significant": false }
-
-JSON only - no other text.`
-
 /**
- * Memory extraction prompt template for inter-character memories
+ * Memory extraction prompt for inter-character memories.
+ * Returns a prompt instructing the LLM to extract an array of discrete facts.
  */
-const INTER_CHARACTER_MEMORY_EXTRACTION_PROMPT = `You are extracting memories that one CHARACTER has learned about ANOTHER CHARACTER from their conversation.
-Analyze the conversation exchange below and identify if there is something significant that CHARACTER A learns about CHARACTER B that should be remembered for future conversations.
+function getInterCharacterMemoryExtractionPrompt(maxMemories: number): string {
+  return `You are extracting memories that one CHARACTER has learned about ANOTHER CHARACTER from their conversation.
+Analyze the conversation exchange below and identify ALL significant discrete facts that CHARACTER A learns about CHARACTER B that should be remembered for future conversations. Break the exchange down into individual facts — each one gets its own memory object.
 
 Criteria for significance:
 - Personal information CHARACTER B shares or reveals (preferences, history, relationships, traits, background)
@@ -105,21 +119,25 @@ Criteria for significance:
 - Observations CHARACTER A would naturally make about CHARACTER B
 
 IMPORTANT: Extract what CHARACTER A would remember about CHARACTER B based on this exchange.
-The memory should capture something CHARACTER A learns about CHARACTER B from this interaction.
+Each memory should capture a single discrete fact CHARACTER A learns about CHARACTER B from this interaction.
 
-If significant, respond with JSON only (no markdown, no code blocks):
-{
-  "significant": true,
-  "content": "Full memory content describing what Character A learns about Character B",
-  "summary": "Brief 1-sentence summary",
-  "keywords": ["keyword1", "keyword2"],
-  "importance": 0.0-1.0
+Respond with a JSON array of memory objects. Each distinct fact should be its own object.
+Return at most ${maxMemories} memories. If nothing is significant, return an empty array [].
+
+[
+  {
+    "significant": true,
+    "content": "Full memory content describing what Character A learns about Character B",
+    "summary": "Brief 1-sentence summary",
+    "keywords": ["keyword1", "keyword2"],
+    "importance": 0.0-1.0
+  }
+]
+
+If nothing significant, respond with: []
+
+JSON array only - no other text.`
 }
-
-If not significant, respond with JSON only:
-{ "significant": false }
-
-Do not include any text outside the JSON object.`
 
 /**
  * Prompt for extracting memory search keywords from recent conversation
@@ -160,7 +178,48 @@ Keep the summary under 500 words. Use natural language, not bullet points. Write
 If there are no memories, respond with exactly: NO_MEMORIES`
 
 /**
- * Extracts a potential memory from a message exchange
+ * Shared parser for memory extraction responses.
+ * Handles both array and single-object responses from LLMs for backward compatibility.
+ * Filters to only significant candidates.
+ */
+function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
+  try {
+    // Clean the response - remove markdown code blocks if present
+    let cleanContent = content.trim()
+    if (cleanContent.startsWith('```json')) {
+      cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+    } else if (cleanContent.startsWith('```')) {
+      cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+    }
+
+    const parsed = JSON.parse(cleanContent)
+
+    // Backward compatibility: if LLM returns a single object, wrap in array
+    const items = Array.isArray(parsed) ? parsed : [parsed]
+
+    return items
+      .map(item => ({
+        significant: item.significant === true,
+        // Ensure content is always a string (some LLMs return objects)
+        content: typeof item.content === 'string'
+          ? item.content
+          : (item.content ? JSON.stringify(item.content) : undefined),
+        summary: typeof item.summary === 'string'
+          ? item.summary
+          : (item.summary ? JSON.stringify(item.summary) : undefined),
+        keywords: item.keywords || [],
+        importance: typeof item.importance === 'number' ? item.importance : 0.5,
+      }))
+      .filter(m => m.significant)
+  } catch {
+    // If JSON parsing fails, return empty array
+    return []
+  }
+}
+
+/**
+ * Extracts potential memories about the USER from a message exchange.
+ * Returns an array of significant memory candidates (may be empty).
  *
  * @param userMessage - The user's message
  * @param assistantMessage - The assistant's response
@@ -169,7 +228,8 @@ If there are no memories, respond with exactly: NO_MEMORIES`
  * @param personaName - The user's persona name (optional)
  * @param selection - The cheap LLM provider selection
  * @param userId - The user ID for API key retrieval
- * @returns A memory candidate or null if nothing significant
+ * @param resolvedMaxTokens - Resolved max output tokens for the cheap LLM profile
+ * @returns An array of significant memory candidates
  */
 export async function extractMemoryFromMessage(
   userMessage: string,
@@ -181,8 +241,10 @@ export async function extractMemoryFromMessage(
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
   chatId?: string,
-  characterPronouns?: Pronouns | null
-): Promise<CheapLLMTaskResult<MemoryCandidate>> {
+  characterPronouns?: Pronouns | null,
+  resolvedMaxTokens?: number
+): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
+  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 4000)
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = personaName ? `${personaName} (the user)` : 'The user'
   const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
@@ -190,7 +252,7 @@ export async function extractMemoryFromMessage(
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: USER_MEMORY_EXTRACTION_PROMPT,
+      content: getUserMemoryExtractionPrompt(maxMemories),
     },
     {
       role: 'user',
@@ -210,45 +272,18 @@ ${characterLabel} says:
     selection,
     messages,
     userId,
-    (content: string): MemoryCandidate => {
-      try {
-        // Clean the response - remove markdown code blocks if present
-        let cleanContent = content.trim()
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        }
-
-        const parsed = JSON.parse(cleanContent)
-        // Ensure content is always a string (some LLMs return objects)
-        const memoryContent = typeof parsed.content === 'string'
-          ? parsed.content
-          : (parsed.content ? JSON.stringify(parsed.content) : undefined)
-        const memorySummary = typeof parsed.summary === 'string'
-          ? parsed.summary
-          : (parsed.summary ? JSON.stringify(parsed.summary) : undefined)
-        return {
-          significant: parsed.significant === true,
-          content: memoryContent,
-          summary: memorySummary,
-          keywords: parsed.keywords || [],
-          importance: typeof parsed.importance === 'number' ? parsed.importance : 0.5,
-        }
-      } catch {
-        // If JSON parsing fails, assume not significant
-        return { significant: false }
-      }
-    },
+    parseMemoryCandidateArray,
     'memory-extraction-user',
     chatId,
     undefined,
-    uncensoredFallback
+    uncensoredFallback,
+    resolvedMaxTokens
   )
 }
 
 /**
- * Extracts a potential memory about the CHARACTER from a message exchange
+ * Extracts potential memories about the CHARACTER from a message exchange.
+ * Returns an array of significant memory candidates (may be empty).
  *
  * @param userMessage - The user's message
  * @param assistantMessage - The character's response
@@ -257,7 +292,8 @@ ${characterLabel} says:
  * @param personaName - The user's persona name (optional)
  * @param selection - The cheap LLM provider selection
  * @param userId - The user ID for API key retrieval
- * @returns A memory candidate or null if nothing significant
+ * @param resolvedMaxTokens - Resolved max output tokens for the cheap LLM profile
+ * @returns An array of significant memory candidates
  */
 export async function extractCharacterMemoryFromMessage(
   userMessage: string,
@@ -269,8 +305,10 @@ export async function extractCharacterMemoryFromMessage(
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
   chatId?: string,
-  characterPronouns?: Pronouns | null
-): Promise<CheapLLMTaskResult<MemoryCandidate>> {
+  characterPronouns?: Pronouns | null,
+  resolvedMaxTokens?: number
+): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
+  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 4000)
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = personaName ? `${personaName} (the user)` : 'The user'
   const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
@@ -278,7 +316,7 @@ export async function extractCharacterMemoryFromMessage(
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: CHARACTER_MEMORY_EXTRACTION_PROMPT,
+      content: getCharacterMemoryExtractionPrompt(maxMemories),
     },
     {
       role: 'user',
@@ -300,45 +338,18 @@ ${characterLabel} says:
     selection,
     messages,
     userId,
-    (content: string): MemoryCandidate => {
-      try {
-        // Clean the response - remove markdown code blocks if present
-        let cleanContent = content.trim()
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        }
-
-        const parsed = JSON.parse(cleanContent)
-        // Ensure content is always a string (some LLMs return objects)
-        const memoryContent = typeof parsed.content === 'string'
-          ? parsed.content
-          : (parsed.content ? JSON.stringify(parsed.content) : undefined)
-        const memorySummary = typeof parsed.summary === 'string'
-          ? parsed.summary
-          : (parsed.summary ? JSON.stringify(parsed.summary) : undefined)
-        return {
-          significant: parsed.significant === true,
-          content: memoryContent,
-          summary: memorySummary,
-          keywords: parsed.keywords || [],
-          importance: typeof parsed.importance === 'number' ? parsed.importance : 0.5,
-        }
-      } catch {
-        // If JSON parsing fails, assume not significant
-        return { significant: false }
-      }
-    },
+    parseMemoryCandidateArray,
     'memory-extraction-character',
     chatId,
     undefined,
-    uncensoredFallback
+    uncensoredFallback,
+    resolvedMaxTokens
   )
 }
 
 /**
- * Extracts a potential memory that one character has about another character
+ * Extracts potential memories that one character has about another character.
+ * Returns an array of significant memory candidates (may be empty).
  *
  * @param characterAName - The character who will remember (the observer)
  * @param characterAMessage - What character A said
@@ -346,7 +357,8 @@ ${characterLabel} says:
  * @param characterBMessage - What character B said
  * @param selection - The cheap LLM provider selection
  * @param userId - The user ID for API key retrieval
- * @returns A memory candidate or null if nothing significant
+ * @param resolvedMaxTokens - Resolved max output tokens for the cheap LLM profile
+ * @returns An array of significant memory candidates
  */
 export async function extractInterCharacterMemoryFromMessage(
   characterAName: string,
@@ -358,15 +370,17 @@ export async function extractInterCharacterMemoryFromMessage(
   uncensoredFallback?: UncensoredFallbackOptions,
   chatId?: string,
   characterAPronouns?: Pronouns | null,
-  characterBPronouns?: Pronouns | null
-): Promise<CheapLLMTaskResult<MemoryCandidate>> {
+  characterBPronouns?: Pronouns | null,
+  resolvedMaxTokens?: number
+): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
+  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 4000)
   const characterALabel = formatNameWithPronouns(characterAName, characterAPronouns)
   const characterBLabel = formatNameWithPronouns(characterBName, characterBPronouns)
 
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: INTER_CHARACTER_MEMORY_EXTRACTION_PROMPT,
+      content: getInterCharacterMemoryExtractionPrompt(maxMemories),
     },
     {
       role: 'user',
@@ -384,40 +398,12 @@ ${characterBLabel}: ${characterBMessage}`,
     selection,
     messages,
     userId,
-    (content: string): MemoryCandidate => {
-      try {
-        // Clean the response - remove markdown code blocks if present
-        let cleanContent = content.trim()
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        }
-
-        const parsed = JSON.parse(cleanContent)
-        // Ensure content is always a string (some LLMs return objects)
-        const memoryContent = typeof parsed.content === 'string'
-          ? parsed.content
-          : (parsed.content ? JSON.stringify(parsed.content) : undefined)
-        const memorySummary = typeof parsed.summary === 'string'
-          ? parsed.summary
-          : (parsed.summary ? JSON.stringify(parsed.summary) : undefined)
-        return {
-          significant: parsed.significant === true,
-          content: memoryContent,
-          summary: memorySummary,
-          keywords: parsed.keywords || [],
-          importance: typeof parsed.importance === 'number' ? parsed.importance : 0.5,
-        }
-      } catch {
-        // If JSON parsing fails, assume not significant
-        return { significant: false }
-      }
-    },
+    parseMemoryCandidateArray,
     'memory-extraction-inter-character',
     chatId,
     undefined,
-    uncensoredFallback
+    uncensoredFallback,
+    resolvedMaxTokens
   )
 }
 

@@ -9,6 +9,7 @@ import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { extractInterCharacterMemoryFromMessage } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { resolveMaxTokens } from '@/lib/llm/model-context-data';
 import { logger } from '@/lib/logger';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import type { InterCharacterMemoryPayload } from '../queue-service';
@@ -71,7 +72,10 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
     isDangerousChat: chat?.isDangerousChat === true,
   } : undefined;
 
-  // Extract inter-character memory
+  // Resolve max tokens for the cheap LLM profile
+  const resolvedMaxTokens = resolveMaxTokens(connectionProfile);
+
+  // Extract inter-character memories
   const result = await extractInterCharacterMemoryFromMessage(
     payload.observerCharacterName,
     payload.observerMessage,
@@ -80,7 +84,10 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
     cheapLLMSelection,
     job.userId,
     uncensoredFallback,
-    payload.chatId
+    payload.chatId,
+    undefined, // observerPronouns
+    undefined, // subjectPronouns
+    resolvedMaxTokens
   );
 
   if (!result.success) {
@@ -93,35 +100,37 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
   }
 
   // If nothing significant was found, we're done
-  if (!result.result || !result.result.significant) {
+  const candidates = result.result || [];
+  if (candidates.length === 0) {
     return;
   }
 
-  // Create the memory
+  // Create memories for each significant candidate
   // Inter-character memories are stored on the observer character about the subject character
-  const importance = result.result.importance || 0.5
-  const memory = await repos.memories.create({
-    characterId: payload.observerCharacterId,
-    content: result.result.content || '',
-    summary: result.result.summary || '',
-    keywords: result.result.keywords || [],
-    tags: [],
-    importance,
-    source: 'AUTO',
-    chatId: payload.chatId,
-    sourceMessageId: payload.sourceMessageId,
-    // Store reference to the subject character this memory is about
-    aboutCharacterId: payload.subjectCharacterId,
-    reinforcementCount: 1,
-    relatedMemoryIds: [],
-    reinforcedImportance: importance,
-  });
+  for (const candidate of candidates) {
+    const importance = candidate.importance || 0.5;
+    const memory = await repos.memories.create({
+      characterId: payload.observerCharacterId,
+      content: candidate.content || '',
+      summary: candidate.summary || '',
+      keywords: candidate.keywords || [],
+      tags: [],
+      importance,
+      source: 'AUTO',
+      chatId: payload.chatId,
+      sourceMessageId: payload.sourceMessageId,
+      aboutCharacterId: payload.subjectCharacterId,
+      reinforcementCount: 1,
+      relatedMemoryIds: [],
+      reinforcedImportance: importance,
+    });
 
-  logger.info('[InterCharacterMemory] Memory created', {
-    jobId: job.id,
-    memoryId: memory.id,
-    chatId: payload.chatId,
-    observerCharacterId: payload.observerCharacterId,
-    subjectCharacterId: payload.subjectCharacterId,
-  });
+    logger.info('[InterCharacterMemory] Memory created', {
+      jobId: job.id,
+      memoryId: memory.id,
+      chatId: payload.chatId,
+      observerCharacterId: payload.observerCharacterId,
+      subjectCharacterId: payload.subjectCharacterId,
+    });
+  }
 }
