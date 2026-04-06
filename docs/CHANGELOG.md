@@ -2,66 +2,11 @@
 
 ## Recent Changes
 
-### 4.0.1
+### 4.1.0
 
-- fix: passphrase change API returned empty object without `success` field, causing frontend to report failure even when the change succeeded
-
-### 4.0.0
-
-- fix: Summon from Lore no longer loses character fields during validation repair — memory assembly set null values for optional UUID fields (`chatId`, `projectId`) causing schema validation failures; the repair process then sent the unrelated **characters** array to the LLM which corrupted description, personality, and system prompt; now omits optional null fields and repair targets only the sections with actual errors
-- fix: remove erroneous file write permission check from user-initiated file uploads — the Prospero AI permission gate was blocking document uploads in the AI Wizard and Summon from Lore source file uploads; user-initiated uploads are already authenticated and don't need the AI write permission
-- fix: AI Wizard on character edit page no longer loses generated description, personality, and system prompt — `fetchCharacter()` was called after saving scenarios which reset form state to DB values before the user could save; now updates scenarios in form state directly
-- docs: update 4.0.0 release notes with post-draft changes — shell version gating, granular status events, reasoning model handling, character defaults fix, provider recommendations, semantic theme classes, chat orchestrator decomposition, centralized API error handling
-- feat: version guard now writes `minServerVersion` into `.dbkey` files on every startup, allowing the Electron shell to reject incompatible server versions before opening the database
-- fix: add granular status events throughout chat message orchestrator — replaces stale "Calculating context budget..." indicator with accurate phase-by-phase progress (initializing, resolving, loading tools, gathering, generating recap, preparing, validating, sending); add per-tool status updates inside `processToolCalls` and streaming status in the tool loop; prevents status messages from lingering through long operations
-- fix: cheap LLM tasks on reasoning models (OpenAI gpt-5-nano, Google Gemini 3.x) now use `strictMaxTokens` flag via `LLMParams` to prevent providers from inflating output token limits — OpenAI uses `reasoning: { effort: 'low' }`, Google reduces thinking budget to 1024; fixes 32-second memory recap calls and empty responses caused by reasoning tokens consuming the entire output budget
-- fix: replace native `confirm()`/`alert()` with `showConfirmation()`/`showErrorToast()` on character conversations tab delete action — matches the modal pattern used elsewhere in the app
-- docs: add provider recommendations help page with guidance on which AI providers to use for chat, background tasks, image generation, embeddings, and moderation; recommends OpenRouter as a first-class chat and cheap LLM option
-- fix: new chat page (`/salon/new`) now applies character defaults for Play As, Scenario, and Timestamp Injection Mode — characters list API was missing `defaultPartnerId`, `defaultTimestampConfig`, `defaultScenarioId`, `defaultSystemPromptId`, and `defaultImageProfileId` fields
-- fix: update qtap-plugin-openrouter for @openrouter/sdk v0.11.2 breaking changes — fix removed `fromChatMessages` re-export (use deep import from `lib/chat-compat`), rename `chatGenerationParams` to `chatRequest` for `chat.send()`, update type imports (`ChatMessages`, `OpenResponsesResult`); bump plugin to 1.0.28
-- chore: update npm dependencies across root, packages, and plugins — @jest/globals 30.3.0, @openrouter/sdk 0.11.2, @anthropic-ai/sdk 0.82.0, tailwindcss 4.2.2, esbuild 0.28.0; remove deprecated @types/sharp and @types/tar stub packages; fix OpenRouter SDK xTitle→appTitle rename; bump qtap-plugin-openrouter to 1.0.27
-- chore: update npm dependencies across root, packages, and plugins — next 16.2.2, esbuild 0.27.7, @playwright/test 1.59.1, dotenv 17.4.0, yauzl 3.3.0, @google/genai 1.48.0, @modelcontextprotocol/sdk 1.29.0, storybook 10.3.4; fix format-time tests for @sinonjs/fake-timers 15.3.0 instanceof Date regression
-- refactor: restructure chat-message extracted services — introduce `StreamingState` mutable context bag (eliminates 9-field destructure/reassign), decompose `FinalizeMessageResponseOptions` into `StreamingState`/`CompressionContext`/`TriggerContext` sub-objects, fix `as any` cast in danger-orchestrator with proper `CheapLLMSelection` type, consolidate scene-state tracking into single orchestrator call site, trim barrel over-exports to public API only; add `.next` to tsconfig exclude
-- refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting empty-response retry and uncensored failover handling into `provider-failover.service.ts`, with focused coverage for same-provider retries, Auto-Route fallback, and final empty-response messaging
-- refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting Concierge classification and uncensored provider-routing preflight into `danger-orchestrator.service.ts`, with focused coverage for mode handling, reroutes, and fail-open behavior
-- refactor: continue decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting assistant response persistence, completion events, token tracking, RNG follow-up, and memory/summary triggers into `message-finalizer.service.ts`, with targeted coverage for the new finalization flow
-- refactor: begin decomposing `lib/services/chat-message/orchestrator.service.ts` by extracting multi-character turn chaining into `turn-orchestrator.service.ts`, adding targeted chain execution tests while preserving the existing message streaming API
-- refactor: split `lib/memory/cheap-llm-tasks` into domain-focused modules for shared execution, memory work, chat summarization/titles, image/scene handling, and compression while preserving the original import path as a compatibility entrypoint
-- refactor: move ZodError and unhandled error catching into API middleware; remove ~97 try-catch blocks from 60 route files (~1,084 lines of boilerplate eliminated)
-- style: convert 1,314 raw Tailwind visual classes to `qt-*` semantic theme classes across 234 files — backgrounds, text colors, border colors, and shadows now use theme-overridable CSS variables
-- refactor: remove vestigial `userId` ownership checks from 45 API route files (single-user app); flatten `app/(authenticated)/` route group into `app/` to eliminate shell-escaping issues with parenthesized directory names
-- docs: add 4.0.0 release notes
-- docs: update README with Desktop App–first installation, model classes, auto-configure, budget compression, Non-Quilltap Prompt generator; update API.md to v4.0-dev with 20 new route groups; remove stale S3/mount points from DEVELOPMENT.md
-- fix: add missing `scenarioText`, `modelClass`, `maxContext`, `maxTokens` fields to `.qtap` export schema; bump `@quilltap/theme-storybook` to 1.0.28 for chat message width variable update
-- chore: remove 8 development `logger.debug` calls from 4 files (chats route, characters repository, prompt-templates repository, auto-configure service)
-- refactor: remove dead code (`lib/image-gen/base.ts`, `@quilltap/theme-storybook` dependency), replace raw `NextResponse.json()` with response helpers in 9 API routes for conformance
-- test: add unit and regression tests for 4.0-dev features — model classes, system prompt registry, memory recap, external prompt generator, auto-configure service, scenario persistence, orphaned file cleanup safety, Character Optimizer JSON repair and frequency guards, greeting content filter detection, Concierge DETECT_ONLY empty response handling, and gatekeeper category mapping/caching (~189 new tests)
-- ci: release workflow puts Desktop App first in installation section and pins link to the quilltap-shell release that was current at build time
-- ci: release workflow now includes release notes from `docs/releases/{version}.md` in GitHub releases; production releases from the release branch require this file to exist
-- fix: `--qt-*` CSS variable defaults now apply to all themes via `[data-theme]` selector instead of `[data-theme="default"]` — fixes missing textarea padding, button styles, and other tokens on non-default themes after redundant declarations were stripped from bundled themes
-- refactor: strip redundant `--qt-*` CSS variables from all bundled themes — variables matching `_variables.css` defaults are removed so themes only declare overrides; reduces theme file sizes 6-34%; update `create-quilltap-theme` bundle template with complete variable reference (all ~250 `--qt-*` vars commented out with defaults)
-- style: widen chat message row default from 800px to 900px and increase row width from 90% to 95% for more readable message widths closer to modern chat UIs; fix code blocks inside list items not wrapping text by adding explicit wrap rules in `_chat.css`
-- feat: auto-configure connection profiles — new button on profile cards and in the edit/create modal that performs web searches for model specifications and recommended settings, sends results to the default LLM for structured analysis, and applies optimal maxContext, maxTokens, temperature, topP, modelClass, and isDangerousCompatible settings; falls back to cheap LLM for JSON cleanup if needed
-- fix: Concierge DETECT_ONLY mode now shows a moderation-aware message when the provider returns an empty response for flagged content, instead of a generic "empty response" error; suggests enabling Auto-Route mode
-- refactor: unify all LLM provider interfaces into four canonical shapes — TextProvider (text→text), ImageProvider (text→image), EmbeddingProvider (text→vector), ScoringProvider (text+candidates→scores); move canonical definitions to `@quilltap/plugin-types` providers/ directory; remove `generateImage()` from text provider interface; generalize moderation into ScoringProvider with documented reranking/classification support; update all plugins and lib/ to use new names with backward-compatible aliases
-- chore: reduce Commonplace Book memory recap limits from 50/20/10 to 20/10/5 (high/medium/low importance tiers)
-- chore: tag-for-release command now uses linear strategy exclusively — removed merge-back strategy and all strategy selection logic
-- chore: add `--linear` strategy option to tag-for-release command — tree-copy approach that keeps main linear by skipping merge-back from release; default behavior unchanged
-- fix: character optimizer "Refine from Memories" UI — frequency badges in behavioral tendencies now wrap instead of overflowing the dialog; textarea in edit mode is taller and resizable, filling available space
-- feat: budget-driven context compression — replace count-based compression trigger with token-budget-aware system; compute `max_available = maxContext - 2 * maxTokens` from connection profile, compress conversation history (Phase 1) when it exceeds 50% of budget and recalled memories (Phase 2) when they exceed 20%; add `maxTokens` field to connection profiles with migration; new `compressMemories()` cheap LLM task; status events for each compression phase shown above ChatComposer
-- feat: add model classes (Compact/Standard/Extended/Deep) as capability tier definitions for connection profiles, with optional `maxContext` override for context window size; new `GET /api/v1/model-classes` endpoint, migration adds `modelClass` and `maxContext` columns
-- chore: update remove-old-dev-tags command to also delete GitHub releases before tags, filter release list to prereleases/drafts only, and remove csebold/quilltap Docker registry references
-- fix: image "copy to clipboard" button in Electron now works via IPC bridge instead of unsupported `navigator.clipboard.write()` API; browser fallback unchanged
-- fix: scenario selection ignored when starting chats — selected scenario was not persisted on the chat, so the runtime system prompt builder always used the first scenario in the array; now stores resolved scenario text (`scenarioText`) on the chat at creation and uses it for all subsequent messages; also fixes UI useEffect that reset scenario selection when changing connection profiles or system prompts
-- fix: remove proxy rate limiter that caused 429 errors during app startup
-- feat: detect quilltap-shell via `QUILLTAP_SHELL` env var (version string) and `QUILLTAP_SHELL_CAPABILITIES` (comma-delimited capability flags); exposed in `/api/v1/system/data-dir` response and capabilities report. Env vars pass through in all modes (direct, Docker `-e`, Lima/WSL2 inherited env).
-- feat: footer now shows shell version and composite backend mode (Electron, Electron+Docker, Electron+VM) when running under quilltap-shell
-- ci: restore rootfs tarball builds (quilltap-linux-arm64.tar.gz, quilltap-linux-amd64.tar.gz) for Lima/WSL2 VM modes
-- ci: restore wsl2 Docker target in Dockerfile.ci and build-rootfs.ts script
-- refactor: remove Electron build infrastructure, Lima/WSL VM management from this repository
-- refactor: Electron desktop app moved to separate repository (quilltap-shell)
-- ci: remove csebold/quilltap Docker registry; only foundry9/quilltap is published
-- ci: simplify release workflow to produce standalone tarball, Docker images, rootfs tarballs, and npm package
-- ci: make Windows Electron build optional in release workflow
-- fix: standalone tarball now includes sharp JS wrapper and @img/colour (only native binaries are stripped)
-- chore: update npm dependencies across root, packages, and plugins
+- feat: Character conversations tab shows memory count badge per chat; clicking it deletes old memories and re-extracts with the new multi-fact system
+- feat: Commonplace Book memory extraction now returns multiple discrete facts per message pair instead of a single memory, with dynamic limits based on the cheap LLM profile's max output tokens
+- fix: Add startup auto-repair for TEXT embeddings in vector_entries and memories tables that accumulate during dev hot-reloads; converts them to Float32 BLOBs on every server start
+- fix: Add warning log in documentToRow when embedding arrays are accidentally stored as JSON text instead of BLOB
+- docs: Add 4.1.0 release notes
+- chore: Update all GitHub repository references from `foundry-9/quilltap` to `foundry-9/quilltap-server` across docs, package.json files, release notes, plugin manifests, and source code

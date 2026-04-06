@@ -127,8 +127,8 @@ npx quilltap themes update                  # Check for updates
 
 For the latest online documentation:
 
-- [Theme Plugin Development Guide](https://github.com/foundry-9/quilltap/blob/main/docs/developer/THEME_PLUGIN_DEVELOPMENT.md) (legacy plugin format)
-- [Plugin Manifest Reference](https://github.com/foundry-9/quilltap/blob/main/docs/developer/PLUGIN_MANIFEST.md)
+- [Theme Plugin Development Guide](https://github.com/foundry-9/quilltap-server/blob/main/docs/developer/THEME_PLUGIN_DEVELOPMENT.md) (legacy plugin format)
+- [Plugin Manifest Reference](https://github.com/foundry-9/quilltap-server/blob/main/docs/developer/PLUGIN_MANIFEST.md)
 - [@quilltap/theme-storybook](https://www.npmjs.com/package/@quilltap/theme-storybook) (for plugin development with Storybook)
 
 ## License

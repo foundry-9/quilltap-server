@@ -337,6 +337,16 @@ export function documentToRow(
     } else if (blobColumns.has(key) && Buffer.isBuffer(value)) {
       row[key] = value;
     } else if (jsonColumns.includes(key) || (shouldStoreAsJson(value) && !blobColumns.has(key))) {
+      // Detect embedding arrays being accidentally stored as JSON text
+      if (key === 'embedding' && Array.isArray(value) && value.length > 100 && typeof value[0] === 'number') {
+        logger.warn('Embedding array being stored as JSON text instead of BLOB — blob columns not registered for this table', {
+          context: 'documentToRow',
+          column: key,
+          dimensions: value.length,
+          blobColumnsRegistered: blobColumns.size > 0,
+          blobColumnsList: Array.from(blobColumns),
+        })
+      }
       row[key] = toJson(value);
     } else {
       row[key] = prepareForStorage(value);
