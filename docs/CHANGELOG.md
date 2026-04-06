@@ -4,6 +4,8 @@
 
 ### 4.2-dev
 
+- docs: Add system flowcharts (Mermaid) documenting prompt assembly, memory extraction pipeline, scene tracking, story background generation, and Concierge content routing
+
 ### 4.1.0
 
 - feat: Character conversations tab shows memory count badge per chat; clicking it deletes old memories and re-extracts with the new multi-fact system
