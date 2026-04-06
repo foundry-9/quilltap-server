@@ -2,7 +2,9 @@
 
 ## Recent Changes
 
-### 4.1-dev
+### 4.2-dev
+
+### 4.1.0
 
 - feat: Character conversations tab shows memory count badge per chat; clicking it deletes old memories and re-extracts with the new multi-fact system
 - feat: Commonplace Book memory extraction now returns multiple discrete facts per message pair instead of a single memory, with dynamic limits based on the cheap LLM profile's max output tokens
