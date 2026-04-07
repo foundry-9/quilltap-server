@@ -6,6 +6,7 @@
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
+ * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,7 +19,7 @@ import { renderMarkdownToHtml, canPreRenderMessage } from '@/lib/services/markdo
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
-import { handleGetAvatars, handleGetState } from '../actions';
+import { handleGetAvatars, handleGetState, handleGetOutfit } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 
@@ -99,6 +100,11 @@ export async function handleGet(
   // Handle get-state action
   if (action === 'get-state') {
     return handleGetState(chatId, ctx);
+  }
+
+  // Handle outfit action - return equipped outfit state
+  if (action === 'outfit') {
+    return handleGetOutfit(chatId, ctx);
   }
 
   // Handle get-background action - returns story background URL for the chat

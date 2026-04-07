@@ -79,6 +79,9 @@ export interface TextBlockEnabledToolOptions extends EnabledToolOptions {
   helpSettings: boolean
   helpNavigate: boolean
   createNote: boolean
+  wardrobeList: boolean
+  wardrobeUpdateOutfit: boolean
+  wardrobeCreateItem: boolean
 }
 
 /**
@@ -90,6 +93,8 @@ export function determineTextBlockToolOptions(
   isMultiCharacter: boolean,
   hasProject: boolean,
   helpToolsEnabled?: boolean,
+  canDressThemselves?: boolean,
+  canCreateOutfits?: boolean,
 ): TextBlockEnabledToolOptions {
   return {
     imageGeneration: !!imageProfileId,
@@ -104,6 +109,9 @@ export function determineTextBlockToolOptions(
     helpSettings: !!helpToolsEnabled,
     helpNavigate: !!helpToolsEnabled,
     createNote: true,
+    wardrobeList: canDressThemselves !== false,
+    wardrobeUpdateOutfit: canDressThemselves !== false,
+    wardrobeCreateItem: canCreateOutfits !== false,
   }
 }
 
@@ -126,6 +134,9 @@ export function buildTextBlockSystemInstructions(
     helpSettings: enabledOptions.helpSettings,
     helpNavigate: enabledOptions.helpNavigate,
     createNote: enabledOptions.createNote,
+    wardrobeList: enabledOptions.wardrobeList,
+    wardrobeUpdateOutfit: enabledOptions.wardrobeUpdateOutfit,
+    wardrobeCreateItem: enabledOptions.wardrobeCreateItem,
   }
   return buildTextBlockInstructions(options)
 }

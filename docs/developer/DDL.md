@@ -175,12 +175,47 @@ CREATE TABLE "characters" (
   "defaultHelpToolsEnabled" INTEGER DEFAULT NULL,
   "defaultTimestampConfig" TEXT DEFAULT NULL,
   "defaultScenarioId" TEXT DEFAULT NULL,
-  "defaultSystemPromptId" TEXT DEFAULT NULL
+  "defaultSystemPromptId" TEXT DEFAULT NULL,
+  "canDressThemselves" INTEGER DEFAULT NULL,
+  "canCreateOutfits" INTEGER DEFAULT NULL
 );
 
 CREATE INDEX "idx_characters_createdAt" ON "characters" ("createdAt" DESC);
 CREATE INDEX "idx_characters_userId" ON "characters" ("userId");
 ```
+
+### wardrobe_items
+
+```sql
+CREATE TABLE "wardrobe_items" (
+  "id" TEXT PRIMARY KEY,
+  "characterId" TEXT,
+  "title" TEXT NOT NULL,
+  "description" TEXT,
+  "types" TEXT NOT NULL DEFAULT '[]',
+  "appropriateness" TEXT,
+  "isDefault" INTEGER DEFAULT 0,
+  "migratedFromClothingRecordId" TEXT,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  FOREIGN KEY ("characterId") REFERENCES "characters"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_wardrobe_items_character" ON "wardrobe_items"("characterId");
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| characterId | TEXT (UUID, nullable) | Owner character. NULL = archetype (shared across characters) |
+| title | TEXT | Display name of the item |
+| description | TEXT | Detailed description for prompts and image generation |
+| types | TEXT (JSON array) | Coverage slots: `["top"]`, `["bottom"]`, `["top","bottom"]` for dresses, etc. |
+| appropriateness | TEXT | Context tags: "casual", "formal", "intimate", etc. |
+| isDefault | INTEGER | 1 = part of character's default outfit |
+| migratedFromClothingRecordId | TEXT (UUID) | Tracks provenance from legacy clothingRecords migration |
+| createdAt | TEXT (ISO 8601) | Creation timestamp |
+| updatedAt | TEXT (ISO 8601) | Last update timestamp |
 
 ### chats
 
@@ -231,6 +266,7 @@ CREATE TABLE "chats" (
   "dangerClassifiedAtMessageCount" INTEGER DEFAULT NULL,
   "turnQueue" TEXT DEFAULT '[]',
   "sceneState" TEXT DEFAULT NULL,
+  "equippedOutfit" TEXT DEFAULT NULL,
   "chatType" TEXT DEFAULT 'salon',
   "helpPageUrl" TEXT DEFAULT NULL,
   "scenarioText" TEXT DEFAULT NULL

@@ -257,6 +257,8 @@ async function processHelpResponse(
       allParticipants.length > 1, // isMultiCharacter
       false, // hasProject
       true, // helpToolsEnabled
+      false, // canDressThemselves - not applicable for help chats
+      false, // canCreateOutfits - not applicable for help chats
     )
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
   } else if (tools.length > 0) {

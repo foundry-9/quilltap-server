@@ -1,0 +1,120 @@
+/**
+ * Character Wardrobe Item Detail API v1
+ *
+ * GET /api/v1/characters/[id]/wardrobe/[itemId] - Get a wardrobe item
+ * PUT /api/v1/characters/[id]/wardrobe/[itemId] - Update a wardrobe item
+ * DELETE /api/v1/characters/[id]/wardrobe/[itemId] - Delete a wardrobe item
+ */
+
+import { NextResponse } from 'next/server';
+import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/middleware';
+import { logger } from '@/lib/logger';
+import { z } from 'zod';
+import { notFound, serverError } from '@/lib/api/responses';
+import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
+
+const updateWardrobeItemSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  types: z.array(WardrobeItemTypeEnum).min(1).optional(),
+  appropriateness: z.string().nullable().optional(),
+  isDefault: z.boolean().optional(),
+});
+
+// GET /api/v1/characters/[id]/wardrobe/[itemId]
+export const GET = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+  async (req, { user, repos }, { id, itemId }) => {
+    try {
+      const character = await repos.characters.findById(id);
+
+      if (!checkOwnership(character, user.id)) {
+        return notFound('Character');
+      }
+
+      const item = await repos.wardrobe.findById(itemId);
+
+      if (!item || item.characterId !== id) {
+        return notFound('Wardrobe item');
+      }
+
+      logger.debug('[Wardrobe v1] Fetched wardrobe item', { characterId: id, itemId });
+
+      return NextResponse.json({ wardrobeItem: item });
+    } catch (error) {
+      logger.error('[Wardrobe v1] Error fetching wardrobe item', { characterId: id, itemId }, error instanceof Error ? error : undefined);
+      return serverError('Failed to fetch wardrobe item');
+    }
+  }
+);
+
+// PUT /api/v1/characters/[id]/wardrobe/[itemId]
+export const PUT = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+  async (req, { user, repos }, { id, itemId }) => {
+    const character = await repos.characters.findById(id);
+
+    if (!checkOwnership(character, user.id)) {
+      return notFound('Character');
+    }
+
+    const existing = await repos.wardrobe.findById(itemId);
+    if (!existing || existing.characterId !== id) {
+      return notFound('Wardrobe item');
+    }
+
+    const body = await req.json();
+    const validatedData = updateWardrobeItemSchema.parse(body);
+
+    logger.debug('[Wardrobe v1] Updating wardrobe item', {
+      characterId: id,
+      itemId,
+      fields: Object.keys(validatedData),
+    });
+
+    const item = await repos.wardrobe.update(itemId, validatedData);
+
+    if (!item) {
+      return notFound('Wardrobe item');
+    }
+
+    logger.info('[Wardrobe v1] Wardrobe item updated', {
+      characterId: id,
+      itemId,
+    });
+
+    return NextResponse.json({ wardrobeItem: item });
+  }
+);
+
+// DELETE /api/v1/characters/[id]/wardrobe/[itemId]
+export const DELETE = createAuthenticatedParamsHandler<{ id: string; itemId: string }>(
+  async (req, { user, repos }, { id, itemId }) => {
+    try {
+      const character = await repos.characters.findById(id);
+
+      if (!checkOwnership(character, user.id)) {
+        return notFound('Character');
+      }
+
+      const existing = await repos.wardrobe.findById(itemId);
+      if (!existing || existing.characterId !== id) {
+        return notFound('Wardrobe item');
+      }
+
+      const success = await repos.wardrobe.delete(itemId);
+
+      if (!success) {
+        return notFound('Wardrobe item');
+      }
+
+      logger.info('[Wardrobe v1] Wardrobe item deleted', {
+        characterId: id,
+        itemId,
+      });
+
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      logger.error('[Wardrobe v1] Error deleting wardrobe item', { characterId: id, itemId }, error instanceof Error ? error : undefined);
+      return serverError('Failed to delete wardrobe item');
+    }
+  }
+);

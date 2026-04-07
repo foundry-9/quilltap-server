@@ -611,6 +611,10 @@ async function processMessage(
   // Resolve help tools enabled from character (default: disabled)
   const helpToolsEnabled = character?.defaultHelpToolsEnabled === true
 
+  // Resolve wardrobe capability flags from character (default: enabled when null)
+  const canDressThemselves = character?.canDressThemselves !== false
+  const canCreateOutfits = character?.canCreateOutfits !== false
+
   // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
   // Always pass disabledTools and disabledToolGroups for filtering
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
@@ -624,7 +628,9 @@ async function processMessage(
     chat.disabledToolGroups ?? [],
     agentMode.enabled, // agentModeEnabled - enables submit_final_response tool
     isMultiCharacter, // isMultiCharacter - enables whisper tool
-    helpToolsEnabled // helpToolsEnabled - enables help_search and help_settings tools
+    helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
+    canDressThemselves, // canDressThemselves - enables list_wardrobe and update_outfit_item
+    canCreateOutfits // canCreateOutfits - enables create_wardrobe_item
   )
 
   const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools)
@@ -638,7 +644,9 @@ async function processMessage(
       streamingState.effectiveProfile.allowWebSearch,
       isMultiCharacter,
       !!chat.projectId,
-      helpToolsEnabled
+      helpToolsEnabled,
+      canDressThemselves,
+      canCreateOutfits
     )
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
     logTextBlockToolUsage(streamingState.effectiveProfile.provider, streamingState.effectiveProfile.modelName, textBlockOptions)

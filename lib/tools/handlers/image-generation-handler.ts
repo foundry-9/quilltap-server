@@ -701,15 +701,46 @@ export async function executeImageGenerationTool(
             context.callingParticipantId
           );
 
-          // Build appearance inputs from resolved placeholders
-          const appearanceInputs: AppearanceResolutionInput[] = resolvedPlaceholders
-            .filter(p => p.entityId && (p.descriptions?.length || p.clothingRecords?.length))
-            .map(p => ({
+          // Build appearance inputs from resolved placeholders, enriched with equipped wardrobe items
+          const repos = getRepositories();
+          const appearanceInputs: AppearanceResolutionInput[] = [];
+          for (const p of resolvedPlaceholders.filter(p => p.entityId && (p.descriptions?.length || p.clothingRecords?.length))) {
+            let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
+            if (context.chatId && p.entityId) {
+              try {
+                const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(context.chatId, p.entityId);
+                if (equippedSlots) {
+                  const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
+                  if (equippedItemIds.length > 0) {
+                    const items = await repos.wardrobe.findByIds(equippedItemIds);
+                    const itemsMap = new Map(items.map(item => [item.id, item]));
+                    equippedWardrobeItems = [];
+                    for (const [slot, itemId] of Object.entries(equippedSlots)) {
+                      if (itemId) {
+                        const item = itemsMap.get(itemId);
+                        if (item) {
+                          equippedWardrobeItems.push({ slot, title: item.title, description: item.description });
+                        }
+                      }
+                    }
+                  }
+                }
+              } catch (err) {
+                logger.warn('[Image Generation] Failed to load equipped wardrobe items for character', {
+                  characterId: p.entityId,
+                  chatId: context.chatId,
+                  error: getErrorMessage(err),
+                });
+              }
+            }
+            appearanceInputs.push({
               characterId: p.entityId!,
               characterName: p.name,
               physicalDescriptions: p.descriptions || [],
               clothingRecords: p.clothingRecords || [],
-            }));
+              equippedWardrobeItems,
+            });
+          }
 
           if (appearanceInputs.length > 0) {
             const resolutionResult = await resolveCharacterAppearances(

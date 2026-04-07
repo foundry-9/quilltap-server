@@ -139,6 +139,14 @@ import { addConnectionProfileModelClassFieldMigration } from './add-connection-p
 import { addConnectionProfileMaxTokensFieldMigration } from './add-connection-profile-max-tokens-field';
 // Fix memory timestamps to match source message timestamps
 import { fixMemoryTimestampsFromSourceMigration } from './fix-memory-timestamps-from-source';
+// Create wardrobe_items table for modular wardrobe system
+import { createWardrobeItemsTableMigration } from './create-wardrobe-items-table';
+// Add equippedOutfit field to chats for per-character outfit tracking
+import { addEquippedOutfitFieldMigration } from './add-equipped-outfit-field';
+// Add canDressThemselves and canCreateOutfits flags to characters
+import { addCharacterWardrobeFlagsMigration } from './add-character-wardrobe-flags';
+// Migrate existing clothing records to wardrobe_items table
+import { migrateClothingRecordsToWardrobeMigration } from './migrate-clothing-records-to-wardrobe';
 
 /**
  * All available migrations.
@@ -402,4 +410,12 @@ export {
   addConnectionProfileMaxTokensFieldMigration,
   // Fix memory timestamps to match source message timestamps
   fixMemoryTimestampsFromSourceMigration,
+  // Create wardrobe_items table for modular wardrobe system
+  createWardrobeItemsTableMigration,
+  // Add equippedOutfit field to chats for per-character outfit tracking
+  addEquippedOutfitFieldMigration,
+  // Add canDressThemselves and canCreateOutfits flags to characters
+  addCharacterWardrobeFlagsMigration,
+  // Migrate existing clothing records to wardrobe_items table
+  migrateClothingRecordsToWardrobeMigration,
 };

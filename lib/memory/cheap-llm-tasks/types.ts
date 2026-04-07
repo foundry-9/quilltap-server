@@ -201,4 +201,10 @@ export interface CharacterAppearanceInput {
     usageContext?: string | null
     description?: string | null
   }>
+  /** Equipped wardrobe items (from the wardrobe system). Takes precedence over clothingRecords for clothing descriptions. */
+  equippedWardrobeItems?: Array<{
+    slot: string        // 'top', 'bottom', 'footwear', 'accessories'
+    title: string
+    description?: string | null
+  }>
 }

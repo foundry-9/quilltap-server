@@ -280,6 +280,19 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Informational: names of assigned tags at export time"
+        },
+        "canDressThemselves": {
+          "type": ["boolean", "null"],
+          "description": "Whether this character can change their own outfit (null = enabled by default)"
+        },
+        "canCreateOutfits": {
+          "type": ["boolean", "null"],
+          "description": "Whether this character can create new wardrobe items mid-conversation (null = enabled by default)"
+        },
+        "wardrobeItems": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WardrobeItem" },
+          "description": "Wardrobe items belonging to this character, exported alongside the character"
         }
       }
     },
@@ -325,6 +338,10 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Informational: names of assigned tags at export time"
+        },
+        "equippedOutfit": {
+          "type": ["object", "null"],
+          "description": "Per-character equipped outfit state: { [characterId]: { top, bottom, footwear, accessories } }"
         }
       }
     },
@@ -549,6 +566,51 @@
         "bold": { "type": "boolean" },
         "italic": { "type": "boolean" },
         "strikethrough": { "type": "boolean" }
+      }
+    },
+
+    "WardrobeItem": {
+      "type": "object",
+      "description": "A wardrobe item (clothing, accessory, etc.) belonging to a character.",
+      "required": ["id", "title", "types", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "characterId": {
+          "oneOf": [
+            { "$ref": "#/$defs/UUID" },
+            { "type": "null" }
+          ],
+          "description": "Character this item belongs to. Null for archetype (shared) items."
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": ["string", "null"] },
+        "types": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": ["top", "bottom", "footwear", "accessories"]
+          },
+          "description": "Coverage slots this item covers"
+        },
+        "appropriateness": {
+          "type": ["string", "null"],
+          "description": "Context tags for when this item is appropriate (e.g., casual, formal, intimate)"
+        },
+        "isDefault": {
+          "type": "boolean",
+          "description": "Whether this item is part of the character's default outfit"
+        },
+        "migratedFromClothingRecordId": {
+          "oneOf": [
+            { "$ref": "#/$defs/UUID" },
+            { "type": "null" }
+          ],
+          "description": "Provenance tracking for items migrated from legacy clothingRecords"
+        },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
       }
     },
 

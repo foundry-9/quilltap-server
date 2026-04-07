@@ -22,6 +22,7 @@ import type {
   ChatParticipantBase,
   Project,
 } from '@/lib/schemas/types';
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type {
   QuilltapExportManifest,
   QuilltapExport,
@@ -1005,6 +1006,14 @@ async function importCharacters(
             name: `${charData.name} (imported)`,
           });
           idMaps.characters.set(character.id, newCharacter.id);
+
+          // Import wardrobe items for duplicated character
+          await importCharacterWardrobeItems(
+            (rawCharacter as ExportedCharacter).wardrobeItems,
+            newCharacter.id,
+            warnings
+          );
+
           imported++;
           continue;
         }
@@ -1013,6 +1022,14 @@ async function importCharacters(
       const { id: _, userId: __, createdAt, updatedAt, ...charData } = character;
       const newCharacter = await repos.characters.create(charData);
       idMaps.characters.set(character.id, newCharacter.id);
+
+      // Import wardrobe items for this character
+      await importCharacterWardrobeItems(
+        (rawCharacter as ExportedCharacter).wardrobeItems,
+        newCharacter.id,
+        warnings
+      );
+
       imported++;
     } catch (error) {
       warnings.push(
@@ -1028,6 +1045,61 @@ async function importCharacters(
   }
 
   return { imported, skipped };
+}
+
+/**
+ * Import wardrobe items for a character, assigning them to the new character ID.
+ * Skips archetype items (characterId = null) since those are shared and not per-character.
+ */
+async function importCharacterWardrobeItems(
+  wardrobeItems: WardrobeItem[] | undefined,
+  newCharacterId: string,
+  warnings: string[]
+): Promise<number> {
+  if (!wardrobeItems || wardrobeItems.length === 0) return 0;
+
+  const globalRepos = getRepositories();
+  let importedCount = 0;
+
+  for (const item of wardrobeItems) {
+    // Skip archetype items (characterId = null) — they are shared, not per-character
+    if (!item.characterId) {
+      moduleLogger.debug('Skipping archetype wardrobe item during import', {
+        wardrobeItemId: item.id,
+        title: item.title,
+      });
+      continue;
+    }
+
+    try {
+      const { id: _, characterId: __, createdAt, updatedAt, migratedFromClothingRecordId, ...itemData } = item;
+      await globalRepos.wardrobe.create({
+        ...itemData,
+        characterId: newCharacterId,
+        migratedFromClothingRecordId: null,
+      });
+      importedCount++;
+
+      moduleLogger.debug('Imported wardrobe item for character', {
+        originalId: item.id,
+        newCharacterId,
+        title: item.title,
+      });
+    } catch (error) {
+      warnings.push(
+        `Failed to import wardrobe item "${item.title}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to import wardrobe item', {
+        wardrobeItemId: item.id,
+        characterId: newCharacterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return importedCount;
 }
 
 async function importChats(

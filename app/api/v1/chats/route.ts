@@ -21,6 +21,13 @@ import { z } from 'zod';
 import type { ChatEvent, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
 import { TimestampConfigSchema } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
+import {
+  OutfitSelectionSchema,
+  EMPTY_EQUIPPED_SLOTS,
+  type EquippedSlots,
+  type OutfitSelection,
+  type WardrobeItem,
+} from '@/lib/schemas/wardrobe.types';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import {
   enrichParticipantSummary,
@@ -63,6 +70,7 @@ const createChatSchema = z.object({
   timestampConfig: TimestampConfigSchema.optional(),
   projectId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
+  outfitSelections: z.array(OutfitSelectionSchema).optional(), // Per-character outfit selections for chat start
 });
 
 // ============================================================================
@@ -190,6 +198,92 @@ async function buildAllParticipants(
   firstLLMCharacter.userCharacterId = firstUserCharacterId || undefined;
 
   return { participants: builtParticipants, tags: allTagIds, firstCharacter: firstLLMCharacter, firstImageProfileId };
+}
+
+// ============================================================================
+// Outfit Resolution Helpers
+// ============================================================================
+
+/**
+ * Resolve the default outfit for a character from their wardrobe items marked as default.
+ * Maps each default item's coverage types to the corresponding equipped slot.
+ * If multiple items cover the same slot, the first one found wins.
+ */
+async function resolveDefaultOutfit(characterId: string, repos: Repos): Promise<EquippedSlots> {
+  const defaultItems = await repos.wardrobe.findDefaultsForCharacter(characterId);
+
+  if (defaultItems.length === 0) {
+    logger.debug('[Chats v1] No default wardrobe items found for character', { characterId });
+    return { ...EMPTY_EQUIPPED_SLOTS };
+  }
+
+  const slots: EquippedSlots = { ...EMPTY_EQUIPPED_SLOTS };
+
+  for (const item of defaultItems) {
+    for (const slotType of item.types) {
+      if (slotType in slots && slots[slotType as keyof EquippedSlots] === null) {
+        slots[slotType as keyof EquippedSlots] = item.id;
+      }
+    }
+  }
+
+  logger.debug('[Chats v1] Resolved default outfit for character', {
+    characterId,
+    defaultItemCount: defaultItems.length,
+    slots,
+  });
+
+  return slots;
+}
+
+/**
+ * Apply outfit selections to a newly created chat.
+ * Processes each selection based on its mode:
+ * - 'default': Load default wardrobe items and map to slots
+ * - 'manual': Use the provided slot assignments directly
+ * - 'none': Set all slots to null (EMPTY_EQUIPPED_SLOTS)
+ * - 'llm_choose': Skip (will be handled asynchronously in Phase 2)
+ */
+async function applyOutfitSelections(
+  chatId: string,
+  selections: OutfitSelection[],
+  repos: Repos
+): Promise<void> {
+  for (const selection of selections) {
+    const { characterId, mode } = selection;
+
+    switch (mode) {
+      case 'default': {
+        const slots = await resolveDefaultOutfit(characterId, repos);
+        await repos.chats.setEquippedOutfit(chatId, characterId, slots);
+        logger.debug('[Chats v1] Applied default outfit for character', { chatId, characterId });
+        break;
+      }
+
+      case 'manual': {
+        const slots = selection.slots || EMPTY_EQUIPPED_SLOTS;
+        await repos.chats.setEquippedOutfit(chatId, characterId, slots);
+        logger.debug('[Chats v1] Applied manual outfit for character', { chatId, characterId, slots });
+        break;
+      }
+
+      case 'none': {
+        await repos.chats.setEquippedOutfit(chatId, characterId, { ...EMPTY_EQUIPPED_SLOTS });
+        logger.debug('[Chats v1] Applied empty outfit for character', { chatId, characterId });
+        break;
+      }
+
+      case 'llm_choose': {
+        // Phase 2: Will be handled asynchronously after chat creation
+        logger.debug('[Chats v1] Skipping llm_choose outfit selection (Phase 2)', { chatId, characterId });
+        break;
+      }
+
+      default:
+        logger.warn('[Chats v1] Unknown outfit selection mode', { chatId, characterId, mode });
+        break;
+    }
+  }
 }
 
 async function createInitialMessages(
@@ -610,6 +704,41 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     disabledToolGroups: projectToolDefaults.disabledToolGroups,
     imageProfileId: chatImageProfileId,
   });
+
+  // Apply outfit selections to the newly created chat
+  // If no selections provided, apply 'default' mode for all LLM-controlled participants
+  try {
+    if (validatedData.outfitSelections && validatedData.outfitSelections.length > 0) {
+      await applyOutfitSelections(chat.id, validatedData.outfitSelections, repos);
+      logger.debug('[Chats v1] Applied explicit outfit selections', {
+        chatId: chat.id,
+        selectionCount: validatedData.outfitSelections.length,
+      });
+    } else {
+      // Default behavior: apply default outfits for all LLM-controlled character participants
+      const llmCharacterIds = participantsWithTimestamps
+        .filter((p) => p.type === 'CHARACTER' && p.controlledBy !== 'user' && p.characterId)
+        .map((p) => p.characterId as string);
+
+      if (llmCharacterIds.length > 0) {
+        const defaultSelections: OutfitSelection[] = llmCharacterIds.map((characterId) => ({
+          characterId,
+          mode: 'default' as const,
+        }));
+        await applyOutfitSelections(chat.id, defaultSelections, repos);
+        logger.debug('[Chats v1] Applied default outfit selections for LLM participants', {
+          chatId: chat.id,
+          characterIds: llmCharacterIds,
+        });
+      }
+    }
+  } catch (error) {
+    // Outfit selection failure should not prevent chat creation
+    logger.error('[Chats v1] Failed to apply outfit selections', {
+      chatId: chat.id,
+      error: getErrorMessage(error, 'Unknown outfit selection error'),
+    });
+  }
 
   await createInitialMessages(
     chat.id,

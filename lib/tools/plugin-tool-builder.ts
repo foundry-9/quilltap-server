@@ -31,6 +31,15 @@ import {
   whisperToolDefinition,
   getAllShellToolDefinitions,
 } from '@/lib/tools';
+import {
+  wardrobeListToolDefinition,
+} from '@/lib/tools/wardrobe-list-tool';
+import {
+  wardrobeUpdateOutfitToolDefinition,
+} from '@/lib/tools/wardrobe-update-outfit-tool';
+import {
+  wardrobeCreateItemToolDefinition,
+} from '@/lib/tools/wardrobe-create-item-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -151,6 +160,15 @@ export interface BuildToolsOptions {
   /** Whether to enable whisper tool (for multi-character private messaging) */
   whisper?: boolean;
 
+  /** Whether to enable list_wardrobe tool (gated by canDressThemselves) */
+  wardrobeList?: boolean;
+
+  /** Whether to enable update_outfit_item tool (gated by canDressThemselves) */
+  wardrobeUpdateOutfit?: boolean;
+
+  /** Whether to enable create_wardrobe_item tool (gated by canCreateOutfits) */
+  wardrobeCreateItem?: boolean;
+
   /** Whether to enable submit_final_response tool (for agent mode) */
   agentMode?: boolean;
 
@@ -211,6 +229,9 @@ export async function buildToolsForProvider(
       rng: options.rng,
       state: options.state,
       whisper: options.whisper,
+      wardrobeList: options.wardrobeList,
+      wardrobeUpdateOutfit: options.wardrobeUpdateOutfit,
+      wardrobeCreateItem: options.wardrobeCreateItem,
       shellInteractivity: options.shellInteractivity,
       includePluginTools: options.includePluginTools,
     },
@@ -283,6 +304,17 @@ export async function buildToolsForProvider(
   // Add whisper tool if enabled (multi-character chats only)
   if (options.whisper) {
     universalTools.push(whisperToolDefinition as UniversalTool);
+  }
+
+  // Add wardrobe tools if enabled (gated by character wardrobe flags)
+  if (options.wardrobeList) {
+    universalTools.push(wardrobeListToolDefinition as UniversalTool);
+  }
+  if (options.wardrobeUpdateOutfit) {
+    universalTools.push(wardrobeUpdateOutfitToolDefinition as UniversalTool);
+  }
+  if (options.wardrobeCreateItem) {
+    universalTools.push(wardrobeCreateItemToolDefinition as UniversalTool);
   }
 
   // Add submit_final_response tool if agent mode is enabled

@@ -39,6 +39,7 @@ import type {
   MessageEvent,
   RoleplayTemplate,
 } from '@/lib/schemas/types';
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 const logger = baseLogger.child({ module: 'export:quilltap-export-service' });
 const APP_VERSION = packageJson.version;
@@ -205,9 +206,25 @@ export async function exportCharacters(
     if (character) {
       const tagNames = await resolveTagNames(repos, character.tags);
 
+      // Load wardrobe items for this character (skip archetypes — characterId=null)
+      let wardrobeItems: WardrobeItem[] = [];
+      try {
+        wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id);
+        logger.debug('Loaded wardrobe items for character export', {
+          characterId: id,
+          wardrobeItemCount: wardrobeItems.length,
+        });
+      } catch (error) {
+        logger.warn('Failed to load wardrobe items for character export', {
+          characterId: id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       characters.push({
         ...character,
         ...(tagNames.length > 0 && { _tagNames: tagNames }),
+        ...(wardrobeItems.length > 0 && { wardrobeItems }),
       });
     }
   }

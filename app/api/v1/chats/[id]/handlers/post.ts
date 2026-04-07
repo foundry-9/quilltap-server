@@ -29,6 +29,7 @@ import {
   handleToggleAgentMode,
   handleRegenerateBackground,
   handleReclassifyDanger,
+  handleEquipSlot,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -54,6 +55,7 @@ const CHAT_POST_ACTIONS = [
   'toggle-agent-mode',
   'regenerate-background',
   'reclassify-danger',
+  'equip',
 ] as const;
 
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
@@ -101,6 +103,7 @@ export async function handlePost(
     'toggle-agent-mode': () => handleToggleAgentMode(req, chatId, ctx),
     'regenerate-background': () => handleRegenerateBackground(chatId, chat, ctx),
     'reclassify-danger': () => handleReclassifyDanger(chatId, chat, ctx),
+    equip: () => handleEquipSlot(req, chatId, ctx),
   };
 
   return actionHandlers[action]();

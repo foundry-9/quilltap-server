@@ -732,11 +732,39 @@ export async function resolveAppearance(
       return `    - ID: ${c.id}, Name: "${c.name}"${context}: ${desc}`
     })
 
+    // Build equipped wardrobe items section if present
+    let wardrobeSection = ''
+    if (char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0) {
+      const slotOrder = ['top', 'bottom', 'footwear', 'accessories']
+      const wardrobeLines: string[] = []
+
+      for (const slot of slotOrder) {
+        const item = char.equippedWardrobeItems.find(i => i.slot === slot)
+        if (item) {
+          const desc = item.description ? ` - ${item.description}` : ''
+          wardrobeLines.push(`    - ${slot.charAt(0).toUpperCase() + slot.slice(1)}: ${item.title}${desc}`)
+        } else {
+          const emptyLabel = slot === 'footwear' ? '(barefoot)' : '(none)'
+          wardrobeLines.push(`    - ${slot.charAt(0).toUpperCase() + slot.slice(1)}: ${emptyLabel}`)
+        }
+      }
+
+      // Include any non-standard slots
+      for (const item of char.equippedWardrobeItems) {
+        if (!slotOrder.includes(item.slot)) {
+          const desc = item.description ? ` - ${item.description}` : ''
+          wardrobeLines.push(`    - ${item.slot.charAt(0).toUpperCase() + item.slot.slice(1)}: ${item.title}${desc}`)
+        }
+      }
+
+      wardrobeSection = `\n  Current Outfit (equipped wardrobe — takes precedence over stored clothing records):\n${wardrobeLines.join('\n')}`
+    }
+
     return `  Character: ${char.characterName} (ID: ${char.characterId})
   Physical Descriptions:
 ${descParts.length > 0 ? descParts.join('\n') : '    (none)'}
   Clothing Records:
-${clothingParts.length > 0 ? clothingParts.join('\n') : '    (none)'}`
+${clothingParts.length > 0 ? clothingParts.join('\n') : '    (none)'}${wardrobeSection}`
   }).join('\n\n')
 
   // Format recent messages

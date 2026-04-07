@@ -12,6 +12,18 @@ import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter'
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 
 /**
+ * Wardrobe context for system prompt rendering.
+ * When provided, replaces the legacy clothingRecords section with
+ * slot-based "Current Outfit" and "Available Wardrobe" sections.
+ */
+export interface WardrobeContext {
+  /** Currently equipped items, keyed by slot name (e.g. "top", "footwear") */
+  equippedItems: Record<string, { title: string; description?: string | null }>
+  /** All wardrobe items for this character (used to show non-equipped alternatives) */
+  wardrobeItems: Array<{ id: string; title: string; types: string[]; appropriateness?: string | null }>
+}
+
+/**
  * Other participant info for multi-character system prompts
  */
 export interface OtherParticipantInfo {
@@ -62,7 +74,9 @@ export function buildSystemPrompt(
   /** The responding character's own participation status */
   respondingCharacterStatus?: 'active' | 'silent' | 'absent' | 'removed',
   /** Scenario text override (from chat-level scenario selection) */
-  scenarioText?: string | null
+  scenarioText?: string | null,
+  /** Wardrobe context for slot-based outfit rendering (replaces legacy clothingRecords when present) */
+  wardrobeContext?: WardrobeContext | null
 ): string {
   const parts: string[] = []
 
@@ -193,8 +207,52 @@ export function buildSystemPrompt(
     }
   }
 
-  // Clothing records - outfit context for the LLM
-  if (character.clothingRecords && character.clothingRecords.length > 0) {
+  // Wardrobe / clothing context for the LLM
+  // Prefer wardrobe context (slot-based) when available; fall back to legacy clothingRecords
+  if (wardrobeContext) {
+    const { equippedItems, wardrobeItems } = wardrobeContext
+    const equippedSlotNames = Object.keys(equippedItems)
+    const hasEquipped = equippedSlotNames.length > 0
+
+    // Current Outfit section — show what each slot is wearing
+    if (hasEquipped) {
+      const slotOrder = ['top', 'bottom', 'footwear', 'accessories'] as const
+      const outfitLines = slotOrder.map(slot => {
+        const item = equippedItems[slot]
+        if (item) {
+          const desc = item.description ? ` — ${item.description}` : ''
+          return `- ${slot.charAt(0).toUpperCase() + slot.slice(1)}: ${item.title}${desc}`
+        }
+        // Show empty slots with appropriate default labels
+        const emptyLabel = slot === 'footwear' ? '(barefoot)' : '(none)'
+        return `- ${slot.charAt(0).toUpperCase() + slot.slice(1)}: ${emptyLabel}`
+      })
+      parts.push(`\n## Current Outfit\n${outfitLines.join('\n')}`)
+    }
+
+    // Available Wardrobe section — non-equipped items, token-efficient
+    // Collect IDs of equipped items so we can exclude them
+    const equippedIds = new Set<string>()
+    for (const slot of Object.keys(equippedItems)) {
+      // Find the wardrobe item that matches the equipped title for this slot
+      const equipped = equippedItems[slot]
+      if (equipped) {
+        const match = wardrobeItems.find(w => w.title === equipped.title)
+        if (match) equippedIds.add(match.id)
+      }
+    }
+
+    const availableItems = wardrobeItems.filter(w => !equippedIds.has(w.id))
+    if (availableItems.length > 0) {
+      const availableLines = availableItems.map(item => {
+        const types = `[${item.types.join(', ')}]`
+        const appro = item.appropriateness ? ` (${item.appropriateness})` : ''
+        return `- "${item.title}" ${types}${appro}`
+      })
+      parts.push(`\n## Available Wardrobe\n${availableLines.join('\n')}`)
+    }
+  } else if (character.clothingRecords && character.clothingRecords.length > 0) {
+    // Legacy fallback: render old clothingRecords format
     const clothingLines = character.clothingRecords.map(record => {
       const contextNote = record.usageContext ? ` (when: ${record.usageContext})` : '';
       const descText = record.description || '';

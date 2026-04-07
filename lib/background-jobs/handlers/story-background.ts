@@ -161,13 +161,43 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // 8. Derive scene context AND resolve character appearances in parallel
   let sceneContext = payload.sceneContext || chat.title;
 
-  // Build appearance inputs from loaded characters
-  const appearanceInputs: AppearanceResolutionInput[] = validCharacters.map(char => ({
-    characterId: char!.id,
-    characterName: char!.name,
-    physicalDescriptions: char!.physicalDescriptions || [],
-    clothingRecords: char!.clothingRecords || [],
-  }));
+  // Build appearance inputs from loaded characters, enriched with equipped wardrobe items
+  const appearanceInputs: AppearanceResolutionInput[] = [];
+  for (const char of validCharacters) {
+    let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
+    try {
+      const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
+      if (equippedSlots) {
+        const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
+        if (equippedItemIds.length > 0) {
+          const items = await repos.wardrobe.findByIds(equippedItemIds);
+          const itemsMap = new Map(items.map(item => [item.id, item]));
+          equippedWardrobeItems = [];
+          for (const [slot, itemId] of Object.entries(equippedSlots)) {
+            if (itemId) {
+              const item = itemsMap.get(itemId);
+              if (item) {
+                equippedWardrobeItems.push({ slot, title: item.title, description: item.description });
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn('[StoryBackground] Failed to load equipped wardrobe items for character', {
+        characterId: char!.id,
+        chatId: payload.chatId,
+        error: getErrorMessage(err),
+      });
+    }
+    appearanceInputs.push({
+      characterId: char!.id,
+      characterName: char!.name,
+      physicalDescriptions: char!.physicalDescriptions || [],
+      clothingRecords: char!.clothingRecords || [],
+      equippedWardrobeItems,
+    });
+  }
 
   // Scene context prompt for appearance resolution
   const scenePromptForAppearance = payload.sceneContext || chat.title;

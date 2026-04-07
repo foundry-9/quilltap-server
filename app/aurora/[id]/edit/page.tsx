@@ -6,6 +6,7 @@ import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { EntityTabs, Tab } from '@/components/tabs'
 import { PhysicalDescriptionList } from '@/components/physical-descriptions'
 import { ClothingRecordList } from '@/components/clothing-records'
+import { WardrobeItemList } from '@/components/wardrobe'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor'
 import { AIWizardModal, type GeneratedCharacterData, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
@@ -288,6 +289,9 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                     />
                     <ClothingRecordList
                       entityId={id}
+                    />
+                    <WardrobeItemList
+                      characterId={id}
                     />
                   </div>
                 )

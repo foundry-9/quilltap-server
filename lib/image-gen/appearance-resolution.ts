@@ -63,6 +63,12 @@ export interface AppearanceResolutionInput {
   characterName: string
   physicalDescriptions: PhysicalDescription[]
   clothingRecords: ClothingRecord[]
+  /** Equipped wardrobe items (from the wardrobe system). Takes precedence over clothingRecords for clothing descriptions. */
+  equippedWardrobeItems?: Array<{
+    slot: string
+    title: string
+    description?: string | null
+  }>
 }
 
 // ============================================================================
@@ -89,6 +95,45 @@ function canSkipResolution(
 /**
  * Build default resolved appearances without an LLM call
  */
+/**
+ * Compose a clothing description from equipped wardrobe items.
+ * Produces a human-readable sentence such as:
+ *   "Wearing a charcoal sweater (soft pullover in grey), dark jeans (slim-fit dark wash), barefoot, no accessories"
+ */
+function composeWardrobeClothingDescription(
+  items: Array<{ slot: string; title: string; description?: string | null }>
+): string {
+  const slotOrder = ['top', 'bottom', 'footwear', 'accessories']
+  const slotLabels: Record<string, { empty: string }> = {
+    top: { empty: 'no top' },
+    bottom: { empty: 'no bottom' },
+    footwear: { empty: 'barefoot' },
+    accessories: { empty: 'no accessories' },
+  }
+
+  const parts: string[] = []
+
+  for (const slot of slotOrder) {
+    const item = items.find(i => i.slot === slot)
+    if (item) {
+      const desc = item.description ? ` (${item.description})` : ''
+      parts.push(`${item.title}${desc}`)
+    } else {
+      parts.push(slotLabels[slot]?.empty || `no ${slot}`)
+    }
+  }
+
+  // Include any non-standard slots that aren't in our ordered list
+  for (const item of items) {
+    if (!slotOrder.includes(item.slot)) {
+      const desc = item.description ? ` (${item.description})` : ''
+      parts.push(`${item.title}${desc}`)
+    }
+  }
+
+  return `Wearing ${parts.join(', ')}`
+}
+
 function buildDefaultAppearances(
   characters: AppearanceResolutionInput[]
 ): ResolvedCharacterAppearance[] {
@@ -102,6 +147,19 @@ function buildDefaultAppearances(
       primary?.mediumPrompt ||
       primary?.shortPrompt ||
       char.characterName
+
+    // Equipped wardrobe items take precedence over legacy clothingRecords
+    if (char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0) {
+      return {
+        characterId: char.characterId,
+        characterName: char.characterName,
+        physicalDescription: physDesc,
+        physicalDescriptionName: primary?.name || 'default',
+        clothingDescription: composeWardrobeClothingDescription(char.equippedWardrobeItems),
+        clothingSource: 'stored' as const,
+        wasSanitized: false,
+      }
+    }
 
     return {
       characterId: char.characterId,
@@ -243,6 +301,9 @@ export async function resolveCharacterAppearances(
       usageContext: c.usageContext,
       description: c.description,
     })),
+    ...(char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
+      ? { equippedWardrobeItems: char.equippedWardrobeItems }
+      : {}),
   }))
 
   const result = await resolveAppearance(
