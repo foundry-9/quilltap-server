@@ -2,6 +2,12 @@
 
 ## Recent Changes
 
+### 4.1.1
+
+- fix: Memory extraction now preserves source message timestamps as the memory's createdAt/updatedAt instead of using the extraction time
+- fix: One-time migration backfills existing memories with correct timestamps from their linked source messages
+- docs: Add 4.1.1 release notes
+
 ### 4.1.0
 
 - feat: Character conversations tab shows memory count badge per chat; clicking it deletes old memories and re-extracts with the new multi-fact system

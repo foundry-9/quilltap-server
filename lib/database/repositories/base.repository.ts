@@ -22,8 +22,10 @@ import { safeQuery as standaloneSafeQuery, extractErrorMessage } from './safe-qu
 export interface CreateOptions {
   /** Pre-specified ID (for sync - use remote ID instead of generating new) */
   id?: string;
-  /** Preserve original createdAt timestamp (for sync) */
+  /** Preserve original createdAt timestamp (for sync, batch extraction) */
   createdAt?: string;
+  /** Preserve original updatedAt timestamp (for batch extraction when updatedAt should match createdAt) */
+  updatedAt?: string;
 }
 
 /**
@@ -299,11 +301,13 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
       const now = this.getCurrentTimestamp();
       const createdAt = options?.createdAt || now;
 
+      const updatedAt = options?.updatedAt || now;
+
       const entityInput = {
         ...data,
         id,
         createdAt,
-        updatedAt: now,
+        updatedAt,
       };
 
       const validated = this.validate(entityInput);
