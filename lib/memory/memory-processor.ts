@@ -44,6 +44,8 @@ export interface MemoryExtractionContext {
   assistantMessage: string
   /** Source message ID for tracking */
   sourceMessageId: string
+  /** Source message createdAt timestamp (to preserve original timing on extracted memories) */
+  sourceMessageTimestamp?: string
   /** User ID for API access */
   userId: string
   /** Connection profile for cheap LLM */
@@ -82,6 +84,8 @@ export interface InterCharacterMemoryContext {
   chatId: string
   /** Source message ID for tracking */
   sourceMessageId: string
+  /** Source message createdAt timestamp (to preserve original timing on extracted memories) */
+  sourceMessageTimestamp?: string
   /** User ID for API access */
   userId: string
   /** Connection profile for cheap LLM */
@@ -193,6 +197,7 @@ async function createMemoryFromCandidate(
       importance: candidate.importance || 0.5,
       source: 'AUTO',
       sourceMessageId: ctx.sourceMessageId,
+      sourceMessageTimestamp: ctx.sourceMessageTimestamp,
       tags: [],
     },
     {
@@ -219,6 +224,7 @@ async function createInterCharacterMemoryFromCandidate(
       importance: candidate.importance || 0.5,
       source: 'AUTO',
       sourceMessageId: ctx.sourceMessageId,
+      sourceMessageTimestamp: ctx.sourceMessageTimestamp,
       tags: [],
     },
     {
@@ -567,8 +573,8 @@ export async function batchProcessChatForMemories(
 
   // Pair user messages with their subsequent assistant responses
   const pairs: Array<{
-    userMessage: { id: string; content: string }
-    assistantMessage: { id: string; content: string }
+    userMessage: { id: string; content: string; createdAt: string }
+    assistantMessage: { id: string; content: string; createdAt: string }
   }> = []
 
   for (let i = 0; i < messageEvents.length - 1; i++) {
@@ -577,8 +583,8 @@ export async function batchProcessChatForMemories(
 
     if (current.role === 'USER' && next.role === 'ASSISTANT') {
       pairs.push({
-        userMessage: { id: current.id, content: current.content },
-        assistantMessage: { id: next.id, content: next.content },
+        userMessage: { id: current.id, content: current.content, createdAt: current.createdAt },
+        assistantMessage: { id: next.id, content: next.content, createdAt: next.createdAt },
       })
     }
   }
@@ -601,6 +607,7 @@ export async function batchProcessChatForMemories(
       userMessage: pair.userMessage.content,
       assistantMessage: pair.assistantMessage.content,
       sourceMessageId: pair.assistantMessage.id,
+      sourceMessageTimestamp: pair.assistantMessage.createdAt,
       userId,
       connectionProfile,
       cheapLLMSettings: chatSettings.cheapLLMSettings,

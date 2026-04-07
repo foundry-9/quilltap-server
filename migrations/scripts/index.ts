@@ -137,6 +137,8 @@ import { addChatScenarioTextFieldMigration } from './add-chat-scenario-text-fiel
 import { addConnectionProfileModelClassFieldMigration } from './add-connection-profile-model-class-field';
 // Add maxTokens field to connection profiles for budget-driven compression
 import { addConnectionProfileMaxTokensFieldMigration } from './add-connection-profile-max-tokens-field';
+// Fix memory timestamps to match source message timestamps
+import { fixMemoryTimestampsFromSourceMigration } from './fix-memory-timestamps-from-source';
 
 /**
  * All available migrations.
@@ -269,6 +271,8 @@ export const migrations: Migration[] = [
   addConnectionProfileModelClassFieldMigration,
   // Add maxTokens field to connection profiles for budget-driven compression
   addConnectionProfileMaxTokensFieldMigration,
+  // Fix memory timestamps to match source message timestamps
+  fixMemoryTimestampsFromSourceMigration,
 ];
 
 export {
@@ -396,4 +400,6 @@ export {
   addConnectionProfileModelClassFieldMigration,
   // Add maxTokens field to connection profiles for budget-driven compression
   addConnectionProfileMaxTokensFieldMigration,
+  // Fix memory timestamps to match source message timestamps
+  fixMemoryTimestampsFromSourceMigration,
 };

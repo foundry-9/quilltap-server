@@ -47,6 +47,8 @@ export interface CreateMemoryOptions {
   source?: 'AUTO' | 'MANUAL'
   /** Source message ID for auto-created memories */
   sourceMessageId?: string | null
+  /** Override createdAt/updatedAt with source message timestamp (for batch extraction) */
+  sourceMessageTimestamp?: string
 }
 
 /**
@@ -178,6 +180,11 @@ async function createMemoryDirect(
   const repos = getRepositories()
   const importance = data.importance ?? 0.5
 
+  // Build create options for timestamp override (batch extraction)
+  const createOpts = data.sourceMessageTimestamp
+    ? { createdAt: data.sourceMessageTimestamp, updatedAt: data.sourceMessageTimestamp }
+    : undefined
+
   const memory = await repos.memories.create({
     characterId: data.characterId,
     content: data.content,
@@ -193,7 +200,7 @@ async function createMemoryDirect(
     reinforcementCount: 1,
     relatedMemoryIds: [],
     reinforcedImportance: importance,
-  })
+  }, createOpts)
 
   if (options.skipEmbedding) {
     return memory
@@ -243,6 +250,11 @@ async function createMemoryDirectWithEmbedding(
   const repos = getRepositories()
   const importance = data.importance ?? 0.5
 
+  // Build create options for timestamp override (batch extraction)
+  const createOpts = data.sourceMessageTimestamp
+    ? { createdAt: data.sourceMessageTimestamp, updatedAt: data.sourceMessageTimestamp }
+    : undefined
+
   const memory = await repos.memories.create({
     characterId: data.characterId,
     content: data.content,
@@ -258,7 +270,7 @@ async function createMemoryDirectWithEmbedding(
     reinforcementCount: 1,
     relatedMemoryIds: [],
     reinforcedImportance: importance,
-  })
+  }, createOpts)
 
   if (embedding) {
     // Use the pre-computed embedding from the gate
