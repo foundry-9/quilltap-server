@@ -399,8 +399,8 @@ export function ParticipantCard({
             </div>
           )}
 
-          {/* Outfit indicator for LLM characters with wardrobe data */}
-          {isCharacter && !isUserParticipant && onEquipSlot && (equippedSlots || outfitLoading) && (
+          {/* Outfit indicator for all characters with wardrobe data */}
+          {isCharacter && onEquipSlot && (equippedSlots || outfitLoading) && (
             <OutfitIndicator
               characterId={participant.character?.id || ''}
               equippedSlots={equippedSlots ?? null}
