@@ -30,7 +30,11 @@ export const createWardrobeItemsTableMigration: Migration = {
       return false;
     }
 
-    return !sqliteTableExists('wardrobe_items');
+    // Always return true if we haven't been recorded as completed yet.
+    // The table may already exist if auto-created by the repository layer
+    // (ensureCollection), but we still need to run to ensure indexes exist
+    // and to be recorded in migrations_state so dependent migrations can proceed.
+    return true;
   },
 
   async run(): Promise<MigrationResult> {
