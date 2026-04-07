@@ -17,7 +17,10 @@
 import { useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
+import { OutfitIndicator } from '@/components/wardrobe/outfit-indicator'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types'
+import type { WardrobeItemSummary } from '@/app/salon/[id]/hooks/useOutfit'
 
 // Special constant for user impersonation selection
 const USER_IMPERSONATION_VALUE = '__user__'
@@ -99,6 +102,12 @@ interface ParticipantCardProps {
   onStatusChange?: (participantId: string, status: 'active' | 'silent' | 'absent' | 'removed') => void
   // Whisper support
   onWhisper?: (participantId: string) => void
+  // Outfit display
+  equippedSlots?: EquippedSlots | null
+  equippedItems?: Record<string, { title: string } | null>
+  wardrobeItems?: WardrobeItemSummary[]
+  onEquipSlot?: (participantId: string, slot: string, itemId: string | null) => void
+  outfitLoading?: boolean
 }
 
 export function ParticipantCard({
@@ -127,6 +136,11 @@ export function ParticipantCard({
   onActiveChange,
   onStatusChange,
   onWhisper,
+  equippedSlots,
+  equippedItems,
+  wardrobeItems,
+  onEquipSlot,
+  outfitLoading,
 }: ParticipantCardProps) {
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
@@ -383,6 +397,18 @@ export function ParticipantCard({
                 className="qt-input w-full h-1 rounded-lg appearance-none cursor-pointer accent-primary"
               />
             </div>
+          )}
+
+          {/* Outfit indicator for LLM characters with wardrobe data */}
+          {isCharacter && !isUserParticipant && onEquipSlot && (equippedSlots || outfitLoading) && (
+            <OutfitIndicator
+              characterId={participant.character?.id || ''}
+              equippedSlots={equippedSlots ?? null}
+              equippedItems={equippedItems ?? {}}
+              wardrobeItems={wardrobeItems ?? []}
+              onEquipSlot={(slot, itemId) => onEquipSlot(participant.id, slot, itemId)}
+              isLoading={outfitLoading}
+            />
           )}
 
           {/* Talkativeness indicator for personas (greyed out) */}

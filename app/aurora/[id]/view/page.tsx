@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { showErrorToast } from '@/lib/toast'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import type { TimestampConfig } from '@/lib/schemas/types'
+import type { OutfitSelection } from '@/components/wardrobe'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { EntityTabs } from '@/components/tabs'
@@ -49,6 +50,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [scenarioId, setScenarioId] = useState<string | null>(null)
   const [selectedSystemPromptId, setSelectedSystemPromptId] = useState<string | null>(null)
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
+  const [outfitSelections, setOutfitSelections] = useState<OutfitSelection[]>([])
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const chatDialogInitializedRef = useRef(false)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
@@ -79,6 +81,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     handleSaveImageProfile,
     handleSaveAgentMode,
     handleSaveHelpTools,
+    handleSaveCanDressThemselves,
+    handleSaveCanCreateOutfits,
     handleSaveTimestampConfig,
     handleSaveDefaultScenario,
     handleSaveDefaultSystemPrompt,
@@ -90,6 +94,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     togglingControlledBy,
     savingAgentMode,
     savingHelpTools,
+    savingCanDressThemselves,
+    savingCanCreateOutfits,
     savingTimestampConfig,
     savingDefaultScenario,
     savingDefaultSystemPrompt,
@@ -203,6 +209,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       scenario,
       scenarioId: scenarioId ?? undefined,
       timestampConfig,
+      outfitSelections: outfitSelections.length > 0 ? outfitSelections : undefined,
     })
     setShowChatDialog(false)
   }
@@ -294,6 +301,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             onAgentModeChange={handleSaveAgentMode}
             savingHelpTools={savingHelpTools}
             onHelpToolsChange={handleSaveHelpTools}
+            savingCanDressThemselves={savingCanDressThemselves}
+            onCanDressThemselvesChange={handleSaveCanDressThemselves}
+            savingCanCreateOutfits={savingCanCreateOutfits}
+            onCanCreateOutfitsChange={handleSaveCanCreateOutfits}
             onTimestampConfigChange={handleSaveTimestampConfig}
             onDefaultScenarioChange={handleSaveDefaultScenario}
             onDefaultSystemPromptChange={handleSaveDefaultSystemPrompt}
@@ -411,6 +422,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           onScenarioChange={setScenario}
           onScenarioIdChange={setScenarioId}
           onTimestampConfigChange={setTimestampConfig}
+          outfitSelections={outfitSelections}
+          onOutfitSelectionsChange={setOutfitSelections}
           onCancel={() => {
             if (openedFromQuery) {
               window.location.href = '/aurora'

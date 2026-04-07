@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { TimestampConfig } from '@/lib/schemas/types'
+import type { OutfitSelection } from '@/components/wardrobe'
 
 interface ConnectionProfile {
   id: string
@@ -33,6 +34,7 @@ interface UseQuickChatReturn {
   scenarioId: string | null
   scenarios: CharacterScenario[]
   timestampConfig: TimestampConfig | null
+  outfitSelections: OutfitSelection[]
   creatingChat: boolean
   setSelectedProfileId: (id: string) => void
   setSelectedPartnerId: (id: string) => void
@@ -40,6 +42,7 @@ interface UseQuickChatReturn {
   setScenario: (scenario: string) => void
   setScenarioId: (id: string | null) => void
   setTimestampConfig: (config: TimestampConfig) => void
+  setOutfitSelections: (selections: OutfitSelection[]) => void
   fetchData: (characterId: string) => Promise<void>
   handleCreateChat: (characterId: string, characterName: string) => Promise<void>
   reset: () => void
@@ -57,6 +60,7 @@ export function useQuickChat(): UseQuickChatReturn {
   const [scenarioId, setScenarioId] = useState<string | null>(null)
   const [scenarios, setScenarios] = useState<CharacterScenario[]>([])
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
+  const [outfitSelections, setOutfitSelections] = useState<OutfitSelection[]>([])
   const [creatingChat, setCreatingChat] = useState(false)
 
   const reset = useCallback(() => {
@@ -67,6 +71,7 @@ export function useQuickChat(): UseQuickChatReturn {
     setScenarioId(null)
     setScenarios([])
     setTimestampConfig(null)
+    setOutfitSelections([])
   }, [])
 
   const fetchData = useCallback(async (characterId: string) => {
@@ -191,6 +196,7 @@ export function useQuickChat(): UseQuickChatReturn {
           ...(scenario && { scenario }),
           ...(scenarioId && { scenarioId }),
           ...(timestampConfig && timestampConfig.mode !== 'NONE' && { timestampConfig }),
+          ...(outfitSelections.length > 0 && { outfitSelections }),
         }),
       })
 
@@ -212,7 +218,7 @@ export function useQuickChat(): UseQuickChatReturn {
     } finally {
       setCreatingChat(false)
     }
-  }, [router, selectedProfileId, selectedPartnerId, selectedImageProfileId, scenario, scenarioId, timestampConfig])
+  }, [router, selectedProfileId, selectedPartnerId, selectedImageProfileId, scenario, scenarioId, timestampConfig, outfitSelections])
 
   return {
     loading,
@@ -225,6 +231,7 @@ export function useQuickChat(): UseQuickChatReturn {
     scenarioId,
     scenarios,
     timestampConfig,
+    outfitSelections,
     creatingChat,
     setSelectedProfileId,
     setSelectedPartnerId,
@@ -232,6 +239,7 @@ export function useQuickChat(): UseQuickChatReturn {
     setScenario,
     setScenarioId,
     setTimestampConfig,
+    setOutfitSelections,
     fetchData,
     handleCreateChat,
     reset,

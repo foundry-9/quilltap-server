@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
+import { OutfitSelector } from '@/components/wardrobe'
 import { useQuickChat } from './hooks'
 
 const CUSTOM_SCENARIO_VALUE = '__custom__'
@@ -31,6 +32,7 @@ export function QuickChatDialog({
     scenarioId,
     scenarios,
     timestampConfig,
+    outfitSelections,
     creatingChat,
     setSelectedProfileId,
     setSelectedPartnerId,
@@ -38,6 +40,7 @@ export function QuickChatDialog({
     setScenario,
     setScenarioId,
     setTimestampConfig,
+    setOutfitSelections,
     fetchData,
     handleCreateChat,
     reset,
@@ -186,8 +189,13 @@ export function QuickChatDialog({
                 </div>
               </div>
 
-              {/* Right Column: Timestamp Configuration */}
-              <div>
+              {/* Right Column: Outfit & Timestamp Configuration */}
+              <div className="space-y-4">
+                <OutfitSelector
+                  characters={[{ id: characterId, name: characterName }]}
+                  onSelectionsChange={setOutfitSelections}
+                  disabled={creatingChat}
+                />
                 <TimestampConfigCard
                   config={timestampConfig}
                   onChange={setTimestampConfig}

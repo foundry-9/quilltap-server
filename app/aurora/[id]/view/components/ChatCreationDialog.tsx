@@ -2,6 +2,8 @@
 
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
+import { OutfitSelector } from '@/components/wardrobe'
+import type { OutfitSelection } from '@/components/wardrobe'
 import { ConnectionProfile, UserControlledCharacter } from '../types'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
@@ -38,6 +40,8 @@ interface ChatCreationDialogProps {
   onScenarioChange: (scenario: string) => void
   onScenarioIdChange?: (scenarioId: string | null) => void
   onTimestampConfigChange: (config: TimestampConfig) => void
+  outfitSelections?: OutfitSelection[]
+  onOutfitSelectionsChange?: (selections: OutfitSelection[]) => void
   onCancel: () => void
   onCreateChat: () => void
 }
@@ -65,6 +69,8 @@ export function ChatCreationDialog({
   onScenarioChange,
   onScenarioIdChange,
   onTimestampConfigChange,
+  outfitSelections: _outfitSelections,
+  onOutfitSelectionsChange,
   onCancel,
   onCreateChat,
 }: ChatCreationDialogProps) {
@@ -219,8 +225,15 @@ export function ChatCreationDialog({
               </div>
             </div>
 
-            {/* Right Column: Timestamp Configuration */}
-            <div>
+            {/* Right Column: Outfit & Timestamp Configuration */}
+            <div className="space-y-4">
+              {onOutfitSelectionsChange && (
+                <OutfitSelector
+                  characters={[{ id: characterId, name: characterName || 'Character' }]}
+                  onSelectionsChange={onOutfitSelectionsChange}
+                  disabled={creatingChat}
+                />
+              )}
               <TimestampConfigCard
                 config={timestampConfig}
                 onChange={onTimestampConfigChange}

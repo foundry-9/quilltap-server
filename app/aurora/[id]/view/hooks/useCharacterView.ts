@@ -34,6 +34,8 @@ interface UseCharacterViewReturn {
   togglingControlledBy: boolean
   savingAgentMode: boolean
   savingHelpTools: boolean
+  savingCanDressThemselves: boolean
+  savingCanCreateOutfits: boolean
   savingTimestampConfig: boolean
   savingDefaultScenario: boolean
   savingDefaultSystemPrompt: boolean
@@ -53,6 +55,8 @@ interface UseCharacterViewReturn {
   handleSaveImageProfile: (profileId: string | null) => Promise<void>
   handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
   handleSaveHelpTools: (enabled: boolean | null) => Promise<void>
+  handleSaveCanDressThemselves: (enabled: boolean | null) => Promise<void>
+  handleSaveCanCreateOutfits: (enabled: boolean | null) => Promise<void>
   handleSaveTimestampConfig: (config: TimestampConfig | null) => Promise<void>
   handleSaveDefaultScenario: (scenarioId: string | null) => Promise<void>
   handleSaveDefaultSystemPrompt: (promptId: string | null) => Promise<void>
@@ -81,6 +85,8 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [togglingControlledBy, setTogglingControlledBy] = useState(false)
   const [savingAgentMode, setSavingAgentMode] = useState(false)
   const [savingHelpTools, setSavingHelpTools] = useState(false)
+  const [savingCanDressThemselves, setSavingCanDressThemselves] = useState(false)
+  const [savingCanCreateOutfits, setSavingCanCreateOutfits] = useState(false)
   const [savingTimestampConfig, setSavingTimestampConfig] = useState(false)
   const [savingDefaultScenario, setSavingDefaultScenario] = useState(false)
   const [savingDefaultSystemPrompt, setSavingDefaultSystemPrompt] = useState(false)
@@ -403,6 +409,64 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  const handleSaveCanDressThemselves = async (enabled: boolean | null) => {
+    setSavingCanDressThemselves(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canDressThemselves: enabled }),
+      })
+      if (!res.ok) throw new Error('Failed to update self-dressing setting')
+
+      // Update local state
+      if (character) {
+        setCharacter({ ...character, canDressThemselves: enabled })
+      }
+      const message = enabled === null
+        ? 'Wardrobe self-dressing set to inherit from global (enabled)'
+        : enabled
+          ? 'Wardrobe self-dressing enabled'
+          : 'Wardrobe self-dressing disabled'
+      showSuccessToast(message)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update self-dressing setting')
+      console.error('Failed to save self-dressing setting', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingCanDressThemselves(false)
+    }
+  }
+
+  const handleSaveCanCreateOutfits = async (enabled: boolean | null) => {
+    setSavingCanCreateOutfits(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canCreateOutfits: enabled }),
+      })
+      if (!res.ok) throw new Error('Failed to update outfit creation setting')
+
+      // Update local state
+      if (character) {
+        setCharacter({ ...character, canCreateOutfits: enabled })
+      }
+      const message = enabled === null
+        ? 'Outfit creation set to inherit from global (enabled)'
+        : enabled
+          ? 'Outfit creation enabled'
+          : 'Outfit creation disabled'
+      showSuccessToast(message)
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update outfit creation setting')
+      console.error('Failed to save outfit creation setting', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingCanCreateOutfits(false)
+    }
+  }
+
   const handleSaveTimestampConfig = async (config: TimestampConfig | null) => {
     setSavingTimestampConfig(true)
     try {
@@ -563,6 +627,8 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     togglingControlledBy,
     savingAgentMode,
     savingHelpTools,
+    savingCanDressThemselves,
+    savingCanCreateOutfits,
     savingTimestampConfig,
     savingDefaultScenario,
     savingDefaultSystemPrompt,
@@ -582,6 +648,8 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleSaveImageProfile,
     handleSaveAgentMode,
     handleSaveHelpTools,
+    handleSaveCanDressThemselves,
+    handleSaveCanCreateOutfits,
     handleSaveTimestampConfig,
     handleSaveDefaultScenario,
     handleSaveDefaultSystemPrompt,

@@ -8,6 +8,8 @@ import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
+import { OutfitSelector } from '@/components/wardrobe'
+import type { OutfitSelection } from '@/components/wardrobe'
 import type { TimestampConfig } from '@/lib/schemas/types'
 
 interface Character {
@@ -98,6 +100,7 @@ export default function NewChatPage() {
   const [creating, setCreating] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [project, setProject] = useState<Project | null>(null)
+  const [outfitSelections, setOutfitSelections] = useState<OutfitSelection[]>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -395,6 +398,10 @@ export default function NewChatPage() {
         requestBody.projectId = project.id
       }
 
+      if (outfitSelections.length > 0) {
+        requestBody.outfitSelections = outfitSelections
+      }
+
       const res = await fetch('/api/v1/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -680,6 +687,18 @@ export default function NewChatPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {selectedCharacters.filter(sc => sc.controlledBy === 'llm').length > 0 && (
+              <div className="rounded-xl border qt-border-default qt-bg-card p-6">
+                <OutfitSelector
+                  characters={selectedCharacters
+                    .filter(sc => sc.controlledBy === 'llm')
+                    .map(sc => ({ id: sc.character.id, name: sc.character.name }))}
+                  onSelectionsChange={setOutfitSelections}
+                  disabled={creating}
+                />
               </div>
             )}
 

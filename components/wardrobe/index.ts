@@ -1,3 +1,7 @@
 export { WardrobeItemCard } from './wardrobe-item-card'
 export { WardrobeItemEditor } from './wardrobe-item-editor'
 export { WardrobeItemList } from './wardrobe-item-list'
+export { OutfitSelector } from './outfit-selector'
+export type { OutfitSelection, OutfitSelectorProps, OutfitSelectorCharacter } from './outfit-selector'
+export { OutfitIndicator } from './outfit-indicator'
+export type { OutfitIndicatorProps } from './outfit-indicator'

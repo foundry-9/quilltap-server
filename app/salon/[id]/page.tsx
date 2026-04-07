@@ -40,6 +40,7 @@ import {
   useImpersonation,
   useChatControls,
   useSSEStreaming,
+  useOutfit,
   type SwipeState,
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
@@ -253,6 +254,29 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Keep refs in sync with SSE streaming state
   triggerContinueModeRef.current = sseStreaming.triggerContinueMode
   streamingRef.current = sseStreaming.streaming || sseStreaming.waitingForResponse
+
+  // --- Outfit hook ---
+  const outfit = useOutfit(id)
+
+  // Refresh outfit state when a tool result comes back (generation completes)
+  const wasGeneratingForOutfitRef = useRef(false)
+  useEffect(() => {
+    const isGenerating = sseStreaming.streaming || sseStreaming.waitingForResponse
+    if (wasGeneratingForOutfitRef.current && !isGenerating) {
+      outfit.refreshOutfit()
+    }
+    wasGeneratingForOutfitRef.current = isGenerating
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- outfit.refreshOutfit is stable (useCallback)
+  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, outfit.refreshOutfit])
+
+  // Equip slot handler that maps participantId -> characterId
+  const handleEquipSlot = useCallback((participantId: string, slot: string, itemId: string | null) => {
+    const participant = chat?.participants.find(p => p.id === participantId)
+    const characterId = participant?.character?.id
+    if (characterId) {
+      outfit.equipSlot(characterId, slot, itemId)
+    }
+  }, [chat?.participants, outfit])
 
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
@@ -1070,6 +1094,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onConnectionProfileChange={chatControls.handleConnectionProfileChange}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}
+          outfitState={outfit.outfitState}
+          wardrobeCache={outfit.wardrobeCache}
+          outfitLoading={outfit.loading}
+          onEquipSlot={handleEquipSlot}
         />
       )}
 

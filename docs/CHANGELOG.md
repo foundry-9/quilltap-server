@@ -16,7 +16,9 @@
 - Image generation uses equipped wardrobe items for accurate visual rendering
 - API routes: `/api/v1/characters/[id]/wardrobe` (CRUD) and `/api/v1/chats/[id]?action=outfit|equip`
 - Wardrobe management UI on character view and edit pages
-- Outfit selection during new chat creation (default, manual, or none)
+- Character settings toggles for `canDressThemselves` and `canCreateOutfits` flags on the Profiles tab
+- Outfit selection during new chat creation (default, manual, or none) across all three chat creation flows
+- In-chat outfit indicator on ParticipantCard sidebar showing current equipped items per character with inline slot-change dropdowns
 
 #### Changed
 
