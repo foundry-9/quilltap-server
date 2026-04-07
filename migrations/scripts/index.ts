@@ -281,6 +281,14 @@ export const migrations: Migration[] = [
   addConnectionProfileMaxTokensFieldMigration,
   // Fix memory timestamps to match source message timestamps
   fixMemoryTimestampsFromSourceMigration,
+  // Create wardrobe_items table for modular wardrobe system
+  createWardrobeItemsTableMigration,
+  // Add equippedOutfit field to chats for per-character outfit tracking
+  addEquippedOutfitFieldMigration,
+  // Add canDressThemselves and canCreateOutfits flags to characters
+  addCharacterWardrobeFlagsMigration,
+  // Migrate existing clothing records to wardrobe_items table
+  migrateClothingRecordsToWardrobeMigration,
 ];
 
 export {
@@ -410,12 +418,4 @@ export {
   addConnectionProfileMaxTokensFieldMigration,
   // Fix memory timestamps to match source message timestamps
   fixMemoryTimestampsFromSourceMigration,
-  // Create wardrobe_items table for modular wardrobe system
-  createWardrobeItemsTableMigration,
-  // Add equippedOutfit field to chats for per-character outfit tracking
-  addEquippedOutfitFieldMigration,
-  // Add canDressThemselves and canCreateOutfits flags to characters
-  addCharacterWardrobeFlagsMigration,
-  // Migrate existing clothing records to wardrobe_items table
-  migrateClothingRecordsToWardrobeMigration,
 };
