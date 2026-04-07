@@ -302,6 +302,18 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     updatedAtMessageCount: chat.messageCount ?? 0,
   };
 
+  // 10b. Override LLM-derived clothing with authoritative wardrobe equipped state
+  // The LLM derives clothing from narrative, but the wardrobe system is the source of truth
+  const sceneCharacters = (sceneState as any).characters as Array<{ characterId: string; clothing?: string }> | undefined;
+  if (sceneCharacters) {
+    for (const sceneChar of sceneCharacters) {
+      const baseline = characterBaselines.find(b => b.characterId === sceneChar.characterId);
+      if (baseline && baseline.clothingDescription) {
+        sceneChar.clothing = baseline.clothingDescription;
+      }
+    }
+  }
+
   // 11. Create system event for token tracking
   if (result.usage) {
     await createSystemEvent(payload.chatId, {

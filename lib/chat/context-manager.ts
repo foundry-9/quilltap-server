@@ -222,6 +222,8 @@ export interface BuildContextOptions {
 
   /** Status change notifications since the responding character's last turn */
   statusChangeNotifications?: string[]
+  /** Outfit change notifications from manual sidebar changes */
+  outfitChangeNotifications?: string[]
 
   // ============================================================================
   // Tool Instructions (native tool rules or text-block tool instructions)
@@ -437,7 +439,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     options.statusChangeNotifications,
     respondingParticipant?.status as 'active' | 'silent' | 'absent' | 'removed' | undefined,
     options.chat.scenarioText ?? undefined,
-    wardrobeContext
+    wardrobeContext,
+    options.outfitChangeNotifications
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 

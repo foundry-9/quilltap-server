@@ -73,6 +73,8 @@ export interface BuildMessageContextOptions {
   uncensoredFallbackOptions?: UncensoredFallbackOptions
   /** Status change notifications to include in prompt */
   statusChangeNotifications?: string[]
+  /** Outfit change notifications from manual sidebar changes */
+  outfitChangeNotifications?: string[]
   /** Optional callback to emit status events during context building phases */
   onStatusChange?: (stage: string, message: string) => void
 }
@@ -383,6 +385,8 @@ export async function buildMessageContext(
     uncensoredFallbackOptions,
     // Status change notifications
     statusChangeNotifications: options.statusChangeNotifications,
+    // Outfit change notifications
+    outfitChangeNotifications: options.outfitChangeNotifications,
     // Status callback for streaming events
     onStatusChange: options.onStatusChange,
   })

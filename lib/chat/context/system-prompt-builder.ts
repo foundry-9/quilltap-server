@@ -75,7 +75,9 @@ export function buildSystemPrompt(
   /** Scenario text override (from chat-level scenario selection) */
   scenarioText?: string | null,
   /** Wardrobe context for slot-based outfit rendering */
-  wardrobeContext?: WardrobeContext | null
+  wardrobeContext?: WardrobeContext | null,
+  /** Outfit change notifications from manual sidebar changes (separate from status changes for prominence) */
+  outfitChangeNotifications?: string[]
 ): string {
   const parts: string[] = []
 
@@ -314,6 +316,15 @@ export function buildSystemPrompt(
       '- Speak any dialogue out loud\n' +
       '- Whisper, murmur, or make any vocal sounds others could hear\n' +
       '- Communicate verbally in any way'
+    )
+  }
+
+  // Outfit change notifications — prominent section so the character notices the change
+  if (outfitChangeNotifications && outfitChangeNotifications.length > 0) {
+    parts.push(
+      '## ⚠️ Outfit Change Notice\n' +
+      'IMPORTANT — The following outfit changes were just made. Acknowledge and incorporate these changes immediately:\n' +
+      outfitChangeNotifications.map(n => `- ${n}`).join('\n')
     )
   }
 

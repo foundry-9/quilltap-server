@@ -608,6 +608,13 @@ async function processMessage(
   const pendingOutfitNotifications = chat.pendingOutfitNotifications as Record<string, string> | null
   if (pendingOutfitNotifications && Object.keys(pendingOutfitNotifications).length > 0) {
     outfitChangeNotifications = Object.values(pendingOutfitNotifications)
+    logger.info('[Orchestrator] Delivering pending outfit change notifications', {
+      context: 'wardrobe',
+      chatId,
+      characterId: character?.id,
+      notificationCount: outfitChangeNotifications.length,
+      notifications: outfitChangeNotifications,
+    })
     // Clear all pending notifications — every character sees them on next turn
     await repos.chats.update(chatId, { pendingOutfitNotifications: null })
   }
@@ -894,20 +901,17 @@ async function processMessage(
       uncensoredFallbackOptions: (chat.isDangerousChat && dangerSettings && cheapLLMSelection)
         ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
         : undefined,
-      // Extract status change notifications from recent system events + pending outfit changes
-      statusChangeNotifications: (() => {
-        const notifications: string[] = []
-        if (isMultiCharacter) {
-          notifications.push(
-            ...existingMessages
-              .filter(m => m.type === 'system' && (m as Record<string, unknown>).systemEventType === 'STATUS_CHANGE')
-              .map(m => (m as Record<string, unknown>).description as string)
-              .filter(Boolean)
-          )
-        }
-        notifications.push(...outfitChangeNotifications)
-        return notifications.length > 0 ? notifications : undefined
-      })(),
+      // Extract status change notifications from recent system events
+      statusChangeNotifications: isMultiCharacter
+        ? existingMessages
+            .filter(m => m.type === 'system' && (m as Record<string, unknown>).systemEventType === 'STATUS_CHANGE')
+            .map(m => (m as Record<string, unknown>).description as string)
+            .filter(Boolean)
+        : undefined,
+      // Outfit change notifications (separate from status changes for prominence)
+      outfitChangeNotifications: outfitChangeNotifications.length > 0
+        ? outfitChangeNotifications
+        : undefined,
       // Status callback for budget-driven compression phases
       onStatusChange: (stage: string, message: string) => {
         safeEnqueue(controller, encodeStatusEvent(encoder, {

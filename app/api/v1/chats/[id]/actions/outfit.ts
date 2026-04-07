@@ -85,6 +85,7 @@ export async function handleEquipSlot(
     });
 
     // Build outfit summary and store as pending notification for the character's next turn
+    logger.debug('[Chats v1] Building outfit change notification', { chatId, characterId, context: 'wardrobe' });
     try {
       const equippedItemIds = Object.values(updatedSlots).filter(Boolean) as string[];
       const equippedItems = equippedItemIds.length > 0
@@ -111,6 +112,9 @@ export async function handleEquipSlot(
       const pending = (chat?.pendingOutfitNotifications as Record<string, string> | null) ?? {};
       pending[characterId] = `${charName}'s outfit has been changed. ${charName} is now wearing: ${outfitText}`;
       await repos.chats.update(chatId, { pendingOutfitNotifications: pending });
+      logger.info('[Chats v1] Stored outfit change notification', {
+        chatId, characterId, charName, notification: pending[characterId], context: 'wardrobe',
+      });
     } catch (notifError) {
       // Non-fatal — outfit change succeeded, notification is best-effort
       logger.warn('[Chats v1] Failed to store outfit change notification', {
