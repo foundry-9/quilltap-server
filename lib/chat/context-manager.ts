@@ -416,7 +416,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       }
     }
   } catch (error) {
-    logger.warn('[ContextManager] Failed to load wardrobe context, falling back to clothingRecords', {
+    logger.warn('[ContextManager] Failed to load wardrobe context', {
       characterId: character.id,
       chatId: chat.id,
       error: getErrorMessage(error),

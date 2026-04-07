@@ -366,6 +366,9 @@ export const ChatMetadataSchema = z.object({
   /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
 
+  /** Pending outfit change notifications keyed by characterId, cleared after delivery */
+  pendingOutfitNotifications: JsonSchema.nullable().optional(),
+
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),
 
@@ -479,6 +482,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
+
+  /** Pending outfit change notifications keyed by characterId, cleared after delivery */
+  pendingOutfitNotifications: JsonSchema.nullable().optional(),
 
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),

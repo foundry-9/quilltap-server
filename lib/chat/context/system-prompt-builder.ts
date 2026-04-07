@@ -13,8 +13,7 @@ import { processTemplate, type TemplateContext } from '@/lib/templates/processor
 
 /**
  * Wardrobe context for system prompt rendering.
- * When provided, replaces the legacy clothingRecords section with
- * slot-based "Current Outfit" and "Available Wardrobe" sections.
+ * Renders slot-based "Current Outfit" and "Available Wardrobe" sections.
  */
 export interface WardrobeContext {
   /** Currently equipped items, keyed by slot name (e.g. "top", "footwear") */
@@ -75,7 +74,7 @@ export function buildSystemPrompt(
   respondingCharacterStatus?: 'active' | 'silent' | 'absent' | 'removed',
   /** Scenario text override (from chat-level scenario selection) */
   scenarioText?: string | null,
-  /** Wardrobe context for slot-based outfit rendering (replaces legacy clothingRecords when present) */
+  /** Wardrobe context for slot-based outfit rendering */
   wardrobeContext?: WardrobeContext | null
 ): string {
   const parts: string[] = []
@@ -207,8 +206,7 @@ export function buildSystemPrompt(
     }
   }
 
-  // Wardrobe / clothing context for the LLM
-  // Prefer wardrobe context (slot-based) when available; fall back to legacy clothingRecords
+  // Wardrobe / clothing context for the LLM (slot-based wardrobe system)
   if (wardrobeContext) {
     const { equippedItems, wardrobeItems } = wardrobeContext
     const equippedSlotNames = Object.keys(equippedItems)
@@ -251,16 +249,6 @@ export function buildSystemPrompt(
       })
       parts.push(`\n## Available Wardrobe\n${availableLines.join('\n')}`)
     }
-  } else if (character.clothingRecords && character.clothingRecords.length > 0) {
-    // Legacy fallback: render old clothingRecords format
-    const clothingLines = character.clothingRecords.map(record => {
-      const contextNote = record.usageContext ? ` (when: ${record.usageContext})` : '';
-      const descText = record.description || '';
-      if (!descText) return `- "${record.name}"${contextNote}`;
-      return `- "${record.name}"${contextNote}: ${descText}`;
-    });
-
-    parts.push(`\n## Clothing / Outfits\n${clothingLines.join('\n')}`);
   }
 
   // Scenario/setting - use first scenario in the array, process templates

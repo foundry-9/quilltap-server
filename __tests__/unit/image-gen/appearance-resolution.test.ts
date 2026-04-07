@@ -96,15 +96,8 @@ const sampleCharacter1: AppearanceResolutionInput = {
       updatedAt: ts,
     },
   ],
-  clothingRecords: [
-    {
-      id: 'clothing-1',
-      name: 'Casual outfit',
-      usageContext: 'Everyday wear',
-      description: 'Blue jeans and a white t-shirt',
-      createdAt: ts,
-      updatedAt: ts,
-    },
+  equippedWardrobeItems: [
+    { slot: 'top', title: 'Casual Outfit', description: 'Blue jeans and a white t-shirt' },
   ],
 }
 
@@ -137,23 +130,10 @@ const sampleCharacter2: AppearanceResolutionInput = {
       updatedAt: ts,
     },
   ],
-  clothingRecords: [
-    {
-      id: 'clothing-2a',
-      name: 'Business attire',
-      usageContext: 'Work meetings',
-      description: 'Navy suit with red tie',
-      createdAt: ts,
-      updatedAt: ts,
-    },
-    {
-      id: 'clothing-2b',
-      name: 'Weekend wear',
-      usageContext: 'Relaxing',
-      description: 'Jeans and plaid flannel',
-      createdAt: ts,
-      updatedAt: ts,
-    },
+  equippedWardrobeItems: [
+    { slot: 'top', title: 'Navy Suit Jacket', description: 'Navy suit jacket with red tie' },
+    { slot: 'bottom', title: 'Navy Suit Trousers', description: 'Matching navy trousers' },
+    { slot: 'footwear', title: 'Oxford Shoes', description: 'Black Oxford shoes' },
   ],
 }
 
@@ -194,8 +174,8 @@ describe('Appearance Resolution Module', () => {
           characterName: 'Alice',
           physicalDescription: 'A young woman with long flowing red hair, vibrant green eyes, fair skin, wearing casual clothes',
           physicalDescriptionName: 'Default',
-          clothingDescription: 'Blue jeans and a white t-shirt',
-          clothingSource: 'default',
+          clothingDescription: 'Wearing Casual Outfit (Blue jeans and a white t-shirt), no bottom, barefoot, no accessories',
+          clothingSource: 'stored',
           wasSanitized: false,
         })
       })
@@ -433,8 +413,8 @@ describe('Appearance Resolution Module', () => {
           characterName: 'Alice',
           physicalDescription: 'A young woman with long flowing red hair, vibrant green eyes, fair skin, wearing casual clothes',
           physicalDescriptionName: 'Default',
-          clothingDescription: 'Blue jeans and a white t-shirt',
-          clothingSource: 'default',
+          clothingDescription: 'Wearing Casual Outfit (Blue jeans and a white t-shirt), no bottom, barefoot, no accessories',
+          clothingSource: 'stored',
           wasSanitized: false,
         })
       })
@@ -507,7 +487,7 @@ describe('Appearance Resolution Module', () => {
           characterId: 'char-3',
           characterName: 'Charlie',
           physicalDescriptions: [],
-          clothingRecords: [],
+          equippedWardrobeItems: [],
         }
 
         const result = await resolveCharacterAppearances(
@@ -558,7 +538,7 @@ describe('Appearance Resolution Module', () => {
               updatedAt: ts,
             },
           ],
-          clothingRecords: [],
+          equippedWardrobeItems: [],
         }
 
         const result = await resolveCharacterAppearances(
@@ -892,15 +872,9 @@ describe('Appearance Resolution Module', () => {
               updatedAt: ts,
             },
           ],
-          clothingRecords: [
-            {
-              id: 'clothing-1',
-              name: 'Outfit A',
-              usageContext: 'General',
-              description: 'Blue jeans and white shirt',
-              createdAt: ts,
-              updatedAt: ts,
-            },
+          equippedWardrobeItems: [
+            { slot: 'top', title: 'White Shirt', description: 'A plain white shirt' },
+            { slot: 'bottom', title: 'Blue Jeans', description: 'Blue jeans' },
           ],
         },
       ]
@@ -950,7 +924,7 @@ describe('Appearance Resolution Module', () => {
           entityId: 'char-2',
           type: 'character' as const,
           descriptions: [],
-          clothingRecords: [],
+          equippedWardrobeItems: [],
         },
       ]
 
@@ -990,7 +964,7 @@ describe('Appearance Resolution Module', () => {
           entityId: 'char-1',
           type: 'character' as const,
           descriptions: [],
-          clothingRecords: [],
+          equippedWardrobeItems: [],
         },
       ]
 
@@ -1037,15 +1011,8 @@ describe('Appearance Resolution Module', () => {
               updatedAt: ts,
             },
           ],
-          clothingRecords: [
-            {
-              id: 'clothing-1',
-              name: 'Outfit',
-              usageContext: null,
-              description: 'Casual clothes',
-              createdAt: ts,
-              updatedAt: ts,
-            },
+          equippedWardrobeItems: [
+            { slot: 'top', title: 'Casual Top', description: 'Casual clothes' },
           ],
         },
       ]
@@ -1068,13 +1035,8 @@ describe('Appearance Resolution Module', () => {
         long: 'A woman with long red hair',
         complete: 'A woman with long red hair and green eyes',
       })
-      expect(context.placeholders[0].clothing).toEqual([
-        {
-          name: 'Outfit',
-          usageContext: null,
-          description: 'Casual clothes',
-        },
-      ])
+      // clothing field removed from placeholders — wardrobe items are loaded separately via equipped state
+      expect(context.placeholders[0].clothing).toBeUndefined()
     })
 
     it('should work without resolved appearances parameter', () => {
@@ -1098,7 +1060,7 @@ describe('Appearance Resolution Module', () => {
               updatedAt: ts,
             },
           ],
-          clothingRecords: [],
+          equippedWardrobeItems: [],
         },
       ]
 

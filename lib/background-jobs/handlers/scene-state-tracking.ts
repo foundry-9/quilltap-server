@@ -172,12 +172,51 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
       .map(p => p.characterId)
   );
   const presentCharacters = validCharacters.filter(c => c && presentParticipantCharacterIds.has(c.id));
-  const characterBaselines = presentCharacters.map(char => ({
-    characterId: char!.id,
-    characterName: char!.name,
-    physicalDescription: char!.physicalDescriptions?.[0]?.mediumPrompt || char!.physicalDescriptions?.[0]?.shortPrompt || '',
-    clothingDescription: char!.clothingRecords?.[0]?.description || '',
-    scenario: chat.scenarioText || char!.scenarios?.[0]?.content || undefined,
+
+  // Build character baselines with equipped wardrobe items
+  const characterBaselines = await Promise.all(presentCharacters.map(async (char) => {
+    let clothingDescription = '';
+
+    // Load equipped wardrobe items for clothing description
+    try {
+      const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
+      if (equippedSlots) {
+        const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
+        if (equippedItemIds.length > 0) {
+          const items = await repos.wardrobe.findByIds(equippedItemIds);
+          const itemsMap = new Map(items.map(item => [item.id, item]));
+          const parts: string[] = [];
+          for (const [slot, itemId] of Object.entries(equippedSlots)) {
+            if (itemId) {
+              const item = itemsMap.get(itemId);
+              if (item) {
+                parts.push(`${slot}: ${item.title}${item.description ? ` (${item.description})` : ''}`);
+              }
+            } else {
+              parts.push(`${slot}: ${slot === 'footwear' ? 'barefoot' : 'none'}`);
+            }
+          }
+          clothingDescription = parts.join(', ');
+        } else {
+          // All slots null — character is unclothed
+          clothingDescription = 'not wearing anything';
+        }
+      }
+    } catch (error) {
+      logger.warn('[SceneStateTracking] Failed to load equipped wardrobe for character', {
+        jobId: job.id,
+        characterId: char!.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return {
+      characterId: char!.id,
+      characterName: char!.name,
+      physicalDescription: char!.physicalDescriptions?.[0]?.mediumPrompt || char!.physicalDescriptions?.[0]?.shortPrompt || '',
+      clothingDescription,
+      scenario: chat.scenarioText || char!.scenarios?.[0]?.content || undefined,
+    };
   }));
 
   // 8b. Extract chat scenario context

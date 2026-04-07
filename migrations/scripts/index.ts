@@ -147,6 +147,8 @@ import { addEquippedOutfitFieldMigration } from './add-equipped-outfit-field';
 import { addCharacterWardrobeFlagsMigration } from './add-character-wardrobe-flags';
 // Migrate existing clothing records to wardrobe_items table
 import { migrateClothingRecordsToWardrobeMigration } from './migrate-clothing-records-to-wardrobe';
+// Add pendingOutfitNotifications field to chats
+import { addPendingOutfitNotificationsFieldMigration } from './add-pending-outfit-notifications-field';
 
 /**
  * All available migrations.
@@ -289,6 +291,8 @@ export const migrations: Migration[] = [
   addCharacterWardrobeFlagsMigration,
   // Migrate existing clothing records to wardrobe_items table
   migrateClothingRecordsToWardrobeMigration,
+  // Add pendingOutfitNotifications field to chats
+  addPendingOutfitNotificationsFieldMigration,
 ];
 
 export {

@@ -194,7 +194,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       characterId: char!.id,
       characterName: char!.name,
       physicalDescriptions: char!.physicalDescriptions || [],
-      clothingRecords: char!.clothingRecords || [],
       equippedWardrobeItems,
     });
   }
@@ -384,11 +383,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
     // Fallback: simple first-description logic
     const primary = char!.physicalDescriptions?.[0];
-    const primaryOutfit = char!.clothingRecords?.[0];
     const descParts = [genderPrefix + (primary?.mediumPrompt || primary?.shortPrompt || char!.name)];
-    if (primaryOutfit?.description) {
-      descParts.push(`Wearing: ${primaryOutfit.description}`);
-    }
     return {
       name: char!.name,
       description: descParts.join('. '),

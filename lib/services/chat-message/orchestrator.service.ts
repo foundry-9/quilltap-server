@@ -602,6 +602,16 @@ async function processMessage(
     await repos.chats.update(chatId, { forceToolsOnNextMessage: false })
   }
 
+  // Check for pending outfit change notifications (visible to ALL characters in the chat)
+  // These are set when a user manually changes a character's outfit via the sidebar
+  let outfitChangeNotifications: string[] = []
+  const pendingOutfitNotifications = chat.pendingOutfitNotifications as Record<string, string> | null
+  if (pendingOutfitNotifications && Object.keys(pendingOutfitNotifications).length > 0) {
+    outfitChangeNotifications = Object.values(pendingOutfitNotifications)
+    // Clear all pending notifications — every character sees them on next turn
+    await repos.chats.update(chatId, { pendingOutfitNotifications: null })
+  }
+
   // Check tool options
   const enabledToolOptions = determineEnabledToolOptions(
     imageProfileId,
@@ -884,13 +894,20 @@ async function processMessage(
       uncensoredFallbackOptions: (chat.isDangerousChat && dangerSettings && cheapLLMSelection)
         ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
         : undefined,
-      // Extract status change notifications from recent system events
-      statusChangeNotifications: isMultiCharacter
-        ? existingMessages
-            .filter(m => m.type === 'system' && (m as Record<string, unknown>).systemEventType === 'STATUS_CHANGE')
-            .map(m => (m as Record<string, unknown>).description as string)
-            .filter(Boolean)
-        : undefined,
+      // Extract status change notifications from recent system events + pending outfit changes
+      statusChangeNotifications: (() => {
+        const notifications: string[] = []
+        if (isMultiCharacter) {
+          notifications.push(
+            ...existingMessages
+              .filter(m => m.type === 'system' && (m as Record<string, unknown>).systemEventType === 'STATUS_CHANGE')
+              .map(m => (m as Record<string, unknown>).description as string)
+              .filter(Boolean)
+          )
+        }
+        notifications.push(...outfitChangeNotifications)
+        return notifications.length > 0 ? notifications : undefined
+      })(),
       // Status callback for budget-driven compression phases
       onStatusChange: (stage: string, message: string) => {
         safeEnqueue(controller, encodeStatusEvent(encoder, {

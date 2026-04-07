@@ -19,6 +19,8 @@
 - Character settings toggles for `canDressThemselves` and `canCreateOutfits` flags on the Profiles tab
 - Outfit selection during new chat creation (default, manual, or none) across all three chat creation flows
 - In-chat outfit indicator on ParticipantCard sidebar showing current equipped items per character with inline slot-change dropdowns
+- Outfit change notifications: when outfits are changed via the sidebar, all characters in the chat are informed on their next turn
+- Scene state tracker now uses equipped wardrobe items instead of legacy clothing records
 
 #### Changed
 

@@ -704,7 +704,7 @@ export async function executeImageGenerationTool(
           // Build appearance inputs from resolved placeholders, enriched with equipped wardrobe items
           const repos = getRepositories();
           const appearanceInputs: AppearanceResolutionInput[] = [];
-          for (const p of resolvedPlaceholders.filter(p => p.entityId && (p.descriptions?.length || p.clothingRecords?.length))) {
+          for (const p of resolvedPlaceholders.filter(p => p.entityId && p.descriptions?.length)) {
             let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
             if (context.chatId && p.entityId) {
               try {
@@ -737,7 +737,6 @@ export async function executeImageGenerationTool(
               characterId: p.entityId!,
               characterName: p.name,
               physicalDescriptions: p.descriptions || [],
-              clothingRecords: p.clothingRecords || [],
               equippedWardrobeItems,
             });
           }

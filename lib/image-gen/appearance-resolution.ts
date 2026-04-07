@@ -8,7 +8,7 @@
  * @module image-gen/appearance-resolution
  */
 
-import type { PhysicalDescription, ClothingRecord } from '@/lib/schemas/types'
+import type { PhysicalDescription } from '@/lib/schemas/types'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 import {
@@ -62,8 +62,7 @@ export interface AppearanceResolutionInput {
   characterId: string
   characterName: string
   physicalDescriptions: PhysicalDescription[]
-  clothingRecords: ClothingRecord[]
-  /** Equipped wardrobe items (from the wardrobe system). Takes precedence over clothingRecords for clothing descriptions. */
+  /** Equipped wardrobe items (from the wardrobe system) */
   equippedWardrobeItems?: Array<{
     slot: string
     title: string
@@ -88,7 +87,7 @@ function canSkipResolution(
   if (recentMessages.length > 0) return false
 
   return characters.every(
-    c => c.physicalDescriptions.length <= 1 && c.clothingRecords.length <= 1
+    c => c.physicalDescriptions.length <= 1 && (!c.equippedWardrobeItems || c.equippedWardrobeItems.length <= 1)
   )
 }
 
@@ -139,7 +138,6 @@ function buildDefaultAppearances(
 ): ResolvedCharacterAppearance[] {
   return characters.map(char => {
     const primary = char.physicalDescriptions[0]
-    const primaryOutfit = char.clothingRecords[0]
 
     const physDesc =
       primary?.completePrompt ||
@@ -148,26 +146,17 @@ function buildDefaultAppearances(
       primary?.shortPrompt ||
       char.characterName
 
-    // Equipped wardrobe items take precedence over legacy clothingRecords
-    if (char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0) {
-      return {
-        characterId: char.characterId,
-        characterName: char.characterName,
-        physicalDescription: physDesc,
-        physicalDescriptionName: primary?.name || 'default',
-        clothingDescription: composeWardrobeClothingDescription(char.equippedWardrobeItems),
-        clothingSource: 'stored' as const,
-        wasSanitized: false,
-      }
-    }
-
     return {
       characterId: char.characterId,
       characterName: char.characterName,
       physicalDescription: physDesc,
       physicalDescriptionName: primary?.name || 'default',
-      clothingDescription: primaryOutfit?.description || '',
-      clothingSource: primaryOutfit ? 'default' as const : 'default' as const,
+      clothingDescription: char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
+        ? composeWardrobeClothingDescription(char.equippedWardrobeItems)
+        : '',
+      clothingSource: char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
+        ? 'stored' as const
+        : 'default' as const,
       wasSanitized: false,
     }
   })
@@ -259,12 +248,11 @@ export async function resolveCharacterAppearances(
         physicalDescription: physDesc,
         physicalDescriptionName: primary?.name || 'scene-state',
         // If scene state has clothing info, use it. If clothing is explicitly null/empty
-        // (e.g. character undressed), do NOT fall back to stored clothing records —
-        // that would incorrectly redress the character in their default outfit.
-        // Only fall back to stored records if the character wasn't found in scene state at all.
+        // (e.g. character undressed), do NOT fall back — that would incorrectly redress.
+        // If the character wasn't found in scene state at all, leave clothing empty.
         clothingDescription: sceneChar
           ? (sceneChar.clothing || '')
-          : (char.clothingRecords[0]?.description || ''),
+          : '',
         clothingSource: sceneChar ? 'narrative' as const : 'default' as const,
         wasSanitized: false,
       }
@@ -294,12 +282,6 @@ export async function resolveCharacterAppearances(
       usageContext: d.usageContext,
       shortPrompt: d.shortPrompt,
       mediumPrompt: d.mediumPrompt,
-    })),
-    clothingRecords: char.clothingRecords.map(c => ({
-      id: c.id,
-      name: c.name,
-      usageContext: c.usageContext,
-      description: c.description,
     })),
     ...(char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
       ? { equippedWardrobeItems: char.equippedWardrobeItems }

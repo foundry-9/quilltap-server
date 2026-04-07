@@ -267,6 +267,7 @@ CREATE TABLE "chats" (
   "turnQueue" TEXT DEFAULT '[]',
   "sceneState" TEXT DEFAULT NULL,
   "equippedOutfit" TEXT DEFAULT NULL,
+  "pendingOutfitNotifications" TEXT DEFAULT NULL,
   "chatType" TEXT DEFAULT 'salon',
   "helpPageUrl" TEXT DEFAULT NULL,
   "scenarioText" TEXT DEFAULT NULL

@@ -726,12 +726,6 @@ export async function resolveAppearance(
       return `    - ID: ${d.id}, Name: "${d.name}"${context}: ${preview}`
     })
 
-    const clothingParts = char.clothingRecords.map(c => {
-      const context = c.usageContext ? ` (context: ${c.usageContext})` : ''
-      const desc = c.description || '(no description)'
-      return `    - ID: ${c.id}, Name: "${c.name}"${context}: ${desc}`
-    })
-
     // Build equipped wardrobe items section if present
     let wardrobeSection = ''
     if (char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0) {
@@ -762,9 +756,7 @@ export async function resolveAppearance(
 
     return `  Character: ${char.characterName} (ID: ${char.characterId})
   Physical Descriptions:
-${descParts.length > 0 ? descParts.join('\n') : '    (none)'}
-  Clothing Records:
-${clothingParts.length > 0 ? clothingParts.join('\n') : '    (none)'}${wardrobeSection}`
+${descParts.length > 0 ? descParts.join('\n') : '    (none)'}${wardrobeSection}`
   }).join('\n\n')
 
   // Format recent messages
