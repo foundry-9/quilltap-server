@@ -4,6 +4,7 @@
 
 ### 4.2-dev
 
+- perf: Memories tab on character pages now uses paginated loading with infinite scroll instead of loading all memories at once
 - chore: Add `all` mode to remove-old-dev-tags Claude command for removing every dev tag, release, and Docker image
 - docs: Add system flowcharts (Mermaid) documenting prompt assembly, memory extraction pipeline, scene tracking, story background generation, and Concierge content routing
 

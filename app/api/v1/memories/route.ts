@@ -196,15 +196,60 @@ async function listMemoriesByCharacter(
     return notFound('Character');
   }
 
-  // Get query params for filtering
+  // Get query params for filtering and pagination
   const { searchParams } = req.nextUrl;
-  const search = searchParams.get('search');
-  const minImportance = searchParams.get('minImportance');
-  const source = searchParams.get('source');
+  const search = searchParams.get('search') || undefined;
+  const minImportanceParam = searchParams.get('minImportance');
+  const source = searchParams.get('source') as 'AUTO' | 'MANUAL' | null;
   const sortBy = searchParams.get('sortBy') || 'createdAt';
-  const sortOrder = searchParams.get('sortOrder') || 'desc';
+  const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
 
-  // Get memories
+  // Pagination params (default: no limit = return all for backward compat)
+  const limitParam = searchParams.get('limit');
+  const offsetParam = searchParams.get('offset');
+
+  const minImportance = minImportanceParam ? parseFloat(minImportanceParam) : undefined;
+
+  // If pagination params provided, use paginated query
+  if (limitParam) {
+    const limit = Math.max(1, Math.min(200, parseInt(limitParam, 10) || 50));
+    const offset = Math.max(0, parseInt(offsetParam || '0', 10) || 0);
+
+    const { memories, totalCount } = await repos.memories.findByCharacterIdPaginated(characterId, {
+      limit,
+      offset,
+      sortBy,
+      sortOrder,
+      search,
+      source: source && (source === 'AUTO' || source === 'MANUAL') ? source : undefined,
+      minImportance: minImportance !== undefined && !isNaN(minImportance) ? minImportance : undefined,
+    });
+
+    // Enrich with tag names
+    const allTags = await repos.tags.findAll();
+    const tagMap = new Map(allTags.map((t: any) => [t.id, t]));
+
+    const memoriesWithTags = memories.map((memory: any) => ({
+      ...memory,
+      tagDetails: memory.tags.map((tagId: string) => tagMap.get(tagId)).filter(Boolean),
+    }));
+
+    logger.debug('[Memories API] Paginated list', {
+      characterId,
+      limit,
+      offset,
+      returned: memoriesWithTags.length,
+      totalCount,
+    });
+
+    return NextResponse.json({
+      memories: memoriesWithTags,
+      count: memoriesWithTags.length,
+      totalCount,
+    });
+  }
+
+  // Legacy unpaginated path (for other callers)
   let memories = await repos.memories.findByCharacterId(characterId);
 
   // Apply filters
@@ -217,11 +262,8 @@ async function listMemoriesByCharacter(
     );
   }
 
-  if (minImportance) {
-    const minImp = parseFloat(minImportance);
-    if (!isNaN(minImp)) {
-      memories = memories.filter((m: any) => m.importance >= minImp);
-    }
+  if (minImportance !== undefined && !isNaN(minImportance)) {
+    memories = memories.filter((m: any) => m.importance >= minImportance);
   }
 
   if (source && (source === 'AUTO' || source === 'MANUAL')) {
@@ -258,6 +300,7 @@ async function listMemoriesByCharacter(
   return NextResponse.json({
     memories: memoriesWithTags,
     count: memoriesWithTags.length,
+    totalCount: memoriesWithTags.length,
   });
 }
 

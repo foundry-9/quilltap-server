@@ -99,6 +99,74 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * Find memories for a character with pagination support.
+   * Returns a page of memories and the total count matching the filter.
+   *
+   * @param characterId The character ID
+   * @param options Pagination, sorting, and filtering options
+   * @returns Promise with memories array and totalCount
+   */
+  async findByCharacterIdPaginated(
+    characterId: string,
+    options: {
+      limit: number
+      offset: number
+      sortBy?: string
+      sortOrder?: 'asc' | 'desc'
+      search?: string
+      source?: 'AUTO' | 'MANUAL'
+      minImportance?: number
+    }
+  ): Promise<{ memories: Memory[]; totalCount: number }> {
+    return this.safeQuery(
+      async () => {
+        const { limit, offset, sortBy = 'createdAt', sortOrder = 'desc', search, source, minImportance } = options;
+
+        // Build filter
+        const filter: TypedQueryFilter<Memory> = { characterId };
+        if (source) {
+          (filter as any).source = source;
+        }
+        if (minImportance !== undefined) {
+          (filter as any).importance = { $gte: minImportance };
+        }
+
+        // Get total count before pagination (but after filtering except search,
+        // since search is applied in-memory)
+        let allMatching = await this.findByFilter(filter, {
+          sort: { [sortBy]: sortOrder === 'desc' ? -1 : 1 },
+        });
+
+        // Apply text search in-memory (same as existing behavior)
+        if (search) {
+          const searchLower = search.toLowerCase();
+          allMatching = allMatching.filter((memory) =>
+            memory.content.toLowerCase().includes(searchLower) ||
+            memory.summary.toLowerCase().includes(searchLower) ||
+            memory.keywords.some((k) => k.toLowerCase().includes(searchLower))
+          );
+        }
+
+        const totalCount = allMatching.length;
+        const memories = allMatching.slice(offset, offset + limit);
+
+        logger.debug('[Memories Repository] Paginated query', {
+          characterId,
+          totalCount,
+          limit,
+          offset,
+          returned: memories.length,
+        });
+
+        return { memories, totalCount };
+      },
+      'Error finding paginated memories for character',
+      { characterId, limit: options.limit, offset: options.offset },
+      { memories: [], totalCount: 0 }
+    );
+  }
+
+  /**
    * Find memories containing any of the specified keywords
    * @param characterId The character ID
    * @param keywords Array of keywords to search for
