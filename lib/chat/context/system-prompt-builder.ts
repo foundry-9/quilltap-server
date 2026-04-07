@@ -99,6 +99,16 @@ export function buildSystemPrompt(
     templateContext
   ))
 
+  // Outfit change notifications — placed immediately after identity for maximum prominence
+  // These must survive system prompt truncation, so they go early
+  if (outfitChangeNotifications && outfitChangeNotifications.length > 0) {
+    parts.push(
+      '## ⚠️ Outfit Change Notice\n' +
+      'IMPORTANT — The following outfit changes were just made. Acknowledge and incorporate these changes immediately:\n' +
+      outfitChangeNotifications.map(n => `- ${n}`).join('\n')
+    )
+  }
+
   // Handle timestamp injection
   if (timestampConfig && shouldInjectTimestamp(timestampConfig, isInitialMessage ?? false)) {
     const timestamp = calculateCurrentTimestamp(timestampConfig, timezone)
@@ -244,12 +254,14 @@ export function buildSystemPrompt(
 
     const availableItems = wardrobeItems.filter(w => !equippedIds.has(w.id))
     if (availableItems.length > 0) {
-      const availableLines = availableItems.map(item => {
-        const types = `[${item.types.join(', ')}]`
-        const appro = item.appropriateness ? ` (${item.appropriateness})` : ''
-        return `- "${item.title}" ${types}${appro}`
-      })
-      parts.push(`\n## Available Wardrobe\n${availableLines.join('\n')}`)
+      // Keep it compact — titles only, no descriptions, to minimize token usage
+      const displayItems = availableItems.slice(0, 15)
+      const availableLines = displayItems.map(item => `- ${item.title}`)
+      let section = `\n## Available Wardrobe\n${availableLines.join('\n')}`
+      if (availableItems.length > 15) {
+        section += `\n(and ${availableItems.length - 15} more items — use list_wardrobe to browse)`
+      }
+      parts.push(section)
     }
   }
 
@@ -316,15 +328,6 @@ export function buildSystemPrompt(
       '- Speak any dialogue out loud\n' +
       '- Whisper, murmur, or make any vocal sounds others could hear\n' +
       '- Communicate verbally in any way'
-    )
-  }
-
-  // Outfit change notifications — prominent section so the character notices the change
-  if (outfitChangeNotifications && outfitChangeNotifications.length > 0) {
-    parts.push(
-      '## ⚠️ Outfit Change Notice\n' +
-      'IMPORTANT — The following outfit changes were just made. Acknowledge and incorporate these changes immediately:\n' +
-      outfitChangeNotifications.map(n => `- ${n}`).join('\n')
     )
   }
 
