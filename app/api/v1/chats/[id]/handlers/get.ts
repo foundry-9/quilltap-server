@@ -171,7 +171,7 @@ export async function handleGet(
     }
 
     const enrichedParticipants = await Promise.all(
-      chatMetadata.participants.map((p) => enrichParticipantDetail(p, repos))
+      chatMetadata.participants.map((p) => enrichParticipantDetail(p, repos, chatId))
     );
 
     // Get roleplay template for rendering patterns
@@ -323,6 +323,7 @@ export async function handleGet(
       agentModeEnabled: chatMetadata.agentModeEnabled ?? false,
       resolvedAgentModeEnabled: resolvedAgentMode.enabled,
       agentModeSource: resolvedAgentMode.enabledSource,
+      avatarGenerationEnabled: chatMetadata.avatarGenerationEnabled ?? null,
     };
 
     return NextResponse.json({ chat });

@@ -45,6 +45,9 @@ export const ProjectSchema = z.object({
   /** Default agent mode enabled state for chats in this project (null = inherit from character or global) */
   defaultAgentModeEnabled: z.boolean().nullable().optional(),
 
+  /** Default avatar generation enabled state for chats in this project (null = disabled) */
+  defaultAvatarGenerationEnabled: z.boolean().nullable().optional(),
+
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),
 

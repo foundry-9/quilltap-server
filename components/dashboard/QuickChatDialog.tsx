@@ -32,6 +32,7 @@ export function QuickChatDialog({
     scenarioId,
     scenarios,
     timestampConfig,
+    avatarGenerationEnabled,
     outfitSelections,
     creatingChat,
     setSelectedProfileId,
@@ -40,6 +41,7 @@ export function QuickChatDialog({
     setScenario,
     setScenarioId,
     setTimestampConfig,
+    setAvatarGenerationEnabled,
     setOutfitSelections,
     fetchData,
     handleCreateChat,
@@ -196,6 +198,21 @@ export function QuickChatDialog({
                   onSelectionsChange={setOutfitSelections}
                   disabled={creatingChat}
                 />
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={avatarGenerationEnabled}
+                      onChange={(e) => setAvatarGenerationEnabled(e.target.checked)}
+                      className="qt-checkbox"
+                      disabled={creatingChat}
+                    />
+                    <span className="qt-text-small">Auto-generate character avatars</span>
+                  </label>
+                  <p className="qt-text-xs qt-text-muted mt-1">
+                    Generate new portraits when outfits change (uses image API)
+                  </p>
+                </div>
                 <TimestampConfigCard
                   config={timestampConfig}
                   onChange={setTimestampConfig}

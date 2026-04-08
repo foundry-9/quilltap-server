@@ -199,15 +199,36 @@ export async function getCharacterSummary(
 
 /**
  * Get enriched character info for detail view (no tags)
+ * @param chatId Optional - if provided, checks avatarOverrides for chat-specific avatar
  */
 export async function getCharacterDetail(
   characterId: string,
-  repos: Repos
+  repos: Repos,
+  chatId?: string,
 ): Promise<EnrichedCharacterDetail | null> {
   const character = await repos.characters.findById(characterId)
   if (!character) {
 
     return null
+  }
+
+  // Check for chat-specific avatar override (from wardrobe avatar generation)
+  if (chatId && character.avatarOverrides?.length) {
+    const override = character.avatarOverrides.find(o => o.chatId === chatId)
+    if (override) {
+      const overrideFile = await repos.files.findById(override.imageId)
+      if (overrideFile) {
+        const overrideImage: EnrichedImage = { id: overrideFile.id, filepath: getFilePath(overrideFile), url: null }
+        return {
+          id: character.id,
+          name: character.name,
+          title: character.title ?? null,
+          avatarUrl: `/api/v1/files/${overrideFile.id}`,
+          defaultImageId: override.imageId,
+          defaultImage: overrideImage,
+        }
+      }
+    }
   }
 
   let defaultImage: EnrichedImage | null = null
@@ -321,10 +342,11 @@ export async function enrichParticipantSummary(
  */
 export async function enrichParticipantDetail(
   participant: ChatParticipantBase,
-  repos: Repos
+  repos: Repos,
+  chatId?: string,
 ): Promise<EnrichedParticipantDetail> {
   const character = participant.type === 'CHARACTER' && participant.characterId
-    ? await getCharacterDetail(participant.characterId, repos)
+    ? await getCharacterDetail(participant.characterId, repos, chatId)
     : null
 
   const connectionProfile = participant.connectionProfileId

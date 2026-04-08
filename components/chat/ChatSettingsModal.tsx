@@ -31,6 +31,7 @@ interface ChatSettingsModalProps {
   chatId: string
   roleplayTemplateId?: string | null
   imageProfileId?: string | null
+  avatarGenerationEnabled?: boolean | null
   onSuccess?: () => void
 }
 
@@ -40,6 +41,7 @@ export default function ChatSettingsModal({
   chatId,
   roleplayTemplateId: initialRoleplayTemplateId,
   imageProfileId: initialImageProfileId,
+  avatarGenerationEnabled: initialAvatarGenerationEnabled,
   onSuccess,
 }: Readonly<ChatSettingsModalProps>) {
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
@@ -51,8 +53,10 @@ export default function ChatSettingsModal({
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(
     initialImageProfileId ?? null
   )
+  const [avatarGenEnabled, setAvatarGenEnabled] = useState(initialAvatarGenerationEnabled ?? false)
   const [roleplayTemplateSaving, setRoleplayTemplateSaving] = useState(false)
   const [imageProfileSaving, setImageProfileSaving] = useState(false)
+  const [avatarGenSaving, setAvatarGenSaving] = useState(false)
   const [dataLoading, setDataLoading] = useState(false)
 
   // Update local state when prop changes
@@ -65,6 +69,10 @@ export default function ChatSettingsModal({
   }, [initialImageProfileId])
 
   useEffect(() => {
+    setAvatarGenEnabled(initialAvatarGenerationEnabled ?? false)
+  }, [initialAvatarGenerationEnabled])
+
+  useEffect(() => {
     if (isOpen) {
       fetchProfiles()
       fetchRoleplayTemplates()
@@ -73,7 +81,7 @@ export default function ChatSettingsModal({
 
   // Disable click-outside detection while saving to prevent native select dropdown clicks
   // from closing the modal (browser renders select options in a separate layer)
-  const isSaving = dataLoading || roleplayTemplateSaving || imageProfileSaving
+  const isSaving = dataLoading || roleplayTemplateSaving || imageProfileSaving || avatarGenSaving
 
   const fetchProfiles = async () => {
     try {
@@ -188,6 +196,41 @@ export default function ChatSettingsModal({
     }
   }
 
+  const handleAvatarGenToggle = async () => {
+    try {
+      setAvatarGenSaving(true)
+
+      const res = await fetch(`/api/v1/chats/${chatId}?action=toggle-avatar-generation`, {
+        method: 'POST',
+      })
+
+      if (!res.ok) {
+        let errorMessage = 'Failed to toggle avatar generation'
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          errorMessage = `HTTP ${res.status}: ${res.statusText}`
+        }
+        throw new Error(errorMessage)
+      }
+
+      const data = await res.json()
+      setAvatarGenEnabled(data.avatarGenerationEnabled ?? !avatarGenEnabled)
+      showSuccessToast(data.avatarGenerationEnabled ? 'Avatar generation enabled' : 'Avatar generation disabled')
+      onSuccess?.()
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error('Failed to toggle avatar generation', {
+        chatId,
+        error: errorMessage,
+      })
+      showErrorToast(errorMessage || 'Failed to toggle avatar generation')
+    } finally {
+      setAvatarGenSaving(false)
+    }
+  }
+
   const footer = (
     <div className="flex justify-end">
       <button
@@ -268,6 +311,29 @@ export default function ChatSettingsModal({
           <p className="qt-text-xs mt-2">
             Used for generating images in this chat.
             {imageProfileSaving && <span className="ml-2">Saving...</span>}
+          </p>
+        </div>
+      </div>
+
+      {/* Avatar Generation Section */}
+      <div className="mb-6">
+        <h3 className="qt-text-small font-medium mb-3">
+          Avatar Generation
+        </h3>
+        <div className="qt-card">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={avatarGenEnabled}
+              onChange={handleAvatarGenToggle}
+              disabled={avatarGenSaving || dataLoading}
+              className="qt-checkbox"
+            />
+            <span className="qt-label">Auto-generate character avatars</span>
+          </label>
+          <p className="qt-text-xs mt-2">
+            Generate new character portraits when outfits change. Each generation uses an image API call.
+            {avatarGenSaving && <span className="ml-2">Saving...</span>}
           </p>
         </div>
       </div>

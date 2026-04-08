@@ -194,6 +194,7 @@ export function ChatModals({
         chatId={chatId}
         roleplayTemplateId={chat?.roleplayTemplateId}
         imageProfileId={chat?.imageProfileId}
+        avatarGenerationEnabled={chat?.avatarGenerationEnabled}
         onSuccess={fetchChat}
       />
 

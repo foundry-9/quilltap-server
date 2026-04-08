@@ -149,6 +149,10 @@ import { addCharacterWardrobeFlagsMigration } from './add-character-wardrobe-fla
 import { migrateClothingRecordsToWardrobeMigration } from './migrate-clothing-records-to-wardrobe';
 // Add pendingOutfitNotifications field to chats
 import { addPendingOutfitNotificationsFieldMigration } from './add-pending-outfit-notifications-field';
+// Add characterAvatars and avatarGenerationEnabled fields to chats
+import { addCharacterAvatarsFieldsMigration } from './add-character-avatars-fields';
+// Add defaultAvatarGenerationEnabled field to projects
+import { addProjectAvatarGenerationDefaultMigration } from './add-project-avatar-generation-default';
 
 /**
  * All available migrations.
@@ -293,6 +297,10 @@ export const migrations: Migration[] = [
   migrateClothingRecordsToWardrobeMigration,
   // Add pendingOutfitNotifications field to chats
   addPendingOutfitNotificationsFieldMigration,
+  // Add characterAvatars and avatarGenerationEnabled fields to chats
+  addCharacterAvatarsFieldsMigration,
+  // Add defaultAvatarGenerationEnabled field to projects
+  addProjectAvatarGenerationDefaultMigration,
 ];
 
 export {
@@ -422,4 +430,9 @@ export {
   addConnectionProfileMaxTokensFieldMigration,
   // Fix memory timestamps to match source message timestamps
   fixMemoryTimestampsFromSourceMigration,
+  // Add characterAvatars and avatarGenerationEnabled fields to chats
+  addCharacterAvatarsFieldsMigration,
+  // Add defaultAvatarGenerationEnabled field to projects
+  addProjectAvatarGenerationDefaultMigration,
 };
+

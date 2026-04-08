@@ -73,6 +73,7 @@ const createChatSchema = z.object({
   projectId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
   outfitSelections: z.array(OutfitSelectionSchema).optional(), // Per-character outfit selections for chat start
+  avatarGenerationEnabled: z.boolean().optional(), // Enable auto-generated character avatars on outfit changes
 });
 
 // ============================================================================
@@ -732,11 +733,12 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     updatedAt: now,
   }));
 
-  // Default tool settings from project (if creating chat within a project)
+  // Default tool settings and avatar generation from project (if creating chat within a project)
   let projectToolDefaults = {
     disabledTools: [] as string[],
     disabledToolGroups: [] as string[],
   };
+  let projectAvatarGenerationDefault: boolean | null = null;
 
   if (validatedData.projectId) {
     const project = await repos.projects.findById(validatedData.projectId);
@@ -749,6 +751,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       disabledTools: project.defaultDisabledTools || [],
       disabledToolGroups: project.defaultDisabledToolGroups || [],
     };
+    projectAvatarGenerationDefault = project.defaultAvatarGenerationEnabled ?? null;
 
     if (!project.allowAnyCharacter) {
       const characterIds = participantsWithTimestamps
@@ -786,6 +789,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     disabledTools: projectToolDefaults.disabledTools,
     disabledToolGroups: projectToolDefaults.disabledToolGroups,
     imageProfileId: chatImageProfileId,
+    avatarGenerationEnabled: validatedData.avatarGenerationEnabled ?? projectAvatarGenerationDefault ?? null,
   });
 
   // Apply outfit selections to the newly created chat

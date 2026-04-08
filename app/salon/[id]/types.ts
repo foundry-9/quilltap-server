@@ -154,6 +154,8 @@ export interface Chat {
   disabledToolGroups?: string[]
   /** Image profile ID for generating images in this chat (shared by all participants) */
   imageProfileId?: string | null
+  /** Whether to auto-generate character avatars when outfits change */
+  avatarGenerationEnabled?: boolean | null
 }
 
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'

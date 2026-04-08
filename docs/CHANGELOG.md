@@ -6,6 +6,14 @@
 
 #### Added
 
+- **Per-Conversation Avatars**: Opt-in automatic avatar generation when character outfits change — generates portrait images reflecting current equipped wardrobe items via background jobs, with visual timeline in chat history
+- New `CHARACTER_AVATAR_GENERATION` background job type for async portrait generation
+- Chat-level `avatarGenerationEnabled` toggle and `characterAvatars` state tracking
+- Toggle action: `POST /api/v1/chats/[id]?action=toggle-avatar-generation`
+- Avatar generation triggers from wardrobe tool changes and sidebar outfit edits
+- Chat enrichment resolves per-chat avatar overrides from generated portraits
+- Avatar generation toggle in project settings (`defaultAvatarGenerationEnabled`), all new chat dialogs, and ChatSettingsModal for existing chats
+- Generated avatar portraits use 3/4 shot (thighs up) with scenario context and are tagged to the character for gallery display
 - **Modular Wardrobe System**: Characters now have composable wardrobes with individual garment items (tops, bottoms, footwear, accessories) that can be mixed and matched
 - New `wardrobe_items` database table for granular wardrobe item storage
 - Per-chat equipped outfit tracking via `equippedOutfit` field on chats

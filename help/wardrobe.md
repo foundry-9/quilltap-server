@@ -78,6 +78,14 @@ When Quilltap generates images of a character --- whether through the Lantern ba
 
 If no wardrobe items are equipped, the system falls back gracefully to the character's legacy clothing description, so nothing breaks for characters who have not yet been fitted with a proper wardrobe.
 
+## Per-Conversation Avatars
+
+Should you wish it, Quilltap can generate fresh character portraits whenever an outfit changes --- a sort of automated daguerreotype service, if you will. When enabled, each outfit change triggers a background portrait generation that reflects the character's current ensemble. The resulting avatar appears alongside their messages, creating a visual chronicle of the character's sartorial journey through the conversation.
+
+To enable this feature, look for the **Auto-Generate Avatars** toggle in your chat settings. Note that each portrait costs an image generation API call, so this feature is entirely opt-in --- one does not wish to receive an unexpectedly large bill from one's portraitist.
+
+The generated avatars update asynchronously: the chat continues without interruption, and the new portrait appears once the image provider has finished its work. Previous messages retain whatever avatar was current at the time, so scrolling backwards through the conversation reveals each costume change in sequence.
+
 ## Migration from Legacy Clothing
 
 If your characters already have clothing descriptions from before the Wardrobe system existed, fear not: Quilltap automatically migrates those descriptions into wardrobe items as full-coverage outfits. The original `clothingRecords` data is preserved, so nothing is lost in the transition. Think of it as unpacking a steamer trunk into a proper armoire --- everything is still there, just better organized.

@@ -51,7 +51,7 @@ export async function handlePut(
   }
 
   const enrichedParticipants = await Promise.all(
-    result.chat.participants.map((p) => enrichParticipantDetail(p, repos))
+    result.chat.participants.map((p) => enrichParticipantDetail(p, repos, chatId))
   );
 
   logger.info('[Chats v1] Chat updated', { chatId });

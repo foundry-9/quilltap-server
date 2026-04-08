@@ -76,6 +76,7 @@ interface Project {
   id: string
   name: string
   color?: string | null
+  defaultAvatarGenerationEnabled?: boolean | null
 }
 
 export default function NewChatPage() {
@@ -100,6 +101,7 @@ export default function NewChatPage() {
   const [creating, setCreating] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [project, setProject] = useState<Project | null>(null)
+  const [avatarGenerationEnabled, setAvatarGenerationEnabled] = useState(false)
   const [outfitSelections, setOutfitSelections] = useState<OutfitSelection[]>([])
 
   useEffect(() => {
@@ -142,7 +144,11 @@ export default function NewChatPage() {
         // Handle project response
         if (projectRes && projectRes.ok) {
           const data = await projectRes.json()
-          setProject(data.project || data)
+          const projectData = data.project || data
+          setProject(projectData)
+          if (projectData.defaultAvatarGenerationEnabled) {
+            setAvatarGenerationEnabled(true)
+          }
         } else if (projectRes && !projectRes.ok) {
           console.warn('[NewChat] Failed to load project', { projectId: projectIdParam, status: projectRes.status })
         }
@@ -396,6 +402,10 @@ export default function NewChatPage() {
 
       if (project?.id) {
         requestBody.projectId = project.id
+      }
+
+      if (avatarGenerationEnabled) {
+        requestBody.avatarGenerationEnabled = true
       }
 
       if (outfitSelections.length > 0) {
@@ -699,6 +709,21 @@ export default function NewChatPage() {
                   onSelectionsChange={setOutfitSelections}
                   disabled={creating}
                 />
+                <div className="mt-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={avatarGenerationEnabled}
+                      onChange={(e) => setAvatarGenerationEnabled(e.target.checked)}
+                      className="qt-checkbox"
+                      disabled={creating}
+                    />
+                    <span className="qt-text-small">Auto-generate character avatars</span>
+                  </label>
+                  <p className="qt-text-xs qt-text-muted mt-1">
+                    Generate new portraits when outfits change (uses image API)
+                  </p>
+                </div>
               </div>
             )}
 

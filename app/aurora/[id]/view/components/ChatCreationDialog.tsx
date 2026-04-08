@@ -40,6 +40,8 @@ interface ChatCreationDialogProps {
   onScenarioChange: (scenario: string) => void
   onScenarioIdChange?: (scenarioId: string | null) => void
   onTimestampConfigChange: (config: TimestampConfig) => void
+  avatarGenerationEnabled?: boolean
+  onAvatarGenerationChange?: (enabled: boolean) => void
   outfitSelections?: OutfitSelection[]
   onOutfitSelectionsChange?: (selections: OutfitSelection[]) => void
   onCancel: () => void
@@ -69,6 +71,8 @@ export function ChatCreationDialog({
   onScenarioChange,
   onScenarioIdChange,
   onTimestampConfigChange,
+  avatarGenerationEnabled,
+  onAvatarGenerationChange,
   outfitSelections: _outfitSelections,
   onOutfitSelectionsChange,
   onCancel,
@@ -233,6 +237,23 @@ export function ChatCreationDialog({
                   onSelectionsChange={onOutfitSelectionsChange}
                   disabled={creatingChat}
                 />
+              )}
+              {onAvatarGenerationChange && (
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={avatarGenerationEnabled ?? false}
+                      onChange={(e) => onAvatarGenerationChange(e.target.checked)}
+                      className="qt-checkbox"
+                      disabled={creatingChat}
+                    />
+                    <span className="qt-text-small">Auto-generate character avatars</span>
+                  </label>
+                  <p className="qt-text-xs qt-text-muted mt-1">
+                    Generate new portraits when outfits change (uses image API)
+                  </p>
+                </div>
               )}
               <TimestampConfigCard
                 config={timestampConfig}

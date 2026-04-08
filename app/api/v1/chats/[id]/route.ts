@@ -31,6 +31,7 @@
  * POST /api/v1/chats/[id]?action=toggle-agent-mode - Toggle agent mode for this chat
  * POST /api/v1/chats/[id]?action=reclassify-danger - Reset and re-queue danger classification
  * POST /api/v1/chats/[id]?action=equip - Equip/unequip wardrobe item in a slot
+ * POST /api/v1/chats/[id]?action=toggle-avatar-generation - Toggle avatar generation
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)
  */
 

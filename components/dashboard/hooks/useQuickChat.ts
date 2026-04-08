@@ -34,6 +34,7 @@ interface UseQuickChatReturn {
   scenarioId: string | null
   scenarios: CharacterScenario[]
   timestampConfig: TimestampConfig | null
+  avatarGenerationEnabled: boolean
   outfitSelections: OutfitSelection[]
   creatingChat: boolean
   setSelectedProfileId: (id: string) => void
@@ -42,6 +43,7 @@ interface UseQuickChatReturn {
   setScenario: (scenario: string) => void
   setScenarioId: (id: string | null) => void
   setTimestampConfig: (config: TimestampConfig) => void
+  setAvatarGenerationEnabled: (enabled: boolean) => void
   setOutfitSelections: (selections: OutfitSelection[]) => void
   fetchData: (characterId: string) => Promise<void>
   handleCreateChat: (characterId: string, characterName: string) => Promise<void>
@@ -60,6 +62,7 @@ export function useQuickChat(): UseQuickChatReturn {
   const [scenarioId, setScenarioId] = useState<string | null>(null)
   const [scenarios, setScenarios] = useState<CharacterScenario[]>([])
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
+  const [avatarGenerationEnabled, setAvatarGenerationEnabled] = useState(false)
   const [outfitSelections, setOutfitSelections] = useState<OutfitSelection[]>([])
   const [creatingChat, setCreatingChat] = useState(false)
 
@@ -71,6 +74,7 @@ export function useQuickChat(): UseQuickChatReturn {
     setScenarioId(null)
     setScenarios([])
     setTimestampConfig(null)
+    setAvatarGenerationEnabled(false)
     setOutfitSelections([])
   }, [])
 
@@ -196,6 +200,7 @@ export function useQuickChat(): UseQuickChatReturn {
           ...(scenario && { scenario }),
           ...(scenarioId && { scenarioId }),
           ...(timestampConfig && timestampConfig.mode !== 'NONE' && { timestampConfig }),
+          ...(avatarGenerationEnabled && { avatarGenerationEnabled }),
           ...(outfitSelections.length > 0 && { outfitSelections }),
         }),
       })
@@ -218,7 +223,7 @@ export function useQuickChat(): UseQuickChatReturn {
     } finally {
       setCreatingChat(false)
     }
-  }, [router, selectedProfileId, selectedPartnerId, selectedImageProfileId, scenario, scenarioId, timestampConfig, outfitSelections])
+  }, [router, selectedProfileId, selectedPartnerId, selectedImageProfileId, scenario, scenarioId, timestampConfig, avatarGenerationEnabled, outfitSelections])
 
   return {
     loading,
@@ -231,6 +236,7 @@ export function useQuickChat(): UseQuickChatReturn {
     scenarioId,
     scenarios,
     timestampConfig,
+    avatarGenerationEnabled,
     outfitSelections,
     creatingChat,
     setSelectedProfileId,
@@ -239,6 +245,7 @@ export function useQuickChat(): UseQuickChatReturn {
     setScenario,
     setScenarioId,
     setTimestampConfig,
+    setAvatarGenerationEnabled,
     setOutfitSelections,
     fetchData,
     handleCreateChat,

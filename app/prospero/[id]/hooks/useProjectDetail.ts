@@ -24,6 +24,7 @@ interface UseProjectDetailReturn {
   handleSave: () => Promise<void>
   handleToggleAllowAnyCharacter: () => Promise<void>
   handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
+  handleSaveAvatarGeneration: (enabled: boolean | null) => Promise<void>
   handleSaveBackgroundDisplayMode: (mode: BackgroundDisplayMode) => Promise<void>
   handleRemoveCharacter: (characterId: string) => Promise<void>
 }
@@ -123,6 +124,30 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     }
   }, [projectId])
 
+  const handleSaveAvatarGeneration = useCallback(async (enabled: boolean | null) => {
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultAvatarGenerationEnabled: enabled }),
+      })
+
+      if (!res.ok) throw new Error('Failed to update avatar generation setting')
+      const data = await res.json()
+      setProject(data.project)
+      const message = enabled === null
+        ? 'Avatar generation set to inherit from global'
+        : enabled
+          ? 'Avatar generation enabled by default for project'
+          : 'Avatar generation disabled by default for project'
+      showSuccessToast(message)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update avatar generation'
+      console.error('useProjectDetail: save avatar generation error', errorMsg)
+      showErrorToast(errorMsg)
+    }
+  }, [projectId])
+
   const handleSaveBackgroundDisplayMode = useCallback(async (mode: BackgroundDisplayMode) => {
     try {
       const res = await fetch(`/api/v1/projects/${projectId}`, {
@@ -178,6 +203,7 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     handleSave,
     handleToggleAllowAnyCharacter,
     handleSaveAgentMode,
+    handleSaveAvatarGeneration,
     handleSaveBackgroundDisplayMode,
     handleRemoveCharacter,
   }

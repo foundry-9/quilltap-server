@@ -406,6 +406,12 @@ export const ChatMetadataSchema = z.object({
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories } } */
   equippedOutfit: JsonSchema.nullable().optional(),
 
+  /** Per-character generated avatars reflecting current outfit: { [characterId]: { imageId, generatedAt, afterMessageCount } } */
+  characterAvatars: JsonSchema.nullable().optional(),
+
+  /** Whether to auto-generate character avatars when outfits change (null = disabled) */
+  avatarGenerationEnabled: z.boolean().nullable().optional(),
+
   /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
   chatType: z.enum(['salon', 'help']).default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
@@ -522,6 +528,12 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories } } */
   equippedOutfit: JsonSchema.nullable().optional(),
+
+  /** Per-character generated avatars reflecting current outfit: { [characterId]: { imageId, generatedAt, afterMessageCount } } */
+  characterAvatars: JsonSchema.nullable().optional(),
+
+  /** Whether to auto-generate character avatars when outfits change (null = disabled) */
+  avatarGenerationEnabled: z.boolean().nullable().optional(),
 
   /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
   chatType: z.enum(['salon', 'help']).default('salon'),

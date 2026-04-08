@@ -18,6 +18,7 @@ interface SettingsCardProps {
   onSave: () => void
   onToggleAllowAnyCharacter: () => void
   onAgentModeChange: (enabled: boolean | null) => void
+  onAvatarGenerationChange: (enabled: boolean | null) => void
   onBackgroundDisplayModeChange: (mode: BackgroundDisplayMode) => void
   expanded: boolean
   onToggle: () => void
@@ -53,6 +54,7 @@ export function SettingsCard({
   onSave,
   onToggleAllowAnyCharacter,
   onAgentModeChange,
+  onAvatarGenerationChange,
   onBackgroundDisplayModeChange,
   expanded,
   onToggle,
@@ -170,6 +172,26 @@ export function SettingsCard({
               className="qt-input w-full max-w-xs"
             >
               <option value="inherit">Inherit from global/character</option>
+              <option value="enabled">Enabled by default</option>
+              <option value="disabled">Disabled by default</option>
+            </select>
+          </div>
+
+          {/* Avatar Generation Setting */}
+          <div className="p-3 rounded-lg qt-border qt-bg-surface">
+            <h4 className="text-sm font-medium text-foreground mb-1">Avatar Generation</h4>
+            <p className="qt-text-xs qt-text-secondary mb-2">
+              Auto-generate character avatars when outfits change in new chats.
+            </p>
+            <select
+              value={project.defaultAvatarGenerationEnabled === null || project.defaultAvatarGenerationEnabled === undefined ? 'inherit' : project.defaultAvatarGenerationEnabled ? 'enabled' : 'disabled'}
+              onChange={(e) => {
+                const value = e.target.value
+                onAvatarGenerationChange(value === 'inherit' ? null : value === 'enabled')
+              }}
+              className="qt-input w-full max-w-xs"
+            >
+              <option value="inherit">Inherit from global</option>
               <option value="enabled">Enabled by default</option>
               <option value="disabled">Disabled by default</option>
             </select>

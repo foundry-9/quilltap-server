@@ -18,6 +18,7 @@ interface UseChatCreationReturn {
     scenario: string
     scenarioId?: string
     timestampConfig?: TimestampConfig | null
+    avatarGenerationEnabled?: boolean
     outfitSelections?: OutfitSelection[]
   }) => Promise<void>
 }
@@ -36,6 +37,7 @@ export function useChatCreation(): UseChatCreationReturn {
     scenario: string
     scenarioId?: string
     timestampConfig?: TimestampConfig | null
+    avatarGenerationEnabled?: boolean
     outfitSelections?: OutfitSelection[]
   }) => {
     const {
@@ -48,6 +50,7 @@ export function useChatCreation(): UseChatCreationReturn {
       scenario,
       scenarioId,
       timestampConfig,
+      avatarGenerationEnabled,
       outfitSelections,
     } = props
 
@@ -85,6 +88,7 @@ export function useChatCreation(): UseChatCreationReturn {
           title: `Chat with ${characterName}`,
           ...(scenarioId ? { scenarioId } : scenario ? { scenario } : {}),
           ...(timestampConfig && timestampConfig.mode !== 'NONE' && { timestampConfig }),
+          ...(avatarGenerationEnabled && { avatarGenerationEnabled }),
           ...(outfitSelections && outfitSelections.length > 0 && { outfitSelections }),
         }),
       })

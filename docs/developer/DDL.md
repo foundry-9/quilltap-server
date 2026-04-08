@@ -268,6 +268,8 @@ CREATE TABLE "chats" (
   "sceneState" TEXT DEFAULT NULL,
   "equippedOutfit" TEXT DEFAULT NULL,
   "pendingOutfitNotifications" TEXT DEFAULT NULL,
+  "characterAvatars" TEXT DEFAULT NULL,
+  "avatarGenerationEnabled" INTEGER DEFAULT NULL,
   "chatType" TEXT DEFAULT 'salon',
   "helpPageUrl" TEXT DEFAULT NULL,
   "scenarioText" TEXT DEFAULT NULL
@@ -406,6 +408,7 @@ CREATE TABLE "projects" (
   "defaultDisabledToolGroups" TEXT DEFAULT '[]',
   "state" TEXT DEFAULT '{}',
   "defaultAgentModeEnabled" INTEGER DEFAULT NULL,
+  "defaultAvatarGenerationEnabled" INTEGER DEFAULT NULL,
   "storyBackgroundsEnabled" INTEGER DEFAULT NULL,
   "staticBackgroundImageId" TEXT DEFAULT NULL,
   "storyBackgroundImageId" TEXT DEFAULT NULL,

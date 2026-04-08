@@ -51,6 +51,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [selectedSystemPromptId, setSelectedSystemPromptId] = useState<string | null>(null)
   const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
   const [outfitSelections, setOutfitSelections] = useState<OutfitSelection[]>([])
+  const [avatarGenerationEnabled, setAvatarGenerationEnabled] = useState(false)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const chatDialogInitializedRef = useRef(false)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
@@ -209,6 +210,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       scenario,
       scenarioId: scenarioId ?? undefined,
       timestampConfig,
+      avatarGenerationEnabled,
       outfitSelections: outfitSelections.length > 0 ? outfitSelections : undefined,
     })
     setShowChatDialog(false)
@@ -422,6 +424,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           onScenarioChange={setScenario}
           onScenarioIdChange={setScenarioId}
           onTimestampConfigChange={setTimestampConfig}
+          avatarGenerationEnabled={avatarGenerationEnabled}
+          onAvatarGenerationChange={setAvatarGenerationEnabled}
           outfitSelections={outfitSelections}
           onOutfitSelectionsChange={setOutfitSelections}
           onCancel={() => {
