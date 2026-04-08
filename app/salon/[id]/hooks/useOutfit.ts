@@ -60,22 +60,35 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
     }
 
     try {
-      const res = await fetch(`/api/v1/characters/${characterId}/wardrobe`)
-      if (!res.ok) {
-        console.warn('[useOutfit] Failed to fetch wardrobe for character', characterId, res.status)
-        return []
+      // Fetch personal wardrobe and shared archetypes in parallel
+      const [personalRes, archetypeRes] = await Promise.all([
+        fetch(`/api/v1/characters/${characterId}/wardrobe`),
+        fetch('/api/v1/wardrobe'),
+      ])
+
+      const personalItems: WardrobeItemSummary[] = []
+      if (personalRes.ok) {
+        const data = await personalRes.json()
+        for (const item of (data.wardrobeItems || [])) {
+          personalItems.push({ id: item.id, title: item.title, types: item.types, isDefault: item.isDefault })
+        }
+      } else {
+        console.warn('[useOutfit] Failed to fetch wardrobe for character', characterId, personalRes.status)
       }
-      const data = await res.json()
-      const items: WardrobeItemSummary[] = (data.wardrobeItems || []).map((item: WardrobeItem) => ({
-        id: item.id,
-        title: item.title,
-        types: item.types,
-        isDefault: item.isDefault,
-      }))
+
+      if (archetypeRes.ok) {
+        const data = await archetypeRes.json()
+        for (const item of (data.wardrobeItems || [])) {
+          // Avoid duplicates (shouldn't happen, but safety check)
+          if (!personalItems.some(p => p.id === item.id)) {
+            personalItems.push({ id: item.id, title: `${item.title} (shared)`, types: item.types, isDefault: false })
+          }
+        }
+      }
 
       fetchedWardrobesRef.current.add(characterId)
-      setWardrobeCache(prev => ({ ...prev, [characterId]: items }))
-      return items
+      setWardrobeCache(prev => ({ ...prev, [characterId]: personalItems }))
+      return personalItems
     } catch (err) {
       console.error('[useOutfit] Error fetching wardrobe', { characterId, error: err })
       return []

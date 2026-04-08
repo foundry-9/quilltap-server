@@ -34,6 +34,7 @@ import { logger } from '@/lib/logger';
 import { TypedQueryFilter, QueryFilter, DatabaseCollection } from '../interfaces';
 import { getDatabaseAsync, getBackendType, ensureCollection } from '../manager';
 import type { EquippedSlots, EquippedOutfitState } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import { ChatOpsContext } from './chats-ops-context';
 import { ChatParticipantsOps } from './chats-participants.ops';
 import { ChatImpersonationOps } from './chats-impersonation.ops';
@@ -534,6 +535,63 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
       'Failed to set equipped outfit',
       { chatId, characterId, context: 'wardrobe' },
       null
+    );
+  }
+  /**
+   * Remove a wardrobe item from equipped outfits across all chats.
+   * When a wardrobe item is deleted, any equipped slot referencing that item
+   * is set to null so the outfit state remains valid.
+   *
+   * @param itemId The wardrobe item ID being removed
+   * @returns Number of chats modified
+   */
+  async removeEquippedItemFromAllChats(itemId: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const allChats = await this._findAll();
+        let modifiedCount = 0;
+
+        for (const chat of allChats) {
+          if (!chat.equippedOutfit) {
+            continue;
+          }
+
+          const state = chat.equippedOutfit as EquippedOutfitState;
+          let chatModified = false;
+
+          for (const characterId of Object.keys(state)) {
+            const slots = state[characterId];
+            for (const slotKey of WARDROBE_SLOT_TYPES) {
+              if (slots[slotKey] === itemId) {
+                slots[slotKey] = null;
+                chatModified = true;
+              }
+            }
+          }
+
+          if (chatModified) {
+            await this.update(chat.id, { equippedOutfit: state } as Partial<ChatMetadata>);
+            modifiedCount++;
+            logger.debug('Removed deleted wardrobe item from chat equipped outfit', {
+              chatId: chat.id,
+              removedItemId: itemId,
+              context: 'wardrobe',
+            });
+          }
+        }
+
+        if (modifiedCount > 0) {
+          logger.info('Removed wardrobe item from equipped outfits across chats', {
+            itemId,
+            chatsModified: modifiedCount,
+            context: 'wardrobe',
+          });
+        }
+
+        return modifiedCount;
+      },
+      'Error removing equipped item from all chats',
+      { itemId, context: 'wardrobe' }
     );
   }
 }

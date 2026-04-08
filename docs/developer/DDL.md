@@ -196,12 +196,30 @@ CREATE TABLE "wardrobe_items" (
   "appropriateness" TEXT,
   "isDefault" INTEGER DEFAULT 0,
   "migratedFromClothingRecordId" TEXT,
+  "archivedAt" TEXT DEFAULT NULL,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL,
   FOREIGN KEY ("characterId") REFERENCES "characters"("id") ON DELETE CASCADE
 );
 
 CREATE INDEX "idx_wardrobe_items_character" ON "wardrobe_items"("characterId");
+```
+
+### outfit_presets
+
+```sql
+CREATE TABLE "outfit_presets" (
+  "id" TEXT PRIMARY KEY,
+  "characterId" TEXT,
+  "name" TEXT NOT NULL,
+  "description" TEXT,
+  "slots" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  FOREIGN KEY ("characterId") REFERENCES "characters"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_outfit_presets_character" ON "outfit_presets"("characterId");
 ```
 
 | Column | Type | Description |

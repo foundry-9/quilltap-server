@@ -58,6 +58,9 @@ describe('wardrobe tool handlers', () => {
         updateEquippedSlot: jest.fn().mockResolvedValue(undefined),
         findById: jest.fn(),
       },
+      outfitPresets: {
+        findByCharacterId: jest.fn().mockResolvedValue([]),
+      },
     }
 
     mockGetRepositories.mockReturnValue(repos as any)

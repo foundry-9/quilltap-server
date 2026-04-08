@@ -10,7 +10,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueCharacterAvatarGeneration } from '@/lib/background-jobs/queue-service';
 import type { WardrobeUpdateOutfitToolInput, WardrobeUpdateOutfitToolOutput } from '../wardrobe-update-outfit-tool';
 import { validateWardrobeUpdateOutfitInput } from '../wardrobe-update-outfit-tool';
-import { EMPTY_EQUIPPED_SLOTS, buildCoverageSummary } from '@/lib/schemas/wardrobe.types';
+import { EMPTY_EQUIPPED_SLOTS, buildCoverageSummary, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 export interface WardrobeUpdateOutfitToolContext {
@@ -62,7 +62,105 @@ export async function executeWardrobeUpdateOutfitTool(
       };
     }
 
-    const { slot, item_id, item_title } = input;
+    const { slot, item_id, item_title, preset_id } = input;
+
+    // --- Preset application flow ---
+    if (preset_id) {
+      const preset = await repos.outfitPresets.findById(preset_id);
+      if (!preset) {
+        logger.warn('Outfit preset not found', {
+          context: 'wardrobe-update-outfit-handler',
+          userId: context.userId,
+          chatId: context.chatId,
+          characterId: context.characterId,
+          presetId: preset_id,
+        });
+        throw new WardrobeUpdateOutfitError(
+          `Outfit preset not found with ID "${preset_id}"`,
+          'NOT_FOUND'
+        );
+      }
+
+      // Validate preset belongs to this character (or is shared)
+      if (preset.characterId !== null && preset.characterId !== undefined && preset.characterId !== context.characterId) {
+        logger.warn('Outfit preset does not belong to character', {
+          context: 'wardrobe-update-outfit-handler',
+          userId: context.userId,
+          characterId: context.characterId,
+          presetCharacterId: preset.characterId,
+          presetId: preset.id,
+        });
+        throw new WardrobeUpdateOutfitError(
+          `Preset "${preset.name}" does not belong to this character`,
+          'NOT_FOUND'
+        );
+      }
+
+      // Check that none of the preset's items are archived
+      for (const slotKey of WARDROBE_SLOT_TYPES) {
+        const itemId = preset.slots[slotKey];
+        if (itemId) {
+          const item = await repos.wardrobe.findById(itemId);
+          if (item?.archivedAt) {
+            logger.warn('Preset references archived wardrobe item', {
+              context: 'wardrobe-update-outfit-handler',
+              userId: context.userId,
+              characterId: context.characterId,
+              presetId: preset.id,
+              slot: slotKey,
+              itemId,
+              itemTitle: item.title,
+            });
+            throw new WardrobeUpdateOutfitError(
+              `Cannot apply preset "${preset.name}": item "${item.title}" in ${slotKey} slot is archived`,
+              'VALIDATION_ERROR'
+            );
+          }
+        }
+      }
+
+      // Apply each non-null slot from the preset
+      for (const slotKey of WARDROBE_SLOT_TYPES) {
+        const itemId = preset.slots[slotKey];
+        if (itemId !== null && itemId !== undefined) {
+          await repos.chats.updateEquippedSlot(context.chatId, context.characterId, slotKey, itemId);
+          logger.debug('Applied preset slot', {
+            context: 'wardrobe-update-outfit-handler',
+            chatId: context.chatId,
+            characterId: context.characterId,
+            slot: slotKey,
+            itemId,
+            presetId: preset.id,
+          });
+        }
+      }
+
+      logger.info('Outfit preset applied', {
+        context: 'wardrobe-update-outfit-handler',
+        userId: context.userId,
+        chatId: context.chatId,
+        characterId: context.characterId,
+        presetId: preset.id,
+        presetName: preset.name,
+      });
+
+      // Load full current state after preset application
+      const currentState = await loadCurrentState(repos, context);
+      const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
+
+      // Trigger avatar generation if enabled
+      await triggerAvatarGenerationIfEnabled(repos, context);
+
+      return {
+        success: true,
+        action: 'equipped',
+        slot: 'preset',
+        item: null,
+        current_state: currentState,
+        coverage_summary: coverageSummary,
+      };
+    }
+
     const isEquipAction = item_id !== undefined || item_title !== undefined;
 
     if (isEquipAction) {
@@ -111,7 +209,7 @@ export async function executeWardrobeUpdateOutfitTool(
       }
 
       // Validate item belongs to this character (or is an archetype with null characterId)
-      if (item.characterId !== null && item.characterId !== context.characterId) {
+      if (item.characterId != null && item.characterId !== context.characterId) {
         logger.warn('Wardrobe item does not belong to character', {
           context: 'wardrobe-update-outfit-handler',
           userId: context.userId,
@@ -122,6 +220,22 @@ export async function executeWardrobeUpdateOutfitTool(
         throw new WardrobeUpdateOutfitError(
           `Item "${item.title}" does not belong to this character`,
           'NOT_FOUND'
+        );
+      }
+
+      // Validate item is not archived
+      if (item.archivedAt) {
+        logger.warn('Attempted to equip archived wardrobe item', {
+          context: 'wardrobe-update-outfit-handler',
+          userId: context.userId,
+          characterId: context.characterId,
+          itemId: item.id,
+          itemTitle: item.title,
+          archivedAt: item.archivedAt,
+        });
+        throw new WardrobeUpdateOutfitError(
+          `Item "${item.title}" is archived and cannot be equipped`,
+          'VALIDATION_ERROR'
         );
       }
 

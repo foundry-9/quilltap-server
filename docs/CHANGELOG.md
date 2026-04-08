@@ -6,6 +6,16 @@
 
 #### Added
 
+- **Archetype Library**: Shared wardrobe items (characterId=null) available to all characters — create, browse, and equip directly without copying
+- **Outfit Presets**: Save named outfit combinations for quick equipping — save current outfit as preset, apply presets from character wardrobe or outfit selector
+- **Wardrobe Archiving**: Soft-delete wardrobe items with archive/unarchive — archived items hidden from lists and tools but stay equipped if currently worn
+- **Deletion Cleanup**: Deleting a wardrobe item now cleans up all equipped references across chats and removes the item from outfit presets
+- New `outfit_presets` database table with character-scoped and shared preset support
+- API routes: `/api/v1/wardrobe` (archetype CRUD) and `/api/v1/characters/[id]/wardrobe/presets` (preset CRUD with apply action)
+- Preset mode in outfit selector ("Use Saved Preset") resolves presets client-side as manual slot assignments
+- `list_wardrobe` tool now includes presets in response and filters archived items
+- `update_outfit_item` tool supports `preset_id` parameter for applying entire outfits at once
+- Wardrobe item list shows personal and shared items in separate sections with archive/unarchive actions
 - **Per-Conversation Avatars**: Opt-in automatic avatar generation when character outfits change — generates portrait images reflecting current equipped wardrobe items via background jobs, with visual timeline in chat history
 - New `CHARACTER_AVATAR_GENERATION` background job type for async portrait generation
 - Chat-level `avatarGenerationEnabled` toggle and `characterAvatars` state tracking
@@ -33,6 +43,8 @@
 
 #### Changed
 
+- Outfit indicator now renders above talkativeness slider for LLM characters in participant sidebar
+- Shared/archetype wardrobe items now appear in sidebar outfit dropdowns with "(shared)" label
 - System prompt clothing section now shows slot-based outfit state instead of monolithic descriptions (falls back to legacy format when no wardrobe items exist)
 - Appearance resolution for image generation prefers equipped wardrobe items over legacy clothing records
 

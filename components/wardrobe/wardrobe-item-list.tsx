@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useListManager } from '@/hooks/useListManager'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { WardrobeItemCard } from './wardrobe-item-card'
@@ -18,20 +18,22 @@ interface WardrobeItemListProps {
 
 export function WardrobeItemList({ characterId, refreshKey }: WardrobeItemListProps) {
   const baseUrl = `/api/v1/characters/${characterId}/wardrobe`
+  const archetypeUrl = '/api/v1/wardrobe'
 
+  // ── Personal wardrobe (character-scoped) ──────────────────────────────
   const {
-    items,
-    loading,
-    error,
-    deletingId,
-    editingItem,
-    showEditor,
-    refetch,
-    handleDelete,
-    handleEdit,
-    handleCreate,
-    handleEditorClose,
-    handleEditorSave,
+    items: personalItems,
+    loading: personalLoading,
+    error: personalError,
+    deletingId: personalDeletingId,
+    editingItem: personalEditingItem,
+    showEditor: personalShowEditor,
+    refetch: refetchPersonal,
+    handleDelete: handleDeletePersonal,
+    handleEdit: handleEditPersonal,
+    handleCreate: handleCreatePersonal,
+    handleEditorClose: handleClosePersonal,
+    handleEditorSave: handleSavePersonal,
   } = useListManager<WardrobeItem>({
     fetchFn: async () => {
       const result = await fetchJson<{ wardrobeItems: WardrobeItem[] }>(baseUrl)
@@ -46,11 +48,68 @@ export function WardrobeItemList({ characterId, refreshKey }: WardrobeItemListPr
     deleteSuccessMessage: 'Wardrobe item deleted',
   })
 
+  // ── Shared wardrobe (archetypes) ──────────────────────────────────────
+  const {
+    items: sharedItems,
+    loading: sharedLoading,
+    error: sharedError,
+    deletingId: sharedDeletingId,
+    editingItem: sharedEditingItem,
+    showEditor: sharedShowEditor,
+    refetch: refetchShared,
+    handleDelete: handleDeleteShared,
+    handleEdit: handleEditShared,
+    handleCreate: handleCreateShared,
+    handleEditorClose: handleCloseShared,
+    handleEditorSave: handleSaveShared,
+  } = useListManager<WardrobeItem>({
+    fetchFn: async () => {
+      const result = await fetchJson<{ wardrobeItems: WardrobeItem[] }>(
+        `${archetypeUrl}?archetypes=true`
+      )
+      if (!result.ok) throw new Error(result.error || 'Failed to fetch shared wardrobe items')
+      return result.data?.wardrobeItems || []
+    },
+    deleteFn: async (id: string) => {
+      const result = await fetchJson(`${archetypeUrl}/${id}`, { method: 'DELETE' })
+      if (!result.ok) throw new Error(result.error || 'Failed to delete shared wardrobe item')
+    },
+    deleteConfirmMessage: 'Are you sure you want to delete this shared wardrobe item? It will be removed for all characters.',
+    deleteSuccessMessage: 'Shared wardrobe item deleted',
+  })
+
+  const [sharedCollapsed, setSharedCollapsed] = useState(true)
+
   useEffect(() => {
     if (refreshKey !== undefined && refreshKey > 0) {
-      refetch()
+      refetchPersonal()
+      refetchShared()
     }
-  }, [refreshKey, refetch])
+  }, [refreshKey, refetchPersonal, refetchShared])
+
+  const handleArchivePersonal = useCallback(async (id: string, archive: boolean) => {
+    const result = await fetchJson(`${baseUrl}/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        archivedAt: archive ? new Date().toISOString() : null,
+      }),
+    })
+    if (!result.ok) throw new Error(result.error || 'Failed to archive wardrobe item')
+    refetchPersonal()
+  }, [baseUrl, refetchPersonal])
+
+  const handleArchiveShared = useCallback(async (id: string, archive: boolean) => {
+    const result = await fetchJson(`${archetypeUrl}/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        archivedAt: archive ? new Date().toISOString() : null,
+      }),
+    })
+    if (!result.ok) throw new Error(result.error || 'Failed to archive shared wardrobe item')
+    refetchShared()
+  }, [archetypeUrl, refetchShared])
 
   const hangerIcon = (
     <svg
@@ -74,6 +133,9 @@ export function WardrobeItemList({ characterId, refreshKey }: WardrobeItemListPr
     </svg>
   )
 
+  const loading = personalLoading && sharedLoading
+  const error = personalError || sharedError
+
   if (loading) {
     return <LoadingState variant="spinner" />
   }
@@ -82,23 +144,24 @@ export function WardrobeItemList({ characterId, refreshKey }: WardrobeItemListPr
     return (
       <ErrorAlert
         message={error}
-        onRetry={refetch}
+        onRetry={() => { refetchPersonal(); refetchShared() }}
       />
     )
   }
 
   return (
     <div>
+      {/* ── Personal Wardrobe ──────────────────────────────────────── */}
       <SectionHeader
-        title="Wardrobe"
-        count={items.length}
+        title="Personal Wardrobe"
+        count={personalItems.length}
         action={{
           label: 'Add Item',
-          onClick: handleCreate,
+          onClick: handleCreatePersonal,
         }}
       />
 
-      {items.length === 0 ? (
+      {personalItems.length === 0 ? (
         <EmptyState
           icon={hangerIcon}
           title="No wardrobe items yet"
@@ -106,29 +169,112 @@ export function WardrobeItemList({ characterId, refreshKey }: WardrobeItemListPr
           variant="dashed"
           action={{
             label: 'Add Item',
-            onClick: handleCreate,
+            onClick: handleCreatePersonal,
           }}
         />
       ) : (
         <div className="space-y-3">
-          {items.map((wardrobeItem) => (
+          {personalItems.map((wardrobeItem) => (
             <WardrobeItemCard
               key={wardrobeItem.id}
               item={wardrobeItem}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              isDeleting={deletingId === wardrobeItem.id}
+              onEdit={handleEditPersonal}
+              onDelete={handleDeletePersonal}
+              onArchive={handleArchivePersonal}
+              isDeleting={personalDeletingId === wardrobeItem.id}
             />
           ))}
         </div>
       )}
 
-      {showEditor && (
+      {/* ── Shared Wardrobe (Archetypes) ──────────────────────────── */}
+      <div className="mt-8">
+        <button
+          type="button"
+          onClick={() => setSharedCollapsed(!sharedCollapsed)}
+          className="flex w-full items-center justify-between gap-4 mb-4"
+        >
+          <h3 className="qt-text-section text-foreground flex items-center gap-2">
+            Shared Wardrobe
+            {sharedItems.length > 0 && (
+              <span className="qt-text-muted qt-text-small font-normal">
+                ({sharedItems.length})
+              </span>
+            )}
+            <span className="qt-text-xs qt-text-muted font-normal italic">
+              available to all characters
+            </span>
+            <svg
+              className={`w-4 h-4 qt-text-secondary transition-transform ${sharedCollapsed ? '' : 'rotate-180'}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </h3>
+          <span className="flex-shrink-0" />
+        </button>
+
+        {!sharedCollapsed && (
+          <>
+            <div className="flex justify-end mb-4">
+              <button
+                type="button"
+                onClick={handleCreateShared}
+                className="qt-button-secondary qt-button-sm"
+              >
+                Add Shared Item
+              </button>
+            </div>
+
+            {sharedItems.length === 0 ? (
+              <EmptyState
+                icon={hangerIcon}
+                title="No shared wardrobe items"
+                description="Shared items are available to all characters. Add items here that multiple characters might wear."
+                variant="dashed"
+                action={{
+                  label: 'Add Shared Item',
+                  onClick: handleCreateShared,
+                }}
+              />
+            ) : (
+              <div className="space-y-3">
+                {sharedItems.map((wardrobeItem) => (
+                  <WardrobeItemCard
+                    key={wardrobeItem.id}
+                    item={wardrobeItem}
+                    onEdit={handleEditShared}
+                    onDelete={handleDeleteShared}
+                    onArchive={handleArchiveShared}
+                    isDeleting={sharedDeletingId === wardrobeItem.id}
+                    isShared
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── Editors ───────────────────────────────────────────────── */}
+      {personalShowEditor && (
         <WardrobeItemEditor
           characterId={characterId}
-          item={editingItem}
-          onClose={handleEditorClose}
-          onSave={handleEditorSave}
+          item={personalEditingItem}
+          onClose={handleClosePersonal}
+          onSave={handleSavePersonal}
+        />
+      )}
+
+      {sharedShowEditor && (
+        <WardrobeItemEditor
+          characterId={characterId}
+          item={sharedEditingItem}
+          isShared
+          onClose={handleCloseShared}
+          onSave={handleSaveShared}
         />
       )}
     </div>

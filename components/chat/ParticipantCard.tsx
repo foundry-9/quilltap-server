@@ -380,6 +380,18 @@ export function ParticipantCard({
             )
           )}
 
+          {/* Outfit indicator for all characters with wardrobe data */}
+          {isCharacter && onEquipSlot && (equippedSlots || (wardrobeItems && wardrobeItems.length > 0) || outfitLoading) && (
+            <OutfitIndicator
+              characterId={participant.character?.id || ''}
+              equippedSlots={equippedSlots ?? null}
+              equippedItems={equippedItems ?? {}}
+              wardrobeItems={wardrobeItems ?? []}
+              onEquipSlot={(slot, itemId) => onEquipSlot(participant.id, slot, itemId)}
+              isLoading={outfitLoading}
+            />
+          )}
+
           {/* Talkativeness slider for characters */}
           {isCharacter && !isUserParticipant && (
             <div className="mt-2">
@@ -397,18 +409,6 @@ export function ParticipantCard({
                 className="qt-input w-full h-1 rounded-lg appearance-none cursor-pointer accent-primary"
               />
             </div>
-          )}
-
-          {/* Outfit indicator for all characters with wardrobe data */}
-          {isCharacter && onEquipSlot && (equippedSlots || (wardrobeItems && wardrobeItems.length > 0) || outfitLoading) && (
-            <OutfitIndicator
-              characterId={participant.character?.id || ''}
-              equippedSlots={equippedSlots ?? null}
-              equippedItems={equippedItems ?? {}}
-              wardrobeItems={wardrobeItems ?? []}
-              onEquipSlot={(slot, itemId) => onEquipSlot(participant.id, slot, itemId)}
-              isLoading={outfitLoading}
-            />
           )}
 
           {/* Talkativeness indicator for personas (greyed out) */}

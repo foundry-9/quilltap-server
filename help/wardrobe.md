@@ -42,6 +42,24 @@ To furnish a character's wardrobe:
 
 You may also edit or remove items at any time. The wardrobe is yours to curate, though your characters may have opinions about it (see below).
 
+### Shared Items (Archetypes)
+
+Some garments transcend the boundaries of any single wardrobe. A Roman legionary's tunic, a proper Edwardian morning suit, or a pair of sensible Wellington boots --- these are the sort of items that any character might reasonably don, regardless of their personal collection.
+
+**Shared items** (also known as archetypes) are wardrobe items not bound to any particular character. Any character may equip them directly, without the tedium of maintaining duplicate entries. To create a shared item, check the "Shared item" checkbox when adding a new garment. Shared items appear in a separate "Shared Wardrobe" section beneath each character's personal collection.
+
+### Outfit Presets
+
+Rather than selecting each garment individually every time a character must dress for an occasion, you may save favourite combinations as **outfit presets**. A preset captures a complete outfit --- one item per slot --- under a memorable name (e.g., "Garden Party Attire" or "Dungeon Crawl Kit").
+
+To save a preset, navigate to a character's wardrobe and use the "Save Current Outfit" feature, or create one manually by selecting items for each slot. Presets appear in the outfit selector when starting a new chat, allowing you to dress a character with a single click.
+
+### Archiving and Deletion
+
+Items that have fallen out of favour need not be destroyed entirely. **Archiving** an item hides it from wardrobe lists and tool results while preserving it for posterity --- and it will remain equipped if currently worn, so mid-conversation wardrobe crises are averted. Should you wish to restore an archived item, simply unarchive it.
+
+**Permanent deletion** removes an item entirely and cleans up all references: any chat where the item was equipped will have that slot emptied, and any preset containing the item will have it removed.
+
 ## Characters and Their Wardrobe Tools
 
 During a chat, characters with the appropriate permissions can interact with the wardrobe using three tools:

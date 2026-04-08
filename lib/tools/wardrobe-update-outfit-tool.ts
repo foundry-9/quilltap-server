@@ -9,12 +9,14 @@
  * Input parameters for the update_outfit_item tool
  */
 export interface WardrobeUpdateOutfitToolInput {
-  /** Required: which slot to modify */
+  /** Required (unless preset_id is provided): which slot to modify */
   slot: string;
   /** ID of item to equip (omit to unequip) */
   item_id?: string;
   /** Title fallback if ID unknown */
   item_title?: string;
+  /** If provided, equip all items from the named preset instead of a single item */
+  preset_id?: string;
 }
 
 /**
@@ -43,7 +45,9 @@ export const wardrobeUpdateOutfitToolDefinition = {
   function: {
     name: 'update_outfit_item',
     description:
-      'Equip or remove a wardrobe item. Provide slot and item_id/item_title to equip, or just slot to remove.',
+      'Equip or remove a wardrobe item, or apply an outfit preset. ' +
+      'Provide slot and item_id/item_title to equip a single item, just slot to remove, ' +
+      'or preset_id to equip all items from a saved outfit preset.',
     parameters: {
       type: 'object',
       properties: {
@@ -62,6 +66,12 @@ export const wardrobeUpdateOutfitToolDefinition = {
           type: 'string',
           description:
             'Fallback lookup by title if item_id is not known. Used to find the wardrobe item by its title.',
+        },
+        preset_id: {
+          type: 'string',
+          description:
+            'If provided, equip all items from the named preset instead of a single item. ' +
+            'When using preset_id, the slot parameter is ignored.',
         },
       },
       required: ['slot'],
@@ -101,6 +111,11 @@ export function validateWardrobeUpdateOutfitInput(
 
   // Validate item_title if provided
   if (obj.item_title !== undefined && typeof obj.item_title !== 'string') {
+    return false;
+  }
+
+  // Validate preset_id if provided
+  if (obj.preset_id !== undefined && typeof obj.preset_id !== 'string') {
     return false;
   }
 

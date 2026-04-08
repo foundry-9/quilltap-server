@@ -53,12 +53,20 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
 
   /**
    * Find all wardrobe items belonging to a specific character
+   * @param characterId The character ID
+   * @param includeArchived When false (default), excludes items where archivedAt is not null
    */
-  async findByCharacterId(characterId: string): Promise<WardrobeItem[]> {
+  async findByCharacterId(characterId: string, includeArchived = false): Promise<WardrobeItem[]> {
     return this.safeQuery(
-      () => this.findByFilter({ characterId } as TypedQueryFilter<WardrobeItem>),
+      async () => {
+        const items = await this.findByFilter({ characterId } as TypedQueryFilter<WardrobeItem>);
+        if (includeArchived) {
+          return items;
+        }
+        return items.filter((item) => !item.archivedAt);
+      },
       'Error finding wardrobe items by character ID',
-      { characterId }
+      { characterId, includeArchived }
     );
   }
 
@@ -90,11 +98,60 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
 
   /**
    * Find archetype wardrobe items (characterId is null, shared across characters)
+   * @param includeArchived When false (default), excludes items where archivedAt is not null
    */
-  async findArchetypes(): Promise<WardrobeItem[]> {
+  async findArchetypes(includeArchived = false): Promise<WardrobeItem[]> {
     return this.safeQuery(
-      () => this.findByFilter(this.createNullableFilter('characterId', null)),
-      'Error finding archetype wardrobe items'
+      async () => {
+        const items = await this.findByFilter(this.createNullableFilter('characterId', null));
+        if (includeArchived) {
+          return items;
+        }
+        return items.filter((item) => !item.archivedAt);
+      },
+      'Error finding archetype wardrobe items',
+      { includeArchived }
+    );
+  }
+
+  /**
+   * Archive a wardrobe item (soft delete)
+   * Sets archivedAt to the current timestamp.
+   */
+  async archive(id: string): Promise<WardrobeItem | null> {
+    return this.safeQuery(
+      async () => {
+        const now = this.getCurrentTimestamp();
+        const item = await this._update(id, { archivedAt: now } as Partial<WardrobeItem>);
+
+        if (item) {
+          logger.info('Wardrobe item archived', { wardrobeItemId: id, archivedAt: now });
+        }
+
+        return item;
+      },
+      'Error archiving wardrobe item',
+      { wardrobeItemId: id }
+    );
+  }
+
+  /**
+   * Unarchive a wardrobe item (restore from archive)
+   * Sets archivedAt to null.
+   */
+  async unarchive(id: string): Promise<WardrobeItem | null> {
+    return this.safeQuery(
+      async () => {
+        const item = await this._update(id, { archivedAt: null } as Partial<WardrobeItem>);
+
+        if (item) {
+          logger.info('Wardrobe item unarchived', { wardrobeItemId: id });
+        }
+
+        return item;
+      },
+      'Error unarchiving wardrobe item',
+      { wardrobeItemId: id }
     );
   }
 

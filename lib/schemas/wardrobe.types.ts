@@ -42,6 +42,8 @@ export const WardrobeItemSchema = z.object({
   isDefault: z.boolean().default(false),
   /** Provenance tracking for items migrated from legacy clothingRecords */
   migratedFromClothingRecordId: UUIDSchema.nullable().optional(),
+  /** When the item was archived (null = active) */
+  archivedAt: TimestampSchema.nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -64,6 +66,24 @@ export type EquippedSlots = z.infer<typeof EquippedSlotsSchema>;
 
 /** Per-chat equipped outfit state, keyed by characterId */
 export type EquippedOutfitState = Record<string, EquippedSlots>;
+
+// ============================================================================
+// OUTFIT PRESET
+// ============================================================================
+
+export const OutfitPresetSchema = z.object({
+  id: UUIDSchema,
+  /** Character this preset belongs to. Null = shared preset. */
+  characterId: UUIDSchema.nullable().optional(),
+  name: z.string().min(1),
+  description: z.string().nullable().optional(),
+  /** Slot assignments: { top: itemId|null, bottom: itemId|null, footwear: itemId|null, accessories: itemId|null } */
+  slots: EquippedSlotsSchema,
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type OutfitPreset = z.infer<typeof OutfitPresetSchema>;
 
 // ============================================================================
 // OUTFIT SELECTION (for new chat creation)

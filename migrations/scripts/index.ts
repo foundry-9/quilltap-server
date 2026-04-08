@@ -153,6 +153,8 @@ import { addPendingOutfitNotificationsFieldMigration } from './add-pending-outfi
 import { addCharacterAvatarsFieldsMigration } from './add-character-avatars-fields';
 // Add defaultAvatarGenerationEnabled field to projects
 import { addProjectAvatarGenerationDefaultMigration } from './add-project-avatar-generation-default';
+// Create outfit_presets table and add archivedAt to wardrobe_items
+import { createOutfitPresetsAndArchiveMigration } from './create-outfit-presets-and-archive';
 
 /**
  * All available migrations.
@@ -301,6 +303,8 @@ export const migrations: Migration[] = [
   addCharacterAvatarsFieldsMigration,
   // Add defaultAvatarGenerationEnabled field to projects
   addProjectAvatarGenerationDefaultMigration,
+  // Create outfit_presets table and add archivedAt to wardrobe_items
+  createOutfitPresetsAndArchiveMigration,
 ];
 
 export {
@@ -434,5 +438,7 @@ export {
   addCharacterAvatarsFieldsMigration,
   // Add defaultAvatarGenerationEnabled field to projects
   addProjectAvatarGenerationDefaultMigration,
+  // Create outfit_presets table and add archivedAt to wardrobe_items
+  createOutfitPresetsAndArchiveMigration,
 };
 

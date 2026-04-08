@@ -13,6 +13,8 @@ import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.type
 interface WardrobeItemEditorProps {
   characterId: string
   item?: WardrobeItem | null
+  /** Whether this item is being created/edited as a shared item */
+  isShared?: boolean
   onClose: () => void
   onSave: () => void
 }
@@ -20,12 +22,17 @@ interface WardrobeItemEditorProps {
 export function WardrobeItemEditor({
   characterId,
   item,
+  isShared: isSharedProp = false,
   onClose,
   onSave,
 }: WardrobeItemEditorProps) {
   const isEditing = !!item
+  // Determine if the item is shared: either explicitly passed as shared,
+  // or the existing item has no characterId (archetype)
+  const existingIsShared = isEditing && !item.characterId
+  const [isShared, setIsShared] = useState(isSharedProp || existingIsShared)
 
-  const { formData, handleChange, setField } = useFormState({
+  const { formData, handleChange } = useFormState({
     title: item?.title || '',
     description: item?.description || '',
     appropriateness: item?.appropriateness || '',
@@ -64,9 +71,18 @@ export function WardrobeItemEditor({
         isDefault: formData.isDefault,
       }
 
-      const baseUrl = `/api/v1/characters/${characterId}/wardrobe`
-      const url = isEditing ? `${baseUrl}/${item.id}` : baseUrl
-      const method = isEditing ? 'PUT' : 'POST'
+      // Route to the correct API endpoint based on shared status
+      let url: string
+      let method: string
+
+      if (isShared) {
+        const sharedBaseUrl = '/api/v1/wardrobe'
+        url = isEditing ? `${sharedBaseUrl}/${item.id}` : sharedBaseUrl
+      } else {
+        const charBaseUrl = `/api/v1/characters/${characterId}/wardrobe`
+        url = isEditing ? `${charBaseUrl}/${item.id}` : charBaseUrl
+      }
+      method = isEditing ? 'PUT' : 'POST'
 
       const result = await fetchJson<{ id: string }>(url, {
         method,
@@ -125,6 +141,13 @@ export function WardrobeItemEditor({
           </div>
 
           <div className="qt-dialog-body space-y-4 flex-1">
+            {/* Shared item notice */}
+            {isShared && isEditing && (
+              <div className="rounded border qt-border-warning/50 qt-bg-warning/10 px-3 py-2 qt-text-small qt-text-warning">
+                Changes to shared items affect all characters
+              </div>
+            )}
+
             {/* Title */}
             <div>
               <label htmlFor="wardrobe-title" className="qt-label mb-1">
@@ -245,6 +268,32 @@ export function WardrobeItemEditor({
               <p className="mt-1 text-xs qt-text-small">
                 Default items are part of the character&apos;s standard outfit
               </p>
+            </div>
+
+            {/* Shared item checkbox */}
+            <div>
+              <label className={`inline-flex items-center gap-2 ${isEditing && !existingIsShared ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                <input
+                  type="checkbox"
+                  checked={isShared}
+                  onChange={(e) => setIsShared(e.target.checked)}
+                  disabled={isEditing && !existingIsShared}
+                  className="qt-checkbox"
+                />
+                <span className="text-sm text-foreground">
+                  Shared item (available to all characters)
+                </span>
+              </label>
+              {isEditing && !existingIsShared && (
+                <p className="mt-1 text-xs qt-text-muted">
+                  Personal items cannot be converted to shared items
+                </p>
+              )}
+              {!isEditing && isShared && (
+                <p className="mt-1 text-xs qt-text-small">
+                  This item will be available to all characters
+                </p>
+              )}
             </div>
           </div>
 

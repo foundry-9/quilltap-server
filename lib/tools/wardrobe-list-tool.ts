@@ -15,6 +15,8 @@ export interface WardrobeListToolInput {
   appropriateness_filter?: string;
   /** Whether to include currently equipped items (default true) */
   include_equipped?: boolean;
+  /** Whether to include outfit presets in the response (default true) */
+  include_presets?: boolean;
 }
 
 /**
@@ -32,12 +34,29 @@ export interface WardrobeListItemResult {
 }
 
 /**
+ * A preset summary in the result list
+ */
+export interface WardrobeListPresetResult {
+  preset_id: string;
+  name: string;
+  description: string | null;
+  slots: {
+    top: string | null;
+    bottom: string | null;
+    footwear: string | null;
+    accessories: string | null;
+  };
+}
+
+/**
  * Output from the list_wardrobe tool
  */
 export interface WardrobeListToolOutput {
   success: boolean;
   items: WardrobeListItemResult[];
   total_count: number;
+  /** Outfit presets available for this character */
+  presets?: WardrobeListPresetResult[];
   /** Error message if operation failed */
   error?: string;
 }
@@ -50,10 +69,12 @@ export const wardrobeListToolDefinition = {
   function: {
     name: 'list_wardrobe',
     description:
-      'Retrieve wardrobe items for the current character. ' +
+      'Retrieve wardrobe items and outfit presets for the current character. ' +
       'Returns clothing and accessory items from the character\'s wardrobe, ' +
       'with optional filtering by item type and appropriateness context. ' +
-      'Each item includes its equipped status, showing what the character is currently wearing.',
+      'Each item includes its equipped status, showing what the character is currently wearing. ' +
+      'Also includes saved outfit presets that can be applied via the update_outfit_item tool. ' +
+      'Archived items are excluded from results.',
     parameters: {
       type: 'object',
       properties: {
@@ -76,6 +97,11 @@ export const wardrobeListToolDefinition = {
           type: 'boolean',
           description:
             'Whether to include currently equipped items in the results. Defaults to true.',
+        },
+        include_presets: {
+          type: 'boolean',
+          description:
+            'Whether to include saved outfit presets in the response. Defaults to true.',
         },
       },
       required: [],
@@ -113,6 +139,13 @@ export function validateWardrobeListInput(input: unknown): input is WardrobeList
   // Validate include_equipped if provided
   if (obj.include_equipped !== undefined) {
     if (typeof obj.include_equipped !== 'boolean') {
+      return false;
+    }
+  }
+
+  // Validate include_presets if provided
+  if (obj.include_presets !== undefined) {
+    if (typeof obj.include_presets !== 'boolean') {
       return false;
     }
   }

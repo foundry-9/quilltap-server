@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type {
   OutfitSelectionMode,
+  OutfitPreset,
   WardrobeItem,
   WardrobeItemType,
   EquippedSlots,
@@ -54,6 +55,12 @@ const SLOT_LABELS: Record<WardrobeItemType, string> = {
 }
 
 // ============================================================================
+// INTERNAL MODE TYPE (adds 'preset' to the selection modes)
+// ============================================================================
+
+type InternalMode = OutfitSelectionMode | 'preset'
+
+// ============================================================================
 // PER-CHARACTER SECTION
 // ============================================================================
 
@@ -75,12 +82,17 @@ function CharacterOutfitSection({
 }: CharacterOutfitSectionProps) {
   const [expanded, setExpanded] = useState(false)
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([])
+  const [presets, setPresets] = useState<OutfitPreset[]>([])
   const [loadingWardrobe, setLoadingWardrobe] = useState(false)
+  const [loadingPresets, setLoadingPresets] = useState(false)
   const [wardrobeFetched, setWardrobeFetched] = useState(false)
+  const [presetsFetched, setPresetsFetched] = useState(false)
+  const [internalMode, setInternalMode] = useState<InternalMode>(selection.mode)
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
 
   // Fetch wardrobe items when mode is manual and items not yet fetched
   useEffect(() => {
-    if (selection.mode !== 'manual' || wardrobeFetched) return
+    if ((internalMode !== 'manual' && internalMode !== 'preset') || wardrobeFetched) return
 
     let cancelled = false
     const fetchWardrobe = async () => {
@@ -105,18 +117,72 @@ function CharacterOutfitSection({
     setLoadingWardrobe(true)
     fetchWardrobe()
     return () => { cancelled = true }
-  }, [selection.mode, character.id, wardrobeFetched])
+  }, [internalMode, character.id, wardrobeFetched])
+
+  // Fetch presets when mode is preset and presets not yet fetched
+  useEffect(() => {
+    if (internalMode !== 'preset' || presetsFetched) return
+
+    let cancelled = false
+    const fetchPresets = async () => {
+      try {
+        const res = await fetch(`/api/v1/characters/${character.id}/wardrobe/presets`)
+        if (!res.ok) throw new Error('Failed to fetch presets')
+        const data = await res.json()
+        if (!cancelled) {
+          setPresets(data.presets || [])
+          setPresetsFetched(true)
+        }
+      } catch (err) {
+        console.error('[OutfitSelector] Failed to fetch presets', {
+          characterId: character.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      } finally {
+        if (!cancelled) setLoadingPresets(false)
+      }
+    }
+
+    setLoadingPresets(true)
+    fetchPresets()
+    return () => { cancelled = true }
+  }, [internalMode, character.id, presetsFetched])
 
   const handleModeChange = useCallback(
-    (mode: OutfitSelectionMode) => {
+    (mode: InternalMode) => {
+      setInternalMode(mode)
+
+      if (mode === 'preset') {
+        // Don't emit to parent yet — wait for a preset to be selected
+        // Meanwhile, keep the current selection stable
+        return
+      }
+
       const updated: OutfitSelection = {
         characterId: character.id,
-        mode,
+        mode: mode as OutfitSelectionMode,
         slots: mode === 'manual' ? selection.slots || { ...EMPTY_EQUIPPED_SLOTS } : undefined,
       }
       onChange(updated)
     },
     [character.id, selection.slots, onChange]
+  )
+
+  const handlePresetSelect = useCallback(
+    (presetId: string) => {
+      setSelectedPresetId(presetId)
+      const preset = presets.find((p) => p.id === presetId)
+      if (!preset) return
+
+      // Resolve preset client-side: emit as 'manual' mode with the preset's slots
+      const updated: OutfitSelection = {
+        characterId: character.id,
+        mode: 'manual',
+        slots: { ...preset.slots },
+      }
+      onChange(updated)
+    },
+    [character.id, presets, onChange]
   )
 
   const handleSlotChange = useCallback(
@@ -140,13 +206,14 @@ function CharacterOutfitSection({
   )
 
   const modeOptions: Array<{
-    value: OutfitSelectionMode
+    value: InternalMode
     label: string
     description?: string
     disabled?: boolean
   }> = [
     { value: 'default', label: 'Use Defaults' },
     { value: 'manual', label: 'Choose Outfit' },
+    { value: 'preset', label: 'Use Saved Preset' },
     {
       value: 'llm_choose',
       label: 'Let Character Choose',
@@ -199,7 +266,7 @@ function CharacterOutfitSection({
                   type="radio"
                   name={`outfit-mode-${character.id}`}
                   value={opt.value}
-                  checked={selection.mode === opt.value}
+                  checked={internalMode === opt.value}
                   onChange={() => handleModeChange(opt.value)}
                   disabled={disabled || opt.disabled}
                   className="mt-0.5 accent-[var(--primary)]"
@@ -216,8 +283,45 @@ function CharacterOutfitSection({
             ))}
           </div>
 
+          {/* Preset picker */}
+          {internalMode === 'preset' && (
+            <div className="mt-3 pl-6">
+              {loadingPresets ? (
+                <p className="text-xs qt-text-secondary">Loading presets...</p>
+              ) : presets.length === 0 && presetsFetched ? (
+                <p className="text-xs qt-text-secondary italic">
+                  No presets found. Create presets in the character&apos;s wardrobe tab.
+                </p>
+              ) : (
+                <div>
+                  <label
+                    htmlFor={`preset-select-${character.id}`}
+                    className="mb-1 block text-xs font-medium qt-text-secondary"
+                  >
+                    Select Preset
+                  </label>
+                  <select
+                    id={`preset-select-${character.id}`}
+                    value={selectedPresetId || ''}
+                    onChange={(e) => handlePresetSelect(e.target.value)}
+                    disabled={disabled}
+                    className="qt-select w-full"
+                  >
+                    <option value="">Choose a preset...</option>
+                    {presets.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.name}
+                        {preset.description ? ` - ${preset.description}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Manual slot pickers */}
-          {selection.mode === 'manual' && (
+          {internalMode === 'manual' && (
             <div className="mt-3 space-y-2 pl-6">
               {loadingWardrobe ? (
                 <p className="text-xs qt-text-secondary">Loading wardrobe...</p>
@@ -261,7 +365,7 @@ function CharacterOutfitSection({
           )}
 
           {/* Warning for none mode */}
-          {selection.mode === 'none' && (
+          {internalMode === 'none' && (
             <div className="mt-2 ml-6 rounded border qt-border-warning/50 qt-bg-warning/10 px-2 py-1.5 text-xs qt-text-warning">
               Character will start undressed
             </div>

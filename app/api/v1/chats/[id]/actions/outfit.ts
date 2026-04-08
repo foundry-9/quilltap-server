@@ -64,7 +64,7 @@ export async function handleEquipSlot(
       if (!item) {
         return notFound('Wardrobe item');
       }
-      if (item.characterId !== characterId) {
+      if (item.characterId != null && item.characterId !== characterId) {
         return badRequest('Wardrobe item does not belong to this character');
       }
       if (!item.types.includes(slot as typeof item.types[number])) {
