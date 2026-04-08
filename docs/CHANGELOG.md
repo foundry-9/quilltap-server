@@ -6,6 +6,7 @@
 
 #### Added
 
+- **Project Detail Card Reorganization**: Split the monolithic Project Settings card into focused cards — "Model Behavior" (agent mode, tool settings), "Image Generation" (avatars, story backgrounds), and slimmed-down "Project Settings" (instructions, project state). Moved "Allow Any Character" toggle into the Characters card. Project Settings card now spans two rows for more instruction space.
 - **WebP Auto-Conversion**: All images (uploaded, imported, and AI-generated) are now automatically converted to WebP format for consistent, space-efficient storage — SVGs are the sole exception
 - **WebP Migration**: Startup migration converts all existing non-WebP, non-SVG images in the instance to WebP, updating database references and deleting originals only after verification
 - **Character Header Avatar**: Avatar on the character detail page now fills the full height of the header card, scaling up or down as needed

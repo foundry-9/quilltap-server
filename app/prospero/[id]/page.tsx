@@ -18,6 +18,8 @@ import {
   FilesCard,
   CharactersCard,
   SettingsCard,
+  ModelBehaviorCard,
+  ImageGenerationCard,
   ChatsSection,
 } from './components'
 
@@ -107,8 +109,10 @@ export default function ProjectDetailPage() {
         onSave={handleSave}
       />
 
-      {/* Cards grid - 3 across on wide desktop, 2 on medium, 1 on mobile */}
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {/* Cards grid - 3 columns on wide desktop, 2 on medium, 1 on mobile
+           Layout: Files          | Characters       | Project Settings (row-span-2)
+                   Model Behavior | Image Generation |                               */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 grid-flow-row-dense">
         <FilesCard
           files={files}
           expanded={cardState.files}
@@ -119,6 +123,7 @@ export default function ProjectDetailPage() {
         <CharactersCard
           project={project}
           onRemoveCharacter={handleRemoveCharacter}
+          onToggleAllowAnyCharacter={handleToggleAllowAnyCharacter}
           expanded={cardState.characters}
           onToggle={() => toggleCard('characters')}
         />
@@ -127,12 +132,21 @@ export default function ProjectDetailPage() {
           editForm={editForm}
           onEditFormChange={setEditForm}
           onSave={handleSave}
-          onToggleAllowAnyCharacter={handleToggleAllowAnyCharacter}
-          onAgentModeChange={handleSaveAgentMode}
-          onAvatarGenerationChange={handleSaveAvatarGeneration}
-          onBackgroundDisplayModeChange={handleSaveBackgroundDisplayMode}
           expanded={cardState.settings}
           onToggle={() => toggleCard('settings')}
+        />
+        <ModelBehaviorCard
+          project={project}
+          onAgentModeChange={handleSaveAgentMode}
+          expanded={cardState.modelBehavior}
+          onToggle={() => toggleCard('modelBehavior')}
+        />
+        <ImageGenerationCard
+          project={project}
+          onAvatarGenerationChange={handleSaveAvatarGeneration}
+          onBackgroundDisplayModeChange={handleSaveBackgroundDisplayMode}
+          expanded={cardState.imageGeneration}
+          onToggle={() => toggleCard('imageGeneration')}
         />
       </div>
 

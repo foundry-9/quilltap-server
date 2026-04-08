@@ -3,12 +3,12 @@
 /**
  * Settings Card
  *
- * Card displaying project instructions and allow any character toggle.
+ * Card displaying project instructions and project state.
+ * Spans two rows in the grid layout to give instructions plenty of room.
  */
 
-import { useState, useCallback, useMemo } from 'react'
-import type { Project, EditForm, BackgroundDisplayMode } from '../types'
-import { ProjectToolSettingsModal } from '@/components/tools/tool-settings'
+import { useState } from 'react'
+import type { Project, EditForm } from '../types'
 import StateEditorModal from '@/components/state/StateEditorModal'
 
 interface SettingsCardProps {
@@ -16,10 +16,6 @@ interface SettingsCardProps {
   editForm: EditForm
   onEditFormChange: (form: EditForm) => void
   onSave: () => void
-  onToggleAllowAnyCharacter: () => void
-  onAgentModeChange: (enabled: boolean | null) => void
-  onAvatarGenerationChange: (enabled: boolean | null) => void
-  onBackgroundDisplayModeChange: (mode: BackgroundDisplayMode) => void
   expanded: boolean
   onToggle: () => void
   onProjectUpdate?: () => void
@@ -52,45 +48,14 @@ export function SettingsCard({
   editForm,
   onEditFormChange,
   onSave,
-  onToggleAllowAnyCharacter,
-  onAgentModeChange,
-  onAvatarGenerationChange,
-  onBackgroundDisplayModeChange,
   expanded,
   onToggle,
   onProjectUpdate,
 }: SettingsCardProps) {
-  const [showToolSettingsModal, setShowToolSettingsModal] = useState(false)
   const [showStateEditorModal, setShowStateEditorModal] = useState(false)
-  const [localDisabledTools, setLocalDisabledTools] = useState<string[]>(project.defaultDisabledTools || [])
-  const [localDisabledToolGroups, setLocalDisabledToolGroups] = useState<string[]>(project.defaultDisabledToolGroups || [])
-
-  // Compute tool summary text
-  const toolSummary = useMemo(() => {
-    const toolCount = localDisabledTools.length
-    const groupCount = localDisabledToolGroups.length
-    if (toolCount === 0 && groupCount === 0) {
-      return 'All tools enabled'
-    }
-    const parts: string[] = []
-    if (toolCount > 0) {
-      parts.push(`${toolCount} tool${toolCount !== 1 ? 's' : ''} disabled`)
-    }
-    if (groupCount > 0) {
-      parts.push(`${groupCount} group${groupCount !== 1 ? 's' : ''} disabled`)
-    }
-    return parts.join(', ')
-  }, [localDisabledTools, localDisabledToolGroups])
-
-  // Handle tool settings save
-  const handleToolSettingsSuccess = useCallback((newDisabledTools: string[], newDisabledToolGroups: string[]) => {
-    setLocalDisabledTools(newDisabledTools)
-    setLocalDisabledToolGroups(newDisabledToolGroups)
-    onProjectUpdate?.()
-  }, [onProjectUpdate])
 
   return (
-    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">
+    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden row-span-2">
       {/* Header - always visible */}
       <button
         onClick={onToggle}
@@ -101,7 +66,7 @@ export function SettingsCard({
           <div className="text-left">
             <h3 className="qt-heading-4 text-foreground">Project Settings</h3>
             <p className="qt-text-small qt-text-secondary">
-              Instructions &amp; character access
+              Instructions &amp; project state
             </p>
           </div>
         </div>
@@ -120,7 +85,7 @@ export function SettingsCard({
             <textarea
               value={editForm.instructions}
               onChange={(e) => onEditFormChange({ ...editForm, instructions: e.target.value })}
-              rows={4}
+              rows={10}
               placeholder="Add instructions for characters in this project..."
               className="qt-textarea w-full"
             />
@@ -129,112 +94,6 @@ export function SettingsCard({
                 Save
               </button>
             </div>
-          </div>
-
-          {/* Allow Any Character Toggle */}
-          <div className="flex items-center justify-between p-3 rounded-lg qt-border qt-bg-surface">
-            <div>
-              <h4 className="text-sm font-medium text-foreground">Allow Any Character</h4>
-              <p className="qt-text-xs qt-text-secondary">
-                {project.allowAnyCharacter
-                  ? 'Any character can join project chats.'
-                  : 'Only roster characters can participate.'}
-              </p>
-            </div>
-            <button
-              onClick={onToggleAllowAnyCharacter}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                project.allowAnyCharacter ? 'bg-primary' : 'qt-bg-muted'
-              }`}
-              role="switch"
-              aria-checked={project.allowAnyCharacter}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                  project.allowAnyCharacter ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* Agent Mode Setting */}
-          <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 className="text-sm font-medium text-foreground mb-1">Agent Mode</h4>
-            <p className="qt-text-xs qt-text-secondary mb-2">
-              Default agent mode for chats in this project. Agent mode allows iterative tool use with self-correction.
-            </p>
-            <select
-              value={project.defaultAgentModeEnabled === null || project.defaultAgentModeEnabled === undefined ? 'inherit' : project.defaultAgentModeEnabled ? 'enabled' : 'disabled'}
-              onChange={(e) => {
-                const value = e.target.value
-                onAgentModeChange(value === 'inherit' ? null : value === 'enabled')
-              }}
-              className="qt-input w-full max-w-xs"
-            >
-              <option value="inherit">Inherit from global/character</option>
-              <option value="enabled">Enabled by default</option>
-              <option value="disabled">Disabled by default</option>
-            </select>
-          </div>
-
-          {/* Avatar Generation Setting */}
-          <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 className="text-sm font-medium text-foreground mb-1">Avatar Generation</h4>
-            <p className="qt-text-xs qt-text-secondary mb-2">
-              Auto-generate character avatars when outfits change in new chats.
-            </p>
-            <select
-              value={project.defaultAvatarGenerationEnabled === null || project.defaultAvatarGenerationEnabled === undefined ? 'inherit' : project.defaultAvatarGenerationEnabled ? 'enabled' : 'disabled'}
-              onChange={(e) => {
-                const value = e.target.value
-                onAvatarGenerationChange(value === 'inherit' ? null : value === 'enabled')
-              }}
-              className="qt-input w-full max-w-xs"
-            >
-              <option value="inherit">Inherit from global</option>
-              <option value="enabled">Enabled by default</option>
-              <option value="disabled">Disabled by default</option>
-            </select>
-          </div>
-
-          {/* Story Backgrounds Setting */}
-          <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 className="text-sm font-medium text-foreground mb-1">Story Backgrounds</h4>
-            <p className="qt-text-xs qt-text-secondary mb-2">
-              Choose how the project background is displayed. Backgrounds are generated from chat titles and characters.
-            </p>
-            <select
-              value={project.backgroundDisplayMode || 'theme'}
-              onChange={(e) => onBackgroundDisplayModeChange(e.target.value as BackgroundDisplayMode)}
-              className="qt-input w-full max-w-xs"
-            >
-              <option value="theme">Use theme background (no image)</option>
-              <option value="latest_chat">Latest chat background</option>
-              <option value="project">Project-generated background</option>
-              <option value="static">Static uploaded image</option>
-            </select>
-            <p className="qt-text-xs qt-text-secondary mt-2">
-              {project.backgroundDisplayMode === 'latest_chat' && 'Shows the most recent background from any chat in this project.'}
-              {project.backgroundDisplayMode === 'project' && 'Uses a background generated specifically for this project.'}
-              {project.backgroundDisplayMode === 'static' && 'Uses a manually uploaded background image.'}
-              {(!project.backgroundDisplayMode || project.backgroundDisplayMode === 'theme') && 'No background image, uses your theme colors.'}
-            </p>
-          </div>
-
-          {/* Default Tool Settings */}
-          <div className="flex items-center justify-between p-3 rounded-lg qt-border qt-bg-surface">
-            <div>
-              <h4 className="text-sm font-medium text-foreground">Default Tool Settings</h4>
-              <p className="qt-text-xs qt-text-secondary">
-                {toolSummary}
-              </p>
-            </div>
-            <button
-              onClick={() => setShowToolSettingsModal(true)}
-              className="qt-button qt-button-secondary qt-button-sm"
-            >
-              Configure
-            </button>
           </div>
 
           {/* Project State */}
@@ -254,16 +113,6 @@ export function SettingsCard({
           </div>
         </div>
       )}
-
-      {/* Tool Settings Modal */}
-      <ProjectToolSettingsModal
-        isOpen={showToolSettingsModal}
-        onClose={() => setShowToolSettingsModal(false)}
-        projectId={project.id}
-        disabledTools={localDisabledTools}
-        disabledToolGroups={localDisabledToolGroups}
-        onSuccess={handleToolSettingsSuccess}
-      />
 
       {/* State Editor Modal */}
       <StateEditorModal
