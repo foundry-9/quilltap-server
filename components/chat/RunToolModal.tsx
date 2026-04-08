@@ -8,16 +8,19 @@
  * Phase 2: Parameter form + execute button
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import JsonSchemaForm from '@/components/chat/JsonSchemaForm'
 import { showErrorToast } from '@/lib/toast'
 import type { AvailableTool } from '@/app/api/v1/tools/route'
+import type { Participant } from '@/app/salon/[id]/types'
 
 interface RunToolModalProps {
   isOpen: boolean
   onClose: () => void
   chatId: string
+  /** Chat participants for character context selection */
+  participants: Participant[]
   /** Called after successful tool execution so the chat can refresh */
   onToolExecuted: () => void
 }
@@ -39,6 +42,7 @@ export default function RunToolModal({
   isOpen,
   onClose,
   chatId,
+  participants,
   onToolExecuted,
 }: RunToolModalProps) {
   const [tools, setTools] = useState<AvailableTool[]>([])
@@ -48,6 +52,13 @@ export default function RunToolModal({
   const [formValues, setFormValues] = useState<Record<string, unknown>>({})
   const [formValid, setFormValid] = useState(false)
   const [executing, setExecuting] = useState(false)
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
+
+  // Active character participants for the character selector
+  const activeCharacters = useMemo(() =>
+    participants.filter(p => p.type === 'CHARACTER' && p.isActive && !p.removedAt),
+    [participants]
+  )
 
   // Fetch tools when modal opens
   useEffect(() => {
@@ -56,6 +67,9 @@ export default function RunToolModal({
     setSelectedTool(null)
     setSearchQuery('')
     setFormValues({})
+    // Default to first active character
+    const firstChar = participants.find(p => p.type === 'CHARACTER' && p.isActive && !p.removedAt)
+    setSelectedCharacterId(firstChar?.characterId || null)
 
     fetch(`/api/v1/tools?chatId=${chatId}&includeSchemas=true`)
       .then(res => res.json())
@@ -71,7 +85,7 @@ export default function RunToolModal({
         showErrorToast('Failed to load available tools')
       })
       .finally(() => setLoading(false))
-  }, [isOpen, chatId])
+  }, [isOpen, chatId, participants])
 
   const handleSelectTool = useCallback((tool: AvailableTool) => {
     if (tool.available === false) return
@@ -117,6 +131,7 @@ export default function RunToolModal({
         body: JSON.stringify({
           toolName: selectedTool.id,
           arguments: cleanArgs,
+          characterId: selectedCharacterId || undefined,
         }),
       })
 
@@ -134,7 +149,7 @@ export default function RunToolModal({
     } finally {
       setExecuting(false)
     }
-  }, [selectedTool, formValues, chatId, onToolExecuted, onClose])
+  }, [selectedTool, formValues, chatId, selectedCharacterId, onToolExecuted, onClose])
 
   // Group tools by category
   const filteredTools = tools.filter(t => {
@@ -312,6 +327,24 @@ export default function RunToolModal({
           <div className="text-sm qt-text-secondary">
             {selectedTool.description}
           </div>
+
+          {/* Character selector */}
+          {activeCharacters.length > 0 && (
+            <div className="border-t qt-border pt-3">
+              <label className="block text-sm font-medium qt-text mb-1">Run as character</label>
+              <select
+                className="qt-input w-full text-sm"
+                value={selectedCharacterId || ''}
+                onChange={(e) => setSelectedCharacterId(e.target.value || null)}
+              >
+                {activeCharacters.map(p => (
+                  <option key={p.id} value={p.characterId || ''}>
+                    {p.character?.name || 'Unknown'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Parameter form */}
           {hasSchema ? (

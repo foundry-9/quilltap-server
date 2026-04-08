@@ -386,6 +386,7 @@ export function ChatModals({
         isOpen={runToolModalOpen}
         onClose={closeRunTool}
         chatId={chatId}
+        participants={chat?.participants || []}
         onToolExecuted={() => {
           fetchChat()
         }}

@@ -28,6 +28,7 @@ const NON_USER_INVOCABLE_TOOLS = new Set([
 const runToolRequestSchema = z.object({
   toolName: z.string().min(1, 'Tool name is required'),
   arguments: z.record(z.string(), z.unknown()).default({}),
+  characterId: z.string().optional(),
 });
 
 /**
@@ -58,9 +59,14 @@ export async function handleRunTool(
   }
 
   // Find the active character participant for context
-  const characterParticipant = chat.participants.find(
-    p => p.type === 'CHARACTER' && p.isActive
-  );
+  // If a characterId was provided, match that specific character; otherwise fall back to first active
+  const characterParticipant = validated.characterId
+    ? chat.participants.find(
+        p => p.type === 'CHARACTER' && p.isActive && p.characterId === validated.characterId
+      )
+    : chat.participants.find(
+        p => p.type === 'CHARACTER' && p.isActive
+      );
 
   const executionContext: ToolExecutionContext = {
     chatId,

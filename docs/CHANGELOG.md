@@ -10,6 +10,9 @@
 
 #### Added
 
+- **Wardrobe Tools in Tool Settings**: Wardrobe tools (`list_wardrobe`, `update_outfit_item`, `create_wardrobe_item`) now appear in tool enable/disable settings and the Run Tool modal, with availability gated by character wardrobe flags
+- **Run Tool Character Selector**: Run Tool modal now includes a "Run as character" dropdown so users can choose which character context to execute tools in, fixing an issue where manual tool runs always used the first active character participant
+
 - **Library File Attach**: New gutter button (document icon) in chat composer lets you attach existing files from General or any project's library to the current message without re-uploading — two-step picker selects scope then browses files with preview
 - **Standalone Image Generation**: New gutter button (camera icon) in chat composer opens a full image generation dialog with profile picker, available in every chat regardless of character image profiles — generated images attach as tool output
 - **Chat Composer Gutter 2x2 Layout**: Gutter tools now arranged in a 2x2 grid with the new library and camera buttons above the existing paperclip and dice
