@@ -955,6 +955,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onAgentModeToggle={chatControls.handleToggleAgentMode}
           storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}
           onRegenerateBackgroundClick={chatControls.handleRegenerateBackground}
+          onRoleplayTemplateChange={fetchChat}
           onSubmit={(e) => sseStreaming.sendMessage(
             e,
             input,

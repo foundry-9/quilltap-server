@@ -4,6 +4,10 @@
 
 ### 4.2-dev
 
+#### Changed
+
+- **Tool Palette Reorganization**: Moved Roleplay Template dropdown from Chat Settings modal into the Edit Content section of the tool palette for quicker access. Moved State to the Organize section. Merged Memory actions (Re-extract, Delete) into the Edit Content section, removing the separate Memory section.
+
 #### Added
 
 - **Library File Attach**: New gutter button (document icon) in chat composer lets you attach existing files from General or any project's library to the current message without re-uploading — two-step picker selects scope then browses files with preview

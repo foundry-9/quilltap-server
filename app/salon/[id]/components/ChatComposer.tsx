@@ -85,6 +85,7 @@ interface ChatComposerProps {
   onRunToolClick?: () => void
   onStateClick?: () => void
   onRegenerateBackgroundClick?: () => void
+  onRoleplayTemplateChange?: () => void
   storyBackgroundsEnabled?: boolean
   onStopStreaming: () => void
   /** Hide the stop button (when sidebar has its own stop button) */
@@ -159,6 +160,7 @@ export function ChatComposer({
   onRunToolClick,
   onStateClick,
   onRegenerateBackgroundClick,
+  onRoleplayTemplateChange,
   storyBackgroundsEnabled = false,
   onStopStreaming,
   hideStopButton = false,
@@ -500,6 +502,8 @@ export function ChatComposer({
           disabled={sending || !hasActiveCharacters}
           agentModeEnabled={agentModeEnabled}
           onAgentModeToggle={onAgentModeToggle}
+          roleplayTemplateId={roleplayTemplateId}
+          onRoleplayTemplateChange={onRoleplayTemplateChange}
         />
 
         {/* Formatting toolbar - shown above the form when document editing mode is enabled */}

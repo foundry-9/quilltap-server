@@ -18,18 +18,10 @@ interface ApiKey {
   provider: string
 }
 
-interface RoleplayTemplate {
-  id: string
-  name: string
-  description: string | null
-  isBuiltIn: boolean
-}
-
 interface ChatSettingsModalProps {
   isOpen: boolean
   onClose: () => void
   chatId: string
-  roleplayTemplateId?: string | null
   imageProfileId?: string | null
   avatarGenerationEnabled?: boolean | null
   onSuccess?: () => void
@@ -39,30 +31,19 @@ export default function ChatSettingsModal({
   isOpen,
   onClose,
   chatId,
-  roleplayTemplateId: initialRoleplayTemplateId,
   imageProfileId: initialImageProfileId,
   avatarGenerationEnabled: initialAvatarGenerationEnabled,
   onSuccess,
 }: Readonly<ChatSettingsModalProps>) {
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
-  const [roleplayTemplates, setRoleplayTemplates] = useState<RoleplayTemplate[]>([])
-  const [selectedRoleplayTemplateId, setSelectedRoleplayTemplateId] = useState<string | null>(
-    initialRoleplayTemplateId ?? null
-  )
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(
     initialImageProfileId ?? null
   )
   const [avatarGenEnabled, setAvatarGenEnabled] = useState(initialAvatarGenerationEnabled ?? false)
-  const [roleplayTemplateSaving, setRoleplayTemplateSaving] = useState(false)
   const [imageProfileSaving, setImageProfileSaving] = useState(false)
   const [avatarGenSaving, setAvatarGenSaving] = useState(false)
   const [dataLoading, setDataLoading] = useState(false)
-
-  // Update local state when prop changes
-  useEffect(() => {
-    setSelectedRoleplayTemplateId(initialRoleplayTemplateId ?? null)
-  }, [initialRoleplayTemplateId])
 
   useEffect(() => {
     setSelectedImageProfileId(initialImageProfileId ?? null)
@@ -75,13 +56,12 @@ export default function ChatSettingsModal({
   useEffect(() => {
     if (isOpen) {
       fetchProfiles()
-      fetchRoleplayTemplates()
     }
   }, [isOpen])
 
   // Disable click-outside detection while saving to prevent native select dropdown clicks
   // from closing the modal (browser renders select options in a separate layer)
-  const isSaving = dataLoading || roleplayTemplateSaving || imageProfileSaving || avatarGenSaving
+  const isSaving = dataLoading || imageProfileSaving || avatarGenSaving
 
   const fetchProfiles = async () => {
     try {
@@ -105,57 +85,6 @@ export default function ChatSettingsModal({
       showErrorToast('Failed to load profiles')
     } finally {
       setDataLoading(false)
-    }
-  }
-
-  const fetchRoleplayTemplates = async () => {
-    try {
-      const res = await fetch('/api/v1/roleplay-templates')
-      if (res.ok) {
-        const data = await res.json()
-        setRoleplayTemplates(data)
-      }
-    } catch (error) {
-      console.error('Failed to fetch roleplay templates', { error: error instanceof Error ? error.message : String(error) })
-    }
-  }
-
-  const handleRoleplayTemplateChange = async (templateId: string | null) => {
-    try {
-      setRoleplayTemplateSaving(true)
-
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roleplayTemplateId: templateId }),
-      })
-
-      if (!res.ok) {
-        let errorMessage = 'Failed to update roleplay template'
-        try {
-          const errorData = await res.json()
-          errorMessage = errorData.error || errorMessage
-        } catch {
-          // Response might not be JSON
-          errorMessage = `HTTP ${res.status}: ${res.statusText}`
-        }
-        throw new Error(errorMessage)
-      }
-
-      setSelectedRoleplayTemplateId(templateId)
-      showSuccessToast('Roleplay template updated')
-      onSuccess?.()
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      console.error('Failed to update roleplay template', {
-        chatId,
-        templateId,
-        error: errorMessage,
-        errorType: error?.constructor?.name || typeof error,
-      })
-      showErrorToast(errorMessage || 'Failed to update roleplay template')
-    } finally {
-      setRoleplayTemplateSaving(false)
     }
   }
 
@@ -252,36 +181,6 @@ export default function ChatSettingsModal({
       closeOnClickOutside={!isSaving}
       closeOnEscape={!isSaving}
     >
-      {/* Roleplay Template Section */}
-      <div className="mb-6">
-        <h3 className="qt-text-small font-medium mb-3">
-          Roleplay Template
-        </h3>
-        <div className="qt-card">
-          <label htmlFor="roleplay-template" className="qt-label mb-1">
-            Formatting Style
-          </label>
-          <select
-            id="roleplay-template"
-            value={selectedRoleplayTemplateId || ''}
-            onChange={(e) => handleRoleplayTemplateChange(e.target.value || null)}
-            disabled={roleplayTemplateSaving || dataLoading}
-            className="qt-select text-sm"
-          >
-            <option value="">None (no formatting template)</option>
-            {roleplayTemplates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.name}{template.isBuiltIn ? ' (Built-in)' : ''}
-              </option>
-            ))}
-          </select>
-          <p className="qt-text-xs mt-2">
-            Controls how the AI formats dialogue, actions, and thoughts in this chat.
-            {roleplayTemplateSaving && <span className="ml-2">Saving...</span>}
-          </p>
-        </div>
-      </div>
-
       {/* Image Profile Section */}
       <div className="mb-6">
         <h3 className="qt-text-small font-medium mb-3">

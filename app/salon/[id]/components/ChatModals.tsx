@@ -200,7 +200,6 @@ export function ChatModals({
         isOpen={chatSettingsModalOpen}
         onClose={closeChatSettings}
         chatId={chatId}
-        roleplayTemplateId={chat?.roleplayTemplateId}
         imageProfileId={chat?.imageProfileId}
         avatarGenerationEnabled={chat?.avatarGenerationEnabled}
         onSuccess={fetchChat}

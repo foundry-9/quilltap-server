@@ -1,7 +1,15 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
+
+interface RoleplayTemplate {
+  id: string
+  name: string
+  description: string | null
+  isBuiltIn: boolean
+}
 
 interface ToolPaletteProps {
   isOpen: boolean
@@ -29,6 +37,8 @@ interface ToolPaletteProps {
   chatMemoryCount?: number
   storyBackgroundsEnabled?: boolean
   disabled?: boolean
+  roleplayTemplateId?: string | null
+  onRoleplayTemplateChange?: () => void
 }
 
 /**
@@ -69,14 +79,53 @@ export default function ToolPalette({
   chatMemoryCount = 0,
   storyBackgroundsEnabled = false,
   disabled = false,
+  roleplayTemplateId,
+  onRoleplayTemplateChange,
 }: ToolPaletteProps) {
   const paletteRef = useRef<HTMLDivElement>(null)
+  const [roleplayTemplates, setRoleplayTemplates] = useState<RoleplayTemplate[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(roleplayTemplateId ?? null)
+  const [templateSaving, setTemplateSaving] = useState(false)
 
   useClickOutside(paletteRef, onClose, {
     enabled: isOpen,
     excludeRefs: toggleButtonRef ? [toggleButtonRef] : [],
     onEscape: onClose,
   })
+
+  // Fetch roleplay templates when palette opens
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedTemplateId(roleplayTemplateId ?? null)
+      fetch('/api/v1/roleplay-templates')
+        .then(res => res.ok ? res.json() : [])
+        .then(data => setRoleplayTemplates(data))
+        .catch(() => setRoleplayTemplates([]))
+    }
+  }, [isOpen, roleplayTemplateId])
+
+  const handleRoleplayTemplateChange = async (templateId: string | null) => {
+    try {
+      setTemplateSaving(true)
+      const res = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roleplayTemplateId: templateId }),
+      })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
+      }
+      setSelectedTemplateId(templateId)
+      showSuccessToast('Roleplay template updated')
+      onRoleplayTemplateChange?.()
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      showErrorToast(msg || 'Failed to update roleplay template')
+    } finally {
+      setTemplateSaving(false)
+    }
+  }
 
   const handleGalleryClick = () => {
     onGalleryClick()
@@ -217,21 +266,6 @@ export default function ToolPalette({
             </button>
           )}
 
-          {/* Chat State */}
-          {onStateClick && (
-            <button
-              type="button"
-              onClick={handleStateClick}
-              className="qt-tool-palette-button"
-              title="View/edit chat state"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-              </svg>
-              <span>State</span>
-            </button>
-          )}
-
           {/* Agent Mode Toggle */}
           {onAgentModeToggle && (
             <button
@@ -347,98 +381,117 @@ export default function ToolPalette({
               <span>Add Character</span>
             </button>
           )}
+
+          {/* Chat State */}
+          {onStateClick && (
+            <button
+              type="button"
+              onClick={handleStateClick}
+              className="qt-tool-palette-button"
+              title="View/edit chat state"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+              </svg>
+              <span>State</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* EDIT CONTENT Section */}
-      {(onSearchReplaceClick || onBulkCharacterReplaceClick) && (
-        <div className="qt-tool-palette-section">
-          <SectionHeader
-            icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            }
-            title="EDIT CONTENT"
-          />
-          <div className="qt-tool-palette-section-content">
-            {/* Search & Replace */}
-            {onSearchReplaceClick && (
-              <button
-                type="button"
-                onClick={handleSearchReplaceClick}
-                className="qt-tool-palette-button"
-                title="Search and replace in chat"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <span>Replace</span>
-              </button>
-            )}
-
-            {/* Bulk Character Replace */}
-            {onBulkCharacterReplaceClick && (
-              <button
-                type="button"
-                onClick={handleBulkCharacterReplaceClick}
-                className="qt-tool-palette-button"
-                title="Bulk re-attribute messages between characters"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-                <span>Bulk Replace</span>
-              </button>
-            )}
+      <div className="qt-tool-palette-section">
+        <SectionHeader
+          icon={
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          }
+          title="EDIT CONTENT"
+        />
+        <div className="qt-tool-palette-section-content">
+          {/* Roleplay Template */}
+          <div className="qt-tool-palette-inline-select">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+            </svg>
+            <select
+              value={selectedTemplateId || ''}
+              onChange={(e) => handleRoleplayTemplateChange(e.target.value || null)}
+              disabled={templateSaving}
+              className="qt-tool-palette-select"
+              title="Roleplay template"
+            >
+              <option value="">No Template</option>
+              {roleplayTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}{template.isBuiltIn ? ' (Built-in)' : ''}
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
-      )}
 
-      {/* MEMORY Section */}
-      {(onReextractMemoriesClick || onDeleteChatMemoriesClick) && (
-        <div className="qt-tool-palette-section">
-          <SectionHeader
-            icon={
+          {/* Search & Replace */}
+          {onSearchReplaceClick && (
+            <button
+              type="button"
+              onClick={handleSearchReplaceClick}
+              className="qt-tool-palette-button"
+              title="Search and replace in chat"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-            }
-            title="MEMORY"
-          />
-          <div className="qt-tool-palette-section-content">
-            {/* Re-extract Memories */}
-            {onReextractMemoriesClick && (
-              <button
-                type="button"
-                onClick={handleReextractMemoriesClick}
-                className="qt-tool-palette-button"
-                title="Re-extract memories"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Re-extract</span>
-              </button>
-            )}
+              <span>Replace</span>
+            </button>
+          )}
 
-            {/* Delete Chat Memories */}
-            {onDeleteChatMemoriesClick && (
-              <button
-                type="button"
-                onClick={handleDeleteChatMemoriesClick}
-                className="qt-tool-palette-button qt-tool-palette-button-danger"
-                title="Delete chat memories"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                <span>Delete ({chatMemoryCount})</span>
-              </button>
-            )}
-          </div>
+          {/* Bulk Character Replace */}
+          {onBulkCharacterReplaceClick && (
+            <button
+              type="button"
+              onClick={handleBulkCharacterReplaceClick}
+              className="qt-tool-palette-button"
+              title="Bulk re-attribute messages between characters"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+              <span>Bulk Replace</span>
+            </button>
+          )}
+
+          {/* Re-extract Memories */}
+          {onReextractMemoriesClick && (
+            <button
+              type="button"
+              onClick={handleReextractMemoriesClick}
+              className="qt-tool-palette-button"
+              title="Re-extract memories"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Re-extract</span>
+            </button>
+          )}
+
+          {/* Delete Chat Memories */}
+          {onDeleteChatMemoriesClick && (
+            <button
+              type="button"
+              onClick={handleDeleteChatMemoriesClick}
+              className="qt-tool-palette-button qt-tool-palette-button-danger"
+              title="Delete chat memories"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span>Delete ({chatMemoryCount})</span>
+            </button>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

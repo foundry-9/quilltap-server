@@ -642,6 +642,23 @@
     background: color-mix(in srgb, var(--qt-badge-enabled-bg) 120%, transparent);
   }
 
+  .qt-tool-palette-inline-select {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md;
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    border: 1px solid transparent;
+  }
+
+  .qt-tool-palette-select {
+    @apply text-xs bg-transparent border-none outline-none cursor-pointer;
+    color: var(--color-foreground);
+    max-width: 160px;
+  }
+
+  .qt-tool-palette-select:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
   /* ==========================================================================
      FORMATTING TOOLBAR (Document Editing Mode)
      ========================================================================== */
