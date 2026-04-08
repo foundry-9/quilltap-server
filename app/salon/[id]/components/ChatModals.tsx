@@ -24,6 +24,8 @@ import { getNextPauseThreshold } from '@/lib/chat/turn-manager'
 import type { Chat, Message } from '../types'
 import SudoApprovalModal from '@/components/chat/SudoApprovalModal'
 import WorkspaceAcknowledgementModal from '@/components/chat/WorkspaceAcknowledgementModal'
+import LibraryFilePickerModal from '@/components/chat/LibraryFilePickerModal'
+import StandaloneGenerateImageDialog from '@/components/chat/StandaloneGenerateImageDialog'
 import type { ReattributeDialogState, FileWriteApprovalState, SudoApprovalState, WorkspaceAcknowledgementState, SelectLLMProfileDialogState } from '../hooks/useModalState'
 
 interface ChatModalsProps {
@@ -60,6 +62,10 @@ interface ChatModalsProps {
   closeRunTool: () => void
   stateEditorModalOpen: boolean
   closeStateEditor: () => void
+  libraryFilePickerOpen: boolean
+  closeLibraryFilePicker: () => void
+  standaloneGenerateImageOpen: boolean
+  closeStandaloneGenerateImage: () => void
   allLLMPauseModalOpen: boolean
   setAllLLMPauseModalOpen: (open: boolean) => void
   // Complex modal states
@@ -122,6 +128,8 @@ export function ChatModals({
   toolSettingsModalOpen, closeToolSettings,
   runToolModalOpen, closeRunTool,
   stateEditorModalOpen, closeStateEditor,
+  libraryFilePickerOpen, closeLibraryFilePicker,
+  standaloneGenerateImageOpen, closeStandaloneGenerateImage,
   allLLMPauseModalOpen, setAllLLMPauseModalOpen,
   // Complex
   reattributeDialogState, setReattributeDialogState,
@@ -226,6 +234,60 @@ export function ChatModals({
         chatId={chatId}
         participants={chat?.participants || []}
         imageProfileId={chat?.imageProfileId || undefined}
+        onImagesGenerated={(images, prompt) => {
+          fetch(`/api/v1/chats/${chatId}?action=add-tool-result`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tool: 'generate_image',
+              initiatedBy: 'user',
+              prompt,
+              images: images.map(img => ({
+                id: img.id,
+                filename: img.filename,
+              })),
+            }),
+          })
+            .then((res) => res.json())
+            .then(() => {
+              fetchChat()
+            })
+            .catch((err) => console.error('Failed to save tool result:', err instanceof Error ? err.message : String(err)))
+
+          setAttachedFiles((prev: any[]) => [
+            ...prev,
+            ...images.map((img) => ({
+              ...img,
+              url: img.filepath.startsWith('/') ? img.filepath : `/${img.filepath}`,
+            })),
+          ])
+          fetchChatPhotoCount()
+        }}
+      />
+
+      <LibraryFilePickerModal
+        isOpen={libraryFilePickerOpen}
+        onClose={closeLibraryFilePicker}
+        chatId={chatId}
+        onFileLinked={(file) => {
+          setAttachedFiles((prev: any[]) => [
+            ...prev,
+            {
+              id: file.id,
+              filename: file.filename,
+              filepath: file.filepath,
+              mimeType: file.mimeType,
+              url: file.url,
+            },
+          ])
+        }}
+      />
+
+      <StandaloneGenerateImageDialog
+        isOpen={standaloneGenerateImageOpen}
+        onClose={closeStandaloneGenerateImage}
+        chatId={chatId}
+        participants={chat?.participants || []}
         onImagesGenerated={(images, prompt) => {
           fetch(`/api/v1/chats/${chatId}?action=add-tool-result`, {
             method: 'POST',

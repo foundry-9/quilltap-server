@@ -6,6 +6,11 @@
 
 #### Added
 
+- **Library File Attach**: New gutter button (document icon) in chat composer lets you attach existing files from General or any project's library to the current message without re-uploading — two-step picker selects scope then browses files with preview
+- **Standalone Image Generation**: New gutter button (camera icon) in chat composer opens a full image generation dialog with profile picker, available in every chat regardless of character image profiles — generated images attach as tool output
+- **Chat Composer Gutter 2x2 Layout**: Gutter tools now arranged in a 2x2 grid with the new library and camera buttons above the existing paperclip and dice
+- **Link File API**: `POST /api/v1/chats/[id]/files?action=link` endpoint links an existing library file to a chat without re-uploading
+
 - **Project Detail Card Reorganization**: Split the monolithic Project Settings card into focused cards — "Model Behavior" (agent mode, tool settings), "Image Generation" (avatars, story backgrounds), and slimmed-down "Project Settings" (instructions, project state). Moved "Allow Any Character" toggle into the Characters card. Project Settings card now spans two rows for more instruction space.
 - **WebP Auto-Conversion**: All images (uploaded, imported, and AI-generated) are now automatically converted to WebP format for consistent, space-efficient storage — SVGs are the sole exception
 - **WebP Migration**: Startup migration converts all existing non-WebP, non-SVG images in the instance to WebP, updating database references and deleting originals only after verification

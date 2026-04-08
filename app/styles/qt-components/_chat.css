@@ -462,8 +462,10 @@
    * Displays icons horizontally with consistent spacing
    */
   .qt-composer-gutter-tools {
-    @apply flex items-center;
-    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 0.25rem 0.5rem;
+    align-items: center;
   }
 
   /**

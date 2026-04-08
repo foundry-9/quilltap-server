@@ -979,6 +979,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           }}
           onGalleryClick={modals.openGallery}
           onGenerateImageClick={modals.openGenerateImage}
+          onLibraryFileClick={modals.openLibraryFilePicker}
+          onStandaloneGenerateImageClick={modals.openStandaloneGenerateImage}
           onAddCharacterClick={modals.openAddCharacter}
           onSettingsClick={modals.openChatSettings}
           onRenameClick={modals.openRename}
@@ -1030,6 +1032,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           closeRunTool={modals.closeRunTool}
           stateEditorModalOpen={modals.stateEditorModalOpen}
           closeStateEditor={modals.closeStateEditor}
+          libraryFilePickerOpen={modals.libraryFilePickerOpen}
+          closeLibraryFilePicker={modals.closeLibraryFilePicker}
+          standaloneGenerateImageOpen={modals.standaloneGenerateImageOpen}
+          closeStandaloneGenerateImage={modals.closeStandaloneGenerateImage}
           allLLMPauseModalOpen={modals.allLLMPauseModalOpen}
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}
           reattributeDialogState={modals.reattributeDialogState}

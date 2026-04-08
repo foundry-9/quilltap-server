@@ -70,6 +70,8 @@ interface ChatComposerProps {
   onImagePaste: (file: File) => Promise<void>
   onGalleryClick: () => void
   onGenerateImageClick: () => void
+  onLibraryFileClick: () => void
+  onStandaloneGenerateImageClick: () => void
   onAddCharacterClick: () => void
   onSettingsClick: () => void
   onRenameClick?: () => void
@@ -142,6 +144,8 @@ export function ChatComposer({
   onImagePaste,
   onGalleryClick,
   onGenerateImageClick,
+  onLibraryFileClick,
+  onStandaloneGenerateImageClick,
   onAddCharacterClick,
   onSettingsClick,
   onRenameClick,
@@ -527,8 +531,8 @@ export function ChatComposer({
             <ComposerGutterTools
               onAttachFileClick={handleAttachFileClick}
               uploadingFile={uploadingFile}
-              onGenerateImageClick={onGenerateImageClick}
-              hasImageProfile={hasImageProfile}
+              onLibraryFileClick={onLibraryFileClick}
+              onStandaloneGenerateImageClick={onStandaloneGenerateImageClick}
               chatId={id}
               onPendingToolResult={onPendingToolResult}
               disabled={sending || !hasActiveCharacters}

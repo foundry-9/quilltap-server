@@ -68,6 +68,8 @@ export function useModalState() {
   const [runToolModalOpen, setRunToolModalOpen] = useState(false)
   const [stateEditorModalOpen, setStateEditorModalOpen] = useState(false)
   const [allLLMPauseModalOpen, setAllLLMPauseModalOpen] = useState(false)
+  const [libraryFilePickerOpen, setLibraryFilePickerOpen] = useState(false)
+  const [standaloneGenerateImageOpen, setStandaloneGenerateImageOpen] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showParticipantSidebar, setShowParticipantSidebar] = useState(true)
 
@@ -103,6 +105,10 @@ export function useModalState() {
   const closeRunTool = useCallback(() => setRunToolModalOpen(false), [])
   const openStateEditor = useCallback(() => setStateEditorModalOpen(true), [])
   const closeStateEditor = useCallback(() => setStateEditorModalOpen(false), [])
+  const openLibraryFilePicker = useCallback(() => setLibraryFilePickerOpen(true), [])
+  const closeLibraryFilePicker = useCallback(() => setLibraryFilePickerOpen(false), [])
+  const openStandaloneGenerateImage = useCallback(() => setStandaloneGenerateImageOpen(true), [])
+  const closeStandaloneGenerateImage = useCallback(() => setStandaloneGenerateImageOpen(false), [])
 
   return {
     // Simple boolean modals
@@ -142,5 +148,9 @@ export function useModalState() {
     openToolSettings, closeToolSettings,
     openRunTool, closeRunTool,
     openStateEditor, closeStateEditor,
+    libraryFilePickerOpen,
+    openLibraryFilePicker, closeLibraryFilePicker,
+    standaloneGenerateImageOpen,
+    openStandaloneGenerateImage, closeStandaloneGenerateImage,
   }
 }
