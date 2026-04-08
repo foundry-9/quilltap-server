@@ -17,7 +17,8 @@
 - API routes: `/api/v1/characters/[id]/wardrobe` (CRUD) and `/api/v1/chats/[id]?action=outfit|equip`
 - Wardrobe management UI on character view and edit pages
 - Character settings toggles for `canDressThemselves` and `canCreateOutfits` flags on the Profiles tab
-- Outfit selection during new chat creation (default, manual, or none) across all three chat creation flows
+- Outfit selection during new chat creation (default, manual, let character choose, or none) across all three chat creation flows
+- "Let Character Choose" outfit mode: uses a cheap LLM to select contextually appropriate outfit based on scenario and character personality, with automatic fallback to defaults on failure
 - In-chat outfit indicator on ParticipantCard sidebar showing current equipped items per character with inline slot-change dropdowns — now shown for user-controlled characters too, not just LLM-controlled ones
 - Outfit change notifications: when outfits are changed via the sidebar, all characters in the chat are informed on their next turn
 - Scene state tracker now uses equipped wardrobe items instead of legacy clothing records

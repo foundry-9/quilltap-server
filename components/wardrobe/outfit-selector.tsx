@@ -150,8 +150,7 @@ function CharacterOutfitSection({
     {
       value: 'llm_choose',
       label: 'Let Character Choose',
-      description: 'Phase 2 — coming soon',
-      disabled: true,
+      description: 'The character picks their own outfit based on the scenario',
     },
     {
       value: 'none',

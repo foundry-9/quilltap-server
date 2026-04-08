@@ -28,6 +28,8 @@ import {
   type OutfitSelection,
   type WardrobeItem,
 } from '@/lib/schemas/wardrobe.types';
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } from '@/lib/llm/cheap-llm';
+import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import {
   enrichParticipantSummary,
@@ -237,17 +239,27 @@ async function resolveDefaultOutfit(characterId: string, repos: Repos): Promise<
 }
 
 /**
+ * Context needed for LLM-based outfit selection during chat creation.
+ */
+interface OutfitSelectionContext {
+  userId: string;
+  scenarioText?: string | null;
+  cheapLLMConfig?: CheapLLMConfig;
+}
+
+/**
  * Apply outfit selections to a newly created chat.
  * Processes each selection based on its mode:
  * - 'default': Load default wardrobe items and map to slots
  * - 'manual': Use the provided slot assignments directly
  * - 'none': Set all slots to null (EMPTY_EQUIPPED_SLOTS)
- * - 'llm_choose': Skip (will be handled asynchronously in Phase 2)
+ * - 'llm_choose': Ask a cheap LLM to pick an outfit, fall back to defaults on failure
  */
 async function applyOutfitSelections(
   chatId: string,
   selections: OutfitSelection[],
-  repos: Repos
+  repos: Repos,
+  context?: OutfitSelectionContext,
 ): Promise<void> {
   for (const selection of selections) {
     const { characterId, mode } = selection;
@@ -274,8 +286,79 @@ async function applyOutfitSelections(
       }
 
       case 'llm_choose': {
-        // Phase 2: Will be handled asynchronously after chat creation
-        logger.debug('[Chats v1] Skipping llm_choose outfit selection (Phase 2)', { chatId, characterId });
+        // Ask a cheap LLM to pick an outfit based on character + scenario context
+        // Falls back to default outfit on any failure
+        let applied = false;
+
+        if (context) {
+          try {
+            const character = await repos.characters.findById(characterId);
+            const wardrobeItems = await repos.wardrobe.findByCharacterId(characterId);
+
+            if (character && wardrobeItems.length > 0) {
+              // Get a cheap LLM provider for the selection task
+              const allProfiles = await repos.connections.findAll();
+              const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
+
+              if (defaultProfile) {
+                const cheapSelection = getCheapLLMProvider(
+                  defaultProfile,
+                  context.cheapLLMConfig || DEFAULT_CHEAP_LLM_CONFIG,
+                  allProfiles,
+                  false, // ollamaAvailable
+                );
+
+                logger.debug('[Chats v1] Requesting LLM outfit selection', {
+                  chatId,
+                  characterId,
+                  characterName: character.name,
+                  wardrobeItemCount: wardrobeItems.length,
+                  provider: cheapSelection.provider,
+                  model: cheapSelection.modelName,
+                });
+
+                const result = await chooseLLMOutfit(
+                  character.name,
+                  character.personality || null,
+                  wardrobeItems,
+                  context.scenarioText || null,
+                  cheapSelection,
+                  context.userId,
+                  chatId,
+                );
+
+                if (result.success && result.result) {
+                  await repos.chats.setEquippedOutfit(chatId, characterId, result.result);
+                  applied = true;
+                  logger.debug('[Chats v1] Applied LLM-chosen outfit for character', {
+                    chatId,
+                    characterId,
+                    slots: result.result,
+                  });
+                } else {
+                  logger.warn('[Chats v1] LLM outfit selection failed, falling back to defaults', {
+                    chatId,
+                    characterId,
+                    error: result.error,
+                  });
+                }
+              }
+            }
+          } catch (error) {
+            logger.warn('[Chats v1] Error during LLM outfit selection, falling back to defaults', {
+              chatId,
+              characterId,
+              error: getErrorMessage(error, 'Unknown error'),
+            });
+          }
+        }
+
+        // Fallback: use default outfit if LLM selection failed or wasn't attempted
+        if (!applied) {
+          const slots = await resolveDefaultOutfit(characterId, repos);
+          await repos.chats.setEquippedOutfit(chatId, characterId, slots);
+          logger.debug('[Chats v1] Applied default outfit as fallback for llm_choose', { chatId, characterId });
+        }
         break;
       }
 
@@ -707,9 +790,24 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
 
   // Apply outfit selections to the newly created chat
   // If no selections provided, apply 'default' mode for all LLM-controlled participants
+  // Build cheap LLM config from chat settings for outfit selection
+  const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings
+    ? {
+      ...DEFAULT_CHEAP_LLM_CONFIG,
+      strategy: chatSettings.cheapLLMSettings.strategy,
+      fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
+      userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
+      defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
+    }
+    : DEFAULT_CHEAP_LLM_CONFIG;
+  const outfitContext: OutfitSelectionContext = {
+    userId: user.id,
+    scenarioText: resolvedScenario,
+    cheapLLMConfig,
+  };
   try {
     if (validatedData.outfitSelections && validatedData.outfitSelections.length > 0) {
-      await applyOutfitSelections(chat.id, validatedData.outfitSelections, repos);
+      await applyOutfitSelections(chat.id, validatedData.outfitSelections, repos, outfitContext);
       logger.debug('[Chats v1] Applied explicit outfit selections', {
         chatId: chat.id,
         selectionCount: validatedData.outfitSelections.length,
@@ -725,7 +823,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
           characterId,
           mode: 'default' as const,
         }));
-        await applyOutfitSelections(chat.id, defaultSelections, repos);
+        await applyOutfitSelections(chat.id, defaultSelections, repos, outfitContext);
         logger.debug('[Chats v1] Applied default outfit selections for LLM participants', {
           chatId: chat.id,
           characterIds: llmCharacterIds,

@@ -67,6 +67,7 @@ When you begin a new conversation, you will be asked how to handle the character
 
 - **Default** --- The character starts wearing whatever they had equipped in their most recent chat (or their full wardrobe if no prior chat exists)
 - **Manual** --- You hand-pick which items the character is wearing at the start of the scene
+- **Let Character Choose** --- The character examines the scenario and their own wardrobe, then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph), the character simply falls back to their default outfit with admirable composure.
 - **None** --- The character begins with no equipped outfit; what they wear (if anything) is left to the narrative
 
 This ensures that every conversation starts with the appropriate sartorial context, whether your character is attending a gala or has just tumbled out of bed.
