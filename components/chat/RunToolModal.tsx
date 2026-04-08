@@ -60,6 +60,9 @@ export default function RunToolModal({
     [participants]
   )
 
+  // Stable identifier for the default character (avoids array ref in useEffect deps)
+  const defaultCharacterId = activeCharacters[0]?.characterId || null
+
   // Fetch tools when modal opens
   useEffect(() => {
     if (!isOpen) return
@@ -67,9 +70,7 @@ export default function RunToolModal({
     setSelectedTool(null)
     setSearchQuery('')
     setFormValues({})
-    // Default to first active character
-    const firstChar = participants.find(p => p.type === 'CHARACTER' && p.isActive && !p.removedAt)
-    setSelectedCharacterId(firstChar?.characterId || null)
+    setSelectedCharacterId(defaultCharacterId)
 
     fetch(`/api/v1/tools?chatId=${chatId}&includeSchemas=true`)
       .then(res => res.json())
@@ -85,7 +86,7 @@ export default function RunToolModal({
         showErrorToast('Failed to load available tools')
       })
       .finally(() => setLoading(false))
-  }, [isOpen, chatId, participants])
+  }, [isOpen, chatId, defaultCharacterId])
 
   const handleSelectTool = useCallback((tool: AvailableTool) => {
     if (tool.available === false) return

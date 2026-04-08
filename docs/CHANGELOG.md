@@ -4,10 +4,6 @@
 
 ### 4.2-dev
 
-#### Changed
-
-- **Tool Palette Reorganization**: Moved Roleplay Template dropdown from Chat Settings modal into the Edit Content section of the tool palette for quicker access. Moved State to the Organize section. Merged Memory actions (Re-extract, Delete) into the Edit Content section, removing the separate Memory section.
-
 #### Added
 
 - **Wardrobe Tools in Tool Settings**: Wardrobe tools (`list_wardrobe`, `update_outfit_item`, `create_wardrobe_item`) now appear in tool enable/disable settings and the Run Tool modal, with availability gated by character wardrobe flags
@@ -60,20 +56,20 @@
 
 #### Changed
 
+- **Tool Palette Reorganization**: Moved Roleplay Template dropdown from Chat Settings modal into the Edit Content section of the tool palette for quicker access. Moved State to the Organize section. Merged Memory actions (Re-extract, Delete) into the Edit Content section, removing the separate Memory section.
 - Outfit indicator now renders above talkativeness slider for LLM characters in participant sidebar
 - Shared/archetype wardrobe items now appear in sidebar outfit dropdowns with "(shared)" label
 - System prompt clothing section now shows slot-based outfit state instead of monolithic descriptions (falls back to legacy format when no wardrobe items exist)
 - Appearance resolution for image generation prefers equipped wardrobe items over legacy clothing records
+- perf: Memories tab on character pages now uses paginated loading with infinite scroll instead of loading all memories at once
+- chore: Add `all` mode to remove-old-dev-tags Claude command for removing every dev tag, release, and Docker image
+- docs: Add system flowcharts (Mermaid) documenting prompt assembly, memory extraction pipeline, scene tracking, story background generation, and Concierge content routing
+- test: Expand unit and regression coverage for wardrobe tools, text-block tool mode, and 4.1 memory repair/timestamp fixes
 
 #### Migration
 
 - Existing clothing records are automatically migrated to wardrobe items as full-coverage outfits
 - Legacy `clothingRecords` column preserved for backward compatibility
-
-- perf: Memories tab on character pages now uses paginated loading with infinite scroll instead of loading all memories at once
-- chore: Add `all` mode to remove-old-dev-tags Claude command for removing every dev tag, release, and Docker image
-- docs: Add system flowcharts (Mermaid) documenting prompt assembly, memory extraction pipeline, scene tracking, story background generation, and Concierge content routing
-- test: Expand unit and regression coverage for wardrobe tools, text-block tool mode, and 4.1 memory repair/timestamp fixes
 
 ### 4.1.1
 
