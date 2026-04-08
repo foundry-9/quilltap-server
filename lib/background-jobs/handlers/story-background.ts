@@ -27,6 +27,7 @@ import {
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
+import { convertToWebP } from '@/lib/files/webp-conversion';
 
 /**
  * Handle a story background generation job
@@ -510,11 +511,18 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     });
     return;
   }
-  const buffer = Buffer.from(rawData, 'base64');
+  const rawBuffer = Buffer.from(rawData, 'base64');
+  const providerMimeType = imageData.mimeType || 'image/png';
+  const providerExt = providerMimeType.split('/')[1] || 'png';
+  const providerFilename = `story_background_${Date.now()}.${providerExt}`;
+
+  // Convert to WebP for consistent storage
+  const converted = await convertToWebP(rawBuffer, providerMimeType, providerFilename);
+  const buffer = converted.buffer;
+  const mimeType = converted.mimeType;
+  const originalFilename = converted.filename;
+
   const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
-  const mimeType = imageData.mimeType || 'image/png';
-  const ext = mimeType.split('/')[1] || 'png';
-  const originalFilename = `story_background_${Date.now()}.${ext}`;
   const fileId = crypto.randomUUID();
 
   // Build linkedTo array with chat and character IDs

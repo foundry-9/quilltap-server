@@ -16,6 +16,7 @@ import {
   GeneratedImageResult,
   validateImageGenerationInput,
 } from '@/lib/tools/image-generation-tool';
+import { convertToWebP } from '@/lib/files/webp-conversion';
 import { preparePromptExpansion, buildExpansionContext, parsePlaceholders, resolvePlaceholders } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
@@ -80,13 +81,16 @@ async function saveGeneratedImage(
   }
 ): Promise<GeneratedImageResult> {
   try {
-    // Decode base64 to buffer
-    const buffer = Buffer.from(imageData, 'base64');
-    const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
+    // Decode base64 to buffer and convert to WebP
+    const rawBuffer = Buffer.from(imageData, 'base64');
+    const providerExt = mimeType.split('/')[1] || 'png';
+    const providerFilename = `generated_${Date.now()}.${providerExt}`;
+    const converted = await convertToWebP(rawBuffer, mimeType, providerFilename);
+    const buffer = converted.buffer;
+    const finalMimeType = converted.mimeType;
+    const originalFilename = converted.filename;
 
-    // Generate original filename
-    const ext = mimeType.split('/')[1] || 'png';
-    const originalFilename = `generated_${Date.now()}.${ext}`;
+    const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
 
     // Build linkedTo array
     const linkedTo = chatId ? [chatId] : [];
@@ -101,7 +105,7 @@ async function saveGeneratedImage(
     const uploadResult = await fileStorageManager.uploadFile({
       filename: originalFilename,
       content: buffer,
-      contentType: mimeType,
+      contentType: finalMimeType,
       projectId: null,
       folderPath: '/',
     });
@@ -114,7 +118,7 @@ async function saveGeneratedImage(
       userId,
       sha256,
       originalFilename,
-      mimeType,
+      mimeType: finalMimeType,
       size: buffer.length,
       width: null,
       height: null,

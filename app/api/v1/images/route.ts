@@ -22,6 +22,7 @@ import { resolveDangerousContentSettings } from '@/lib/services/dangerous-conten
 import { classifyContent as classifyDangerousContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { getErrorMessage } from '@/lib/errors';
+import { convertToWebP } from '@/lib/files/webp-conversion';
 
 const importFromUrlSchema = z.object({
   url: z.url(),
@@ -292,16 +293,23 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       if (!imageData) {
         throw new Error('Generated image has no data');
       }
-      const imageBuffer = Buffer.from(imageData, 'base64');
+      const rawBuffer = Buffer.from(imageData, 'base64');
 
       // Get file extension from mime type
-      const mimeTypeParts = (generatedImage.mimeType || 'image/png').split('/');
+      const providerMime = generatedImage.mimeType || 'image/png';
+      const mimeTypeParts = providerMime.split('/');
       const ext = mimeTypeParts[1] === 'jpeg' ? 'jpg' : mimeTypeParts[1] || 'png';
+      const providerFilename = `generated_${Date.now()}_${index}.${ext}`;
+
+      // Convert to WebP for consistent storage
+      const converted = await convertToWebP(rawBuffer, providerMime, providerFilename);
+      const imageBuffer = converted.buffer;
+      const imageMimeType = converted.mimeType;
 
       // Generate unique filename and hash
       const sha256 = createHash('sha256').update(new Uint8Array(imageBuffer)).digest('hex');
       const shortHash = sha256.substring(0, 8);
-      const filename = `generated_${Date.now()}_${index}_${shortHash}.${ext}`;
+      const filename = `generated_${Date.now()}_${index}_${shortHash}.webp`;
 
       // Generate a new file ID
       const fileId = crypto.randomUUID();
@@ -312,7 +320,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       const { storageKey } = await fileStorageManager.uploadFile({
         filename,
         content: imageBuffer,
-        contentType: generatedImage.mimeType || 'image/png',
+        contentType: imageMimeType,
         projectId: null,
         folderPath: '/',
       });
@@ -326,7 +334,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
         sha256,
         userId: user.id,
         originalFilename: filename,
-        mimeType: generatedImage.mimeType,
+        mimeType: imageMimeType,
         size: imageBuffer.length,
         source,
         category,

@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import type { CharacterAvatarGenerationPayload } from '../queue-service';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
+import { convertToWebP } from '@/lib/files/webp-conversion';
 
 /**
  * Handle CHARACTER_AVATAR_GENERATION job.
@@ -176,11 +177,18 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  const buffer = Buffer.from(rawData, 'base64');
+  const rawBuffer = Buffer.from(rawData, 'base64');
+  const providerMimeType = imageData.mimeType || 'image/png';
+  const providerExt = providerMimeType.split('/')[1] || 'png';
+  const providerFilename = `avatar_${character.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.${providerExt}`;
+
+  // Convert to WebP for consistent storage
+  const converted = await convertToWebP(rawBuffer, providerMimeType, providerFilename);
+  const buffer = converted.buffer;
+  const mimeType = converted.mimeType;
+  const originalFilename = converted.filename;
+
   const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
-  const mimeType = imageData.mimeType || 'image/png';
-  const ext = mimeType.split('/')[1] || 'png';
-  const originalFilename = `avatar_${character.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.${ext}`;
   const fileId = crypto.randomUUID();
 
   const category: FileCategory = 'IMAGE';

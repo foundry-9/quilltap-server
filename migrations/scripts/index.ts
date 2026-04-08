@@ -155,6 +155,8 @@ import { addCharacterAvatarsFieldsMigration } from './add-character-avatars-fiel
 import { addProjectAvatarGenerationDefaultMigration } from './add-project-avatar-generation-default';
 // Create outfit_presets table and add archivedAt to wardrobe_items
 import { createOutfitPresetsAndArchiveMigration } from './create-outfit-presets-and-archive';
+// Convert all non-WebP, non-SVG images to WebP format
+import { convertImagesToWebPMigration } from './convert-images-to-webp';
 
 /**
  * All available migrations.
@@ -305,6 +307,8 @@ export const migrations: Migration[] = [
   addProjectAvatarGenerationDefaultMigration,
   // Create outfit_presets table and add archivedAt to wardrobe_items
   createOutfitPresetsAndArchiveMigration,
+  // Convert all non-WebP, non-SVG images to WebP format
+  convertImagesToWebPMigration,
 ];
 
 export {
@@ -440,5 +444,7 @@ export {
   addProjectAvatarGenerationDefaultMigration,
   // Create outfit_presets table and add archivedAt to wardrobe_items
   createOutfitPresetsAndArchiveMigration,
+  // Convert all non-WebP, non-SVG images to WebP format
+  convertImagesToWebPMigration,
 };
 

@@ -6,6 +6,9 @@
 
 #### Added
 
+- **WebP Auto-Conversion**: All images (uploaded, imported, and AI-generated) are now automatically converted to WebP format for consistent, space-efficient storage — SVGs are the sole exception
+- **WebP Migration**: Startup migration converts all existing non-WebP, non-SVG images in the instance to WebP, updating database references and deleting originals only after verification
+
 - **Archetype Library**: Shared wardrobe items (characterId=null) available to all characters — create, browse, and equip directly without copying
 - **Outfit Presets**: Save named outfit combinations for quick equipping — save current outfit as preset, apply presets from character wardrobe or outfit selector
 - **Wardrobe Archiving**: Soft-delete wardrobe items with archive/unarchive — archived items hidden from lists and tools but stay equipped if currently worn
