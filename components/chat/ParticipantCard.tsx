@@ -400,7 +400,7 @@ export function ParticipantCard({
           )}
 
           {/* Outfit indicator for all characters with wardrobe data */}
-          {isCharacter && onEquipSlot && (equippedSlots || outfitLoading) && (
+          {isCharacter && onEquipSlot && (equippedSlots || (wardrobeItems && wardrobeItems.length > 0) || outfitLoading) && (
             <OutfitIndicator
               characterId={participant.character?.id || ''}
               equippedSlots={equippedSlots ?? null}

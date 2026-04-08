@@ -18,7 +18,7 @@
 - Wardrobe management UI on character view and edit pages
 - Character settings toggles for `canDressThemselves` and `canCreateOutfits` flags on the Profiles tab
 - Outfit selection during new chat creation (default, manual, or none) across all three chat creation flows
-- In-chat outfit indicator on ParticipantCard sidebar showing current equipped items per character with inline slot-change dropdowns
+- In-chat outfit indicator on ParticipantCard sidebar showing current equipped items per character with inline slot-change dropdowns — now shown for user-controlled characters too, not just LLM-controlled ones
 - Outfit change notifications: when outfits are changed via the sidebar, all characters in the chat are informed on their next turn
 - Scene state tracker now uses equipped wardrobe items instead of legacy clothing records
 
@@ -42,12 +42,3 @@
 - fix: Memory extraction now preserves source message timestamps as the memory's createdAt/updatedAt instead of using the extraction time
 - fix: One-time migration backfills existing memories with correct timestamps from their linked source messages
 - docs: Add 4.1.1 release notes
-
-### 4.1.0
-
-- feat: Character conversations tab shows memory count badge per chat; clicking it deletes old memories and re-extracts with the new multi-fact system
-- feat: Commonplace Book memory extraction now returns multiple discrete facts per message pair instead of a single memory, with dynamic limits based on the cheap LLM profile's max output tokens
-- fix: Add startup auto-repair for TEXT embeddings in vector_entries and memories tables that accumulate during dev hot-reloads; converts them to Float32 BLOBs on every server start
-- fix: Add warning log in documentToRow when embedding arrays are accidentally stored as JSON text instead of BLOB
-- docs: Add 4.1.0 release notes
-- chore: Update all GitHub repository references from `foundry-9/quilltap` to `foundry-9/quilltap-server` across docs, package.json files, release notes, plugin manifests, and source code

@@ -256,7 +256,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   streamingRef.current = sseStreaming.streaming || sseStreaming.waitingForResponse
 
   // --- Outfit hook ---
-  const outfit = useOutfit(id)
+  // Collect all character IDs from participants so we can fetch wardrobe for all of them
+  // (including user-controlled characters that may not have equipped outfits yet)
+  const participantCharacterIds = useMemo(() =>
+    (chat?.participants ?? [])
+      .filter(p => p.type === 'CHARACTER' && p.character?.id)
+      .map(p => p.character!.id),
+    [chat?.participants]
+  )
+  const outfit = useOutfit(id, participantCharacterIds)
 
   // Refresh outfit state when a tool result comes back (generation completes)
   const wasGeneratingForOutfitRef = useRef(false)

@@ -43,7 +43,7 @@ export type WardrobeCache = Record<string, WardrobeItemSummary[]>
 // HOOK
 // ============================================================================
 
-export function useOutfit(chatId: string) {
+export function useOutfit(chatId: string, characterIds: string[] = []) {
   const [outfitState, setOutfitState] = useState<OutfitState>({})
   const [wardrobeCache, setWardrobeCache] = useState<WardrobeCache>({})
   const [loading, setLoading] = useState(false)
@@ -119,16 +119,24 @@ export function useOutfit(chatId: string) {
       const data = await res.json()
       const equippedOutfit: Record<string, EquippedSlots> = data.equippedOutfit || {}
 
-      // Fetch wardrobe items for each character and resolve details
-      const characterIds = Object.keys(equippedOutfit)
+      // Merge character IDs from equipped outfit with all known character IDs
+      const allCharacterIds = new Set([
+        ...Object.keys(equippedOutfit),
+        ...characterIds,
+      ])
       const newOutfitState: OutfitState = {}
 
+      const emptySlots: EquippedSlots = { top: null, bottom: null, footwear: null, accessories: null }
+
       await Promise.all(
-        characterIds.map(async (characterId) => {
-          const slots = equippedOutfit[characterId]
+        Array.from(allCharacterIds).map(async (characterId) => {
+          const slots = equippedOutfit[characterId] ?? emptySlots
           const wardrobeItems = await fetchWardrobeForCharacter(characterId)
-          const items = resolveItemDetails(slots, wardrobeItems)
-          newOutfitState[characterId] = { slots, items }
+          // Only include characters that actually have wardrobe items
+          if (wardrobeItems.length > 0 || equippedOutfit[characterId]) {
+            const items = resolveItemDetails(slots, wardrobeItems)
+            newOutfitState[characterId] = { slots, items }
+          }
         })
       )
 
@@ -138,7 +146,8 @@ export function useOutfit(chatId: string) {
     } finally {
       setLoading(false)
     }
-  }, [chatId, fetchWardrobeForCharacter, resolveItemDetails])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- characterIds identity changes; content is stable after chat load
+  }, [chatId, characterIds.join(','), fetchWardrobeForCharacter, resolveItemDetails])
 
   /**
    * Equip or unequip an item in a specific slot for a character.
