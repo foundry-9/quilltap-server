@@ -5,11 +5,8 @@
  * and optionally equip them immediately.
  */
 
-/**
- * Valid wardrobe item type tags
- */
-export const WARDROBE_ITEM_TYPES = ['top', 'bottom', 'footwear', 'accessories'] as const;
-export type WardrobeItemType = (typeof WARDROBE_ITEM_TYPES)[number];
+import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 /**
  * Input parameters for the create wardrobe item tool
@@ -117,7 +114,7 @@ export function validateWardrobeCreateItemInput(
     if (typeof t !== 'string') {
       return false;
     }
-    if (!(WARDROBE_ITEM_TYPES as readonly string[]).includes(t)) {
+    if (!(WARDROBE_SLOT_TYPES as readonly string[]).includes(t)) {
       return false;
     }
   }

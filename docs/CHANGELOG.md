@@ -13,6 +13,7 @@
 - **SRP: Image Generation Handler**: Refactored monolithic `executeImageGenerationTool` (438 lines) into 5 focused helper functions with a clear pipeline orchestrator
 - **SRP: StandaloneGenerateImageDialog**: Extracted `useEntitySearch` hook and `EntitySearchDropdown` component to reduce dialog complexity (385→290 lines)
 - **Dead Code Report**: Updated `docs/developer/DEAD-CODE-REPORT.md` with current knip findings
+- **Dead Code Cleanup**: Consolidated duplicate `WardrobeItemType` to schema import, unexported unused `DedupClusterResult`/`CharacterDedupResult`/`DedupResult`/`ValidationResult` types
 
 #### Added
 

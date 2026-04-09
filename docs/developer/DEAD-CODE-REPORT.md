@@ -64,14 +64,9 @@ These types are re-exported from the tools barrel file to form the public API su
 
 | Type | Location | Notes |
 |------|----------|-------|
-| `BuildToolsOptions` | `lib/tools/plugin-tool-builder.ts:123` | Duplicate: also re-exported from `lib/tools/index.ts`. Could unexport from source if only consumed via barrel. |
-| `ParsedTextBlock` | `lib/tools/text-block-parser.ts:24` | Duplicate: also re-exported from `lib/tools/index.ts`. Could unexport from source if only consumed via barrel. |
-| `ShellCommandRequest` | `lib/tools/shell/shell-session.types.ts:48` | Duplicate: also re-exported from `lib/tools/shell/index.ts`. Could unexport from source if only consumed via barrel. |
-| `DedupClusterResult` | `lib/tools/memory-dedup.ts:25` | Not imported anywhere outside file. Could unexport; keep as internal type. |
-| `CharacterDedupResult` | `lib/tools/memory-dedup.ts:36` | Not imported anywhere outside file. Could unexport; keep as internal type. |
-| `DedupResult` | `lib/tools/memory-dedup.ts:51` | Not imported anywhere outside file. Could unexport; keep as internal type. |
-| `WardrobeItemType` | `lib/tools/wardrobe-create-item-tool.ts:12` | Duplicate of `WardrobeItemType` in `lib/schemas/wardrobe.types.ts`. Should consolidate to schema version. |
-| `ValidationResult` | `lib/validation/qtap-schema-validator.ts:18` | Not imported by any consumer. Could unexport if callers only use `validateQtapExport()` return value structurally. |
+| `BuildToolsOptions` | `lib/tools/plugin-tool-builder.ts:123` | Required by barrel re-export in `lib/tools/index.ts`. Not actionable. |
+| `ParsedTextBlock` | `lib/tools/text-block-parser.ts:24` | Required by barrel re-export in `lib/tools/index.ts`. Not actionable. |
+| `ShellCommandRequest` | `lib/tools/shell/shell-session.types.ts:48` | Imported by `shell-handler.ts` and re-exported from barrel. Not actionable. |
 
 ### Unused Enum Members (3)
 
@@ -381,12 +376,15 @@ These files are flagged by knip but are actually used:
 
 ## Remaining Work (Low Priority)
 
-### Actionable Items from 2026-04-08 Analysis
+### Completed 2026-04-08
 
-1. **Consolidate duplicate `WardrobeItemType`**: The copy in `lib/tools/wardrobe-create-item-tool.ts` should import from `lib/schemas/wardrobe.types.ts` instead of redefining
-2. **Unexport dedup types**: `DedupClusterResult`, `CharacterDedupResult`, and `DedupResult` in `lib/tools/memory-dedup.ts` are not consumed externally and could be made internal
-3. **Unexport `ValidationResult`**: In `lib/validation/qtap-schema-validator.ts`, no external consumer imports this type
-4. **Reduce source-level duplicate exports**: `BuildToolsOptions`, `ParsedTextBlock`, and `ShellCommandRequest` are exported from both source files and barrel files; could remove from source if only consumed via barrel
+1. **Consolidated duplicate `WardrobeItemType`**: Removed local copy in `lib/tools/wardrobe-create-item-tool.ts`, now imports from `lib/schemas/wardrobe.types.ts`
+2. **Unexported dedup types**: `DedupClusterResult`, `CharacterDedupResult`, and `DedupResult` in `lib/tools/memory-dedup.ts` made file-internal
+3. **Unexported `ValidationResult`**: In `lib/validation/qtap-schema-validator.ts`, made file-internal
+
+### Not Actionable (Reviewed 2026-04-08)
+
+- **Source-level barrel duplicates** (`BuildToolsOptions`, `ParsedTextBlock`, `ShellCommandRequest`): Source files must keep `export` for barrel re-exports to work. The knip "duplicate" is inherent to the barrel pattern.
 
 ### Duplicate Exports (~39)
 
