@@ -90,7 +90,7 @@ export function createMockCharacter(overrides: Partial<Character> = {}): Charact
     isFavorite: false,
     npc: false,
     talkativeness: 0.5,
-    personaLinks: [],
+    partnerLinks: [],
     tags: [],
     avatarOverrides: [],
     physicalDescriptions: [],
@@ -139,7 +139,6 @@ export function createMockChatParticipant(
     id: generateId(),
     type,
     characterId: type === 'CHARACTER' ? generateId() : null,
-    personaId: null,
     connectionProfileId: type === 'CHARACTER' ? generateId() : null,
     imageProfileId: null,
     roleplayTemplateId: null,
@@ -223,7 +222,6 @@ export function createMockMemory(overrides: Partial<Memory> = {}): Memory {
   return {
     id: generateId(),
     characterId: generateId(),
-    personaId: null,
     aboutCharacterId: null,
     chatId: null,
     content: 'This is a test memory content for unit tests.',
@@ -807,7 +805,7 @@ export function createMockCharacterWithRelations(): {
   const persona = createMockPersona({ userId, tags: [tag.id] });
   const character = createMockCharacter({
     userId,
-    personaLinks: [{ personaId: persona.id, isDefault: true }],
+    partnerLinks: [{ partnerId: persona.id, isDefault: true }],
     tags: [tag.id],
   });
 
@@ -823,7 +821,6 @@ export function createMockCharacterWithRelations(): {
   });
 
   const memories = createMockMemories(3, character.id, {
-    personaId: persona.id,
     chatId: chat.id,
   });
 

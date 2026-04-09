@@ -80,7 +80,7 @@ describe('Chat GET API - Attachment Resolution', () => {
     systemPrompts: [],
     avatarUrl: null,
     defaultImageId: null,
-    personaLinks: [],
+    partnerLinks: [],
     tags: [],
     isFavorite: false,
     createdAt: new Date().toISOString(),

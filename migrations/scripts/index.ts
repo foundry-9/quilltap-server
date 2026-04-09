@@ -157,6 +157,8 @@ import { addProjectAvatarGenerationDefaultMigration } from './add-project-avatar
 import { createOutfitPresetsAndArchiveMigration } from './create-outfit-presets-and-archive';
 // Convert all non-WebP, non-SVG images to WebP format
 import { convertImagesToWebPMigration } from './convert-images-to-webp';
+// Rename persona DB columns (personaLinks → partnerLinks, drop memories.personaId)
+import { renamePersonaColumnsMigration } from './rename-persona-columns';
 
 /**
  * All available migrations.
@@ -309,6 +311,8 @@ export const migrations: Migration[] = [
   createOutfitPresetsAndArchiveMigration,
   // Convert all non-WebP, non-SVG images to WebP format
   convertImagesToWebPMigration,
+  // Rename persona DB columns
+  renamePersonaColumnsMigration,
 ];
 
 export {
@@ -446,5 +450,7 @@ export {
   createOutfitPresetsAndArchiveMigration,
   // Convert all non-WebP, non-SVG images to WebP format
   convertImagesToWebPMigration,
+  // Rename persona DB columns
+  renamePersonaColumnsMigration,
 };
 

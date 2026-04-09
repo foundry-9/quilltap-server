@@ -54,7 +54,8 @@ migrations/
     ├── cleanup-orphan-file-records.ts        # v2.7.0
     ├── create-mount-points.ts                # v2.7.0
     ├── fix-missing-storage-keys.ts           # v2.7.0
-    ├── fix-orphan-persona-participants.ts    # v2.7.0
+    ├── fix-orphan-persona-participants.ts    # v2.7.0 (historical)
+    ├── rename-persona-columns.ts             # v4.2.0
     ├── add-llm-logs-collection.ts            # v2.8.0
     ├── migrate-to-centralized-data-dir.ts    # v2.8.0
     ├── per-project-mount-points.ts           # v2.8.0
@@ -257,10 +258,11 @@ Only v2.7.0+ migrations are included in the codebase. Legacy migrations (v2.0.0�
 | restructure-file-storage-v1 | 3.3.0 | Restructure file storage from old users/{userId}/... layout to new flat layout | sqlite-initial-schema-v1 |
 | restructure-file-storage-cleanup-v1 | 3.3.0 | Cleanup pass for file storage restructure (category dirs, thumbnails, .DS_Store) | None |
 | fix-text-embeddings-after-update-v1 | 3.1.0 | Fix TEXT embeddings written by update path (should be Float32 BLOBs) | normalize-vector-storage-v1 |
+| rename-persona-columns-v1 | 4.2.0 | Rename personaLinks → partnerLinks in characters, drop personaId from memories | sqlite-initial-schema-v1 |
 
 **Notes**:
 - Minimum supported version for upgrades is v2.7.0
-- Total of 46 migrations from v2.7.0 to v3.3.0
+- Total of 47 migrations from v2.7.0 to v4.2.0
 - Migrations with no dependencies have no blockers
 - Some migrations are no-ops for SQLite (legacy MongoDB support removed)
 - See `migrations/scripts/index.ts` for the complete registry

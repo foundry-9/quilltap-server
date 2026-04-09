@@ -403,7 +403,6 @@ describe('First Message Context Builder', () => {
           id: 'participant-1',
           type: 'CHARACTER' as const,
           characterId: 'char-bob',
-          personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
 
@@ -439,7 +438,6 @@ describe('First Message Context Builder', () => {
           id: 'participant-speaker',
           type: 'CHARACTER' as const,
           characterId: 'char-speaker', // Same as speakingCharacterId
-          personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
 
@@ -453,7 +451,6 @@ describe('First Message Context Builder', () => {
           id: 'participant-other',
           type: 'CHARACTER' as const,
           characterId: 'char-other',
-          personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
 
@@ -501,7 +498,6 @@ describe('First Message Context Builder', () => {
           id: 'persona-participant',
           type: 'CHARACTER' as const,
           characterId: null,
-          personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
 
@@ -527,7 +523,6 @@ describe('First Message Context Builder', () => {
           id: 'bad-participant',
           type: 'CHARACTER' as const,
           characterId: null, // Invalid
-          personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
 

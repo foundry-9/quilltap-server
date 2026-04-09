@@ -1245,7 +1245,6 @@ async function importMemories(
       await repos.memories.create({
         ...memoryData,
         characterId: newCharacterId,
-        personaId: null,
         aboutCharacterId: newAboutCharacterId,
         chatId: newChatId,
         projectId: newProjectId,

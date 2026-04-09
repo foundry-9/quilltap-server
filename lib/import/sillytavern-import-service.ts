@@ -222,7 +222,7 @@ export async function importMultiCharacterChat(
           controlledBy === 'llm' ? (mapping.connectionProfileId || defaultConnectionProfileId) : null,
         isFavorite: false,
         tags: [] as string[],
-        personaLinks: [] as { personaId: string; isDefault: boolean }[],
+        partnerLinks: [] as { partnerId: string; isDefault: boolean }[],
         avatarOverrides: [] as { chatId: string; imageId: string }[],
         defaultImageId: null,
         physicalDescriptions: [],
@@ -268,7 +268,7 @@ export async function importMultiCharacterChat(
         defaultConnectionProfileId: null, // User-controlled characters don't need a connection profile
         isFavorite: false,
         tags: [] as string[],
-        personaLinks: [] as { personaId: string; isDefault: boolean }[],
+        partnerLinks: [] as { partnerId: string; isDefault: boolean }[],
         avatarOverrides: [] as { chatId: string; imageId: string }[],
         defaultImageId: null,
         physicalDescriptions: [],

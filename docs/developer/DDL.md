@@ -161,7 +161,7 @@ CREATE TABLE "characters" (
   "npc" INTEGER DEFAULT 0,
   "talkativeness" REAL DEFAULT 0.5,
   "controlledBy" TEXT DEFAULT 'llm',
-  "personaLinks" TEXT DEFAULT '[]',
+  "partnerLinks" TEXT DEFAULT '[]',
   "tags" TEXT DEFAULT '[]',
   "avatarOverrides" TEXT DEFAULT '[]',
   "physicalDescriptions" TEXT DEFAULT '[]',
@@ -519,7 +519,6 @@ CREATE INDEX "idx_file_permissions_userId" ON "file_permissions" ("userId");
 CREATE TABLE "memories" (
   "id" TEXT PRIMARY KEY,
   "characterId" TEXT NOT NULL,
-  "personaId" TEXT,
   "aboutCharacterId" TEXT,
   "chatId" TEXT,
   "projectId" TEXT,

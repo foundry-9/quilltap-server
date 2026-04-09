@@ -165,7 +165,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
           aliases: data.aliases ?? [],
           pronouns: data.pronouns ?? null,
           isFavorite: data.isFavorite ?? false,
-          personaLinks: data.personaLinks ?? [],
+          partnerLinks: data.partnerLinks ?? [],
           avatarOverrides: data.avatarOverrides ?? [],
           physicalDescriptions: data.physicalDescriptions ?? [],
           systemPrompts: data.systemPrompts ?? [],
@@ -250,7 +250,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   // ============================================================================
-  // PARTNER LINK OPERATIONS (legacy personaLinks field)
+  // PARTNER LINK OPERATIONS
   // ============================================================================
 
   /**
@@ -269,10 +269,10 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
           return null;
         }
 
-        const existing = character.personaLinks.find((link) => link.personaId === partnerId);
+        const existing = character.partnerLinks.find((link) => link.partnerId === partnerId);
         if (!existing) {
-          character.personaLinks.push({ personaId: partnerId, isDefault });
-          return await this.update(characterId, { personaLinks: character.personaLinks });
+          character.partnerLinks.push({ partnerId, isDefault });
+          return await this.update(characterId, { partnerLinks: character.partnerLinks });
         }
         return character;
       },
@@ -296,12 +296,12 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
           return null;
         }
 
-        const beforeCount = character.personaLinks.length;
-        character.personaLinks = character.personaLinks.filter((link) => link.personaId !== partnerId);
-        const afterCount = character.personaLinks.length;
+        const beforeCount = character.partnerLinks.length;
+        character.partnerLinks = character.partnerLinks.filter((link) => link.partnerId !== partnerId);
+        const afterCount = character.partnerLinks.length;
 
         if (beforeCount !== afterCount) {
-          return await this.update(characterId, { personaLinks: character.personaLinks });
+          return await this.update(characterId, { partnerLinks: character.partnerLinks });
         }
         return character;
       },

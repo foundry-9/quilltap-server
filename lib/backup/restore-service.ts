@@ -594,12 +594,21 @@ function remapBackupData(
       ),
       userId: targetUserId,
     };
-    // Handle personaLinks array of objects
-    if (remapped.personaLinks) {
-      remapped.personaLinks = remapped.personaLinks.map((link: { personaId: string; isDefault: boolean }) => ({
+    // Handle partnerLinks array of objects (new format)
+    if (remapped.partnerLinks) {
+      remapped.partnerLinks = remapped.partnerLinks.map((link: { partnerId: string; isDefault: boolean }) => ({
         ...link,
-        personaId: remapper.remap(link.personaId),
+        partnerId: remapper.remap(link.partnerId),
       }));
+    }
+    // Handle personaLinks backwards compatibility (old backup format)
+    const legacy = remapped as Record<string, unknown>;
+    if (legacy.personaLinks && !remapped.partnerLinks) {
+      remapped.partnerLinks = (legacy.personaLinks as Array<{ personaId: string; isDefault: boolean }>).map((link) => ({
+        partnerId: remapper.remap(link.personaId),
+        isDefault: link.isDefault,
+      }));
+      delete legacy.personaLinks;
     }
     // Handle avatarOverrides
     if (remapped.avatarOverrides) {
@@ -995,11 +1004,9 @@ export async function restore(
       try {
         const { id, createdAt, updatedAt, ...memoryData } = memory;
 
-        // Personas are no longer supported; clear personaId for backwards compatibility
-        await repos.memories.create({
-          ...memoryData,
-          personaId: null,
-        });
+        // Strip legacy personaId from old backups (column no longer exists)
+        const { personaId: _legacyPersonaId, ...cleanMemoryData } = memoryData as Record<string, unknown>;
+        await repos.memories.create(cleanMemoryData as Parameters<typeof repos.memories.create>[0]);
       } catch (error) {
         warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore memory', { memoryId: memory.id, error });

@@ -50,7 +50,7 @@ export interface ChatContext {
 /**
  * Build chat context for initializing a new chat or generating responses
  * @param characterId - The AI-controlled character ID
- * @param userCharacterId - Optional user-controlled character ID (replaces personaId)
+ * @param userCharacterId - Optional user-controlled character ID
  * @param customScenario - Optional custom scenario override
  * @param selectedSystemPromptId - Optional specific system prompt ID from the character's prompts array
  */

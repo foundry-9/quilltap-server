@@ -520,7 +520,7 @@ function assembleQtapExport(
     talkativeness: 0.5,
     controlledBy: 'llm',
     defaultAgentModeEnabled: null,
-    personaLinks: [],
+    partnerLinks: [],
     aliases: [],
     pronouns: stepResults.pronouns || null,
     tags: [],

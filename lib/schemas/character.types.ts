@@ -147,8 +147,8 @@ export const CharacterSchema = z.object({
   canCreateOutfits: z.boolean().nullable().optional(),
 
   // Relationships
-  personaLinks: z.array(z.object({
-    personaId: UUIDSchema,
+  partnerLinks: z.array(z.object({
+    partnerId: UUIDSchema,
     isDefault: z.boolean(),
   })).default([]),
   aliases: z.array(z.string()).default([]),

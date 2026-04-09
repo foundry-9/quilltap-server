@@ -47,7 +47,7 @@
         "talkativeness": 0.5,
         "controlledBy": "llm",
         "defaultHelpToolsEnabled": true,
-        "personaLinks": [],
+        "partnerLinks": [],
         "aliases": [],
         "pronouns": {
           "subject": "he",
@@ -100,7 +100,7 @@
         "talkativeness": 0.5,
         "controlledBy": "llm",
         "defaultHelpToolsEnabled": true,
-        "personaLinks": [],
+        "partnerLinks": [],
         "aliases": [],
         "pronouns": {
           "subject": "she",

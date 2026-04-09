@@ -42,7 +42,6 @@ const createMemorySchema = z.object({
   tags: z.array(z.uuid()).prefault([]),
   importance: z.number().min(0).max(1).prefault(0.5),
   aboutCharacterId: z.uuid().nullable().optional(),
-  personaId: z.uuid().nullable().optional(), // Legacy support
   chatId: z.uuid().nullable().optional(),
   source: z.enum(['AUTO', 'MANUAL']).prefault('MANUAL'),
   sourceMessageId: z.uuid().nullable().optional(),
@@ -414,7 +413,6 @@ async function handleCreateMemory(
       tags: validatedData.tags,
       importance: validatedData.importance,
       aboutCharacterId: validatedData.aboutCharacterId,
-      personaId: validatedData.personaId,
       chatId: validatedData.chatId,
       source: validatedData.source,
       sourceMessageId: validatedData.sourceMessageId,

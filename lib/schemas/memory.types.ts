@@ -28,15 +28,6 @@ export const MemorySchema = z.object({
   id: UUIDSchema,
   characterId: UUIDSchema,
   /**
-   * @deprecated Use aboutCharacterId instead.
-   * Characters Not Personas - Phase 7: This field is migrated to aboutCharacterId.
-   * After migration, personaId will be removed from all memories.
-   * For backwards compatibility during migration, this field may still exist
-   * in the database but should not be used in new code.
-   */
-  personaId: UUIDSchema.nullable().optional(),
-  /**
-   * The character this memory is about (who is being remembered).
    * The character this memory is about (who is being remembered).
    * When a memory is about another character, their ID goes here.
    */
