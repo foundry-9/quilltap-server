@@ -926,11 +926,27 @@
               "type": "null"
             }
           ]
+        },
+        "narrationDelimiters": {
+          "description": "Narration delimiter(s) — a single string (same open/close, e.g. \"*\") or a [open, close] tuple (e.g. [\"[\", \"]\"])",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          ]
         }
       },
       "required": [
         "name",
-        "systemPrompt"
+        "systemPrompt",
+        "narrationDelimiters"
       ],
       "additionalProperties": false
     },

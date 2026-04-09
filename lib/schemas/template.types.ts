@@ -70,6 +70,24 @@ export const DialogueDetectionSchema = z.object({
 export type DialogueDetection = z.infer<typeof DialogueDetectionSchema>;
 
 // ============================================================================
+// NARRATION DELIMITERS
+// ============================================================================
+
+/**
+ * Narration delimiters define how narration/action text is marked in roleplay output.
+ * Required for all roleplay templates.
+ *
+ * - A single string means the same character is used for opening and closing (e.g., '*')
+ * - A tuple of two strings means different opening and closing delimiters (e.g., ['[', ']'])
+ */
+export const NarrationDelimitersSchema = z.union([
+  z.string().min(1),
+  z.tuple([z.string().min(1), z.string().min(1)]),
+]);
+
+export type NarrationDelimiters = z.infer<typeof NarrationDelimitersSchema>;
+
+// ============================================================================
 // ROLEPLAY TEMPLATES
 // ============================================================================
 
@@ -88,6 +106,8 @@ export const RoleplayTemplateSchema = z.object({
   renderingPatterns: z.array(RenderingPatternSchema).default([]),
   /** Optional dialogue detection for paragraph-level styling */
   dialogueDetection: DialogueDetectionSchema.nullable().optional(),
+  /** Narration delimiters — required for new templates. Defaults to '*' for backward compatibility */
+  narrationDelimiters: NarrationDelimitersSchema.default('*'),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

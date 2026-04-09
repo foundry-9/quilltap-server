@@ -155,6 +155,7 @@ export type {
 
 export type {
   // Roleplay template plugin types
+  NarrationDelimiters,
   RoleplayTemplateConfig,
   RoleplayTemplateMetadata,
   RoleplayTemplatePlugin,

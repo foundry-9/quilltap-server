@@ -55,7 +55,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
  */
 export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {const body = await req.json();
-    const { name, description, systemPrompt } = body;
+    const { name, description, systemPrompt, narrationDelimiters } = body;
 
     // Validation
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -72,6 +72,22 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
 
     if (description && typeof description === 'string' && description.length > 500) {
       return errorResponse('Description must be 500 characters or less', 400);
+    }
+
+    // Validate narrationDelimiters (required)
+    if (!narrationDelimiters) {
+      return errorResponse('Narration delimiters are required', 400);
+    }
+    if (typeof narrationDelimiters === 'string') {
+      if (narrationDelimiters.length === 0) {
+        return errorResponse('Narration delimiters string must not be empty', 400);
+      }
+    } else if (Array.isArray(narrationDelimiters)) {
+      if (narrationDelimiters.length !== 2 || !narrationDelimiters[0] || !narrationDelimiters[1]) {
+        return errorResponse('Narration delimiters array must have exactly 2 non-empty elements [open, close]', 400);
+      }
+    } else {
+      return errorResponse('Narration delimiters must be a string or [string, string] array', 400);
     }
 
     // Check for duplicate name among user's own templates
@@ -91,6 +107,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       annotationButtons: [],
       renderingPatterns: [],
       dialogueDetection: null,
+      narrationDelimiters: narrationDelimiters as string | [string, string],
     });
 
     logger.info('Roleplay template created', {

@@ -57,6 +57,7 @@ export type {
   AnnotationButton,
   RenderingPattern,
   DialogueDetection,
+  NarrationDelimiters,
   RoleplayTemplateConfig,
   RoleplayTemplateMetadata,
   RoleplayTemplatePlugin,

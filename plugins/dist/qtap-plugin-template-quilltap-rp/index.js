@@ -55,7 +55,8 @@ var plugin = (0, import_plugin_utils.createSingleTemplatePlugin)({
     url: "https://foundry-9.com"
   },
   tags: ["quilltap", "custom", "brackets", "braces"],
-  version: "1.0.4",
+  narrationDelimiters: ["[", "]"],
+  version: "1.0.5",
   enableLogging: true
 });
 function initialize() {
@@ -63,7 +64,7 @@ function initialize() {
 }
 var metadata = {
   name: "qtap-plugin-template-quilltap-rp",
-  version: "1.0.4",
+  version: "1.0.5",
   type: "ROLEPLAY_TEMPLATE"
 };
 var pluginExport = { plugin, initialize, metadata };

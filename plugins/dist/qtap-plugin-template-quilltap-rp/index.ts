@@ -51,7 +51,8 @@ export const plugin: RoleplayTemplatePlugin = createSingleTemplatePlugin({
     url: 'https://foundry-9.com',
   },
   tags: ['quilltap', 'custom', 'brackets', 'braces'],
-  version: '1.0.4',
+  narrationDelimiters: ['[', ']'],
+  version: '1.0.5',
   enableLogging: true,
 });
 
@@ -68,7 +69,7 @@ export function initialize(): void | Promise<void> {
  */
 export const metadata = {
   name: 'qtap-plugin-template-quilltap-rp',
-  version: '1.0.4',
+  version: '1.0.5',
   type: 'ROLEPLAY_TEMPLATE',
 } as const;
 

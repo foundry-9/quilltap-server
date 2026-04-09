@@ -418,6 +418,13 @@
         "systemPrompt": { "type": "string", "minLength": 1 },
         "isBuiltIn": { "const": false },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+        "narrationDelimiters": {
+          "description": "Narration delimiter(s) — single string or [open, close] pair",
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 2, "maxItems": 2 }
+          ]
+        },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
         "_tagNames": {

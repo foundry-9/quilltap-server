@@ -65,6 +65,8 @@ You must adhere to the following standard roleplay syntax for all outputs.
       closingChars: ['"', '\u201d'],
       className: 'qt-chat-dialogue',
     },
+    // Narration uses single asterisks
+    narrationDelimiters: '*',
   },
   // Additional templates are provided by plugins
 ];
@@ -89,6 +91,7 @@ function pluginTemplateToRoleplayTemplate(pluginTemplate: LoadedRoleplayTemplate
     annotationButtons: pluginTemplate.annotationButtons || [],
     renderingPatterns: pluginTemplate.renderingPatterns || [],
     dialogueDetection: pluginTemplate.dialogueDetection || null,
+    narrationDelimiters: pluginTemplate.narrationDelimiters,
     createdAt: pluginTimestamp,
     updatedAt: pluginTimestamp,
   };
@@ -203,6 +206,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
               annotationButtons: template.annotationButtons,
               renderingPatterns: template.renderingPatterns,
               dialogueDetection: template.dialogueDetection,
+              narrationDelimiters: template.narrationDelimiters,
               updatedAt: now,
             };
 

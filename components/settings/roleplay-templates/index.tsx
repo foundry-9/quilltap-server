@@ -213,6 +213,90 @@ export default function RoleplayTemplatesTab() {
                     You can use placeholders like {'{{char}}'} and {'{{user}}'}.
                   </p>
                 </div>
+
+                <div>
+                  <label className="qt-label mb-1">
+                    Narration Delimiters <span className="qt-text-destructive">*</span>
+                  </label>
+                  <p className="qt-text-xs mb-2">
+                    How narration and action text is marked in this template&apos;s formatting.
+                  </p>
+                  <div className="flex items-center gap-3 mb-2">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="narrationDelimiterMode"
+                        checked={formData.narrationDelimiterMode === 'single'}
+                        onChange={() => setFormData(prev => ({
+                          ...prev,
+                          narrationDelimiterMode: 'single',
+                          narrationClose: prev.narrationOpen,
+                        }))}
+                        className="qt-radio"
+                      />
+                      <span className="text-sm">Same open &amp; close</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="narrationDelimiterMode"
+                        checked={formData.narrationDelimiterMode === 'pair'}
+                        onChange={() => setFormData(prev => ({
+                          ...prev,
+                          narrationDelimiterMode: 'pair',
+                        }))}
+                        className="qt-radio"
+                      />
+                      <span className="text-sm">Different open &amp; close</span>
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {formData.narrationDelimiterMode === 'single' ? (
+                      <div className="flex items-center gap-2">
+                        <label className="qt-text-xs whitespace-nowrap">Delimiter:</label>
+                        <input
+                          type="text"
+                          value={formData.narrationOpen}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            narrationOpen: e.target.value,
+                            narrationClose: e.target.value,
+                          }))}
+                          maxLength={10}
+                          placeholder="*"
+                          className="qt-input w-20 font-mono text-center"
+                        />
+                        <span className="qt-text-xs qt-text-secondary">
+                          e.g. <code className="font-mono">*narration*</code>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <label className="qt-text-xs whitespace-nowrap">Open:</label>
+                        <input
+                          type="text"
+                          value={formData.narrationOpen}
+                          onChange={(e) => setFormData(prev => ({ ...prev, narrationOpen: e.target.value }))}
+                          maxLength={10}
+                          placeholder="["
+                          className="qt-input w-20 font-mono text-center"
+                        />
+                        <label className="qt-text-xs whitespace-nowrap">Close:</label>
+                        <input
+                          type="text"
+                          value={formData.narrationClose}
+                          onChange={(e) => setFormData(prev => ({ ...prev, narrationClose: e.target.value }))}
+                          maxLength={10}
+                          placeholder="]"
+                          className="qt-input w-20 font-mono text-center"
+                        />
+                        <span className="qt-text-xs qt-text-secondary">
+                          e.g. <code className="font-mono">[narration]</code>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 mt-6">
@@ -227,7 +311,7 @@ export default function RoleplayTemplatesTab() {
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={saving || !formData.name.trim() || !formData.systemPrompt.trim()}
+                  disabled={saving || !formData.name.trim() || !formData.systemPrompt.trim() || !formData.narrationOpen.trim() || (formData.narrationDelimiterMode === 'pair' && !formData.narrationClose.trim())}
                   className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:qt-bg-primary/90 disabled:opacity-50"
                 >
                   {saving ? 'Saving...' : editingTemplate ? 'Save Changes' : 'Create Template'}

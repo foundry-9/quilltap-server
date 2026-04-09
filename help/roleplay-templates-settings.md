@@ -172,6 +172,15 @@ To create a brand new custom template:
   - Any special conventions
 - **Can use** — {{char}} and {{user}} placeholders
 
+#### Narration Delimiters
+
+- **What it is** — The character(s) used to mark narration text (required)
+- **Why it's required** — The system uses this to semantically distinguish narration from speech
+- **Format** — Either a single string (same character for open/close, like `*`) or a pair (different open/close, like `[` and `]`)
+- **Examples** —
+  - `*` — Standard asterisk narration: `*She sighed heavily.*`
+  - `[`, `]` — Bracket narration: `[She sighed heavily.]`
+
 ### Previewing Your Templates
 
 To see a custom template's details:

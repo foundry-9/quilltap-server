@@ -352,6 +352,7 @@ export const SQLITE_TABLES = [
       "annotationButtons" TEXT DEFAULT '[]',
       "renderingPatterns" TEXT DEFAULT '[]',
       "dialogueDetection" TEXT,
+      "narrationDelimiters" TEXT DEFAULT '"*"',
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,

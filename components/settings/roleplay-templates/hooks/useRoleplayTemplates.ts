@@ -134,10 +134,15 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
 
   const openEditModal = (template: RoleplayTemplate) => {
     setEditingTemplate(template)
+    const delimiters = template.narrationDelimiters
+    const isPair = Array.isArray(delimiters)
     setFormData({
       name: template.name,
       description: template.description || '',
       systemPrompt: template.systemPrompt,
+      narrationDelimiterMode: isPair ? 'pair' : 'single',
+      narrationOpen: isPair ? delimiters[0] : (delimiters || '*'),
+      narrationClose: isPair ? delimiters[1] : (delimiters || '*'),
     })
     setIsModalOpen(true)
   }
@@ -153,12 +158,24 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       setSaving(true)
       setError(null)
 
+      // Build narrationDelimiters from form state
+      const narrationDelimiters = formData.narrationDelimiterMode === 'pair'
+        ? [formData.narrationOpen, formData.narrationClose]
+        : formData.narrationOpen
+
+      const payload = {
+        name: formData.name,
+        description: formData.description,
+        systemPrompt: formData.systemPrompt,
+        narrationDelimiters,
+      }
+
       if (editingTemplate) {
         // Update existing template
         const res = await fetch(`/api/v1/roleplay-templates/${editingTemplate.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(payload),
         })
 
         if (!res.ok) {
@@ -176,7 +193,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         const res = await fetch('/api/v1/roleplay-templates', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(payload),
         })
 
         if (!res.ok) {
@@ -229,10 +246,15 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
 
   const handleCopyAsNew = (template: RoleplayTemplate) => {
     setEditingTemplate(null)
+    const delimiters = template.narrationDelimiters
+    const isPair = Array.isArray(delimiters)
     setFormData({
       name: `${template.name} (Copy)`,
       description: template.description || '',
       systemPrompt: template.systemPrompt,
+      narrationDelimiterMode: isPair ? 'pair' : 'single',
+      narrationOpen: isPair ? delimiters[0] : (delimiters || '*'),
+      narrationClose: isPair ? delimiters[1] : (delimiters || '*'),
     })
     setIsModalOpen(true)
   }

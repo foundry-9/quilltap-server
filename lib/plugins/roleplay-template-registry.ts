@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger';
 import { getEnabledPluginsByCapability } from '@/lib/plugins';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
 import { getErrorMessage } from '@/lib/errors';
-import type { AnnotationButton, RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
+import type { AnnotationButton, RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types';
 import { AbstractRegistry } from '@/lib/plugins/base-registry';
 
 // ============================================================================
@@ -46,6 +46,9 @@ export interface LoadedRoleplayTemplate {
 
   /** Optional dialogue detection for paragraph-level styling */
   dialogueDetection?: DialogueDetection;
+
+  /** Narration delimiters — required */
+  narrationDelimiters: NarrationDelimiters;
 
   /** Source plugin name */
   pluginName: string;
@@ -166,6 +169,9 @@ class RoleplayTemplateRegistry extends AbstractRegistry<TemplateRegistryState> {
     if (!templateConfig.name || !templateConfig.systemPrompt) {
       throw new Error('Template config missing required fields: name, systemPrompt');
     }
+    if (!templateConfig.narrationDelimiters) {
+      throw new Error('Template config missing required field: narrationDelimiters');
+    }
 
     // Create the loaded template
     const loadedTemplate: LoadedRoleplayTemplate = {
@@ -177,6 +183,7 @@ class RoleplayTemplateRegistry extends AbstractRegistry<TemplateRegistryState> {
       annotationButtons: templateConfig.annotationButtons || [],
       renderingPatterns: templateConfig.renderingPatterns || [],
       dialogueDetection: templateConfig.dialogueDetection ?? undefined,
+      narrationDelimiters: templateConfig.narrationDelimiters,
       pluginName: plugin.manifest.name,
       version: plugin.manifest.version,
       isBuiltIn: true, // Plugin templates are always treated as built-in

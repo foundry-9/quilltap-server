@@ -159,6 +159,8 @@ import { createOutfitPresetsAndArchiveMigration } from './create-outfit-presets-
 import { convertImagesToWebPMigration } from './convert-images-to-webp';
 // Rename persona DB columns (personaLinks → partnerLinks, drop memories.personaId)
 import { renamePersonaColumnsMigration } from './rename-persona-columns';
+// Add narrationDelimiters field to roleplay_templates
+import { addNarrationDelimitersFieldMigration } from './add-narration-delimiters-field';
 
 /**
  * All available migrations.
@@ -452,5 +454,7 @@ export {
   convertImagesToWebPMigration,
   // Rename persona DB columns
   renamePersonaColumnsMigration,
+  // Add narrationDelimiters field to roleplay_templates
+  addNarrationDelimitersFieldMigration,
 };
 

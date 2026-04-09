@@ -501,6 +501,12 @@ export const RoleplayTemplateConfigSchema = z.object({
 
   /** Optional dialogue detection for paragraph-level styling (null = none) */
   dialogueDetection: DialogueDetectionConfigSchema.nullable().optional().describe('Dialogue paragraph detection'),
+
+  /** Narration delimiters — required. Single string (same open/close) or [open, close] tuple */
+  narrationDelimiters: z.union([
+    z.string().min(1),
+    z.tuple([z.string().min(1), z.string().min(1)]),
+  ]).describe('Narration delimiter(s) — single string or [open, close] pair'),
 });
 
 export type RoleplayTemplateConfig = z.infer<typeof RoleplayTemplateConfigSchema>;

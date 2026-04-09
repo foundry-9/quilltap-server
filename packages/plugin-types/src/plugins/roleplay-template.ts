@@ -93,6 +93,28 @@ export interface DialogueDetection {
 }
 
 // ============================================================================
+// NARRATION DELIMITERS
+// ============================================================================
+
+/**
+ * Narration delimiters define how narration/action text is marked in roleplay output.
+ * Required for all roleplay templates.
+ *
+ * - A single string means the same character is used for opening and closing (e.g., '*')
+ * - A tuple of two strings means different opening and closing delimiters (e.g., ['[', ']'])
+ *
+ * @example
+ * ```typescript
+ * // Single asterisk for both open and close
+ * narrationDelimiters: '*'
+ *
+ * // Square brackets with different open/close
+ * narrationDelimiters: ['[', ']']
+ * ```
+ */
+export type NarrationDelimiters = string | [string, string];
+
+// ============================================================================
 // ROLEPLAY TEMPLATE CONFIGURATION
 // ============================================================================
 
@@ -164,6 +186,24 @@ export interface RoleplayTemplateConfig {
    * ```
    */
   dialogueDetection?: DialogueDetection;
+
+  /**
+   * Narration delimiters — required for all templates.
+   * Defines how narration/action text is delimited in the template's formatting.
+   *
+   * A single string means the same delimiter is used for opening and closing (e.g., '*').
+   * A tuple of two strings means different opening and closing delimiters (e.g., ['[', ']']).
+   *
+   * @example
+   * ```typescript
+   * // Standard: *narration*
+   * narrationDelimiters: '*'
+   *
+   * // Quilltap RP: [narration]
+   * narrationDelimiters: ['[', ']']
+   * ```
+   */
+  narrationDelimiters: NarrationDelimiters;
 }
 
 // ============================================================================

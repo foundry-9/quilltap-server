@@ -291,13 +291,31 @@ Some templates include dialogue detection:
 5. **Include edge cases** — Address unusual formatting situations
 6. **Be specific** — Exact formatting beats vague guidelines
 
+### Narration Delimiters (Required)
+
+Every roleplay template **must** declare how narration is delimited. This is the `narrationDelimiters` field, which tells the system how to identify narration text in the AI's response — not just for display styling, but for semantic understanding of what is narration versus speech.
+
+Narration delimiters can be:
+
+- **A single character** — The same delimiter opens and closes narration (e.g., `*` for `*narration*`)
+- **A pair of characters** — Different opening and closing delimiters (e.g., `[` and `]` for `[narration]`)
+
+Speech (dialogue) is everything that isn't delimited as narration. If your template uses quotes for speech, that's a display convention — but what the system needs to know is how narration is marked.
+
+**Examples:**
+
+| Template | Narration Delimiters | Narration Looks Like |
+|----------|---------------------|---------------------|
+| Standard | `*` | `*She crossed her arms.* ` |
+| Quilltap RP | `[`, `]` | `[She crossed her arms.]` |
+
 ### Formatting Conventions
 
 Common elements to define:
 
 - **Dialogue** — How speech is marked (quotes, asterisks, etc.)
 - **Actions** — How actions are marked (*action* or [action])
-- **Narration** — How narrative text is formatted
+- **Narration** — How narrative text is formatted (must be declared via narration delimiters)
 - **Thoughts** — How character thoughts are shown
 - **Out-of-Character** — How OOC comments appear ((comment))
 - **Emphasis** — How **bold** and *italic* text should work

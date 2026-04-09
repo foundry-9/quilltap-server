@@ -25,6 +25,10 @@ const updateRoleplayTemplateSchema = z.object({
   annotationButtons: z.array(z.any()).optional(),
   renderingPatterns: z.array(z.any()).optional(),
   dialogueDetection: z.any().optional().nullable(),
+  narrationDelimiters: z.union([
+    z.string().min(1),
+    z.tuple([z.string().min(1), z.string().min(1)]),
+  ]).optional(),
 });
 
 // ============================================================================

@@ -269,11 +269,13 @@ export type {
 // TEMPLATE TYPES
 // ============================================================================
 export {
+  NarrationDelimitersSchema,
   RoleplayTemplateSchema,
   PromptTemplateSchema,
 } from './template.types';
 
 export type {
+  NarrationDelimiters,
   RoleplayTemplate,
   PromptTemplate,
 } from './template.types';
