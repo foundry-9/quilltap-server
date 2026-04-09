@@ -6,6 +6,7 @@
 
 #### Fixed
 
+- **Concierge: Avatar Generation**: Character avatar generation now passes through the Concierge dangerous content system — prompts built from physical descriptions and equipped wardrobe are classified before image generation, with AUTO_ROUTE support for rerouting to uncensored image providers when needed
 - **Wardrobe Multi-Type Displacement**: Equipping a wardrobe item now correctly displaces conflicting items from all their type slots — e.g., equipping a new top when a dress (types: top+bottom) is worn will also clear the bottom slot. Unequipping similarly clears all slots the item covers. Applies to sidebar outfit changes, tool use (`update_outfit_item`, `create_wardrobe_item`), and preset application.
 - **Backup Coverage**: Wardrobe items and outfit presets are now included in backup/restore, with full UUID remapping for new-account imports
 - **DRY: Avatar Generation**: Consolidated three duplicate implementations of avatar generation triggering (two wardrobe handlers + outfit API) into shared `lib/wardrobe/avatar-generation.ts`

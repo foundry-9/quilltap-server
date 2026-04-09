@@ -19,14 +19,25 @@ import { getErrorMessage } from '@/lib/errors';
 import type { CharacterAvatarGenerationPayload } from '../queue-service';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { convertToWebP } from '@/lib/files/webp-conversion';
+import {
+  resolveDangerousContentSettings,
+} from '@/lib/services/dangerous-content/resolver.service';
+import {
+  classifyContent as classifyDangerousContent,
+} from '@/lib/services/dangerous-content/gatekeeper.service';
+import {
+  resolveImageProviderForDangerousContent,
+} from '@/lib/services/dangerous-content/provider-routing.service';
+import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 
 /**
  * Handle CHARACTER_AVATAR_GENERATION job.
  *
  * 1. Load character + equipped wardrobe items
  * 2. Build appearance description from physical descriptions + equipped items
- * 3. Generate portrait image
- * 4. Store image and update chat.characterAvatars
+ * 3. Run prompt through Concierge (dangerous content classification + provider rerouting)
+ * 4. Generate portrait image
+ * 5. Store image and update chat.characterAvatars
  */
 export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as CharacterAvatarGenerationPayload;
@@ -134,18 +145,111 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     promptPreview: prompt.substring(0, 200),
   });
 
-  // 6. Generate portrait image
-  const provider = createImageProvider(imageProfile.provider);
-  const decryptedKey = apiKey.key_value;
+  // 6. Concierge check — classify the prompt for dangerous content
+  const chatSettings = await repos.chatSettings.findByUserId(job.userId) ?? undefined;
+  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
+  const dangerSettings = dangerousContentResolved.settings;
+
+  let effectiveImageProfile = imageProfile;
+  let effectiveApiKey = apiKey.key_value;
+
+  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts) {
+    let cheapLLMSelection: CheapLLMSelection | null = null;
+    try {
+      const allProfiles = await repos.connections.findByUserId(job.userId);
+      const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
+        strategy: chatSettings.cheapLLMSettings.strategy,
+        userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
+        defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
+        fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
+      } : DEFAULT_CHEAP_LLM_CONFIG;
+
+      const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
+      if (defaultProfile) {
+        cheapLLMSelection = getCheapLLMProvider(
+          defaultProfile,
+          cheapLLMConfig,
+          allProfiles,
+          false
+        );
+      }
+    } catch (error) {
+      logger.warn('[CharacterAvatar] Failed to build cheap LLM selection for danger classification', {
+        context: 'background-jobs.character-avatar',
+        jobId: job.id,
+        error: getErrorMessage(error),
+      });
+    }
+
+    if (cheapLLMSelection) {
+      try {
+        const classification = await classifyDangerousContent(
+          prompt,
+          cheapLLMSelection,
+          job.userId,
+          dangerSettings,
+          payload.chatId
+        );
+
+        if (classification.isDangerous) {
+          logger.info('[CharacterAvatar] Avatar prompt classified as dangerous', {
+            context: 'background-jobs.character-avatar',
+            jobId: job.id,
+            score: classification.score,
+            categories: classification.categories.map(c => c.category),
+            mode: dangerSettings.mode,
+          });
+
+          if (dangerSettings.mode === 'AUTO_ROUTE') {
+            const routeResult = await resolveImageProviderForDangerousContent(
+              imageProfile,
+              apiKey.key_value,
+              dangerSettings,
+              job.userId
+            );
+
+            if (routeResult.rerouted) {
+              effectiveImageProfile = routeResult.imageProfile;
+              effectiveApiKey = routeResult.apiKey;
+              logger.info('[CharacterAvatar] Rerouted to uncensored image provider', {
+                context: 'background-jobs.character-avatar',
+                jobId: job.id,
+                originalProfile: imageProfile.name,
+                uncensoredProfile: routeResult.imageProfile.name,
+                reason: routeResult.reason,
+              });
+            } else {
+              logger.warn('[CharacterAvatar] No uncensored image provider available, using original', {
+                context: 'background-jobs.character-avatar',
+                jobId: job.id,
+                reason: routeResult.reason,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        // Fail safe — never block avatar generation on classification errors
+        logger.error('[CharacterAvatar] Prompt classification failed, continuing normally', {
+          context: 'background-jobs.character-avatar',
+          jobId: job.id,
+          error: getErrorMessage(error),
+        });
+      }
+    }
+  }
+
+  // 7. Generate portrait image
+  const provider = createImageProvider(effectiveImageProfile.provider);
+  const decryptedKey = effectiveApiKey;
 
   let generationResponse;
   try {
     generationResponse = await provider.generateImage({
       prompt,
-      model: imageProfile.modelName,
+      model: effectiveImageProfile.modelName,
       n: 1,
       size: '1024x1792', // Portrait orientation for 3/4 shot
-      quality: (imageProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
+      quality: (effectiveImageProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
       style: 'natural',
     }, decryptedKey);
   } catch (error) {
@@ -166,7 +270,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  // 7. Save generated image
+  // 8. Save generated image
   const imageData = generationResponse.images[0];
   const rawData = imageData.data || imageData.b64Json;
   if (!rawData) {
@@ -228,7 +332,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       source,
       category,
       generationPrompt: prompt,
-      generationModel: imageProfile.modelName,
+      generationModel: effectiveImageProfile.modelName,
       generationRevisedPrompt: imageData.revisedPrompt || null,
       description: `${character.name} — wardrobe portrait`,
       tags: [payload.characterId],
@@ -250,7 +354,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     throw new Error(`Failed to save avatar image: ${getErrorMessage(error)}`);
   }
 
-  // 8. Update chat.characterAvatars with the new avatar
+  // 9. Update chat.characterAvatars with the new avatar
   const existingAvatars = (chat.characterAvatars && typeof chat.characterAvatars === 'object')
     ? chat.characterAvatars as Record<string, unknown>
     : {};
@@ -268,7 +372,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     characterAvatars: updatedAvatars,
   });
 
-  // 9. Also update character.avatarOverrides for this chat
+  // 10. Also update character.avatarOverrides for this chat
   const existingOverrides = character.avatarOverrides || [];
   const filteredOverrides = existingOverrides.filter(o => o.chatId !== payload.chatId);
   filteredOverrides.push({ chatId: payload.chatId, imageId: fileId });
