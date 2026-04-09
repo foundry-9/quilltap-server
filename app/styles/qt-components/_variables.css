@@ -279,6 +279,12 @@
   --qt-chat-silent-border: #7a9e8e;
   --qt-chat-silent-label-fg: #5d7e6e;
 
+  /* Chat: Wardrobe action notices — warm amber/gold for dressing room actions */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #c4a24e 40%);
+  --qt-chat-wardrobe-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-wardrobe-border: #c4a24e;
+  --qt-chat-wardrobe-label-fg: #9a7d2e;
+
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
   --qt-chat-composer-radius: var(--radius-lg);
@@ -682,6 +688,11 @@
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #4a7a6a 35%);
   --qt-chat-silent-border: #4a7a6a;
   --qt-chat-silent-label-fg: #8ab8a4;
+
+  /* Chat: Wardrobe action notices — dark mode */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #8a6d1b 40%);
+  --qt-chat-wardrobe-border: #8a6d1b;
+  --qt-chat-wardrobe-label-fg: #d4b65c;
 
   /* Response status — brighter indicators */
   --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);

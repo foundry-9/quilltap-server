@@ -100,6 +100,35 @@
   }
 
   /**
+   * Wardrobe action notice — inline summary of outfit changes (equip, unequip, gift).
+   * Distinguished from whispers (dashed purple) and silent (dotted teal) by a double
+   * border and warm amber/gold tones, evoking a dressing room bulletin.
+   */
+  .qt-chat-wardrobe-notice {
+    background: var(--qt-chat-wardrobe-bg);
+    color: var(--qt-chat-wardrobe-fg);
+    border: 3px double var(--qt-chat-wardrobe-border);
+    border-radius: var(--radius-md, 0.375rem);
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .qt-chat-wardrobe-label {
+    font-size: 0.6875rem;
+    color: var(--qt-chat-wardrobe-label-fg);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+  }
+
+  .qt-chat-wardrobe-summary {
+    color: var(--qt-chat-wardrobe-fg);
+  }
+
+  /**
    * System message - notifications, status updates
    */
   .qt-chat-message-system {

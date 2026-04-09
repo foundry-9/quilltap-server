@@ -235,6 +235,10 @@
   /* --qt-chat-silent-fg: var(--qt-chat-assistant-fg); */
   /* --qt-chat-silent-border: #7a9e8e; */
   /* --qt-chat-silent-label-fg: #5d7e6e; */
+  /* --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #c4a24e 40%); */
+  /* --qt-chat-wardrobe-fg: var(--qt-chat-assistant-fg); */
+  /* --qt-chat-wardrobe-border: #c4a24e; */
+  /* --qt-chat-wardrobe-label-fg: #9a7d2e; */
   /* --qt-chat-composer-bg: var(--color-background); */
   /* --qt-chat-composer-border: var(--color-border); */
   /* --qt-chat-composer-radius: var(--radius-lg); */

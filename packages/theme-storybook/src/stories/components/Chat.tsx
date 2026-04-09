@@ -248,6 +248,45 @@ export const Chat: React.FC = () => {
         </div>
       </section>
 
+      {/* Wardrobe Action Notices */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Wardrobe Action Notices
+        </h3>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
+          Inline summaries of outfit changes (equip, unequip, gift). Distinguished from whispers (dashed purple)
+          and silent messages (dotted teal) by a double border and warm amber/gold tones.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '32rem' }}>
+          {/* Equip action */}
+          <div className="qt-chat-wardrobe-notice">
+            <div className="qt-chat-wardrobe-label">Wardrobe</div>
+            <div className="qt-chat-wardrobe-summary">
+              <div>Equipped &ldquo;Crimson Evening Gown&rdquo; in the top slot.</div>
+              <div>Wearing: Crimson Evening Gown (top, bottom), Glass Slippers (footwear)</div>
+            </div>
+          </div>
+
+          {/* Remove action */}
+          <div className="qt-chat-wardrobe-notice">
+            <div className="qt-chat-wardrobe-label">Wardrobe</div>
+            <div className="qt-chat-wardrobe-summary">
+              <div>Removed item from the footwear slot.</div>
+              <div>Wearing: Crimson Evening Gown (top, bottom), barefoot</div>
+            </div>
+          </div>
+
+          {/* Gift action */}
+          <div className="qt-chat-wardrobe-notice">
+            <div className="qt-chat-wardrobe-label">Wardrobe</div>
+            <div className="qt-chat-wardrobe-summary">
+              <div>Gifted &ldquo;Silver Pocket Watch&rdquo; to Marcus.</div>
+              <div>Marcus put it on immediately.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Chat Toolbar */}
       <section style={{ marginBottom: '2rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

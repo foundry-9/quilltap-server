@@ -50,6 +50,68 @@ interface ToolResult {
   images?: Array<{ id: string; filename: string }>
 }
 
+/** Wardrobe tool names that should show an action notice */
+const WARDROBE_ACTION_TOOLS = new Set(['update_outfit_item', 'create_wardrobe_item'])
+
+/**
+ * Build a human-readable wardrobe action summary from tool result data.
+ * Returns null if the tool is not a wardrobe action tool or wasn't successful.
+ */
+function buildWardrobeActionSummary(toolData: ToolResult): { label: string; lines: string[] } | null {
+  if (!toolData.success || !toolData.toolName || !WARDROBE_ACTION_TOOLS.has(toolData.toolName)) {
+    return null
+  }
+
+  const result = toolData.result as Record<string, unknown> | undefined
+  if (!result || typeof result !== 'object') return null
+
+  const lines: string[] = []
+
+  if (toolData.toolName === 'update_outfit_item') {
+    const action = result.action as string
+    const item = result.item as { item_id?: string; title?: string } | null
+    const slot = result.slot as string
+    const coverageSummary = result.coverage_summary as string | undefined
+
+    if (action === 'equipped' && slot === 'preset') {
+      lines.push('Applied an outfit preset.')
+    } else if (action === 'equipped' && item?.title) {
+      lines.push(`Equipped "${item.title}" in the ${slot} slot.`)
+    } else if (action === 'removed') {
+      lines.push(`Removed item from the ${slot} slot.`)
+    }
+
+    if (coverageSummary) {
+      lines.push(coverageSummary)
+    }
+
+    return lines.length > 0 ? { label: 'Wardrobe', lines } : null
+  }
+
+  if (toolData.toolName === 'create_wardrobe_item') {
+    const title = result.title as string | undefined
+    const equipped = result.equipped as boolean | undefined
+    const recipientName = result.recipient_name as string | undefined
+
+    if (recipientName) {
+      lines.push(`Gifted "${title}" to ${recipientName}.`)
+      if (equipped) {
+        lines.push(`${recipientName} put it on immediately.`)
+      }
+    } else if (title) {
+      if (equipped) {
+        lines.push(`Created and equipped "${title}".`)
+      } else {
+        lines.push(`Created "${title}" and added it to the wardrobe.`)
+      }
+    }
+
+    return lines.length > 0 ? { label: 'Wardrobe', lines } : null
+  }
+
+  return null
+}
+
 /**
  * Copy text to clipboard
  */
@@ -140,6 +202,9 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   // Determine if character initiated this or user did
   const showCharacterName = toolData.initiatedBy !== 'user' && character
 
+  // Build wardrobe action summary (if applicable)
+  const wardrobeSummary = useMemo(() => buildWardrobeActionSummary(toolData), [toolData])
+
   // Get image attachments
   const imageAttachments = (message.attachments || []).filter((a) =>
     a.mimeType.startsWith('image/')
@@ -227,6 +292,21 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '📋',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
+    list_wardrobe: {
+      displayName: 'Wardrobe',
+      icon: '👗',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    update_outfit_item: {
+      displayName: 'Outfit Change',
+      icon: '👗',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    create_wardrobe_item: {
+      displayName: 'New Wardrobe Item',
+      icon: '🧵',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
   }
 
   const info = toolInfo[toolData.toolName!] || {
@@ -274,6 +354,17 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   if (embedded) {
     return (
       <div className="qt-chat-tool-embedded rounded-lg border qt-border-default qt-bg-muted/50 overflow-hidden">
+        {/* Wardrobe action notice — prominent summary above tool details */}
+        {wardrobeSummary && (
+          <div className="qt-chat-wardrobe-notice">
+            <div className="qt-chat-wardrobe-label">{wardrobeSummary.label}</div>
+            <div className="qt-chat-wardrobe-summary">
+              {wardrobeSummary.lines.map((line, i) => (
+                <div key={i}>{line}</div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Tool header - compact */}
         <div className="flex items-center gap-2 px-3 py-2 qt-bg-muted/30 border-b qt-border-default">
           <span className="text-base">{info.icon}</span>
@@ -461,6 +552,17 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       </div>
 
       <div className="flex-1 min-w-0 group relative">
+        {/* Wardrobe action notice — prominent summary above tool details */}
+        {wardrobeSummary && (
+          <div className="qt-chat-wardrobe-notice mb-2">
+            <div className="qt-chat-wardrobe-label">{wardrobeSummary.label}</div>
+            <div className="qt-chat-wardrobe-summary">
+              {wardrobeSummary.lines.map((line, i) => (
+                <div key={i}>{line}</div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className={`px-4 py-3 rounded-lg ${info.bgColor}`}>
           {/* Tool header */}
           <div className="flex items-center gap-2 mb-2">

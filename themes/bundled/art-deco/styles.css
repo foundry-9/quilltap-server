@@ -188,6 +188,11 @@
   --qt-chat-silent-border: hsl(88 25% 52%);
   --qt-chat-silent-label-fg: hsl(88 20% 35%);
 
+  /* Chat: Wardrobe action notices — warm gold, like polished brass fittings */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(43 80% 50%) 45%);
+  --qt-chat-wardrobe-border: hsl(43 80% 50%);
+  --qt-chat-wardrobe-label-fg: hsl(43 70% 35%);
+
   --qt-chat-composer-padding-x: 1.25rem;
   --qt-chat-composer-padding-y: 1rem;
 
@@ -494,6 +499,11 @@
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, hsl(88 30% 28%) 40%);
   --qt-chat-silent-border: hsl(88 30% 40%);
   --qt-chat-silent-label-fg: hsl(88 25% 55%);
+
+  /* Chat: Wardrobe action notices — burnished brass for dark mode */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(43 75% 32%) 45%);
+  --qt-chat-wardrobe-border: hsl(43 75% 32%);
+  --qt-chat-wardrobe-label-fg: hsl(43 85% 65%);
 
   /* Links — gold in dark mode */
   --qt-link-color: var(--deco-gold);

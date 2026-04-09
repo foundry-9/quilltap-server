@@ -304,11 +304,23 @@
   --qt-chat-assistant-font: var(--font-sans);
   --qt-chat-assistant-font-weight: inherit;
 
+  /* Chat: Whisper messages */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #9b8ec4 40%);
+  --qt-chat-whisper-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-whisper-border: #9b8ec4;
+  --qt-chat-whisper-label-fg: #7c6fa0;
+
   /* Chat: Silent messages — inner thoughts/actions from characters in silent mode */
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #7a9e8e 35%);
   --qt-chat-silent-fg: var(--qt-chat-assistant-fg);
   --qt-chat-silent-border: #7a9e8e;
   --qt-chat-silent-label-fg: #5d7e6e;
+
+  /* Chat: Wardrobe action notices — warm amber/gold for dressing room actions */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #c4a24e 40%);
+  --qt-chat-wardrobe-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-wardrobe-border: #c4a24e;
+  --qt-chat-wardrobe-label-fg: #9a7d2e;
 
   /* Chat composer variables */
   --qt-chat-composer-bg: var(--color-background);
@@ -1026,6 +1038,27 @@
 }
 
 /**
+ * Whisper message — private messages between characters, not heard by all.
+ */
+.qt-chat-message-whisper {
+  background: var(--qt-chat-whisper-bg);
+  color: var(--qt-chat-whisper-fg);
+  border: 2px dashed var(--qt-chat-whisper-border);
+  font-style: italic;
+}
+
+.qt-chat-whisper-label {
+  font-size: 0.75rem;
+  color: var(--qt-chat-whisper-label-fg);
+  font-style: italic;
+  margin-bottom: 0.25rem;
+}
+
+.qt-chat-message-whisper-overheard {
+  opacity: 0.6;
+}
+
+/**
  * Silent message — inner thoughts and actions from character in silent mode.
  * Distinguished from whispers by a dotted border (vs dashed) and sage/teal tones.
  */
@@ -1041,6 +1074,34 @@
   color: var(--qt-chat-silent-label-fg);
   font-style: italic;
   margin-bottom: 0.25rem;
+}
+
+/**
+ * Wardrobe action notice — inline summary of outfit changes.
+ * Double border with warm amber/gold tones, distinct from whisper (dashed) and silent (dotted).
+ */
+.qt-chat-wardrobe-notice {
+  background: var(--qt-chat-wardrobe-bg);
+  color: var(--qt-chat-wardrobe-fg);
+  border: 3px double var(--qt-chat-wardrobe-border);
+  border-radius: var(--radius-md, 0.375rem);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.qt-chat-wardrobe-label {
+  font-size: 0.6875rem;
+  color: var(--qt-chat-wardrobe-label-fg);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.qt-chat-wardrobe-summary {
+  color: var(--qt-chat-wardrobe-fg);
 }
 
 /**
@@ -1857,10 +1918,20 @@
    Adjusted colors for dark backgrounds with better contrast
    ========================================================================== */
 .dark {
+  /* Chat: Whisper messages — dark mode */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #6b5b95 40%);
+  --qt-chat-whisper-border: #6b5b95;
+  --qt-chat-whisper-label-fg: #a89cc8;
+
   /* Chat: Silent messages — darker mode variants */
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #4a7a6a 35%);
   --qt-chat-silent-border: #4a7a6a;
   --qt-chat-silent-label-fg: #8ab8a4;
+
+  /* Chat: Wardrobe action notices — dark mode */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #8a6d1b 40%);
+  --qt-chat-wardrobe-border: #8a6d1b;
+  --qt-chat-wardrobe-label-fg: #d4b65c;
 
   /* Alert tokens - brighter, more saturated for dark backgrounds */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.2);
