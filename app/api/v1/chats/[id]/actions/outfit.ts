@@ -11,6 +11,8 @@ import { logger } from '@/lib/logger';
 import { serverError, notFound, badRequest } from '@/lib/api/responses';
 import { enqueueCharacterAvatarGeneration } from '@/lib/background-jobs/queue-service';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
+import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 const equipSlotSchema = z.object({
   characterId: z.string().min(1, 'characterId is required'),
@@ -58,8 +60,11 @@ export async function handleEquipSlot(
       context: 'wardrobe',
     });
 
-    // If setting an item, verify the wardrobe item exists and belongs to this character
+    // Equip or unequip with full displacement of multi-type items
+    let updatedSlots;
+
     if (itemId) {
+      // Equipping: verify the wardrobe item exists and belongs to this character
       const item = await repos.wardrobe.findById(itemId);
       if (!item) {
         return notFound('Wardrobe item');
@@ -70,9 +75,13 @@ export async function handleEquipSlot(
       if (!item.types.includes(slot as typeof item.types[number])) {
         return badRequest(`Wardrobe item "${item.title}" does not cover the ${slot} slot`);
       }
-    }
 
-    const updatedSlots = await repos.chats.updateEquippedSlot(chatId, characterId, slot, itemId);
+      // Equip in all item's type slots, displacing any conflicting items
+      updatedSlots = await equipWithDisplacement(repos, chatId, characterId, item);
+    } else {
+      // Unequipping: clear all slots covered by the item currently in this slot
+      updatedSlots = await unequipWithDisplacement(repos, chatId, characterId, slot as WardrobeItemType);
+    }
 
     if (!updatedSlots) {
       return serverError('Failed to update equipped slot');

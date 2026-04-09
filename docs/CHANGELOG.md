@@ -4,6 +4,10 @@
 
 ### 4.2-dev
 
+#### Fixed
+
+- **Wardrobe Multi-Type Displacement**: Equipping a wardrobe item now correctly displaces conflicting items from all their type slots — e.g., equipping a new top when a dress (types: top+bottom) is worn will also clear the bottom slot. Unequipping similarly clears all slots the item covers. Applies to sidebar outfit changes, tool use (`update_outfit_item`, `create_wardrobe_item`), and preset application.
+
 #### Added
 
 - **Wardrobe Tools in Tool Settings**: Wardrobe tools (`list_wardrobe`, `update_outfit_item`, `create_wardrobe_item`) now appear in tool enable/disable settings and the Run Tool modal, with availability gated by character wardrobe flags

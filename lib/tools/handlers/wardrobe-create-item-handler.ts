@@ -11,6 +11,7 @@ import type { WardrobeCreateItemToolInput, WardrobeCreateItemToolOutput } from '
 import { validateWardrobeCreateItemInput } from '../wardrobe-create-item-tool';
 import type { WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types';
+import { equipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
 
 export interface WardrobeCreateItemToolContext {
   userId: string;
@@ -101,14 +102,8 @@ export async function executeWardrobeCreateItemTool(
         slots: newItem.types,
       });
 
-      for (const slot of newItem.types) {
-        await repos.chats.updateEquippedSlot(
-          context.chatId,
-          context.characterId,
-          slot,
-          newItem.id
-        );
-      }
+      // Equip with displacement of conflicting items
+      await equipWithDisplacement(repos, context.chatId, context.characterId, newItem);
 
       equipped = true;
 

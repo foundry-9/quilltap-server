@@ -11,7 +11,8 @@ import { enqueueCharacterAvatarGeneration } from '@/lib/background-jobs/queue-se
 import type { WardrobeUpdateOutfitToolInput, WardrobeUpdateOutfitToolOutput } from '../wardrobe-update-outfit-tool';
 import { validateWardrobeUpdateOutfitInput } from '../wardrobe-update-outfit-tool';
 import { EMPTY_EQUIPPED_SLOTS, buildCoverageSummary, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
-import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
 
 export interface WardrobeUpdateOutfitToolContext {
   userId: string;
@@ -119,11 +120,16 @@ export async function executeWardrobeUpdateOutfitTool(
         }
       }
 
-      // Apply each non-null slot from the preset
+      // Apply each non-null slot from the preset with displacement
       for (const slotKey of WARDROBE_SLOT_TYPES) {
         const itemId = preset.slots[slotKey];
         if (itemId !== null && itemId !== undefined) {
-          await repos.chats.updateEquippedSlot(context.chatId, context.characterId, slotKey, itemId);
+          const presetItem = await repos.wardrobe.findById(itemId);
+          if (presetItem) {
+            await equipWithDisplacement(repos, context.chatId, context.characterId, presetItem);
+          } else {
+            await repos.chats.updateEquippedSlot(context.chatId, context.characterId, slotKey, itemId);
+          }
           logger.debug('Applied preset slot', {
             context: 'wardrobe-update-outfit-handler',
             chatId: context.chatId,
@@ -255,17 +261,8 @@ export async function executeWardrobeUpdateOutfitTool(
         );
       }
 
-      // Equip the item in all matching slots (e.g., a dress with types ["top","bottom"])
-      for (const itemType of item.types) {
-        await repos.chats.updateEquippedSlot(context.chatId, context.characterId, itemType, item.id);
-        logger.debug('Equipped item in slot', {
-          context: 'wardrobe-update-outfit-handler',
-          chatId: context.chatId,
-          characterId: context.characterId,
-          slot: itemType,
-          itemId: item.id,
-        });
-      }
+      // Equip the item in all matching slots with displacement of conflicting items
+      await equipWithDisplacement(repos, context.chatId, context.characterId, item);
 
       logger.info('Wardrobe item equipped', {
         context: 'wardrobe-update-outfit-handler',
@@ -294,10 +291,10 @@ export async function executeWardrobeUpdateOutfitTool(
         coverage_summary: coverageSummary,
       };
     } else {
-      // --- Remove action ---
-      await repos.chats.updateEquippedSlot(context.chatId, context.characterId, slot, null);
+      // --- Remove action --- clear all slots covered by the item in this slot
+      await unequipWithDisplacement(repos, context.chatId, context.characterId, slot as WardrobeItemType);
 
-      logger.info('Wardrobe slot cleared', {
+      logger.info('Wardrobe slot cleared (with displacement)', {
         context: 'wardrobe-update-outfit-handler',
         userId: context.userId,
         chatId: context.chatId,

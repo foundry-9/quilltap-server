@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { notFound, serverError, badRequest } from '@/lib/api/responses';
 import { EquippedSlotsSchema, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import { equipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
 
 const updatePresetSchema = z.object({
   name: z.string().min(1).optional(),
@@ -164,7 +165,12 @@ async function handleApply(
   for (const slot of WARDROBE_SLOT_TYPES) {
     const itemId = preset.slots[slot];
     if (itemId !== null && itemId !== undefined) {
-      resultSlots = await repos.chats.updateEquippedSlot(chatId, id, slot, itemId);
+      const presetItem = await repos.wardrobe.findById(itemId);
+      if (presetItem) {
+        resultSlots = await equipWithDisplacement(repos, chatId, id, presetItem);
+      } else {
+        resultSlots = await repos.chats.updateEquippedSlot(chatId, id, slot, itemId);
+      }
     }
   }
 

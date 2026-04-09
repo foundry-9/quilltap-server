@@ -11,8 +11,9 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types'
+import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
+import { computeDisplacedSlots } from '@/lib/wardrobe/outfit-displacement'
 
 // ============================================================================
 // TYPES
@@ -182,17 +183,22 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
         return
       }
 
-      // Optimistic update: apply the change locally before full refresh
-      const wardrobeItems = wardrobeCache[characterId] ?? []
+      // Optimistic update with multi-type displacement
+      const items = wardrobeCache[characterId] ?? []
       setOutfitState(prev => {
         const currentChar = prev[characterId]
         if (!currentChar) return prev
 
-        const newSlots = { ...currentChar.slots, [slot]: itemId }
-        const newItems = resolveItemDetails(newSlots as EquippedSlots, wardrobeItems)
+        const newSlots = computeDisplacedSlots(
+          currentChar.slots,
+          items,
+          slot as WardrobeItemType,
+          itemId
+        )
+        const newItems = resolveItemDetails(newSlots, items)
         return {
           ...prev,
-          [characterId]: { slots: newSlots as EquippedSlots, items: newItems },
+          [characterId]: { slots: newSlots, items: newItems },
         }
       })
     } catch (err) {

@@ -56,6 +56,7 @@ describe('wardrobe tool handlers', () => {
       chats: {
         getEquippedOutfitForCharacter: jest.fn(),
         updateEquippedSlot: jest.fn().mockResolvedValue(undefined),
+        setEquippedOutfit: jest.fn().mockImplementation(async (_chatId: string, _charId: string, slots: unknown) => slots),
         findById: jest.fn(),
       },
       outfitPresets: {
@@ -160,19 +161,16 @@ describe('wardrobe tool handlers', () => {
       context
     )
 
-    expect(repos.chats.updateEquippedSlot).toHaveBeenNthCalledWith(
-      1,
+    // equipWithDisplacement uses setEquippedOutfit for batch update
+    expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith(
       'chat-1',
       'char-1',
-      'top',
-      'dress-1'
-    )
-    expect(repos.chats.updateEquippedSlot).toHaveBeenNthCalledWith(
-      2,
-      'chat-1',
-      'char-1',
-      'bottom',
-      'dress-1'
+      {
+        top: 'dress-1',
+        bottom: 'dress-1',
+        footwear: null,
+        accessories: null,
+      }
     )
     expect(result).toMatchObject({
       success: true,
@@ -207,6 +205,7 @@ describe('wardrobe tool handlers', () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain('cannot be equipped in the "top" slot')
     expect(repos.chats.updateEquippedSlot).not.toHaveBeenCalled()
+    expect(repos.chats.setEquippedOutfit).not.toHaveBeenCalled()
   })
 
   it('creates and immediately equips a new wardrobe item when requested', async () => {
@@ -249,17 +248,16 @@ describe('wardrobe tool handlers', () => {
       appropriateness: 'casual',
       isDefault: false,
     })
-    expect(repos.chats.updateEquippedSlot).toHaveBeenCalledWith(
+    // equipWithDisplacement uses setEquippedOutfit for batch update
+    expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith(
       'chat-1',
       'char-1',
-      'accessories',
-      'new-item-1'
-    )
-    expect(repos.chats.updateEquippedSlot).toHaveBeenCalledWith(
-      'chat-1',
-      'char-1',
-      'top',
-      'new-item-1'
+      {
+        top: 'new-item-1',
+        bottom: null,
+        footwear: null,
+        accessories: 'new-item-1',
+      }
     )
     expect(result).toMatchObject({
       success: true,
