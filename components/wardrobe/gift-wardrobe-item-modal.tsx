@@ -29,7 +29,7 @@ interface GiftWardrobeItemModalProps {
   chatId: string
   onClose: () => void
   /** Called after a successful gift so the parent can refresh outfit state */
-  onGifted: () => void
+  onGifted: (giftInfo?: { title: string; types: string[]; equipped: boolean }) => void
 }
 
 export function GiftWardrobeItemModal({
@@ -112,7 +112,7 @@ export function GiftWardrobeItemModal({
       }
 
       showSuccessToast(`Gifted "${formData.title}" to ${recipientName}`)
-      onGifted()
+      onGifted({ title: formData.title, types: [...selectedTypes], equipped: equipNow })
     })
   }
 

@@ -27,6 +27,8 @@
 
 #### Added
 
+- **Outfit Change Notify Button**: When a character's outfit changes (via Participants Sidebar equip, wardrobe item gift, or LLM tool use), a glowing "Notify 👗" pill button appears above the composer gutter tools. Clicking it inserts the change description at the top of the textarea, wrapped in the current roleplay template's narration delimiters (e.g., `*clothing change: Charlie:\n- **top:** shirt\n...*`). Supports multiple characters and distinguishes "clothing change" (equip) from "wardrobe change" (gift). Notifications persist in localStorage until consumed.
+
 - **Narration Delimiters**: Roleplay templates now require a `narrationDelimiters` field that declares how narration/action text is delimited — either a single character (e.g., `*` for `*narration*`) or an open/close pair (e.g., `[`, `]` for `[narration]`). This enables semantic identification of narration vs. other text, beyond just display styling. The Standard built-in template uses `*`, the Quilltap RP plugin uses `[`/`]`. The create/edit template form includes a narration delimiters picker. Existing templates default to `*` via DB migration and Zod schema default. Updated plugin-types (2.1.0) and plugin-utils (2.1.0) with the new required field.
 
 - **Wardrobe Action Notices**: Wardrobe actions (equip, unequip, create, gift) now display a prominent inline summary in chat messages with a warm amber/gold double-border style, so users can see at a glance what happened without parsing tool JSON. CSS variables (`--qt-chat-wardrobe-*`) are themeable with per-theme overrides for all 5 bundled themes. Also added missing whisper CSS variables and classes to the theme-storybook.

@@ -118,16 +118,17 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
 
   /**
    * Fetch the full equipped outfit state for this chat and resolve item details.
+   * Returns the new outfit state, or null on failure.
    */
-  const refreshOutfit = useCallback(async () => {
-    if (!chatId) return
+  const refreshOutfit = useCallback(async (): Promise<OutfitState | null> => {
+    if (!chatId) return null
 
     setLoading(true)
     try {
       const res = await fetch(`/api/v1/chats/${chatId}?action=outfit`)
       if (!res.ok) {
         console.warn('[useOutfit] Failed to fetch outfit state', res.status)
-        return
+        return null
       }
 
       const data = await res.json()
@@ -155,8 +156,10 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
       )
 
       setOutfitState(newOutfitState)
+      return newOutfitState
     } catch (err) {
       console.error('[useOutfit] Error refreshing outfit state', { chatId, error: err })
+      return null
     } finally {
       setLoading(false)
     }
@@ -165,12 +168,13 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
 
   /**
    * Equip or unequip an item in a specific slot for a character.
+   * Returns the resolved item details for the new outfit, or null on failure.
    */
   const equipSlot = useCallback(async (
     characterId: string,
     slot: string,
     itemId: string | null
-  ) => {
+  ): Promise<Record<string, { title: string } | null> | null> => {
     try {
       const res = await fetch(`/api/v1/chats/${chatId}?action=equip`, {
         method: 'POST',
@@ -180,31 +184,33 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
 
       if (!res.ok) {
         console.error('[useOutfit] Failed to equip slot', { characterId, slot, itemId, status: res.status })
-        return
+        return null
       }
 
       // Optimistic update with multi-type displacement
       const items = wardrobeCache[characterId] ?? []
-      setOutfitState(prev => {
-        const currentChar = prev[characterId]
-        if (!currentChar) return prev
+      const currentChar = outfitState[characterId]
+      if (!currentChar) return null
 
-        const newSlots = computeDisplacedSlots(
-          currentChar.slots,
-          items,
-          slot as WardrobeItemType,
-          itemId
-        )
-        const newItems = resolveItemDetails(newSlots, items)
-        return {
-          ...prev,
-          [characterId]: { slots: newSlots, items: newItems },
-        }
-      })
+      const newSlots = computeDisplacedSlots(
+        currentChar.slots,
+        items,
+        slot as WardrobeItemType,
+        itemId
+      )
+      const newItems = resolveItemDetails(newSlots, items)
+
+      setOutfitState(prev => ({
+        ...prev,
+        [characterId]: { slots: newSlots, items: newItems },
+      }))
+
+      return newItems
     } catch (err) {
       console.error('[useOutfit] Error equipping slot', { characterId, slot, itemId, error: err })
+      return null
     }
-  }, [chatId, wardrobeCache, resolveItemDetails])
+  }, [chatId, wardrobeCache, outfitState, resolveItemDetails])
 
   /**
    * Invalidate the wardrobe cache for a specific character (or all characters).

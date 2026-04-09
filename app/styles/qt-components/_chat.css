@@ -533,6 +533,60 @@
     @apply relative;
   }
 
+  /**
+   * Vertical column wrapper for outfit notify button + gutter tools.
+   * Stacks the notify button above the 2x2 gutter grid.
+   */
+  .qt-composer-gutter-column {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  /**
+   * Outfit notification button - bright, attention-grabbing pill
+   * that appears above the gutter tools when outfit changes are pending.
+   */
+  .qt-composer-outfit-notify-button {
+    @apply inline-flex items-center gap-1;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply transition-all duration-200;
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--radius-full, 9999px);
+    border: 1px solid var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+    color: var(--color-primary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.25;
+    animation: qt-outfit-notify-pulse 2s ease-in-out infinite;
+  }
+
+  .qt-composer-outfit-notify-button:hover {
+    background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 40%, transparent);
+  }
+
+  .qt-composer-outfit-notify-label {
+    letter-spacing: 0.02em;
+  }
+
+  .qt-composer-outfit-notify-icon {
+    font-size: 0.875rem;
+    line-height: 1;
+  }
+
+  @keyframes qt-outfit-notify-pulse {
+    0%, 100% {
+      box-shadow: 0 0 4px color-mix(in srgb, var(--color-primary) 20%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 12px color-mix(in srgb, var(--color-primary) 50%, transparent);
+    }
+  }
+
   /* ==========================================================================
      DESKTOP TOOL PALETTE POPOVER
      ========================================================================== */
