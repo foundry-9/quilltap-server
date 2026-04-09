@@ -130,7 +130,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="qt-label mb-1">
-                Max Memories
+                Maximum Unprotected Memories
               </label>
               <input
                 type="number"
@@ -140,9 +140,15 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 max={10000}
                 className="qt-input"
               />
-              <p className="mt-1 qt-text-xs">
-                Hard cap on total memories
-              </p>
+              <div className="mt-1 qt-text-xs space-y-0.5">
+                <p>Not deleting memories that are:</p>
+                <ul className="list-disc pl-4">
+                  <li>Importance &ge; 70%</li>
+                  <li>Reinforced 5+ times</li>
+                  <li>Manually created</li>
+                  <li>Accessed within last 3 months</li>
+                </ul>
+              </div>
             </div>
 
             <div>

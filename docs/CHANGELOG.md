@@ -10,6 +10,7 @@
 
 #### Fixed
 
+- **Memory Cleanup: Accurate Max Memories Label**: Changed "Max Memories" / "Hard cap on total memories" to "Maximum Unprotected Memories" with a list of the protection rules (importance ≥ 70%, reinforced 5+ times, manually created, accessed within 3 months), since the hard cap does not delete protected memories
 - **LLM Inspector: Image Generation Logging**: Image generation API calls (character avatars, story backgrounds, in-chat image tool) are now logged in the LLM Inspector with chat/character linkage, provider, model, prompt, duration, and error tracking
 - **Outfit Description Consistency**: Centralized all wardrobe outfit descriptions into a single `describeOutfit()` utility with clear rules for null slots (null = empty, not "default"). Replaced 6 scattered implementations that had inconsistent behavior — some assumed defaults for empty slots, others omitted them entirely. Outfit Change Notices now use the same canonical format.
 - **Clipboard: Copy Image to Clipboard**: Fixed "Failed to copy image to clipboard" error in browser — the Clipboard API only accepts `image/png`, but images are stored as WebP. Now converts to PNG via canvas before clipboard write. Also fixed CSP violation when using `blob:` URLs by switching to `data:` URLs.
