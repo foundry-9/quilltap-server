@@ -22,6 +22,8 @@ export interface WardrobeCreateItemToolInput {
   appropriateness?: string;
   /** If true, equip immediately after creation (default false) */
   equip_now?: boolean;
+  /** Optional: name of the character to give this item to. Defaults to the calling character. */
+  recipient?: string;
 }
 
 /**
@@ -32,6 +34,8 @@ export interface WardrobeCreateItemToolOutput {
   item_id: string;
   title: string;
   equipped: boolean;
+  /** Name of the character who received the item (when gifted to another) */
+  recipient_name?: string;
   current_state?: {
     top: string | null;
     bottom: string | null;
@@ -50,7 +54,8 @@ export const wardrobeCreateItemToolDefinition = {
     name: 'create_wardrobe_item',
     description:
       'Create a new wardrobe item and optionally equip it immediately. ' +
-      'Use this to design new outfits or clothing items.',
+      'Use this to design new outfits or clothing items. ' +
+      'You can give the item to another character in the chat by specifying a recipient.',
     parameters: {
       type: 'object',
       properties: {
@@ -82,6 +87,12 @@ export const wardrobeCreateItemToolDefinition = {
           description:
             'If true, equip the item immediately after creation. Defaults to false.',
           default: false,
+        },
+        recipient: {
+          type: 'string',
+          description:
+            'Name of a character in this chat to give the item to. ' +
+            'If omitted, the item is added to your own wardrobe.',
         },
       },
       required: ['title', 'types'],
@@ -131,6 +142,11 @@ export function validateWardrobeCreateItemInput(
 
   // equip_now is optional but must be a boolean if provided
   if (obj.equip_now !== undefined && typeof obj.equip_now !== 'boolean') {
+    return false;
+  }
+
+  // recipient is optional but must be a non-empty string if provided
+  if (obj.recipient !== undefined && (typeof obj.recipient !== 'string' || obj.recipient.trim().length === 0)) {
     return false;
   }
 

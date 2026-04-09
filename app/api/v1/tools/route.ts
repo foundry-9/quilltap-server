@@ -210,7 +210,7 @@ const BUILT_IN_TOOLS = [
   {
     id: 'create_wardrobe_item',
     name: 'Create Wardrobe Item',
-    description: 'Create a new wardrobe item and optionally equip it immediately',
+    description: 'Create a new wardrobe item, optionally equip it, or gift it to another character',
     source: 'built-in' as const,
     category: 'utility',
   },

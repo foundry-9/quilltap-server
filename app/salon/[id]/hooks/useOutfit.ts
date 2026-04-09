@@ -206,6 +206,19 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
     }
   }, [chatId, wardrobeCache, resolveItemDetails])
 
+  /**
+   * Invalidate the wardrobe cache for a specific character (or all characters).
+   * Call this before refreshOutfit when items have been added/removed externally
+   * (e.g., via the gift modal or character wardrobe page).
+   */
+  const invalidateWardrobe = useCallback((characterId?: string) => {
+    if (characterId) {
+      fetchedWardrobesRef.current.delete(characterId)
+    } else {
+      fetchedWardrobesRef.current.clear()
+    }
+  }, [])
+
   // Fetch outfit state on mount
   useEffect(() => {
     refreshOutfit()
@@ -216,6 +229,7 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
     wardrobeCache,
     loading,
     refreshOutfit,
+    invalidateWardrobe,
     equipSlot,
   }
 }

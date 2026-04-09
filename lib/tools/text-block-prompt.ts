@@ -173,8 +173,9 @@ To remove: [[EQUIP slot="top" /]]`)
   if (options.wardrobeCreateItem) {
     toolDocs.push(`
 ### Create Wardrobe Item
-Design and add a new clothing item to your wardrobe.
-Format: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" appropriateness="casual"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]`)
+Design and add a new clothing item to your wardrobe, or gift one to another character.
+Format: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" appropriateness="casual"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]
+Gift to another character: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" recipient="CharacterName"]]A gift for you[[/CREATE_WARDROBE_ITEM]]`)
   }
 
   if (toolDocs.length === 0) {

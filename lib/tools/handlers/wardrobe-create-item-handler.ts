@@ -2,6 +2,8 @@
  * Create Wardrobe Item Tool Handler
  *
  * Creates new wardrobe items and optionally equips them immediately.
+ * Supports gifting items to other characters in the chat via the
+ * optional `recipient` parameter.
  */
 
 import { logger } from '@/lib/logger';
@@ -24,6 +26,49 @@ export class WardrobeCreateItemError extends Error {
     super(message);
     this.name = 'WardrobeCreateItemError';
   }
+}
+
+/**
+ * Resolve a recipient character ID from a name string by searching chat participants.
+ * Returns { characterId, characterName } or null if not found.
+ */
+async function resolveRecipientFromChat(
+  chatId: string,
+  recipientName: string,
+  callingCharacterId: string,
+): Promise<{ characterId: string; characterName: string } | null> {
+  const repos = getRepositories();
+  const chat = await repos.chats.findById(chatId);
+  if (!chat) return null;
+
+  const participants = (chat as Record<string, unknown>).participants as Array<{
+    characterId?: string;
+    status?: string;
+  }> | undefined;
+
+  if (!participants || !Array.isArray(participants)) return null;
+
+  // Normalize the search name for case-insensitive matching
+  const normalizedSearch = recipientName.trim().toLowerCase();
+
+  // Search through active participants for a character name match
+  for (const participant of participants) {
+    // Skip removed participants
+    if (participant.status === 'removed') continue;
+
+    const charId = participant.characterId;
+    if (!charId) continue;
+
+    // Look up the character record to get the name
+    const character = await repos.characters.findById(charId);
+    if (!character) continue;
+
+    if (character.name.trim().toLowerCase() === normalizedSearch) {
+      return { characterId: charId, characterName: character.name };
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -58,21 +103,61 @@ export async function executeWardrobeCreateItemTool(
       };
     }
 
-    const { title, description, types, appropriateness, equip_now } = input;
+    const { title, description, types, appropriateness, equip_now, recipient } = input;
+
+    // Resolve the target character — defaults to the calling character
+    let targetCharacterId = context.characterId;
+    let recipientName: string | undefined;
+
+    if (recipient) {
+      const resolved = await resolveRecipientFromChat(
+        context.chatId,
+        recipient,
+        context.characterId,
+      );
+
+      if (!resolved) {
+        logger.warn('Wardrobe create item recipient not found in chat', {
+          context: 'wardrobe-create-item-handler',
+          userId: context.userId,
+          chatId: context.chatId,
+          recipientName: recipient,
+        });
+        return {
+          success: false,
+          item_id: '',
+          title: '',
+          equipped: false,
+          error: `Could not find a character named "${recipient}" in this chat`,
+        };
+      }
+
+      targetCharacterId = resolved.characterId;
+      recipientName = resolved.characterName;
+
+      logger.debug('Resolved gift recipient', {
+        context: 'wardrobe-create-item-handler',
+        recipientName: resolved.characterName,
+        recipientCharacterId: resolved.characterId,
+        callingCharacterId: context.characterId,
+      });
+    }
 
     logger.debug('Creating wardrobe item', {
       context: 'wardrobe-create-item-handler',
       userId: context.userId,
       chatId: context.chatId,
       characterId: context.characterId,
+      targetCharacterId,
+      recipientName,
       title,
       types,
       equipNow: equip_now,
     });
 
-    // Create the wardrobe item
+    // Create the wardrobe item for the target character
     const newItem = await repos.wardrobe.create({
-      characterId: context.characterId,
+      characterId: targetCharacterId,
       title,
       description: description || null,
       types: types as WardrobeItemType[],
@@ -83,7 +168,8 @@ export async function executeWardrobeCreateItemTool(
     logger.debug('Wardrobe item created', {
       context: 'wardrobe-create-item-handler',
       userId: context.userId,
-      characterId: context.characterId,
+      targetCharacterId,
+      recipientName,
       itemId: newItem.id,
       title: newItem.title,
     });
@@ -97,13 +183,13 @@ export async function executeWardrobeCreateItemTool(
         context: 'wardrobe-create-item-handler',
         userId: context.userId,
         chatId: context.chatId,
-        characterId: context.characterId,
+        targetCharacterId,
         itemId: newItem.id,
         slots: newItem.types,
       });
 
-      // Equip with displacement of conflicting items
-      await equipWithDisplacement(repos, context.chatId, context.characterId, newItem);
+      // Equip on the target character (may be a gift recipient)
+      await equipWithDisplacement(repos, context.chatId, targetCharacterId, newItem);
 
       equipped = true;
 
@@ -111,23 +197,23 @@ export async function executeWardrobeCreateItemTool(
       const chat = await repos.chats.findById(context.chatId);
       if (chat) {
         const equippedOutfit = (chat as Record<string, unknown>).equippedOutfit as Record<string, EquippedSlots> | undefined;
-        currentState = equippedOutfit?.[context.characterId] || { ...EMPTY_EQUIPPED_SLOTS };
+        currentState = equippedOutfit?.[targetCharacterId] || { ...EMPTY_EQUIPPED_SLOTS };
       }
 
       logger.debug('Wardrobe item equipped', {
         context: 'wardrobe-create-item-handler',
         userId: context.userId,
         chatId: context.chatId,
-        characterId: context.characterId,
+        targetCharacterId,
         itemId: newItem.id,
         currentState,
       });
 
-      // Trigger avatar generation if enabled
+      // Trigger avatar generation for the target character if enabled
       await triggerAvatarGenerationIfEnabled(repos, {
         userId: context.userId,
         chatId: context.chatId,
-        characterId: context.characterId,
+        characterId: targetCharacterId,
         callerContext: 'wardrobe-create-item-handler',
       });
     }
@@ -137,6 +223,8 @@ export async function executeWardrobeCreateItemTool(
       userId: context.userId,
       chatId: context.chatId,
       characterId: context.characterId,
+      targetCharacterId,
+      recipientName,
       itemId: newItem.id,
       title: newItem.title,
       equipped,
@@ -147,6 +235,7 @@ export async function executeWardrobeCreateItemTool(
       item_id: newItem.id,
       title: newItem.title,
       equipped,
+      ...(recipientName ? { recipient_name: recipientName } : {}),
       ...(currentState ? { current_state: currentState } : {}),
     };
   } catch (error) {
@@ -178,10 +267,14 @@ export function formatWardrobeCreateItemResults(output: WardrobeCreateItemToolOu
     return `Wardrobe Error: ${output.error || 'Unknown error'}`;
   }
 
-  const parts: string[] = [`Created wardrobe item "${output.title}" (${output.item_id})`];
+  const recipientNote = output.recipient_name
+    ? ` for ${output.recipient_name}`
+    : '';
+
+  const parts: string[] = [`Created wardrobe item "${output.title}" (${output.item_id})${recipientNote}`];
 
   if (output.equipped) {
-    parts.push('- Equipped immediately');
+    parts.push(`- Equipped immediately${recipientNote ? ` on ${output.recipient_name}` : ''}`);
 
     if (output.current_state) {
       const slotSummary = WARDROBE_SLOT_TYPES
@@ -190,7 +283,7 @@ export function formatWardrobeCreateItemResults(output: WardrobeCreateItemToolOu
       parts.push(`- Current outfit:\n${slotSummary}`);
     }
   } else {
-    parts.push('- Not equipped (added to wardrobe only)');
+    parts.push(`- Not equipped (added to wardrobe${recipientNote ? ` of ${output.recipient_name}` : ''} only)`);
   }
 
   return parts.join('\n');

@@ -66,9 +66,17 @@ During a chat, characters with the appropriate permissions can interact with the
 
 - **list_wardrobe** --- Browse all available items in the character's wardrobe
 - **update_outfit_item** --- Swap an equipped item for a different one from the wardrobe
-- **create_wardrobe_item** --- Invent an entirely new garment and add it to the wardrobe
+- **create_wardrobe_item** --- Invent an entirely new garment and add it to the wardrobe, or **gift one to another character** in the chat
 
 For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[EQUIP]]`, and `[[CREATE_WARDROBE_ITEM]]`.
+
+### Gifting Wardrobe Items
+
+A character may, with suitable generosity and the `canCreateOutfits` permission, conjure a garment not merely for their own wardrobe but for that of another character in the conversation. This is accomplished by specifying a **recipient** when creating a wardrobe item --- the newly minted garment is placed directly into the recipient's collection, and may optionally be equipped upon them at once.
+
+From the **user's** perspective, a small gift icon appears beside the **Outfit** header on each character's participant card in the sidebar. Clicking it opens a form where you may design a new wardrobe item and bestow it upon that character --- complete with the option to have them don the gift immediately. This is rather like having a personal couturier on retainer, dispatching bespoke garments to your cast of characters at a moment's notice.
+
+For models using text-block syntax, gifting uses the `recipient` attribute: `[[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" recipient="CharacterName"]]A gift for you[[/CREATE_WARDROBE_ITEM]]`.
 
 ### The Wardrobe Flags
 

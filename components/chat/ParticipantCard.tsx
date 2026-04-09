@@ -108,6 +108,8 @@ interface ParticipantCardProps {
   wardrobeItems?: WardrobeItemSummary[]
   onEquipSlot?: (participantId: string, slot: string, itemId: string | null) => void
   outfitLoading?: boolean
+  // Gift wardrobe item
+  onGiftItem?: (participantId: string) => void
 }
 
 export function ParticipantCard({
@@ -141,6 +143,7 @@ export function ParticipantCard({
   wardrobeItems,
   onEquipSlot,
   outfitLoading,
+  onGiftItem,
 }: ParticipantCardProps) {
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
@@ -389,6 +392,7 @@ export function ParticipantCard({
               wardrobeItems={wardrobeItems ?? []}
               onEquipSlot={(slot, itemId) => onEquipSlot(participant.id, slot, itemId)}
               isLoading={outfitLoading}
+              onGiftItem={onGiftItem ? () => onGiftItem(participant.id) : undefined}
             />
           )}
 

@@ -17,6 +17,7 @@
 
 #### Added
 
+- **Wardrobe Item Gifting**: Characters can now create wardrobe items for other characters in the chat via the `recipient` parameter on `create_wardrobe_item`. Users can gift items via a dedicated button (gift icon) next to the "Outfit" header on each character's participant card in the sidebar. Gifted items are added to the recipient's wardrobe and can optionally be equipped immediately.
 - **Wardrobe Tools in Tool Settings**: Wardrobe tools (`list_wardrobe`, `update_outfit_item`, `create_wardrobe_item`) now appear in tool enable/disable settings and the Run Tool modal, with availability gated by character wardrobe flags
 - **Run Tool Character Selector**: Run Tool modal now includes a "Run as character" dropdown so users can choose which character context to execute tools in, fixing an issue where manual tool runs always used the first active character participant
 

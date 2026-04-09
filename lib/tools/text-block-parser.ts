@@ -150,6 +150,10 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
     'name': 'title',
     'type': 'types',
     'context': 'appropriateness',
+    'to': 'recipient',
+    'for': 'recipient',
+    'give_to': 'recipient',
+    'gift_to': 'recipient',
   },
 }
 

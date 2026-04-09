@@ -701,6 +701,7 @@ export async function executeToolCallWithContext(
           item_id: result.item_id,
           title: result.title,
           equipped: result.equipped,
+          recipient_name: result.recipient_name,
           current_state: result.current_state,
         } : null,
         error: result.success ? undefined : result.error,

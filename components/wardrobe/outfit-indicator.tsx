@@ -29,6 +29,8 @@ export interface OutfitIndicatorProps {
   /** Callback when equipping/unequipping a slot */
   onEquipSlot: (slot: string, itemId: string | null) => void
   isLoading?: boolean
+  /** Callback to open the gift wardrobe item modal for this character */
+  onGiftItem?: () => void
 }
 
 // ============================================================================
@@ -60,6 +62,7 @@ export function OutfitIndicator({
   wardrobeItems,
   onEquipSlot,
   isLoading = false,
+  onGiftItem,
 }: OutfitIndicatorProps) {
   const [expanded, setExpanded] = useState(false)
   const [changingSlot, setChangingSlot] = useState<WardrobeItemType | null>(null)
@@ -85,27 +88,45 @@ export function OutfitIndicator({
 
   return (
     <div className="mt-2">
-      {/* Collapsible header */}
-      <button
-        type="button"
-        onClick={toggleExpanded}
-        className="flex w-full items-center gap-1 text-left qt-text-xs qt-text-secondary hover:qt-text-primary transition-colors"
-        aria-expanded={expanded}
-        aria-label="Toggle outfit display"
-      >
-        <svg
-          className={`w-3 h-3 transition-transform flex-shrink-0 ${expanded ? 'rotate-90' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+      {/* Collapsible header with gift button */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={toggleExpanded}
+          className="flex items-center gap-1 text-left qt-text-xs qt-text-secondary hover:qt-text-primary transition-colors"
+          aria-expanded={expanded}
+          aria-label="Toggle outfit display"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-        </svg>
-        <span>Outfit</span>
+          <svg
+            className={`w-3 h-3 transition-transform flex-shrink-0 ${expanded ? 'rotate-90' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          <span>Outfit</span>
+        </button>
         {isLoading && (
-          <span className="qt-text-muted text-xs ml-1">(loading...)</span>
+          <span className="qt-text-muted text-xs">(loading...)</span>
         )}
-      </button>
+        {onGiftItem && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onGiftItem()
+            }}
+            className="ml-auto qt-text-secondary hover:qt-text-primary transition-colors p-0.5"
+            title="Gift a wardrobe item to this character"
+            aria-label="Gift wardrobe item"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+            </svg>
+          </button>
+        )}
+      </div>
 
       {/* Expanded content */}
       {expanded && equippedSlots && (

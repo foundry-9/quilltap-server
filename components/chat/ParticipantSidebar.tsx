@@ -67,6 +67,8 @@ interface ParticipantSidebarProps {
   wardrobeCache?: WardrobeCache
   outfitLoading?: boolean
   onEquipSlot?: (participantId: string, slot: string, itemId: string | null) => void
+  // Gift wardrobe item
+  onGiftItem?: (participantId: string) => void
   className?: string
 }
 
@@ -100,6 +102,7 @@ export function ParticipantSidebar({
   wardrobeCache,
   outfitLoading,
   onEquipSlot,
+  onGiftItem,
   className = '',
 }: ParticipantSidebarProps) {
   // Collapsed state with localStorage persistence (default: collapsed)
@@ -453,6 +456,7 @@ export function ParticipantSidebar({
               wardrobeItems={charWardrobe}
               onEquipSlot={onEquipSlot}
               outfitLoading={outfitLoading}
+              onGiftItem={onGiftItem}
             />
           )
         })}

@@ -51,6 +51,7 @@ import {
 } from './components'
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
+import { GiftWardrobeItemModal } from '@/components/wardrobe/gift-wardrobe-item-modal'
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -90,6 +91,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [pendingToolResults, setPendingToolResults] = useState<PendingToolResult[]>([])
   const [showAllWhispers, setShowAllWhispers] = useState(false)
   const [whisperTarget, setWhisperTarget] = useState<{ participantId: string; name: string } | null>(null)
+  const [giftTarget, setGiftTarget] = useState<{ participantId: string; characterId: string; name: string } | null>(null)
 
   // --- Refs ---
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -119,6 +121,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const participant = chat?.participants.find(p => p.id === participantId)
     const name = participant?.character?.name || participant?.persona?.name || 'Unknown'
     setWhisperTarget({ participantId, name })
+  }, [chat?.participants])
+
+  const handleGiftItem = useCallback((participantId: string) => {
+    const participant = chat?.participants.find(p => p.id === participantId)
+    const characterId = participant?.character?.id
+    const name = participant?.character?.name || participant?.persona?.name || 'Unknown'
+    if (characterId) {
+      setGiftTarget({ participantId, characterId, name })
+    }
   }, [chat?.participants])
 
   const userParticipantIdSet = useMemo(() => {
@@ -267,15 +278,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const outfit = useOutfit(id, participantCharacterIds)
 
   // Refresh outfit state when a tool result comes back (generation completes)
+  // Invalidate wardrobe cache first since tools may have created/gifted new items
   const wasGeneratingForOutfitRef = useRef(false)
   useEffect(() => {
     const isGenerating = sseStreaming.streaming || sseStreaming.waitingForResponse
     if (wasGeneratingForOutfitRef.current && !isGenerating) {
+      outfit.invalidateWardrobe()
       outfit.refreshOutfit()
     }
     wasGeneratingForOutfitRef.current = isGenerating
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- outfit.refreshOutfit is stable (useCallback)
-  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, outfit.refreshOutfit])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- outfit.refreshOutfit and invalidateWardrobe are stable (useCallback)
+  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, outfit.refreshOutfit, outfit.invalidateWardrobe])
 
   // Equip slot handler that maps participantId -> characterId
   const handleEquipSlot = useCallback((participantId: string, slot: string, itemId: string | null) => {
@@ -1113,6 +1126,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           wardrobeCache={outfit.wardrobeCache}
           outfitLoading={outfit.loading}
           onEquipSlot={handleEquipSlot}
+          onGiftItem={handleGiftItem}
         />
       )}
 
@@ -1126,6 +1140,20 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onSent={async () => {
             setWhisperTarget(null)
             await fetchChat()
+          }}
+        />
+      )}
+
+      {giftTarget && (
+        <GiftWardrobeItemModal
+          recipientCharacterId={giftTarget.characterId}
+          recipientName={giftTarget.name}
+          chatId={id}
+          onClose={() => setGiftTarget(null)}
+          onGifted={() => {
+            outfit.invalidateWardrobe(giftTarget.characterId)
+            setGiftTarget(null)
+            outfit.refreshOutfit()
           }}
         />
       )}
