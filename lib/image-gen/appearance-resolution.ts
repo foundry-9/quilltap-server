@@ -11,6 +11,7 @@
 import type { PhysicalDescription } from '@/lib/schemas/types'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import { describeOutfit } from '@/lib/wardrobe/outfit-description'
 import {
   resolveAppearance,
   sanitizeAppearance,
@@ -92,47 +93,28 @@ function canSkipResolution(
 }
 
 /**
- * Build default resolved appearances without an LLM call
+ * Convert an array of equipped wardrobe items into OutfitSlotValues
+ * for use with the canonical describeOutfit utility.
  */
-/**
- * Compose a clothing description from equipped wardrobe items.
- * Produces a human-readable sentence such as:
- *   "Wearing a charcoal sweater (soft pullover in grey), dark jeans (slim-fit dark wash), barefoot, no accessories"
- */
-function composeWardrobeClothingDescription(
+function wardrobeItemsToSlotValues(
   items: Array<{ slot: string; title: string; description?: string | null }>
-): string {
-  const slotOrder = ['top', 'bottom', 'footwear', 'accessories']
-  const slotLabels: Record<string, { empty: string }> = {
-    top: { empty: 'no top' },
-    bottom: { empty: 'no bottom' },
-    footwear: { empty: 'barefoot' },
-    accessories: { empty: 'no accessories' },
-  }
-
-  const parts: string[] = []
-
-  for (const slot of slotOrder) {
+): import('@/lib/wardrobe/outfit-description').OutfitSlotValues {
+  const findItem = (slot: string) => {
     const item = items.find(i => i.slot === slot)
-    if (item) {
-      const desc = item.description ? ` (${item.description})` : ''
-      parts.push(`${item.title}${desc}`)
-    } else {
-      parts.push(slotLabels[slot]?.empty || `no ${slot}`)
-    }
+    if (!item) return null
+    return item.description ? `${item.title} (${item.description})` : item.title
   }
-
-  // Include any non-standard slots that aren't in our ordered list
-  for (const item of items) {
-    if (!slotOrder.includes(item.slot)) {
-      const desc = item.description ? ` (${item.description})` : ''
-      parts.push(`${item.title}${desc}`)
-    }
+  return {
+    top: findItem('top'),
+    bottom: findItem('bottom'),
+    footwear: findItem('footwear'),
+    accessories: findItem('accessories'),
   }
-
-  return `Wearing ${parts.join(', ')}`
 }
 
+/**
+ * Build default resolved appearances without an LLM call
+ */
 function buildDefaultAppearances(
   characters: AppearanceResolutionInput[]
 ): ResolvedCharacterAppearance[] {
@@ -146,15 +128,17 @@ function buildDefaultAppearances(
       primary?.shortPrompt ||
       char.characterName
 
+    const hasWardrobe = char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
+
     return {
       characterId: char.characterId,
       characterName: char.characterName,
       physicalDescription: physDesc,
       physicalDescriptionName: primary?.name || 'default',
-      clothingDescription: char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
-        ? composeWardrobeClothingDescription(char.equippedWardrobeItems)
+      clothingDescription: hasWardrobe
+        ? describeOutfit(wardrobeItemsToSlotValues(char.equippedWardrobeItems!))
         : '',
-      clothingSource: char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
+      clothingSource: hasWardrobe
         ? 'stored' as const
         : 'default' as const,
       wasSanitized: false,

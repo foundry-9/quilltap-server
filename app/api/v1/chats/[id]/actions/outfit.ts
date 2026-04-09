@@ -13,6 +13,7 @@ import type { AuthenticatedContext } from '@/lib/api/middleware';
 import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 
 const equipSlotSchema = z.object({
   characterId: z.string().min(1, 'characterId is required'),
@@ -104,14 +105,17 @@ export async function handleEquipSlot(
         : [];
       const itemsMap = new Map(equippedItems.map(i => [i.id, i]));
 
-      const slotLabels: Record<string, string> = {
-        top: updatedSlots.top ? (itemsMap.get(updatedSlots.top)?.title ?? 'unknown') : '(nothing)',
-        bottom: updatedSlots.bottom ? (itemsMap.get(updatedSlots.bottom)?.title ?? 'unknown') : '(nothing)',
-        footwear: updatedSlots.footwear ? (itemsMap.get(updatedSlots.footwear)?.title ?? 'unknown') : '(barefoot)',
-        accessories: updatedSlots.accessories ? (itemsMap.get(updatedSlots.accessories)?.title ?? 'unknown') : '(none)',
+      const findTitle = (slotName: string): string | null => {
+        const slotItemId = updatedSlots[slotName as keyof typeof updatedSlots];
+        if (!slotItemId) return null;
+        return itemsMap.get(slotItemId)?.title ?? null;
       };
-
-      const outfitText = `Top: ${slotLabels.top}, Bottom: ${slotLabels.bottom}, Footwear: ${slotLabels.footwear}, Accessories: ${slotLabels.accessories}`;
+      const outfitText = describeOutfit({
+        top: findTitle('top'),
+        bottom: findTitle('bottom'),
+        footwear: findTitle('footwear'),
+        accessories: findTitle('accessories'),
+      });
 
       // Look up character name for the notification
       const character = await repos.characters.findById(characterId);

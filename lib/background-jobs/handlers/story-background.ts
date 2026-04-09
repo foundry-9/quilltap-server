@@ -28,6 +28,7 @@ import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
 import { convertToWebP } from '@/lib/files/webp-conversion';
+import { logLLMCall } from '@/lib/services/llm-logging.service';
 
 /**
  * Handle a story background generation job
@@ -473,6 +474,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const decryptedKey = apiKey.key_value;
 
   let generationResponse;
+  const genStartTime = Date.now();
   try {
     // Request landscape-oriented image for backgrounds
     generationResponse = await provider.generateImage({
@@ -483,8 +485,50 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       quality: (imageProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
       style: 'natural', // Natural style works better for ambient backgrounds
     }, decryptedKey);
+
+    const genDurationMs = Date.now() - genStartTime;
+    const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
+
+    logLLMCall({
+      userId: job.userId,
+      type: 'IMAGE_GENERATION',
+      chatId: payload.chatId,
+      provider: imageProfile.provider,
+      modelName: imageProfile.modelName,
+      request: {
+        messages: [{ role: 'user', content: finalPrompt }],
+      },
+      response: {
+        content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
+      },
+      durationMs: genDurationMs,
+    }).catch(err => {
+      logger.warn('[StoryBackground] Failed to log image generation to LLM Inspector', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        error: getErrorMessage(err),
+      });
+    });
   } catch (error) {
     const errorMessage = getErrorMessage(error);
+    const genDurationMs = Date.now() - genStartTime;
+
+    logLLMCall({
+      userId: job.userId,
+      type: 'IMAGE_GENERATION',
+      chatId: payload.chatId,
+      provider: imageProfile.provider,
+      modelName: imageProfile.modelName,
+      request: {
+        messages: [{ role: 'user', content: finalPrompt }],
+      },
+      response: {
+        content: '',
+        error: errorMessage,
+      },
+      durationMs: genDurationMs,
+    }).catch(() => { /* never block on logging */ });
+
     logger.error('[StoryBackground] Image generation failed', {
       context: 'background-jobs.story-background',
       jobId: job.id,

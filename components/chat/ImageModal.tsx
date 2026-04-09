@@ -68,7 +68,7 @@ export default function ImageModal({
       await copyImageToClipboard(src)
       showSuccessToast('Image copied to clipboard')
     } catch (error) {
-      console.error('Failed to copy image to clipboard:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to copy image to clipboard:', error)
       showErrorToast('Failed to copy image to clipboard')
     }
   }

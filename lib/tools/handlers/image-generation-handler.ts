@@ -31,6 +31,7 @@ import {
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { getErrorMessage } from '@/lib/errors';
+import { logLLMCall } from '@/lib/services/llm-logging.service';
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
@@ -267,10 +268,51 @@ async function generateImagesWithProvider(
 
   // Generate images
   let generationResponse;
+  const genStartTime = Date.now();
   try {
     generationResponse = await provider.generateImage(mergedParams, decryptedKey);
+
+    const genDurationMs = Date.now() - genStartTime;
+    const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
+
+    logLLMCall({
+      userId,
+      type: 'IMAGE_GENERATION',
+      chatId,
+      provider: imageProfile.provider,
+      modelName: imageProfile.modelName,
+      request: {
+        messages: [{ role: 'user', content: toolInput.prompt }],
+      },
+      response: {
+        content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
+      },
+      durationMs: genDurationMs,
+    }).catch(err => {
+      logger.warn('[Image Generation] Failed to log image generation to LLM Inspector', {
+        error: getErrorMessage(err),
+      });
+    });
   } catch (error) {
     const errorMessage = getErrorMessage(error);
+    const genDurationMs = Date.now() - genStartTime;
+
+    logLLMCall({
+      userId,
+      type: 'IMAGE_GENERATION',
+      chatId,
+      provider: imageProfile.provider,
+      modelName: imageProfile.modelName,
+      request: {
+        messages: [{ role: 'user', content: toolInput.prompt }],
+      },
+      response: {
+        content: '',
+        error: errorMessage,
+      },
+      durationMs: genDurationMs,
+    }).catch(() => { /* never block on logging */ });
+
     logger.error('Image generation failed:', { errorMessage }, error as Error);
     throw new ImageGenerationError(
       'PROVIDER_ERROR',

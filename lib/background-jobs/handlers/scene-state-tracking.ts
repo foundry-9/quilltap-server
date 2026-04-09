@@ -16,6 +16,7 @@ import { resolveDangerousContentSettings } from '@/lib/services/dangerous-conten
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { SceneStateTrackingPayload } from '../queue-service';
+import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 
 const logger = createServiceLogger('SceneStateTrackingHandler');
 
@@ -182,25 +183,20 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       if (equippedSlots) {
         const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
-        if (equippedItemIds.length > 0) {
-          const items = await repos.wardrobe.findByIds(equippedItemIds);
-          const itemsMap = new Map(items.map(item => [item.id, item]));
-          const parts: string[] = [];
-          for (const [slot, itemId] of Object.entries(equippedSlots)) {
-            if (itemId) {
-              const item = itemsMap.get(itemId);
-              if (item) {
-                parts.push(`${slot}: ${item.title}${item.description ? ` (${item.description})` : ''}`);
-              }
-            } else {
-              parts.push(`${slot}: ${slot === 'footwear' ? 'barefoot' : 'none'}`);
-            }
-          }
-          clothingDescription = parts.join(', ');
-        } else {
-          // All slots null — character is unclothed
-          clothingDescription = 'not wearing anything';
-        }
+        const items = equippedItemIds.length > 0 ? await repos.wardrobe.findByIds(equippedItemIds) : [];
+        const itemsMap = new Map(items.map(item => [item.id, item]));
+        const findTitle = (slot: string): string | null => {
+          const itemId = equippedSlots[slot as keyof typeof equippedSlots];
+          if (!itemId) return null;
+          const item = itemsMap.get(itemId);
+          return item ? (item.description ? `${item.title} (${item.description})` : item.title) : null;
+        };
+        clothingDescription = describeOutfit({
+          top: findTitle('top'),
+          bottom: findTitle('bottom'),
+          footwear: findTitle('footwear'),
+          accessories: findTitle('accessories'),
+        });
       }
     } catch (error) {
       logger.warn('[SceneStateTracking] Failed to load equipped wardrobe for character', {

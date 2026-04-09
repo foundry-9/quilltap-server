@@ -12,6 +12,7 @@ import {
   UUIDSchema,
   TimestampSchema,
 } from './common.types';
+import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 
 // ============================================================================
 // WARDROBE ITEM TYPES
@@ -115,35 +116,16 @@ export const EMPTY_EQUIPPED_SLOTS: EquippedSlots = {
 
 /**
  * Build a human-readable coverage summary from equipped slots and their item details.
+ * Delegates to the canonical describeOutfit utility.
  */
 export function buildCoverageSummary(
-  slots: EquippedSlots,
+  _slots: EquippedSlots,
   items: Record<string, WardrobeItem | null>
 ): string {
-  const parts: string[] = [];
-
-  if (items.top) {
-    parts.push(`wearing ${items.top.title}`);
-  }
-  if (items.bottom) {
-    parts.push(items.bottom.title);
-  }
-
-  if (parts.length === 0) {
-    parts.push('naked');
-  }
-
-  if (!items.footwear) {
-    parts.push('barefoot');
-  } else {
-    parts.push(items.footwear.title);
-  }
-
-  if (!items.accessories) {
-    parts.push('no accessories');
-  } else {
-    parts.push(items.accessories.title);
-  }
-
-  return parts.join(', ');
+  return describeOutfit({
+    top: items.top?.title ?? null,
+    bottom: items.bottom?.title ?? null,
+    footwear: items.footwear?.title ?? null,
+    accessories: items.accessories?.title ?? null,
+  });
 }

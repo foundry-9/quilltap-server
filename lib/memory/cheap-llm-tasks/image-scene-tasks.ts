@@ -5,6 +5,7 @@
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { logger } from '@/lib/logger'
+import { describeOutfit } from '@/lib/wardrobe/outfit-description'
 import { executeCheapLLMTask } from './core-execution'
 import type {
   AppearanceResolutionItem,
@@ -726,32 +727,21 @@ export async function resolveAppearance(
       return `    - ID: ${d.id}, Name: "${d.name}"${context}: ${preview}`
     })
 
-    // Build equipped wardrobe items section if present
+    // Build equipped wardrobe items section using canonical describeOutfit
     let wardrobeSection = ''
     if (char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0) {
-      const slotOrder = ['top', 'bottom', 'footwear', 'accessories']
-      const wardrobeLines: string[] = []
-
-      for (const slot of slotOrder) {
-        const item = char.equippedWardrobeItems.find(i => i.slot === slot)
-        if (item) {
-          const desc = item.description ? ` - ${item.description}` : ''
-          wardrobeLines.push(`    - ${slot.charAt(0).toUpperCase() + slot.slice(1)}: ${item.title}${desc}`)
-        } else {
-          const emptyLabel = slot === 'footwear' ? '(barefoot)' : '(none)'
-          wardrobeLines.push(`    - ${slot.charAt(0).toUpperCase() + slot.slice(1)}: ${emptyLabel}`)
-        }
+      const findItem = (slot: string) => {
+        const item = char.equippedWardrobeItems!.find(i => i.slot === slot)
+        if (!item) return null
+        return item.description ? `${item.title} (${item.description})` : item.title
       }
-
-      // Include any non-standard slots
-      for (const item of char.equippedWardrobeItems) {
-        if (!slotOrder.includes(item.slot)) {
-          const desc = item.description ? ` - ${item.description}` : ''
-          wardrobeLines.push(`    - ${item.slot.charAt(0).toUpperCase() + item.slot.slice(1)}: ${item.title}${desc}`)
-        }
-      }
-
-      wardrobeSection = `\n  Current Outfit (equipped wardrobe — takes precedence over stored clothing records):\n${wardrobeLines.join('\n')}`
+      const outfitDescription = describeOutfit({
+        top: findItem('top'),
+        bottom: findItem('bottom'),
+        footwear: findItem('footwear'),
+        accessories: findItem('accessories'),
+      })
+      wardrobeSection = `\n  Current Outfit (equipped wardrobe — takes precedence over stored clothing records):\n${outfitDescription}`
     }
 
     return `  Character: ${char.characterName} (ID: ${char.characterId})

@@ -29,6 +29,8 @@ import {
   resolveImageProviderForDangerousContent,
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { logLLMCall } from '@/lib/services/llm-logging.service';
+import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 
 /**
  * Handle CHARACTER_AVATAR_GENERATION job.
@@ -100,26 +102,23 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     }
   }
 
-  // Equipped wardrobe items
+  // Equipped wardrobe items — use canonical describeOutfit utility
   const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, payload.characterId);
   if (equippedSlots) {
     const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
-    if (equippedItemIds.length > 0) {
-      const items = await repos.wardrobe.findByIds(equippedItemIds);
-      const clothingParts: string[] = [];
-      for (const [slot, itemId] of Object.entries(equippedSlots)) {
-        if (itemId) {
-          const item = items.find(i => i.id === itemId);
-          if (item) {
-            const desc = item.description ? ` - ${item.description}` : '';
-            clothingParts.push(`${slot}: ${item.title}${desc}`);
-          }
-        }
-      }
-      if (clothingParts.length > 0) {
-        appearanceParts.push(`Wearing: ${clothingParts.join(', ')}`);
-      }
-    }
+    const items = equippedItemIds.length > 0 ? await repos.wardrobe.findByIds(equippedItemIds) : [];
+    const findTitle = (slot: string): string | null => {
+      const itemId = equippedSlots[slot as keyof typeof equippedSlots];
+      if (!itemId) return null;
+      const item = items.find(i => i.id === itemId);
+      return item ? (item.description ? `${item.title} (${item.description})` : item.title) : null;
+    };
+    appearanceParts.push(describeOutfit({
+      top: findTitle('top'),
+      bottom: findTitle('bottom'),
+      footwear: findTitle('footwear'),
+      accessories: findTitle('accessories'),
+    }));
   }
 
   if (appearanceParts.length === 0) {
@@ -243,6 +242,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   const decryptedKey = effectiveApiKey;
 
   let generationResponse;
+  const genStartTime = Date.now();
   try {
     generationResponse = await provider.generateImage({
       prompt,
@@ -252,8 +252,52 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       quality: (effectiveImageProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
       style: 'natural',
     }, decryptedKey);
+
+    const genDurationMs = Date.now() - genStartTime;
+    const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
+
+    logLLMCall({
+      userId: job.userId,
+      type: 'IMAGE_GENERATION',
+      chatId: payload.chatId,
+      characterId: payload.characterId,
+      provider: effectiveImageProfile.provider,
+      modelName: effectiveImageProfile.modelName,
+      request: {
+        messages: [{ role: 'user', content: prompt }],
+      },
+      response: {
+        content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
+      },
+      durationMs: genDurationMs,
+    }).catch(err => {
+      logger.warn('[CharacterAvatar] Failed to log image generation to LLM Inspector', {
+        context: 'background-jobs.character-avatar',
+        jobId: job.id,
+        error: getErrorMessage(err),
+      });
+    });
   } catch (error) {
     const errorMessage = getErrorMessage(error);
+    const genDurationMs = Date.now() - genStartTime;
+
+    logLLMCall({
+      userId: job.userId,
+      type: 'IMAGE_GENERATION',
+      chatId: payload.chatId,
+      characterId: payload.characterId,
+      provider: effectiveImageProfile.provider,
+      modelName: effectiveImageProfile.modelName,
+      request: {
+        messages: [{ role: 'user', content: prompt }],
+      },
+      response: {
+        content: '',
+        error: errorMessage,
+      },
+      durationMs: genDurationMs,
+    }).catch(() => { /* never block on logging */ });
+
     logger.error('[CharacterAvatar] Image generation failed', {
       context: 'background-jobs.character-avatar',
       jobId: job.id,

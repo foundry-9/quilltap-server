@@ -10,6 +10,7 @@ import { isParticipantPresent, type ParticipantStatus } from '@/lib/schemas/type
 import { calculateCurrentTimestamp, shouldInjectTimestamp, formatTimestampForSystemPrompt } from '@/lib/chat/timestamp-utils'
 import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter'
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
+import { describeOutfit } from '@/lib/wardrobe/outfit-description'
 
 /**
  * Wardrobe context for system prompt rendering.
@@ -221,24 +222,20 @@ export function buildSystemPrompt(
   // Wardrobe / clothing context for the LLM (slot-based wardrobe system)
   if (wardrobeContext) {
     const { equippedItems, wardrobeItems } = wardrobeContext
-    const equippedSlotNames = Object.keys(equippedItems)
-    const hasEquipped = equippedSlotNames.length > 0
 
-    // Current Outfit section — show what each slot is wearing
-    if (hasEquipped) {
-      const slotOrder = ['top', 'bottom', 'footwear', 'accessories'] as const
-      const outfitLines = slotOrder.map(slot => {
-        const item = equippedItems[slot]
-        if (item) {
-          const desc = item.description ? ` — ${item.description}` : ''
-          return `- ${slot.charAt(0).toUpperCase() + slot.slice(1)}: ${item.title}${desc}`
-        }
-        // Show empty slots with appropriate default labels
-        const emptyLabel = slot === 'footwear' ? '(barefoot)' : '(none)'
-        return `- ${slot.charAt(0).toUpperCase() + slot.slice(1)}: ${emptyLabel}`
-      })
-      parts.push(`\n## Current Outfit\n${outfitLines.join('\n')}`)
+    // Current Outfit section — use canonical describeOutfit utility
+    const formatItem = (slot: string): string | null => {
+      const item = equippedItems[slot]
+      if (!item) return null
+      return item.description ? `${item.title} (${item.description})` : item.title
     }
+    const outfitDescription = describeOutfit({
+      top: formatItem('top'),
+      bottom: formatItem('bottom'),
+      footwear: formatItem('footwear'),
+      accessories: formatItem('accessories'),
+    })
+    parts.push(`\n## Current Outfit\n${outfitDescription}`)
 
     // Available Wardrobe section — non-equipped items, token-efficient
     // Collect IDs of equipped items so we can exclude them

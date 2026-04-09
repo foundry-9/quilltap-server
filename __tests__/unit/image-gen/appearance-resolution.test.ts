@@ -174,7 +174,7 @@ describe('Appearance Resolution Module', () => {
           characterName: 'Alice',
           physicalDescription: 'A young woman with long flowing red hair, vibrant green eyes, fair skin, wearing casual clothes',
           physicalDescriptionName: 'Default',
-          clothingDescription: 'Wearing Casual Outfit (Blue jeans and a white t-shirt), no bottom, barefoot, no accessories',
+          clothingDescription: '- **top:** Casual Outfit (Blue jeans and a white t-shirt)\n- **bottom:** bottomless\n- **footwear:** barefoot\n- **accessories:** no accessories\n',
           clothingSource: 'stored',
           wasSanitized: false,
         })
@@ -413,7 +413,7 @@ describe('Appearance Resolution Module', () => {
           characterName: 'Alice',
           physicalDescription: 'A young woman with long flowing red hair, vibrant green eyes, fair skin, wearing casual clothes',
           physicalDescriptionName: 'Default',
-          clothingDescription: 'Wearing Casual Outfit (Blue jeans and a white t-shirt), no bottom, barefoot, no accessories',
+          clothingDescription: '- **top:** Casual Outfit (Blue jeans and a white t-shirt)\n- **bottom:** bottomless\n- **footwear:** barefoot\n- **accessories:** no accessories\n',
           clothingSource: 'stored',
           wasSanitized: false,
         })
