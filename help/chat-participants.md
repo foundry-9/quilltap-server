@@ -100,7 +100,7 @@ Each character in the sidebar has a card with:
 
 **Type Badge:**
 - "Character" for regular characters
-- "Persona" for user personas
+- "User Character" for user-controlled characters
 - "NPC" for on-the-fly characters
 
 ### Connection Profile Dropdown

@@ -371,7 +371,7 @@ export default function NewChatPage() {
         controlledBy: sc.controlledBy,
       }))
 
-      // Add user-controlled character as a participant (replaces persona)
+      // Add user-controlled character as a participant
       if (selectedUserCharacterId) {
         participants.push({
           type: 'CHARACTER' as const,

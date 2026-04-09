@@ -269,7 +269,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
       }
 
       await fetchCharacter()
-      showSuccessToast(`Replaced ${type === 'char' ? 'character name' : 'persona name'} with ${template}`)
+      showSuccessToast(`Replaced ${type === 'char' ? 'character name' : 'user character name'} with ${template}`)
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to replace template')
       console.error('Template replacement failed', { error: err instanceof Error ? err.message : String(err) })

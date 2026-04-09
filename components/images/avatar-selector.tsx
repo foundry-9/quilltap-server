@@ -14,7 +14,7 @@ interface AvatarSelectorProps {
   onClose: () => void;
   onSelect: (imageId: string) => void | Promise<void>;
   currentImageId?: string;
-  contextType?: 'CHARACTER' | 'PERSONA' | 'CHAT';
+  contextType?: 'CHARACTER' | 'CHAT';
   contextId?: string;
 }
 

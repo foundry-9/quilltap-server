@@ -53,7 +53,6 @@ function createCharacterParticipant(overrides: Partial<ParticipantData> = {}): P
       talkativeness: 0.7,
       defaultImage: null,
     },
-    persona: null,
     connectionProfile: {
       id: 'profile-1',
       name: 'GPT-4',
@@ -64,16 +63,16 @@ function createCharacterParticipant(overrides: Partial<ParticipantData> = {}): P
   }
 }
 
-// Helper to create a persona (user) participant
-function createPersonaParticipant(overrides: Partial<ParticipantData> = {}): ParticipantData {
+// Helper to create a user-controlled character participant
+function createUserCharacterParticipant(overrides: Partial<ParticipantData> = {}): ParticipantData {
   return {
-    id: 'participant-persona-1',
-    type: 'PERSONA',
+    id: 'participant-user-1',
+    type: 'CHARACTER',
+    controlledBy: 'user',
     displayOrder: 0,
     isActive: true,
-    character: null,
-    persona: {
-      id: 'persona-1',
+    character: {
+      id: 'char-user-1',
       name: 'User',
       title: 'Human',
       avatarUrl: '/avatars/user.png',
@@ -139,7 +138,7 @@ describe('ParticipantCard', () => {
 
     it('renders persona name and title', () => {
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
       })
       render(<ParticipantCard {...props} />)
@@ -150,7 +149,7 @@ describe('ParticipantCard', () => {
 
     it('renders "You" badge for user participant', () => {
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
       })
       render(<ParticipantCard {...props} />)
@@ -354,7 +353,7 @@ describe('ParticipantCard', () => {
 
     it('does not show remove button for user participant', () => {
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
         canRemove: true,
         onRemove: jest.fn(),
@@ -478,7 +477,7 @@ describe('ParticipantCard', () => {
 
     it('renders disabled talkativeness slider for user participant', () => {
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
       })
       render(<ParticipantCard {...props} />)
@@ -528,7 +527,7 @@ describe('ParticipantCard', () => {
   describe('User participant with skip button', () => {
     it('shows Queue and Skip buttons for user participant with onSkip', () => {
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
         onSkip: jest.fn(),
         canSkip: true,
@@ -542,7 +541,7 @@ describe('ParticipantCard', () => {
     it('calls onSkip when skip button is clicked', () => {
       const onSkip = jest.fn()
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
         onSkip,
         canSkip: true,
@@ -557,7 +556,7 @@ describe('ParticipantCard', () => {
 
     it('disables skip button when canSkip is false', () => {
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
         onSkip: jest.fn(),
         canSkip: false,
@@ -570,7 +569,7 @@ describe('ParticipantCard', () => {
 
     it('disables skip button when generating', () => {
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
         isGenerating: true,
         onSkip: jest.fn(),
@@ -584,7 +583,7 @@ describe('ParticipantCard', () => {
 
     it('shows skip button with proper title when canSkip is true', () => {
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
         onSkip: jest.fn(),
         canSkip: true,
@@ -597,7 +596,7 @@ describe('ParticipantCard', () => {
 
     it('shows skip button with proper title when canSkip is false', () => {
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
         onSkip: jest.fn(),
         canSkip: false,
@@ -623,7 +622,7 @@ describe('ParticipantCard', () => {
 
     it('skip button has accessible title', () => {
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
         onSkip: jest.fn(),
         canSkip: true,
@@ -695,7 +694,7 @@ describe('ParticipantCard', () => {
     it('persona participant calls onQueue when action button clicked', () => {
       const onQueue = jest.fn()
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
         isGenerating: false,
         queuePosition: 0,
@@ -708,7 +707,7 @@ describe('ParticipantCard', () => {
       const queueButton = screen.getByRole('button', { name: /queue/i })
       fireEvent.click(queueButton)
 
-      expect(onQueue).toHaveBeenCalledWith('participant-persona-1')
+      expect(onQueue).toHaveBeenCalledWith('participant-user-1')
     })
   })
 
@@ -730,9 +729,9 @@ describe('ParticipantCard', () => {
       expect(select.tagName).toBe('SELECT')
     })
 
-    it('does not render dropdown for persona participant', () => {
+    it('does not render dropdown for user-controlled character participant', () => {
       const props = createDefaultProps({
-        participant: createPersonaParticipant(),
+        participant: createUserCharacterParticipant(),
         isUserParticipant: true,
         connectionProfiles: mockProfiles,
         onConnectionProfileChange: jest.fn(),

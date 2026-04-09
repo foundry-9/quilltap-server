@@ -53,7 +53,7 @@ interface ComputeTurnOrderOptions {
   isGenerating: boolean;
   /** The participant currently generating a response */
   respondingParticipantId?: string | null;
-  /** The user's participant ID (persona) */
+  /** The user's participant ID (user-controlled character) */
   userParticipantId: string | null;
 }
 
@@ -65,7 +65,7 @@ interface ComputeTurnOrderOptions {
  * 2. Next speaker from turnSelectionResult (#2 if generating, #1 if not)
  * 3. Queue entries (in order)
  * 4. Eligible participants (not spoken this cycle, not last speaker) sorted by talkativeness desc
- * 5. User persona (at their cycle position)
+ * 5. User character (at their cycle position)
  * 6. Already-spoken participants
  * 7. Inactive participants (position = null)
  */
@@ -139,7 +139,7 @@ export function computePredictedTurnOrder(options: ComputeTurnOrderOptions): Tur
     addEntry(p.id, 'eligible');
   }
 
-  // 5. User persona at their cycle position
+  // 5. User character at their cycle position
   if (userParticipantId && !placed.has(userParticipantId)) {
     const userP = participants.find(p => p.id === userParticipantId);
     if (userP && isParticipantPresent(userP.status || 'active')) {

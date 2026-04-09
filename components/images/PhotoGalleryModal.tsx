@@ -45,8 +45,8 @@ type ChatGalleryProps = BaseGalleryProps & {
   chatId: string
   characterId?: string
   characterName?: string
-  personaId?: string
-  personaName?: string
+  userCharacterId?: string
+  userCharacterName?: string
   onImageDeleted?: (fileId: string) => void
 }
 
@@ -56,13 +56,13 @@ type CharacterGalleryProps = BaseGalleryProps & {
   characterName: string
 }
 
-type PersonaGalleryProps = BaseGalleryProps & {
-  mode: 'persona'
-  personaId: string
-  personaName: string
+type UserCharacterGalleryProps = BaseGalleryProps & {
+  mode: 'user-character'
+  userCharacterId: string
+  userCharacterName: string
 }
 
-type PhotoGalleryModalProps = ChatGalleryProps | CharacterGalleryProps | PersonaGalleryProps
+type PhotoGalleryModalProps = ChatGalleryProps | CharacterGalleryProps | UserCharacterGalleryProps
 
 type GalleryItem =
   | { kind: 'chat'; data: ChatFile }
@@ -81,7 +81,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
   const { mode, isOpen, onClose } = props
   const chatId = mode === 'chat' ? props.chatId : undefined
   const characterId = mode === 'character' ? props.characterId : undefined
-  const personaId = mode === 'persona' ? props.personaId : undefined
+  const userCharacterId = mode === 'user-character' ? props.userCharacterId : undefined
 
   const thumbnailSize = THUMBNAIL_SIZES[thumbnailSizeIndex]
   const selectedItem = selectedIndex >= 0 ? items[selectedIndex] : null
@@ -91,14 +91,14 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
       ? 'Chat Photos'
       : mode === 'character'
       ? `${props.characterName}'s Photos`
-      : `${props.personaName}'s Photos`
+      : `${(props as UserCharacterGalleryProps).userCharacterName}'s Photos`
 
   const emptyStateText =
     mode === 'chat'
       ? 'No photos in this chat'
       : mode === 'character'
       ? 'No photos tagged to this character'
-      : 'No photos tagged to this persona'
+      : 'No photos tagged to this character'
 
   const loadItems = useCallback(async () => {
     if (!isOpen) return
@@ -115,10 +115,10 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
 
         const imageFiles = (data.files || []).filter((f: ChatFile) => f.mimeType.startsWith('image/'))
         setItems(imageFiles.map((file: ChatFile) => ({ kind: 'chat', data: file })))
-      } else if (mode !== 'chat' && (characterId || personaId)) {
+      } else if (mode !== 'chat' && (characterId || userCharacterId)) {
         const params = new URLSearchParams({
-          tagType: mode === 'character' ? 'CHARACTER' : 'PERSONA',
-          tagId: mode === 'character' ? (characterId as string) : (personaId as string),
+          tagType: 'CHARACTER',
+          tagId: mode === 'character' ? (characterId as string) : (userCharacterId as string),
         })
         const response = await fetch(`/api/v1/images?${params.toString()}`)
         const data = await response.json()
@@ -135,7 +135,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     } finally {
       setLoading(false)
     }
-  }, [isOpen, mode, chatId, characterId, personaId])
+  }, [isOpen, mode, chatId, characterId, userCharacterId])
 
   useEffect(() => {
     if (isOpen) {
@@ -335,8 +335,8 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
           onDelete={() => handleDeleteChatFile(selectedItem.data.id)}
           characterId={mode === 'chat' ? props.characterId : undefined}
           characterName={mode === 'chat' ? props.characterName : undefined}
-          personaId={mode === 'chat' ? props.personaId : undefined}
-          personaName={mode === 'chat' ? props.personaName : undefined}
+          userCharacterId={mode === 'chat' ? props.userCharacterId : undefined}
+          userCharacterName={mode === 'chat' ? props.userCharacterName : undefined}
         />
       )}
 

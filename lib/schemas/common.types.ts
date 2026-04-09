@@ -38,7 +38,7 @@ export type EmbeddingProfileProvider = z.infer<typeof EmbeddingProfileProviderEn
 export const RoleEnum = z.enum(['SYSTEM', 'USER', 'ASSISTANT', 'TOOL']);
 export type Role = z.infer<typeof RoleEnum>;
 
-export const ImageTagTypeEnum = z.enum(['CHARACTER', 'PERSONA', 'CHAT', 'THEME']);
+export const ImageTagTypeEnum = z.enum(['CHARACTER', 'CHAT', 'THEME']);
 export type ImageTagType = z.infer<typeof ImageTagTypeEnum>;
 
 export const AvatarDisplayModeEnum = z.enum(['ALWAYS', 'GROUP_ONLY', 'NEVER']);

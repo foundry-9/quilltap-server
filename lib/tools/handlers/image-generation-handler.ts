@@ -357,7 +357,7 @@ interface PromptExpansionOptions {
 }
 
 /**
- * Expand prompt with character/persona placeholders using cheap LLM
+ * Expand prompt with character/user character placeholders using cheap LLM
  */
 async function expandPromptWithDescriptions(
   originalPrompt: string,
@@ -838,7 +838,7 @@ async function expandPromptWithContext(
   expandedPrompt: string;
   effectiveImageProfile: any;
 }> {
-  // 6. Expand prompt with character/persona descriptions if needed
+  // 6. Expand prompt with character/user character descriptions if needed
   let expandedPrompt = toolInput.prompt;
   try {
     const expandResult = await expandPromptWithDescriptions(

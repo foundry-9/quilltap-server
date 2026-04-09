@@ -253,8 +253,8 @@
   /* Entity-type badge colors — warm-tinted variants */
   --qt-badge-character-bg: hsl(20 45% 25% / 0.15);
   --qt-badge-character-fg: hsl(20 45% 38%);
-  --qt-badge-persona-bg: hsl(43 75% 55% / 0.15);
-  --qt-badge-persona-fg: hsl(43 70% 35%);
+  --qt-badge-user-character-bg: hsl(43 75% 55% / 0.15);
+  --qt-badge-user-character-fg: hsl(43 70% 35%);
   --qt-badge-chat-bg: hsl(142 65% 38% / 0.15);
   --qt-badge-chat-fg: hsl(142 65% 30%);
   --qt-badge-tag-bg: hsl(25 85% 53% / 0.15);
@@ -443,8 +443,8 @@
   /* Entity badge tokens — brighter for dark backgrounds */
   --qt-badge-character-bg: hsl(20 45% 35% / 0.3);
   --qt-badge-character-fg: hsl(20 55% 68%);
-  --qt-badge-persona-bg: hsl(43 75% 55% / 0.25);
-  --qt-badge-persona-fg: hsl(43 75% 68%);
+  --qt-badge-user-character-bg: hsl(43 75% 55% / 0.25);
+  --qt-badge-user-character-fg: hsl(43 75% 68%);
   --qt-badge-chat-bg: hsl(142 65% 38% / 0.3);
   --qt-badge-chat-fg: hsl(142 65% 62%);
   --qt-badge-tag-bg: hsl(25 85% 53% / 0.3);

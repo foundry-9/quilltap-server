@@ -43,8 +43,8 @@ const mockFactoryRepos = {
     removeDescription: jest.fn(),
     getDescription: jest.fn(),
     getDescriptions: jest.fn(),
-    addPersona: jest.fn(),
-    removePersona: jest.fn(),
+    addPartnerLink: jest.fn(),
+    removePartnerLink: jest.fn(),
   },
   chats: {
     findById: jest.fn(),

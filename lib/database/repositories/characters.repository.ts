@@ -250,54 +250,54 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   // ============================================================================
-  // PERSONA LINK OPERATIONS
+  // PARTNER LINK OPERATIONS (legacy personaLinks field)
   // ============================================================================
 
   /**
-   * Add a persona link to a character
+   * Add a partner link to a character
    * @param characterId The character ID
-   * @param personaId The persona ID
-   * @param isDefault Whether this persona should be the default
+   * @param partnerId The partner character ID
+   * @param isDefault Whether this partner should be the default
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
-  async addPersona(characterId: string, personaId: string, isDefault = false): Promise<Character | null> {
+  async addPartnerLink(characterId: string, partnerId: string, isDefault = false): Promise<Character | null> {
     return this.safeQuery(
       async () => {
         const character = await this.findById(characterId);
         if (!character) {
-          logger.warn('Character not found for persona link addition', { characterId });
+          logger.warn('Character not found for partner link addition', { characterId });
           return null;
         }
 
-        const existing = character.personaLinks.find((link) => link.personaId === personaId);
+        const existing = character.personaLinks.find((link) => link.personaId === partnerId);
         if (!existing) {
-          character.personaLinks.push({ personaId, isDefault });
+          character.personaLinks.push({ personaId: partnerId, isDefault });
           return await this.update(characterId, { personaLinks: character.personaLinks });
         }
         return character;
       },
-      'Error adding persona link to character',
-      { characterId, personaId }
+      'Error adding partner link to character',
+      { characterId, partnerId }
     );
   }
 
   /**
-   * Remove a persona link from a character
+   * Remove a partner link from a character
    * @param characterId The character ID
-   * @param personaId The persona ID
+   * @param partnerId The partner character ID
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
-  async removePersona(characterId: string, personaId: string): Promise<Character | null> {
+  async removePartnerLink(characterId: string, partnerId: string): Promise<Character | null> {
     return this.safeQuery(
       async () => {
         const character = await this.findById(characterId);
         if (!character) {
-          logger.warn('Character not found for persona link removal', { characterId });
+          logger.warn('Character not found for partner link removal', { characterId });
           return null;
         }
 
         const beforeCount = character.personaLinks.length;
-        character.personaLinks = character.personaLinks.filter((link) => link.personaId !== personaId);
+        character.personaLinks = character.personaLinks.filter((link) => link.personaId !== partnerId);
         const afterCount = character.personaLinks.length;
 
         if (beforeCount !== afterCount) {
@@ -305,8 +305,8 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         }
         return character;
       },
-      'Error removing persona link from character',
-      { characterId, personaId }
+      'Error removing partner link from character',
+      { characterId, partnerId }
     );
   }
 

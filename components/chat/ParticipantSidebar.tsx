@@ -172,10 +172,10 @@ export function ParticipantSidebar({
     return turnSelectionResult?.nextSpeakerId ?? null
   }, [isGenerating, respondingParticipantId, turnState.lastSpeakerId, turnSelectionResult?.nextSpeakerId])
 
-  // Count active characters (not including personas)
+  // Count active characters (not including user-controlled participants)
   const activeCharacterCount = useMemo(() => {
-    return participants.filter(p => p.type === 'CHARACTER' && p.isActive).length
-  }, [participants])
+    return participants.filter(p => p.type === 'CHARACTER' && p.isActive && p.controlledBy !== 'user' && p.id !== userParticipantId).length
+  }, [participants, userParticipantId])
 
   // Count all active participants (characters + personas) for whisper eligibility
   const activeParticipantCount = useMemo(() => {
@@ -238,10 +238,10 @@ export function ParticipantSidebar({
             // Show pulsating animation during both waiting-for-response AND streaming phases
             const isActivelyGenerating = currentSpeakerId === participant.id && isGenerating
 
-            // Get participant name and avatar from character or persona
-            const name = participant.character?.name || participant.persona?.name || 'Unknown'
-            const avatarUrl = participant.character?.avatarUrl || participant.persona?.avatarUrl || null
-            const defaultImage = participant.character?.defaultImage || participant.persona?.defaultImage || null
+            // Get participant name and avatar from character data
+            const name = participant.character?.name || 'Unknown'
+            const avatarUrl = participant.character?.avatarUrl || null
+            const defaultImage = participant.character?.defaultImage || null
 
             // Get position badge class for collapsed view
             const positionBadgeClass = turnEntry ? getCollapsedPositionBadgeClass(turnEntry.status) : ''

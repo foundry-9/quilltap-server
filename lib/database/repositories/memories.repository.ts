@@ -773,40 +773,17 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   // ============================================================================
 
   /**
-   * Find all memories for a specific persona
-   * @deprecated Use findByAboutCharacterId instead.
-   * Characters Not Personas - Phase 7: personaId is migrated to aboutCharacterId.
-   * @param personaId The persona ID
-   * @returns Promise<Memory[]> Array of memories associated with the persona
-   */
-  async findByPersonaId(personaId: string): Promise<Memory[]> {
-    return this.safeQuery(
-      async () => {
-        const memories = await this.findByFilter({ personaId });
-        return memories;
-      },
-      'Error finding memories by persona ID',
-      { personaId },
-      []
-    );
-  }
-
-  /**
-   * Find all memories about a specific character (including former personas)
-   * Characters Not Personas - Phase 7: This replaces findByPersonaId.
-   * After migration, aboutCharacterId includes both inter-character memories
-   * and former persona-related memories.
+   * Find all memories about a specific character
    * @param aboutCharacterId The character ID this memory is about
    * @returns Promise<Memory[]> Array of memories about the character
    */
   async findByAboutCharacterId(aboutCharacterId: string): Promise<Memory[]> {
     return this.safeQuery(
       async () => {
-        // Query both aboutCharacterId (new) and personaId (legacy, for backward compat)
         const memories = await this.findByFilter({
           $or: [
             { aboutCharacterId },
-            { personaId: aboutCharacterId }, // Legacy support during migration
+            { personaId: aboutCharacterId }, // Legacy DB field from pre-migration data
           ],
         });
         return memories;
@@ -821,7 +798,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * Count memories containing specific text
    * Searches in content, summary, and keywords fields
    * @param characterId Optional character ID filter
-   * @param personaId Optional persona ID filter
+   * @param personaId Optional legacy personaId DB field filter (typically null)
    * @param chatId Optional chat ID filter
    * @param searchText Text to search for
    * @returns Number of memories containing the text
@@ -870,7 +847,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * Find memories containing specific text
    * Searches in content, summary, and keywords fields
    * @param characterId Optional character ID filter
-   * @param personaId Optional persona ID filter
+   * @param personaId Optional legacy personaId DB field filter (typically null)
    * @param chatId Optional chat ID filter
    * @param searchText Text to search for
    * @returns Array of memories containing the text

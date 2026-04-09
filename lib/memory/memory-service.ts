@@ -37,7 +37,7 @@ export interface CreateMemoryOptions {
   tags?: string[]
   /** Importance score (0-1) */
   importance?: number
-  /** Associated persona ID */
+  /** Associated user character ID */
   personaId?: string | null
   /** Character ID this memory is about (for inter-character memories) */
   aboutCharacterId?: string | null

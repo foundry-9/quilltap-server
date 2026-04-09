@@ -24,7 +24,7 @@ interface Chat {
     id: string
     name: string
   }
-  persona?: {
+  userCharacter?: {
     id: string
     name: string
     title?: string | null
@@ -85,7 +85,7 @@ function transformChatToCardData(chat: Chat): ChatCardData {
     updatedAt: chat.updatedAt,
     lastMessageAt: chat.lastMessageAt,
     project: chat.project || null,
-    persona: chat.persona || null,
+    userCharacter: chat.userCharacter || null,
     previewText: getPreviewText(chat.messages),
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     isDangerousChat: chat.isDangerousChat === true,

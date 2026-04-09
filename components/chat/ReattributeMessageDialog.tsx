@@ -3,7 +3,7 @@
 /**
  * ReattributeMessageDialog Component
  *
- * Dialog for changing which participant (character/persona) is attributed
+ * Dialog for changing which participant (character) is attributed
  * as the sender of a message. When re-attributed, associated memories
  * are deleted.
  */
@@ -15,19 +15,8 @@ import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface ParticipantData {
   id: string
-  type: 'CHARACTER' | 'PERSONA'
+  type: 'CHARACTER'
   character?: {
-    id: string
-    name: string
-    title?: string | null
-    avatarUrl?: string
-    defaultImage?: {
-      id: string
-      filepath: string
-      url?: string
-    } | null
-  } | null
-  persona?: {
     id: string
     name: string
     title?: string | null
@@ -106,7 +95,7 @@ export default function ReattributeMessageDialog({
       const result = await response.json()
 
       const selectedParticipant = participants.find(p => p.id === selectedParticipantId)
-      const name = selectedParticipant?.character?.name || selectedParticipant?.persona?.name || 'participant'
+      const name = selectedParticipant?.character?.name || 'participant'
 
       showSuccessToast(
         result.memoriesDeleted > 0
@@ -127,15 +116,15 @@ export default function ReattributeMessageDialog({
   }
 
   const getParticipantName = (participant: ParticipantData): string => {
-    return participant.character?.name || participant.persona?.name || 'Unknown'
+    return participant.character?.name || 'Unknown'
   }
 
   const getParticipantTitle = (participant: ParticipantData): string | null | undefined => {
-    return participant.character?.title || participant.persona?.title
+    return participant.character?.title
   }
 
   const getParticipantAvatarSrc = (participant: ParticipantData) => {
-    return participant.character || participant.persona || null
+    return participant.character || null
   }
 
   if (!isOpen) return null

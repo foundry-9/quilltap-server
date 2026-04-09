@@ -44,7 +44,7 @@ jest.mock('@/components/chat/ParticipantCard', () => ({
       data-has-stop-streaming={onStopStreaming ? 'true' : 'false'}
     >
       <span className="participant-name">
-        {participant.type === 'CHARACTER' ? participant.character?.name : participant.persona?.name}
+        {participant.character?.name}
       </span>
       <button
         data-testid={`nudge-${participant.id}`}
@@ -114,13 +114,13 @@ function createCharacterParticipant(id: string, name: string, displayOrder: numb
 function createPersonaParticipant(id: string, name: string, displayOrder: number, isActive = true): ParticipantData {
   return {
     id,
-    type: 'PERSONA',
+    type: 'CHARACTER',
     controlledBy: 'user',
     displayOrder,
     isActive,
     status: isActive ? 'active' : 'absent',
-    persona: {
-      id: `persona-${id}`,
+    character: {
+      id: `char-${id}`,
       name,
     },
   }

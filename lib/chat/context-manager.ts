@@ -184,8 +184,8 @@ export interface BuildContextOptions {
   userId: string
   /** Character for system prompt (the character who will respond) */
   character: Character
-  /** Persona information (optional) */
-  persona?: { name: string; description: string } | null
+  /** User character information (optional) */
+  userCharacter?: { name: string; description: string } | null
   /** Chat metadata */
   chat: ChatMetadataBase
   /** Existing messages in the conversation */
@@ -332,7 +332,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     modelName,
     userId,
     character,
-    persona,
+    userCharacter,
     chat,
     existingMessages,
     newUserMessage,
@@ -427,7 +427,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
   const systemPrompt = buildSystemPrompt(
     character,
-    persona,
+    userCharacter,
     otherParticipantsInfo,
     roleplayTemplate,
     toolInstructions,
@@ -575,7 +575,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           hasCachedResult: !!cachedCompressionResult,
         })
 
-        const userName = persona?.name || 'User'
+        const userName = userCharacter?.name || 'User'
 
         try {
           compressionResult = await applyContextCompression(
@@ -1056,7 +1056,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const otherParticipantNames = otherParticipantsInfo?.map(p => p.name)
   const identityReminder = buildIdentityReinforcement(
     character.name,
-    persona?.name || 'User',
+    userCharacter?.name || 'User',
     isMultiCharacter ? otherParticipantNames : undefined,
   )
   fullSystemContent += '\n\n' + identityReminder

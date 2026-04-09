@@ -109,8 +109,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       for (const p of chat.participants) {
         if (p.character?.name) {
           names[p.id] = p.character.name
-        } else if (p.persona?.name) {
-          names[p.id] = p.persona.name
+        } else if (p.character?.name && p.controlledBy === 'user') {
+          names[p.id] = p.character.name
         }
       }
     }
@@ -119,14 +119,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const handleWhisper = useCallback((participantId: string) => {
     const participant = chat?.participants.find(p => p.id === participantId)
-    const name = participant?.character?.name || participant?.persona?.name || 'Unknown'
+    const name = participant?.character?.name || 'Unknown'
     setWhisperTarget({ participantId, name })
   }, [chat?.participants])
 
   const handleGiftItem = useCallback((participantId: string) => {
     const participant = chat?.participants.find(p => p.id === participantId)
     const characterId = participant?.character?.id
-    const name = participant?.character?.name || participant?.persona?.name || 'Unknown'
+    const name = participant?.character?.name || 'Unknown'
     if (characterId) {
       setGiftTarget({ participantId, characterId, name })
     }
@@ -748,15 +748,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (participant) {
         if (participant.type === 'CHARACTER' && participant.character) {
           return { name: participant.character.name, title: participant.character.title, avatarUrl: participant.character.avatarUrl, defaultImage: participant.character.defaultImage }
-        } else if (participant.type === 'PERSONA' && participant.persona) {
-          return { name: participant.persona.name, title: participant.persona.title, avatarUrl: participant.persona.avatarUrl, defaultImage: participant.persona.defaultImage }
         }
       }
     }
     if (message.role === 'USER') {
-      const persona = participantsWithImpersonation.getFirstPersona()
-      if (persona) {
-        return { name: persona.name, title: persona.title, avatarUrl: persona.avatarUrl, defaultImage: persona.defaultImage }
+      const userChar = participantsWithImpersonation.getFirstUserCharacter()
+      if (userChar) {
+        return { name: userChar.name, title: userChar.title, avatarUrl: userChar.avatarUrl, defaultImage: userChar.defaultImage }
       } else if (chat?.user) {
         return { name: chat.user.name || 'User', title: null, avatarUrl: chat.user.image ?? null, defaultImage: null }
       }
@@ -1068,7 +1066,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           handleConflictResolution={handleConflictResolution}
           resolvingConflict={resolvingConflict}
           getFirstCharacter={participantsWithImpersonation.getFirstCharacter}
-          getFirstPersona={participantsWithImpersonation.getFirstPersona}
+          getFirstUserCharacter={participantsWithImpersonation.getFirstUserCharacter}
           onCharacterAdded={chatControls.handleCharacterAdded}
           onReattributed={handleReattributed}
           onConfirmStopImpersonation={impersonation.handleConfirmStopImpersonation}

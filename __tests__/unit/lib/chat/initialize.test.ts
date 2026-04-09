@@ -238,7 +238,7 @@ describe('chat/initialize', () => {
       expect(result.firstMessage).toBeDefined()
     })
 
-    it('should set both persona and userCharacter for backwards compatibility', async () => {
+    it('should set userCharacter when user character provided', async () => {
       const aiCharacter = createMockCharacter({
         id: 'char-1',
         name: 'Alice',
@@ -256,10 +256,6 @@ describe('chat/initialize', () => {
 
       const result = await buildChatContext('char-1', 'char-2')
 
-      expect(result.persona).toMatchObject({
-        id: 'char-2',
-        name: 'Bob',
-      })
       expect(result.userCharacter).toMatchObject({
         id: 'char-2',
         name: 'Bob',

@@ -107,7 +107,7 @@ export function useParticipants({
     return chatParticipants.map(p => ({
       id: p.id,
       type: p.type,
-      controlledBy: p.controlledBy ?? (p.type === 'PERSONA' ? 'user' : 'llm'),
+      controlledBy: p.controlledBy ?? 'llm',
       displayOrder: p.displayOrder,
       isActive: p.isActive,
       status: (p.status as 'active' | 'silent' | 'absent' | 'removed') || (p.isActive ? 'active' : 'absent'),
@@ -119,13 +119,7 @@ export function useParticipants({
         talkativeness: p.character.talkativeness ?? 0.5,
         defaultImage: p.character.defaultImage,
       } : null,
-      persona: p.persona ? {
-        id: p.persona.id,
-        name: p.persona.name,
-        title: p.persona.title,
-        avatarUrl: p.persona.avatarUrl,
-        defaultImage: p.persona.defaultImage,
-      } : null,
+      // User-controlled characters use the same .character field as LLM characters
       connectionProfile: p.connectionProfile,
     }))
   }, [chatParticipants])
@@ -143,10 +137,10 @@ export function useParticipants({
     }> = []
 
     for (const p of participantData) {
-      const isUserControlled = p.type === 'PERSONA' || p.controlledBy === 'user'
+      const isUserControlled = p.controlledBy === 'user'
       const isImpersonating = impersonatingParticipantIds.includes(p.id)
       if ((isUserControlled || isImpersonating) && p.isActive) {
-        const entity = p.character || p.persona
+        const entity = p.character
         if (entity) {
           result.push({
             participantId: p.id,
@@ -215,17 +209,17 @@ export function useParticipants({
     return chatParticipants.find(p => p.id === participantId) ?? null
   }, [chatParticipants])
 
-  // Helper functions to get character/persona from participants
+  // Helper functions to get character from participants
   const getFirstCharacterParticipant = useCallback(() => {
     return chatParticipants?.find(p => p.type === 'CHARACTER' && p.isActive)
   }, [chatParticipants])
 
-  const getFirstPersonaParticipant = useCallback(() => {
-    return chatParticipants?.find(p => p.type === 'PERSONA' && p.isActive)
+  const getFirstUserCharacterParticipant = useCallback(() => {
+    return chatParticipants?.find(p => p.controlledBy === 'user' && p.isActive)
   }, [chatParticipants])
 
   const getFirstCharacter = useCallback(() => getFirstCharacterParticipant()?.character, [getFirstCharacterParticipant])
-  const getFirstPersona = useCallback(() => getFirstPersonaParticipant()?.persona, [getFirstPersonaParticipant])
+  const getFirstUserCharacter = useCallback(() => getFirstUserCharacterParticipant()?.character, [getFirstUserCharacterParticipant])
   const getFirstConnectionProfile = useCallback(() => getFirstCharacterParticipant()?.connectionProfile, [getFirstCharacterParticipant])
 
   return {
@@ -244,9 +238,9 @@ export function useParticipants({
     effectiveNextSpeakerId,
     getParticipantById,
     getFirstCharacterParticipant,
-    getFirstPersonaParticipant,
+    getFirstUserCharacterParticipant,
     getFirstCharacter,
-    getFirstPersona,
+    getFirstUserCharacter,
     getFirstConnectionProfile,
   }
 }

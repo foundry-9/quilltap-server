@@ -24,7 +24,7 @@ interface ImageProfilePickerProps {
   value?: string | null
   onChange?: (profileId: string | null) => void
   characterId?: string
-  personaId?: string
+  userCharacterId?: string
   disabled?: boolean
 }
 
@@ -32,7 +32,7 @@ export function ImageProfilePicker({
   value,
   onChange,
   characterId,
-  personaId,
+  userCharacterId,
   disabled,
 }: ImageProfilePickerProps) {
   const [profiles, setProfiles] = useState<ImageProfile[]>([])
@@ -49,8 +49,8 @@ export function ImageProfilePicker({
         if (characterId) {
           url.searchParams.set('sortByCharacter', characterId)
         }
-        if (personaId) {
-          url.searchParams.set('sortByPersona', personaId)
+        if (userCharacterId) {
+          url.searchParams.set('sortByUserCharacter', userCharacterId)
         }
 
         const res = await fetch(url.toString())
@@ -66,7 +66,7 @@ export function ImageProfilePicker({
     }
 
     fetchProfiles()
-  }, [characterId, personaId])
+  }, [characterId, userCharacterId])
 
   if (loading) {
     return (

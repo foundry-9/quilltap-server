@@ -276,7 +276,7 @@ async function processMessage(
   // Resolve user identity through fallback chain:
   // 1. User-controlled character in chat → 2. Sole user-controlled character → 3. User profile → 4. "User"
   const resolvedIdentity = await resolveUserIdentity(repos, userId, chat)
-  const persona: { name: string; description: string } | null = {
+  const userCharacter: { name: string; description: string } | null = {
     name: resolvedIdentity.name,
     description: resolvedIdentity.description,
   }
@@ -878,7 +878,7 @@ async function processMessage(
       character,
       characterParticipant,
       connectionProfile: streamingState.effectiveProfile,
-      persona,
+      userCharacter,
       isMultiCharacter,
       participantCharacters,
       roleplayTemplate,

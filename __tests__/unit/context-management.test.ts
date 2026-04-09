@@ -873,7 +873,7 @@ describe('Context Manager', () => {
         modelName: 'gpt-4o',
         userId: 'user',
         character: characterA,
-        persona: { name: 'Alex', description: 'Curious' },
+        userCharacter: { name: 'Alex', description: 'Curious' },
         chat: {
           id: 'chat-1',
           userId: 'user',

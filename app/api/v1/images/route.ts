@@ -29,7 +29,7 @@ const importFromUrlSchema = z.object({
   tags: z
     .array(
       z.object({
-        tagType: z.enum(['CHARACTER', 'PERSONA', 'CHAT', 'THEME']),
+        tagType: z.enum(['CHARACTER', 'CHAT', 'THEME']),
         tagId: z.string(),
       })
     )
@@ -42,7 +42,7 @@ const generateImageSchema = z.object({
   tags: z
     .array(
       z.object({
-        tagType: z.enum(['CHARACTER', 'PERSONA', 'CHAT', 'THEME']),
+        tagType: z.enum(['CHARACTER', 'CHAT', 'THEME']),
         tagId: z.string(),
       })
     )
@@ -437,7 +437,7 @@ async function handleUploadOrImport(request: NextRequest, user: { id: string }, 
 
 
     // Parse tags if provided
-    let tags: Array<{ tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME'; tagId: string }> | undefined;
+    let tags: Array<{ tagType: 'CHARACTER' | 'CHAT' | 'THEME'; tagId: string }> | undefined;
     if (tagsJson) {
       try {
         tags = JSON.parse(tagsJson);

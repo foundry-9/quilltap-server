@@ -11,12 +11,10 @@ interface MemoryCreationDialogProps {
     id: string
     title: string
     participants: Array<{
-      type: 'CHARACTER' | 'PERSONA'
+      type: 'CHARACTER'
       characterId?: string | null
-      personaId?: string | null
       connectionProfileId?: string | null
       character?: { id: string; name: string } | null
-      persona?: { id: string; name: string } | null
     }>
     messages: Array<{
       id: string

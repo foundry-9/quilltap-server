@@ -495,13 +495,13 @@ describe('First Message Context Builder', () => {
       expect(result.participantMemories).toEqual([])
     })
 
-    it('skips non-CHARACTER participants', async () => {
+    it('skips user-controlled participants with no characterId', async () => {
       const participants = [
         {
           id: 'persona-participant',
-          type: 'PERSONA' as const,
+          type: 'CHARACTER' as const,
           characterId: null,
-          personaId: 'persona-123',
+          personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
 

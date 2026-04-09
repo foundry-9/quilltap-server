@@ -45,7 +45,7 @@
   }
 
   /**
-   * Entity card - for character, persona, and chat list items
+   * Entity card - for character and chat list items
    * Extends qt-card-interactive with flex column layout
    */
   .qt-entity-card {

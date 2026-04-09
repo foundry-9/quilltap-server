@@ -63,7 +63,7 @@ export function SystemPromptsTab({
                   <TemplateDisplay
                     content={prompt.content}
                     characterName={character.name}
-                    personaName={defaultPartnerName}
+                    userCharacterName={defaultPartnerName}
                   />
                 </code>
               </pre>

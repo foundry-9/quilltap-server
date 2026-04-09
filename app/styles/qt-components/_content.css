@@ -144,7 +144,7 @@
   .qt-badge-destructive,
   .qt-badge-info,
   .qt-badge-character,
-  .qt-badge-persona,
+  .qt-badge-user-character,
   .qt-badge-chat,
   .qt-badge-tag,
   .qt-badge-memory,
@@ -152,7 +152,7 @@
   .qt-badge-project,
   .qt-badge-characters,
   .qt-badge-chats,
-  .qt-badge-personas,
+  .qt-badge-user-characters,
   .qt-badge-enabled,
   .qt-badge-disabled,
   .qt-badge-related,
@@ -1256,9 +1256,9 @@
   /**
    * Persona badge (purple)
    */
-  .qt-badge-persona {
-    background-color: var(--qt-badge-persona-bg);
-    color: var(--qt-badge-persona-fg);
+  .qt-badge-user-character {
+    background-color: var(--qt-badge-user-character-bg);
+    color: var(--qt-badge-user-character-fg);
   }
 
   /**
@@ -1323,11 +1323,11 @@
   }
 
   /**
-   * Personas badge (purple) - for dashboard persona count
+   * User characters badge (purple) - for dashboard user character count
    */
-  .qt-badge-personas {
-    background-color: var(--qt-badge-persona-bg);
-    color: var(--qt-badge-persona-fg);
+  .qt-badge-user-characters {
+    background-color: var(--qt-badge-user-character-bg);
+    color: var(--qt-badge-user-character-fg);
   }
 
   /* ==========================================================================

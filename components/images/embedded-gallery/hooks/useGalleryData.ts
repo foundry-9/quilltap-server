@@ -35,17 +35,15 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
   }
 
   const isImageTagged = (image: GalleryImage) => {
-    // Check for both CHARACTER and legacy PERSONA tags (for backwards compatibility after migration)
-    // After migration, personas become characters with the same ID, so we check both tag types
     return image.tags?.some(tag =>
-      tag.tagId === entityId && (tag.tagType === 'CHARACTER' || tag.tagType === 'PERSONA')
+      tag.tagId === entityId && tag.tagType === 'CHARACTER'
     ) ?? false
   }
 
   const handleToggleTag = async (image: GalleryImage, entityName: string) => {
-    // Find existing tag for this entity (could be CHARACTER or legacy PERSONA)
+    // Find existing tag for this entity
     const existingTag = image.tags?.find(tag =>
-      tag.tagId === entityId && (tag.tagType === 'CHARACTER' || tag.tagType === 'PERSONA')
+      tag.tagId === entityId && tag.tagType === 'CHARACTER'
     )
     const isTagged = !!existingTag
 
@@ -85,7 +83,7 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
         return {
           ...img,
           tags: isTagged
-            ? currentTags.filter(t => t.tagId !== entityId || (t.tagType !== 'CHARACTER' && t.tagType !== 'PERSONA'))
+            ? currentTags.filter(t => t.tagId !== entityId || t.tagType !== 'CHARACTER')
             : [...currentTags, newTag]
         }
       }))

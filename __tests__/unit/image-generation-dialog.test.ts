@@ -306,7 +306,7 @@ describe('Image Generation Dialog - API Integration', () => {
         profileId: '550e8400-e29b-41d4-a716-446655440000',
         tags: [
           { tagType: 'CHARACTER', tagId: 'char-123' },
-          { tagType: 'PERSONA', tagId: 'persona-456' },
+          { tagType: 'CHARACTER', tagId: 'persona-456' },
           { tagType: 'CHAT', tagId: 'chat-789' },
         ],
       };
@@ -321,7 +321,7 @@ describe('Image Generation Dialog - API Integration', () => {
               mimeType: 'image/png',
               tags: [
                 { tagType: 'CHARACTER', tagId: 'char-123' },
-                { tagType: 'PERSONA', tagId: 'persona-456' },
+                { tagType: 'CHARACTER', tagId: 'persona-456' },
                 { tagType: 'CHAT', tagId: 'chat-789' },
               ],
             },

@@ -216,9 +216,9 @@ async function processHelpResponse(
     apiKey = apiKeyData.key_value
   }
 
-  // Get persona (user profile)
+  // Get user character identity (from user profile)
   const userSettings = await repos.users.findById(userId)
-  const persona = userSettings ? { name: userSettings.name || 'User', description: '' } : null
+  const userCharacter = userSettings ? { name: userSettings.name || 'User', description: '' } : null
 
   // Get other character names for multi-character context
   const otherCharacterNames: string[] = []
@@ -275,7 +275,7 @@ async function processHelpResponse(
   // Build help-specific system prompt
   const systemPrompt = buildHelpChatSystemPrompt({
     character,
-    persona,
+    userCharacter,
     pageContext: primaryContext,
     additionalPageContexts: additionalContexts,
     otherCharacterNames: otherCharacterNames.length > 0 ? otherCharacterNames : undefined,
@@ -665,7 +665,7 @@ async function triggerAsyncTasks(
             characterId: character.id,
             characterName: character.name,
             characterPronouns: character.pronouns,
-            personaName: (await repos.users.findById(userId))?.name || 'User',
+            userCharacterName: (await repos.users.findById(userId))?.name || 'User',
             chatId,
             userMessage: lastUserMsg.content,
             assistantMessage: lastAssistantMsg.content,

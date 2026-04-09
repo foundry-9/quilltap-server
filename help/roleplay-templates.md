@@ -46,7 +46,7 @@ When a template is active in a chat:
 Templates can include placeholders that get replaced with actual names:
 
 - **{{char}}** — Replaced with the character's name
-- **{{user}}** — Replaced with the user's name or persona
+- **{{user}}** — Replaced with the user's name or user character name
 
 This allows templates to reference character and user names dynamically.
 

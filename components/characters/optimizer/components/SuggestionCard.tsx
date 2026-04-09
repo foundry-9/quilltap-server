@@ -43,7 +43,7 @@ const FIELD_BADGE_CLASS: Record<string, string> = {
   firstMessage: 'qt-badge-message',
   systemPrompt: 'qt-badge-memory',
   systemPrompts: 'qt-badge-memory',
-  physicalDescriptions: 'qt-badge-persona',
+  physicalDescriptions: 'qt-badge-user-character',
   clothingRecords: 'qt-badge-tag',
   title: 'qt-badge-primary',
 };

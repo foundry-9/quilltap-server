@@ -334,7 +334,7 @@ Your system prompt should define:
 Placeholders dynamically insert names:
 
 - **{{char}}** — Replaced with the character's name
-- **{{user}}** — Replaced with the user's name/persona
+- **{{user}}** — Replaced with the user's name/user character name
 - **Use in examples** — Show how names appear in formatted text
 - **Use in instructions** — Reference {{char}} in rules
 

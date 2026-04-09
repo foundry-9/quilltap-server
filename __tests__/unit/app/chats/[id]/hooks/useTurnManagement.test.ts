@@ -111,17 +111,19 @@ function createMockTurnResponse(overrides: Partial<{
 // Test data factories
 function createMockParticipant(
   id: string,
-  type: 'CHARACTER' | 'PERSONA',
+  type: 'CHARACTER',
   isActive: boolean = true,
-  characterId?: string
+  characterId?: string,
+  controlledBy?: 'llm' | 'user'
 ): ChatParticipantBase {
   return {
     id,
     type,
     isActive,
     displayOrder: 0,
-    characterId: type === 'CHARACTER' ? characterId || `char-${id}` : undefined,
-    personaId: type === 'PERSONA' ? `persona-${id}` : undefined,
+    characterId: characterId || `char-${id}`,
+    personaId: undefined,
+    controlledBy: controlledBy || 'llm',
   }
 }
 
@@ -144,29 +146,21 @@ function createMockCharacter(id: string, name: string, talkativeness: number = 0
 
 function createMockParticipantData(
   id: string,
-  type: 'CHARACTER' | 'PERSONA',
-  name: string
+  type: 'CHARACTER',
+  name: string,
+  controlledBy?: 'llm' | 'user'
 ): ParticipantData {
   return {
     id,
     type,
     displayOrder: 0,
     isActive: true,
-    character:
-      type === 'CHARACTER'
-        ? {
-            id: `char-${id}`,
-            name,
-            talkativeness: 0.5,
-          }
-        : null,
-    persona:
-      type === 'PERSONA'
-        ? {
-            id: `persona-${id}`,
-            name,
-          }
-        : null,
+    controlledBy: controlledBy || 'llm',
+    character: {
+      id: `char-${id}`,
+      name,
+      talkativeness: 0.5,
+    },
   }
 }
 
@@ -228,7 +222,7 @@ describe('useTurnManagement', () => {
     participantsAsBase = [
       createMockParticipant('p1', 'CHARACTER', true, 'char-1'),
       createMockParticipant('p2', 'CHARACTER', true, 'char-2'),
-      createMockParticipant('p3', 'PERSONA', true),
+      createMockParticipant('p3', 'CHARACTER', true, undefined, 'user'),
     ]
 
     charactersMap = new Map([
@@ -241,7 +235,7 @@ describe('useTurnManagement', () => {
     participantData = [
       createMockParticipantData('p1', 'CHARACTER', 'Alice'),
       createMockParticipantData('p2', 'CHARACTER', 'Bob'),
-      createMockParticipantData('p3', 'PERSONA', 'User'),
+      createMockParticipantData('p3', 'CHARACTER', 'User', 'user'),
     ]
 
     ephemeralMessages = []
@@ -314,8 +308,8 @@ describe('useTurnManagement', () => {
       expect(result.current.hasActiveCharacters).toBe(false)
     })
 
-    it('should calculate hasActiveCharacters correctly with only persona participants', () => {
-      const onlyPersona = [createMockParticipant('p3', 'PERSONA', true)]
+    it('should calculate hasActiveCharacters correctly with only user-controlled participants', () => {
+      const onlyPersona = [createMockParticipant('p3', 'CHARACTER', true, undefined, 'user')]
 
       const { result } = renderHook(() =>
         useTurnManagement(
@@ -502,17 +496,18 @@ describe('useTurnManagement', () => {
       expect(onUnpause).not.toHaveBeenCalled()
     })
 
-    it('should use participant name from persona if character not found', async () => {
-      const personaParticipantData = [createMockParticipantData('p3', 'PERSONA', 'User')]
+    it('should use participant name from participantData when character not found in charactersMap', async () => {
+      // p1 is LLM-controlled but its character is not in the (empty) map
+      const llmParticipantData = [createMockParticipantData('p1', 'CHARACTER', 'AliceFromData')]
 
       const { result } = renderHook(() =>
         useTurnManagement(
           TEST_CHAT_ID,
           participantsAsBase,
-          charactersMap,
+          new Map(), // empty map — character won't be found
           turnState,
           'p3',
-          personaParticipantData,
+          llmParticipantData,
           ephemeralMessages,
           setTurnState,
           setTurnSelectionResult,
@@ -522,10 +517,10 @@ describe('useTurnManagement', () => {
       )
 
       await act(async () => {
-        await result.current.handleNudge('p3')
+        await result.current.handleNudge('p1')
       })
 
-      expect(mockCreateEphemeralMessage).toHaveBeenCalledWith('nudge', 'p3', 'User')
+      expect(mockCreateEphemeralMessage).toHaveBeenCalledWith('nudge', 'p1', 'AliceFromData')
     })
 
     it('should use fallback name "Participant" if neither character nor persona found', async () => {
@@ -702,7 +697,7 @@ describe('useTurnManagement', () => {
       // All inactive characters
       const noActiveChars = participantsAsBase.map((p) => ({
         ...p,
-        isActive: p.type === 'PERSONA', // Only persona is active
+        isActive: p.controlledBy === 'user', // Only user-controlled character is active
       }))
 
       const { result } = renderHook(() =>

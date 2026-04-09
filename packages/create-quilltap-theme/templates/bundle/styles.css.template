@@ -321,8 +321,8 @@
   /* --qt-badge-outline-border: var(--color-border); */
   /* --qt-badge-character-bg: hsl(225 55% 55% / 0.12); */
   /* --qt-badge-character-fg: hsl(225 55% 42%); */
-  /* --qt-badge-persona-bg: hsl(270 45% 55% / 0.12); */
-  /* --qt-badge-persona-fg: hsl(270 45% 42%); */
+  /* --qt-badge-user-character-bg: hsl(270 45% 55% / 0.12); */
+  /* --qt-badge-user-character-fg: hsl(270 45% 42%); */
   /* --qt-badge-chat-bg: hsl(152 50% 38% / 0.12); */
   /* --qt-badge-chat-fg: hsl(152 50% 30%); */
   /* --qt-badge-tag-bg: hsl(25 70% 48% / 0.12); */

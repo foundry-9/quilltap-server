@@ -4,6 +4,10 @@
 
 ### 4.2-dev
 
+#### Refactored
+
+- **Persona References Removed**: Comprehensive removal of all "persona" and "PERSONA" references from the codebase (except SillyTavern import/export compatibility). User-controlled characters are now the sole concept — no more legacy PERSONA type, no more fallback code paths. Renamed `persona` → `userCharacter` across the entire message pipeline (types, orchestrator, context builder, system prompt builder, template processor), `personaName` → `userCharacterName` in memory extraction, `getFirstPersona` → `getFirstUserCharacter` in salon hooks, `addPersona`/`removePersona` → `addPartnerLink`/`removePartnerLink` in character repository. Removed deprecated `findByPersonaId` from memories repository. CSS badge variables renamed `--qt-badge-persona-*` → `--qt-badge-user-character-*` across all 5 bundled themes, storybook, and create-quilltap-theme template. Updated all help docs, plugin README, and component props. `{{persona}}` template variable retained for SillyTavern template compatibility; `personaId`/`personaLinks` DB column names retained (require migration to rename).
+
 #### Fixed
 
 - **LLM Inspector: Image Generation Logging**: Image generation API calls (character avatars, story backgrounds, in-chat image tool) are now logged in the LLM Inspector with chat/character linkage, provider, model, prompt, duration, and error tracking

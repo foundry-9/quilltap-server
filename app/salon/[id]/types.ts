@@ -60,19 +60,6 @@ export interface CharacterData {
   talkativeness?: number
 }
 
-export interface PersonaData {
-  id: string
-  name: string
-  title?: string | null
-  avatarUrl?: string
-  defaultImageId?: string
-  defaultImage?: {
-    id: string
-    filepath: string
-    url?: string
-  } | null
-}
-
 export interface ConnectionProfileData {
   id: string
   name: string
@@ -88,16 +75,14 @@ export interface ConnectionProfileData {
 
 export interface Participant {
   id: string
-  type: 'CHARACTER' | 'PERSONA'
+  type: 'CHARACTER'
   controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
   /** Four-state participation status */
   status?: 'active' | 'silent' | 'absent' | 'removed'
   characterId?: string | null
-  personaId?: string | null
   character?: CharacterData | null
-  persona?: PersonaData | null
   connectionProfile?: ConnectionProfileData | null
   imageProfile?: {
     id: string
@@ -238,23 +223,13 @@ export interface PendingToolResult {
 
 export interface ChatParticipantData {
   id: string
-  type: 'CHARACTER' | 'PERSONA'
+  type: 'CHARACTER'
   controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
   /** Four-state participation status */
   status?: 'active' | 'silent' | 'absent' | 'removed'
   character: {
-    id: string
-    name: string
-    title?: string | null
-    avatarUrl?: string
-    defaultImage?: {
-      url?: string
-      filepath?: string
-    } | null
-  } | null
-  persona: {
     id: string
     name: string
     title?: string | null

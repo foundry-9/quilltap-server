@@ -71,10 +71,14 @@ export async function findExclusiveChatsForCharacter(
   const exclusiveChats: ExclusiveChatInfo[] = []
 
   for (const chat of chatsWithCharacter) {
-    // Get all CHARACTER participants in this chat
-    const characterParticipants = chat.participants.filter(p => p.type === 'CHARACTER')
+    // Get all AI-controlled CHARACTER participants in this chat
+    // User-controlled participants (controlledBy === 'user') are excluded from exclusivity checks
+    // since they represent the user's own character and don't affect whether a chat is "exclusive" to an AI character
+    const characterParticipants = chat.participants.filter(
+      p => p.type === 'CHARACTER' && p.controlledBy !== 'user'
+    )
 
-    // If this is the only character in the chat, it's exclusive
+    // If this is the only AI character in the chat, it's exclusive
     if (characterParticipants.length === 1 && characterParticipants[0].characterId === characterId) {
       exclusiveChats.push({
         chat,

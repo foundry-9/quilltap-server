@@ -90,7 +90,7 @@ export const Badges: React.FC = () => {
         </h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
           <span className="qt-badge qt-badge-character">Character</span>
-          <span className="qt-badge qt-badge-persona">Persona</span>
+          <span className="qt-badge qt-badge-user-character">User Character</span>
           <span className="qt-badge qt-badge-chat">Chat</span>
           <span className="qt-badge qt-badge-tag">Tag</span>
           <span className="qt-badge qt-badge-memory">Memory</span>

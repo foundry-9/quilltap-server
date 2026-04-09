@@ -27,7 +27,7 @@ const USER_IMPERSONATION_VALUE = '__user__'
 
 export interface ParticipantData {
   id: string
-  type: 'CHARACTER' | 'PERSONA'
+  type: 'CHARACTER'
   controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
@@ -39,17 +39,6 @@ export interface ParticipantData {
     title?: string | null
     avatarUrl?: string | null
     talkativeness: number
-    defaultImage?: {
-      id: string
-      filepath: string
-      url?: string
-    } | null
-  } | null
-  persona?: {
-    id: string
-    name: string
-    title?: string | null
-    avatarUrl?: string | null
     defaultImage?: {
       id: string
       filepath: string
@@ -82,7 +71,7 @@ interface ParticipantCardProps {
   onSkip?: () => void // Skip turn (for user participants in multi-char chat)
   onTalkativenessChange?: (participantId: string, value: number) => void
   onRemove?: (participantId: string) => void // Phase 6: Remove character from chat
-  isUserParticipant?: boolean // True if this is the user's persona
+  isUserParticipant?: boolean // True if this is the user's character
   canRemove?: boolean // True if this character can be removed (not the only character)
   canSkip?: boolean // True if user can skip their turn (next speaker is null = user's turn)
   // Turn order display
@@ -149,7 +138,7 @@ export function ParticipantCard({
     participant.character?.talkativeness ?? 0.5
   )
   const isCharacter = participant.type === 'CHARACTER'
-  const entity = isCharacter ? participant.character : participant.persona
+  const entity = participant.character
 
   if (!entity) {
     return null
@@ -176,7 +165,7 @@ export function ParticipantCard({
       // Only LLM-controlled characters can be nudged for AI response
       onNudge(participant.id)
     } else {
-      // User persona or user-controlled character - queue them
+      // User-controlled character - queue them
       onQueue(participant.id)
     }
   }
@@ -351,8 +340,8 @@ export function ParticipantCard({
             </div>
           )}
 
-          {/* Connection profile dropdown for characters */}
-          {isCharacter && connectionProfiles && onConnectionProfileChange ? (
+          {/* Connection profile dropdown for characters (not user-controlled) */}
+          {isCharacter && !isUserParticipant && connectionProfiles && onConnectionProfileChange ? (
             <div className="mt-1">
               <select
                 value={connectionProfileValue}
@@ -513,8 +502,9 @@ export function ParticipantCard({
         )}
 
         {/* Remove button - for characters when canRemove is true
-            canRemove now includes the safety check that at least one user-controlled character remains */}
-        {isCharacter && onRemove && canRemove && (
+            canRemove now includes the safety check that at least one user-controlled character remains
+            User-controlled participants cannot be removed via this button */}
+        {isCharacter && !isUserParticipant && onRemove && canRemove && (
           <button
             onClick={() => onRemove(participant.id)}
             disabled={isGenerating}

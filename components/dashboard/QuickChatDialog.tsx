@@ -146,7 +146,7 @@ export function QuickChatDialog({
                     value={selectedImageProfileId}
                     onChange={setSelectedImageProfileId}
                     characterId={characterId}
-                    personaId={selectedPartnerId}
+                    userCharacterId={selectedPartnerId}
                   />
                 </div>
 

@@ -39,7 +39,7 @@ async function getChatIdsForScope(
       return [scope.chatId];
 
     case 'character':
-      // Get all chats where character is a participant (includes former personas with controlledBy: 'user')
+      // Get all chats where character is a participant
       const characterChats = await repos.chats.findByCharacterId(scope.characterId);
       // Filter to only user's chats
       return characterChats
@@ -54,7 +54,7 @@ async function getChatIdsForScope(
 
 /**
  * Get memory query criteria based on scope
- * Note: personaId removed - personas are now characters with controlledBy: 'user'
+ * Note: personaId parameter is a legacy DB field; always passed as null
  */
 function getMemoryQueryForScope(scope: SearchReplaceScope): {
   characterId: string | null;
@@ -97,12 +97,12 @@ export async function getSearchReplacePreview(
     }
 
     // Count memory matches
-    // Note: personaId parameter removed - personas are now characters with controlledBy: 'user'
+    // Note: personaId is a legacy DB field; always null
     if (request.includeMemories) {
       const memoryQuery = getMemoryQueryForScope(request.scope);
       const count = await repos.memories.countMemoriesWithText(
         memoryQuery.characterId,
-        null, // personaId - no longer used, personas are now characters
+        null, // personaId (legacy DB field)
         memoryQuery.chatId,
         request.searchText
       );
@@ -174,12 +174,12 @@ export async function executeSearchReplace(
     }
 
     // Process memories
-    // Note: personaId parameter removed - personas are now characters with controlledBy: 'user'
+    // Note: personaId is a legacy DB field; always null
     if (request.includeMemories) {
       const memoryQuery = getMemoryQueryForScope(request.scope);
       const memoriesToUpdate = await repos.memories.findMemoriesWithText(
         memoryQuery.characterId,
-        null, // personaId - no longer used, personas are now characters
+        null, // personaId (legacy DB field)
         memoryQuery.chatId,
         request.searchText
       );

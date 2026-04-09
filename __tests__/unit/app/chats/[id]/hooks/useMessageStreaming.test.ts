@@ -28,7 +28,7 @@ function createMockParams(overrides: Partial<Parameters<typeof useMessageStreami
   return {
     chatId: 'test-chat-id',
     messages: [] as Message[],
-    participantsAsBase: [] as { id: string; type: 'CHARACTER' | 'PERSONA'; isActive: boolean }[],
+    participantsAsBase: [] as { id: string; type: 'CHARACTER'; isActive: boolean }[],
     chat: null as { participants: Participant[] } | null,
     isMultiChar: false,
     scrollToBottom: jest.fn(),

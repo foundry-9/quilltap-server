@@ -153,7 +153,7 @@ describe('Template Processing', () => {
 
       const context = buildTemplateContext({
         character,
-        persona,
+        userCharacter: persona,
         scenario: character.scenarios[0].content,
         systemPrompt: 'System prompt',
       })
@@ -179,7 +179,7 @@ describe('Template Processing', () => {
 
       const context = buildTemplateContext({
         character,
-        persona: null,
+        userCharacter: null,
         systemPrompt: null,
       })
 
@@ -225,7 +225,7 @@ describe('Template Processing', () => {
 
       const result = processCharacterTemplates({
         character,
-        persona,
+        userCharacter: persona,
         scenario: character.scenarios[0].content,
         systemPrompt: 'You are {{char}}, talking to {{user}}.',
       })
@@ -250,7 +250,7 @@ describe('Template Processing', () => {
 
       const result = processCharacterTemplates({
         character,
-        persona: null,
+        userCharacter: null,
         systemPrompt: null,
       })
 
@@ -279,7 +279,7 @@ describe('Template Processing', () => {
 
       const result = processCharacterTemplates({
         character,
-        persona,
+        userCharacter: persona,
         scenario: character.scenarios[0].content,
         systemPrompt: null,
       })

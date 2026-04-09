@@ -7,14 +7,14 @@ describe('TemplateDisplay', () => {
       <TemplateDisplay
         content="Greetings {{char}}, please help {{user}} today."
         characterName="Alice"
-        personaName="Bob"
+        userCharacterName="Bob"
       />
     )
 
     const charSpan = screen.getByTitle('Character name (from {{char}})')
     expect(charSpan).toHaveTextContent('Alice')
 
-    const userSpan = screen.getByTitle('Persona name (from {{user}})')
+    const userSpan = screen.getByTitle('User character name (from {{user}})')
     expect(userSpan).toHaveTextContent('Bob')
   })
 
@@ -23,11 +23,11 @@ describe('TemplateDisplay', () => {
       <TemplateDisplay
         content="Reminder: {{user}} should stay in character."
         characterName="Alice"
-        personaName={null}
+        userCharacterName={null}
       />
     )
 
-    const fallbackSpan = screen.getByTitle('User (no default persona set)')
+    const fallbackSpan = screen.getByTitle('User (no default user character set)')
     expect(fallbackSpan).toHaveTextContent('USER')
   })
 
@@ -36,14 +36,14 @@ describe('TemplateDisplay', () => {
       <TemplateDisplay
         content="Alice talks to Bob without templates."
         characterName="Alice"
-        personaName="Bob"
+        userCharacterName="Bob"
       />
     )
 
     const charWarning = screen.getByTitle('Hard-coded character name - consider replacing with {{char}}')
     expect(charWarning).toHaveTextContent('Alice')
 
-    const userWarning = screen.getByTitle('Hard-coded persona name - consider replacing with {{user}}')
+    const userWarning = screen.getByTitle('Hard-coded user character name - consider replacing with {{user}}')
     expect(userWarning).toHaveTextContent('Bob')
   })
 })

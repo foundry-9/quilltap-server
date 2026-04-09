@@ -52,7 +52,7 @@ export interface ProjectContext {
  */
 export function buildSystemPrompt(
   character: Character,
-  persona?: { name: string; description: string } | null,
+  userCharacter?: { name: string; description: string } | null,
   /** For multi-character chats: info about other participants */
   otherParticipants?: OtherParticipantInfo[],
   /** Roleplay template to prepend (formatting instructions) */
@@ -85,11 +85,11 @@ export function buildSystemPrompt(
   // Build template context for {{char}}, {{user}}, etc. replacement
   const templateContext: TemplateContext = {
     char: character.name,
-    user: persona?.name || 'User',
+    user: userCharacter?.name || 'User',
     description: character.description || '',
     personality: character.personality || '',
     scenario: scenarioText || character.scenarios?.[0]?.content || '',
-    persona: persona?.description || '',
+    persona: userCharacter?.description || '',
   }
 
   // Identity preamble: establish who the character is from the very first tokens.
@@ -290,10 +290,10 @@ export function buildSystemPrompt(
     parts.push(toolReinforcement)
   }
 
-  // Persona information if provided (single-character mode)
-  // In multi-character mode, the persona is included in otherParticipants
-  if (persona && (!otherParticipants || otherParticipants.length === 0)) {
-    parts.push(`\n## User Persona\nYou are speaking with ${persona.name}. ${persona.description}`)
+  // User character information if provided (single-character mode)
+  // In multi-character mode, the user character is included in otherParticipants
+  if (userCharacter && (!otherParticipants || otherParticipants.length === 0)) {
+    parts.push(`\n## User Character\nYou are speaking with ${userCharacter.name}. ${userCharacter.description}`)
   }
 
   // Multi-character context section

@@ -232,7 +232,7 @@ export async function finalizeMessageResponse({
       characterId: character.id,
       characterName: character.name,
       characterPronouns: character.pronouns,
-      personaName: resolvedIdentity.name !== 'User' ? resolvedIdentity.name : undefined,
+      userCharacterName: resolvedIdentity.name !== 'User' ? resolvedIdentity.name : undefined,
       userCharacterId,
       allCharacterNames: isMultiCharacter ? Array.from(participantCharacters.values()).map(c => c.name) : undefined,
       allCharacterPronouns,

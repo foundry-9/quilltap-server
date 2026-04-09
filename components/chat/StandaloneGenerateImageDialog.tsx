@@ -8,12 +8,9 @@ import { EntitySearchDropdown } from './EntitySearchDropdown'
 
 interface Participant {
   id: string
-  type: 'CHARACTER' | 'PERSONA'
+  type: 'CHARACTER'
+  controlledBy?: 'llm' | 'user'
   character?: {
-    id: string
-    name: string
-  } | null
-  persona?: {
     id: string
     name: string
   } | null
@@ -129,8 +126,8 @@ export default function StandaloneGenerateImageDialog({
   if (!isOpen) return null
 
   // Get current chat participants for quick buttons
-  const characterParticipants = participants.filter(p => p.type === 'CHARACTER')
-  const personaParticipant = participants.find(p => p.type === 'PERSONA')
+  const characterParticipants = participants.filter(p => p.type === 'CHARACTER' && p.controlledBy !== 'user')
+  const userCharacterParticipant = participants.find(p => p.controlledBy === 'user')
 
   return (
     <div className="qt-dialog-overlay p-4">
@@ -173,13 +170,13 @@ export default function StandaloneGenerateImageDialog({
               </div>
 
               {/* Me button */}
-              {personaParticipant?.persona && (
+              {userCharacterParticipant?.character && (
                 <button
                   onClick={() => insertPlaceholder('me')}
                   className="w-full px-3 py-2 text-left text-sm qt-bg-primary/10 hover:qt-bg-primary/20 text-primary rounded border qt-border-primary/30 transition-colors"
                   disabled={isGenerating}
                 >
-                  <div className="font-medium">{personaParticipant.persona.name}</div>
+                  <div className="font-medium">{userCharacterParticipant.character.name}</div>
                   <div className="text-xs opacity-75">{'{{me}}'}</div>
                 </button>
               )}

@@ -139,7 +139,7 @@ export function createMockChatParticipant(
     id: generateId(),
     type,
     characterId: type === 'CHARACTER' ? generateId() : null,
-    personaId: type === 'PERSONA' ? generateId() : null,
+    personaId: null,
     connectionProfileId: type === 'CHARACTER' ? generateId() : null,
     imageProfileId: null,
     roleplayTemplateId: null,

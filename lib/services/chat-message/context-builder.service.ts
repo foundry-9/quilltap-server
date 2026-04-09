@@ -42,7 +42,7 @@ export interface BuildMessageContextOptions {
   character: Character
   characterParticipant: ChatParticipantBase
   connectionProfile: ConnectionProfile
-  persona: { name: string; description: string } | null
+  userCharacter: { name: string; description: string } | null
   isMultiCharacter: boolean
   participantCharacters?: Map<string, Character>
   roleplayTemplate: { systemPrompt: string } | null
@@ -290,7 +290,7 @@ export async function buildMessageContext(
     character,
     characterParticipant,
     connectionProfile,
-    persona,
+    userCharacter,
     isMultiCharacter,
     participantCharacters,
     roleplayTemplate,
@@ -348,7 +348,7 @@ export async function buildMessageContext(
     modelName: connectionProfile.modelName,
     userId,
     character,
-    persona,
+    userCharacter,
     chat,
     existingMessages: conversationMessages,
     newUserMessage,

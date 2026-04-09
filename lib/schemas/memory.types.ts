@@ -37,9 +37,8 @@ export const MemorySchema = z.object({
   personaId: UUIDSchema.nullable().optional(),
   /**
    * The character this memory is about (who is being remembered).
-   * Characters Not Personas - Phase 7: This now includes former persona references.
-   * When a memory is about another character or former persona, their ID goes here.
-   * The migration copies personaId → aboutCharacterId before removing personaId.
+   * The character this memory is about (who is being remembered).
+   * When a memory is about another character, their ID goes here.
    */
   aboutCharacterId: UUIDSchema.nullable().optional(),
   chatId: UUIDSchema.nullable().optional(),         // Optional: source chat reference
@@ -47,7 +46,7 @@ export const MemorySchema = z.object({
   content: z.string(),                              // The actual memory content
   summary: z.string(),                              // Distilled version for context injection
   keywords: z.array(z.string()).default([]),        // For text-based search
-  tags: z.array(UUIDSchema).default([]),            // Derived from character/persona/chat tags
+  tags: z.array(UUIDSchema).default([]),            // Derived from character/chat tags
   importance: z.number().min(0).max(1).default(0.5), // 0-1 scale for prioritization
   // Vector embedding for semantic search.
   // Accepts number[], Buffer (Float32 BLOB from SQLite), or JSON string (legacy TEXT storage).

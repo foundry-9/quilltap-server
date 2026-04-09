@@ -182,7 +182,7 @@ export function useQuickChat(): UseQuickChatReturn {
         },
       ]
 
-      // Add user-controlled character as partner (not persona)
+      // Add user-controlled character as partner
       if (selectedPartnerId) {
         participants.push({
           type: 'CHARACTER',

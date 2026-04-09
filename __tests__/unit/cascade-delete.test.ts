@@ -215,7 +215,8 @@ describe('Cascade Delete Utilities', () => {
           },
           {
             id: 'participant-2',
-            type: 'PERSONA',
+            type: 'CHARACTER',
+            controlledBy: 'user',
             personaId: 'persona-1',
             displayOrder: 1,
             isActive: true,

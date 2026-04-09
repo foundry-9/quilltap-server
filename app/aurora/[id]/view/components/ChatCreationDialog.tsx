@@ -184,7 +184,7 @@ export function ChatCreationDialog({
                   value={selectedImageProfileId}
                   onChange={onImageProfileChange}
                   characterId={characterId}
-                  personaId={selectedUserCharacterId}
+                  userCharacterId={selectedUserCharacterId}
                 />
               </div>
 

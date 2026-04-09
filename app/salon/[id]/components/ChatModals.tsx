@@ -87,7 +87,7 @@ interface ChatModalsProps {
   resolvingConflict: boolean
   // Participant data for various dialogs
   getFirstCharacter: () => { id: string; name: string; [key: string]: any } | null | undefined
-  getFirstPersona: () => { id: string; name: string; [key: string]: any } | null | undefined
+  getFirstUserCharacter: () => { id: string; name: string; [key: string]: any } | null | undefined
   // Callbacks
   onCharacterAdded: () => void
   onReattributed: () => Promise<void>
@@ -140,7 +140,7 @@ export function ChatModals({
   // File conflict
   isConflictDialogOpen, cancelConflict, conflictInfo, handleConflictResolution, resolvingConflict,
   // Participants
-  getFirstCharacter, getFirstPersona,
+  getFirstCharacter, getFirstUserCharacter,
   // Callbacks
   onCharacterAdded, onReattributed, onConfirmStopImpersonation,
   // Memory cascade
@@ -151,7 +151,7 @@ export function ChatModals({
   triggerContinueMode,
 }: ChatModalsProps) {
   const firstCharacter = getFirstCharacter()
-  const firstPersona = getFirstPersona()
+  const firstUserCharacter = getFirstUserCharacter()
 
   return (
     <>
@@ -163,8 +163,8 @@ export function ChatModals({
         fileId={modalImage?.fileId}
         characterId={firstCharacter?.id}
         characterName={firstCharacter?.name}
-        personaId={firstPersona?.id}
-        personaName={firstPersona?.name}
+        userCharacterId={firstUserCharacter?.id}
+        userCharacterName={firstUserCharacter?.name}
         onDelete={() => {
           fetchChat()
         }}
@@ -177,8 +177,8 @@ export function ChatModals({
         chatId={chatId}
         characterId={firstCharacter?.id}
         characterName={firstCharacter?.name}
-        personaId={firstPersona?.id}
-        personaName={firstPersona?.name}
+        userCharacterId={firstUserCharacter?.id}
+        userCharacterName={firstUserCharacter?.name}
         onImageDeleted={(fileId) => {
           setMessages((prev) =>
             prev.map((msg) => {

@@ -15,20 +15,9 @@ import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface ParticipantData {
   id: string
-  type: 'CHARACTER' | 'PERSONA'
+  type: 'CHARACTER'
   controlledBy?: 'llm' | 'user'
   character?: {
-    id: string
-    name: string
-    title?: string | null
-    avatarUrl?: string
-    defaultImage?: {
-      id?: string
-      filepath?: string
-      url?: string
-    } | null
-  } | null
-  persona?: {
     id: string
     name: string
     title?: string | null
@@ -175,7 +164,7 @@ export default function BulkCharacterReplaceModal({
 
       const targetParticipant = participants.find((p) => p.id === targetParticipantId)
       const targetName =
-        targetParticipant?.character?.name || targetParticipant?.persona?.name || 'participant'
+        targetParticipant?.character?.name || 'participant'
 
       let successMessage = `${result.messagesUpdated} ${result.messagesUpdated === 1 ? 'message' : 'messages'} re-attributed to ${targetName}.`
       if (result.memoriesDeleted > 0) {
@@ -196,18 +185,18 @@ export default function BulkCharacterReplaceModal({
   }
 
   const getParticipantName = (participant: ParticipantData): string => {
-    return participant.character?.name || participant.persona?.name || 'Unknown'
+    return participant.character?.name || 'Unknown'
   }
 
   const getParticipantAvatarSrc = (participant: ParticipantData) => {
-    return participant.character || participant.persona || null
+    return participant.character || null
   }
 
   const getControlLabel = (participant: ParticipantData): string => {
     if (participant.controlledBy === 'user') {
       return 'User-controlled'
     }
-    return participant.type === 'CHARACTER' ? 'Character' : 'Persona'
+    return 'Character'
   }
 
   if (!isOpen) return null

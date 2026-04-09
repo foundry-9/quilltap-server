@@ -98,7 +98,7 @@ export function CharacterDetails({
               <TemplateDisplay
                 content={character.description}
                 characterName={character.name}
-                personaName={defaultPartnerName}
+                userCharacterName={defaultPartnerName}
               />
             </div>
           </div>
@@ -118,7 +118,7 @@ export function CharacterDetails({
               <TemplateDisplay
                 content={character.personality}
                 characterName={character.name}
-                personaName={defaultPartnerName}
+                userCharacterName={defaultPartnerName}
               />
             </div>
           </div>
@@ -138,7 +138,7 @@ export function CharacterDetails({
                   <TemplateDisplay
                     content={scenario.content}
                     characterName={character.name}
-                    personaName={defaultPartnerName}
+                    userCharacterName={defaultPartnerName}
                   />
                 </div>
               </div>
@@ -160,7 +160,7 @@ export function CharacterDetails({
               <TemplateDisplay
                 content={character.firstMessage}
                 characterName={character.name}
-                personaName={defaultPartnerName}
+                userCharacterName={defaultPartnerName}
               />
             </div>
           </div>
@@ -180,7 +180,7 @@ export function CharacterDetails({
               <TemplateDisplay
                 content={character.exampleDialogues}
                 characterName={character.name}
-                personaName={defaultPartnerName}
+                userCharacterName={defaultPartnerName}
               />
             </div>
           </div>
