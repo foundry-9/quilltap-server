@@ -10,6 +10,7 @@
 
 #### Fixed
 
+- **Run Tool: Wardrobe Action Notices**: Fixed wardrobe action notices not appearing for user-invoked `update_outfit_item` and `create_wardrobe_item` calls from the Run Tool modal — tool result payloads now preserve their structured metadata so the inline amber summary renders correctly instead of collapsing into raw JSON
 - **Memory Cleanup: Accurate Max Memories Label**: Changed "Max Memories" / "Hard cap on total memories" to "Maximum Unprotected Memories" with a list of the protection rules (importance ≥ 70%, reinforced 5+ times, manually created, accessed within 3 months), since the hard cap does not delete protected memories
 - **LLM Inspector: Image Generation Logging**: Image generation API calls (character avatars, story backgrounds, in-chat image tool) are now logged in the LLM Inspector with chat/character linkage, provider, model, prompt, duration, and error tracking
 - **Outfit Description Consistency**: Centralized all wardrobe outfit descriptions into a single `describeOutfit()` utility with clear rules for null slots (null = empty, not "default"). Replaced 6 scattered implementations that had inconsistent behavior — some assumed defaults for empty slots, others omitted them entirely. Outfit Change Notices now use the same canonical format.

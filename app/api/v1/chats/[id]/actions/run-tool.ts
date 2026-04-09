@@ -83,11 +83,10 @@ export async function handleRunTool(
     executionContext
   );
 
-  // Format the result for storage
-  // Use string result if available, otherwise JSON-stringify
-  const resultContent = typeof result.result === 'string'
-    ? result.result
-    : JSON.stringify(result.result, null, 2);
+  // Preserve structured result payloads for the chat UI.
+  // Components like `ToolMessage` use rich fields (for example wardrobe action metadata)
+  // to render inline summaries, so avoid flattening objects into JSON strings here.
+  const resultContent = result.result;
 
   // Build a human-readable prompt description
   const argsEntries = Object.entries(validated.arguments);

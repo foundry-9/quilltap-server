@@ -241,23 +241,34 @@ describe('handleRunTool', () => {
       expect(messageContent.success).toBe(true);
     });
 
-    it('handles non-string tool results by JSON-stringifying them', async () => {
+    it('preserves structured tool results in the stored chat message', async () => {
       mockExecuteToolCallWithContext.mockResolvedValue({
-        toolName: 'search_memories',
+        toolName: 'update_outfit_item',
         success: true,
-        result: { matches: [{ text: 'memory 1' }] },
+        result: {
+          formattedText: 'Updated outfit successfully',
+          action: 'equipped',
+          slot: 'top',
+          item: { item_id: 'item-1', title: 'Crimson Jacket' },
+          coverage_summary: 'Wearing: Crimson Jacket (top)',
+        },
       });
 
-      const req = createRequest({ toolName: 'search_memories', arguments: {} });
+      const req = createRequest({ toolName: 'update_outfit_item', arguments: { slot: 'top', item_id: 'item-1' } });
       const ctx = createMockContext();
 
       await handleRunTool(req, 'chat-123', ctx);
 
       const addMessageCall = (ctx.repos.chats.addMessage as jest.Mock).mock.calls[0];
       const messageContent = JSON.parse(addMessageCall[1].content);
-      // Non-string result should be JSON-stringified
-      expect(typeof messageContent.result).toBe('string');
-      expect(JSON.parse(messageContent.result)).toEqual({ matches: [{ text: 'memory 1' }] });
+      expect(typeof messageContent.result).toBe('object');
+      expect(messageContent.result).toEqual({
+        formattedText: 'Updated outfit successfully',
+        action: 'equipped',
+        slot: 'top',
+        item: { item_id: 'item-1', title: 'Crimson Jacket' },
+        coverage_summary: 'Wearing: Crimson Jacket (top)',
+      });
     });
 
     it('handles chat with no active character participant', async () => {
