@@ -9,6 +9,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import type { Project } from '../types'
 import { ProjectToolSettingsModal } from '@/components/tools/tool-settings'
+import { ChevronIcon } from '@/components/ui/ChevronIcon'
 
 interface ModelBehaviorCardProps {
   project: Project
@@ -16,19 +17,6 @@ interface ModelBehaviorCardProps {
   expanded: boolean
   onToggle: () => void
   onProjectUpdate?: () => void
-}
-
-function ChevronIcon({ className, expanded }: { className?: string; expanded: boolean }) {
-  return (
-    <svg
-      className={`${className} transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-    </svg>
-  )
 }
 
 function BrainIcon({ className }: { className?: string }) {

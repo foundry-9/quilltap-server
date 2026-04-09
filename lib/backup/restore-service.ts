@@ -50,6 +50,7 @@ import type {
   LLMLog,
   PluginConfig,
 } from '@/lib/schemas/types';
+import type { WardrobeItem, OutfitPreset } from '@/lib/schemas/wardrobe.types';
 
 const execFileAsync = promisify(execFile);
 
@@ -164,6 +165,9 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const filePermissions = await readJsonFileOptional<FileWritePermission[]>(rootPath, 'data/file-permissions.json', []);
     // Folders are optional for backwards compatibility with older backups
     const folders = await readJsonFileOptional<Folder[]>(rootPath, 'data/folders.json', []);
+    // Wardrobe items and outfit presets are optional for backwards compatibility
+    const wardrobeItems = await readJsonFileOptional<WardrobeItem[]>(rootPath, 'data/wardrobe-items.json', []);
+    const outfitPresets = await readJsonFileOptional<OutfitPreset[]>(rootPath, 'data/outfit-presets.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
@@ -190,6 +194,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       chatSettings,
       filePermissions,
       folders,
+      wardrobeItems,
+      outfitPresets,
     };
 
     return { data, extractDir, rootFolder };
@@ -286,6 +292,8 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       chatSettings: data.chatSettings?.length || 0,
       filePermissions: data.filePermissions?.length || 0,
       folders: data.folders?.length || 0,
+      wardrobeItems: data.wardrobeItems?.length || 0,
+      outfitPresets: data.outfitPresets?.length || 0,
       npmPlugins: npmPluginCount,
       warnings: [],
     };
@@ -305,7 +313,7 @@ async function deleteUserData(userId: string): Promise<void> {
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, filePermissions, folders] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, filePermissions, folders, wardrobeItems, outfitPresets] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -321,6 +329,8 @@ async function deleteUserData(userId: string): Promise<void> {
       globalRepos.chatSettings.findByUserId(userId),
       globalRepos.filePermissions.findByUserId(userId),
       globalRepos.folders.findByUserId(userId),
+      globalRepos.wardrobe.findAll(),
+      globalRepos.outfitPresets.findAll(),
     ]);
 
   // Delete memories for each character first
@@ -346,6 +356,8 @@ async function deleteUserData(userId: string): Promise<void> {
     ...(chatSettings ? [globalRepos.chatSettings.delete(chatSettings.id)] : []),
     ...filePermissions.map((fp) => globalRepos.filePermissions.delete(fp.id)),
     ...folders.map((f) => globalRepos.folders.delete(f.id)),
+    ...wardrobeItems.map((w) => globalRepos.wardrobe.delete(w.id)),
+    ...outfitPresets.map((o) => globalRepos.outfitPresets.delete(o.id)),
   ]);
 
   // Delete files from storage
@@ -380,6 +392,8 @@ async function deleteUserData(userId: string): Promise<void> {
       chatSettings: chatSettings ? 1 : 0,
       filePermissions: filePermissions.length,
       folders: folders.length,
+      wardrobeItems: wardrobeItems.length,
+      outfitPresets: outfitPresets.length,
     },
   });
 }
@@ -773,6 +787,25 @@ function remapBackupData(
     userId: targetUserId,
   })) as Folder[];
 
+  // Remap wardrobe items
+  const remappedWardrobeItems = (data.wardrobeItems || []).map((item) => ({
+    ...remapper.remapFields(item, ['id', 'characterId']),
+  })) as WardrobeItem[];
+
+  // Remap outfit presets (slot values are wardrobe item IDs)
+  const remappedOutfitPresets = (data.outfitPresets || []).map((preset) => {
+    const remapped = remapper.remapFields(preset, ['id', 'characterId']);
+    if (remapped.slots) {
+      remapped.slots = {
+        top: remapped.slots.top ? remapper.remap(remapped.slots.top) : null,
+        bottom: remapped.slots.bottom ? remapper.remap(remapped.slots.bottom) : null,
+        footwear: remapped.slots.footwear ? remapper.remap(remapped.slots.footwear) : null,
+        accessories: remapped.slots.accessories ? remapper.remap(remapped.slots.accessories) : null,
+      };
+    }
+    return remapped as OutfitPreset;
+  });
+
   return {
     manifest: data.manifest,
     characters: remappedCharacters,
@@ -792,6 +825,8 @@ function remapBackupData(
     chatSettings: remappedChatSettings,
     filePermissions: remappedFilePermissions,
     folders: remappedFolders,
+    wardrobeItems: remappedWardrobeItems,
+    outfitPresets: remappedOutfitPresets,
   };
 }
 
@@ -1105,7 +1140,33 @@ export async function restore(
       }
     }
 
-    // 19. NPM Plugins (copy from extracted dir to plugins/npm directory)
+    // 19. Wardrobe Items
+    let wardrobeItemsRestored = 0;
+    for (const item of data.wardrobeItems || []) {
+      try {
+        const { id, createdAt, updatedAt, ...itemData } = item;
+        await globalRepos.wardrobe.create(itemData, { id: item.id });
+        wardrobeItemsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore wardrobe item "${item.title}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore wardrobe item', { wardrobeItemId: item.id, error });
+      }
+    }
+
+    // 20. Outfit Presets
+    let outfitPresetsRestored = 0;
+    for (const preset of data.outfitPresets || []) {
+      try {
+        const { id, createdAt, updatedAt, ...presetData } = preset;
+        await globalRepos.outfitPresets.create(presetData, { id: preset.id });
+        outfitPresetsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore outfit preset "${preset.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore outfit preset', { outfitPresetId: preset.id, error });
+      }
+    }
+
+    // 21. NPM Plugins (copy from extracted dir to plugins/npm directory)
     let npmPluginsRestored = 0;
     const npmPluginsSrcDir = path.join(rootPath, 'plugins', 'npm');
 
@@ -1167,6 +1228,8 @@ export async function restore(
       chatSettings: chatSettingsRestored,
       filePermissions: filePermissionsRestored,
       folders: foldersRestored,
+      wardrobeItems: wardrobeItemsRestored,
+      outfitPresets: outfitPresetsRestored,
       npmPlugins: npmPluginsRestored,
       warnings,
     };

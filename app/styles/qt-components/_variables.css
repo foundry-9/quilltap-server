@@ -415,6 +415,18 @@
   --qt-badge-source-manual-bg: var(--color-muted);
   --qt-badge-source-manual-fg: var(--color-muted-foreground);
 
+  /* Wardrobe slot badge colors */
+  --qt-badge-wardrobe-top-bg: hsl(220 60% 55% / 0.12);
+  --qt-badge-wardrobe-top-fg: hsl(220 60% 42%);
+  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 38% / 0.12);
+  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 30%);
+  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 48% / 0.12);
+  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 38%);
+  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 55% / 0.12);
+  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 42%);
+  --qt-badge-wardrobe-shared-bg: hsl(240 50% 55% / 0.12);
+  --qt-badge-wardrobe-shared-fg: hsl(240 50% 42%);
+
   /* Capability badge colors */
   --qt-badge-capability-bg: hsl(225 55% 55% / 0.08);
   --qt-badge-capability-fg: hsl(225 55% 42%);
@@ -638,6 +650,18 @@
   --qt-badge-source-npm-fg: hsl(0 60% 68%);
   --qt-badge-source-git-bg: hsl(25 70% 50% / 0.25);
   --qt-badge-source-git-fg: hsl(25 70% 62%);
+
+  /* Wardrobe slot badge tokens — dark mode */
+  --qt-badge-wardrobe-top-bg: hsl(220 60% 58% / 0.25);
+  --qt-badge-wardrobe-top-fg: hsl(220 60% 72%);
+  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 40% / 0.25);
+  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 62%);
+  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 50% / 0.25);
+  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 68%);
+  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 58% / 0.25);
+  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 72%);
+  --qt-badge-wardrobe-shared-bg: hsl(240 50% 58% / 0.25);
+  --qt-badge-wardrobe-shared-fg: hsl(240 50% 72%);
 
   /* Capability badge tokens */
   --qt-badge-capability-bg: hsl(225 55% 58% / 0.18);

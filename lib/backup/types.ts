@@ -25,6 +25,7 @@ import type {
   LLMLog,
   PluginConfig,
 } from '@/lib/schemas/types';
+import type { WardrobeItem, OutfitPreset } from '@/lib/schemas/wardrobe.types';
 
 // ============================================================================
 // BACKUP MANIFEST
@@ -91,6 +92,10 @@ export interface BackupManifest {
     filePermissions?: number;
     /** Number of Folder entities (user-created file folders) */
     folders?: number;
+    /** Number of WardrobeItem entities (character wardrobe items) */
+    wardrobeItems?: number;
+    /** Number of OutfitPreset entities (character outfit presets) */
+    outfitPresets?: number;
     /** Number of npm-installed plugins backed up */
     npmPlugins?: number;
   };
@@ -161,6 +166,12 @@ export interface BackupData {
 
   /** Array of Folder entities (user-created file/project folders) */
   folders?: Folder[];
+
+  /** Array of WardrobeItem entities (character wardrobe items) */
+  wardrobeItems?: WardrobeItem[];
+
+  /** Array of OutfitPreset entities (character outfit presets) */
+  outfitPresets?: OutfitPreset[];
 }
 
 // ============================================================================
@@ -268,6 +279,12 @@ export interface RestoreSummary {
 
   /** Number of Folder entities restored */
   folders?: number;
+
+  /** Number of WardrobeItem entities restored */
+  wardrobeItems?: number;
+
+  /** Number of OutfitPreset entities restored */
+  outfitPresets?: number;
 
   /** Number of npm plugins restored */
   npmPlugins?: number;

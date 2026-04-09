@@ -1,15 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { useClickOutside } from '@/hooks/useClickOutside'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
-
-interface EntityOption {
-  id: string
-  name: string
-  type: 'character'
-}
+import { useEntitySearch } from './useEntitySearch'
+import { EntitySearchDropdown } from './EntitySearchDropdown'
 
 interface Participant {
   id: string
@@ -43,45 +38,9 @@ export default function StandaloneGenerateImageDialog({
   const [prompt, setPrompt] = useState('')
   const [imageCount, setImageCount] = useState(1)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [allEntities, setAllEntities] = useState<EntityOption[]>([])
-  const [searchTerm, setSearchTerm] = useState('')
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Load all characters for the dropdown
-  useEffect(() => {
-    if (isOpen) {
-      loadAllEntities()
-    }
-  }, [isOpen])
-
-  const loadAllEntities = async () => {
-    try {
-      const charactersRes = await fetch('/api/v1/characters')
-
-      if (!charactersRes.ok) {
-        throw new Error('Failed to load characters')
-      }
-
-      const charactersData = await charactersRes.json()
-      const characters = charactersData.characters || []
-
-      const entities: EntityOption[] = characters.map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        type: 'character' as const,
-      }))
-
-      // Sort alphabetically
-      entities.sort((a, b) => a.name.localeCompare(b.name))
-
-      setAllEntities(entities)
-    } catch (error) {
-      console.error('Error loading entities', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast('Failed to load characters')
-    }
-  }
+  const entitySearch = useEntitySearch(isOpen)
 
   const insertPlaceholder = (text: string) => {
     const textarea = promptRef.current
@@ -103,16 +62,6 @@ export default function StandaloneGenerateImageDialog({
       textarea.setSelectionRange(newPosition, newPosition)
     }, 0)
   }
-
-  const handleEntitySelect = (entity: EntityOption) => {
-    insertPlaceholder(entity.name)
-    setIsDropdownOpen(false)
-    setSearchTerm('')
-  }
-
-  const filteredEntities = allEntities.filter(e =>
-    e.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -176,11 +125,6 @@ export default function StandaloneGenerateImageDialog({
       setIsGenerating(false)
     }
   }
-
-  // Close dropdown when clicking outside
-  useClickOutside(dropdownRef, () => setIsDropdownOpen(false), {
-    enabled: isDropdownOpen,
-  })
 
   if (!isOpen) return null
 
@@ -256,55 +200,16 @@ export default function StandaloneGenerateImageDialog({
               ))}
 
               {/* Search dropdown */}
-              <div className="relative pt-4" ref={dropdownRef}>
-                <button
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="w-full px-3 py-2 text-sm text-foreground qt-bg-muted hover:qt-bg-muted/80 rounded border border-input transition-colors flex items-center justify-between"
-                  disabled={isGenerating}
-                >
-                  <span>Other Characters...</span>
-                  <svg className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {isDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-background border qt-border-default rounded-lg qt-shadow-lg max-h-64 overflow-hidden flex flex-col z-10">
-                    <div className="p-2 border-b qt-border-default">
-                      <input
-                        type="text"
-                        placeholder="Search..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="qt-input"
-                      />
-                    </div>
-                    <div className="overflow-y-auto">
-                      {filteredEntities.map(entity => (
-                        <button
-                          key={entity.id}
-                          onClick={() => handleEntitySelect(entity)}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2"
-                        >
-                          <span className={`px-1.5 py-0.5 text-xs rounded ${
-                            entity.type === 'character'
-                              ? 'bg-accent text-accent-foreground'
-                              : 'qt-bg-primary/20 text-primary'
-                          }`}>
-                            {entity.type === 'character' ? 'C' : 'P'}
-                          </span>
-                          <span className="text-foreground">{entity.name}</span>
-                        </button>
-                      ))}
-                      {filteredEntities.length === 0 && (
-                        <div className="px-3 py-4 qt-text-small text-center">
-                          No matches found
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <EntitySearchDropdown
+                isDropdownOpen={entitySearch.isDropdownOpen}
+                setIsDropdownOpen={entitySearch.setIsDropdownOpen}
+                searchTerm={entitySearch.searchTerm}
+                setSearchTerm={entitySearch.setSearchTerm}
+                filteredEntities={entitySearch.filteredEntities}
+                onEntitySelect={(entity) => entitySearch.handleEntitySelect(entity, insertPlaceholder)}
+                dropdownRef={entitySearch.dropdownRef}
+                disabled={isGenerating}
+              />
             </div>
 
             {/* Right side - Prompt input */}

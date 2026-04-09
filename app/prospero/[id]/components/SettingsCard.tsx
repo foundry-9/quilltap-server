@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import type { Project, EditForm } from '../types'
 import StateEditorModal from '@/components/state/StateEditorModal'
+import { ChevronIcon } from '@/components/ui/ChevronIcon'
 
 interface SettingsCardProps {
   project: Project
@@ -19,19 +20,6 @@ interface SettingsCardProps {
   expanded: boolean
   onToggle: () => void
   onProjectUpdate?: () => void
-}
-
-function ChevronIcon({ className, expanded }: { className?: string; expanded: boolean }) {
-  return (
-    <svg
-      className={`${className} transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-    </svg>
-  )
 }
 
 function SettingsIcon({ className }: { className?: string }) {

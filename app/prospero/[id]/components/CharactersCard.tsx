@@ -13,6 +13,7 @@ import Link from 'next/link'
 import Avatar from '@/components/ui/Avatar'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import type { Project } from '../types'
+import { ChevronIcon } from '@/components/ui/ChevronIcon'
 
 interface CharactersCardProps {
   project: Project
@@ -20,19 +21,6 @@ interface CharactersCardProps {
   onToggleAllowAnyCharacter: () => void
   expanded: boolean
   onToggle: () => void
-}
-
-function ChevronIcon({ className, expanded }: { className?: string; expanded: boolean }) {
-  return (
-    <svg
-      className={`${className} transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-    </svg>
-  )
 }
 
 function UsersIcon({ className }: { className?: string }) {

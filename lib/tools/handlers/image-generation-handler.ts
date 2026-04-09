@@ -20,7 +20,8 @@ import { convertToWebP } from '@/lib/files/webp-conversion';
 import { preparePromptExpansion, buildExpansionContext, parsePlaceholders, resolvePlaceholders } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
-import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
+import type { CheapLLMSettings, DangerousContentSettings } from '@/lib/schemas/settings.types';
+import type { ChatSettings } from '@/lib/schemas/types';
 import {
   resolveCharacterAppearances,
   sanitizeAppearancesIfNeeded,
@@ -464,66 +465,197 @@ async function expandPromptWithDescriptions(
 }
 
 /**
- * Execute the image generation tool
+ * Validate input and load the image profile and provider
  */
-export async function executeImageGenerationTool(
+async function validateAndLoadProfile(
   input: unknown,
   context: ImageToolExecutionContext
-): Promise<ImageGenerationToolOutput> {
-  let imageProfile: any = null;
+): Promise<{ toolInput: ImageGenerationToolInput; imageProfile: any } | ImageGenerationToolOutput> {
+  // 1. Validate input
+  if (!validateImageGenerationInput(input)) {
+    return {
+      success: false,
+      error: 'Invalid input: prompt is required and must be a non-empty string',
+      message: 'Image generation tool received invalid parameters',
+    };
+  }
 
+  const toolInput = input as unknown as ImageGenerationToolInput;
+
+  // 2. Load and validate profile
+  const profileResult = await loadAndValidateProfile(context.profileId, context.userId);
+  if (!profileResult.success) {
+    return profileResult.output as ImageGenerationToolOutput;
+  }
+
+  const imageProfile = profileResult.profile;
+
+  // 3. Validate provider
   try {
-    // 1. Validate input
-    if (!validateImageGenerationInput(input)) {
-      return {
-        success: false,
-        error: 'Invalid input: prompt is required and must be a non-empty string',
-        message: 'Image generation tool received invalid parameters',
-      };
+    createImageProvider(imageProfile.provider);
+  } catch (e) {
+    return {
+      success: false,
+      error: 'Unknown provider',
+      message: `Image provider "${imageProfile.provider}" is not supported`,
+      provider: imageProfile.provider,
+      model: imageProfile.modelName,
+    };
+  }
+
+  return { toolInput, imageProfile };
+}
+
+/**
+ * Classify content for dangerous material and reroute the image provider if needed
+ */
+async function classifyAndRouteForDangerousContent(
+  toolInput: ImageGenerationToolInput,
+  imageProfile: any,
+  chatSettings: ChatSettings | undefined,
+  dangerSettings: DangerousContentSettings,
+  cheapLLMSelection: CheapLLMSelection | null,
+  context: ImageToolExecutionContext
+): Promise<{
+  imagePromptDangerous: boolean;
+  effectiveImageProfile: any;
+  styleOptions: PromptExpansionOptions | undefined;
+}> {
+  let imagePromptDangerous = false;
+  let effectiveImageProfile = imageProfile;
+
+  // 5. Get style trigger phrase if available
+  let styleOptions: PromptExpansionOptions | undefined;
+  const constraints = getImageProviderConstraints(imageProfile.provider);
+
+  if (constraints?.styleInfo) {
+    // Determine the selected style from tool input or profile defaults
+    const selectedStyle =
+      toolInput.style ||
+      (imageProfile.parameters as Record<string, unknown>)?.style as string | undefined;
+
+    if (selectedStyle && constraints.styleInfo[selectedStyle]) {
+      const styleInfo = constraints.styleInfo[selectedStyle];
+      if (styleInfo.triggerPhrase) {
+        styleOptions = {
+          styleTriggerPhrase: styleInfo.triggerPhrase,
+          styleName: styleInfo.name,
+        };
+      }
     }
+  }
 
-    const toolInput = input as unknown as ImageGenerationToolInput;
-
-    // 2. Load and validate profile
-    const profileResult = await loadAndValidateProfile(context.profileId, context.userId);
-    if (!profileResult.success) {
-      return profileResult.output as ImageGenerationToolOutput;
-    }
-
-    imageProfile = profileResult.profile;
-
-    // 3. Validate provider
+  // 5b. Classify user's image prompt before expansion (scanImagePrompts)
+  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts && cheapLLMSelection) {
     try {
-      createImageProvider(imageProfile.provider);
-    } catch (e) {
-      return {
-        success: false,
-        error: 'Unknown provider',
-        message: `Image provider "${imageProfile.provider}" is not supported`,
-        provider: imageProfile.provider,
-        model: imageProfile.modelName,
-      };
-    }
+      const promptClassification = await classifyDangerousContent(
+        toolInput.prompt,
+        cheapLLMSelection,
+        context.userId,
+        dangerSettings,
+        context.chatId
+      );
 
-    // 4. Fetch user's chat settings for cheap LLM configuration
-    const repos = getRepositories();
-    let chatSettings;
-    try {
-      chatSettings = await repos.chatSettings.findByUserId(context.userId);
+      if (promptClassification.isDangerous) {
+        imagePromptDangerous = true;
+        logger.info('[Image Generation] User image prompt classified as dangerous', {
+          chatId: context.chatId,
+          score: promptClassification.score,
+          categories: promptClassification.categories.map(c => c.category),
+          mode: dangerSettings.mode,
+        });
+
+        // If AUTO_ROUTE, reroute the image provider
+        if (dangerSettings.mode === 'AUTO_ROUTE') {
+          const routeResult = await resolveImageProviderForDangerousContent(
+            imageProfile,
+            imageProfile.apiKey.key_value,
+            dangerSettings,
+            context.userId
+          );
+
+          if (routeResult.rerouted) {
+            effectiveImageProfile = { ...routeResult.imageProfile, apiKey: imageProfile.apiKey };
+            // Reload the full profile with API key for the rerouted provider
+            const reroutedProfileResult = await loadAndValidateProfile(routeResult.imageProfile.id, context.userId);
+            if (reroutedProfileResult.success && reroutedProfileResult.profile) {
+              effectiveImageProfile = reroutedProfileResult.profile;
+            }
+            logger.info('[Image Generation] Rerouted to uncensored image provider', {
+              chatId: context.chatId,
+              originalProfile: imageProfile.name,
+              uncensoredProfile: routeResult.imageProfile.name,
+              reason: routeResult.reason,
+            });
+          } else {
+            logger.warn('[Image Generation] No uncensored image provider available, using original', {
+              chatId: context.chatId,
+              reason: routeResult.reason,
+            });
+          }
+        }
+      }
     } catch (error) {
-      logger.warn('[Image Generation] Failed to load chat settings, using defaults', {
+      // Fail safe - never block on classification errors
+      logger.error('[Image Generation] Image prompt classification failed, continuing normally', {
+        chatId: context.chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return { imagePromptDangerous, effectiveImageProfile, styleOptions };
+}
+
+/**
+ * Resolve character appearances including wardrobe and sanitization
+ */
+async function resolveAppearances(
+  toolInput: ImageGenerationToolInput,
+  chatSettings: ChatSettings | undefined,
+  dangerSettings: DangerousContentSettings,
+  cheapLLMSelection: CheapLLMSelection | null,
+  context: ImageToolExecutionContext
+): Promise<{
+  recentChatMessages: ChatMessage[];
+  isDangerousChat: boolean;
+  resolvedAppearances: ResolvedCharacterAppearance[] | undefined;
+}> {
+  const repos = getRepositories();
+
+  // 5c. Fetch recent chat messages for appearance resolution (if chatId)
+  let recentChatMessages: ChatMessage[] = [];
+  let isDangerousChat = false;
+  if (context.chatId) {
+    try {
+      const chat = await repos.chats.findById(context.chatId);
+      isDangerousChat = chat?.isDangerousChat === true;
+
+      const chatEvents = await repos.chats.getMessages(context.chatId);
+      recentChatMessages = chatEvents
+        .filter((event: any): event is Extract<typeof event, { type: 'message' }> => event.type === 'message')
+        .filter((msg: any) => msg.role === 'USER' || msg.role === 'ASSISTANT')
+        .slice(-20)
+        .map((msg: any) => ({
+          role: msg.role === 'USER' ? 'user' as const : 'assistant' as const,
+          content: msg.content,
+        }));
+
+    } catch (error) {
+      logger.warn('[Image Generation] Failed to fetch chat messages, skipping appearance resolution', {
+        chatId: context.chatId,
         errorMessage: getErrorMessage(error),
       });
     }
+  }
 
-    // 4b. Resolve dangerous content settings
-    const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
-    const dangerSettings = dangerousContentResolved.settings;
-
-    // 4c. Build cheap LLM selection for dangerous content classification
-    let cheapLLMSelection: CheapLLMSelection | null = null;
-    if (dangerSettings.mode !== 'OFF' && (dangerSettings.scanImagePrompts || dangerSettings.scanImageGeneration)) {
-      try {
+  // 5d. Resolve character appearances (context-aware)
+  let resolvedAppearances: ResolvedCharacterAppearance[] | undefined;
+  if (parsePlaceholders(toolInput.prompt).length > 0) {
+    try {
+      // Build a cheap LLM selection for appearance resolution
+      let appearanceLLMSelection = cheapLLMSelection;
+      if (!appearanceLLMSelection) {
         const allProfiles = await repos.connections.findByUserId(context.userId);
         const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
           strategy: chatSettings.cheapLLMSettings.strategy,
@@ -534,326 +666,332 @@ export async function executeImageGenerationTool(
 
         const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
         if (defaultProfile) {
-          cheapLLMSelection = getCheapLLMProvider(
+          appearanceLLMSelection = getCheapLLMProvider(
             defaultProfile,
             cheapLLMConfig,
             allProfiles,
             false
           );
         }
-      } catch (error) {
-        logger.warn('[Image Generation] Failed to build cheap LLM selection for danger classification', {
-          errorMessage: getErrorMessage(error),
-        });
       }
-    }
 
-    // Track whether image prompt was flagged as dangerous (for metadata)
-    let imagePromptDangerous = false;
-    let effectiveImageProfile = imageProfile;
-
-    // 5. Get style trigger phrase if available
-    let styleOptions: PromptExpansionOptions | undefined;
-    const constraints = getImageProviderConstraints(imageProfile.provider);
-
-    if (constraints?.styleInfo) {
-      // Determine the selected style from tool input or profile defaults
-      const selectedStyle =
-        toolInput.style ||
-        (imageProfile.parameters as Record<string, unknown>)?.style as string | undefined;
-
-      if (selectedStyle && constraints.styleInfo[selectedStyle]) {
-        const styleInfo = constraints.styleInfo[selectedStyle];
-        if (styleInfo.triggerPhrase) {
-          styleOptions = {
-            styleTriggerPhrase: styleInfo.triggerPhrase,
-            styleName: styleInfo.name,
-          };
-        }
-      }
-    }
-
-    // 5b. Classify user's image prompt before expansion (scanImagePrompts)
-    if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts && cheapLLMSelection) {
-      try {
-        const promptClassification = await classifyDangerousContent(
-          toolInput.prompt,
-          cheapLLMSelection,
-          context.userId,
+      // For dangerous chats, use uncensored provider for appearance resolution
+      if (isDangerousChat && appearanceLLMSelection) {
+        const profilesForUncensored = await repos.connections.findByUserId(context.userId);
+        appearanceLLMSelection = resolveUncensoredCheapLLMSelection(
+          appearanceLLMSelection,
+          true,
           dangerSettings,
-          context.chatId
+          profilesForUncensored
+        );
+      }
+
+      if (appearanceLLMSelection) {
+        // Resolve placeholders to get character data
+        const rawPlaceholders = parsePlaceholders(toolInput.prompt);
+        const resolvedPlaceholders = await resolvePlaceholders(
+          rawPlaceholders,
+          context.userId,
+          context.chatId,
+          context.callingParticipantId
         );
 
-        if (promptClassification.isDangerous) {
-          imagePromptDangerous = true;
-          logger.info('[Image Generation] User image prompt classified as dangerous', {
-            chatId: context.chatId,
-            score: promptClassification.score,
-            categories: promptClassification.categories.map(c => c.category),
-            mode: dangerSettings.mode,
-          });
-
-          // If AUTO_ROUTE, reroute the image provider
-          if (dangerSettings.mode === 'AUTO_ROUTE') {
-            const routeResult = await resolveImageProviderForDangerousContent(
-              imageProfile,
-              imageProfile.apiKey.key_value,
-              dangerSettings,
-              context.userId
-            );
-
-            if (routeResult.rerouted) {
-              effectiveImageProfile = { ...routeResult.imageProfile, apiKey: imageProfile.apiKey };
-              // Reload the full profile with API key for the rerouted provider
-              const reroutedProfileResult = await loadAndValidateProfile(routeResult.imageProfile.id, context.userId);
-              if (reroutedProfileResult.success && reroutedProfileResult.profile) {
-                effectiveImageProfile = reroutedProfileResult.profile;
-              }
-              logger.info('[Image Generation] Rerouted to uncensored image provider', {
-                chatId: context.chatId,
-                originalProfile: imageProfile.name,
-                uncensoredProfile: routeResult.imageProfile.name,
-                reason: routeResult.reason,
-              });
-            } else {
-              logger.warn('[Image Generation] No uncensored image provider available, using original', {
-                chatId: context.chatId,
-                reason: routeResult.reason,
-              });
-            }
-          }
-        }
-      } catch (error) {
-        // Fail safe - never block on classification errors
-        logger.error('[Image Generation] Image prompt classification failed, continuing normally', {
-          chatId: context.chatId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-
-    // 5c. Fetch recent chat messages for appearance resolution (if chatId)
-    let recentChatMessages: ChatMessage[] = [];
-    let isDangerousChat = false;
-    if (context.chatId) {
-      try {
-        const chat = await repos.chats.findById(context.chatId);
-        isDangerousChat = chat?.isDangerousChat === true;
-
-        const chatEvents = await repos.chats.getMessages(context.chatId);
-        recentChatMessages = chatEvents
-          .filter((event: any): event is Extract<typeof event, { type: 'message' }> => event.type === 'message')
-          .filter((msg: any) => msg.role === 'USER' || msg.role === 'ASSISTANT')
-          .slice(-20)
-          .map((msg: any) => ({
-            role: msg.role === 'USER' ? 'user' as const : 'assistant' as const,
-            content: msg.content,
-          }));
-
-      } catch (error) {
-        logger.warn('[Image Generation] Failed to fetch chat messages, skipping appearance resolution', {
-          chatId: context.chatId,
-          errorMessage: getErrorMessage(error),
-        });
-      }
-    }
-
-    // 5d. Resolve character appearances (context-aware)
-    let resolvedAppearances: ResolvedCharacterAppearance[] | undefined;
-    if (parsePlaceholders(toolInput.prompt).length > 0) {
-      try {
-        // Build a cheap LLM selection for appearance resolution
-        let appearanceLLMSelection = cheapLLMSelection;
-        if (!appearanceLLMSelection) {
-          const allProfiles = await repos.connections.findByUserId(context.userId);
-          const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
-            strategy: chatSettings.cheapLLMSettings.strategy,
-            userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
-            defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
-            fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
-          } : DEFAULT_CHEAP_LLM_CONFIG;
-
-          const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-          if (defaultProfile) {
-            appearanceLLMSelection = getCheapLLMProvider(
-              defaultProfile,
-              cheapLLMConfig,
-              allProfiles,
-              false
-            );
-          }
-        }
-
-        // For dangerous chats, use uncensored provider for appearance resolution
-        if (isDangerousChat && appearanceLLMSelection) {
-          const profilesForUncensored = await repos.connections.findByUserId(context.userId);
-          appearanceLLMSelection = resolveUncensoredCheapLLMSelection(
-            appearanceLLMSelection,
-            true,
-            dangerSettings,
-            profilesForUncensored
-          );
-        }
-
-        if (appearanceLLMSelection) {
-          // Resolve placeholders to get character data
-          const rawPlaceholders = parsePlaceholders(toolInput.prompt);
-          const resolvedPlaceholders = await resolvePlaceholders(
-            rawPlaceholders,
-            context.userId,
-            context.chatId,
-            context.callingParticipantId
-          );
-
-          // Build appearance inputs from resolved placeholders, enriched with equipped wardrobe items
-          const repos = getRepositories();
-          const appearanceInputs: AppearanceResolutionInput[] = [];
-          for (const p of resolvedPlaceholders.filter(p => p.entityId && p.descriptions?.length)) {
-            let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
-            if (context.chatId && p.entityId) {
-              try {
-                const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(context.chatId, p.entityId);
-                if (equippedSlots) {
-                  const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
-                  if (equippedItemIds.length > 0) {
-                    const items = await repos.wardrobe.findByIds(equippedItemIds);
-                    const itemsMap = new Map(items.map(item => [item.id, item]));
-                    equippedWardrobeItems = [];
-                    for (const [slot, itemId] of Object.entries(equippedSlots)) {
-                      if (itemId) {
-                        const item = itemsMap.get(itemId);
-                        if (item) {
-                          equippedWardrobeItems.push({ slot, title: item.title, description: item.description });
-                        }
+        // Build appearance inputs from resolved placeholders, enriched with equipped wardrobe items
+        const repos = getRepositories();
+        const appearanceInputs: AppearanceResolutionInput[] = [];
+        for (const p of resolvedPlaceholders.filter(p => p.entityId && p.descriptions?.length)) {
+          let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
+          if (context.chatId && p.entityId) {
+            try {
+              const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(context.chatId, p.entityId);
+              if (equippedSlots) {
+                const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
+                if (equippedItemIds.length > 0) {
+                  const items = await repos.wardrobe.findByIds(equippedItemIds);
+                  const itemsMap = new Map(items.map(item => [item.id, item]));
+                  equippedWardrobeItems = [];
+                  for (const [slot, itemId] of Object.entries(equippedSlots)) {
+                    if (itemId) {
+                      const item = itemsMap.get(itemId);
+                      if (item) {
+                        equippedWardrobeItems.push({ slot, title: item.title, description: item.description });
                       }
                     }
                   }
                 }
-              } catch (err) {
-                logger.warn('[Image Generation] Failed to load equipped wardrobe items for character', {
-                  characterId: p.entityId,
-                  chatId: context.chatId,
-                  error: getErrorMessage(err),
-                });
               }
-            }
-            appearanceInputs.push({
-              characterId: p.entityId!,
-              characterName: p.name,
-              physicalDescriptions: p.descriptions || [],
-              equippedWardrobeItems,
-            });
-          }
-
-          if (appearanceInputs.length > 0) {
-            const resolutionResult = await resolveCharacterAppearances(
-              appearanceInputs,
-              recentChatMessages,
-              toolInput.prompt,
-              appearanceLLMSelection,
-              context.userId,
-              context.chatId
-            );
-            resolvedAppearances = resolutionResult.appearances;
-
-            // Determine if uncensored image provider is available
-            const hasUncensoredImageProvider = Boolean(
-              dangerSettings.uncensoredImageProfileId
-            );
-
-            // Sanitize appearances through the Concierge
-            resolvedAppearances = await sanitizeAppearancesIfNeeded(
-              resolvedAppearances,
-              dangerSettings,
-              isDangerousChat,
-              hasUncensoredImageProvider,
-              appearanceLLMSelection,
-              context.userId,
-              context.chatId
-            );
-
-          }
-        }
-      } catch (error) {
-        // Fail safe — fall back to current behavior
-        logger.warn('[Image Generation] Appearance resolution failed, using raw descriptions', {
-          chatId: context.chatId,
-          errorMessage: getErrorMessage(error),
-        });
-        resolvedAppearances = undefined;
-      }
-    }
-
-    // 6. Expand prompt with character/persona descriptions if needed
-    let expandedPrompt = toolInput.prompt;
-    try {
-      const expandResult = await expandPromptWithDescriptions(
-        toolInput.prompt,
-        context.userId,
-        effectiveImageProfile.provider,
-        context.chatId,
-        context.callingParticipantId,
-        chatSettings?.cheapLLMSettings,
-        styleOptions,
-        imagePromptDangerous,
-        resolvedAppearances
-      );
-      expandedPrompt = expandResult.expandedPrompt;
-    } catch (error) {
-      // If expansion fails, just use the original prompt
-      logger.warn('Prompt expansion failed, using original prompt:', { errorMessage: getErrorMessage(error) });
-      expandedPrompt = toolInput.prompt;
-    }
-
-    // 6b. Classify expanded prompt before image generation (scanImageGeneration)
-    if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImageGeneration && cheapLLMSelection && expandedPrompt !== toolInput.prompt) {
-      try {
-        const expandedClassification = await classifyDangerousContent(
-          expandedPrompt,
-          cheapLLMSelection,
-          context.userId,
-          dangerSettings,
-          context.chatId
-        );
-
-        if (expandedClassification.isDangerous && !imagePromptDangerous) {
-          // The expanded prompt is dangerous but original wasn't - still try to reroute
-          logger.info('[Image Generation] Expanded prompt classified as dangerous', {
-            chatId: context.chatId,
-            score: expandedClassification.score,
-            categories: expandedClassification.categories.map(c => c.category),
-            mode: dangerSettings.mode,
-          });
-
-          if (dangerSettings.mode === 'AUTO_ROUTE' && effectiveImageProfile === imageProfile) {
-            const routeResult = await resolveImageProviderForDangerousContent(
-              imageProfile,
-              imageProfile.apiKey.key_value,
-              dangerSettings,
-              context.userId
-            );
-
-            if (routeResult.rerouted) {
-              const reroutedProfileResult = await loadAndValidateProfile(routeResult.imageProfile.id, context.userId);
-              if (reroutedProfileResult.success && reroutedProfileResult.profile) {
-                effectiveImageProfile = reroutedProfileResult.profile;
-              }
-              logger.info('[Image Generation] Rerouted to uncensored image provider (expanded prompt)', {
+            } catch (err) {
+              logger.warn('[Image Generation] Failed to load equipped wardrobe items for character', {
+                characterId: p.entityId,
                 chatId: context.chatId,
-                originalProfile: imageProfile.name,
-                uncensoredProfile: routeResult.imageProfile.name,
+                error: getErrorMessage(err),
               });
             }
           }
+          appearanceInputs.push({
+            characterId: p.entityId!,
+            characterName: p.name,
+            physicalDescriptions: p.descriptions || [],
+            equippedWardrobeItems,
+          });
         }
-      } catch (error) {
-        // Fail safe
-        logger.error('[Image Generation] Expanded prompt classification failed, continuing normally', {
-          chatId: context.chatId,
-          error: error instanceof Error ? error.message : String(error),
-        });
+
+        if (appearanceInputs.length > 0) {
+          const resolutionResult = await resolveCharacterAppearances(
+            appearanceInputs,
+            recentChatMessages,
+            toolInput.prompt,
+            appearanceLLMSelection,
+            context.userId,
+            context.chatId
+          );
+          resolvedAppearances = resolutionResult.appearances;
+
+          // Determine if uncensored image provider is available
+          const hasUncensoredImageProvider = Boolean(
+            dangerSettings.uncensoredImageProfileId
+          );
+
+          // Sanitize appearances through the Concierge
+          resolvedAppearances = await sanitizeAppearancesIfNeeded(
+            resolvedAppearances,
+            dangerSettings,
+            isDangerousChat,
+            hasUncensoredImageProvider,
+            appearanceLLMSelection,
+            context.userId,
+            context.chatId
+          );
+
+        }
       }
+    } catch (error) {
+      // Fail safe — fall back to current behavior
+      logger.warn('[Image Generation] Appearance resolution failed, using raw descriptions', {
+        chatId: context.chatId,
+        errorMessage: getErrorMessage(error),
+      });
+      resolvedAppearances = undefined;
     }
+  }
+
+  return { recentChatMessages, isDangerousChat, resolvedAppearances };
+}
+
+/**
+ * Expand the prompt with context and classify expanded content for dangerous material
+ */
+async function expandPromptWithContext(
+  toolInput: ImageGenerationToolInput,
+  imageProfile: any,
+  effectiveImageProfile: any,
+  chatSettings: ChatSettings | undefined,
+  dangerSettings: DangerousContentSettings,
+  cheapLLMSelection: CheapLLMSelection | null,
+  imagePromptDangerous: boolean,
+  styleOptions: PromptExpansionOptions | undefined,
+  resolvedAppearances: ResolvedCharacterAppearance[] | undefined,
+  context: ImageToolExecutionContext
+): Promise<{
+  expandedPrompt: string;
+  effectiveImageProfile: any;
+}> {
+  // 6. Expand prompt with character/persona descriptions if needed
+  let expandedPrompt = toolInput.prompt;
+  try {
+    const expandResult = await expandPromptWithDescriptions(
+      toolInput.prompt,
+      context.userId,
+      effectiveImageProfile.provider,
+      context.chatId,
+      context.callingParticipantId,
+      chatSettings?.cheapLLMSettings,
+      styleOptions,
+      imagePromptDangerous,
+      resolvedAppearances
+    );
+    expandedPrompt = expandResult.expandedPrompt;
+  } catch (error) {
+    // If expansion fails, just use the original prompt
+    logger.warn('Prompt expansion failed, using original prompt:', { errorMessage: getErrorMessage(error) });
+    expandedPrompt = toolInput.prompt;
+  }
+
+  // 6b. Classify expanded prompt before image generation (scanImageGeneration)
+  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImageGeneration && cheapLLMSelection && expandedPrompt !== toolInput.prompt) {
+    try {
+      const expandedClassification = await classifyDangerousContent(
+        expandedPrompt,
+        cheapLLMSelection,
+        context.userId,
+        dangerSettings,
+        context.chatId
+      );
+
+      if (expandedClassification.isDangerous && !imagePromptDangerous) {
+        // The expanded prompt is dangerous but original wasn't - still try to reroute
+        logger.info('[Image Generation] Expanded prompt classified as dangerous', {
+          chatId: context.chatId,
+          score: expandedClassification.score,
+          categories: expandedClassification.categories.map(c => c.category),
+          mode: dangerSettings.mode,
+        });
+
+        if (dangerSettings.mode === 'AUTO_ROUTE' && effectiveImageProfile === imageProfile) {
+          const routeResult = await resolveImageProviderForDangerousContent(
+            imageProfile,
+            imageProfile.apiKey.key_value,
+            dangerSettings,
+            context.userId
+          );
+
+          if (routeResult.rerouted) {
+            const reroutedProfileResult = await loadAndValidateProfile(routeResult.imageProfile.id, context.userId);
+            if (reroutedProfileResult.success && reroutedProfileResult.profile) {
+              effectiveImageProfile = reroutedProfileResult.profile;
+            }
+            logger.info('[Image Generation] Rerouted to uncensored image provider (expanded prompt)', {
+              chatId: context.chatId,
+              originalProfile: imageProfile.name,
+              uncensoredProfile: routeResult.imageProfile.name,
+            });
+          }
+        }
+      }
+    } catch (error) {
+      // Fail safe
+      logger.error('[Image Generation] Expanded prompt classification failed, continuing normally', {
+        chatId: context.chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return { expandedPrompt, effectiveImageProfile };
+}
+
+/**
+ * Load chat settings and build the cheap LLM selection for dangerous content classification
+ */
+async function loadSettingsAndBuildCheapLLM(
+  userId: string,
+  chatSettings: ChatSettings | undefined
+): Promise<{
+  dangerSettings: DangerousContentSettings;
+  cheapLLMSelection: CheapLLMSelection | null;
+}> {
+  // 4b. Resolve dangerous content settings
+  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
+  const dangerSettings = dangerousContentResolved.settings;
+
+  // 4c. Build cheap LLM selection for dangerous content classification
+  let cheapLLMSelection: CheapLLMSelection | null = null;
+  if (dangerSettings.mode !== 'OFF' && (dangerSettings.scanImagePrompts || dangerSettings.scanImageGeneration)) {
+    try {
+      const repos = getRepositories();
+      const allProfiles = await repos.connections.findByUserId(userId);
+      const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
+        strategy: chatSettings.cheapLLMSettings.strategy,
+        userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
+        defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
+        fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
+      } : DEFAULT_CHEAP_LLM_CONFIG;
+
+      const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
+      if (defaultProfile) {
+        cheapLLMSelection = getCheapLLMProvider(
+          defaultProfile,
+          cheapLLMConfig,
+          allProfiles,
+          false
+        );
+      }
+    } catch (error) {
+      logger.warn('[Image Generation] Failed to build cheap LLM selection for danger classification', {
+        errorMessage: getErrorMessage(error),
+      });
+    }
+  }
+
+  return { dangerSettings, cheapLLMSelection };
+}
+
+/**
+ * Execute the image generation tool
+ */
+export async function executeImageGenerationTool(
+  input: unknown,
+  context: ImageToolExecutionContext
+): Promise<ImageGenerationToolOutput> {
+  let imageProfile: any = null;
+
+  try {
+    // 1-3. Validate input, load profile, validate provider
+    const validationResult = await validateAndLoadProfile(input, context);
+    if ('success' in validationResult && !('toolInput' in validationResult)) {
+      return validationResult as ImageGenerationToolOutput;
+    }
+    const { toolInput, imageProfile: loadedProfile } = validationResult as { toolInput: ImageGenerationToolInput; imageProfile: any };
+    imageProfile = loadedProfile;
+
+    // 4. Fetch user's chat settings for cheap LLM configuration
+    const repos = getRepositories();
+    let chatSettings: ChatSettings | undefined;
+    try {
+      chatSettings = await repos.chatSettings.findByUserId(context.userId) ?? undefined;
+    } catch (error) {
+      logger.warn('[Image Generation] Failed to load chat settings, using defaults', {
+        errorMessage: getErrorMessage(error),
+      });
+    }
+
+    // 4b-4c. Resolve dangerous content settings and build cheap LLM selection
+    const { dangerSettings, cheapLLMSelection } = await loadSettingsAndBuildCheapLLM(
+      context.userId,
+      chatSettings
+    );
+
+    // 5-5b. Classify content, resolve style options, and reroute if needed
+    const {
+      imagePromptDangerous,
+      effectiveImageProfile: profileAfterClassification,
+      styleOptions,
+    } = await classifyAndRouteForDangerousContent(
+      toolInput,
+      imageProfile,
+      chatSettings,
+      dangerSettings,
+      cheapLLMSelection,
+      context
+    );
+
+    // 5c-5d. Resolve character appearances
+    const {
+      resolvedAppearances,
+    } = await resolveAppearances(
+      toolInput,
+      chatSettings,
+      dangerSettings,
+      cheapLLMSelection,
+      context
+    );
+
+    // 6-6b. Expand prompt and classify expanded content
+    const {
+      expandedPrompt,
+      effectiveImageProfile: finalProfile,
+    } = await expandPromptWithContext(
+      toolInput,
+      imageProfile,
+      profileAfterClassification,
+      chatSettings,
+      dangerSettings,
+      cheapLLMSelection,
+      imagePromptDangerous,
+      styleOptions,
+      resolvedAppearances,
+      context
+    );
 
     // Update the tool input with the expanded prompt
     const finalInput = {
@@ -864,7 +1002,7 @@ export async function executeImageGenerationTool(
     // 7. Generate images (using effective profile which may have been rerouted)
     const savedImages = await generateImagesWithProvider(
       finalInput,
-      effectiveImageProfile,
+      finalProfile,
       context.userId,
       context.chatId
     );
@@ -873,9 +1011,9 @@ export async function executeImageGenerationTool(
     return {
       success: true,
       images: savedImages,
-      message: `Successfully generated ${savedImages.length} image(s) using ${effectiveImageProfile.modelName}`,
-      provider: effectiveImageProfile.provider,
-      model: effectiveImageProfile.modelName,
+      message: `Successfully generated ${savedImages.length} image(s) using ${finalProfile.modelName}`,
+      provider: finalProfile.provider,
+      model: finalProfile.modelName,
       expandedPrompt: expandedPrompt,
     };
   } catch (error) {

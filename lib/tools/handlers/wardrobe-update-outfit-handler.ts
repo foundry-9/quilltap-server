@@ -7,12 +7,12 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { enqueueCharacterAvatarGeneration } from '@/lib/background-jobs/queue-service';
 import type { WardrobeUpdateOutfitToolInput, WardrobeUpdateOutfitToolOutput } from '../wardrobe-update-outfit-tool';
 import { validateWardrobeUpdateOutfitInput } from '../wardrobe-update-outfit-tool';
 import { EMPTY_EQUIPPED_SLOTS, buildCoverageSummary, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
+import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 
 export interface WardrobeUpdateOutfitToolContext {
   userId: string;
@@ -155,7 +155,12 @@ export async function executeWardrobeUpdateOutfitTool(
       const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
 
       // Trigger avatar generation if enabled
-      await triggerAvatarGenerationIfEnabled(repos, context);
+      await triggerAvatarGenerationIfEnabled(repos, {
+        userId: context.userId,
+        chatId: context.chatId,
+        characterId: context.characterId,
+        callerContext: 'wardrobe-update-outfit-handler',
+      });
 
       return {
         success: true,
@@ -280,7 +285,12 @@ export async function executeWardrobeUpdateOutfitTool(
       const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
 
       // Trigger avatar generation if enabled
-      await triggerAvatarGenerationIfEnabled(repos, context);
+      await triggerAvatarGenerationIfEnabled(repos, {
+        userId: context.userId,
+        chatId: context.chatId,
+        characterId: context.characterId,
+        callerContext: 'wardrobe-update-outfit-handler',
+      });
 
       return {
         success: true,
@@ -307,7 +317,12 @@ export async function executeWardrobeUpdateOutfitTool(
       const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
 
       // Trigger avatar generation if enabled
-      await triggerAvatarGenerationIfEnabled(repos, context);
+      await triggerAvatarGenerationIfEnabled(repos, {
+        userId: context.userId,
+        chatId: context.chatId,
+        characterId: context.characterId,
+        callerContext: 'wardrobe-update-outfit-handler',
+      });
 
       return {
         success: true,
@@ -351,74 +366,6 @@ export async function executeWardrobeUpdateOutfitTool(
       coverage_summary: '',
       error: error instanceof Error ? error.message : 'Unknown error during outfit update',
     };
-  }
-}
-
-/**
- * Trigger avatar generation if the chat has avatarGenerationEnabled.
- * Resolves the image profile from chat-level setting or falls back to default.
- * Failures are caught and logged — they must not affect the tool result.
- */
-async function triggerAvatarGenerationIfEnabled(
-  repos: ReturnType<typeof getRepositories>,
-  context: WardrobeUpdateOutfitToolContext
-): Promise<void> {
-  try {
-    const chat = await repos.chats.findById(context.chatId);
-    if (!chat?.avatarGenerationEnabled) {
-      logger.debug('Avatar generation not enabled for chat, skipping', {
-        context: 'wardrobe-update-outfit-handler',
-        chatId: context.chatId,
-      });
-      return;
-    }
-
-    // Resolve image profile: chat-level first, then default
-    let imageProfileId: string | null = null;
-
-    if (chat.imageProfileId) {
-      const profile = await repos.imageProfiles.findById(chat.imageProfileId);
-      if (profile) {
-        imageProfileId = profile.id;
-      }
-    }
-
-    if (!imageProfileId) {
-      const allProfiles = await repos.imageProfiles.findAll();
-      const defaultProfile = allProfiles.find((p) => p.isDefault) || null;
-      if (defaultProfile) {
-        imageProfileId = defaultProfile.id;
-      }
-    }
-
-    if (!imageProfileId) {
-      logger.debug('No image profile available for avatar generation, skipping', {
-        context: 'wardrobe-update-outfit-handler',
-        chatId: context.chatId,
-        characterId: context.characterId,
-      });
-      return;
-    }
-
-    await enqueueCharacterAvatarGeneration(context.userId, {
-      chatId: context.chatId,
-      characterId: context.characterId,
-      imageProfileId,
-    });
-
-    logger.debug('Avatar generation enqueued after outfit change', {
-      context: 'wardrobe-update-outfit-handler',
-      chatId: context.chatId,
-      characterId: context.characterId,
-      imageProfileId,
-    });
-  } catch (error) {
-    logger.warn('Failed to enqueue avatar generation after outfit change', {
-      context: 'wardrobe-update-outfit-handler',
-      chatId: context.chatId,
-      characterId: context.characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
   }
 }
 

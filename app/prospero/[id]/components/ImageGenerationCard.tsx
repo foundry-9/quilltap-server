@@ -7,6 +7,7 @@
  */
 
 import type { Project, BackgroundDisplayMode } from '../types'
+import { ChevronIcon } from '@/components/ui/ChevronIcon'
 
 interface ImageGenerationCardProps {
   project: Project
@@ -14,19 +15,6 @@ interface ImageGenerationCardProps {
   onBackgroundDisplayModeChange: (mode: BackgroundDisplayMode) => void
   expanded: boolean
   onToggle: () => void
-}
-
-function ChevronIcon({ className, expanded }: { className?: string; expanded: boolean }) {
-  return (
-    <svg
-      className={`${className} transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-    </svg>
-  )
 }
 
 function ImageIcon({ className }: { className?: string }) {

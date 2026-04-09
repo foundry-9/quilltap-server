@@ -6,12 +6,12 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { enqueueCharacterAvatarGeneration } from '@/lib/background-jobs/queue-service';
 import type { WardrobeCreateItemToolInput, WardrobeCreateItemToolOutput } from '../wardrobe-create-item-tool';
 import { validateWardrobeCreateItemInput } from '../wardrobe-create-item-tool';
 import type { WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types';
 import { equipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
+import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 
 export interface WardrobeCreateItemToolContext {
   userId: string;
@@ -124,7 +124,12 @@ export async function executeWardrobeCreateItemTool(
       });
 
       // Trigger avatar generation if enabled
-      await triggerAvatarGenerationIfEnabled(repos, context);
+      await triggerAvatarGenerationIfEnabled(repos, {
+        userId: context.userId,
+        chatId: context.chatId,
+        characterId: context.characterId,
+        callerContext: 'wardrobe-create-item-handler',
+      });
     }
 
     logger.info('Wardrobe create item completed', {
@@ -159,74 +164,6 @@ export async function executeWardrobeCreateItemTool(
       equipped: false,
       error: error instanceof Error ? error.message : 'Unknown error during wardrobe item creation',
     };
-  }
-}
-
-/**
- * Trigger avatar generation if the chat has avatarGenerationEnabled.
- * Resolves the image profile from chat-level setting or falls back to default.
- * Failures are caught and logged — they must not affect the tool result.
- */
-async function triggerAvatarGenerationIfEnabled(
-  repos: ReturnType<typeof getRepositories>,
-  context: WardrobeCreateItemToolContext
-): Promise<void> {
-  try {
-    const chat = await repos.chats.findById(context.chatId);
-    if (!chat?.avatarGenerationEnabled) {
-      logger.debug('Avatar generation not enabled for chat, skipping', {
-        context: 'wardrobe-create-item-handler',
-        chatId: context.chatId,
-      });
-      return;
-    }
-
-    // Resolve image profile: chat-level first, then default
-    let imageProfileId: string | null = null;
-
-    if (chat.imageProfileId) {
-      const profile = await repos.imageProfiles.findById(chat.imageProfileId);
-      if (profile) {
-        imageProfileId = profile.id;
-      }
-    }
-
-    if (!imageProfileId) {
-      const allProfiles = await repos.imageProfiles.findAll();
-      const defaultProfile = allProfiles.find((p) => p.isDefault) || null;
-      if (defaultProfile) {
-        imageProfileId = defaultProfile.id;
-      }
-    }
-
-    if (!imageProfileId) {
-      logger.debug('No image profile available for avatar generation, skipping', {
-        context: 'wardrobe-create-item-handler',
-        chatId: context.chatId,
-        characterId: context.characterId,
-      });
-      return;
-    }
-
-    await enqueueCharacterAvatarGeneration(context.userId, {
-      chatId: context.chatId,
-      characterId: context.characterId,
-      imageProfileId,
-    });
-
-    logger.debug('Avatar generation enqueued after outfit change', {
-      context: 'wardrobe-create-item-handler',
-      chatId: context.chatId,
-      characterId: context.characterId,
-      imageProfileId,
-    });
-  } catch (error) {
-    logger.warn('Failed to enqueue avatar generation after outfit change', {
-      context: 'wardrobe-create-item-handler',
-      chatId: context.chatId,
-      characterId: context.characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
   }
 }
 

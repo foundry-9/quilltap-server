@@ -15,11 +15,11 @@ interface WardrobeItemCardProps {
   isShared?: boolean
 }
 
-const TYPE_COLORS: Record<WardrobeItemType, string> = {
-  top: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-  bottom: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-  footwear: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-  accessories: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+const TYPE_BADGE_CLASSES: Record<WardrobeItemType, string> = {
+  top: 'qt-badge-wardrobe-top',
+  bottom: 'qt-badge-wardrobe-bottom',
+  footwear: 'qt-badge-wardrobe-footwear',
+  accessories: 'qt-badge-wardrobe-accessories',
 }
 
 export function WardrobeItemCard({
@@ -63,7 +63,7 @@ export function WardrobeItemCard({
               </span>
             )}
             {isShared && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium qt-badge-wardrobe-shared">
                 Shared
               </span>
             )}
@@ -77,7 +77,7 @@ export function WardrobeItemCard({
             {item.types.map((type) => (
               <span
                 key={type}
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[type]}`}
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_BADGE_CLASSES[type]}`}
               >
                 {type}
               </span>

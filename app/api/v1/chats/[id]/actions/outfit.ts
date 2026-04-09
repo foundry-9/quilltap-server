@@ -9,9 +9,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { serverError, notFound, badRequest } from '@/lib/api/responses';
-import { enqueueCharacterAvatarGeneration } from '@/lib/background-jobs/queue-service';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
+import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 const equipSlotSchema = z.object({
@@ -134,55 +134,12 @@ export async function handleEquipSlot(
     }
 
     // Trigger avatar generation if enabled for this chat
-    try {
-      const chat = await repos.chats.findById(chatId);
-      if (chat?.avatarGenerationEnabled) {
-        let imageProfileId: string | null = null;
-
-        if (chat.imageProfileId) {
-          const profile = await repos.imageProfiles.findById(chat.imageProfileId);
-          if (profile) {
-            imageProfileId = profile.id;
-          }
-        }
-
-        if (!imageProfileId) {
-          const allProfiles = await repos.imageProfiles.findAll();
-          const defaultProfile = allProfiles.find((p) => p.isDefault) || null;
-          if (defaultProfile) {
-            imageProfileId = defaultProfile.id;
-          }
-        }
-
-        if (imageProfileId) {
-          await enqueueCharacterAvatarGeneration(ctx.user.id, {
-            chatId,
-            characterId,
-            imageProfileId,
-          });
-          logger.debug('[Chats v1] Avatar generation enqueued after outfit equip', {
-            chatId,
-            characterId,
-            imageProfileId,
-            context: 'wardrobe',
-          });
-        } else {
-          logger.debug('[Chats v1] No image profile available for avatar generation, skipping', {
-            chatId,
-            characterId,
-            context: 'wardrobe',
-          });
-        }
-      }
-    } catch (avatarError) {
-      // Non-fatal — outfit change succeeded, avatar generation is best-effort
-      logger.warn('[Chats v1] Failed to enqueue avatar generation after outfit equip', {
-        chatId,
-        characterId,
-        error: avatarError instanceof Error ? avatarError.message : String(avatarError),
-        context: 'wardrobe',
-      });
-    }
+    await triggerAvatarGenerationIfEnabled(repos, {
+      userId: ctx.user.id,
+      chatId,
+      characterId,
+      callerContext: '[Chats v1] outfit-equip',
+    });
 
     return NextResponse.json({ equippedSlots: updatedSlots });
   } catch (error) {
