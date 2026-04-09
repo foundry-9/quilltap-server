@@ -129,8 +129,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
  */
 async function copyImageToClipboardLocal(imageUrl: string): Promise<boolean> {
   try {
-    await copyImageToClipboardLocal(imageUrl)
-    return true
+    return await copyImageToClipboard(imageUrl)
   } catch {
     return false
   }
@@ -740,81 +739,68 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
           {/* Image attachments for non-image-generation tools */}
           {toolData.toolName !== 'generate_image' && imageAttachments.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3">
-              {imageAttachments.map((attachment) => (
-                <div key={attachment.id} className="relative group/thumb overflow-hidden rounded border qt-border-default hover:qt-border-primary/50 transition-colors">
-                  {missingImages.has(attachment.id) ? (
-                    <div className="w-20 h-20 flex items-center justify-center qt-bg-muted">
-                      <svg className="w-8 h-8 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                        />
-                      </svg>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        // Normalize filepath - some files have leading slash, some don't
-                        const normalizedPath = attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`
-                        onImageClick?.(normalizedPath, attachment.filename, attachment.id)
-                      }}
-                      className="relative group/thumb overflow-hidden rounded cursor-pointer block"
-                      type="button"
-                    >
-                      <div className="relative w-20 h-20 qt-bg-muted">
-                        {missingImages.has(attachment.id) ? (
-                          <DeletedImagePlaceholder
-                            imageId={attachment.id}
-                            filename={attachment.filename}
-                            onCleanup={async () => {
-                              try {
-                                const response = await fetch(`/api/v1/chat-files/${attachment.id}`, {
-                                  method: 'DELETE',
-                                })
+              {imageAttachments.map((attachment) => {
+                const handleDeletedAttachmentCleanup = async () => {
+                  try {
+                    const response = await fetch(`/api/v1/chat-files/${attachment.id}`, {
+                      method: 'DELETE',
+                    })
 
-                                if (!response.ok) {
-                                  const data = await response.json()
-                                  throw new Error(data.error || 'Failed to delete attachment')
-                                }
+                    if (!response.ok) {
+                      const data = await response.json()
+                      throw new Error(data.error || 'Failed to delete attachment')
+                    }
 
-                                // Remove from missing images set
-                                setMissingImages((prev) => {
-                                  const next = new Set(prev)
-                                  next.delete(attachment.id)
-                                  return next
-                                })
+                    setMissingImages((prev) => {
+                      const next = new Set(prev)
+                      next.delete(attachment.id)
+                      return next
+                    })
 
-                                // Notify parent component
-                                onAttachmentDeleted?.(attachment.id)
-                              } catch (error) {
-                                showErrorToast(
-                                  error instanceof Error ? error.message : 'Failed to delete attachment'
-                                )
-                              }
-                            }}
-                            className="w-full h-full absolute inset-0 !p-2"
-                          />
-                        ) : (
+                    onAttachmentDeleted?.(attachment.id)
+                  } catch (error) {
+                    showErrorToast(
+                      error instanceof Error ? error.message : 'Failed to delete attachment'
+                    )
+                  }
+                }
 
+                return (
+                  <div key={attachment.id} className="relative group/thumb overflow-hidden rounded border qt-border-default hover:qt-border-primary/50 transition-colors">
+                    {missingImages.has(attachment.id) ? (
+                      <DeletedImagePlaceholder
+                        imageId={attachment.id}
+                        filename={attachment.filename}
+                        onCleanup={handleDeletedAttachmentCleanup}
+                        className="w-20 h-20 !p-2"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => {
+                          const normalizedPath = attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`
+                          onImageClick?.(normalizedPath, attachment.filename, attachment.id)
+                        }}
+                        className="relative group/thumb overflow-hidden rounded cursor-pointer block"
+                        type="button"
+                      >
+                        <div className="relative w-20 h-20 qt-bg-muted">
                           <img
                             src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
                             alt={attachment.filename}
                             className="w-full h-full object-cover"
                             onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
                           />
-                        )}
-                      </div>
-                      <div className="absolute inset-0 qt-bg-overlay-none group-hover/thumb:qt-bg-overlay-light transition-colors flex items-center justify-center">
-                        <svg className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                        </svg>
-                      </div>
-                    </button>
-                  )}
-                </div>
-              ))}
+                        </div>
+                        <div className="absolute inset-0 qt-bg-overlay-none group-hover/thumb:qt-bg-overlay-light transition-colors flex items-center justify-center">
+                          <svg className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                          </svg>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 

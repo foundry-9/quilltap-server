@@ -61,6 +61,7 @@ describe('wardrobe tool handlers', () => {
       },
       outfitPresets: {
         findByCharacterId: jest.fn().mockResolvedValue([]),
+        findById: jest.fn(),
       },
     }
 
@@ -135,6 +136,55 @@ describe('wardrobe tool handlers', () => {
     expect(result.success).toBe(true)
     expect(result.items).toHaveLength(1)
     expect(result.items[0]?.item_id).toBe('top-2')
+  })
+
+  it('includes outfit presets by default while excluding archived items', async () => {
+    repos.wardrobe.findByCharacterId.mockResolvedValue([
+      makeWardrobeItem({ id: 'active-1', title: 'Travel Coat', types: ['top'] }),
+      makeWardrobeItem({
+        id: 'archived-1',
+        title: 'Old Cloak',
+        types: ['top'],
+        archivedAt: '2026-04-08T00:00:00.000Z',
+      }),
+    ])
+    repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+      top: null,
+      bottom: null,
+      footwear: null,
+      accessories: null,
+    })
+    repos.outfitPresets.findByCharacterId.mockResolvedValue([
+      {
+        id: 'preset-1',
+        name: 'Travel Outfit',
+        description: 'Good for road trips',
+        slots: {
+          top: 'active-1',
+          bottom: null,
+          footwear: null,
+          accessories: null,
+        },
+      },
+    ])
+
+    const result = await executeWardrobeListTool({ include_presets: true }, context)
+
+    expect(result.success).toBe(true)
+    expect(result.items.map((item) => item.item_id)).toEqual(['active-1'])
+    expect(result.presets).toEqual([
+      {
+        preset_id: 'preset-1',
+        name: 'Travel Outfit',
+        description: 'Good for road trips',
+        slots: {
+          top: 'active-1',
+          bottom: null,
+          footwear: null,
+          accessories: null,
+        },
+      },
+    ])
   })
 
   it('equips a multi-slot item and returns the updated outfit summary', async () => {
@@ -271,5 +321,81 @@ describe('wardrobe tool handlers', () => {
         accessories: 'new-item-1',
       },
     })
+  })
+
+  it('applies an outfit preset and triggers avatar generation when available', async () => {
+    repos.outfitPresets.findById.mockResolvedValue({
+      id: 'preset-1',
+      characterId: 'char-1',
+      name: 'Travel Outfit',
+      slots: {
+        top: 'coat-1',
+        bottom: null,
+        footwear: 'boots-1',
+        accessories: null,
+      },
+    })
+    repos.wardrobe.findById.mockImplementation(async (id: string) => {
+      if (id === 'coat-1') {
+        return makeWardrobeItem({ id: 'coat-1', title: 'Travel Coat', types: ['top'] })
+      }
+      if (id === 'boots-1') {
+        return makeWardrobeItem({ id: 'boots-1', title: 'Riding Boots', types: ['footwear'] })
+      }
+      return null
+    })
+    repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+      top: 'coat-1',
+      bottom: null,
+      footwear: 'boots-1',
+      accessories: null,
+    })
+
+    const result = await executeWardrobeUpdateOutfitTool(
+      { slot: 'top', preset_id: 'preset-1' },
+      context
+    )
+
+    expect(result).toMatchObject({
+      success: true,
+      action: 'equipped',
+      slot: 'preset',
+      current_state: {
+        top: 'coat-1',
+        bottom: null,
+        footwear: 'boots-1',
+        accessories: null,
+      },
+    })
+  })
+
+  it('rejects outfit presets that reference archived wardrobe items', async () => {
+    repos.outfitPresets.findById.mockResolvedValue({
+      id: 'preset-archived',
+      characterId: 'char-1',
+      name: 'Retired Outfit',
+      slots: {
+        top: 'archived-top',
+        bottom: null,
+        footwear: null,
+        accessories: null,
+      },
+    })
+    repos.wardrobe.findById.mockResolvedValue(
+      makeWardrobeItem({
+        id: 'archived-top',
+        title: 'Archived Blouse',
+        types: ['top'],
+        archivedAt: '2026-04-08T00:00:00.000Z',
+      })
+    )
+
+    const result = await executeWardrobeUpdateOutfitTool(
+      { slot: 'top', preset_id: 'preset-archived' },
+      context
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('is archived')
   })
 })
