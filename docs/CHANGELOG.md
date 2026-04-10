@@ -6,6 +6,8 @@
 
 #### Changed
 
+- **OpenRouter Plugin (1.0.30)**: Added image generation provider enabling image creation through OpenRouter-proxied models (Gemini, GPT-5 Image, etc.) via the chat completions API with `modalities: ["image", "text"]` and `image_config` parameters. Includes dynamic model discovery using `output_modalities` metadata, graceful handling of model refusals, and support for aspect ratio and quality settings. Fixed manifest capabilities to correctly declare `imageGeneration`, `embeddings`, and `webSearch` as enabled (were incorrectly set to `false`). Improved image model discovery in pricing fetcher to check `output_modalities` array (OpenRouter's documented field) in addition to `architecture.outputModality` and `supported_generation_methods`. Updated fallback image model list to include OpenAI models alongside Gemini.
+
 - **@quilltap/plugin-types 2.2.0**: Removed `ROLEPLAY_TEMPLATE` from `PluginCapability` type, deprecated roleplay template type exports from barrel. Types preserved in `./plugins/roleplay-template` for backward compat.
 - **@quilltap/plugin-utils 2.2.0**: Removed roleplay template builder utilities (`createRoleplayTemplatePlugin`, `createSingleTemplatePlugin`, `validateTemplateConfig`) from main exports and `./roleplay-templates` export path. Updated `@quilltap/plugin-types` dependency to ^2.2.0.
 - **Dependencies**: next 16.2.2→16.2.3, openai 6.33→6.34, react/react-dom 19.2.4→19.2.5, @google/genai 1.48→1.49, storybook 10.3.4→10.3.5, @types/node 22.19.15→22.19.17, dotenv 17.4.0→17.4.1
