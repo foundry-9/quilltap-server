@@ -48,6 +48,9 @@ export const ProjectSchema = z.object({
   /** Default avatar generation enabled state for chats in this project (null = disabled) */
   defaultAvatarGenerationEnabled: z.boolean().nullable().optional(),
 
+  /** Default image generation profile for new chats in this project (null = inherit from character or global) */
+  defaultImageProfileId: UUIDSchema.nullable().optional(),
+
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),
 

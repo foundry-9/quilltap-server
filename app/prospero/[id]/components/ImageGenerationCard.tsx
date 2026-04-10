@@ -3,15 +3,25 @@
 /**
  * Image Generation Card
  *
- * Card displaying avatar generation and story background settings for a project.
+ * Card displaying avatar generation, default image profile, and story background
+ * settings for a project.
  */
 
 import type { Project, BackgroundDisplayMode } from '../types'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
 
+interface ImageProfile {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+}
+
 interface ImageGenerationCardProps {
   project: Project
+  imageProfiles: ImageProfile[]
   onAvatarGenerationChange: (enabled: boolean | null) => void
+  onDefaultImageProfileChange: (profileId: string | null) => void
   onBackgroundDisplayModeChange: (mode: BackgroundDisplayMode) => void
   expanded: boolean
   onToggle: () => void
@@ -27,7 +37,9 @@ function ImageIcon({ className }: { className?: string }) {
 
 export function ImageGenerationCard({
   project,
+  imageProfiles,
   onAvatarGenerationChange,
+  onDefaultImageProfileChange,
   onBackgroundDisplayModeChange,
   expanded,
   onToggle,
@@ -44,7 +56,7 @@ export function ImageGenerationCard({
           <div className="text-left">
             <h3 className="qt-heading-4 text-foreground">Image Generation</h3>
             <p className="qt-text-small qt-text-secondary">
-              Avatars &amp; story backgrounds
+              Avatars, image profiles &amp; story backgrounds
             </p>
           </div>
         </div>
@@ -71,6 +83,29 @@ export function ImageGenerationCard({
               <option value="inherit">Inherit from global</option>
               <option value="enabled">Enabled by default</option>
               <option value="disabled">Disabled by default</option>
+            </select>
+          </div>
+
+          {/* Default Image Profile Setting */}
+          <div className="p-3 rounded-lg qt-border qt-bg-surface">
+            <h4 className="text-sm font-medium text-foreground mb-1">Default Image Profile</h4>
+            <p className="qt-text-xs qt-text-secondary mb-2">
+              Image generation profile for new chats in this project. Overrides both the global default and character defaults.
+            </p>
+            <select
+              value={project.defaultImageProfileId || ''}
+              onChange={(e) => {
+                const value = e.target.value
+                onDefaultImageProfileChange(value || null)
+              }}
+              className="qt-input w-full max-w-xs"
+            >
+              <option value="">Inherit from global default</option>
+              {imageProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} ({profile.provider} / {profile.modelName})
+                </option>
+              ))}
             </select>
           </div>
 

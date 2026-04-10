@@ -25,6 +25,7 @@ interface UseProjectDetailReturn {
   handleToggleAllowAnyCharacter: () => Promise<void>
   handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
   handleSaveAvatarGeneration: (enabled: boolean | null) => Promise<void>
+  handleSaveDefaultImageProfile: (profileId: string | null) => Promise<void>
   handleSaveBackgroundDisplayMode: (mode: BackgroundDisplayMode) => Promise<void>
   handleRemoveCharacter: (characterId: string) => Promise<void>
 }
@@ -148,6 +149,27 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     }
   }, [projectId])
 
+  const handleSaveDefaultImageProfile = useCallback(async (profileId: string | null) => {
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultImageProfileId: profileId }),
+      })
+
+      if (!res.ok) throw new Error('Failed to update default image profile')
+      const data = await res.json()
+      setProject(data.project)
+      showSuccessToast(profileId
+        ? 'Default image profile set for project'
+        : 'Image profile set to inherit from global')
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update image profile'
+      console.error('useProjectDetail: save default image profile error', errorMsg)
+      showErrorToast(errorMsg)
+    }
+  }, [projectId])
+
   const handleSaveBackgroundDisplayMode = useCallback(async (mode: BackgroundDisplayMode) => {
     try {
       const res = await fetch(`/api/v1/projects/${projectId}`, {
@@ -204,6 +226,7 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     handleToggleAllowAnyCharacter,
     handleSaveAgentMode,
     handleSaveAvatarGeneration,
+    handleSaveDefaultImageProfile,
     handleSaveBackgroundDisplayMode,
     handleRemoveCharacter,
   }

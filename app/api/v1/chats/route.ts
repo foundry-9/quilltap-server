@@ -739,6 +739,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     disabledToolGroups: [] as string[],
   };
   let projectAvatarGenerationDefault: boolean | null = null;
+  let projectDefaultImageProfileId: string | null = null;
 
   if (validatedData.projectId) {
     const project = await repos.projects.findById(validatedData.projectId);
@@ -752,6 +753,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       disabledToolGroups: project.defaultDisabledToolGroups || [],
     };
     projectAvatarGenerationDefault = project.defaultAvatarGenerationEnabled ?? null;
+    projectDefaultImageProfileId = project.defaultImageProfileId ?? null;
 
     if (!project.allowAnyCharacter) {
       const characterIds = participantsWithTimestamps
@@ -770,8 +772,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // Resolve timestamp config with fallback chain: request > character default > global default
   const resolvedTimestampConfig = validatedData.timestampConfig || primaryCharacter?.defaultTimestampConfig || chatSettings?.defaultTimestampConfig || null;
 
-  // Use chat-level imageProfileId if provided, otherwise use first from participants (legacy support)
-  const chatImageProfileId = validatedData.imageProfileId || buildResult.firstImageProfileId || null;
+  // Resolve image profile: request > project default > character default > null
+  const chatImageProfileId = validatedData.imageProfileId || projectDefaultImageProfileId || buildResult.firstImageProfileId || null;
 
   const chat = await repos.chats.create({
     userId: user.id,

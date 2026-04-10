@@ -77,6 +77,7 @@ interface Project {
   name: string
   color?: string | null
   defaultAvatarGenerationEnabled?: boolean | null
+  defaultImageProfileId?: string | null
 }
 
 export default function NewChatPage() {
@@ -148,6 +149,10 @@ export default function NewChatPage() {
           setProject(projectData)
           if (projectData.defaultAvatarGenerationEnabled) {
             setAvatarGenerationEnabled(true)
+          }
+          // Pre-select project's default image profile if set
+          if (projectData.defaultImageProfileId) {
+            setChatImageProfileId(projectData.defaultImageProfileId)
           }
         } else if (projectRes && !projectRes.ok) {
           console.warn('[NewChat] Failed to load project', { projectId: projectIdParam, status: projectRes.status })
@@ -251,12 +256,12 @@ export default function NewChatPage() {
       if (char.defaultScenarioId) {
         setScenarioId(char.defaultScenarioId)
       }
-      // Pre-select default image profile if set
-      if (char.defaultImageProfileId) {
+      // Pre-select default image profile if set (project default takes priority)
+      if (char.defaultImageProfileId && !project?.defaultImageProfileId) {
         setChatImageProfileId(char.defaultImageProfileId)
       }
     }
-  }, [selectedCharacters])
+  }, [selectedCharacters, project?.defaultImageProfileId])
 
   const handleScenarioSelectChange = (value: string) => {
     if (value === CUSTOM_SCENARIO_VALUE || value === '') {

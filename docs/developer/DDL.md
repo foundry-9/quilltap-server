@@ -427,6 +427,7 @@ CREATE TABLE "projects" (
   "state" TEXT DEFAULT '{}',
   "defaultAgentModeEnabled" INTEGER DEFAULT NULL,
   "defaultAvatarGenerationEnabled" INTEGER DEFAULT NULL,
+  "defaultImageProfileId" TEXT DEFAULT NULL,
   "storyBackgroundsEnabled" INTEGER DEFAULT NULL,
   "staticBackgroundImageId" TEXT DEFAULT NULL,
   "storyBackgroundImageId" TEXT DEFAULT NULL,

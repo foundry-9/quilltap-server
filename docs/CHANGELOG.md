@@ -41,6 +41,8 @@
 
 #### Added
 
+- **Project Default Image Profile**: Projects can now have their own default image generation profile, set in the "Image Generation" card on the project page. New chats created in that project inherit the project's image profile, overriding both the global default and character-level defaults. The profile resolution chain for story backgrounds also checks the project's profile. New DB column: `projects.defaultImageProfileId`.
+
 - **Character Avatar Regeneration**: Added a small camera button overlay on participant avatars in the chat sidebar that manually triggers avatar regeneration. Only visible when avatar generation is enabled for the chat. After regeneration completes, the avatar auto-refreshes on the page via polling — also applies to avatars generated automatically from outfit changes. New API action: `POST /api/v1/chats/[id]?action=regenerate-avatar`.
 
 - **Wardrobe: Import from Image**: Users can now upload a reference image (photograph, artwork, screenshot) and have a vision-capable LLM analyze it to propose wardrobe items. The flow is: upload image with optional guidance notes → LLM identifies clothing/accessories → review/edit/select proposed items → import selected items to the character's personal wardrobe. Entry point is a camera icon button in the Personal Wardrobe section header. Uses the same vision provider resolution as the image description fallback system (configured Image Description Profile, or any vision-capable provider). Added `SectionHeader` `secondaryAction` prop for icon buttons alongside the primary action. New API endpoint: `POST /api/v1/wardrobe/analyze-image`. New LLM log type: `WARDROBE_IMAGE_ANALYSIS`.

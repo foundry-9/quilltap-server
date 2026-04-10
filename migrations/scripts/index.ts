@@ -163,6 +163,8 @@ import { renamePersonaColumnsMigration } from './rename-persona-columns';
 import { addNarrationDelimitersFieldMigration } from './add-narration-delimiters-field';
 // Migrate plugin roleplay templates to native built-in, rename annotationButtons to delimiters
 import { migratePluginTemplatesToNativeMigration } from './migrate-plugin-templates-to-native';
+// Add defaultImageProfileId to projects for project-level image profile default
+import { addProjectDefaultImageProfileMigration } from './add-project-default-image-profile';
 
 /**
  * All available migrations.
@@ -321,6 +323,8 @@ export const migrations: Migration[] = [
   addNarrationDelimitersFieldMigration,
   // Migrate plugin roleplay templates to native built-in, rename annotationButtons to delimiters
   migratePluginTemplatesToNativeMigration,
+  // Add defaultImageProfileId to projects for project-level image profile default
+  addProjectDefaultImageProfileMigration,
 ];
 
 export {
@@ -464,5 +468,7 @@ export {
   addNarrationDelimitersFieldMigration,
   // Migrate plugin roleplay templates to native built-in
   migratePluginTemplatesToNativeMigration,
+  // Add defaultImageProfileId to projects for project-level image profile default
+  addProjectDefaultImageProfileMigration,
 };
 

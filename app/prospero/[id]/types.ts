@@ -71,6 +71,7 @@ export interface Project {
   allowAnyCharacter: boolean
   defaultAgentModeEnabled?: boolean | null
   defaultAvatarGenerationEnabled?: boolean | null
+  defaultImageProfileId?: string | null
   color?: string | null
   icon?: string | null
   characterRoster: ProjectCharacter[]

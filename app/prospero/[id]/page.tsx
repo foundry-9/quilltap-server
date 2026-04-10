@@ -8,7 +8,7 @@
  * - Infinite scrolling list of chats below
  */
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useProjectDetail, useProjectChats, useProjectFiles, useProjectCardState } from './hooks'
@@ -40,9 +40,14 @@ export default function ProjectDetailPage() {
     handleToggleAllowAnyCharacter,
     handleSaveAgentMode,
     handleSaveAvatarGeneration,
+    handleSaveDefaultImageProfile,
     handleSaveBackgroundDisplayMode,
     handleRemoveCharacter,
   } = useProjectDetail(projectId)
+
+  // Image profiles for the default image profile selector
+  const [imageProfiles, setImageProfiles] = useState<Array<{ id: string; name: string; provider: string; modelName: string }>>([])
+
 
   const {
     chats,
@@ -71,6 +76,11 @@ export default function ProjectDetailPage() {
     fetchProject()
     fetchChats()
     fetchFiles()
+    // Fetch image profiles for the default image profile selector
+    fetch('/api/v1/image-profiles')
+      .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load image profiles')))
+      .then(data => setImageProfiles(data?.profiles || []))
+      .catch(() => {/* non-critical, selector will just be empty */})
   }, [projectId, fetchProject, fetchChats, fetchFiles])
 
   if (loading) {
@@ -143,7 +153,9 @@ export default function ProjectDetailPage() {
         />
         <ImageGenerationCard
           project={project}
+          imageProfiles={imageProfiles}
           onAvatarGenerationChange={handleSaveAvatarGeneration}
+          onDefaultImageProfileChange={handleSaveDefaultImageProfile}
           onBackgroundDisplayModeChange={handleSaveBackgroundDisplayMode}
           expanded={cardState.imageGeneration}
           onToggle={() => toggleCard('imageGeneration')}
