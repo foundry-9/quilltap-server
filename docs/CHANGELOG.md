@@ -25,6 +25,7 @@
 - chore: Add `all` mode to remove-old-dev-tags Claude command for removing every dev tag, release, and Docker image
 - docs: Add system flowcharts (Mermaid) documenting prompt assembly, memory extraction pipeline, scene tracking, story background generation, and Concierge content routing
 - test: Expand unit and regression coverage for wardrobe tools, text-block tool mode, and 4.1 memory repair/timestamp fixes
+- Lorian and Riya seed characters now include default wardrobe items matching their physical descriptions; clothing and accessories removed from physical description fields to avoid duplication with the wardrobe system
 
 #### Refactored
 
