@@ -1,20 +1,21 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import type { AnnotationButton, NarrationDelimiters } from '@/lib/schemas/template.types'
+import type { TemplateDelimiter, NarrationDelimiters } from '@/lib/schemas/template.types'
 import {
   MARKDOWN_FORMATS,
   insertFormat,
-  getAnnotationTooltip,
+  getDelimiterTooltip,
+  delimiterToPrefixSuffix,
   type MarkdownFormatConfig,
 } from '@/lib/chat/annotations'
 
-interface RoleplayTemplateWithAnnotations {
+interface RoleplayTemplateWithDelimiters {
   id: string
   name: string
   description: string | null
   isBuiltIn: boolean
-  annotationButtons?: AnnotationButton[]
+  delimiters?: TemplateDelimiter[]
 }
 
 interface FormattingToolbarProps {
@@ -35,7 +36,7 @@ interface FormattingToolbarProps {
  * Formatting toolbar for document editing mode.
  *
  * Displays Markdown formatting buttons (bold, italic, headers, lists)
- * and roleplay annotation buttons based on the active template.
+ * and roleplay delimiter buttons based on the active template.
  */
 export default function FormattingToolbar({
   roleplayTemplateId,
@@ -47,7 +48,7 @@ export default function FormattingToolbar({
   onTogglePreview,
   narrationDelimiters,
 }: FormattingToolbarProps) {
-  const [template, setTemplate] = useState<RoleplayTemplateWithAnnotations | null>(null)
+  const [template, setTemplate] = useState<RoleplayTemplateWithDelimiters | null>(null)
   const [loadingTemplate, setLoadingTemplate] = useState(false)
 
   // Fetch template info when roleplayTemplateId changes
@@ -93,49 +94,51 @@ export default function FormattingToolbar({
     [input, inputRef, setInput]
   )
 
-  // Handle annotation button click
-  const handleAnnotationClick = useCallback(
-    (button: AnnotationButton) => {
+  // Handle delimiter button click
+  const handleDelimiterClick = useCallback(
+    (delimiter: TemplateDelimiter) => {
       const textarea = inputRef.current
       if (!textarea) return
 
-      insertFormat(textarea, input, button, setInput)
+      const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
+      insertFormat(textarea, input, { prefix, suffix }, setInput)
     },
     [input, inputRef, setInput]
   )
 
   // Build the narration button from delimiters, and filter out any template
-  // annotation buttons whose prefix/suffix match the narration delimiters
-  const { narrationButton, filteredAnnotationButtons } = useMemo(() => {
+  // delimiter buttons whose delimiters match the narration delimiters
+  const { narrationButton, filteredDelimiters } = useMemo(() => {
     if (!narrationDelimiters) {
       return {
         narrationButton: null,
-        filteredAnnotationButtons: template?.annotationButtons ?? [],
+        filteredDelimiters: template?.delimiters ?? [],
       }
     }
 
     const narPrefix = Array.isArray(narrationDelimiters) ? narrationDelimiters[0] : narrationDelimiters
     const narSuffix = Array.isArray(narrationDelimiters) ? narrationDelimiters[1] : narrationDelimiters
 
-    const btn: AnnotationButton = {
-      label: 'Narration',
-      abbrev: 'Nar',
-      prefix: narPrefix,
-      suffix: narSuffix,
+    const btn: TemplateDelimiter = {
+      name: 'Narration',
+      buttonName: 'Nar',
+      delimiters: narrationDelimiters,
+      style: 'qt-chat-narration',
     }
 
-    // Remove any template button whose delimiters match the narration delimiters
-    const filtered = (template?.annotationButtons ?? []).filter(
-      (b) => b.prefix !== narPrefix || b.suffix !== narSuffix
-    )
+    // Remove any template delimiter whose delimiters match the narration delimiters
+    const filtered = (template?.delimiters ?? []).filter((d) => {
+      const { prefix, suffix } = delimiterToPrefixSuffix(d)
+      return prefix !== narPrefix || suffix !== narSuffix
+    })
 
-    return { narrationButton: btn, filteredAnnotationButtons: filtered }
+    return { narrationButton: btn, filteredDelimiters: filtered }
   }, [narrationDelimiters, template])
 
-  const allAnnotationButtons = narrationButton
-    ? [narrationButton, ...filteredAnnotationButtons]
-    : filteredAnnotationButtons
-  const hasAnnotations = !loadingTemplate && allAnnotationButtons.length > 0
+  const allDelimiters = narrationButton
+    ? [narrationButton, ...filteredDelimiters]
+    : filteredDelimiters
+  const hasDelimiters = !loadingTemplate && allDelimiters.length > 0
 
   return (
     <div className="qt-formatting-toolbar">
@@ -155,21 +158,21 @@ export default function FormattingToolbar({
         ))}
       </div>
 
-      {/* RP template buttons - only shown when template has annotation buttons */}
-      {hasAnnotations && (
+      {/* RP template buttons - only shown when template has delimiters */}
+      {hasDelimiters && (
         <>
           <div className="qt-formatting-toolbar-divider" />
           <div className="qt-formatting-toolbar-section">
-            {allAnnotationButtons.map((button, index) => (
+            {allDelimiters.map((delimiter, index) => (
               <button
-                key={`${button.abbrev}-${index}`}
+                key={`${delimiter.buttonName}-${index}`}
                 type="button"
-                onClick={() => handleAnnotationClick(button)}
+                onClick={() => handleDelimiterClick(delimiter)}
                 disabled={disabled}
                 className="qt-rp-annotation-button"
-                title={getAnnotationTooltip(button)}
+                title={getDelimiterTooltip(delimiter)}
               >
-                {button.abbrev}
+                {delimiter.buttonName}
               </button>
             ))}
           </div>

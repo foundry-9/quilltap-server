@@ -239,7 +239,7 @@ export const ChatParticipantSchema = z.object({
   // LLM configuration (for AI characters only, ignored when controlledBy is 'user')
   connectionProfileId: UUIDSchema.nullable().optional(),  // Required for LLM control, null for user control
   imageProfileId: UUIDSchema.nullable().optional(),       // Image generation profile
-  roleplayTemplateId: z.string().nullable().optional(),   // Roleplay template override - can be UUID or 'plugin:*' format
+  roleplayTemplateId: z.string().nullable().optional(),   // Roleplay template override
 
   // Per-chat customization
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
@@ -275,7 +275,7 @@ export const ChatParticipantBaseSchema = z.object({
   controlledBy: ControlledByEnum.optional().default('llm'),  // Who controls: 'llm' or 'user'
   connectionProfileId: UUIDSchema.nullable().optional(),
   imageProfileId: UUIDSchema.nullable().optional(),
-  roleplayTemplateId: z.string().nullable().optional(),  // Roleplay template override - can be UUID or 'plugin:*' format
+  roleplayTemplateId: z.string().nullable().optional(),  // Roleplay template override
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
   displayOrder: z.number().default(0),
   /** @deprecated Use `status` field instead. Kept as computed compat field (true when status is active or silent). */

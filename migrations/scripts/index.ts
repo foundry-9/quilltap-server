@@ -161,6 +161,8 @@ import { convertImagesToWebPMigration } from './convert-images-to-webp';
 import { renamePersonaColumnsMigration } from './rename-persona-columns';
 // Add narrationDelimiters field to roleplay_templates
 import { addNarrationDelimitersFieldMigration } from './add-narration-delimiters-field';
+// Migrate plugin roleplay templates to native built-in, rename annotationButtons to delimiters
+import { migratePluginTemplatesToNativeMigration } from './migrate-plugin-templates-to-native';
 
 /**
  * All available migrations.
@@ -317,6 +319,8 @@ export const migrations: Migration[] = [
   renamePersonaColumnsMigration,
   // Add narrationDelimiters field to roleplay_templates
   addNarrationDelimitersFieldMigration,
+  // Migrate plugin roleplay templates to native built-in, rename annotationButtons to delimiters
+  migratePluginTemplatesToNativeMigration,
 ];
 
 export {
@@ -458,5 +462,7 @@ export {
   renamePersonaColumnsMigration,
   // Add narrationDelimiters field to roleplay_templates
   addNarrationDelimitersFieldMigration,
+  // Migrate plugin roleplay templates to native built-in
+  migratePluginTemplatesToNativeMigration,
 };
 

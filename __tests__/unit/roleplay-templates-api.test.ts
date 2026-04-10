@@ -66,7 +66,7 @@ function buildTemplate(overrides: Partial<RoleplayTemplate> = {}): RoleplayTempl
     systemPrompt: overrides.systemPrompt ?? 'Use this format',
     isBuiltIn: overrides.isBuiltIn ?? false,
     tags: overrides.tags ?? [],
-    annotationButtons: overrides.annotationButtons ?? [],
+    delimiters: overrides.delimiters ?? [],
     renderingPatterns: overrides.renderingPatterns ?? [],
     dialogueDetection: overrides.dialogueDetection ?? null,
     narrationDelimiters: overrides.narrationDelimiters ?? '*',
@@ -201,8 +201,10 @@ describe('Roleplay Template Routes', () => {
         systemPrompt: 'Use this prompt',
         isBuiltIn: false,
         tags: [],
-        annotationButtons: [],
-        renderingPatterns: [],
+        delimiters: [],
+        renderingPatterns: [
+          { pattern: '(?<!\\*)\\*[^\\*]+\\*(?!\\*)', className: 'qt-chat-narration' },
+        ],
         dialogueDetection: null,
         narrationDelimiters: '*',
       })

@@ -3,7 +3,7 @@
  *
  * Backend-agnostic repository for RoleplayTemplate entities.
  * Works with SQLite through the database abstraction layer.
- * Manages roleplay templates including built-in and plugin-provided templates.
+ * Manages roleplay templates including built-in and user-created templates.
  */
 
 import {
@@ -12,14 +12,11 @@ import {
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { roleplayTemplateRegistry, type LoadedRoleplayTemplate } from '@/lib/plugins/roleplay-template-registry';
 import { TypedQueryFilter } from '../interfaces';
 
 /**
- * Built-in roleplay templates that are seeded on first access
- * Note: Additional templates may be provided by plugins with the ROLEPLAY_TEMPLATE capability
- * Note: RoleplayTemplate has optional userId (null for built-in), so we use AbstractBaseRepository
- * instead of UserOwnedBaseRepository. Tag operations are implemented manually.
+ * Built-in roleplay templates that are seeded on first access.
+ * These templates are read-only and always available.
  */
 const BUILT_IN_TEMPLATES: Omit<RoleplayTemplate, 'id' | 'createdAt' | 'updatedAt'>[] = [
   // Standard is the default/recommended option
@@ -46,16 +43,16 @@ You must adhere to the following standard roleplay syntax for all outputs.
 5. STRICT COMPLIANCE: Ensure a clear visual separation between actions (* *) and speech (" ").`,
     isBuiltIn: true,
     tags: [],
-    annotationButtons: [
-      { label: 'Narration', abbrev: 'Nar', prefix: '*', suffix: '*' },
-      { label: 'Out of Character', abbrev: 'OOC', prefix: '((', suffix: '))' },
+    delimiters: [
+      { name: 'Narration', buttonName: 'Nar', delimiters: '*', style: 'qt-chat-narration' },
+      { name: 'Out of Character', buttonName: 'OOC', delimiters: ['((', '))'], style: 'qt-chat-ooc' },
     ],
     // Rendering patterns for message content styling
     renderingPatterns: [
       // OOC: ((comments)) - double parentheses
       { pattern: '\\(\\([^)]+\\)\\)', className: 'qt-chat-ooc' },
       // Dialogue: "speech" - straight and curly quotes (inline detection as fallback)
-      { pattern: '[""][^""]+[""]', className: 'qt-chat-dialogue' },
+      { pattern: '[""\u201c][^""\u201d]+[""\u201d]', className: 'qt-chat-dialogue' },
       // Narration: *actions* - single asterisks (not bold **)
       { pattern: '(?<!\\*)\\*[^*]+\\*(?!\\*)', className: 'qt-chat-narration' },
     ],
@@ -68,34 +65,44 @@ You must adhere to the following standard roleplay syntax for all outputs.
     // Narration uses single asterisks
     narrationDelimiters: '*',
   },
-  // Additional templates are provided by plugins
-];
-
-/**
- * Convert a plugin-provided template to a RoleplayTemplate format
- * Plugin templates use the plugin ID as their template ID
- */
-function pluginTemplateToRoleplayTemplate(pluginTemplate: LoadedRoleplayTemplate): RoleplayTemplate {
-  // Generate a stable timestamp based on the plugin - using a fixed date for plugin templates
-  const pluginTimestamp = new Date('2025-01-01T00:00:00Z').toISOString();
-
-  return {
-    id: `plugin:${pluginTemplate.id}`, // Prefix with 'plugin:' to distinguish from DB templates
+  // Quilltap RP - bracket-based formatting (migrated from plugin)
+  {
     userId: null,
-    name: pluginTemplate.name,
-    description: pluginTemplate.description || null,
-    systemPrompt: pluginTemplate.systemPrompt,
-    isBuiltIn: true, // Plugin templates are treated as built-in (read-only)
-    pluginName: pluginTemplate.pluginName, // Include the plugin name for display
-    tags: pluginTemplate.tags,
-    annotationButtons: pluginTemplate.annotationButtons || [],
-    renderingPatterns: pluginTemplate.renderingPatterns || [],
-    dialogueDetection: pluginTemplate.dialogueDetection || null,
-    narrationDelimiters: pluginTemplate.narrationDelimiters,
-    createdAt: pluginTimestamp,
-    updatedAt: pluginTimestamp,
-  };
-}
+    name: 'Quilltap RP',
+    description: 'Custom formatting protocol with dialogue as bare text, actions in [brackets], thoughts in {braces}, and OOC with // prefix.',
+    systemPrompt: `[SYSTEM INSTRUCTION: INTERACTION FORMATTING PROTOCOL]
+You must adhere to the following custom syntax for all outputs. Do NOT use standard roleplay formatting.
+
+1. SPOKEN DIALOGUE: Write as bare text. Do NOT use quotation marks.
+   - Example: Put the gun down, John.
+   - Markdown Italics (*text*) denote VOCAL EMPHASIS only, never action.
+
+2. ACTION & NARRATION: Enclose all physical movements, facial expressions, and environmental descriptions in SQUARE BRACKETS [ ].
+   - Example: [I lean back in the chair, crossing my arms.]
+
+3. INTERNAL MONOLOGUE: Enclose private thoughts and feelings in CURLY BRACES { }.
+   - Example: {He's lying to me. I can feel it.}
+
+4. META/OOC: Any Out-of-Character comments or instructions must start with "// ".
+   - Example: // The user is simulating a high-gravity environment now.
+
+5. STRICT COMPLIANCE: You must mirror this formatting in your responses. Never use asterisks for actions.`,
+    isBuiltIn: true,
+    tags: [],
+    delimiters: [
+      { name: 'Narration', buttonName: 'Nar', delimiters: ['[', ']'], style: 'qt-chat-narration' },
+      { name: 'Internal Monologue', buttonName: 'Int', delimiters: ['{', '}'], style: 'qt-chat-inner-monologue' },
+      { name: 'Out of Character', buttonName: 'OOC', delimiters: ['// ', ''], style: 'qt-chat-ooc' },
+    ],
+    renderingPatterns: [
+      { pattern: '^// .+$', className: 'qt-chat-ooc', flags: 'm' },
+      { pattern: '\\[[^\\]]+\\](?!\\()', className: 'qt-chat-narration' },
+      { pattern: '\\{[^}]+\\}', className: 'qt-chat-inner-monologue' },
+    ],
+    dialogueDetection: null,
+    narrationDelimiters: ['[', ']'],
+  },
+];
 
 /**
  * Roleplay Templates Repository
@@ -107,41 +114,6 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
 
   constructor() {
     super('roleplay_templates', RoleplayTemplateSchema);
-  }
-
-  // ============================================================================
-  // PLUGIN TEMPLATE HELPERS
-  // ============================================================================
-
-  /**
-   * Get all plugin-provided templates as RoleplayTemplate objects
-   */
-  private getPluginTemplates(): RoleplayTemplate[] {
-    if (!roleplayTemplateRegistry.isInitialized()) {
-      return [];
-    }
-
-    const pluginTemplates = roleplayTemplateRegistry.getAll();
-    return pluginTemplates.map(pluginTemplateToRoleplayTemplate);
-  }
-
-  /**
-   * Get a plugin template by ID
-   */
-  private getPluginTemplateById(id: string): RoleplayTemplate | null {
-    // Check if this is a plugin template ID (prefixed with 'plugin:')
-    if (!id.startsWith('plugin:')) {
-      return null;
-    }
-
-    const pluginId = id.slice(7); // Remove 'plugin:' prefix
-    const pluginTemplate = roleplayTemplateRegistry.get(pluginId);
-
-    if (!pluginTemplate) {
-      return null;
-    }
-
-    return pluginTemplateToRoleplayTemplate(pluginTemplate);
   }
 
   // ============================================================================
@@ -197,13 +169,13 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
               templateName: template.name,
             });
           } else {
-            // Update existing built-in template with new fields (e.g., annotationButtons, renderingPatterns)
+            // Update existing built-in template with new fields
             // This ensures built-in templates stay in sync with code changes
             const now = this.getCurrentTimestamp();
             const updateData: Partial<RoleplayTemplate> = {
               systemPrompt: template.systemPrompt,
               description: template.description,
-              annotationButtons: template.annotationButtons,
+              delimiters: template.delimiters,
               renderingPatterns: template.renderingPatterns,
               dialogueDetection: template.dialogueDetection,
               narrationDelimiters: template.narrationDelimiters,
@@ -229,23 +201,14 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
 
   /**
    * Find a roleplay template by ID
-   * Checks plugin templates first, then database templates
    */
   async findById(id: string): Promise<RoleplayTemplate | null> {
     return this.safeQuery(
       async () => {
-        // Check if this is a plugin template
-        const pluginTemplate = this.getPluginTemplateById(id);
-        if (pluginTemplate) {
-          return pluginTemplate;
-        }
-
         // Ensure built-in templates are seeded
         await this.seedBuiltInTemplates();
 
-        // Use base implementation for database lookup
-        const result = await this._findById(id);
-        return result;
+        return await this._findById(id);
       },
       'Error finding roleplay template by ID',
       { templateId: id },
@@ -254,7 +217,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
   }
 
   /**
-   * Find all roleplay templates (database + plugin templates)
+   * Find all roleplay templates
    */
   async findAll(): Promise<RoleplayTemplate[]> {
     return this.safeQuery(
@@ -262,13 +225,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
         // Ensure built-in templates are seeded
         await this.seedBuiltInTemplates();
 
-        // Use base implementation for database lookup
-        const dbTemplates = await this._findAll();
-        // Also include plugin templates
-        const pluginTemplates = this.getPluginTemplates();
-
-        const allTemplates = [...dbTemplates, ...pluginTemplates];
-        return allTemplates;
+        return await this._findAll();
       },
       'Error finding all roleplay templates',
       {},
@@ -289,7 +246,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
   }
 
   /**
-   * Find all built-in roleplay templates (database + plugin templates)
+   * Find all built-in roleplay templates
    */
   async findBuiltIn(): Promise<RoleplayTemplate[]> {
     return this.safeQuery(
@@ -297,12 +254,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
         // Ensure built-in templates are seeded
         await this.seedBuiltInTemplates();
 
-        const dbTemplates = await this.findByFilter({ isBuiltIn: true });
-        // Also include plugin templates (they are all built-in)
-        const pluginTemplates = this.getPluginTemplates();
-
-        const allBuiltIn = [...dbTemplates, ...pluginTemplates];
-        return allBuiltIn;
+        return await this.findByFilter({ isBuiltIn: true });
       },
       'Error finding built-in roleplay templates',
       {},
@@ -311,7 +263,7 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
   }
 
   /**
-   * Find all templates available to a user (built-in + plugin + user's own templates)
+   * Find all templates available to a user (built-in + user's own templates)
    */
   async findAllForUser(userId: string): Promise<RoleplayTemplate[]> {
     return this.safeQuery(
@@ -319,17 +271,12 @@ export class RoleplayTemplatesRepository extends AbstractBaseRepository<Roleplay
         // Ensure built-in templates are seeded
         await this.seedBuiltInTemplates();
 
-        const dbTemplates = await this.findByFilter({
+        return await this.findByFilter({
           $or: [
             { isBuiltIn: true },
             { userId },
           ],
         } as TypedQueryFilter<RoleplayTemplate>);
-        // Also include plugin templates
-        const pluginTemplates = this.getPluginTemplates();
-
-        const allTemplates = [...dbTemplates, ...pluginTemplates];
-        return allTemplates;
       },
       'Error finding all roleplay templates for user',
       { userId },

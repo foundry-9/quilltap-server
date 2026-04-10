@@ -321,7 +321,7 @@ export async function exportRoleplayTemplates(
   for (const id of templateIds) {
     const template = await globalRepos.roleplayTemplates.findById(id);
     // Verify user owns template (userId is null for built-in, or matches for user-created)
-    if (template && !template.isBuiltIn && !template.pluginName && template.userId === userId) {
+    if (template && !template.isBuiltIn && template.userId === userId) {
       const tagNames = await resolveTagNames(repos, template.tags);
       templates.push({
         ...template,
@@ -544,7 +544,7 @@ export async function createExport(
           : [];
         const ids = options.scope === 'all'
           ? allTemplates
-              .filter(t => !t.isBuiltIn && !t.pluginName && t.userId === userId)
+              .filter(t => !t.isBuiltIn && t.userId === userId)
               .map(t => t.id)
           : entityIds;
 
@@ -713,13 +713,13 @@ export async function previewExport(
           : [];
         const ids = options.scope === 'all'
           ? allTemplates
-              .filter(t => !t.isBuiltIn && !t.pluginName && t.userId === userId)
+              .filter(t => !t.isBuiltIn && t.userId === userId)
               .map(t => t.id)
           : entityIds;
 
         for (const id of ids) {
           const template = await globalRepos.roleplayTemplates.findById(id);
-          if (template && !template.isBuiltIn && !template.pluginName && template.userId === userId) {
+          if (template && !template.isBuiltIn && template.userId === userId) {
             entities.push({ id: template.id, name: template.name });
           }
         }

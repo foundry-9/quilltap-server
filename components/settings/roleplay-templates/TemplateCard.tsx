@@ -35,7 +35,7 @@ export function TemplateCard({
   // Build badges array
   const badges: SettingsCardBadge[] = []
   if (isBuiltIn) {
-    badges.push({ text: template.pluginName || 'Built-in', variant: 'info' })
+    badges.push({ text: 'Built-in', variant: 'info' })
   }
 
   // Build actions array

@@ -811,6 +811,26 @@ async function importRoleplayTemplates(
 
   for (const template of templates) {
     try {
+      // Backward compatibility: convert old annotationButtons to delimiters format
+      const templateAny = template as Record<string, unknown>;
+      if (templateAny.annotationButtons && !template.delimiters?.length) {
+        const oldButtons = templateAny.annotationButtons as Array<{ label?: string; abbrev?: string; prefix?: string; suffix?: string }>;
+        const styleMap: Record<string, string> = {
+          'Narration': 'qt-chat-narration', 'Nar': 'qt-chat-narration',
+          'Internal Monologue': 'qt-chat-inner-monologue', 'Int': 'qt-chat-inner-monologue',
+          'Out of Character': 'qt-chat-ooc', 'OOC': 'qt-chat-ooc',
+        };
+        template.delimiters = oldButtons.map(btn => ({
+          name: btn.label || btn.abbrev || 'Unknown',
+          buttonName: btn.abbrev || btn.label || '?',
+          delimiters: (btn.prefix === btn.suffix) ? (btn.prefix || '') : [btn.prefix || '', btn.suffix || ''] as [string, string],
+          style: styleMap[btn.label || ''] || styleMap[btn.abbrev || ''] || 'qt-chat-narration',
+        }));
+        delete templateAny.annotationButtons;
+      }
+      // Remove legacy pluginName field if present
+      delete templateAny.pluginName;
+
       const existing = await globalRepos.roleplayTemplates.findById(template.id);
 
       if (existing) {
@@ -1340,8 +1360,8 @@ async function reconcileRelationships(
         }
       }
 
-      // Remap defaultRoleplayTemplateId (only if it's a UUID, not a plugin template)
-      if (character.defaultRoleplayTemplateId && !character.defaultRoleplayTemplateId.startsWith('plugin:')) {
+      // Remap defaultRoleplayTemplateId
+      if (character.defaultRoleplayTemplateId) {
         const newTemplateId = remapId(character.defaultRoleplayTemplateId, idMaps.roleplayTemplates);
         if (newTemplateId) {
           updates.defaultRoleplayTemplateId = newTemplateId;
@@ -1401,8 +1421,8 @@ async function reconcileRelationships(
               if (newImgProfId) remapped.imageProfileId = newImgProfId;
             }
 
-            // Remap roleplayTemplateId (only if it's a UUID, not a plugin template)
-            if (participant.roleplayTemplateId && !participant.roleplayTemplateId.startsWith('plugin:')) {
+            // Remap roleplayTemplateId
+            if (participant.roleplayTemplateId) {
               const newTemplateId = remapId(
                 participant.roleplayTemplateId,
                 idMaps.roleplayTemplates

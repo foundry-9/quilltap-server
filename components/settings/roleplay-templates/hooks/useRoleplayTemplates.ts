@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { RoleplayTemplate, TemplateFormData, INITIAL_FORM_DATA } from '../types'
+import { RoleplayTemplate, TemplateFormData, DelimiterFormEntry, INITIAL_FORM_DATA } from '../types'
+import type { TemplateDelimiter } from '@/lib/schemas/template.types'
 
 export interface UseRoleplayTemplatesReturn {
   // Data
@@ -39,6 +40,33 @@ export interface UseRoleplayTemplatesReturn {
   handleSave: () => Promise<void>
   handleDelete: (templateId: string) => Promise<void>
   handleCopyAsNew: (template: RoleplayTemplate) => void
+}
+
+/** Convert a TemplateDelimiter to form entry */
+function delimiterToFormEntry(d: TemplateDelimiter): DelimiterFormEntry {
+  const isPair = Array.isArray(d.delimiters)
+  return {
+    name: d.name,
+    buttonName: d.buttonName,
+    delimiterMode: isPair ? 'pair' : 'single',
+    delimiterOpen: isPair ? (d.delimiters as [string, string])[0] : (d.delimiters as string),
+    delimiterClose: isPair ? (d.delimiters as [string, string])[1] : (d.delimiters as string),
+    style: d.style,
+  }
+}
+
+/** Convert form entries back to TemplateDelimiter array */
+function formEntriesToDelimiters(entries: DelimiterFormEntry[]): TemplateDelimiter[] {
+  return entries
+    .filter(e => e.name.trim() && e.buttonName.trim())
+    .map(e => ({
+      name: e.name.trim(),
+      buttonName: e.buttonName.trim(),
+      delimiters: e.delimiterMode === 'pair'
+        ? [e.delimiterOpen, e.delimiterClose] as [string, string]
+        : e.delimiterOpen,
+      style: e.style.trim() || 'qt-chat-narration',
+    }))
 }
 
 export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
@@ -143,6 +171,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       narrationDelimiterMode: isPair ? 'pair' : 'single',
       narrationOpen: isPair ? delimiters[0] : (delimiters || '*'),
       narrationClose: isPair ? delimiters[1] : (delimiters || '*'),
+      delimiters: (template.delimiters || []).map(delimiterToFormEntry),
     })
     setIsModalOpen(true)
   }
@@ -168,6 +197,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         description: formData.description,
         systemPrompt: formData.systemPrompt,
         narrationDelimiters,
+        delimiters: formEntriesToDelimiters(formData.delimiters),
       }
 
       if (editingTemplate) {
@@ -255,6 +285,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       narrationDelimiterMode: isPair ? 'pair' : 'single',
       narrationOpen: isPair ? delimiters[0] : (delimiters || '*'),
       narrationClose: isPair ? delimiters[1] : (delimiters || '*'),
+      delimiters: (template.delimiters || []).map(delimiterToFormEntry),
     })
     setIsModalOpen(true)
   }

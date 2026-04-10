@@ -33,7 +33,6 @@ export const PluginCapabilityEnum = z.enum([
   'THEME',                 // Provides UI theme
   'DATABASE_BACKEND',      // Replaces/augments database
   'UPGRADE_MIGRATION',     // Provides version upgrade migrations (runs early in startup)
-  'ROLEPLAY_TEMPLATE',     // Provides roleplay formatting templates
   'TOOL_PROVIDER',         // Provides LLM tools (e.g., curl, calculators, etc.)
   'SEARCH_PROVIDER',       // Provides web search backend (e.g., Serper, Bing, DuckDuckGo)
   'MODERATION_PROVIDER',   // Provides content moderation (e.g., OpenAI moderation endpoint)
@@ -428,88 +427,6 @@ export const ThemeConfigSchema = z.object({
 
 export type ThemeConfig = z.infer<typeof ThemeConfigSchema>;
 
-/**
- * Annotation button configuration for roleplay templates
- * Defines formatting buttons shown in the document editing toolbar
- */
-export const AnnotationButtonConfigSchema = z.object({
-  /** Full name displayed in tooltip (e.g., "Narration", "Internal Monologue") */
-  label: z.string().min(1).max(50).describe('Full name for tooltip'),
-  /** Abbreviated label displayed on button (e.g., "Nar", "Int", "OOC") */
-  abbrev: z.string().min(1).max(10).describe('Short label for button'),
-  /** Opening delimiter (e.g., "[", "*", "{{") */
-  prefix: z.string().describe('Opening delimiter'),
-  /** Closing delimiter (e.g., "]", "*", "}}") - empty string for line-end delimiters */
-  suffix: z.string().describe('Closing delimiter'),
-});
-
-export type AnnotationButtonConfig = z.infer<typeof AnnotationButtonConfigSchema>;
-
-/**
- * Rendering pattern for message content styling
- */
-export const RenderingPatternConfigSchema = z.object({
-  /** Regex pattern as a string (converted to RegExp at runtime) */
-  pattern: z.string().min(1).describe('Regex pattern string'),
-  /** CSS class to apply to matched text */
-  className: z.string().min(1).describe('CSS class name'),
-  /** Optional regex flags (e.g., "m" for multiline) */
-  flags: z.string().optional().describe('Regex flags'),
-});
-
-export type RenderingPatternConfig = z.infer<typeof RenderingPatternConfigSchema>;
-
-/**
- * Dialogue detection for paragraph-level styling
- */
-export const DialogueDetectionConfigSchema = z.object({
-  /** Opening quote characters to detect */
-  openingChars: z.array(z.string()).describe('Opening quote characters'),
-  /** Closing quote characters to detect */
-  closingChars: z.array(z.string()).describe('Closing quote characters'),
-  /** CSS class to apply to dialogue paragraphs */
-  className: z.string().min(1).describe('CSS class name'),
-});
-
-export type DialogueDetectionConfig = z.infer<typeof DialogueDetectionConfigSchema>;
-
-/**
- * Roleplay template plugin configuration schema
- *
- * Defines the configuration for roleplay template plugins.
- * These plugins provide formatting instructions that are prepended
- * to character system prompts during chat.
- */
-export const RoleplayTemplateConfigSchema = z.object({
-  /** Display name for the template */
-  name: z.string().min(1).max(100).describe('Template display name'),
-
-  /** Short description of the template formatting style */
-  description: z.string().max(500).optional().describe('Template description'),
-
-  /** The full system prompt with formatting instructions */
-  systemPrompt: z.string().min(1).describe('System prompt with formatting instructions'),
-
-  /** Optional categorization tags */
-  tags: z.array(z.string()).default([]).optional().describe('Tags for categorization'),
-
-  /** Annotation buttons for the formatting toolbar - defines available formatting options */
-  annotationButtons: z.array(AnnotationButtonConfigSchema).default([]).optional().describe('Formatting toolbar buttons'),
-
-  /** Patterns for styling roleplay text in message content */
-  renderingPatterns: z.array(RenderingPatternConfigSchema).default([]).optional().describe('Message content rendering patterns'),
-
-  /** Optional dialogue detection for paragraph-level styling (null = none) */
-  dialogueDetection: DialogueDetectionConfigSchema.nullable().optional().describe('Dialogue paragraph detection'),
-
-  /** Narration delimiters — required. Single string (same open/close) or [open, close] tuple */
-  narrationDelimiters: z.union([
-    z.string().min(1),
-    z.tuple([z.string().min(1), z.string().min(1)]),
-  ]).describe('Narration delimiter(s) — single string or [open, close] pair'),
-});
-
-export type RoleplayTemplateConfig = z.infer<typeof RoleplayTemplateConfigSchema>;
 
 /**
  * Tool plugin configuration schema
@@ -758,9 +675,6 @@ export const PluginManifestSchema = z.strictObject({
 
   /** Theme configuration (for THEME capability plugins) */
   themeConfig: ThemeConfigSchema.optional(),
-
-  /** Roleplay template configuration (for ROLEPLAY_TEMPLATE capability plugins) */
-  roleplayTemplateConfig: RoleplayTemplateConfigSchema.optional(),
 
   /** Tool configuration (for TOOL_PROVIDER capability plugins) */
   toolConfig: ToolConfigSchema.optional(),

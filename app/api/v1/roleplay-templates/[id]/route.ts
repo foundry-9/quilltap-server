@@ -12,6 +12,7 @@ import { createAuthenticatedParamsHandler, checkOwnership } from '@/lib/api/midd
 import { successResponse, errorResponse, notFound, forbidden } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
+import { generateRenderingPatterns } from '@/lib/chat/annotations';
 
 // ============================================================================
 // Schemas
@@ -22,7 +23,7 @@ const updateRoleplayTemplateSchema = z.object({
   description: z.string().max(500).optional().nullable(),
   systemPrompt: z.string().min(1).optional(),
   tags: z.array(z.uuid()).optional(),
-  annotationButtons: z.array(z.any()).optional(),
+  delimiters: z.array(z.any()).optional(),
   renderingPatterns: z.array(z.any()).optional(),
   dialogueDetection: z.any().optional().nullable(),
   narrationDelimiters: z.union([
@@ -46,6 +47,15 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
 
     if (!template) {
       return notFound('Roleplay template');
+    }
+
+    // Auto-generate rendering patterns for templates that have delimiters but no patterns
+    if ((!template.renderingPatterns || template.renderingPatterns.length === 0) &&
+        ((template.delimiters && template.delimiters.length > 0) || template.narrationDelimiters)) {
+      template.renderingPatterns = generateRenderingPatterns(
+        template.delimiters || [],
+        template.narrationDelimiters
+      );
     }
 
     return successResponse(template);
@@ -104,12 +114,27 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
     }
 
     // Trim string values
-    const updateData = {
+    const updateData: Record<string, unknown> = {
       ...validatedData,
       name: validatedData.name?.trim(),
       description: validatedData.description?.trim(),
       systemPrompt: validatedData.systemPrompt?.trim(),
     };
+
+    // Auto-generate rendering patterns from delimiters if delimiters changed but no explicit patterns
+    if (validatedData.delimiters && !validatedData.renderingPatterns) {
+      const narDelim = validatedData.narrationDelimiters || existingTemplate.narrationDelimiters;
+      updateData.renderingPatterns = generateRenderingPatterns(validatedData.delimiters, narDelim);
+      logger.debug('Auto-generated rendering patterns on template update', {
+        templateId: id,
+        delimiterCount: validatedData.delimiters.length,
+        patternCount: (updateData.renderingPatterns as unknown[]).length,
+      });
+    } else if (validatedData.narrationDelimiters && !validatedData.renderingPatterns && !validatedData.delimiters) {
+      // Narration delimiters changed but no delimiters or patterns provided — regenerate
+      const delims = existingTemplate.delimiters || [];
+      updateData.renderingPatterns = generateRenderingPatterns(delims, validatedData.narrationDelimiters);
+    }
 
     const updatedTemplate = await repos.roleplayTemplates.update(id, updateData);
 

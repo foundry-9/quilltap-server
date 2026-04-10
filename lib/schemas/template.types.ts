@@ -14,25 +14,37 @@ import {
 } from './common.types';
 
 // ============================================================================
-// ANNOTATION BUTTONS (for formatting toolbar)
+// TEMPLATE DELIMITERS (for formatting toolbar buttons and delimiter configuration)
 // ============================================================================
 
 /**
- * Configuration for annotation buttons shown in the formatting toolbar.
- * Each roleplay template can define its own set of formatting buttons.
+ * Configuration for a delimiter entry in a roleplay template.
+ * Each entry defines a formatting type (narration, thoughts, OOC, etc.)
+ * with its delimiters, toolbar button, and associated CSS style class.
  */
-export const AnnotationButtonSchema = z.object({
+export const TemplateDelimiterSchema = z.object({
   /** Full name displayed in tooltip (e.g., "Narration", "Internal Monologue") */
-  label: z.string().min(1).max(50),
-  /** Abbreviated label displayed on button (e.g., "Nar", "Int", "OOC") */
-  abbrev: z.string().min(1).max(10),
-  /** Opening delimiter (e.g., "[", "*", "{{") */
-  prefix: z.string(),
-  /** Closing delimiter (e.g., "]", "*", "}}") - empty string for line-end delimiters */
-  suffix: z.string(),
+  name: z.string().min(1).max(50),
+  /** Abbreviated label displayed on toolbar button (e.g., "Nar", "Int", "OOC") */
+  buttonName: z.string().min(1).max(10),
+  /** Delimiter(s): a single string (same open/close) or [open, close] tuple */
+  delimiters: z.union([
+    z.string(),
+    z.tuple([z.string(), z.string()]),
+  ]),
+  /** CSS class name for styling matched text (e.g., "qt-chat-narration") */
+  style: z.string().min(1).max(50),
 });
 
-export type AnnotationButton = z.infer<typeof AnnotationButtonSchema>;
+export type TemplateDelimiter = z.infer<typeof TemplateDelimiterSchema>;
+
+// Legacy type alias for backward compatibility during migration
+export type AnnotationButton = {
+  label: string;
+  abbrev: string;
+  prefix: string;
+  suffix: string;
+};
 
 // ============================================================================
 // RENDERING PATTERNS (for message content styling)
@@ -98,10 +110,9 @@ export const RoleplayTemplateSchema = z.object({
   description: z.string().max(500).nullable().optional(),
   systemPrompt: z.string().min(1),           // The template content
   isBuiltIn: z.boolean().default(false),     // Built-in templates are read-only
-  pluginName: z.string().nullable().optional(), // Plugin name if provided by a plugin
   tags: z.array(UUIDSchema).default([]),     // Optional categorization
-  /** Annotation buttons for the formatting toolbar - defines available formatting options */
-  annotationButtons: z.array(AnnotationButtonSchema).default([]),
+  /** Delimiter entries for the formatting toolbar — each defines a formatting type with its button and style */
+  delimiters: z.array(TemplateDelimiterSchema).default([]),
   /** Patterns for styling roleplay text in message content */
   renderingPatterns: z.array(RenderingPatternSchema).default([]),
   /** Optional dialogue detection for paragraph-level styling */

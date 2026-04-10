@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { successResponse, errorResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
+import { generateRenderingPatterns } from '@/lib/chat/annotations';
 
 /**
  * GET /api/v1/roleplay-templates
@@ -96,6 +97,17 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       return errorResponse('A roleplay template with this name already exists', 409);
     }
 
+    // Auto-generate rendering patterns from delimiters if not explicitly provided
+    const templateDelimiters = body.delimiters || [];
+    let renderingPatterns = body.renderingPatterns || [];
+    if ((!renderingPatterns || renderingPatterns.length === 0) && (templateDelimiters.length > 0 || narrationDelimiters)) {
+      renderingPatterns = generateRenderingPatterns(templateDelimiters, narrationDelimiters as string | [string, string]);
+      logger.debug('Auto-generated rendering patterns from delimiters', {
+        delimiterCount: templateDelimiters.length,
+        patternCount: renderingPatterns.length,
+      });
+    }
+
     // Create template
     const template = await repos.roleplayTemplates.create({
       userId: user.id,
@@ -104,9 +116,9 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       systemPrompt: systemPrompt.trim(),
       isBuiltIn: false,
       tags: [],
-      annotationButtons: [],
-      renderingPatterns: [],
-      dialogueDetection: null,
+      delimiters: templateDelimiters,
+      renderingPatterns,
+      dialogueDetection: body.dialogueDetection || null,
       narrationDelimiters: narrationDelimiters as string | [string, string],
     });
 
