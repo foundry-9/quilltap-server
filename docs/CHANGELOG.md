@@ -9,6 +9,20 @@
 - **@quilltap/plugin-types 2.2.0**: Removed `ROLEPLAY_TEMPLATE` from `PluginCapability` type, deprecated roleplay template type exports from barrel. Types preserved in `./plugins/roleplay-template` for backward compat.
 - **@quilltap/plugin-utils 2.2.0**: Removed roleplay template builder utilities (`createRoleplayTemplatePlugin`, `createSingleTemplatePlugin`, `validateTemplateConfig`) from main exports and `./roleplay-templates` export path. Updated `@quilltap/plugin-types` dependency to ^2.2.0.
 - **Dependencies**: next 16.2.2→16.2.3, openai 6.33→6.34, react/react-dom 19.2.4→19.2.5, @google/genai 1.48→1.49, storybook 10.3.4→10.3.5, @types/node 22.19.15→22.19.17, dotenv 17.4.0→17.4.1
+- **API.md**: Added documentation for wardrobe (archetypes), character wardrobe, outfit presets, character plugin data, chat avatars, chat state, chat wardrobe/outfits, chat tools/automation, and images API routes; updated version reference to v4.2+
+- **README.md**: Updated Core Features with wardrobe system, character plugin metadata, native roleplay templates, per-conversation avatar generation, and project default image profiles
+- **DEVELOPMENT.md**: Updated roleplayTemplates table description to reflect native template system
+- **help/chat-settings.md**: Added Per-Conversation Avatar Generation section
+- **4.2.0 Release Notes**: Added manual avatar regeneration, default image generation profile for projects, and character plugin data sections
+- **Tool Palette Reorganization**: Moved Roleplay Template dropdown from Chat Settings modal into the Edit Content section of the tool palette for quicker access. Moved State to the Organize section. Merged Memory actions (Re-extract, Delete) into the Edit Content section, removing the separate Memory section.
+- Outfit indicator now renders above talkativeness slider for LLM characters in participant sidebar
+- Shared/archetype wardrobe items now appear in sidebar outfit dropdowns with "(shared)" label
+- System prompt clothing section now shows slot-based outfit state instead of monolithic descriptions (falls back to legacy format when no wardrobe items exist)
+- Appearance resolution for image generation prefers equipped wardrobe items over legacy clothing records
+- perf: Memories tab on character pages now uses paginated loading with infinite scroll instead of loading all memories at once
+- chore: Add `all` mode to remove-old-dev-tags Claude command for removing every dev tag, release, and Docker image
+- docs: Add system flowcharts (Mermaid) documenting prompt assembly, memory extraction pipeline, scene tracking, story background generation, and Concierge content routing
+- test: Expand unit and regression coverage for wardrobe tools, text-block tool mode, and 4.1 memory repair/timestamp fixes
 
 #### Refactored
 
@@ -104,18 +118,6 @@
 - In-chat outfit indicator on ParticipantCard sidebar showing current equipped items per character with inline slot-change dropdowns — now shown for user-controlled characters too, not just LLM-controlled ones
 - Outfit change notifications: when outfits are changed via the sidebar, all characters in the chat are informed on their next turn
 - Scene state tracker now uses equipped wardrobe items instead of legacy clothing records
-
-#### Changed
-
-- **Tool Palette Reorganization**: Moved Roleplay Template dropdown from Chat Settings modal into the Edit Content section of the tool palette for quicker access. Moved State to the Organize section. Merged Memory actions (Re-extract, Delete) into the Edit Content section, removing the separate Memory section.
-- Outfit indicator now renders above talkativeness slider for LLM characters in participant sidebar
-- Shared/archetype wardrobe items now appear in sidebar outfit dropdowns with "(shared)" label
-- System prompt clothing section now shows slot-based outfit state instead of monolithic descriptions (falls back to legacy format when no wardrobe items exist)
-- Appearance resolution for image generation prefers equipped wardrobe items over legacy clothing records
-- perf: Memories tab on character pages now uses paginated loading with infinite scroll instead of loading all memories at once
-- chore: Add `all` mode to remove-old-dev-tags Claude command for removing every dev tag, release, and Docker image
-- docs: Add system flowcharts (Mermaid) documenting prompt assembly, memory extraction pipeline, scene tracking, story background generation, and Concierge content routing
-- test: Expand unit and regression coverage for wardrobe tools, text-block tool mode, and 4.1 memory repair/timestamp fixes
 
 #### Migration
 
