@@ -15,7 +15,7 @@
 - **README.md**: Updated Core Features with wardrobe system, character plugin metadata, native roleplay templates, per-conversation avatar generation, and project default image profiles
 - **DEVELOPMENT.md**: Updated roleplayTemplates table description to reflect native template system
 - **help/chat-settings.md**: Added Per-Conversation Avatar Generation section
-- **4.2.0 Release Notes**: Added manual avatar regeneration, default image generation profile for projects, and character plugin data sections
+- **4.2.0 Release Notes**: Added manual avatar regeneration, default image generation profile for projects, character plugin data sections, OpenRouter image generation, seed character wardrobe items; corrected plugin package versions to 2.2.1
 - **Tool Palette Reorganization**: Moved Roleplay Template dropdown from Chat Settings modal into the Edit Content section of the tool palette for quicker access. Moved State to the Organize section. Merged Memory actions (Re-extract, Delete) into the Edit Content section, removing the separate Memory section.
 - Outfit indicator now renders above talkativeness slider for LLM characters in participant sidebar
 - Shared/archetype wardrobe items now appear in sidebar outfit dropdowns with "(shared)" label
