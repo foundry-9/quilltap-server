@@ -1,7 +1,7 @@
 ---
 title: The Wardrobe
 url: /aurora
-tags: [characters, wardrobe, outfit, clothing, appearance, tools]
+tags: [characters, wardrobe, outfit, clothing, appearance, tools, image, import, vision]
 ---
 
 # The Wardrobe
@@ -41,6 +41,28 @@ To furnish a character's wardrobe:
 6. Provide a **description** --- as lavish or as terse as you please --- that the AI will use when referencing the garment
 
 You may also edit or remove items at any time. The wardrobe is yours to curate, though your characters may have opinions about it (see below).
+
+### Import from Image
+
+For those moments when visual inspiration strikes --- a photograph discovered in one's research, a portrait from a fashion plate, a screenshot from a film --- Quilltap can analyze a reference image and propose wardrobe items derived from whatever garments are visible therein. It is rather like having a couturier examine a daguerreotype and reproduce the ensemble, stitch by stitch.
+
+To use this feature:
+
+1. Navigate to a character's **Appearance** tab
+2. In the **Personal Wardrobe** section header, click the **image icon** button (beside "Add Item")
+3. Drop an image file into the upload zone, or click to browse (JPEG, PNG, WebP, or GIF, up to 10 MB)
+4. Optionally provide **guidance notes** --- free-text hints to steer the analysis (e.g., "this is a medieval fantasy setting," "focus on the woman on the left," "ignore the background characters")
+5. Click **Analyze Image**
+
+A vision-capable LLM will examine the image and return a list of proposed wardrobe items, each with a suggested title, description, slot type(s), and appropriateness tags. You are then presented with a review screen where you may:
+
+- **Edit** any field (title, types, appropriateness, description) before importing
+- **Deselect** items you do not wish to import
+- **Re-analyze** the image if the results are unsatisfactory
+
+Click **Import Selected** to add the approved items to the character's personal wardrobe. They are created as non-default items --- you may mark them as defaults or equip them afterwards, at your leisure.
+
+**Requirements:** This feature requires at least one vision-capable provider to be configured (Anthropic Claude, OpenAI GPT-4o, Google Gemini, or xAI Grok). If you have configured an **Image Description Profile** in your Chat settings, that profile will be used; otherwise Quilltap will select any available vision-capable provider from your connection profiles.
 
 ### Shared Items (Archetypes)
 

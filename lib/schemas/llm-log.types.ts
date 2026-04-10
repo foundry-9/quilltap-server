@@ -32,6 +32,7 @@ export const LLMLogTypeEnum = z.enum([
   'EXTERNAL_PROMPT',
   'AUTO_CONFIGURE',
   'IMAGE_GENERATION',
+  'WARDROBE_IMAGE_ANALYSIS',
 ]);
 export type LLMLogType = z.infer<typeof LLMLogTypeEnum>;
 
