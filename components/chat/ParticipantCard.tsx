@@ -99,6 +99,8 @@ interface ParticipantCardProps {
   outfitLoading?: boolean
   // Gift wardrobe item
   onGiftItem?: (participantId: string) => void
+  // Avatar regeneration
+  onRegenerateAvatar?: (participantId: string) => void
 }
 
 export function ParticipantCard({
@@ -133,6 +135,7 @@ export function ParticipantCard({
   onEquipSlot,
   outfitLoading,
   onGiftItem,
+  onRegenerateAvatar,
 }: ParticipantCardProps) {
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
@@ -297,6 +300,23 @@ export function ParticipantCard({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
               </svg>
             </div>
+          )}
+          {/* Regenerate avatar button — small camera icon below avatar */}
+          {onRegenerateAvatar && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onRegenerateAvatar(participant.id)
+              }}
+              className="qt-participant-avatar-regenerate"
+              title={`Regenerate avatar for ${name}`}
+              aria-label={`Regenerate avatar for ${name}`}
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+              </svg>
+            </button>
           )}
         </div>
 

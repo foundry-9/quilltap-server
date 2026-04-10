@@ -31,6 +31,7 @@ import {
   handleReclassifyDanger,
   handleEquipSlot,
   handleToggleAvatarGeneration,
+  handleRegenerateAvatar,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -58,6 +59,7 @@ const CHAT_POST_ACTIONS = [
   'reclassify-danger',
   'equip',
   'toggle-avatar-generation',
+  'regenerate-avatar',
 ] as const;
 
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
@@ -107,6 +109,7 @@ export async function handlePost(
     'reclassify-danger': () => handleReclassifyDanger(chatId, chat, ctx),
     equip: () => handleEquipSlot(req, chatId, ctx),
     'toggle-avatar-generation': () => handleToggleAvatarGeneration(chatId, ctx),
+    'regenerate-avatar': () => handleRegenerateAvatar(req, chatId, ctx),
   };
 
   return actionHandlers[action]();

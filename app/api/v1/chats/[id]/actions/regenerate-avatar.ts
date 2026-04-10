@@ -1,0 +1,83 @@
+/**
+ * Chats API v1 - Regenerate Avatar Action
+ *
+ * POST /api/v1/chats/[id]?action=regenerate-avatar - Queue regeneration of character avatar
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { logger } from '@/lib/logger';
+import { badRequest, serverError, successResponse } from '@/lib/api/responses';
+import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import type { AuthenticatedContext } from '@/lib/api/middleware';
+
+const regenerateAvatarSchema = z.object({
+  characterId: z.string().min(1, 'characterId is required'),
+});
+
+/**
+ * Handle regenerate-avatar action
+ * Queues a background job to regenerate the avatar for a specific character in the chat
+ */
+export async function handleRegenerateAvatar(
+  req: NextRequest,
+  chatId: string,
+  ctx: AuthenticatedContext
+): Promise<NextResponse> {
+  const { user, repos } = ctx;
+
+  try {
+    const body = await req.json();
+    const { characterId } = regenerateAvatarSchema.parse(body);
+
+    // Verify the character exists and is a participant in this chat
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      return badRequest('Chat not found');
+    }
+
+    if (!chat.avatarGenerationEnabled) {
+      return badRequest('Avatar generation is not enabled for this chat.');
+    }
+
+    const isParticipant = chat.participants.some(
+      p => p.characterId === characterId
+    );
+    if (!isParticipant) {
+      return badRequest('Character is not a participant in this chat.');
+    }
+
+    logger.debug('[Chats v1] Manual avatar regeneration requested', {
+      chatId,
+      characterId,
+      context: 'character-avatar',
+    });
+
+    await triggerAvatarGenerationIfEnabled(repos, {
+      userId: user.id,
+      chatId,
+      characterId,
+      callerContext: '[Chats v1] regenerate-avatar',
+    });
+
+    logger.info('[Chats v1] Avatar regeneration triggered', {
+      chatId,
+      characterId,
+      context: 'character-avatar',
+    });
+
+    return successResponse({
+      message: 'Avatar regeneration queued',
+      queued: true,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return badRequest(error.issues.map(e => e.message).join(', '));
+    }
+    logger.error('[Chats v1] Failed to trigger avatar regeneration', {
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    }, error instanceof Error ? error : undefined);
+    return serverError('Failed to queue avatar regeneration');
+  }
+}

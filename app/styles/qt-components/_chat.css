@@ -1585,6 +1585,25 @@
   }
 
   /**
+   * Regenerate avatar button — tiny camera icon anchored below the avatar.
+   * Semi-transparent until hovered so it doesn't fight with the portrait.
+   */
+  .qt-participant-avatar-regenerate {
+    @apply absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all;
+    background: var(--qt-surface-alt, var(--color-muted));
+    color: var(--qt-text-secondary, var(--color-muted-foreground));
+    border: 1.5px solid var(--color-background);
+    opacity: 0.6;
+    z-index: 3;
+  }
+
+  .qt-participant-avatar-regenerate:hover {
+    opacity: 1;
+    background: var(--qt-accent-bg, var(--color-primary));
+    color: var(--qt-accent-fg, var(--color-primary-foreground));
+  }
+
+  /**
    * Stop button on participant card - danger colors
    */
   .qt-participant-stop-button {

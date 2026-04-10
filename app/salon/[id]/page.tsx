@@ -135,6 +135,84 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [chat?.participants])
 
+  // --- Avatar generation polling ---
+  // After triggering avatar generation, poll fetchChat until the avatar updates
+  const avatarPollRef = useRef<NodeJS.Timeout | null>(null)
+  const avatarPollCountRef = useRef(0)
+
+  const startAvatarPoll = useCallback((characterId: string) => {
+    // Snapshot the current avatar URL for this character to detect when it changes
+    const participant = chat?.participants.find(p => p.character?.id === characterId)
+    const snapshotAvatarUrl = participant?.character?.avatarUrl ?? null
+
+    // Clear any existing poll
+    if (avatarPollRef.current) {
+      clearInterval(avatarPollRef.current)
+    }
+    avatarPollCountRef.current = 0
+
+    avatarPollRef.current = setInterval(async () => {
+      avatarPollCountRef.current++
+      // Poll for up to 2 minutes (24 polls at 5s intervals)
+      if (avatarPollCountRef.current > 24) {
+        if (avatarPollRef.current) clearInterval(avatarPollRef.current)
+        avatarPollRef.current = null
+        return
+      }
+      try {
+        const res = await fetch(`/api/v1/chats/${id}`)
+        if (!res.ok) return
+        const data = await res.json()
+        // Check the enriched participant avatar URL — this changes when avatarOverrides update
+        const updatedParticipant = data.chat?.participants?.find(
+          (p: { character?: { id?: string } }) => p.character?.id === characterId
+        )
+        const newAvatarUrl = updatedParticipant?.character?.avatarUrl ?? null
+        if (newAvatarUrl && newAvatarUrl !== snapshotAvatarUrl) {
+          // Avatar URL changed — do a full fetchChat to update React state
+          if (avatarPollRef.current) clearInterval(avatarPollRef.current)
+          avatarPollRef.current = null
+          await fetchChat()
+          showInfoToast('Avatar updated')
+        }
+      } catch {
+        // Silently continue polling
+      }
+    }, 5000)
+  }, [chat?.participants, id, fetchChat])
+
+  // Cleanup avatar polling on unmount
+  useEffect(() => {
+    return () => {
+      if (avatarPollRef.current) {
+        clearInterval(avatarPollRef.current)
+      }
+    }
+  }, [])
+
+  const handleRegenerateAvatar = useCallback(async (participantId: string) => {
+    const participant = chat?.participants.find(p => p.id === participantId)
+    const characterId = participant?.character?.id
+    const name = participant?.character?.name || 'Unknown'
+    if (!characterId) return
+    try {
+      const res = await fetch(`/api/v1/chats/${id}?action=regenerate-avatar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId }),
+      })
+      if (res.ok) {
+        showInfoToast(`Avatar regeneration queued for ${name}`)
+        startAvatarPoll(characterId)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        showErrorToast(data.error || 'Failed to regenerate avatar')
+      }
+    } catch {
+      showErrorToast('Failed to regenerate avatar')
+    }
+  }, [chat?.participants, id, startAvatarPoll])
+
   const userParticipantIdSet = useMemo(() => {
     if (!chat?.participants) return new Set<string>()
     return new Set(
@@ -346,8 +424,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         })
         outfitNotification.addNotification(characterName, 'clothing', outfitText)
       }
+      // If avatar generation is enabled, start polling for the auto-triggered avatar update
+      if (chat?.avatarGenerationEnabled) {
+        startAvatarPoll(characterId)
+      }
     }
-  }, [chat?.participants, outfit, outfitNotification])
+  }, [chat?.participants, chat?.avatarGenerationEnabled, outfit, outfitNotification, startAvatarPoll])
 
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
@@ -1183,6 +1265,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           outfitLoading={outfit.loading}
           onEquipSlot={handleEquipSlot}
           onGiftItem={handleGiftItem}
+          onRegenerateAvatar={chat?.avatarGenerationEnabled ? handleRegenerateAvatar : undefined}
         />
       )}
 

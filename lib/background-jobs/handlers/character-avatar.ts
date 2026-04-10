@@ -135,7 +135,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   const scenarioContext = chat.scenarioText
     ? ` Setting: ${chat.scenarioText.substring(0, 300)}.`
     : '';
-  const prompt = `Three-quarter portrait of ${character.name}, from the thighs up. ${appearanceText}.${scenarioContext} Character portrait, detailed, high quality, natural lighting.`;
+  const prompt = `Solo portrait of a single person: ${character.name}. Show exactly one figure, from the thighs up, three-quarter view. ${appearanceText}.${scenarioContext} Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
 
   logger.debug('[CharacterAvatar] Generated portrait prompt', {
     context: 'background-jobs.character-avatar',
@@ -342,24 +342,26 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   const category: FileCategory = 'IMAGE';
   const source: FileSource = 'GENERATED';
 
+  const folderProjectId = chat.projectId ?? null;
+
   try {
     const uploadResult = await fileStorageManager.uploadFile({
       filename: originalFilename,
       content: buffer,
       contentType: mimeType,
-      projectId: null,
+      projectId: folderProjectId,
       folderPath: '/character-avatars/',
     });
 
-    // Ensure /character-avatars/ folder record exists
-    const existingFolder = await repos.folders.findByPath(job.userId, '/character-avatars/', null);
+    // Ensure /character-avatars/ folder record exists for the project (or general)
+    const existingFolder = await repos.folders.findByPath(job.userId, '/character-avatars/', folderProjectId);
     if (!existingFolder) {
       await repos.folders.create({
         userId: job.userId,
         path: '/character-avatars/',
         name: 'character-avatars',
         parentFolderId: null,
-        projectId: null,
+        projectId: folderProjectId,
       });
     }
 
@@ -381,7 +383,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       description: `${character.name} — wardrobe portrait`,
       tags: [payload.characterId],
       storageKey: uploadResult.storageKey,
-      projectId: null,
+      projectId: folderProjectId,
       folderPath: '/character-avatars/',
     }, { id: fileId });
 

@@ -69,6 +69,8 @@ interface ParticipantSidebarProps {
   onEquipSlot?: (participantId: string, slot: string, itemId: string | null) => void
   // Gift wardrobe item
   onGiftItem?: (participantId: string) => void
+  // Avatar regeneration
+  onRegenerateAvatar?: (participantId: string) => void
   className?: string
 }
 
@@ -103,6 +105,7 @@ export function ParticipantSidebar({
   outfitLoading,
   onEquipSlot,
   onGiftItem,
+  onRegenerateAvatar,
   className = '',
 }: ParticipantSidebarProps) {
   // Collapsed state with localStorage persistence (default: collapsed)
@@ -457,6 +460,7 @@ export function ParticipantSidebar({
               onEquipSlot={onEquipSlot}
               outfitLoading={outfitLoading}
               onGiftItem={onGiftItem}
+              onRegenerateAvatar={onRegenerateAvatar}
             />
           )
         })}
