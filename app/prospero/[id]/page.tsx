@@ -8,7 +8,7 @@
  * - Infinite scrolling list of chats below
  */
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useProjectDetail, useProjectChats, useProjectFiles, useProjectCardState } from './hooks'
@@ -18,6 +18,8 @@ import {
   FilesCard,
   CharactersCard,
   SettingsCard,
+  ModelBehaviorCard,
+  ImageGenerationCard,
   ChatsSection,
 } from './components'
 
@@ -37,9 +39,15 @@ export default function ProjectDetailPage() {
     handleSave,
     handleToggleAllowAnyCharacter,
     handleSaveAgentMode,
+    handleSaveAvatarGeneration,
+    handleSaveDefaultImageProfile,
     handleSaveBackgroundDisplayMode,
     handleRemoveCharacter,
   } = useProjectDetail(projectId)
+
+  // Image profiles for the default image profile selector
+  const [imageProfiles, setImageProfiles] = useState<Array<{ id: string; name: string; provider: string; modelName: string }>>([])
+
 
   const {
     chats,
@@ -68,6 +76,11 @@ export default function ProjectDetailPage() {
     fetchProject()
     fetchChats()
     fetchFiles()
+    // Fetch image profiles for the default image profile selector
+    fetch('/api/v1/image-profiles')
+      .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load image profiles')))
+      .then(data => setImageProfiles(data?.profiles || []))
+      .catch(() => {/* non-critical, selector will just be empty */})
   }, [projectId, fetchProject, fetchChats, fetchFiles])
 
   if (loading) {
@@ -106,8 +119,10 @@ export default function ProjectDetailPage() {
         onSave={handleSave}
       />
 
-      {/* Cards grid - 3 across on wide desktop, 2 on medium, 1 on mobile */}
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {/* Cards grid - 3 columns on wide desktop, 2 on medium, 1 on mobile
+           Layout: Files          | Characters       | Project Settings (row-span-2)
+                   Model Behavior | Image Generation |                               */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 grid-flow-row-dense">
         <FilesCard
           files={files}
           expanded={cardState.files}
@@ -118,6 +133,7 @@ export default function ProjectDetailPage() {
         <CharactersCard
           project={project}
           onRemoveCharacter={handleRemoveCharacter}
+          onToggleAllowAnyCharacter={handleToggleAllowAnyCharacter}
           expanded={cardState.characters}
           onToggle={() => toggleCard('characters')}
         />
@@ -126,11 +142,23 @@ export default function ProjectDetailPage() {
           editForm={editForm}
           onEditFormChange={setEditForm}
           onSave={handleSave}
-          onToggleAllowAnyCharacter={handleToggleAllowAnyCharacter}
-          onAgentModeChange={handleSaveAgentMode}
-          onBackgroundDisplayModeChange={handleSaveBackgroundDisplayMode}
           expanded={cardState.settings}
           onToggle={() => toggleCard('settings')}
+        />
+        <ModelBehaviorCard
+          project={project}
+          onAgentModeChange={handleSaveAgentMode}
+          expanded={cardState.modelBehavior}
+          onToggle={() => toggleCard('modelBehavior')}
+        />
+        <ImageGenerationCard
+          project={project}
+          imageProfiles={imageProfiles}
+          onAvatarGenerationChange={handleSaveAvatarGeneration}
+          onDefaultImageProfileChange={handleSaveDefaultImageProfile}
+          onBackgroundDisplayModeChange={handleSaveBackgroundDisplayMode}
+          expanded={cardState.imageGeneration}
+          onToggle={() => toggleCard('imageGeneration')}
         />
       </div>
 

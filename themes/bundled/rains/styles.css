@@ -461,6 +461,11 @@
   --qt-chat-silent-border: hsl(170 28% 38%);
   --qt-chat-silent-label-fg: hsl(170 20% 32%);
 
+  /* Chat: Wardrobe action notices — muted warm amber tempered by rain */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 62%, hsl(40 35% 30%) 38%);
+  --qt-chat-wardrobe-border: hsl(40 30% 35%);
+  --qt-chat-wardrobe-label-fg: hsl(40 35% 58%);
+
   --qt-chat-composer-bg: hsl(var(--bg-000));
   --qt-chat-composer-border: var(--stroke-strong);
   --qt-chat-composer-radius: var(--radius-md);
@@ -754,8 +759,8 @@
   /* Badge Tokens - Entity/Status/Source */
   --qt-badge-character-bg: hsl(217 91% 60% / 0.15);
   --qt-badge-character-fg: hsl(217 91% 45%);
-  --qt-badge-persona-bg: hsl(270 70% 60% / 0.15);
-  --qt-badge-persona-fg: hsl(270 70% 45%);
+  --qt-badge-user-character-bg: hsl(270 70% 60% / 0.15);
+  --qt-badge-user-character-fg: hsl(270 70% 45%);
   --qt-badge-chat-bg: hsl(142 76% 36% / 0.15);
   --qt-badge-chat-fg: hsl(142 76% 30%);
   --qt-badge-tag-bg: hsl(25 95% 53% / 0.15);
@@ -916,8 +921,8 @@
   /* Dark mode entity badge tokens - brighter for dark backgrounds */
   --qt-badge-character-bg: hsl(217 91% 60% / 0.3);
   --qt-badge-character-fg: hsl(217 91% 70%);
-  --qt-badge-persona-bg: hsl(270 70% 60% / 0.3);
-  --qt-badge-persona-fg: hsl(270 70% 70%);
+  --qt-badge-user-character-bg: hsl(270 70% 60% / 0.3);
+  --qt-badge-user-character-fg: hsl(270 70% 70%);
   --qt-badge-chat-bg: hsl(142 76% 36% / 0.3);
   --qt-badge-chat-fg: hsl(142 76% 65%);
   --qt-badge-tag-bg: hsl(25 95% 53% / 0.3);
@@ -993,6 +998,11 @@
   --qt-chat-silent-border: hsl(170 25% 68%);
   --qt-chat-silent-label-fg: hsl(170 20% 45%);
 
+  /* Chat: Wardrobe action notices — soft amber for light rain mode */
+  --qt-chat-wardrobe-bg: hsl(40 30% 88%);
+  --qt-chat-wardrobe-border: hsl(40 28% 65%);
+  --qt-chat-wardrobe-label-fg: hsl(40 30% 42%);
+
   /* Overlay - warm brown tints for light mode */
   --qt-overlay-bg: hsl(35 15% 10% / 0.85);
   --qt-overlay-medium-bg: hsl(35 15% 10% / 0.55);
@@ -1057,7 +1067,7 @@
   border: 1px solid hsl(var(--accent-secondary-100) / 0.3);
 }
 
-[data-theme="rains"] .qt-badge-persona {
+[data-theme="rains"] .qt-badge-user-character {
   background: hsl(var(--accent-pro-900));
   color: hsl(var(--accent-pro-100));
   border: 1px solid hsl(var(--accent-pro-100) / 0.3);
@@ -1098,7 +1108,7 @@
   color: hsl(var(--success-100));
 }
 
-[data-theme="rains"] .qt-badge-personas {
+[data-theme="rains"] .qt-badge-user-characters {
   background: hsl(var(--accent-pro-900));
   color: hsl(var(--accent-pro-100));
 }

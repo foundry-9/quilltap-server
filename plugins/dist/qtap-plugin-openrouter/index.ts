@@ -18,6 +18,7 @@ import type {
 } from './types';
 import { OpenRouterProvider } from './provider';
 import { OpenRouterEmbeddingProvider } from './embedding-provider';
+import { OpenRouterImageProvider } from './image-provider';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -131,6 +132,13 @@ export const plugin: TextProviderPlugin = {
    */
   createProvider: (baseUrl?: string) => {
     return new OpenRouterProvider();
+  },
+
+  /**
+   * Factory method to create an OpenRouter image generation provider instance
+   */
+  createImageProvider: (baseUrl?: string) => {
+    return new OpenRouterImageProvider();
   },
 
   /**

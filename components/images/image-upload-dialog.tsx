@@ -13,7 +13,7 @@ interface ImageUploadDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
-  contextType?: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME';
+  contextType?: 'CHARACTER' | 'CHAT' | 'THEME';
   contextId?: string;
 }
 

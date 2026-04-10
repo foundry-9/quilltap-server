@@ -19,6 +19,8 @@ interface ProfilesTabProps {
   savingImageProfile?: boolean
   savingAgentMode?: boolean
   savingHelpTools?: boolean
+  savingCanDressThemselves?: boolean
+  savingCanCreateOutfits?: boolean
   savingTimestampConfig?: boolean
   savingDefaultScenario?: boolean
   savingDefaultSystemPrompt?: boolean
@@ -27,6 +29,8 @@ interface ProfilesTabProps {
   onImageProfileChange: (profileId: string | null) => void
   onAgentModeChange: (enabled: boolean | null) => void
   onHelpToolsChange: (enabled: boolean | null) => void
+  onCanDressThemselvesChange: (enabled: boolean | null) => void
+  onCanCreateOutfitsChange: (enabled: boolean | null) => void
   onTimestampConfigChange: (config: TimestampConfig | null) => void
   onDefaultScenarioChange: (scenarioId: string | null) => void
   onDefaultSystemPromptChange: (promptId: string | null) => void
@@ -44,6 +48,8 @@ export function ProfilesTab({
   savingImageProfile,
   savingAgentMode,
   savingHelpTools,
+  savingCanDressThemselves,
+  savingCanCreateOutfits,
   savingTimestampConfig,
   savingDefaultScenario,
   savingDefaultSystemPrompt,
@@ -52,6 +58,8 @@ export function ProfilesTab({
   onImageProfileChange,
   onAgentModeChange,
   onHelpToolsChange,
+  onCanDressThemselvesChange,
+  onCanCreateOutfitsChange,
   onTimestampConfigChange,
   onDefaultScenarioChange,
   onDefaultSystemPromptChange,
@@ -297,6 +305,71 @@ export function ProfilesTab({
               Saving...
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Wardrobe Section */}
+      <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-2">
+          Wardrobe
+        </h2>
+
+        {/* Self-Dressing */}
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-foreground mb-1">Self-Dressing</h3>
+          <p className="qt-text-small mb-3">
+            Control whether this character can change their own outfit during conversations using wardrobe tools.
+          </p>
+          <div className="flex items-center gap-3">
+            <select
+              value={character?.canDressThemselves === null || character?.canDressThemselves === undefined ? 'inherit' : character.canDressThemselves ? 'enabled' : 'disabled'}
+              onChange={(e) => {
+                const value = e.target.value
+                onCanDressThemselvesChange(value === 'inherit' ? null : value === 'enabled')
+              }}
+              disabled={savingCanDressThemselves}
+              className="flex-1 max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            >
+              <option value="inherit">Inherit from global settings (enabled)</option>
+              <option value="enabled">Enabled</option>
+              <option value="disabled">Disabled</option>
+            </select>
+            {savingCanDressThemselves && (
+              <div className="flex items-center gap-2 qt-text-small">
+                <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
+                Saving...
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Outfit Creation */}
+        <div>
+          <h3 className="text-sm font-medium text-foreground mb-1">Outfit Creation</h3>
+          <p className="qt-text-small mb-3">
+            Control whether this character can create new wardrobe items mid-conversation. Requires tool use.
+          </p>
+          <div className="flex items-center gap-3">
+            <select
+              value={character?.canCreateOutfits === null || character?.canCreateOutfits === undefined ? 'inherit' : character.canCreateOutfits ? 'enabled' : 'disabled'}
+              onChange={(e) => {
+                const value = e.target.value
+                onCanCreateOutfitsChange(value === 'inherit' ? null : value === 'enabled')
+              }}
+              disabled={savingCanCreateOutfits}
+              className="flex-1 max-w-xs rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            >
+              <option value="inherit">Inherit from global settings (enabled)</option>
+              <option value="enabled">Enabled</option>
+              <option value="disabled">Disabled</option>
+            </select>
+            {savingCanCreateOutfits && (
+              <div className="flex items-center gap-2 qt-text-small">
+                <div className="h-4 w-4 animate-spin rounded-full qt-spinner"></div>
+                Saving...
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -118,7 +118,7 @@ Click the expand/collapse button to switch views.
 Each participant card shows:
 
 - **Avatar and Name** — Character identity
-- **Type Badge** — "Character" or "Persona"
+- **Type Badge** — "Character" or "User Character"
 - **Connection Profile** — Which LLM they use
 - **Participation Status** — Active, Silent, Absent, or Removed
 - **Turn Indicator** — Glowing when it's their turn

@@ -8,6 +8,8 @@ import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { getAvatarClasses } from '@/lib/avatar-styles'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
+import { OutfitSelector } from '@/components/wardrobe'
+import type { OutfitSelection } from '@/components/wardrobe'
 import type { TimestampConfig } from '@/lib/schemas/types'
 
 interface Character {
@@ -74,6 +76,8 @@ interface Project {
   id: string
   name: string
   color?: string | null
+  defaultAvatarGenerationEnabled?: boolean | null
+  defaultImageProfileId?: string | null
 }
 
 export default function NewChatPage() {
@@ -98,6 +102,8 @@ export default function NewChatPage() {
   const [creating, setCreating] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [project, setProject] = useState<Project | null>(null)
+  const [avatarGenerationEnabled, setAvatarGenerationEnabled] = useState(false)
+  const [outfitSelections, setOutfitSelections] = useState<OutfitSelection[]>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -139,7 +145,15 @@ export default function NewChatPage() {
         // Handle project response
         if (projectRes && projectRes.ok) {
           const data = await projectRes.json()
-          setProject(data.project || data)
+          const projectData = data.project || data
+          setProject(projectData)
+          if (projectData.defaultAvatarGenerationEnabled) {
+            setAvatarGenerationEnabled(true)
+          }
+          // Pre-select project's default image profile if set
+          if (projectData.defaultImageProfileId) {
+            setChatImageProfileId(projectData.defaultImageProfileId)
+          }
         } else if (projectRes && !projectRes.ok) {
           console.warn('[NewChat] Failed to load project', { projectId: projectIdParam, status: projectRes.status })
         }
@@ -242,12 +256,12 @@ export default function NewChatPage() {
       if (char.defaultScenarioId) {
         setScenarioId(char.defaultScenarioId)
       }
-      // Pre-select default image profile if set
-      if (char.defaultImageProfileId) {
+      // Pre-select default image profile if set (project default takes priority)
+      if (char.defaultImageProfileId && !project?.defaultImageProfileId) {
         setChatImageProfileId(char.defaultImageProfileId)
       }
     }
-  }, [selectedCharacters])
+  }, [selectedCharacters, project?.defaultImageProfileId])
 
   const handleScenarioSelectChange = (value: string) => {
     if (value === CUSTOM_SCENARIO_VALUE || value === '') {
@@ -362,7 +376,7 @@ export default function NewChatPage() {
         controlledBy: sc.controlledBy,
       }))
 
-      // Add user-controlled character as a participant (replaces persona)
+      // Add user-controlled character as a participant
       if (selectedUserCharacterId) {
         participants.push({
           type: 'CHARACTER' as const,
@@ -393,6 +407,14 @@ export default function NewChatPage() {
 
       if (project?.id) {
         requestBody.projectId = project.id
+      }
+
+      if (avatarGenerationEnabled) {
+        requestBody.avatarGenerationEnabled = true
+      }
+
+      if (outfitSelections.length > 0) {
+        requestBody.outfitSelections = outfitSelections
       }
 
       const res = await fetch('/api/v1/chats', {
@@ -680,6 +702,33 @@ export default function NewChatPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {selectedCharacters.filter(sc => sc.controlledBy === 'llm').length > 0 && (
+              <div className="rounded-xl border qt-border-default qt-bg-card p-6">
+                <OutfitSelector
+                  characters={selectedCharacters
+                    .filter(sc => sc.controlledBy === 'llm')
+                    .map(sc => ({ id: sc.character.id, name: sc.character.name }))}
+                  onSelectionsChange={setOutfitSelections}
+                  disabled={creating}
+                />
+                <div className="mt-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={avatarGenerationEnabled}
+                      onChange={(e) => setAvatarGenerationEnabled(e.target.checked)}
+                      className="qt-checkbox"
+                      disabled={creating}
+                    />
+                    <span className="qt-text-small">Auto-generate character avatars</span>
+                  </label>
+                  <p className="qt-text-xs qt-text-muted mt-1">
+                    Generate new portraits when outfits change (uses image API)
+                  </p>
+                </div>
               </div>
             )}
 

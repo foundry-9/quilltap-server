@@ -10,9 +10,9 @@ export interface TemplateContext {
   personality?: string // Character personality
   scenario?: string // Current scenario
 
-  // Persona data
-  user?: string // User/persona name
-  persona?: string // Persona description
+  // User character data
+  user?: string // User character name
+  persona?: string // User character description (maps to {{persona}} SillyTavern template variable)
 
   // System prompts
   system?: string // System prompt or character's main prompt override
@@ -75,12 +75,12 @@ export function processTemplate(template: string, context: TemplateContext): str
 }
 
 /**
- * Build template context from character and persona data
+ * Build template context from character and user character data
  * This creates the context object used for template replacement
  */
 export function buildTemplateContext({
   character,
-  persona,
+  userCharacter,
   scenario,
   systemPrompt,
 }: {
@@ -91,7 +91,7 @@ export function buildTemplateContext({
     scenarios?: Array<{ id: string; title: string; content: string }> | null
     exampleDialogues?: string | null
   }
-  persona?: {
+  userCharacter?: {
     name: string
     description?: string | null
   } | null
@@ -105,9 +105,9 @@ export function buildTemplateContext({
     personality: character.personality || '',
     scenario: scenario || '',
 
-    // Persona data
-    user: persona?.name || 'User',
-    persona: persona?.description || '',
+    // User character data (maps to {{user}} and {{persona}} template variables)
+    user: userCharacter?.name || 'User',
+    persona: userCharacter?.description || '',
 
     // System prompt (passed separately, resolved from character.systemPrompts array by caller)
     system: systemPrompt || '',
@@ -131,13 +131,13 @@ export function buildTemplateContext({
  * This ensures consistency across all character data sent to the LLM
  *
  * @param character - Character data to process
- * @param persona - Optional persona for {{user}} variable
+ * @param userCharacter - Optional user-controlled character for {{user}} variable
  * @param scenario - Optional custom scenario override
  * @param systemPrompt - Optional system prompt content (resolved from character.systemPrompts array by caller)
  */
 export function processCharacterTemplates({
   character,
-  persona,
+  userCharacter,
   scenario,
   systemPrompt,
 }: {
@@ -149,7 +149,7 @@ export function processCharacterTemplates({
     firstMessage?: string | null
     exampleDialogues?: string | null
   }
-  persona?: {
+  userCharacter?: {
     name: string
     description?: string | null
   } | null
@@ -163,7 +163,7 @@ export function processCharacterTemplates({
   exampleDialogues: string
   systemPrompt: string
 } {
-  const context = buildTemplateContext({ character, persona, scenario, systemPrompt })
+  const context = buildTemplateContext({ character, userCharacter, scenario, systemPrompt })
 
   return {
     description: processTemplate(character.description || '', context),

@@ -12,7 +12,6 @@ import { pluginRegistry } from '@/lib/plugins/registry';
 import { registerPluginRoutes, getPluginRouteRegistry, pluginRouteRegistry } from '@/lib/plugins/route-loader';
 import { initializeProviderRegistry } from '@/lib/plugins/provider-registry';
 import { initializeThemeRegistry, themeRegistry } from '@/lib/themes/theme-registry';
-import { initializeRoleplayTemplateRegistry, roleplayTemplateRegistry } from '@/lib/plugins/roleplay-template-registry';
 import { initializeToolRegistry, toolRegistry } from '@/lib/plugins/tool-registry';
 import { initializeSearchProviderRegistry, searchProviderRegistry } from '@/lib/plugins/search-provider-registry';
 import { initializeModerationProviderRegistry, moderationProviderRegistry } from '@/lib/plugins/moderation-provider-registry';
@@ -424,9 +423,6 @@ async function performInitialization(): Promise<PluginInitializationResult> {
     // Then initialize the registry (handles file-based themes and default theme)
     await initializeThemeRegistry();
 
-    // Initialize roleplay template registry from enabled plugins with ROLEPLAY_TEMPLATE capability
-    await initializeRoleplayTemplateRegistry();
-
     // Initialize tool registry from enabled plugins with TOOL_PROVIDER capability
     const toolPlugins = pluginRegistry.getEnabledByCapability('TOOL_PROVIDER');
     if (toolPlugins.length > 0) {
@@ -649,8 +645,6 @@ export function resetPluginSystem(): void {
   pluginRouteRegistry.skipValidation = false;
   // Reset theme registry
   themeRegistry.reset();
-  // Reset roleplay template registry
-  roleplayTemplateRegistry.reset();
   // Reset tool registry
   toolRegistry.reset();
   // Reset search provider registry

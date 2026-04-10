@@ -40,7 +40,7 @@ export interface ContextCompressionOptions {
   chatId?: string
   /** Character name for compression prompt */
   characterName: string
-  /** User/persona name for compression prompt */
+  /** User character name for compression prompt */
   userName: string
   /** Dangerous content settings for uncensored fallback */
   dangerSettings?: DangerousContentSettings

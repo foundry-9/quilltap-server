@@ -347,11 +347,11 @@ export const SQLITE_TABLES = [
       "description" TEXT,
       "systemPrompt" TEXT NOT NULL,
       "isBuiltIn" INTEGER DEFAULT 0,
-      "pluginName" TEXT,
       "tags" TEXT DEFAULT '[]',
-      "annotationButtons" TEXT DEFAULT '[]',
+      "delimiters" TEXT DEFAULT '[]',
       "renderingPatterns" TEXT DEFAULT '[]',
       "dialogueDetection" TEXT,
+      "narrationDelimiters" TEXT DEFAULT '"*"',
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,

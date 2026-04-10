@@ -10,6 +10,8 @@ export { ProjectDetailHeader } from './ProjectDetailHeader'
 export { FilesCard } from './FilesCard'
 export { CharactersCard } from './CharactersCard'
 export { SettingsCard } from './SettingsCard'
+export { ModelBehaviorCard } from './ModelBehaviorCard'
+export { ImageGenerationCard } from './ImageGenerationCard'
 export { ChatsSection } from './ChatsSection'
 
 // Legacy tab components (kept for backwards compatibility)

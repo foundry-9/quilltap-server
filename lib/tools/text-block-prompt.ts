@@ -38,6 +38,12 @@ export interface TextBlockPromptOptions {
   helpNavigate?: boolean
   /** Enable create note tool */
   createNote?: boolean
+  /** Enable list wardrobe tool */
+  wardrobeList?: boolean
+  /** Enable update outfit item tool */
+  wardrobeUpdateOutfit?: boolean
+  /** Enable create wardrobe item tool */
+  wardrobeCreateItem?: boolean
 }
 
 /**
@@ -145,6 +151,31 @@ Format: [[HELP_NAVIGATE url="/settings?tab=chat&section=dangerous-content" /]]`)
 ### Create Note
 Create a note to remember something for later.
 Format: [[CREATE_NOTE title="Meeting Notes"]]content of the note[[/CREATE_NOTE]]`)
+  }
+
+  if (options.wardrobeList) {
+    toolDocs.push(`
+### List Wardrobe
+Browse your wardrobe to see available clothing and outfits.
+Format: [[WARDROBE /]]
+With filters: [[WARDROBE type_filter="top" /]]`)
+  }
+
+  if (options.wardrobeUpdateOutfit) {
+    toolDocs.push(`
+### Equip/Remove Outfit Item
+Change what you're wearing by equipping or removing items from outfit slots.
+To equip: [[EQUIP slot="top" id="item-uuid" /]]
+To equip by name: [[EQUIP slot="top" title="Charcoal Sweater" /]]
+To remove: [[EQUIP slot="top" /]]`)
+  }
+
+  if (options.wardrobeCreateItem) {
+    toolDocs.push(`
+### Create Wardrobe Item
+Design and add a new clothing item to your wardrobe, or gift one to another character.
+Format: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" appropriateness="casual"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]
+Gift to another character: [[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories" recipient="CharacterName"]]A gift for you[[/CREATE_WARDROBE_ITEM]]`)
   }
 
   if (toolDocs.length === 0) {

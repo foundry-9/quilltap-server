@@ -30,7 +30,7 @@ export interface StreamingState {
 interface StreamingHookParams {
   chatId: string
   messages: Message[]
-  participantsAsBase: { id: string; type: 'CHARACTER' | 'PERSONA'; isActive: boolean }[]
+  participantsAsBase: { id: string; type: 'CHARACTER'; isActive: boolean }[]
   chat: { participants: Participant[] } | null
   isMultiChar: boolean
   scrollToBottom: () => void

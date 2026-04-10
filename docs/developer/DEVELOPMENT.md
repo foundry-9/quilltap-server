@@ -212,7 +212,7 @@ The tables stored in the main database are:
 - **embeddingProfiles** - Embedding provider configurations
 - **imageProfiles** - Image generation configurations
 - **promptTemplates** - User-created system prompt templates
-- **roleplayTemplates** - Roleplay format templates
+- **roleplayTemplates** - Native roleplay format templates (Standard, Quilltap RP, and user-created)
 - **providerModels** - Cached provider model lists
 
 The SQLite database file location depends on platform:

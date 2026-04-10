@@ -172,7 +172,6 @@ Core initialization logic that runs on the server.
 5. **Register** - Register plugins with capability-specific registries:
    - `LLM_PROVIDER` / `EMBEDDING_PROVIDER` → Provider Registry
    - `THEME` → Theme Registry
-   - `ROLEPLAY_TEMPLATE` → Roleplay Template Registry
    - `TOOL_PROVIDER` → Tool Registry
    - `SEARCH_PROVIDER` → Search Provider Registry
    - `MODERATION_PROVIDER` → Moderation Provider Registry

@@ -52,7 +52,7 @@ describe('buildHelpChatSystemPrompt', () => {
   it('uses persona name as userName when persona provided', () => {
     const character = createMockCharacter()
     const persona = { name: 'Alice', description: 'A curious user' }
-    const result = buildHelpChatSystemPrompt({ character, persona })
+    const result = buildHelpChatSystemPrompt({ character, userCharacter: persona })
     expect(result).toContain('Alice')
   })
 
@@ -150,16 +150,16 @@ describe('buildHelpChatSystemPrompt', () => {
   it('includes persona info section when persona provided', () => {
     const character = createMockCharacter()
     const persona = { name: 'Bob', description: 'An experienced writer' }
-    const result = buildHelpChatSystemPrompt({ character, persona })
-    expect(result).toContain('## User Persona')
+    const result = buildHelpChatSystemPrompt({ character, userCharacter: persona })
+    expect(result).toContain('## User Character')
     expect(result).toContain('Bob')
     expect(result).toContain('An experienced writer')
   })
 
   it('excludes persona section when no persona', () => {
     const character = createMockCharacter()
-    const result = buildHelpChatSystemPrompt({ character, persona: null })
-    expect(result).not.toContain('## User Persona')
+    const result = buildHelpChatSystemPrompt({ character, userCharacter: null })
+    expect(result).not.toContain('## User Character')
   })
 
   it('includes other characters section when multiple names provided', () => {
@@ -218,7 +218,7 @@ describe('buildHelpChatSystemPrompt', () => {
 
     const result = buildHelpChatSystemPrompt({
       character,
-      persona,
+      userCharacter: persona,
       pageContext,
       additionalPageContexts,
       otherCharacterNames,

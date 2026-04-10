@@ -39,6 +39,7 @@ import type {
   MessageEvent,
   RoleplayTemplate,
 } from '@/lib/schemas/types';
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 const logger = baseLogger.child({ module: 'export:quilltap-export-service' });
 const APP_VERSION = packageJson.version;
@@ -205,9 +206,43 @@ export async function exportCharacters(
     if (character) {
       const tagNames = await resolveTagNames(repos, character.tags);
 
+      // Load wardrobe items for this character (skip archetypes — characterId=null)
+      let wardrobeItems: WardrobeItem[] = [];
+      try {
+        wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id);
+        logger.debug('Loaded wardrobe items for character export', {
+          characterId: id,
+          wardrobeItemCount: wardrobeItems.length,
+        });
+      } catch (error) {
+        logger.warn('Failed to load wardrobe items for character export', {
+          characterId: id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      // Load plugin data for this character
+      let pluginData: Record<string, unknown> = {};
+      try {
+        pluginData = await globalRepos.characterPluginData.getPluginDataMap(id);
+        if (Object.keys(pluginData).length > 0) {
+          logger.debug('Loaded plugin data for character export', {
+            characterId: id,
+            pluginCount: Object.keys(pluginData).length,
+          });
+        }
+      } catch (error) {
+        logger.warn('Failed to load plugin data for character export', {
+          characterId: id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       characters.push({
         ...character,
         ...(tagNames.length > 0 && { _tagNames: tagNames }),
+        ...(wardrobeItems.length > 0 && { wardrobeItems }),
+        ...(Object.keys(pluginData).length > 0 && { pluginData }),
       });
     }
   }
@@ -304,7 +339,7 @@ export async function exportRoleplayTemplates(
   for (const id of templateIds) {
     const template = await globalRepos.roleplayTemplates.findById(id);
     // Verify user owns template (userId is null for built-in, or matches for user-created)
-    if (template && !template.isBuiltIn && !template.pluginName && template.userId === userId) {
+    if (template && !template.isBuiltIn && template.userId === userId) {
       const tagNames = await resolveTagNames(repos, template.tags);
       templates.push({
         ...template,
@@ -527,7 +562,7 @@ export async function createExport(
           : [];
         const ids = options.scope === 'all'
           ? allTemplates
-              .filter(t => !t.isBuiltIn && !t.pluginName && t.userId === userId)
+              .filter(t => !t.isBuiltIn && t.userId === userId)
               .map(t => t.id)
           : entityIds;
 
@@ -696,13 +731,13 @@ export async function previewExport(
           : [];
         const ids = options.scope === 'all'
           ? allTemplates
-              .filter(t => !t.isBuiltIn && !t.pluginName && t.userId === userId)
+              .filter(t => !t.isBuiltIn && t.userId === userId)
               .map(t => t.id)
           : entityIds;
 
         for (const id of ids) {
           const template = await globalRepos.roleplayTemplates.findById(id);
-          if (template && !template.isBuiltIn && !template.pluginName && template.userId === userId) {
+          if (template && !template.isBuiltIn && template.userId === userId) {
             entities.push({ id: template.id, name: template.name });
           }
         }

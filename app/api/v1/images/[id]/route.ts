@@ -17,7 +17,7 @@ import { z } from 'zod';
 import { successResponse, notFound, badRequest, serverError, forbidden } from '@/lib/api/responses';
 
 const addTagSchema = z.object({
-  tagType: z.enum(['CHARACTER', 'PERSONA', 'CHAT', 'THEME']),
+  tagType: z.enum(['CHARACTER', 'CHAT', 'THEME']),
   tagId: z.string(),
 });
 
@@ -308,7 +308,7 @@ async function handleRemoveTag(req: NextRequest, user: any, repos: any, imageId:
 // ============================================================================
 
 async function verifyTaggedEntity(
-  tagType: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME',
+  tagType: 'CHARACTER' | 'CHAT' | 'THEME',
   tagId: string,
   userId: string,
   repos: any

@@ -76,6 +76,21 @@ import {
   isShellTool,
   type ShellToolContext,
 } from '@/lib/tools/shell';
+import {
+  executeWardrobeListTool,
+  formatWardrobeListResults,
+  type WardrobeListToolContext,
+} from '@/lib/tools/handlers/wardrobe-list-handler';
+import {
+  executeWardrobeUpdateOutfitTool,
+  formatWardrobeUpdateOutfitResults,
+  type WardrobeUpdateOutfitToolContext,
+} from '@/lib/tools/handlers/wardrobe-update-outfit-handler';
+import {
+  executeWardrobeCreateItemTool,
+  formatWardrobeCreateItemResults,
+  type WardrobeCreateItemToolContext,
+} from '@/lib/tools/handlers/wardrobe-create-item-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -171,6 +186,10 @@ const BUILT_IN_TOOLS = new Set([
   'state',
   'submit_final_response',
   'whisper',
+  // Wardrobe tools
+  'list_wardrobe',
+  'update_outfit_item',
+  'create_wardrobe_item',
   // Shell interactivity tools
   'chdir',
   'exec_sync',
@@ -609,6 +628,81 @@ export async function executeToolCallWithContext(
           path: result.path,
           value: result.value,
           previousValue: result.previousValue,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle list_wardrobe
+    if (toolCall.name === 'list_wardrobe') {
+      const wardrobeContext: WardrobeListToolContext = {
+        userId,
+        chatId,
+        characterId: characterId || '',
+      };
+
+      const result = await executeWardrobeListTool(toolCall.arguments, wardrobeContext);
+      const formattedResult = formatWardrobeListResults(result);
+
+      return {
+        toolName: 'list_wardrobe',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          items: result.items,
+          total_count: result.total_count,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle update_outfit_item
+    if (toolCall.name === 'update_outfit_item') {
+      const wardrobeContext: WardrobeUpdateOutfitToolContext = {
+        userId,
+        chatId,
+        characterId: characterId || '',
+      };
+
+      const result = await executeWardrobeUpdateOutfitTool(toolCall.arguments, wardrobeContext);
+      const formattedResult = formatWardrobeUpdateOutfitResults(result);
+
+      return {
+        toolName: 'update_outfit_item',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          action: result.action,
+          slot: result.slot,
+          item: result.item,
+          current_state: result.current_state,
+          coverage_summary: result.coverage_summary,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle create_wardrobe_item
+    if (toolCall.name === 'create_wardrobe_item') {
+      const wardrobeContext: WardrobeCreateItemToolContext = {
+        userId,
+        chatId,
+        characterId: characterId || '',
+      };
+
+      const result = await executeWardrobeCreateItemTool(toolCall.arguments, wardrobeContext);
+      const formattedResult = formatWardrobeCreateItemResults(result);
+
+      return {
+        toolName: 'create_wardrobe_item',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          item_id: result.item_id,
+          title: result.title,
+          equipped: result.equipped,
+          recipient_name: result.recipient_name,
+          current_state: result.current_state,
         } : null,
         error: result.success ? undefined : result.error,
       };

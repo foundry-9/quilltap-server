@@ -11,6 +11,7 @@ import { fileStorageManager } from './file-storage/manager';
 import type { FileEntry, FileSource, FileCategory } from './schemas/types';
 import { logger } from './logger';
 import { getInheritedTags, mergeTags } from './files/tag-inheritance';
+import { convertToWebP } from './files/webp-conversion';
 
 export interface ImageUploadResult {
   id: string;
@@ -88,9 +89,6 @@ interface CreateFileParams {
  */
 async function createFile(params: CreateFileParams): Promise<FileEntry> {
   const {
-    buffer,
-    originalFilename,
-    mimeType,
     source,
     category,
     userId,
@@ -104,7 +102,25 @@ async function createFile(params: CreateFileParams): Promise<FileEntry> {
     description,
   } = params;
 
+  let { buffer, originalFilename, mimeType } = params;
+
   const repos = getRepositories();
+
+  // Auto-convert raster images to WebP (SVGs pass through unchanged)
+  if (mimeType.startsWith('image/') && mimeType !== 'image/svg+xml') {
+    const converted = await convertToWebP(buffer, mimeType, originalFilename);
+    if (converted.wasConverted) {
+      buffer = converted.buffer;
+      mimeType = converted.mimeType;
+      originalFilename = converted.filename;
+      logger.debug('Auto-converted image to WebP in createFile', {
+        context: 'images-v2.createFile',
+        originalFilename: params.originalFilename,
+        newFilename: originalFilename,
+      });
+    }
+  }
+
   const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
 
   // Check for duplicate by hash

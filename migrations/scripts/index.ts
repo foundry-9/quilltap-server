@@ -139,6 +139,34 @@ import { addConnectionProfileModelClassFieldMigration } from './add-connection-p
 import { addConnectionProfileMaxTokensFieldMigration } from './add-connection-profile-max-tokens-field';
 // Fix memory timestamps to match source message timestamps
 import { fixMemoryTimestampsFromSourceMigration } from './fix-memory-timestamps-from-source';
+// Create wardrobe_items table for modular wardrobe system
+import { createWardrobeItemsTableMigration } from './create-wardrobe-items-table';
+// Add equippedOutfit field to chats for per-character outfit tracking
+import { addEquippedOutfitFieldMigration } from './add-equipped-outfit-field';
+// Add canDressThemselves and canCreateOutfits flags to characters
+import { addCharacterWardrobeFlagsMigration } from './add-character-wardrobe-flags';
+// Migrate existing clothing records to wardrobe_items table
+import { migrateClothingRecordsToWardrobeMigration } from './migrate-clothing-records-to-wardrobe';
+// Add pendingOutfitNotifications field to chats
+import { addPendingOutfitNotificationsFieldMigration } from './add-pending-outfit-notifications-field';
+// Add characterAvatars and avatarGenerationEnabled fields to chats
+import { addCharacterAvatarsFieldsMigration } from './add-character-avatars-fields';
+// Add defaultAvatarGenerationEnabled field to projects
+import { addProjectAvatarGenerationDefaultMigration } from './add-project-avatar-generation-default';
+// Create outfit_presets table and add archivedAt to wardrobe_items
+import { createOutfitPresetsAndArchiveMigration } from './create-outfit-presets-and-archive';
+// Convert all non-WebP, non-SVG images to WebP format
+import { convertImagesToWebPMigration } from './convert-images-to-webp';
+// Rename persona DB columns (personaLinks → partnerLinks, drop memories.personaId)
+import { renamePersonaColumnsMigration } from './rename-persona-columns';
+// Add narrationDelimiters field to roleplay_templates
+import { addNarrationDelimitersFieldMigration } from './add-narration-delimiters-field';
+// Migrate plugin roleplay templates to native built-in, rename annotationButtons to delimiters
+import { migratePluginTemplatesToNativeMigration } from './migrate-plugin-templates-to-native';
+// Add defaultImageProfileId to projects for project-level image profile default
+import { addProjectDefaultImageProfileMigration } from './add-project-default-image-profile';
+// Create character_plugin_data table for per-character per-plugin metadata
+import { createCharacterPluginDataTableMigration } from './create-character-plugin-data-table';
 
 /**
  * All available migrations.
@@ -273,6 +301,34 @@ export const migrations: Migration[] = [
   addConnectionProfileMaxTokensFieldMigration,
   // Fix memory timestamps to match source message timestamps
   fixMemoryTimestampsFromSourceMigration,
+  // Create wardrobe_items table for modular wardrobe system
+  createWardrobeItemsTableMigration,
+  // Add equippedOutfit field to chats for per-character outfit tracking
+  addEquippedOutfitFieldMigration,
+  // Add canDressThemselves and canCreateOutfits flags to characters
+  addCharacterWardrobeFlagsMigration,
+  // Migrate existing clothing records to wardrobe_items table
+  migrateClothingRecordsToWardrobeMigration,
+  // Add pendingOutfitNotifications field to chats
+  addPendingOutfitNotificationsFieldMigration,
+  // Add characterAvatars and avatarGenerationEnabled fields to chats
+  addCharacterAvatarsFieldsMigration,
+  // Add defaultAvatarGenerationEnabled field to projects
+  addProjectAvatarGenerationDefaultMigration,
+  // Create outfit_presets table and add archivedAt to wardrobe_items
+  createOutfitPresetsAndArchiveMigration,
+  // Convert all non-WebP, non-SVG images to WebP format
+  convertImagesToWebPMigration,
+  // Rename persona DB columns
+  renamePersonaColumnsMigration,
+  // Add narrationDelimiters field to roleplay_templates
+  addNarrationDelimitersFieldMigration,
+  // Migrate plugin roleplay templates to native built-in, rename annotationButtons to delimiters
+  migratePluginTemplatesToNativeMigration,
+  // Add defaultImageProfileId to projects for project-level image profile default
+  addProjectDefaultImageProfileMigration,
+  // Create character_plugin_data table for per-character per-plugin metadata
+  createCharacterPluginDataTableMigration,
 ];
 
 export {
@@ -402,4 +458,23 @@ export {
   addConnectionProfileMaxTokensFieldMigration,
   // Fix memory timestamps to match source message timestamps
   fixMemoryTimestampsFromSourceMigration,
+  // Add characterAvatars and avatarGenerationEnabled fields to chats
+  addCharacterAvatarsFieldsMigration,
+  // Add defaultAvatarGenerationEnabled field to projects
+  addProjectAvatarGenerationDefaultMigration,
+  // Create outfit_presets table and add archivedAt to wardrobe_items
+  createOutfitPresetsAndArchiveMigration,
+  // Convert all non-WebP, non-SVG images to WebP format
+  convertImagesToWebPMigration,
+  // Rename persona DB columns
+  renamePersonaColumnsMigration,
+  // Add narrationDelimiters field to roleplay_templates
+  addNarrationDelimitersFieldMigration,
+  // Migrate plugin roleplay templates to native built-in
+  migratePluginTemplatesToNativeMigration,
+  // Add defaultImageProfileId to projects for project-level image profile default
+  addProjectDefaultImageProfileMigration,
+  // Create character_plugin_data table for per-character per-plugin metadata
+  createCharacterPluginDataTableMigration,
 };
+

@@ -22,6 +22,7 @@ import type {
   ChatParticipantBase,
   Project,
 } from '@/lib/schemas/types';
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type {
   QuilltapExportManifest,
   QuilltapExport,
@@ -810,6 +811,26 @@ async function importRoleplayTemplates(
 
   for (const template of templates) {
     try {
+      // Backward compatibility: convert old annotationButtons to delimiters format
+      const templateAny = template as Record<string, unknown>;
+      if (templateAny.annotationButtons && !template.delimiters?.length) {
+        const oldButtons = templateAny.annotationButtons as Array<{ label?: string; abbrev?: string; prefix?: string; suffix?: string }>;
+        const styleMap: Record<string, string> = {
+          'Narration': 'qt-chat-narration', 'Nar': 'qt-chat-narration',
+          'Internal Monologue': 'qt-chat-inner-monologue', 'Int': 'qt-chat-inner-monologue',
+          'Out of Character': 'qt-chat-ooc', 'OOC': 'qt-chat-ooc',
+        };
+        template.delimiters = oldButtons.map(btn => ({
+          name: btn.label || btn.abbrev || 'Unknown',
+          buttonName: btn.abbrev || btn.label || '?',
+          delimiters: (btn.prefix === btn.suffix) ? (btn.prefix || '') : [btn.prefix || '', btn.suffix || ''] as [string, string],
+          style: styleMap[btn.label || ''] || styleMap[btn.abbrev || ''] || 'qt-chat-narration',
+        }));
+        delete templateAny.annotationButtons;
+      }
+      // Remove legacy pluginName field if present
+      delete templateAny.pluginName;
+
       const existing = await globalRepos.roleplayTemplates.findById(template.id);
 
       if (existing) {
@@ -1005,6 +1026,21 @@ async function importCharacters(
             name: `${charData.name} (imported)`,
           });
           idMaps.characters.set(character.id, newCharacter.id);
+
+          // Import wardrobe items for duplicated character
+          await importCharacterWardrobeItems(
+            (rawCharacter as ExportedCharacter).wardrobeItems,
+            newCharacter.id,
+            warnings
+          );
+
+          // Import plugin data for duplicated character
+          await importCharacterPluginData(
+            (rawCharacter as ExportedCharacter).pluginData,
+            newCharacter.id,
+            warnings
+          );
+
           imported++;
           continue;
         }
@@ -1013,6 +1049,21 @@ async function importCharacters(
       const { id: _, userId: __, createdAt, updatedAt, ...charData } = character;
       const newCharacter = await repos.characters.create(charData);
       idMaps.characters.set(character.id, newCharacter.id);
+
+      // Import wardrobe items for this character
+      await importCharacterWardrobeItems(
+        (rawCharacter as ExportedCharacter).wardrobeItems,
+        newCharacter.id,
+        warnings
+      );
+
+      // Import plugin data for this character
+      await importCharacterPluginData(
+        (rawCharacter as ExportedCharacter).pluginData,
+        newCharacter.id,
+        warnings
+      );
+
       imported++;
     } catch (error) {
       warnings.push(
@@ -1028,6 +1079,100 @@ async function importCharacters(
   }
 
   return { imported, skipped };
+}
+
+/**
+ * Import wardrobe items for a character, assigning them to the new character ID.
+ * Skips archetype items (characterId = null) since those are shared and not per-character.
+ */
+async function importCharacterWardrobeItems(
+  wardrobeItems: WardrobeItem[] | undefined,
+  newCharacterId: string,
+  warnings: string[]
+): Promise<number> {
+  if (!wardrobeItems || wardrobeItems.length === 0) return 0;
+
+  const globalRepos = getRepositories();
+  let importedCount = 0;
+
+  for (const item of wardrobeItems) {
+    // Skip archetype items (characterId = null) — they are shared, not per-character
+    if (!item.characterId) {
+      moduleLogger.debug('Skipping archetype wardrobe item during import', {
+        wardrobeItemId: item.id,
+        title: item.title,
+      });
+      continue;
+    }
+
+    try {
+      const { id: _, characterId: __, createdAt, updatedAt, migratedFromClothingRecordId, ...itemData } = item;
+      await globalRepos.wardrobe.create({
+        ...itemData,
+        characterId: newCharacterId,
+        migratedFromClothingRecordId: null,
+      });
+      importedCount++;
+
+      moduleLogger.debug('Imported wardrobe item for character', {
+        originalId: item.id,
+        newCharacterId,
+        title: item.title,
+      });
+    } catch (error) {
+      warnings.push(
+        `Failed to import wardrobe item "${item.title}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to import wardrobe item', {
+        wardrobeItemId: item.id,
+        characterId: newCharacterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return importedCount;
+}
+
+/**
+ * Import plugin data for a character, assigning entries to the new character ID.
+ */
+async function importCharacterPluginData(
+  pluginData: Record<string, unknown> | undefined,
+  newCharacterId: string,
+  warnings: string[]
+): Promise<number> {
+  if (!pluginData || Object.keys(pluginData).length === 0) return 0;
+
+  const globalRepos = getRepositories();
+  let importedCount = 0;
+
+  for (const [pluginName, data] of Object.entries(pluginData)) {
+    try {
+      await globalRepos.characterPluginData.upsert(newCharacterId, pluginName, data);
+      importedCount++;
+
+      moduleLogger.debug('Imported plugin data for character', {
+        pluginName,
+        newCharacterId,
+      });
+    } catch (error) {
+      warnings.push(
+        `Failed to import plugin data for "${pluginName}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to import plugin data', {
+        pluginName,
+        characterId: newCharacterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return importedCount;
 }
 
 async function importChats(
@@ -1173,7 +1318,6 @@ async function importMemories(
       await repos.memories.create({
         ...memoryData,
         characterId: newCharacterId,
-        personaId: null,
         aboutCharacterId: newAboutCharacterId,
         chatId: newChatId,
         projectId: newProjectId,
@@ -1269,8 +1413,8 @@ async function reconcileRelationships(
         }
       }
 
-      // Remap defaultRoleplayTemplateId (only if it's a UUID, not a plugin template)
-      if (character.defaultRoleplayTemplateId && !character.defaultRoleplayTemplateId.startsWith('plugin:')) {
+      // Remap defaultRoleplayTemplateId
+      if (character.defaultRoleplayTemplateId) {
         const newTemplateId = remapId(character.defaultRoleplayTemplateId, idMaps.roleplayTemplates);
         if (newTemplateId) {
           updates.defaultRoleplayTemplateId = newTemplateId;
@@ -1330,8 +1474,8 @@ async function reconcileRelationships(
               if (newImgProfId) remapped.imageProfileId = newImgProfId;
             }
 
-            // Remap roleplayTemplateId (only if it's a UUID, not a plugin template)
-            if (participant.roleplayTemplateId && !participant.roleplayTemplateId.startsWith('plugin:')) {
+            // Remap roleplayTemplateId
+            if (participant.roleplayTemplateId) {
               const newTemplateId = remapId(
                 participant.roleplayTemplateId,
                 idMaps.roleplayTemplates

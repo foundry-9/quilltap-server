@@ -42,7 +42,7 @@ export interface BuildMessageContextOptions {
   character: Character
   characterParticipant: ChatParticipantBase
   connectionProfile: ConnectionProfile
-  persona: { name: string; description: string } | null
+  userCharacter: { name: string; description: string } | null
   isMultiCharacter: boolean
   participantCharacters?: Map<string, Character>
   roleplayTemplate: { systemPrompt: string } | null
@@ -73,6 +73,8 @@ export interface BuildMessageContextOptions {
   uncensoredFallbackOptions?: UncensoredFallbackOptions
   /** Status change notifications to include in prompt */
   statusChangeNotifications?: string[]
+  /** Outfit change notifications from manual sidebar changes */
+  outfitChangeNotifications?: string[]
   /** Optional callback to emit status events during context building phases */
   onStatusChange?: (stage: string, message: string) => void
 }
@@ -288,7 +290,7 @@ export async function buildMessageContext(
     character,
     characterParticipant,
     connectionProfile,
-    persona,
+    userCharacter,
     isMultiCharacter,
     participantCharacters,
     roleplayTemplate,
@@ -346,7 +348,7 @@ export async function buildMessageContext(
     modelName: connectionProfile.modelName,
     userId,
     character,
-    persona,
+    userCharacter,
     chat,
     existingMessages: conversationMessages,
     newUserMessage,
@@ -383,6 +385,8 @@ export async function buildMessageContext(
     uncensoredFallbackOptions,
     // Status change notifications
     statusChangeNotifications: options.statusChangeNotifications,
+    // Outfit change notifications
+    outfitChangeNotifications: options.outfitChangeNotifications,
     // Status callback for streaming events
     onStatusChange: options.onStatusChange,
   })

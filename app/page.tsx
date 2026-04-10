@@ -91,7 +91,6 @@ export default async function Home() {
         } : null,
         tags: p.character.tags || [],
       } : null,
-      persona: null, // Personas are now handled as user-controlled characters
     })),
     _count: {
       messages: chat._count.messages,

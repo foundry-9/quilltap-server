@@ -33,6 +33,8 @@ import {
 import { logger } from '@/lib/logger';
 import { TypedQueryFilter, QueryFilter, DatabaseCollection } from '../interfaces';
 import { getDatabaseAsync, getBackendType, ensureCollection } from '../manager';
+import type { EquippedSlots, EquippedOutfitState } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import { ChatOpsContext } from './chats-ops-context';
 import { ChatParticipantsOps } from './chats-participants.ops';
 import { ChatImpersonationOps } from './chats-impersonation.ops';
@@ -423,6 +425,174 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     limit?: number
   ): Promise<Array<{ messageId: string; content: string; chatId: string; role: string; createdAt: string }>> {
     return this.searchOps.searchMessagesGlobal(chatIds, searchText, limit);
+  }
+
+  // ============================================================================
+  // EQUIPPED OUTFIT STATE
+  // ============================================================================
+
+  /**
+   * Get the full equipped outfit state for a chat (all characters)
+   */
+  async getEquippedOutfit(chatId: string): Promise<EquippedOutfitState | null> {
+    return this.safeQuery(
+      async () => {
+        const chat = await this.findById(chatId);
+        if (!chat || !chat.equippedOutfit) {
+          logger.debug('No equipped outfit found for chat', { chatId, context: 'wardrobe' });
+          return null;
+        }
+        return chat.equippedOutfit as EquippedOutfitState;
+      },
+      'Failed to get equipped outfit',
+      { chatId, context: 'wardrobe' },
+      null
+    );
+  }
+
+  /**
+   * Get equipped slots for a specific character in a chat
+   */
+  async getEquippedOutfitForCharacter(chatId: string, characterId: string): Promise<EquippedSlots | null> {
+    return this.safeQuery(
+      async () => {
+        const state = await this.getEquippedOutfit(chatId);
+        if (!state || !state[characterId]) {
+          logger.debug('No equipped outfit found for character in chat', {
+            chatId, characterId, context: 'wardrobe',
+          });
+          return null;
+        }
+        return state[characterId];
+      },
+      'Failed to get equipped outfit for character',
+      { chatId, characterId, context: 'wardrobe' },
+      null
+    );
+  }
+
+  /**
+   * Update a single equipped slot for a character in a chat
+   */
+  async updateEquippedSlot(
+    chatId: string,
+    characterId: string,
+    slot: string,
+    itemId: string | null
+  ): Promise<EquippedSlots | null> {
+    return this.safeQuery(
+      async () => {
+        const existing = await this.getEquippedOutfit(chatId);
+        const state: EquippedOutfitState = existing ?? {};
+
+        const characterSlots: EquippedSlots = state[characterId] ?? {
+          top: null,
+          bottom: null,
+          footwear: null,
+          accessories: null,
+        };
+
+        (characterSlots as Record<string, string | null>)[slot] = itemId;
+        state[characterId] = characterSlots;
+
+        await this.update(chatId, { equippedOutfit: state } as Partial<ChatMetadata>);
+
+        logger.debug('Updated equipped slot', {
+          chatId, characterId, slot, itemId, context: 'wardrobe',
+        });
+
+        return characterSlots;
+      },
+      'Failed to update equipped slot',
+      { chatId, characterId, slot, itemId, context: 'wardrobe' },
+      null
+    );
+  }
+
+  /**
+   * Set the entire equipped outfit for a character in a chat
+   */
+  async setEquippedOutfit(
+    chatId: string,
+    characterId: string,
+    slots: EquippedSlots
+  ): Promise<EquippedSlots | null> {
+    return this.safeQuery(
+      async () => {
+        const existing = await this.getEquippedOutfit(chatId);
+        const state: EquippedOutfitState = existing ?? {};
+
+        state[characterId] = slots;
+
+        await this.update(chatId, { equippedOutfit: state } as Partial<ChatMetadata>);
+
+        logger.debug('Set equipped outfit for character', {
+          chatId, characterId, slots, context: 'wardrobe',
+        });
+
+        return slots;
+      },
+      'Failed to set equipped outfit',
+      { chatId, characterId, context: 'wardrobe' },
+      null
+    );
+  }
+  /**
+   * Remove a wardrobe item from equipped outfits across all chats.
+   * When a wardrobe item is deleted, any equipped slot referencing that item
+   * is set to null so the outfit state remains valid.
+   *
+   * @param itemId The wardrobe item ID being removed
+   * @returns Number of chats modified
+   */
+  async removeEquippedItemFromAllChats(itemId: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const allChats = await this._findAll();
+        let modifiedCount = 0;
+
+        for (const chat of allChats) {
+          if (!chat.equippedOutfit) {
+            continue;
+          }
+
+          const state = chat.equippedOutfit as EquippedOutfitState;
+          let chatModified = false;
+
+          for (const characterId of Object.keys(state)) {
+            const slots = state[characterId];
+            for (const slotKey of WARDROBE_SLOT_TYPES) {
+              if (slots[slotKey] === itemId) {
+                slots[slotKey] = null;
+                chatModified = true;
+              }
+            }
+          }
+
+          if (chatModified) {
+            await this.update(chat.id, { equippedOutfit: state } as Partial<ChatMetadata>);
+            modifiedCount++;
+            logger.debug('Removed deleted wardrobe item from chat equipped outfit', {
+              chatId: chat.id,
+              removedItemId: itemId,
+              context: 'wardrobe',
+            });
+          }
+        }
+
+        if (modifiedCount > 0) {
+          logger.info('Removed wardrobe item from equipped outfits across chats', {
+            itemId,
+            chatsModified: modifiedCount,
+            context: 'wardrobe',
+          });
+        }
+
+        return modifiedCount;
+      },
+      'Error removing equipped item from all chats',
+      { itemId, context: 'wardrobe' }
+    );
   }
 }
 

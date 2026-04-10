@@ -4,7 +4,7 @@
  *
  * Updated for characters-not-personas migration:
  * - Second parameter is now userCharacterId (user-controlled character) instead of personaId
- * - Uses CHARACTER with controlledBy='user' instead of PERSONA type
+ * - Uses CHARACTER with controlledBy='user' for user-controlled participants
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'

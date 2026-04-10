@@ -150,61 +150,6 @@ This gives you a complete `LLMProvider` implementation with:
 npm install openai
 ```
 
-### Roleplay Template Plugin Utilities
-
-Create roleplay template plugins with built-in validation and logging:
-
-```typescript
-import { createSingleTemplatePlugin } from '@quilltap/plugin-utils';
-
-// Simple single-template plugin
-export const plugin = createSingleTemplatePlugin({
-  templateId: 'my-rp-format',
-  displayName: 'My RP Format',
-  description: 'A custom roleplay formatting style',
-  systemPrompt: `[FORMATTING INSTRUCTIONS]
-1. DIALOGUE: Use quotation marks
-2. ACTIONS: Use asterisks *like this*
-3. THOUGHTS: Use angle brackets <like this>`,
-  tags: ['custom', 'roleplay'],
-  enableLogging: true,
-});
-```
-
-For plugins providing multiple templates:
-
-```typescript
-import { createRoleplayTemplatePlugin } from '@quilltap/plugin-utils';
-
-export const plugin = createRoleplayTemplatePlugin({
-  metadata: {
-    templateId: 'rp-format-pack',
-    displayName: 'RP Format Pack',
-    description: 'A collection of roleplay formats',
-  },
-  templates: [
-    {
-      name: 'Screenplay',
-      description: 'Screenplay-style formatting',
-      systemPrompt: '...',
-    },
-    {
-      name: 'Novel',
-      description: 'Novel-style prose',
-      systemPrompt: '...',
-    },
-  ],
-  enableLogging: true,
-});
-```
-
-| Function | Description |
-|----------|-------------|
-| `createRoleplayTemplatePlugin(options)` | Create a plugin with full control over metadata and templates |
-| `createSingleTemplatePlugin(options)` | Simplified helper for plugins with a single template |
-| `validateTemplateConfig(template)` | Validate an individual template configuration |
-| `validateRoleplayTemplatePlugin(plugin)` | Validate a complete roleplay template plugin |
-
 ### System Prompt Plugin Utilities
 
 Create system prompt plugins that provide character prompt templates from `.md` files:

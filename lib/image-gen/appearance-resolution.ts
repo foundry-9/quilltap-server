@@ -8,9 +8,10 @@
  * @module image-gen/appearance-resolution
  */
 
-import type { PhysicalDescription, ClothingRecord } from '@/lib/schemas/types'
+import type { PhysicalDescription } from '@/lib/schemas/types'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import { describeOutfit } from '@/lib/wardrobe/outfit-description'
 import {
   resolveAppearance,
   sanitizeAppearance,
@@ -62,7 +63,12 @@ export interface AppearanceResolutionInput {
   characterId: string
   characterName: string
   physicalDescriptions: PhysicalDescription[]
-  clothingRecords: ClothingRecord[]
+  /** Equipped wardrobe items (from the wardrobe system) */
+  equippedWardrobeItems?: Array<{
+    slot: string
+    title: string
+    description?: string | null
+  }>
 }
 
 // ============================================================================
@@ -82,8 +88,28 @@ function canSkipResolution(
   if (recentMessages.length > 0) return false
 
   return characters.every(
-    c => c.physicalDescriptions.length <= 1 && c.clothingRecords.length <= 1
+    c => c.physicalDescriptions.length <= 1 && (!c.equippedWardrobeItems || c.equippedWardrobeItems.length <= 1)
   )
+}
+
+/**
+ * Convert an array of equipped wardrobe items into OutfitSlotValues
+ * for use with the canonical describeOutfit utility.
+ */
+function wardrobeItemsToSlotValues(
+  items: Array<{ slot: string; title: string; description?: string | null }>
+): import('@/lib/wardrobe/outfit-description').OutfitSlotValues {
+  const findItem = (slot: string) => {
+    const item = items.find(i => i.slot === slot)
+    if (!item) return null
+    return item.description ? `${item.title} (${item.description})` : item.title
+  }
+  return {
+    top: findItem('top'),
+    bottom: findItem('bottom'),
+    footwear: findItem('footwear'),
+    accessories: findItem('accessories'),
+  }
 }
 
 /**
@@ -94,7 +120,6 @@ function buildDefaultAppearances(
 ): ResolvedCharacterAppearance[] {
   return characters.map(char => {
     const primary = char.physicalDescriptions[0]
-    const primaryOutfit = char.clothingRecords[0]
 
     const physDesc =
       primary?.completePrompt ||
@@ -103,13 +128,19 @@ function buildDefaultAppearances(
       primary?.shortPrompt ||
       char.characterName
 
+    const hasWardrobe = char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
+
     return {
       characterId: char.characterId,
       characterName: char.characterName,
       physicalDescription: physDesc,
       physicalDescriptionName: primary?.name || 'default',
-      clothingDescription: primaryOutfit?.description || '',
-      clothingSource: primaryOutfit ? 'default' as const : 'default' as const,
+      clothingDescription: hasWardrobe
+        ? describeOutfit(wardrobeItemsToSlotValues(char.equippedWardrobeItems!))
+        : '',
+      clothingSource: hasWardrobe
+        ? 'stored' as const
+        : 'default' as const,
       wasSanitized: false,
     }
   })
@@ -201,12 +232,11 @@ export async function resolveCharacterAppearances(
         physicalDescription: physDesc,
         physicalDescriptionName: primary?.name || 'scene-state',
         // If scene state has clothing info, use it. If clothing is explicitly null/empty
-        // (e.g. character undressed), do NOT fall back to stored clothing records —
-        // that would incorrectly redress the character in their default outfit.
-        // Only fall back to stored records if the character wasn't found in scene state at all.
+        // (e.g. character undressed), do NOT fall back — that would incorrectly redress.
+        // If the character wasn't found in scene state at all, leave clothing empty.
         clothingDescription: sceneChar
           ? (sceneChar.clothing || '')
-          : (char.clothingRecords[0]?.description || ''),
+          : '',
         clothingSource: sceneChar ? 'narrative' as const : 'default' as const,
         wasSanitized: false,
       }
@@ -237,12 +267,9 @@ export async function resolveCharacterAppearances(
       shortPrompt: d.shortPrompt,
       mediumPrompt: d.mediumPrompt,
     })),
-    clothingRecords: char.clothingRecords.map(c => ({
-      id: c.id,
-      name: c.name,
-      usageContext: c.usageContext,
-      description: c.description,
-    })),
+    ...(char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
+      ? { equippedWardrobeItems: char.equippedWardrobeItems }
+      : {}),
   }))
 
   const result = await resolveAppearance(

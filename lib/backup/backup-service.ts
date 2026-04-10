@@ -56,6 +56,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     chatSettingsResult,
     filePermissions,
     folders,
+    wardrobeItems,
+    outfitPresets,
   ] = await Promise.all([
     repos.characters.findAll(),
     repos.chats.findAll(),
@@ -81,6 +83,9 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     globalRepos.filePermissions.findByUserId(userId),
     // Get folders
     globalRepos.folders.findByUserId(userId),
+    // Get wardrobe items and outfit presets
+    globalRepos.wardrobe.findAll(),
+    globalRepos.outfitPresets.findAll(),
   ]);
 
   // Exclude backup files from the file list - we don't want to back up old backups
@@ -135,6 +140,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     chatSettings,
     filePermissions,
     folders,
+    wardrobeItems,
+    outfitPresets,
   };
 }
 
@@ -189,6 +196,8 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       chatSettings: data.chatSettings?.length || 0,
       filePermissions: data.filePermissions?.length || 0,
       folders: data.folders?.length || 0,
+      wardrobeItems: data.wardrobeItems?.length || 0,
+      outfitPresets: data.outfitPresets?.length || 0,
       npmPlugins: countNpmPlugins(),
     },
   };
@@ -276,6 +285,8 @@ export async function createBackup(userId: string): Promise<{
     await writeJsonFile(path.join(stagingDir, 'data', 'chat-settings.json'), data.chatSettings || []);
     await writeJsonFile(path.join(stagingDir, 'data', 'file-permissions.json'), data.filePermissions || []);
     await writeJsonFile(path.join(stagingDir, 'data', 'folders.json'), data.folders || []);
+    await writeJsonFile(path.join(stagingDir, 'data', 'wardrobe-items.json'), data.wardrobeItems || []);
+    await writeJsonFile(path.join(stagingDir, 'data', 'outfit-presets.json'), data.outfitPresets || []);
 
     moduleLogger.debug('Wrote all JSON data files to staging directory');
 

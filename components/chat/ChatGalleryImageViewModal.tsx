@@ -29,8 +29,8 @@ interface ChatGalleryImageViewModalProps {
   onDelete: () => void
   characterId?: string
   characterName?: string
-  personaId?: string
-  personaName?: string
+  userCharacterId?: string
+  userCharacterName?: string
 }
 
 export default function ChatGalleryImageViewModal({
@@ -42,11 +42,11 @@ export default function ChatGalleryImageViewModal({
   onDelete,
   characterId,
   characterName,
-  personaId,
-  personaName,
+  userCharacterId,
+  userCharacterName,
 }: ChatGalleryImageViewModalProps) {
   const [isTaggedToCharacter, setIsTaggedToCharacter] = useState(false)
-  const [isTaggedToPersona, setIsTaggedToPersona] = useState(false)
+  const [isTaggedToUserCharacter, setIsTaggedToUserCharacter] = useState(false)
   const [isTagging, setIsTagging] = useState(false)
   const [checkingTags, setCheckingTags] = useState(true)
   const [imageMissing, setImageMissing] = useState(false)
@@ -58,7 +58,6 @@ export default function ChatGalleryImageViewModal({
       setCheckingTags(true)
       try {
         // Check if image exists in gallery with these tags
-        const params = new URLSearchParams()
         if (characterId) {
           const charRes = await fetch(`/api/v1/images?tagType=CHARACTER&tagId=${characterId}`)
           if (charRes.ok) {
@@ -67,12 +66,12 @@ export default function ChatGalleryImageViewModal({
             setIsTaggedToCharacter(found)
           }
         }
-        if (personaId) {
-          const personaRes = await fetch(`/api/v1/images?tagType=PERSONA&tagId=${personaId}`)
-          if (personaRes.ok) {
-            const personaData = await safeJsonParse<{ data?: Array<{ filepath: string }> }>(personaRes)
-            const found = (personaData.data || []).some((img) => img.filepath === file.filepath)
-            setIsTaggedToPersona(found)
+        if (userCharacterId) {
+          const userCharRes = await fetch(`/api/v1/images?tagType=CHARACTER&tagId=${userCharacterId}`)
+          if (userCharRes.ok) {
+            const userCharData = await safeJsonParse<{ data?: Array<{ filepath: string }> }>(userCharRes)
+            const found = (userCharData.data || []).some((img) => img.filepath === file.filepath)
+            setIsTaggedToUserCharacter(found)
           }
         }
       } catch (error) {
@@ -82,7 +81,7 @@ export default function ChatGalleryImageViewModal({
       }
     }
     checkTags()
-  }, [file.id, file.filepath, characterId, personaId])
+  }, [file.id, file.filepath, characterId, userCharacterId])
 
   // Keyboard navigation (Escape, arrow keys)
   useImageNavigation({
@@ -167,14 +166,14 @@ export default function ChatGalleryImageViewModal({
     }
   }
 
-  const handleTogglePersonaTag = async () => {
-    if (!personaId || isTagging) return
+  const handleToggleUserCharacterTag = async () => {
+    if (!userCharacterId || isTagging) return
 
     setIsTagging(true)
     try {
-      if (isTaggedToPersona) {
+      if (isTaggedToUserCharacter) {
         // Find the image in gallery first
-        const imagesRes = await fetch(`/api/v1/images?tagType=PERSONA&tagId=${personaId}`)
+        const imagesRes = await fetch(`/api/v1/images?tagType=CHARACTER&tagId=${userCharacterId}`)
         const imagesData = await safeJsonParse<{ data?: Array<{ id: string; filepath: string }>; error?: string }>(imagesRes)
         if (!imagesRes.ok) throw new Error(imagesData.error || 'Failed to find image')
         const galleryImage = (imagesData.data || []).find((img) => img.filepath === file.filepath)
@@ -185,16 +184,16 @@ export default function ChatGalleryImageViewModal({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              tagType: 'PERSONA',
-              tagId: personaId,
+              tagType: 'CHARACTER',
+              tagId: userCharacterId,
             }),
           })
           if (!res.ok) {
             const data = await safeJsonParse<{ error?: string }>(res)
             throw new Error(data.error || 'Failed to remove tag')
           }
-          setIsTaggedToPersona(false)
-          showSuccessToast(`Removed from ${personaName || 'persona'}'s gallery`)
+          setIsTaggedToUserCharacter(false)
+          showSuccessToast(`Removed from ${userCharacterName || 'user character'}'s gallery`)
         }
       } else {
         // Add tag - both generated images and chat files use the same endpoint
@@ -203,19 +202,19 @@ export default function ChatGalleryImageViewModal({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            tagType: 'PERSONA',
-            tagId: personaId,
+            tagType: 'CHARACTER',
+            tagId: userCharacterId,
           }),
         })
         if (!res.ok) {
           const data = await safeJsonParse<{ error?: string }>(res)
           throw new Error(data.error || 'Failed to tag image')
         }
-        setIsTaggedToPersona(true)
-        showSuccessToast(`Added to ${personaName || 'persona'}'s gallery`)
+        setIsTaggedToUserCharacter(true)
+        showSuccessToast(`Added to ${userCharacterName || 'user character'}'s gallery`)
       }
     } catch (error) {
-      console.error('Failed to toggle persona tag:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to toggle user character tag:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to update tag')
     } finally {
       setIsTagging(false)
@@ -291,20 +290,20 @@ export default function ChatGalleryImageViewModal({
             </svg>
           </button>
         )}
-        {/* Tag to Persona button */}
-        {personaId && (
+        {/* Tag to user character button */}
+        {userCharacterId && (
           <button
             onClick={(e) => {
               e.stopPropagation()
-              handleTogglePersonaTag()
+              handleToggleUserCharacterTag()
             }}
             disabled={isTagging || checkingTags}
             className={`p-2 rounded-full qt-text-overlay transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${
-              isTaggedToPersona
+              isTaggedToUserCharacter
                 ? 'bg-primary hover:qt-bg-primary/90'
                 : 'qt-bg-overlay-btn hover:qt-bg-overlay-btn'
             }`}
-            title={isTaggedToPersona ? `Remove from ${personaName || 'persona'}'s gallery` : `Add to ${personaName || 'persona'}'s gallery`}
+            title={isTaggedToUserCharacter ? `Remove from ${userCharacterName || 'user character'}'s gallery` : `Add to ${userCharacterName || 'user character'}'s gallery`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />

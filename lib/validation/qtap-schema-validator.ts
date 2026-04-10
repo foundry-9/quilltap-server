@@ -15,7 +15,7 @@ import { logger } from '@/lib/logger';
 // Types
 // ============================================================================
 
-export interface ValidationResult {
+interface ValidationResult {
   valid: boolean;
   errors: string[];
 }

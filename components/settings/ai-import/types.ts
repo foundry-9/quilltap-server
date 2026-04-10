@@ -23,6 +23,7 @@ export type AIImportStepName =
   | 'first_message'
   | 'system_prompts'
   | 'physical_descriptions'
+  | 'wardrobe_items'
   | 'pronouns'
   | 'memories'
   | 'chats'
@@ -80,6 +81,7 @@ export const STEP_DISPLAY_NAMES: Record<AIImportStepName, string> = {
   first_message: 'Generating Dialogue',
   system_prompts: 'Creating System Prompts',
   physical_descriptions: 'Describing Appearance',
+  wardrobe_items: 'Generating Wardrobe',
   pronouns: 'Determining Pronouns',
   memories: 'Generating Memories',
   chats: 'Creating Example Chat',
@@ -94,6 +96,7 @@ export const CORE_STEPS: AIImportStepName[] = [
   'first_message',
   'system_prompts',
   'physical_descriptions',
+  'wardrobe_items',
   'pronouns',
   'assembly',
   'validation',

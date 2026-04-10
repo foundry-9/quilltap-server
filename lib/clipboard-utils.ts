@@ -27,6 +27,50 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 /**
+ * Convert an image Blob to PNG via an offscreen canvas.
+ * The Clipboard API only supports image/png for ClipboardItem writes,
+ * so non-PNG images (e.g. WebP) must be converted first.
+ *
+ * Uses a data URL (not blob: URL) to load the image, since the CSP
+ * img-src directive allows data: but not blob:.
+ */
+function convertToPngBlob(blob: Blob): Promise<Blob> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const dataUrl = await blobToDataUrl(blob);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas 2d context'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(
+          (pngBlob) => {
+            if (pngBlob) {
+              resolve(pngBlob);
+            } else {
+              reject(new Error('Canvas toBlob returned null'));
+            }
+          },
+          'image/png'
+        );
+      };
+      img.onerror = () => {
+        reject(new Error('Failed to load image for PNG conversion'));
+      };
+      img.src = dataUrl;
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/**
  * Copy an image to the clipboard from a fetch-able URL (relative or absolute).
  *
  * In Electron: fetches the image, converts to a data URL, and sends via IPC
@@ -45,7 +89,8 @@ export async function copyImageToClipboard(src: string): Promise<boolean> {
     return window.quilltap!.copyImageToClipboard(dataUrl);
   }
 
-  // Browser: standard Clipboard API
-  await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+  // Browser: standard Clipboard API (only supports image/png)
+  const pngBlob = blob.type === 'image/png' ? blob : await convertToPngBlob(blob);
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
   return true;
 }

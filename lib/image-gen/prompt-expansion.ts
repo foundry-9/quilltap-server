@@ -6,7 +6,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { PhysicalDescription, ClothingRecord, ImageProvider } from '@/lib/schemas/types';
+import { PhysicalDescription, ImageProvider } from '@/lib/schemas/types';
 import type { Pronouns } from '@/lib/schemas/character.types';
 import type { ResolvedCharacterAppearance } from '@/lib/image-gen/appearance-resolution';
 
@@ -24,8 +24,6 @@ export interface PlaceholderInfo {
   entityId?: string;
   /** All available physical descriptions for this entity */
   descriptions?: PhysicalDescription[];
-  /** All available clothing records for this entity */
-  clothingRecords?: ClothingRecord[];
   /** Character pronouns (for gender hints in image prompts) */
   pronouns?: Pronouns | null;
 }
@@ -91,7 +89,6 @@ export async function resolvePlaceholders(
     // {{me}}, {{I}}, or {{char}} = the caller (character when assistant calls, user-controlled character when user calls)
     if (lowerName === 'me' || lowerName === 'i' || lowerName === 'char') {
       let descriptions: PhysicalDescription[] = [];
-      let clothing: ClothingRecord[] = [];
       let entityId: string | undefined;
       let entityType: 'character' | 'user' = 'user';
       let resolvedName = name;
@@ -107,7 +104,6 @@ export async function resolvePlaceholders(
             const character = await repos.characters.findById(characterId);
             if (character) {
               descriptions = character.physicalDescriptions || [];
-              clothing = character.clothingRecords || [];
               entityId = character.id;
               entityType = 'character';
               resolvedName = character.name;
@@ -122,7 +118,6 @@ export async function resolvePlaceholders(
           const character = await repos.characters.findById(characterParticipant.characterId);
           if (character) {
             descriptions = character.physicalDescriptions || [];
-            clothing = character.clothingRecords || [];
             entityId = character.id;
             entityType = 'character';
             resolvedName = character.name;
@@ -137,7 +132,6 @@ export async function resolvePlaceholders(
         type: entityType,
         entityId,
         descriptions,
-        clothingRecords: clothing,
         pronouns,
       });
       continue;
@@ -146,7 +140,6 @@ export async function resolvePlaceholders(
     // {{user}} = the OTHER participant (user-controlled character when LLM calls, LLM character when user calls)
     if (lowerName === 'user') {
       let descriptions: PhysicalDescription[] = [];
-      let clothing: ClothingRecord[] = [];
       let entityId: string | undefined;
       let entityType: 'character' | 'user' = 'character';
       let resolvedName = name;
@@ -186,7 +179,6 @@ export async function resolvePlaceholders(
             const character = await repos.characters.findById(characterId);
             if (character) {
               descriptions = character.physicalDescriptions || [];
-              clothing = character.clothingRecords || [];
               entityId = character.id;
               entityType = 'character';
               resolvedName = character.name;
@@ -202,7 +194,6 @@ export async function resolvePlaceholders(
         type: entityType,
         entityId,
         descriptions,
-        clothingRecords: clothing,
         pronouns,
       });
       continue;
@@ -222,7 +213,6 @@ export async function resolvePlaceholders(
         type: 'character',
         entityId: character.id,
         descriptions: character.physicalDescriptions || [],
-        clothingRecords: character.clothingRecords || [],
         pronouns: character.pronouns ?? null,
       });
       continue;
@@ -234,7 +224,6 @@ export async function resolvePlaceholders(
       name,
       type: 'character', // Default to character type
       descriptions: [],
-      clothingRecords: [],
     });
   }
 
@@ -378,13 +367,8 @@ export function buildExpansionContext(
       };
     }
 
-    // No resolved appearance — fall back to raw data (original behavior)
+    // No resolved appearance — fall back to raw description data
     const tiers = getAllDescriptionTiers(placeholder.descriptions || []);
-    const clothing = (placeholder.clothingRecords || []).map(r => ({
-      name: r.name,
-      usageContext: r.usageContext,
-      description: r.description,
-    }));
 
     return {
       placeholder: placeholder.placeholder,
@@ -397,7 +381,6 @@ export function buildExpansionContext(
         long: tiers?.long,
         complete: tiers?.complete,
       },
-      ...(clothing.length > 0 ? { clothing } : {}),
     };
   });
 

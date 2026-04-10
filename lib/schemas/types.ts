@@ -96,6 +96,13 @@ export { PluginConfigSchema, PluginConfigInputSchema } from './plugin-config.typ
 export type { PluginConfig, PluginConfigInput } from './plugin-config.types';
 
 // ============================================================================
+// CHARACTER PLUGIN DATA TYPES
+// ============================================================================
+export { CharacterPluginDataSchema, CharacterPluginDataInputSchema } from './character-plugin-data.types';
+
+export type { CharacterPluginData, CharacterPluginDataInput } from './character-plugin-data.types';
+
+// ============================================================================
 // PROFILE TYPES
 // ============================================================================
 export {
@@ -269,11 +276,13 @@ export type {
 // TEMPLATE TYPES
 // ============================================================================
 export {
+  NarrationDelimitersSchema,
   RoleplayTemplateSchema,
   PromptTemplateSchema,
 } from './template.types';
 
 export type {
+  NarrationDelimiters,
   RoleplayTemplate,
   PromptTemplate,
 } from './template.types';

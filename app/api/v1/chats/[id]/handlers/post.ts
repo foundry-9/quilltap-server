@@ -29,6 +29,9 @@ import {
   handleToggleAgentMode,
   handleRegenerateBackground,
   handleReclassifyDanger,
+  handleEquipSlot,
+  handleToggleAvatarGeneration,
+  handleRegenerateAvatar,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -54,6 +57,9 @@ const CHAT_POST_ACTIONS = [
   'toggle-agent-mode',
   'regenerate-background',
   'reclassify-danger',
+  'equip',
+  'toggle-avatar-generation',
+  'regenerate-avatar',
 ] as const;
 
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
@@ -101,6 +107,9 @@ export async function handlePost(
     'toggle-agent-mode': () => handleToggleAgentMode(req, chatId, ctx),
     'regenerate-background': () => handleRegenerateBackground(chatId, chat, ctx),
     'reclassify-danger': () => handleReclassifyDanger(chatId, chat, ctx),
+    equip: () => handleEquipSlot(req, chatId, ctx),
+    'toggle-avatar-generation': () => handleToggleAvatarGeneration(chatId, ctx),
+    'regenerate-avatar': () => handleRegenerateAvatar(req, chatId, ctx),
   };
 
   return actionHandlers[action]();

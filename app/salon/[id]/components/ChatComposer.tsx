@@ -7,7 +7,8 @@ import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
 import MessageContent from '@/components/chat/MessageContent'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import type { AttachedFile, PendingToolResult } from '../types'
-import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
+import type { OutfitNotifications } from '../hooks/useOutfitNotification'
 
 // Platform detection for keyboard shortcuts
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
@@ -70,6 +71,8 @@ interface ChatComposerProps {
   onImagePaste: (file: File) => Promise<void>
   onGalleryClick: () => void
   onGenerateImageClick: () => void
+  onLibraryFileClick: () => void
+  onStandaloneGenerateImageClick: () => void
   onAddCharacterClick: () => void
   onSettingsClick: () => void
   onRenameClick?: () => void
@@ -83,12 +86,21 @@ interface ChatComposerProps {
   onRunToolClick?: () => void
   onStateClick?: () => void
   onRegenerateBackgroundClick?: () => void
+  onRoleplayTemplateChange?: () => void
   storyBackgroundsEnabled?: boolean
   onStopStreaming: () => void
   /** Hide the stop button (when sidebar has its own stop button) */
   hideStopButton?: boolean
   /** Callback when a pending tool result is added */
   onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
+  /** Current roleplay template narration delimiters (e.g. '*' or ['[', ']']) */
+  narrationDelimiters?: NarrationDelimiters
+  /** Whether there are pending outfit change notifications */
+  outfitNotificationHasPending?: boolean
+  /** Number of pending outfit notifications */
+  outfitNotificationCount?: number
+  /** Consume all pending outfit notifications, returns them and clears state */
+  onConsumeOutfitNotifications?: () => OutfitNotifications
 }
 
 const resizeTextarea = (textarea: HTMLTextAreaElement, maxHeight: number) => {
@@ -142,6 +154,8 @@ export function ChatComposer({
   onImagePaste,
   onGalleryClick,
   onGenerateImageClick,
+  onLibraryFileClick,
+  onStandaloneGenerateImageClick,
   onAddCharacterClick,
   onSettingsClick,
   onRenameClick,
@@ -155,10 +169,15 @@ export function ChatComposer({
   onRunToolClick,
   onStateClick,
   onRegenerateBackgroundClick,
+  onRoleplayTemplateChange,
   storyBackgroundsEnabled = false,
   onStopStreaming,
   hideStopButton = false,
   onPendingToolResult,
+  narrationDelimiters,
+  outfitNotificationHasPending = false,
+  outfitNotificationCount = 0,
+  onConsumeOutfitNotifications,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
@@ -282,6 +301,52 @@ export function ChatComposer({
       }
     }
   }
+
+  // Handle outfit notification insertion
+  const handleInsertOutfitNotification = useCallback(() => {
+    if (!onConsumeOutfitNotifications) return
+    const notifications = onConsumeOutfitNotifications()
+    if (Object.keys(notifications).length === 0) return
+
+    // Build the text to insert
+    const parts: string[] = []
+    for (const [name, entry] of Object.entries(notifications)) {
+      const label = entry.type === 'clothing' ? 'clothing change' : 'wardrobe change'
+      parts.push(`${label}: ${name}:\n${entry.description}`)
+    }
+    const notificationText = parts.join('\n').trimEnd()
+
+    // Wrap in narration delimiters
+    let wrappedText: string
+    if (narrationDelimiters) {
+      if (Array.isArray(narrationDelimiters)) {
+        wrappedText = `${narrationDelimiters[0]}${notificationText}${narrationDelimiters[1]}`
+      } else {
+        wrappedText = `${narrationDelimiters}${notificationText}${narrationDelimiters}`
+      }
+    } else {
+      wrappedText = notificationText
+    }
+
+    // Insert at the top of the textarea
+    const textarea = inputRef.current
+    if (textarea) {
+      const currentValue = textarea.value
+      const newValue = currentValue ? `${wrappedText}\n\n${currentValue}` : `${wrappedText}\n`
+      textarea.value = newValue
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
+      setInput(newValue)
+      setTimeout(() => {
+        if (inputRef.current) {
+          resizeTextarea(inputRef.current, maxHeightRef.current)
+          inputRef.current.focus()
+          inputRef.current.selectionStart = inputRef.current.selectionEnd = wrappedText.length + 1
+        }
+      }, 0)
+    }
+  }, [onConsumeOutfitNotifications, narrationDelimiters, setInput])
 
   // Handle paste events to detect and upload images
   const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -496,6 +561,8 @@ export function ChatComposer({
           disabled={sending || !hasActiveCharacters}
           agentModeEnabled={agentModeEnabled}
           onAgentModeToggle={onAgentModeToggle}
+          roleplayTemplateId={roleplayTemplateId}
+          onRoleplayTemplateChange={onRoleplayTemplateChange}
         />
 
         {/* Formatting toolbar - shown above the form when document editing mode is enabled */}
@@ -508,6 +575,7 @@ export function ChatComposer({
             disabled={sending || !hasActiveCharacters}
             showPreview={showPreview}
             onTogglePreview={() => setShowPreview(!showPreview)}
+            narrationDelimiters={narrationDelimiters}
           />
         )}
 
@@ -523,16 +591,31 @@ export function ChatComposer({
 
           {/* Left side toolbar - gutter tools, then main toolbar buttons */}
           <div className="qt-chat-toolbar-row">
+            {/* Outfit notification button - shown above gutter tools when changes are pending */}
+            <div className="qt-composer-gutter-column">
+              {outfitNotificationHasPending && (
+                <button
+                  type="button"
+                  onClick={handleInsertOutfitNotification}
+                  className="qt-composer-outfit-notify-button"
+                  title={`Insert ${outfitNotificationCount} outfit notification${outfitNotificationCount > 1 ? 's' : ''} into message`}
+                >
+                  <span className="qt-composer-outfit-notify-label">Notify</span>
+                  <span className="qt-composer-outfit-notify-icon">👗</span>
+                </button>
+              )}
+
             {/* Gutter tools - Attach, Generate, RNG */}
             <ComposerGutterTools
               onAttachFileClick={handleAttachFileClick}
               uploadingFile={uploadingFile}
-              onGenerateImageClick={onGenerateImageClick}
-              hasImageProfile={hasImageProfile}
+              onLibraryFileClick={onLibraryFileClick}
+              onStandaloneGenerateImageClick={onStandaloneGenerateImageClick}
               chatId={id}
               onPendingToolResult={onPendingToolResult}
               disabled={sending || !hasActiveCharacters}
             />
+            </div>
 
             {/* Main toolbar buttons - hamburger and document mode */}
             <div className="qt-chat-toolbar">

@@ -55,11 +55,15 @@ export async function fetchOpenRouterPricing(
       const supportsVision = inputModality?.includes('image') || false;
 
       // Check output modality for image generation support (can produce images)
-      // OpenRouter exposes this via architecture.outputModality or supported_generation_methods
-      const outputModality = (model.architecture as any)?.outputModality;
+      // OpenRouter exposes this via output_modalities array, architecture.outputModality,
+      // or supported_generation_methods
+      const modelAny = model as any;
+      const outputModalities = modelAny.output_modalities || modelAny.outputModalities;
+      const outputModality = modelAny.architecture?.outputModality;
       const supportsImageGeneration =
-        outputModality?.includes('image') ||
-        (model as any).supported_generation_methods?.includes('image') ||
+        (Array.isArray(outputModalities) && outputModalities.includes('image')) ||
+        (typeof outputModality === 'string' && outputModality.includes('image')) ||
+        modelAny.supported_generation_methods?.includes('image') ||
         false;
 
       models.push({

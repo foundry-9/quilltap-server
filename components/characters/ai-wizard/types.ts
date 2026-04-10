@@ -23,6 +23,7 @@ export type GeneratableField =
   | 'exampleDialogues'
   | 'systemPrompt'
   | 'physicalDescription'
+  | 'wardrobeItems'
 
 export interface GenerationProgress {
   currentField: GeneratableField | null
@@ -40,6 +41,13 @@ export interface GeneratedPhysicalDescription {
   fullDescription: string
 }
 
+export interface GeneratedWardrobeItem {
+  title: string
+  description: string
+  types: string[]
+  appropriateness?: string
+}
+
 export interface GeneratedCharacterData {
   name?: string
   title?: string
@@ -49,6 +57,7 @@ export interface GeneratedCharacterData {
   exampleDialogues?: string
   systemPrompt?: string
   physicalDescription?: GeneratedPhysicalDescription
+  wardrobeItems?: GeneratedWardrobeItem[]
 }
 
 /**
@@ -220,6 +229,7 @@ export const FIELD_LABELS: Record<GeneratableField, string> = {
   exampleDialogues: 'Example Dialogues',
   systemPrompt: 'System Prompt',
   physicalDescription: 'Physical Description',
+  wardrobeItems: 'Wardrobe Items',
 }
 
 export const FIELD_DESCRIPTIONS: Record<GeneratableField, string> = {
@@ -231,4 +241,5 @@ export const FIELD_DESCRIPTIONS: Record<GeneratableField, string> = {
   exampleDialogues: 'Example conversations to guide AI responses',
   systemPrompt: 'Custom system instructions for AI roleplay',
   physicalDescription: 'Detailed physical description for image generation',
+  wardrobeItems: 'Clothing and accessories for the character\'s wardrobe (top, bottom, footwear, accessories)',
 }

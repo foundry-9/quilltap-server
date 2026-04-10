@@ -39,7 +39,6 @@ export type EntityType = 'character'
 
 export interface TagActionParams {
   imageId: string
-  // CHARACTER is the only type for new tags; PERSONA kept in schema for legacy data
   entityType: 'CHARACTER'
   entityId: string
 }

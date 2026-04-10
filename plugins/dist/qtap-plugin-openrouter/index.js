@@ -973,82 +973,82 @@ var ClientSDK = class {
 _ClientSDK_httpClient = /* @__PURE__ */ new WeakMap(), _ClientSDK_hooks = /* @__PURE__ */ new WeakMap(), _ClientSDK_logger = /* @__PURE__ */ new WeakMap();
 var jsonLikeContentTypeRE = /^(application|text)\/([^+]+\+)*json.*/;
 var jsonlLikeContentTypeRE = /^(application|text)\/([^+]+\+)*(jsonl|x-ndjson)\b.*/;
-async function logRequest(logger4, req) {
-  if (!logger4) {
+async function logRequest(logger5, req) {
+  if (!logger5) {
     return;
   }
   const contentType = req.headers.get("content-type");
   const ct = contentType?.split(";")[0] || "";
-  logger4.group(`> Request: ${req.method} ${req.url}`);
-  logger4.group("Headers:");
+  logger5.group(`> Request: ${req.method} ${req.url}`);
+  logger5.group("Headers:");
   for (const [k, v] of req.headers.entries()) {
-    logger4.log(`${k}: ${v}`);
+    logger5.log(`${k}: ${v}`);
   }
-  logger4.groupEnd();
-  logger4.group("Body:");
+  logger5.groupEnd();
+  logger5.group("Body:");
   switch (true) {
     case jsonLikeContentTypeRE.test(ct):
-      logger4.log(await req.clone().json());
+      logger5.log(await req.clone().json());
       break;
     case ct.startsWith("text/"):
-      logger4.log(await req.clone().text());
+      logger5.log(await req.clone().text());
       break;
     case ct === "multipart/form-data": {
       const body = await req.clone().formData();
       for (const [k, v] of body) {
         const vlabel = v instanceof Blob ? "<Blob>" : v;
-        logger4.log(`${k}: ${vlabel}`);
+        logger5.log(`${k}: ${vlabel}`);
       }
       break;
     }
     default:
-      logger4.log(`<${contentType}>`);
+      logger5.log(`<${contentType}>`);
       break;
   }
-  logger4.groupEnd();
-  logger4.groupEnd();
+  logger5.groupEnd();
+  logger5.groupEnd();
 }
-async function logResponse(logger4, res, req) {
-  if (!logger4) {
+async function logResponse(logger5, res, req) {
+  if (!logger5) {
     return;
   }
   const contentType = res.headers.get("content-type");
   const ct = contentType?.split(";")[0] || "";
-  logger4.group(`< Response: ${req.method} ${req.url}`);
-  logger4.log("Status Code:", res.status, res.statusText);
-  logger4.group("Headers:");
+  logger5.group(`< Response: ${req.method} ${req.url}`);
+  logger5.log("Status Code:", res.status, res.statusText);
+  logger5.group("Headers:");
   for (const [k, v] of res.headers.entries()) {
-    logger4.log(`${k}: ${v}`);
+    logger5.log(`${k}: ${v}`);
   }
-  logger4.groupEnd();
-  logger4.group("Body:");
+  logger5.groupEnd();
+  logger5.group("Body:");
   switch (true) {
     case (matchContentType(res, "application/json") || jsonLikeContentTypeRE.test(ct) && !jsonlLikeContentTypeRE.test(ct)):
-      logger4.log(await res.clone().json());
+      logger5.log(await res.clone().json());
       break;
     case (matchContentType(res, "application/jsonl") || jsonlLikeContentTypeRE.test(ct)):
-      logger4.log(await res.clone().text());
+      logger5.log(await res.clone().text());
       break;
     case matchContentType(res, "text/event-stream"):
-      logger4.log(`<${contentType}>`);
+      logger5.log(`<${contentType}>`);
       break;
     case matchContentType(res, "text/*"):
-      logger4.log(await res.clone().text());
+      logger5.log(await res.clone().text());
       break;
     case matchContentType(res, "multipart/form-data"): {
       const body = await res.clone().formData();
       for (const [k, v] of body) {
         const vlabel = v instanceof Blob ? "<Blob>" : v;
-        logger4.log(`${k}: ${vlabel}`);
+        logger5.log(`${k}: ${vlabel}`);
       }
       break;
     }
     default:
-      logger4.log(`<${contentType}>`);
+      logger5.log(`<${contentType}>`);
       break;
   }
-  logger4.groupEnd();
-  logger4.groupEnd();
+  logger5.groupEnd();
+  logger5.groupEnd();
 }
 
 // node_modules/@openrouter/sdk/esm/models/errors/openroutererror.js
@@ -15769,6 +15769,31 @@ var InvalidWebhookSignatureError = class extends Error {
     super(message);
   }
 };
+var OAuthError = class extends APIError {
+  constructor(status, error, headers) {
+    let finalMessage = "OAuth2 authentication error";
+    let error_code = void 0;
+    if (error && typeof error === "object") {
+      const errorData = error;
+      error_code = errorData["error"];
+      const description = errorData["error_description"];
+      if (description && typeof description === "string") {
+        finalMessage = description;
+      } else if (error_code) {
+        finalMessage = error_code;
+      }
+    }
+    super(status, error, finalMessage, headers);
+    this.error_code = error_code;
+  }
+};
+var SubjectTokenProviderError = class extends OpenAIError {
+  constructor(message, provider, cause) {
+    super(message);
+    this.provider = provider;
+    this.cause = cause;
+  }
+};
 
 // ../../../node_modules/openai/internal/utils/values.mjs
 var startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
@@ -15817,7 +15842,7 @@ var safeJSON = (text2) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.33.0";
+var VERSION = "6.34.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -16528,11 +16553,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger4, logLevel) {
-  if (!logger4 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger5, logLevel) {
+  if (!logger5 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger4[fnLevel].bind(logger4);
+    return logger5[fnLevel].bind(logger5);
   }
 }
 var noopLogger = {
@@ -16543,22 +16568,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger4 = client.logger;
+  const logger5 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger4) {
+  if (!logger5) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger4);
+  const cachedLogger = cachedLoggers.get(logger5);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger4, logLevel),
-    warn: makeLogFn("warn", logger4, logLevel),
-    info: makeLogFn("info", logger4, logLevel),
-    debug: makeLogFn("debug", logger4, logLevel)
+    error: makeLogFn("error", logger5, logLevel),
+    warn: makeLogFn("warn", logger5, logLevel),
+    info: makeLogFn("info", logger5, logLevel),
+    debug: makeLogFn("debug", logger5, logLevel)
   };
-  cachedLoggers.set(logger4, [logLevel, levelLogger]);
+  cachedLoggers.set(logger5, [logLevel, levelLogger]);
   return levelLogger;
 }
 var formatRequestDetails = (details) => {
@@ -16592,7 +16617,7 @@ var Stream = class _Stream {
   }
   static fromSSEResponse(response, controller, client, synthesizeEventData) {
     let consumed = false;
-    const logger4 = client ? loggerFor(client) : console;
+    const logger5 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -16612,8 +16637,8 @@ var Stream = class _Stream {
             try {
               data = JSON.parse(sse2.data);
             } catch (e) {
-              logger4.error(`Could not parse message into JSON:`, sse2.data);
-              logger4.error(`From chunk:`, sse2.raw);
+              logger5.error(`Could not parse message into JSON:`, sse2.data);
+              logger5.error(`From chunk:`, sse2.raw);
               throw e;
             }
             if (data && data.error) {
@@ -17080,6 +17105,91 @@ var ConversationCursorPage = class extends AbstractPage {
         after: cursor
       }
     };
+  }
+};
+
+// ../../../node_modules/openai/auth/workload-identity-auth.mjs
+var SUBJECT_TOKEN_TYPES = {
+  jwt: "urn:ietf:params:oauth:token-type:jwt",
+  id: "urn:ietf:params:oauth:token-type:id_token"
+};
+var TOKEN_EXCHANGE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:token-exchange";
+var WorkloadIdentityAuth = class {
+  constructor(config2, fetch2) {
+    this.cachedToken = null;
+    this.refreshPromise = null;
+    this.tokenExchangeUrl = "https://auth.openai.com/oauth/token";
+    this.config = config2;
+    this.fetch = fetch2 ?? getDefaultFetch();
+  }
+  async getToken() {
+    if (!this.cachedToken || this.isTokenExpired(this.cachedToken)) {
+      if (this.refreshPromise) {
+        return await this.refreshPromise;
+      }
+      this.refreshPromise = this.refreshToken();
+      try {
+        const token = await this.refreshPromise;
+        return token;
+      } finally {
+        this.refreshPromise = null;
+      }
+    }
+    if (this.needsRefresh(this.cachedToken) && !this.refreshPromise) {
+      this.refreshPromise = this.refreshToken().finally(() => {
+        this.refreshPromise = null;
+      });
+    }
+    return this.cachedToken.token;
+  }
+  async refreshToken() {
+    const subjectToken = await this.config.provider.getToken();
+    const response = await this.fetch(this.tokenExchangeUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+        client_id: this.config.clientId,
+        subject_token: subjectToken,
+        subject_token_type: SUBJECT_TOKEN_TYPES[this.config.provider.tokenType],
+        identity_provider_id: this.config.identityProviderId,
+        service_account_id: this.config.serviceAccountId
+      })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      let body = void 0;
+      try {
+        body = JSON.parse(errorText);
+      } catch {
+      }
+      if (response.status === 400 || response.status === 401 || response.status === 403) {
+        throw new OAuthError(response.status, body, response.headers);
+      }
+      throw APIError.generate(response.status, body, `Token exchange failed with status ${response.status}`, response.headers);
+    }
+    const tokenResponse = await response.json();
+    const expiresIn = tokenResponse.expires_in || 3600;
+    const expiresAt = Date.now() + expiresIn * 1e3;
+    this.cachedToken = {
+      token: tokenResponse.access_token,
+      expiresAt
+    };
+    return tokenResponse.access_token;
+  }
+  isTokenExpired(cachedToken) {
+    return Date.now() >= cachedToken.expiresAt;
+  }
+  needsRefresh(cachedToken) {
+    const bufferSeconds = this.config.refreshBufferSeconds ?? 1200;
+    const bufferMs = bufferSeconds * 1e3;
+    return Date.now() >= cachedToken.expiresAt - bufferMs;
+  }
+  invalidateToken() {
+    this.cachedToken = null;
+    this.refreshPromise = null;
   }
 };
 
@@ -22110,6 +22220,7 @@ var _OpenAI_instances;
 var _a3;
 var _OpenAI_encoder;
 var _OpenAI_baseURLOverridden;
+var WORKLOAD_IDENTITY_API_KEY_PLACEHOLDER = "workload-identity-auth";
 var OpenAI = class {
   /**
    * API Client for interfacing with the OpenAI API.
@@ -22127,7 +22238,7 @@ var OpenAI = class {
    * @param {Record<string, string | undefined>} opts.defaultQuery - Default query parameters to include with every request to the API.
    * @param {boolean} [opts.dangerouslyAllowBrowser=false] - By default, client-side use of this library is not allowed, as it risks exposing your secret API credentials to attackers.
    */
-  constructor({ baseURL = readEnv("OPENAI_BASE_URL"), apiKey = readEnv("OPENAI_API_KEY"), organization = readEnv("OPENAI_ORG_ID") ?? null, project = readEnv("OPENAI_PROJECT_ID") ?? null, webhookSecret = readEnv("OPENAI_WEBHOOK_SECRET") ?? null, ...opts } = {}) {
+  constructor({ baseURL = readEnv("OPENAI_BASE_URL"), apiKey = readEnv("OPENAI_API_KEY"), organization = readEnv("OPENAI_ORG_ID") ?? null, project = readEnv("OPENAI_PROJECT_ID") ?? null, webhookSecret = readEnv("OPENAI_WEBHOOK_SECRET") ?? null, workloadIdentity, ...opts } = {}) {
     _OpenAI_instances.add(this);
     _OpenAI_encoder.set(this, void 0);
     this.completions = new Completions2(this);
@@ -22152,14 +22263,20 @@ var OpenAI = class {
     this.containers = new Containers(this);
     this.skills = new Skills(this);
     this.videos = new Videos(this);
-    if (apiKey === void 0) {
-      throw new OpenAIError("Missing credentials. Please pass an `apiKey`, or set the `OPENAI_API_KEY` environment variable.");
+    if (workloadIdentity) {
+      if (apiKey && apiKey !== WORKLOAD_IDENTITY_API_KEY_PLACEHOLDER) {
+        throw new OpenAIError("The `apiKey` and `workloadIdentity` arguments are mutually exclusive; only one can be passed at a time.");
+      }
+      apiKey = WORKLOAD_IDENTITY_API_KEY_PLACEHOLDER;
+    } else if (apiKey === void 0) {
+      throw new OpenAIError("Missing credentials. Please pass an `apiKey`, `workloadIdentity`, or set the `OPENAI_API_KEY` environment variable.");
     }
     const options = {
       apiKey,
       organization,
       project,
       webhookSecret,
+      workloadIdentity,
       ...opts,
       baseURL: baseURL || `https://api.openai.com/v1`
     };
@@ -22177,6 +22294,9 @@ var OpenAI = class {
     this.fetch = options.fetch ?? getDefaultFetch();
     __classPrivateFieldSet3(this, _OpenAI_encoder, FallbackEncoder, "f");
     this._options = options;
+    if (workloadIdentity) {
+      this._workloadIdentityAuth = new WorkloadIdentityAuth(workloadIdentity, this.fetch);
+    }
     this.apiKey = typeof apiKey === "string" ? apiKey : "Missing Key";
     this.organization = organization;
     this.project = project;
@@ -22196,6 +22316,7 @@ var OpenAI = class {
       fetch: this.fetch,
       fetchOptions: this.fetchOptions,
       apiKey: this.apiKey,
+      workloadIdentity: this._options.workloadIdentity,
       organization: this.organization,
       project: this.project,
       webhookSecret: this.webhookSecret,
@@ -22321,7 +22442,7 @@ var OpenAI = class {
       throw new APIUserAbortError();
     }
     const controller = new AbortController();
-    const response = await this.fetchWithTimeout(url, req, timeout, controller).catch(castToError);
+    const response = await this.fetchWithAuth(url, req, timeout, controller).catch(castToError);
     const headersTime = Date.now();
     if (response instanceof globalThis.Error) {
       const retryMessage = `retrying, ${retriesRemaining} attempts remaining`;
@@ -22346,6 +22467,9 @@ var OpenAI = class {
         durationMs: headersTime - startTime,
         message: response.message
       }));
+      if (response instanceof OAuthError || response instanceof SubjectTokenProviderError) {
+        throw response;
+      }
       if (isTimeout) {
         throw new APIConnectionTimeoutError();
       }
@@ -22354,6 +22478,17 @@ var OpenAI = class {
     const specialHeaders = [...response.headers.entries()].filter(([name]) => name === "x-request-id").map(([name, value]) => ", " + name + ": " + JSON.stringify(value)).join("");
     const responseInfo = `[${requestLogID}${retryLogStr}${specialHeaders}] ${req.method} ${url} ${response.ok ? "succeeded" : "failed"} with status ${response.status} in ${headersTime - startTime}ms`;
     if (!response.ok) {
+      if (response.status === 401 && this._workloadIdentityAuth && !options.__metadata?.["hasStreamingBody"] && !options.__metadata?.["workloadIdentityTokenRefreshed"]) {
+        await CancelReadableStream(response.body);
+        this._workloadIdentityAuth.invalidateToken();
+        return this.makeRequest({
+          ...options,
+          __metadata: {
+            ...options.__metadata,
+            workloadIdentityTokenRefreshed: true
+          }
+        }, retriesRemaining, retryOfRequestLogID ?? requestLogID);
+      }
       const shouldRetry = await this.shouldRetry(response);
       if (retriesRemaining && shouldRetry) {
         const retryMessage2 = `retrying, ${retriesRemaining} attempts remaining`;
@@ -22400,6 +22535,18 @@ var OpenAI = class {
   requestAPIList(Page2, options) {
     const request = this.makeRequest(options, null, void 0);
     return new PagePromise(this, request, Page2);
+  }
+  async fetchWithAuth(url, init, timeout, controller) {
+    if (this._workloadIdentityAuth) {
+      const headers = init.headers;
+      const authHeader = headers.get("Authorization");
+      if (!authHeader || authHeader === `Bearer ${WORKLOAD_IDENTITY_API_KEY_PLACEHOLDER}`) {
+        const token = await this._workloadIdentityAuth.getToken();
+        headers.set("Authorization", `Bearer ${token}`);
+      }
+    }
+    const response = await this.fetchWithTimeout(url, init, timeout, controller);
+    return response;
   }
   async fetchWithTimeout(url, init, ms, controller) {
     const { signal, method, ...options } = init || {};
@@ -22479,7 +22626,13 @@ var OpenAI = class {
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
-    const { bodyHeaders, body } = this.buildBody({ options });
+    const { bodyHeaders, body, isStreamingBody } = this.buildBody({ options });
+    if (isStreamingBody) {
+      inputOptions.__metadata = {
+        ...inputOptions.__metadata,
+        hasStreamingBody: true
+      };
+    }
     const reqHeaders = await this.buildHeaders({ options: inputOptions, method, bodyHeaders, retryCount });
     const req = {
       method,
@@ -22523,9 +22676,11 @@ var OpenAI = class {
   }
   buildBody({ options: { body, headers: rawHeaders } }) {
     if (!body) {
-      return { bodyHeaders: void 0, body: void 0 };
+      return { bodyHeaders: void 0, body: void 0, isStreamingBody: false };
     }
     const headers = buildHeaders([rawHeaders]);
+    const isReadableStream = typeof globalThis.ReadableStream !== "undefined" && body instanceof globalThis.ReadableStream;
+    const isRetryableBody = !isReadableStream && (typeof body === "string" || body instanceof ArrayBuffer || ArrayBuffer.isView(body) || typeof globalThis.Blob !== "undefined" && body instanceof globalThis.Blob || body instanceof URLSearchParams || body instanceof FormData);
     if (
       // Pass raw type verbatim
       ArrayBuffer.isView(body) || body instanceof ArrayBuffer || body instanceof DataView || typeof body === "string" && // Preserve legacy string encoding behavior for now
@@ -22533,18 +22688,23 @@ var OpenAI = class {
       globalThis.Blob && body instanceof globalThis.Blob || // `FormData` -> `multipart/form-data`
       body instanceof FormData || // `URLSearchParams` -> `application/x-www-form-urlencoded`
       body instanceof URLSearchParams || // Send chunked stream (each chunk has own `length`)
-      globalThis.ReadableStream && body instanceof globalThis.ReadableStream
+      isReadableStream
     ) {
-      return { bodyHeaders: void 0, body };
+      return { bodyHeaders: void 0, body, isStreamingBody: !isRetryableBody };
     } else if (typeof body === "object" && (Symbol.asyncIterator in body || Symbol.iterator in body && "next" in body && typeof body.next === "function")) {
-      return { bodyHeaders: void 0, body: ReadableStreamFrom(body) };
+      return {
+        bodyHeaders: void 0,
+        body: ReadableStreamFrom(body),
+        isStreamingBody: true
+      };
     } else if (typeof body === "object" && headers.values.get("content-type") === "application/x-www-form-urlencoded") {
       return {
         bodyHeaders: { "content-type": "application/x-www-form-urlencoded" },
-        body: this.stringifyQuery(body)
+        body: this.stringifyQuery(body),
+        isStreamingBody: false
       };
     } else {
-      return __classPrivateFieldGet3(this, _OpenAI_encoder, "f").call(this, { body, headers });
+      return { ...__classPrivateFieldGet3(this, _OpenAI_encoder, "f").call(this, { body, headers }), isStreamingBody: false };
     }
   }
 };
@@ -22646,7 +22806,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger4 = {
+  const logger5 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -22678,7 +22838,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger4;
+  return logger5;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -23270,6 +23430,259 @@ var OpenRouterEmbeddingProvider = class {
   }
 };
 
+// image-provider.ts
+var logger3 = createPluginLogger("qtap-plugin-openrouter");
+var FALLBACK_IMAGE_MODELS = [
+  "google/gemini-2.5-flash-preview-native-image",
+  "google/gemini-3-pro-image-preview",
+  "openai/gpt-5-image",
+  "openai/gpt-5-image-mini"
+];
+var OpenRouterImageProvider = class {
+  constructor() {
+    this.provider = "OPENROUTER";
+    this.supportedModels = [...FALLBACK_IMAGE_MODELS];
+  }
+  async generateImage(params, apiKey) {
+    if (!apiKey) {
+      throw new Error("OpenRouter provider requires an API key");
+    }
+    const model = params.model ?? FALLBACK_IMAGE_MODELS[0];
+    logger3.debug("Generating image via OpenRouter", {
+      context: "OpenRouterImageProvider.generateImage",
+      model,
+      hasAspectRatio: !!params.aspectRatio,
+      hasNegativePrompt: !!params.negativePrompt
+    });
+    let prompt = params.prompt;
+    if (params.negativePrompt) {
+      prompt += `
+
+Avoid the following in the image: ${params.negativePrompt}`;
+    }
+    if (params.style) {
+      prompt += `
+
+Use a ${params.style} artistic style.`;
+    }
+    const body = {
+      model,
+      messages: [
+        { role: "user", content: prompt }
+      ],
+      modalities: ["image", "text"]
+    };
+    const imageConfig = {};
+    if (params.aspectRatio) {
+      imageConfig.aspect_ratio = params.aspectRatio;
+    }
+    if (params.quality === "hd") {
+      imageConfig.image_size = "4K";
+    }
+    if (Object.keys(imageConfig).length > 0) {
+      body.image_config = imageConfig;
+    }
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": process.env.BASE_URL || "http://localhost:3000",
+          "X-Title": "Quilltap",
+          "User-Agent": getQuilltapUserAgent()
+        },
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger3.error("OpenRouter image generation API error", {
+          context: "OpenRouterImageProvider.generateImage",
+          status: response.status,
+          error: errorText,
+          model
+        });
+        throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      logger3.debug("OpenRouter image generation raw response structure", {
+        context: "OpenRouterImageProvider.generateImage",
+        model,
+        choiceCount: data.choices?.length,
+        hasImages: !!data.choices?.[0]?.message?.images,
+        imageCount: data.choices?.[0]?.message?.images?.length,
+        contentType: typeof data.choices?.[0]?.message?.content,
+        contentIsArray: Array.isArray(data.choices?.[0]?.message?.content)
+      });
+      return this.parseImageResponse(data);
+    } catch (error) {
+      logger3.error("Failed to generate image via OpenRouter", {
+        context: "OpenRouterImageProvider.generateImage",
+        model
+      }, error instanceof Error ? error : void 0);
+      throw error;
+    }
+  }
+  /**
+   * Parse the OpenRouter chat completion response to extract images.
+   *
+   * OpenRouter returns images in the message.images[] array:
+   *   message.images: [{ type: "image_url", image_url: { url: "data:image/png;base64,..." } }]
+   *
+   * Also handles fallback formats:
+   * - Images in content array (multipart content)
+   * - Inline data format (Gemini native passthrough)
+   */
+  parseImageResponse(data) {
+    const images = [];
+    let textContent = "";
+    const choices = data.choices || [];
+    for (const choice of choices) {
+      const message = choice.message;
+      if (!message) continue;
+      if (Array.isArray(message.images)) {
+        for (const img of message.images) {
+          const url = img.image_url?.url || img.url;
+          if (url) {
+            this.extractImageFromUrl(url, images);
+          }
+        }
+      }
+      if (message.refusal) {
+        textContent = message.refusal;
+      }
+      if (typeof message.content === "string" && message.content) {
+        textContent = message.content;
+      }
+      if (Array.isArray(message.content)) {
+        for (const part of message.content) {
+          if (part.type === "image_url" && part.image_url?.url) {
+            this.extractImageFromUrl(part.image_url.url, images);
+          } else if (part.type === "text" && part.text) {
+            textContent = part.text;
+          }
+          const inlineData = part.inline_data || part.inlineData;
+          if (inlineData?.data) {
+            images.push({
+              data: inlineData.data,
+              mimeType: inlineData.mimeType || inlineData.mime_type || "image/png"
+            });
+          }
+        }
+      }
+    }
+    if (images.length === 0) {
+      logger3.error("No images in OpenRouter response", {
+        context: "OpenRouterImageProvider.parseImageResponse",
+        textContent: textContent.slice(0, 500),
+        choiceCount: choices.length,
+        messageKeys: choices[0]?.message ? Object.keys(choices[0].message) : []
+      });
+      if (textContent) {
+        const summary = textContent.length > 200 ? textContent.slice(0, 200) + "..." : textContent;
+        throw new Error(`Model declined to generate an image: ${summary}`);
+      }
+      throw new Error("No images returned from OpenRouter API");
+    }
+    logger3.debug("Successfully parsed image response", {
+      context: "OpenRouterImageProvider.parseImageResponse",
+      imageCount: images.length
+    });
+    return {
+      images,
+      raw: data
+    };
+  }
+  /**
+   * Extract image data from a URL (data URI or external URL)
+   */
+  extractImageFromUrl(url, images) {
+    const dataUriMatch = url.match(/^data:(image\/[^;]+);base64,(.+)$/);
+    if (dataUriMatch) {
+      images.push({
+        data: dataUriMatch[2],
+        mimeType: dataUriMatch[1]
+      });
+    } else {
+      images.push({ url, mimeType: "image/png" });
+    }
+  }
+  async validateApiKey(apiKey) {
+    try {
+      const client = new OpenRouter({
+        apiKey,
+        httpReferer: process.env.BASE_URL || "http://localhost:3000",
+        appTitle: getQuilltapUserAgent()
+      });
+      await client.models.list();
+      return true;
+    } catch (error) {
+      logger3.error("OpenRouter API key validation failed for image generation", {
+        context: "OpenRouterImageProvider.validateApiKey"
+      }, error instanceof Error ? error : void 0);
+      return false;
+    }
+  }
+  /**
+   * Get available image generation models.
+   * Dynamically discovers models via the OpenRouter models API by checking
+   * each model's output_modalities for "image" support.
+   * Falls back to the static list if no API key is provided or the API call fails.
+   */
+  async getAvailableModels(apiKey) {
+    if (!apiKey) {
+      logger3.debug("No API key provided, returning fallback image models", {
+        context: "OpenRouterImageProvider.getAvailableModels"
+      });
+      return [...FALLBACK_IMAGE_MODELS];
+    }
+    try {
+      const client = new OpenRouter({
+        apiKey,
+        httpReferer: process.env.BASE_URL || "http://localhost:3000",
+        appTitle: getQuilltapUserAgent()
+      });
+      const response = await client.models.list();
+      const imageModels = [];
+      for (const model of response.data || []) {
+        const modelAny = model;
+        const outputModalities = modelAny.output_modalities || modelAny.outputModalities;
+        if (Array.isArray(outputModalities) && outputModalities.includes("image")) {
+          imageModels.push(model.id);
+          continue;
+        }
+        const outputModality = modelAny.architecture?.outputModality;
+        if (typeof outputModality === "string" && outputModality.includes("image")) {
+          imageModels.push(model.id);
+          continue;
+        }
+        const genMethods = modelAny.supported_generation_methods;
+        if (Array.isArray(genMethods) && genMethods.includes("image")) {
+          imageModels.push(model.id);
+          continue;
+        }
+      }
+      if (imageModels.length > 0) {
+        logger3.info("Discovered image generation models from OpenRouter API", {
+          context: "OpenRouterImageProvider.getAvailableModels",
+          count: imageModels.length,
+          models: imageModels.slice(0, 10)
+        });
+        return imageModels;
+      }
+      logger3.warn("No image models found via API, using fallback list", {
+        context: "OpenRouterImageProvider.getAvailableModels"
+      });
+      return [...FALLBACK_IMAGE_MODELS];
+    } catch (error) {
+      logger3.error("Failed to fetch image models from OpenRouter API, using fallback list", {
+        context: "OpenRouterImageProvider.getAvailableModels"
+      }, error instanceof Error ? error : void 0);
+      return [...FALLBACK_IMAGE_MODELS];
+    }
+  }
+};
+
 // node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
 var TOOL_NAME_ALIASES = {
   // Direct mappings
@@ -23595,7 +24008,7 @@ function stripAllXMLToolMarkers(response) {
 }
 
 // index.ts
-var logger3 = createPluginLogger("qtap-plugin-openrouter");
+var logger4 = createPluginLogger("qtap-plugin-openrouter");
 var metadata = {
   providerName: "OPENROUTER",
   displayName: "OpenRouter",
@@ -23663,6 +24076,12 @@ var plugin = {
     return new OpenRouterProvider();
   },
   /**
+   * Factory method to create an OpenRouter image generation provider instance
+   */
+  createImageProvider: (baseUrl) => {
+    return new OpenRouterImageProvider();
+  },
+  /**
    * Factory method to create an OpenRouter embedding provider instance
    */
   createEmbeddingProvider: (baseUrl) => {
@@ -23679,7 +24098,7 @@ var plugin = {
       const models = await provider.getAvailableModels(apiKey);
       return models;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Failed to fetch OpenRouter models",
         { context: "plugin.getAvailableModels" },
         error instanceof Error ? error : void 0
@@ -23696,7 +24115,7 @@ var plugin = {
       const isValid = await provider.validateApiKey(apiKey);
       return isValid;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error validating OpenRouter API key",
         { context: "plugin.validateApiKey" },
         error instanceof Error ? error : void 0
@@ -23857,7 +24276,7 @@ var plugin = {
       const formattedTools = [];
       for (const tool of tools) {
         if (!("function" in tool)) {
-          logger3.warn("Skipping tool with invalid format", {
+          logger4.warn("Skipping tool with invalid format", {
             context: "plugin.formatTools"
           });
           continue;
@@ -23866,7 +24285,7 @@ var plugin = {
       }
       return formattedTools;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error formatting tools for OpenRouter",
         { context: "plugin.formatTools" },
         error instanceof Error ? error : void 0
@@ -23886,7 +24305,7 @@ var plugin = {
       const toolCalls = parseOpenAIToolCalls(response);
       return toolCalls;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error parsing tool calls from OpenRouter response",
         { context: "plugin.parseToolCalls" },
         error instanceof Error ? error : void 0
@@ -23909,7 +24328,7 @@ var plugin = {
       const results = parseAllXMLAsToolCalls(text2);
       return results;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error parsing text tool calls",
         { context: "openrouter.parseTextToolCalls" },
         error instanceof Error ? error : void 0

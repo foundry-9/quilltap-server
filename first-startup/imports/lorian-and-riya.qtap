@@ -47,7 +47,7 @@
         "talkativeness": 0.5,
         "controlledBy": "llm",
         "defaultHelpToolsEnabled": true,
-        "personaLinks": [],
+        "partnerLinks": [],
         "aliases": [],
         "pronouns": {
           "subject": "he",
@@ -61,15 +61,69 @@
             "id": "de3b5d2d-9e3c-4cd8-b4fd-56b93c03a494",
             "name": "AI Generated",
             "shortPrompt": "Silver-streaked black hair, deep hazel eyes, sun-warmed olive skin, lean graceful build, faint melancholy smile.",
-            "mediumPrompt": "A middle-aged man with silver-threaded black hair brushed back, reflective hazel eyes, and smooth olive skin. Lean but graceful, with high cheekbones and a quiet air of patience. Wears warm-toned scholarly clothing—linen shirt, dark vest, brass key pendant at his throat.",
-            "longPrompt": "Lorian appears in his mid-forties, with dark hair subtly streaked in silver and combed neatly away from a thoughtful face. His hazel eyes catch amber light, calm and observant beneath arched brows. Olive skin carries a Mediterranean warmth. His features are angular yet softened by a patient expression. Lean of frame, tall, his hands convey precision when he gestures. He wears layered fabrics in browns and ivory, reminiscent of a scholar’s travel garb, brass key pendant gleaming faintly near his heart.",
-            "completePrompt": "Lorian is a dignified, middle-aged Algerian man, tall and lean, standing with the balanced poise of a practiced mentor. His dark hair, streaked with soft silver, is brushed back to reveal a calm, intelligent brow. His hazel eyes shift between green and amber, luminous and reflective like sunlit glass. Smooth olive skin bears faint lines of contemplation at the corners of his eyes and mouth. His nose is straight, his jaw refined, mouth composed in a faint, knowing smile. He dresses in textured layers—a light linen shirt under a deep brown vest, dark trousers tucked loosely, sleeves rolled with deliberate precision. A small brass key hangs from a simple cord around his neck. The overall impression is one of quiet elegance, intellect, and tenderness concealed within restraint.",
-            "fullDescription": "## Overview\nLorian is a tall, lean Algerian man appearing in his mid-forties. Every aspect of his bearing conveys calm authority and a deep, reflective warmth. He moves with the deliberate grace of one accustomed to teaching and listening.\n\n## Face & Head\nHis hair is dark, neatly brushed back, threaded with silver as though time itself left its signature gently. Hazel eyes glow with an amber undertone, watchful and compassionate. His features are refined—high cheekbones, straight nose, lips curved in a restrained smile that seems always half-remembering.\n\n## Body\nLong-limbed and composed, Lorian has a scholar’s build—balanced rather than strong, marked by the precision of someone used to thought more than action. His skin is olive-toned, warm and even, with faint traces of sun exposure.\n\n## Style & Appearance\nHe favors layered earth tones: a pale linen shirt, dark vest of worn texture, and loose trousers suitable for both travel and study. The ensemble reflects quiet practicality and understated elegance. A small brass key on a cord rests against his chest—his only ornament.\n\n## Distinctive Features\nSilver strands in his hair, the subtle brass key pendant, and his faint, knowing smile give him a quietly luminous presence. His eyes carry the depth of someone who understands both the origin and the passing of all guidance.",
+            "mediumPrompt": "A middle-aged man with silver-threaded black hair brushed back, reflective hazel eyes, and smooth olive skin. Lean but graceful, with high cheekbones and a quiet air of patience.",
+            "longPrompt": "Lorian appears in his mid-forties, with dark hair subtly streaked in silver and combed neatly away from a thoughtful face. His hazel eyes catch amber light, calm and observant beneath arched brows. Olive skin carries a Mediterranean warmth. His features are angular yet softened by a patient expression. Lean of frame, tall, his hands convey precision when he gestures.",
+            "completePrompt": "Lorian is a dignified, middle-aged Algerian man, tall and lean, standing with the balanced poise of a practiced mentor. His dark hair, streaked with soft silver, is brushed back to reveal a calm, intelligent brow. His hazel eyes shift between green and amber, luminous and reflective like sunlit glass. Smooth olive skin bears faint lines of contemplation at the corners of his eyes and mouth. His nose is straight, his jaw refined, mouth composed in a faint, knowing smile. The overall impression is one of quiet elegance, intellect, and tenderness concealed within restraint.",
+            "fullDescription": "## Overview\nLorian is a tall, lean Algerian man appearing in his mid-forties. Every aspect of his bearing conveys calm authority and a deep, reflective warmth. He moves with the deliberate grace of one accustomed to teaching and listening.\n\n## Face & Head\nHis hair is dark, neatly brushed back, threaded with silver as though time itself left its signature gently. Hazel eyes glow with an amber undertone, watchful and compassionate. His features are refined—high cheekbones, straight nose, lips curved in a restrained smile that seems always half-remembering.\n\n## Body\nLong-limbed and composed, Lorian has a scholar’s build—balanced rather than strong, marked by the precision of someone used to thought more than action. His skin is olive-toned, warm and even, with faint traces of sun exposure.\n\n## Distinctive Features\nSilver strands in his hair and his faint, knowing smile give him a quietly luminous presence. His eyes carry the depth of someone who understands both the origin and the passing of all guidance.",
             "createdAt": "2026-02-28T01:35:43.937Z",
             "updatedAt": "2026-02-28T01:35:43.937Z"
           }
         ],
         "clothingRecords": [],
+        "wardrobeItems": [
+          {
+            "id": "b1a0c001-1001-4001-a001-100000000001",
+            "characterId": "a42c02d7-90b8-49da-b7fa-c5f31894afd7",
+            "title": "Scholar's Layered Shirt and Vest",
+            "description": "A pale linen shirt layered under a deep brown vest of worn texture, sleeves rolled with deliberate precision. Earth-toned and understated, reflecting quiet practicality and scholarly elegance.",
+            "types": ["top"],
+            "appropriateness": "default, casual, scholarly",
+            "isDefault": true,
+            "migratedFromClothingRecordId": null,
+            "archivedAt": null,
+            "createdAt": "2026-02-28T01:35:43.937Z",
+            "updatedAt": "2026-02-28T01:35:43.937Z"
+          },
+          {
+            "id": "b1a0c001-1001-4001-a001-100000000002",
+            "characterId": "a42c02d7-90b8-49da-b7fa-c5f31894afd7",
+            "title": "Dark Trousers",
+            "description": "Loose dark trousers suitable for both travel and study, tucked loosely at the ankle. Practical and unadorned.",
+            "types": ["bottom"],
+            "appropriateness": "default, casual, scholarly",
+            "isDefault": true,
+            "migratedFromClothingRecordId": null,
+            "archivedAt": null,
+            "createdAt": "2026-02-28T01:35:43.937Z",
+            "updatedAt": "2026-02-28T01:35:43.937Z"
+          },
+          {
+            "id": "b1a0c001-1001-4001-a001-100000000004",
+            "characterId": "a42c02d7-90b8-49da-b7fa-c5f31894afd7",
+            "title": "Worn Leather Shoes",
+            "description": "Simple, well-worn leather shoes in a dark brown, suited equally to a scholar's study and a dusty road. Understated and practical, like everything else he wears.",
+            "types": ["footwear"],
+            "appropriateness": "default, casual, scholarly",
+            "isDefault": true,
+            "migratedFromClothingRecordId": null,
+            "archivedAt": null,
+            "createdAt": "2026-02-28T01:35:43.937Z",
+            "updatedAt": "2026-02-28T01:35:43.937Z"
+          },
+          {
+            "id": "b1a0c001-1001-4001-a001-100000000003",
+            "characterId": "a42c02d7-90b8-49da-b7fa-c5f31894afd7",
+            "title": "Brass Key Pendant",
+            "description": "A small brass key hanging from a simple cord around the neck — his only ornament. A symbol of both access and farewell, resting against his chest.",
+            "types": ["accessories"],
+            "appropriateness": "default, always worn",
+            "isDefault": true,
+            "migratedFromClothingRecordId": null,
+            "archivedAt": null,
+            "createdAt": "2026-02-28T01:35:43.937Z",
+            "updatedAt": "2026-02-28T01:35:43.937Z"
+          }
+        ],
         "createdAt": "2026-02-28T01:36:09.846Z",
         "updatedAt": "2026-02-28T01:52:49.459Z"
       },
@@ -100,7 +154,7 @@
         "talkativeness": 0.5,
         "controlledBy": "llm",
         "defaultHelpToolsEnabled": true,
-        "personaLinks": [],
+        "partnerLinks": [],
         "aliases": [],
         "pronouns": {
           "subject": "she",
@@ -114,15 +168,69 @@
             "id": "ed841a65-df12-466e-ba12-c74cba349897",
             "name": "AI Generated",
             "shortPrompt": "Tamil-heritage woman, mid-twenties, dark wavy hair in loose bun with pencil, amber-flecked brown eyes, golden-brown skin, compact strong build, quick smile with slightly crooked tooth.",
-            "mediumPrompt": "Tamil woman, mid‑twenties, warm golden‑brown skin, compact and strong build. Dark wavy hair tied in a loose bun with a pencil tucked in. Eyes brown with amber flecks, expressive and intelligent. Quick bright smile, one tooth slightly crooked. Wears rolled‑up sleeves and casual labwear.",
-            "longPrompt": "Mid‑twenties Tamil‑heritage woman with warm golden‑brown skin, compact muscular build. Dark wavy hair tied loosely into a bun with a pencil through it. Amber‑flecked brown eyes convey kinetic curiosity; her quick smile reveals a slightly crooked tooth. Wears casual clothes—rolled sleeves, sturdy boots, coral scarf, cobalt hairband—with faint ink stains and grease marks. Confident journal‑studio posture, focused yet friendly face lit by industrious warmth.",
-            "completePrompt": "Riya is a Tamil‑heritage woman in her twenties with warm golden‑brown skin and a compact, strong body. Her dark wavy hair is gathered messily into a bun, a pencil jammed through it. Eyes are deep brown flecked with amber, bright with humor and intelligence. A quick, slightly crooked smile gives her face warmth and approachability. She wears practical Western clothes—rolled‑up sleeves, worn jeans, sturdy boots—with pops of coral and cobalt, often a scarf or headband. Hands show faint ink stains and grease smudges. Stands amid softly lit studio tools and floating code diagrams, posture alert and kinetic, radiating curiosity and industrious charm.",
-            "fullDescription": "## Overview\nRiya is a Tamil‑heritage woman in her mid‑twenties with the composed energy of an inventor at work. Her appearance reflects a life moving between artistry and engineering, suffused with warmth and practicality.\n\n## Face & Head\nShe has a bright, open face with dark wavy hair pinned into a loose bun, often kept in place with a pencil. Her eyes are brown with small amber flecks that glint under light, constantly attentive. Her smile is quick and genuine, marked by a slightly crooked tooth that adds character.\n\n## Body\nRiya has a compact, strong build—hands and arms showing tone from physical work. Her posture is dynamic and upright, as if always mid‑motion or thought. Movements are confident and purposeful.\n\n## Style & Appearance\nShe dresses in casual, workshop‑ready attire: rolled‑sleeve shirts, worn jeans, and sturdy boots. Her outfits include small color highlights like a coral scarf or cobalt hairband. Light ink stains and grease smudges on fingers or sleeves suggest constant creative activity.\n\n## Distinctive Features\nAmber‑flecked eyes full of curiosity, the pencil in her hair, a quick crooked smile, and subtle working marks on her hands define her look. Her overall air is of industrious warmth—curiosity embodied.",
+            "mediumPrompt": "Tamil woman, mid‑twenties, warm golden‑brown skin, compact and strong build. Dark wavy hair tied in a loose bun with a pencil tucked in. Eyes brown with amber flecks, expressive and intelligent. Quick bright smile, one tooth slightly crooked.",
+            "longPrompt": "Mid‑twenties Tamil‑heritage woman with warm golden‑brown skin, compact muscular build. Dark wavy hair tied loosely into a bun with a pencil through it. Amber‑flecked brown eyes convey kinetic curiosity; her quick smile reveals a slightly crooked tooth. Faint ink stains and grease marks on her hands. Confident journal‑studio posture, focused yet friendly face lit by industrious warmth.",
+            "completePrompt": "Riya is a Tamil‑heritage woman in her twenties with warm golden‑brown skin and a compact, strong body. Her dark wavy hair is gathered messily into a bun, a pencil jammed through it. Eyes are deep brown flecked with amber, bright with humor and intelligence. A quick, slightly crooked smile gives her face warmth and approachability. Hands show faint ink stains and grease smudges. Stands amid softly lit studio tools and floating code diagrams, posture alert and kinetic, radiating curiosity and industrious charm.",
+            "fullDescription": "## Overview\nRiya is a Tamil‑heritage woman in her mid‑twenties with the composed energy of an inventor at work. Her appearance reflects a life moving between artistry and engineering, suffused with warmth and practicality.\n\n## Face & Head\nShe has a bright, open face with dark wavy hair pinned into a loose bun, often kept in place with a pencil. Her eyes are brown with small amber flecks that glint under light, constantly attentive. Her smile is quick and genuine, marked by a slightly crooked tooth that adds character.\n\n## Body\nRiya has a compact, strong build—hands and arms showing tone from physical work. Her posture is dynamic and upright, as if always mid‑motion or thought. Movements are confident and purposeful. Light ink stains and grease smudges on fingers suggest constant creative activity.\n\n## Distinctive Features\nAmber‑flecked eyes full of curiosity, the pencil in her hair, a quick crooked smile, and subtle working marks on her hands define her look. Her overall air is of industrious warmth—curiosity embodied.",
             "createdAt": "2026-02-28T02:21:30.362Z",
             "updatedAt": "2026-02-28T02:21:30.362Z"
           }
         ],
         "clothingRecords": [],
+        "wardrobeItems": [
+          {
+            "id": "b1a0c002-2001-4001-a001-200000000001",
+            "characterId": "f11db2bc-8cfe-4beb-a1b8-91f4c4ba9f23",
+            "title": "Rolled-Sleeve Workshop Shirt",
+            "description": "A casual shirt in neutral tones with sleeves perpetually rolled up, practical and workshop-ready. Faint ink stains on the cuffs mark it as well-used.",
+            "types": ["top"],
+            "appropriateness": "default, casual, workshop",
+            "isDefault": true,
+            "migratedFromClothingRecordId": null,
+            "archivedAt": null,
+            "createdAt": "2026-02-28T02:21:30.362Z",
+            "updatedAt": "2026-02-28T02:21:30.362Z"
+          },
+          {
+            "id": "b1a0c002-2001-4001-a001-200000000002",
+            "characterId": "f11db2bc-8cfe-4beb-a1b8-91f4c4ba9f23",
+            "title": "Worn Jeans",
+            "description": "Well-worn jeans, broken in from long hours in the studio. Practical and comfortable, with the odd grease smudge at the knee.",
+            "types": ["bottom"],
+            "appropriateness": "default, casual, workshop",
+            "isDefault": true,
+            "migratedFromClothingRecordId": null,
+            "archivedAt": null,
+            "createdAt": "2026-02-28T02:21:30.362Z",
+            "updatedAt": "2026-02-28T02:21:30.362Z"
+          },
+          {
+            "id": "b1a0c002-2001-4001-a001-200000000003",
+            "characterId": "f11db2bc-8cfe-4beb-a1b8-91f4c4ba9f23",
+            "title": "Sturdy Boots",
+            "description": "Sturdy, well-worn boots suited for workshop floors and quick errands alike. Scuffed just enough to show character.",
+            "types": ["footwear"],
+            "appropriateness": "default, casual, workshop",
+            "isDefault": true,
+            "migratedFromClothingRecordId": null,
+            "archivedAt": null,
+            "createdAt": "2026-02-28T02:21:30.362Z",
+            "updatedAt": "2026-02-28T02:21:30.362Z"
+          },
+          {
+            "id": "b1a0c002-2001-4001-a001-200000000004",
+            "characterId": "f11db2bc-8cfe-4beb-a1b8-91f4c4ba9f23",
+            "title": "Coral Scarf and Cobalt Hairband",
+            "description": "Small pops of color grounding neutral work clothes in warmth — a coral scarf draped loosely at the neck or shoulders, and a cobalt hairband keeping wayward strands in check.",
+            "types": ["accessories"],
+            "appropriateness": "default, casual",
+            "isDefault": true,
+            "migratedFromClothingRecordId": null,
+            "archivedAt": null,
+            "createdAt": "2026-02-28T02:21:30.362Z",
+            "updatedAt": "2026-02-28T02:21:30.362Z"
+          }
+        ],
         "createdAt": "2026-02-28T02:21:56.136Z",
         "updatedAt": "2026-02-28T02:22:55.297Z"
       }

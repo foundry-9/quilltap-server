@@ -96,26 +96,6 @@ export type {
 } from './providers';
 
 // ============================================================================
-// Roleplay Template Utilities
-// ============================================================================
-
-export {
-  // Builder functions
-  createRoleplayTemplatePlugin,
-  createSingleTemplatePlugin,
-
-  // Validation utilities
-  validateTemplateConfig,
-  validateRoleplayTemplatePlugin,
-} from './roleplay-templates';
-
-export type {
-  // Builder option types
-  CreateRoleplayTemplatePluginOptions,
-  CreateSingleTemplatePluginOptions,
-} from './roleplay-templates';
-
-// ============================================================================
 // System Prompt Utilities
 // ============================================================================
 
@@ -166,6 +146,15 @@ export {
 } from './version';
 
 // ============================================================================
+// Character Plugin Data Types (re-exported from plugin-types)
+// ============================================================================
+
+export type {
+  CharacterPluginDataEntry,
+  CharacterPluginDataMap,
+} from '@quilltap/plugin-types';
+
+// ============================================================================
 // Package Version
 // ============================================================================
 
@@ -173,4 +162,4 @@ export {
  * Version of the plugin-utils package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_UTILS_VERSION = '1.7.0';
+export const PLUGIN_UTILS_VERSION = '2.2.1';

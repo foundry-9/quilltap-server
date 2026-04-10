@@ -33,6 +33,9 @@ import {
   rngToolDefinition,
   stateToolDefinition,
   whisperToolDefinition,
+  wardrobeListToolDefinition,
+  wardrobeUpdateOutfitToolDefinition,
+  wardrobeCreateItemToolDefinition,
   shellChdirToolDefinition,
   shellExecSyncToolDefinition,
   shellExecAsyncToolDefinition,
@@ -62,6 +65,9 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   async_result: shellAsyncResultToolDefinition,
   sudo_sync: shellSudoSyncToolDefinition,
   cp_host: shellCpHostToolDefinition,
+  list_wardrobe: wardrobeListToolDefinition,
+  update_outfit_item: wardrobeUpdateOutfitToolDefinition,
+  create_wardrobe_item: wardrobeCreateItemToolDefinition,
 };
 
 /**
@@ -187,6 +193,27 @@ const BUILT_IN_TOOLS = [
     source: 'built-in' as const,
     category: 'shell',
   },
+  {
+    id: 'list_wardrobe',
+    name: 'List Wardrobe',
+    description: 'Retrieve wardrobe items and outfit presets for the current character',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
+  {
+    id: 'update_outfit_item',
+    name: 'Update Outfit',
+    description: 'Equip or remove a wardrobe item, or apply an outfit preset',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
+  {
+    id: 'create_wardrobe_item',
+    name: 'Create Wardrobe Item',
+    description: 'Create a new wardrobe item, optionally equip it, or gift it to another character',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
   // Note: request_full_context and submit_final_response are intentionally excluded
   // - request_full_context is a safety valve that should always be available
   // - submit_final_response is an agent-mode internal tool
@@ -236,6 +263,8 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
       hasProject: boolean;
       allowsWebSearch: boolean;
       isMultiCharacter: boolean;
+      canDressThemselves: boolean;
+      canCreateOutfits: boolean;
     } | null = null;
 
     if (chatId) {
@@ -266,7 +295,25 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           ).length;
           const isMultiCharacter = activeCharacterCount > 1;
 
-          chatContext = { hasImageProfile, hasProject, allowsWebSearch, isMultiCharacter };
+          // Check wardrobe capability flags from character (default: enabled when null)
+          let canDressThemselves = true;
+          let canCreateOutfits = true;
+          if (characterParticipant?.characterId) {
+            try {
+              const character = await repos.characters.findById(characterParticipant.characterId);
+              if (character) {
+                canDressThemselves = character.canDressThemselves !== false;
+                canCreateOutfits = character.canCreateOutfits !== false;
+              }
+            } catch (charError) {
+              logger.warn('[Tools v1] Failed to load character for wardrobe check', {
+                characterId: characterParticipant.characterId,
+                error: charError instanceof Error ? charError.message : String(charError),
+              });
+            }
+          }
+
+          chatContext = { hasImageProfile, hasProject, allowsWebSearch, isMultiCharacter, canDressThemselves, canCreateOutfits };
         }
       } catch (chatError) {
         logger.warn('[Tools v1] Failed to load chat for availability check', {
@@ -431,6 +478,19 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
             if (!chatContext.isMultiCharacter) {
               tool.available = false;
               tool.unavailableReason = 'Whisper requires a multi-character chat with more than one active character';
+            }
+            break;
+          case 'list_wardrobe':
+          case 'update_outfit_item':
+            if (!chatContext.canDressThemselves) {
+              tool.available = false;
+              tool.unavailableReason = 'Character does not have wardrobe self-dressing enabled';
+            }
+            break;
+          case 'create_wardrobe_item':
+            if (!chatContext.canCreateOutfits) {
+              tool.available = false;
+              tool.unavailableReason = 'Character does not have wardrobe item creation enabled';
             }
             break;
           case 'chdir':

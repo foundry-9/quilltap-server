@@ -28,7 +28,7 @@ interface Character {
 
 /**
  * UserCharacter represents a user-controlled character that the user "plays as"
- * in the conversation. This replaces the old Persona concept.
+ * in the conversation.
  */
 interface UserCharacter {
   id: string
@@ -43,16 +43,14 @@ export interface ChatContext {
   systemPrompt: string
   firstMessage: string
   character: Character
-  /** @deprecated Use userCharacter instead */
-  persona?: UserCharacter | null
-  /** The user-controlled character the user is playing as (replaces persona) */
+  /** The user-controlled character the user is playing as */
   userCharacter?: UserCharacter | null
 }
 
 /**
  * Build chat context for initializing a new chat or generating responses
  * @param characterId - The AI-controlled character ID
- * @param userCharacterId - Optional user-controlled character ID (replaces personaId)
+ * @param userCharacterId - Optional user-controlled character ID
  * @param customScenario - Optional custom scenario override
  * @param selectedSystemPromptId - Optional specific system prompt ID from the character's prompts array
  */
@@ -70,7 +68,7 @@ export async function buildChatContext(
     throw new Error('Character not found')
   }
 
-  // Look up user-controlled character (replaces persona lookup)
+  // Look up user-controlled character
   let userCharacter: UserCharacter | null = null
   if (userCharacterId) {
     const uc = await repos.characters.findById(userCharacterId)
@@ -104,7 +102,7 @@ export async function buildChatContext(
   // Use the scenario explicitly provided by the caller (already resolved from scenarioId or custom text)
   const resolvedScenario = customScenario || undefined
 
-  // Build system prompt (pass userCharacter as 'persona' for template compatibility)
+  // Build system prompt
   const systemPrompt = buildSystemPrompt({
     character,
     userCharacter: userCharacter || undefined,
@@ -116,10 +114,9 @@ export async function buildChatContext(
   const defaultSystemPrompt = getSelectedOrDefaultSystemPrompt(character, selectedSystemPromptId)
 
   // Process first message with templates
-  // Note: processCharacterTemplates expects 'persona' shape for {{user}} template variable
   const processedCharacter = processCharacterTemplates({
     character,
-    persona: userCharacter ? { name: userCharacter.name, description: userCharacter.description } : undefined,
+    userCharacter: userCharacter ? { name: userCharacter.name, description: userCharacter.description } : undefined,
     scenario: resolvedScenario,
     systemPrompt: defaultSystemPrompt,
   })
@@ -129,7 +126,6 @@ export async function buildChatContext(
     systemPrompt,
     firstMessage,
     character,
-    persona: userCharacter || null,  // For backwards compatibility
     userCharacter: userCharacter || null,
   }
 }
@@ -182,10 +178,9 @@ function buildSystemPrompt({
   const systemPromptContent = getSelectedOrDefaultSystemPrompt(character, selectedSystemPromptId)
 
   // Process all character templates with the current context
-  // Note: processCharacterTemplates expects 'persona' shape for {{user}} template variable
   const processedCharacter = processCharacterTemplates({
     character,
-    persona: userCharacter ? { name: userCharacter.name, description: userCharacter.description } : undefined,
+    userCharacter: userCharacter ? { name: userCharacter.name, description: userCharacter.description } : undefined,
     scenario,
     systemPrompt: systemPromptContent,
   })

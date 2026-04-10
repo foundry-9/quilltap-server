@@ -34,8 +34,6 @@ export interface MemoryExtractionPayload {
   assistantMessage: string;
   sourceMessageId: string;
   connectionProfileId: string;
-  /** @deprecated Use userCharacterId instead */
-  personaId?: string;
   /** User character ID - who the memory is about (the user-controlled character) */
   userCharacterId?: string;
 }
@@ -128,6 +126,18 @@ export interface StoryBackgroundGenerationPayload {
   sceneContext?: string;
   /** Optional project ID if the chat belongs to a project */
   projectId?: string | null;
+}
+
+/**
+ * Payload for character avatar generation job
+ */
+export interface CharacterAvatarGenerationPayload {
+  /** Chat ID where the outfit changed */
+  chatId: string;
+  /** Character ID to generate avatar for */
+  characterId: string;
+  /** Image profile ID to use for generation */
+  imageProfileId: string;
 }
 
 /**
@@ -526,6 +536,51 @@ export async function cancelJob(jobId: string): Promise<boolean> {
 export async function getPendingJobsForChat(chatId: string) {
   const repos = getRepositories();
   return repos.backgroundJobs.findPendingForChat(chatId);
+}
+
+/**
+ * Enqueue a character avatar generation job.
+ * Skips if there's already a pending/processing avatar job for the same chat+character.
+ */
+export async function enqueueCharacterAvatarGeneration(
+  userId: string,
+  payload: CharacterAvatarGenerationPayload,
+  options?: EnqueueJobOptions
+): Promise<{ jobId: string; isNew: boolean }> {
+  const repos = getRepositories();
+
+  // Dedup: skip if there's already a pending/processing avatar job for this chat+character
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existingJob = pendingJobs.find(
+    job => job.type === 'CHARACTER_AVATAR_GENERATION'
+      && (job.payload as unknown as CharacterAvatarGenerationPayload).characterId === payload.characterId
+  );
+
+  if (existingJob) {
+    logger.info('[CharacterAvatar] Reusing existing pending job', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      characterId: payload.characterId,
+      existingJobId: existingJob.id,
+    });
+    return { jobId: existingJob.id, isNew: false };
+  }
+
+  const jobId = await enqueueJob(
+    userId,
+    'CHARACTER_AVATAR_GENERATION',
+    payload as unknown as Record<string, unknown>,
+    options
+  );
+
+  logger.info('[CharacterAvatar] Avatar generation job enqueued', {
+    context: 'background-jobs.queue',
+    chatId: payload.chatId,
+    characterId: payload.characterId,
+    jobId,
+  });
+
+  return { jobId, isNew: true };
 }
 
 /**

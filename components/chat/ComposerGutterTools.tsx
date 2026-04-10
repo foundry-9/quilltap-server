@@ -8,10 +8,10 @@ interface ComposerGutterToolsProps {
   onAttachFileClick: () => void
   /** Whether file upload is in progress */
   uploadingFile?: boolean
-  /** Callback to open image generation modal */
-  onGenerateImageClick: () => void
-  /** Whether the generate image button should be shown */
-  hasImageProfile: boolean
+  /** Callback to open library file picker modal */
+  onLibraryFileClick: () => void
+  /** Callback to open standalone image generation dialog */
+  onStandaloneGenerateImageClick: () => void
   /** Chat ID for RNG API calls */
   chatId: string
   /** Callback when RNG result is ready */
@@ -23,18 +23,18 @@ interface ComposerGutterToolsProps {
 /**
  * Gutter tools for the chat composer.
  *
- * Displays small icon buttons for frequently-used message-level tools:
- * - Attach file (paperclip)
- * - Generate image (image icon) - only shown when hasImageProfile is true
- * - RNG (dice icon)
+ * Displays small icon buttons for frequently-used message-level tools
+ * in a 2x2 grid:
+ * - Row 1: Library file (document), Generate image (camera)
+ * - Row 2: Attach file (paperclip), RNG (dice)
  *
  * These are positioned in the left gutter of the composer for quick access.
  */
 export function ComposerGutterTools({
   onAttachFileClick,
   uploadingFile = false,
-  onGenerateImageClick,
-  hasImageProfile,
+  onLibraryFileClick,
+  onStandaloneGenerateImageClick,
   chatId,
   onPendingToolResult,
   disabled = false,
@@ -43,7 +43,37 @@ export function ComposerGutterTools({
 
   return (
     <div className="qt-composer-gutter-tools">
-      {/* Attach File */}
+      {/* Row 1, Col 1: Library File */}
+      <button
+        type="button"
+        onClick={onLibraryFileClick}
+        disabled={disabled}
+        className="qt-composer-gutter-button"
+        title="Attach file from library"
+        aria-label="Attach file from library"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11v6m-3-3h6" />
+        </svg>
+      </button>
+
+      {/* Row 1, Col 2: Generate Image */}
+      <button
+        type="button"
+        onClick={onStandaloneGenerateImageClick}
+        disabled={disabled}
+        className="qt-composer-gutter-button"
+        title="Generate image"
+        aria-label="Generate image"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+          <circle cx="12" cy="13" r="3" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
+        </svg>
+      </button>
+
+      {/* Row 2, Col 1: Attach File */}
       <button
         type="button"
         onClick={onAttachFileClick}
@@ -63,23 +93,7 @@ export function ComposerGutterTools({
         )}
       </button>
 
-      {/* Generate Image - only shown when character has image profile */}
-      {hasImageProfile && (
-        <button
-          type="button"
-          onClick={onGenerateImageClick}
-          disabled={disabled}
-          className="qt-composer-gutter-button"
-          title="Generate image"
-          aria-label="Generate image"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-        </button>
-      )}
-
-      {/* RNG with dropdown */}
+      {/* Row 2, Col 2: RNG with dropdown */}
       <div ref={rngDropdownRef} className="qt-composer-gutter-rng">
         <RngDropdown
           chatId={chatId}

@@ -18,7 +18,7 @@ export interface RecentChat {
   storyBackgroundUrl?: string | null
   participants: Array<{
     id: string
-    type: 'CHARACTER' | 'PERSONA'
+    type: 'CHARACTER'
     isActive: boolean
     displayOrder: number
     character?: {
@@ -32,11 +32,6 @@ export interface RecentChat {
         url?: string
       } | null
       tags?: string[]
-    } | null
-    persona?: {
-      id: string
-      name: string
-      title?: string | null
     } | null
   }>
   _count: {

@@ -99,6 +99,74 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * Find memories for a character with pagination support.
+   * Returns a page of memories and the total count matching the filter.
+   *
+   * @param characterId The character ID
+   * @param options Pagination, sorting, and filtering options
+   * @returns Promise with memories array and totalCount
+   */
+  async findByCharacterIdPaginated(
+    characterId: string,
+    options: {
+      limit: number
+      offset: number
+      sortBy?: string
+      sortOrder?: 'asc' | 'desc'
+      search?: string
+      source?: 'AUTO' | 'MANUAL'
+      minImportance?: number
+    }
+  ): Promise<{ memories: Memory[]; totalCount: number }> {
+    return this.safeQuery(
+      async () => {
+        const { limit, offset, sortBy = 'createdAt', sortOrder = 'desc', search, source, minImportance } = options;
+
+        // Build filter
+        const filter: TypedQueryFilter<Memory> = { characterId };
+        if (source) {
+          (filter as any).source = source;
+        }
+        if (minImportance !== undefined) {
+          (filter as any).importance = { $gte: minImportance };
+        }
+
+        // Get total count before pagination (but after filtering except search,
+        // since search is applied in-memory)
+        let allMatching = await this.findByFilter(filter, {
+          sort: { [sortBy]: sortOrder === 'desc' ? -1 : 1 },
+        });
+
+        // Apply text search in-memory (same as existing behavior)
+        if (search) {
+          const searchLower = search.toLowerCase();
+          allMatching = allMatching.filter((memory) =>
+            memory.content.toLowerCase().includes(searchLower) ||
+            memory.summary.toLowerCase().includes(searchLower) ||
+            memory.keywords.some((k) => k.toLowerCase().includes(searchLower))
+          );
+        }
+
+        const totalCount = allMatching.length;
+        const memories = allMatching.slice(offset, offset + limit);
+
+        logger.debug('[Memories Repository] Paginated query', {
+          characterId,
+          totalCount,
+          limit,
+          offset,
+          returned: memories.length,
+        });
+
+        return { memories, totalCount };
+      },
+      'Error finding paginated memories for character',
+      { characterId, limit: options.limit, offset: options.offset },
+      { memories: [], totalCount: 0 }
+    );
+  }
+
+  /**
    * Find memories containing any of the specified keywords
    * @param characterId The character ID
    * @param keywords Array of keywords to search for
@@ -705,41 +773,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   // ============================================================================
 
   /**
-   * Find all memories for a specific persona
-   * @deprecated Use findByAboutCharacterId instead.
-   * Characters Not Personas - Phase 7: personaId is migrated to aboutCharacterId.
-   * @param personaId The persona ID
-   * @returns Promise<Memory[]> Array of memories associated with the persona
-   */
-  async findByPersonaId(personaId: string): Promise<Memory[]> {
-    return this.safeQuery(
-      async () => {
-        const memories = await this.findByFilter({ personaId });
-        return memories;
-      },
-      'Error finding memories by persona ID',
-      { personaId },
-      []
-    );
-  }
-
-  /**
-   * Find all memories about a specific character (including former personas)
-   * Characters Not Personas - Phase 7: This replaces findByPersonaId.
-   * After migration, aboutCharacterId includes both inter-character memories
-   * and former persona-related memories.
+   * Find all memories about a specific character
    * @param aboutCharacterId The character ID this memory is about
    * @returns Promise<Memory[]> Array of memories about the character
    */
   async findByAboutCharacterId(aboutCharacterId: string): Promise<Memory[]> {
     return this.safeQuery(
       async () => {
-        // Query both aboutCharacterId (new) and personaId (legacy, for backward compat)
         const memories = await this.findByFilter({
-          $or: [
-            { aboutCharacterId },
-            { personaId: aboutCharacterId }, // Legacy support during migration
-          ],
+          aboutCharacterId,
         });
         return memories;
       },
@@ -753,14 +795,12 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * Count memories containing specific text
    * Searches in content, summary, and keywords fields
    * @param characterId Optional character ID filter
-   * @param personaId Optional persona ID filter
    * @param chatId Optional chat ID filter
    * @param searchText Text to search for
    * @returns Number of memories containing the text
    */
   async countMemoriesWithText(
     characterId: string | null,
-    personaId: string | null,
     chatId: string | null,
     searchText: string
   ): Promise<number> {
@@ -786,14 +826,13 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         };
 
         if (characterId) filter.characterId = characterId;
-        if (personaId) filter.personaId = personaId;
         if (chatId) filter.chatId = chatId;
 
         const count = await this.count(filter);
         return count;
       },
       'Error counting memories with text',
-      { characterId, personaId, chatId },
+      { characterId, chatId },
       0
     );
   }
@@ -802,14 +841,12 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * Find memories containing specific text
    * Searches in content, summary, and keywords fields
    * @param characterId Optional character ID filter
-   * @param personaId Optional persona ID filter
    * @param chatId Optional chat ID filter
    * @param searchText Text to search for
    * @returns Array of memories containing the text
    */
   async findMemoriesWithText(
     characterId: string | null,
-    personaId: string | null,
     chatId: string | null,
     searchText: string
   ): Promise<Memory[]> {
@@ -835,14 +872,13 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         };
 
         if (characterId) filter.characterId = characterId;
-        if (personaId) filter.personaId = personaId;
         if (chatId) filter.chatId = chatId;
 
         const memories = await this.findByFilter(filter);
         return memories;
       },
       'Error finding memories with text',
-      { characterId, personaId, chatId },
+      { characterId, chatId },
       []
     );
   }

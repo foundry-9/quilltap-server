@@ -100,6 +100,35 @@
   }
 
   /**
+   * Wardrobe action notice — inline summary of outfit changes (equip, unequip, gift).
+   * Distinguished from whispers (dashed purple) and silent (dotted teal) by a double
+   * border and warm amber/gold tones, evoking a dressing room bulletin.
+   */
+  .qt-chat-wardrobe-notice {
+    background: var(--qt-chat-wardrobe-bg);
+    color: var(--qt-chat-wardrobe-fg);
+    border: 3px double var(--qt-chat-wardrobe-border);
+    border-radius: var(--radius-md, 0.375rem);
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .qt-chat-wardrobe-label {
+    font-size: 0.6875rem;
+    color: var(--qt-chat-wardrobe-label-fg);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+  }
+
+  .qt-chat-wardrobe-summary {
+    color: var(--qt-chat-wardrobe-fg);
+  }
+
+  /**
    * System message - notifications, status updates
    */
   .qt-chat-message-system {
@@ -462,8 +491,10 @@
    * Displays icons horizontally with consistent spacing
    */
   .qt-composer-gutter-tools {
-    @apply flex items-center;
-    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 0.25rem 0.5rem;
+    align-items: center;
   }
 
   /**
@@ -500,6 +531,60 @@
    */
   .qt-composer-gutter-rng {
     @apply relative;
+  }
+
+  /**
+   * Vertical column wrapper for outfit notify button + gutter tools.
+   * Stacks the notify button above the 2x2 gutter grid.
+   */
+  .qt-composer-gutter-column {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  /**
+   * Outfit notification button - bright, attention-grabbing pill
+   * that appears above the gutter tools when outfit changes are pending.
+   */
+  .qt-composer-outfit-notify-button {
+    @apply inline-flex items-center gap-1;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+    @apply transition-all duration-200;
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--radius-full, 9999px);
+    border: 1px solid var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+    color: var(--color-primary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.25;
+    animation: qt-outfit-notify-pulse 2s ease-in-out infinite;
+  }
+
+  .qt-composer-outfit-notify-button:hover {
+    background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 40%, transparent);
+  }
+
+  .qt-composer-outfit-notify-label {
+    letter-spacing: 0.02em;
+  }
+
+  .qt-composer-outfit-notify-icon {
+    font-size: 0.875rem;
+    line-height: 1;
+  }
+
+  @keyframes qt-outfit-notify-pulse {
+    0%, 100% {
+      box-shadow: 0 0 4px color-mix(in srgb, var(--color-primary) 20%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 12px color-mix(in srgb, var(--color-primary) 50%, transparent);
+    }
   }
 
   /* ==========================================================================
@@ -638,6 +723,23 @@
 
   .qt-tool-palette-badge-on:hover:not(:disabled) {
     background: color-mix(in srgb, var(--qt-badge-enabled-bg) 120%, transparent);
+  }
+
+  .qt-tool-palette-inline-select {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md;
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    border: 1px solid transparent;
+  }
+
+  .qt-tool-palette-select {
+    @apply text-xs bg-transparent border-none outline-none cursor-pointer;
+    color: var(--color-foreground);
+    max-width: 160px;
+  }
+
+  .qt-tool-palette-select:disabled {
+    @apply opacity-50 cursor-not-allowed;
   }
 
   /* ==========================================================================
@@ -1480,6 +1582,25 @@
   .qt-participant-status-overlay-absent {
     background: var(--color-muted);
     color: var(--color-muted-foreground);
+  }
+
+  /**
+   * Regenerate avatar button — tiny camera icon anchored below the avatar.
+   * Semi-transparent until hovered so it doesn't fight with the portrait.
+   */
+  .qt-participant-avatar-regenerate {
+    @apply absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer transition-all;
+    background: var(--qt-surface-alt, var(--color-muted));
+    color: var(--qt-text-secondary, var(--color-muted-foreground));
+    border: 1.5px solid var(--color-background);
+    opacity: 0.6;
+    z-index: 3;
+  }
+
+  .qt-participant-avatar-regenerate:hover {
+    opacity: 1;
+    background: var(--qt-accent-bg, var(--color-primary));
+    color: var(--qt-accent-fg, var(--color-primary-foreground));
   }
 
   /**

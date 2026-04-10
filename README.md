@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting everything between sessions. 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.1.1-green.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.2.0-green.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.com/channels/1476289075152556205/1476290238187049184)
@@ -167,7 +167,9 @@ Semantic search finds content by meaning across your entire project: not just th
 
 Create AI characters with personality, backstory, system prompts, pronouns, aliases, and physical descriptions. Each character maintains their own long-term memory — they remember your conversations, your preferences, your history together. When you come back after a week away, they know what you talked about last time. In multi-character chats, characters also form memories about each other — learning names, personalities, and shared experiences the way people do.
 
-Characters aren't limited to a single personality template. Each can have multiple named system prompts and scenarios, letting you shift context — the same companion in different settings, or different facets of the same relationship. The AI Character Import wizard can generate a complete character from source material (wiki pages, documents, freeform text). The **Non-Quilltap Prompt generator** exports any character as a standalone system prompt for use in other AI tools — taking your character with you when you need to.
+Characters aren't limited to a single personality template. Each can have multiple named system prompts and scenarios, letting you shift context — the same companion in different settings, or different facets of the same relationship. The AI Character Import wizard can generate a complete character from source material (wiki pages, documents, freeform text). The **Non-Quilltap Prompt generator** exports any character as a standalone system prompt for use in other AI tools — taking your character with you when you need to. Plugins can store per-character metadata for their own use via the character plugin data API.
+
+The **wardrobe system** gives characters a persistent closet — tops, bottoms, footwear, and accessories that the LLM knows about and can reference. Create items manually, generate them from the AI Wizard or lore, or **import from an image** using vision AI to analyze a photo and propose wardrobe items. Save outfit presets, gift items between characters, and let the LLM choose what to wear when a chat starts. Outfit changes appear as inline notices in the conversation. A shared archetype library lets you define items once and reuse them across characters.
 
 The Concierge system ensures that your conversations are never arbitrarily refused. Instead of blocking content, it routes intelligently — detecting content type and, when configured, directing requests to providers that can handle them. You set the boundaries. The software respects them.
 
@@ -181,7 +183,7 @@ Proactive recall lets characters analyze recent conversation for relevant memori
 
 ### Multi-Character & Roleplay
 
-Multi-character chats with a turn-order sidebar, four-state participation (active, silent, absent, removed), identity reinforcement, impersonation, and swipe alternatives. Private whisper messages between characters. SillyTavern character and chat import is fully supported.
+Multi-character chats with a turn-order sidebar, four-state participation (active, silent, absent, removed), identity reinforcement, impersonation, and swipe alternatives. Private whisper messages between characters. SillyTavern character and chat import is fully supported. Native roleplay templates with configurable narration delimiters — no plugins required.
 
 ### Gaming & Interactivity
 
@@ -189,7 +191,7 @@ Persistent chat state for inventories, stats, scores, and any structured data. P
 
 ### Image Generation
 
-AI-generated background images for chats based on scene context, with character appearance resolution using clothing and physical descriptions. The Scene State Tracker automatically maintains a structured summary of the current scene after every turn, so image generation always reflects what's actually happening.
+AI-generated background images for chats based on scene context, with character appearance resolution using clothing and physical descriptions. The Scene State Tracker automatically maintains a structured summary of the current scene after every turn, so image generation always reflects what's actually happening. Per-conversation avatar generation creates unique portraits for each character in a chat, with a manual regeneration button. Projects can set a default image generation profile that applies to all their chats.
 
 ---
 

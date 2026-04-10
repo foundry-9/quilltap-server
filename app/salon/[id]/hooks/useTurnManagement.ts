@@ -120,7 +120,7 @@ export function useTurnManagement(
   onUnpause?: () => Promise<void>,
 ) {
   const hasActiveCharacters = useMemo(() => {
-    return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive).length > 0
+    return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive && p.controlledBy !== 'user').length > 0
   }, [participantsAsBase])
 
   const handleNudge = useCallback(async (participantId: string) => {
@@ -139,7 +139,7 @@ export function useTurnManagement(
       await onUnpause()
     }
 
-    const participantName = participant?.character?.name || participant?.persona?.name || 'Participant'
+    const participantName = participant?.character?.name || 'Participant'
 
     // Add ephemeral nudge notification
     const ephemeral = createEphemeralMessage('nudge', participantId, participantName)

@@ -40,7 +40,6 @@ function transformProjectChatToCardData(chat: ProjectChat): ChatCardData {
     updatedAt: chat.updatedAt,
     // Project is null since we're already in project context
     project: null,
-    persona: null,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     isDangerousChat: chat.isDangerousChat === true,
   }

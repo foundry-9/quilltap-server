@@ -238,7 +238,6 @@ describe('quilltap-export-service', () => {
             id: generateId(),
             type: 'CHARACTER',
             characterId: character.id,
-            personaId: null,
             connectionProfileId: generateId(),
             imageProfileId: null,
             roleplayTemplateId: null,

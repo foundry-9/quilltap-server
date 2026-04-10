@@ -29,6 +29,7 @@ export const BackgroundJobTypeEnum = z.enum([
   'STORY_BACKGROUND_GENERATION', // Generate story background image for chat/project
   'CHAT_DANGER_CLASSIFICATION', // Classify chat-level danger from context summary
   'SCENE_STATE_TRACKING', // Track scene state (location, character actions, appearance, clothing)
+  'CHARACTER_AVATAR_GENERATION', // Generate character avatar based on equipped wardrobe items
 ]);
 export type BackgroundJobType = z.infer<typeof BackgroundJobTypeEnum>;
 

@@ -273,19 +273,19 @@ describe('PhotoGalleryModal - Deleted Image Handling', () => {
       })
     })
 
-    it('should handle deleted images in persona mode', async () => {
+    it('should handle deleted images in user-character mode', async () => {
       render(
         <PhotoGalleryModal
-          mode="persona"
+          mode="user-character"
           isOpen={true}
           onClose={jest.fn()}
-          personaId="persona-1"
-          personaName="Test Persona"
+          userCharacterId="user-char-1"
+          userCharacterName="Test User Character"
         />
       )
 
       await waitFor(() => {
-        expect(screen.getByText("Test Persona's Photos")).toBeInTheDocument()
+        expect(screen.getByText("Test User Character's Photos")).toBeInTheDocument()
       })
 
       await waitFor(() => {

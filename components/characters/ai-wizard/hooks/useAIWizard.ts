@@ -141,6 +141,9 @@ export function useAIWizard({
       fields.push('physicalDescription')
     }
 
+    // Wardrobe items are always available
+    fields.push('wardrobeItems')
+
     return fields
   }, [characterName, currentData, descriptionSource])
 

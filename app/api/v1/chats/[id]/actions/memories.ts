@@ -112,7 +112,7 @@ export async function handleQueueMemories(
     };
 
     // Helper to get user name for user messages
-    const personaName = 'User';
+    const userCharacterName = 'User';
 
     pairsWithCharacter = [];
 
@@ -156,7 +156,7 @@ export async function handleQueueMemories(
         } else {
           // Multi-character case: include intervening messages for context
           const contextParts: string[] = [];
-          contextParts.push(`${personaName}: ${userMessage.content}`);
+          contextParts.push(`${userCharacterName}: ${userMessage.content}`);
 
           // Add all messages between user message and this assistant message
           for (let j = lastUserMessageIndex + 1; j < i; j++) {

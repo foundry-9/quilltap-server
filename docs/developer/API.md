@@ -1,6 +1,6 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v4.0-dev.
+Complete API reference for Quilltap v4.2+.
 
 ## Table of Contents
 
@@ -24,7 +24,11 @@ Complete API reference for Quilltap v4.0-dev.
   - [Character Descriptions](#character-descriptions)
   - [Character System Prompts](#character-system-prompts)
   - [Character Scenarios](#character-scenarios)
+  - [Character Plugin Data](#character-plugin-data)
   - [NPCs](#npcs)
+  - [Wardrobe (Archetypes)](#wardrobe-archetypes)
+  - [Character Wardrobe](#character-wardrobe)
+  - [Outfit Presets](#outfit-presets)
   - [Chats](#chats)
   - [Chat Files](#chat-files)
   - [Chat File Operations](#chat-file-operations)
@@ -35,6 +39,7 @@ Complete API reference for Quilltap v4.0-dev.
   - [Files & Images (Legacy)](#files--images)
   - [Folders](#folders)
   - [Templates](#templates)
+  - [Images](#images)
   - [System Backup & Restore](#system-backup--restore)
   - [System Data Directory](#system-data-directory)
   - [System Unlock](#system-unlock)
@@ -1117,6 +1122,90 @@ Deletes a clothing record. Returns `{ success: true }`.
 
 ---
 
+#### Character Plugin Data
+
+Per-character per-plugin JSON metadata storage. Plugins can store arbitrary JSON data scoped to individual characters.
+
+##### `GET /api/v1/characters/[id]/plugin-data`
+
+Get all plugin data for a character.
+
+**Response**: `200 OK`
+
+```json
+{
+  "pluginData": {
+    "my-plugin": { "key": "value" },
+    "another-plugin": { "setting": true }
+  }
+}
+```
+
+##### `POST /api/v1/characters/[id]/plugin-data`
+
+Create or upsert plugin data for a character.
+
+**Request Body**:
+
+```json
+{
+  "pluginName": "my-plugin",
+  "data": { "key": "value" }
+}
+```
+
+**Response**: `201 Created`
+
+```json
+{
+  "pluginData": {
+    "id": "uuid",
+    "characterId": "char-uuid",
+    "pluginName": "my-plugin",
+    "data": { "key": "value" }
+  }
+}
+```
+
+##### `GET /api/v1/characters/[id]/plugin-data/[pluginName]`
+
+Get plugin data for a specific plugin.
+
+**Response**: `200 OK`
+
+```json
+{
+  "pluginData": {
+    "id": "uuid",
+    "characterId": "char-uuid",
+    "pluginName": "my-plugin",
+    "data": { "key": "value" }
+  }
+}
+```
+
+##### `PUT /api/v1/characters/[id]/plugin-data/[pluginName]`
+
+Replace entire plugin data object.
+
+**Request Body**: Any valid JSON value.
+
+**Response**: `200 OK` with updated plugin data object.
+
+##### `DELETE /api/v1/characters/[id]/plugin-data/[pluginName]`
+
+Delete plugin data for a specific plugin.
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true
+}
+```
+
+---
+
 ### Character Descriptions
 
 Multi-tiered description records for characters, providing varying levels of detail for different context window sizes.
@@ -1407,6 +1496,226 @@ List all NPCs.
 #### `POST /api/v1/characters` with `npc: true`
 
 Create an NPC character.
+
+---
+
+### Wardrobe (Archetypes)
+
+Global archetype wardrobe items that can be shared across characters.
+
+#### `GET /api/v1/wardrobe`
+
+List all archetype wardrobe items.
+
+**Response**: `200 OK`
+
+```json
+{
+  "wardrobeItems": [
+    {
+      "id": "item-uuid",
+      "title": "Leather Jacket",
+      "description": "A well-worn leather jacket...",
+      "types": ["top"],
+      "appropriateness": "casual",
+      "isDefault": false,
+      "characterId": null,
+      "archivedAt": null
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/wardrobe`
+
+Create a new archetype wardrobe item.
+
+**Request Body**:
+
+```json
+{
+  "title": "Leather Jacket",
+  "description": "A well-worn leather jacket...",
+  "types": ["top"],
+  "appropriateness": "casual",
+  "isDefault": false
+}
+```
+
+**Response**: `201 Created`
+
+#### `GET /api/v1/wardrobe/[itemId]`
+
+Get a specific archetype wardrobe item.
+
+#### `PUT /api/v1/wardrobe/[itemId]`
+
+Update an archetype wardrobe item. All fields optional.
+
+#### `DELETE /api/v1/wardrobe/[itemId]`
+
+Delete an archetype wardrobe item. Cleans up all character references first.
+
+#### `POST /api/v1/wardrobe/analyze-image`
+
+Analyze an image using a vision LLM to suggest wardrobe items.
+
+**Request Body**:
+
+```json
+{
+  "image": "<base64-encoded image data, max 14MB>",
+  "mimeType": "image/jpeg",
+  "guidance": "Optional guidance for the analysis"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "proposedItems": [...],
+  "provider": "OPENAI",
+  "model": "gpt-4o"
+}
+```
+
+---
+
+### Character Wardrobe
+
+Per-character wardrobe items. Same schema as archetypes but scoped to a specific character.
+
+#### `GET /api/v1/characters/[id]/wardrobe`
+
+Get all wardrobe items for a character.
+
+**Response**: `200 OK`
+
+```json
+{
+  "wardrobeItems": [...]
+}
+```
+
+#### `POST /api/v1/characters/[id]/wardrobe`
+
+Create a new character-specific wardrobe item.
+
+**Request Body**:
+
+```json
+{
+  "title": "Evening Gown",
+  "description": "A floor-length silk gown...",
+  "types": ["top", "bottom"],
+  "appropriateness": "formal",
+  "isDefault": false
+}
+```
+
+**Response**: `201 Created`
+
+#### `GET /api/v1/characters/[id]/wardrobe/[itemId]`
+
+Get a specific wardrobe item for a character.
+
+#### `PUT /api/v1/characters/[id]/wardrobe/[itemId]`
+
+Update a character wardrobe item. All fields optional.
+
+#### `DELETE /api/v1/characters/[id]/wardrobe/[itemId]`
+
+Delete a character wardrobe item.
+
+---
+
+### Outfit Presets
+
+Named outfit combinations for characters. Each preset maps wardrobe items to equipment slots.
+
+#### `GET /api/v1/characters/[id]/wardrobe/presets`
+
+List outfit presets for a character.
+
+**Response**: `200 OK`
+
+```json
+{
+  "presets": [
+    {
+      "id": "preset-uuid",
+      "characterId": "char-uuid",
+      "name": "Casual Friday",
+      "description": "Relaxed office attire",
+      "slots": {
+        "top": "item-uuid-1",
+        "bottom": "item-uuid-2",
+        "footwear": "item-uuid-3",
+        "accessories": null
+      }
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/characters/[id]/wardrobe/presets`
+
+Create a new outfit preset.
+
+**Request Body**:
+
+```json
+{
+  "name": "Casual Friday",
+  "description": "Relaxed office attire",
+  "slots": {
+    "top": "item-uuid-1",
+    "bottom": "item-uuid-2",
+    "footwear": "item-uuid-3",
+    "accessories": null
+  }
+}
+```
+
+**Response**: `201 Created`
+
+#### `GET /api/v1/characters/[id]/wardrobe/presets/[presetId]`
+
+Get a specific outfit preset.
+
+#### `PUT /api/v1/characters/[id]/wardrobe/presets/[presetId]`
+
+Update an outfit preset. All fields optional.
+
+#### `DELETE /api/v1/characters/[id]/wardrobe/presets/[presetId]`
+
+Delete an outfit preset.
+
+#### `POST /api/v1/characters/[id]/wardrobe/presets/[presetId]?action=apply`
+
+Apply a preset outfit to a chat.
+
+**Request Body**:
+
+```json
+{
+  "chatId": "chat-uuid"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "equipped": {
+    "top": "item-uuid-1",
+    "bottom": "item-uuid-2",
+    "footwear": "item-uuid-3",
+    "accessories": null
+  }
+}
+```
 
 ---
 
@@ -1718,6 +2027,264 @@ Set the active speaker when impersonating multiple characters.
 ```json
 {
   "participantId": "participant-uuid"
+}
+```
+
+---
+
+### Chat Avatars
+
+#### `POST /api/v1/chats/[id]?action=get-avatars`
+
+Get all avatar overrides for characters in this chat.
+
+**Response**: `200 OK`
+
+```json
+{
+  "data": [
+    {
+      "chatId": "chat-uuid",
+      "characterId": "char-uuid",
+      "imageId": "file-uuid",
+      "character": { "id": "char-uuid", "name": "Alice" },
+      "image": { "id": "file-uuid", "filepath": "/api/v1/files/file-uuid", "url": null }
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=set-avatar`
+
+Set avatar override for a character in a chat.
+
+**Request Body**:
+
+```json
+{
+  "characterId": "char-uuid",
+  "imageId": "file-uuid"
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=remove-avatar`
+
+Remove avatar override for a character in a chat.
+
+**Request Body**:
+
+```json
+{
+  "characterId": "char-uuid"
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=toggle-avatar-generation`
+
+Toggle per-conversation AI avatar generation. When enabling, queues generation for all LLM characters.
+
+**Response**: `200 OK`
+
+```json
+{
+  "avatarGenerationEnabled": true
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=regenerate-avatar`
+
+Queue avatar regeneration for a specific character in this chat.
+
+**Request Body**:
+
+```json
+{
+  "characterId": "char-uuid"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Avatar regeneration queued",
+  "queued": true
+}
+```
+
+---
+
+### Chat State
+
+#### `POST /api/v1/chats/[id]?action=get-state`
+
+Get chat state (merged with project state if chat belongs to a project).
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "state": {},
+  "chatState": {},
+  "projectState": {},
+  "projectId": "project-uuid"
+}
+```
+
+#### `PUT /api/v1/chats/[id]?action=set-state`
+
+Replace entire chat state.
+
+**Request Body**:
+
+```json
+{
+  "state": { "hp": 100, "gold": 50 }
+}
+```
+
+#### `DELETE /api/v1/chats/[id]?action=reset-state`
+
+Reset chat state to empty object. Returns previous state.
+
+---
+
+### Chat Wardrobe & Outfits
+
+#### `POST /api/v1/chats/[id]?action=outfit`
+
+Get full equipped outfit state for all characters in this chat.
+
+**Response**: `200 OK`
+
+```json
+{
+  "equippedOutfit": {
+    "char-uuid-1": { "top": "item-uuid", "bottom": null, "footwear": null, "accessories": null },
+    "char-uuid-2": { "top": null, "bottom": null, "footwear": null, "accessories": null }
+  }
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=equip`
+
+Equip or unequip a wardrobe item in a slot. Set `itemId` to `null` to unequip.
+
+**Request Body**:
+
+```json
+{
+  "characterId": "char-uuid",
+  "slot": "top",
+  "itemId": "item-uuid"
+}
+```
+
+---
+
+### Chat Tools & Automation
+
+#### `POST /api/v1/chats/[id]?action=add-tool-result`
+
+Add a tool result as a TOOL message to the chat.
+
+**Request Body**:
+
+```json
+{
+  "tool": "dice_roll",
+  "initiatedBy": "user",
+  "prompt": "Roll 2d6",
+  "result": { "rolls": [3, 5], "sum": 8 },
+  "images": []
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=run-tool`
+
+Execute an arbitrary tool and add the result as a message.
+
+**Request Body**:
+
+```json
+{
+  "toolName": "dice_roll",
+  "arguments": { "sides": 20 },
+  "characterId": "char-uuid"
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=rng`
+
+Execute an RNG operation (dice, coin flip, spin the bottle) and add result as a message.
+
+**Request Body**:
+
+```json
+{
+  "type": 20,
+  "rolls": 1,
+  "preview": false
+}
+```
+
+`type` accepts a number (2–1000 for dice sides), `"flip_coin"`, or `"spin_the_bottle"`. Set `preview: true` to get the result without adding a message.
+
+#### `POST /api/v1/chats/[id]?action=queue-memories`
+
+Queue memory extraction jobs for message pairs.
+
+**Request Body**:
+
+```json
+{
+  "characterId": "char-uuid",
+  "characterName": "Alice",
+  "messagePairs": [
+    {
+      "userMessageId": "msg-uuid-1",
+      "assistantMessageId": "msg-uuid-2",
+      "userContent": "...",
+      "assistantContent": "..."
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/chats/[id]?action=toggle-agent-mode`
+
+Toggle agent mode for this chat, or set to inherit from project/character.
+
+**Request Body**:
+
+```json
+{
+  "enabled": true
+}
+```
+
+Set `enabled` to `null` to inherit from project or character settings.
+
+#### `POST /api/v1/chats/[id]?action=reclassify-danger`
+
+Clear danger classification and re-queue classification job for messages in this chat.
+
+#### `POST /api/v1/chats/[id]?action=get-background`
+
+Get the current story background for the chat.
+
+#### `POST /api/v1/chats/[id]?action=regenerate-background`
+
+Queue a story background regeneration job.
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Background regeneration queued",
+  "queued": true,
+  "jobId": "job-uuid"
 }
 ```
 
@@ -2544,6 +3111,131 @@ Per-chat roleplay formatting templates.
 - `GET /api/v1/roleplay-templates/[id]` - Get template
 - `PUT /api/v1/roleplay-templates/[id]` - Update template
 - `DELETE /api/v1/roleplay-templates/[id]` - Delete template
+
+---
+
+### Images
+
+Image management endpoints for uploads, AI generation, and tagging.
+
+#### `GET /api/v1/images`
+
+List all images.
+
+**Query Parameters**:
+- `tagId` - Filter by tag
+
+**Response**: `200 OK`
+
+```json
+{
+  "data": [
+    {
+      "id": "file-uuid",
+      "filename": "portrait.webp",
+      "filepath": "/api/v1/files/file-uuid",
+      "url": null,
+      "mimeType": "image/webp",
+      "size": 45678,
+      "width": 1024,
+      "height": 1024,
+      "source": "generated",
+      "generationPrompt": "A portrait of...",
+      "generationModel": "dall-e-3",
+      "createdAt": "2026-01-15T12:00:00.000Z",
+      "tags": [],
+      "_count": {
+        "charactersUsingAsDefault": 1,
+        "chatAvatarOverrides": 0
+      }
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/images`
+
+Upload an image file or import from URL.
+
+**Request** (upload): `multipart/form-data` with `file` field and optional `tags` JSON string.
+
+**Request** (import from URL):
+
+```json
+{
+  "url": "https://example.com/image.png",
+  "tags": [{ "tagType": "CHARACTER", "tagId": "char-uuid" }]
+}
+```
+
+**Response**: `201 Created`
+
+#### `POST /api/v1/images?action=generate`
+
+Generate images using an LLM image provider.
+
+**Request Body**:
+
+```json
+{
+  "prompt": "A portrait of a character in a garden",
+  "profileId": "image-profile-uuid",
+  "tags": [{ "tagType": "CHARACTER", "tagId": "char-uuid" }],
+  "options": {
+    "n": 1,
+    "quality": "hd",
+    "style": "vivid",
+    "aspectRatio": "1:1"
+  }
+}
+```
+
+**Response**: `201 Created`
+
+```json
+{
+  "data": [{ "id": "file-uuid", "filepath": "...", "..." : "..." }],
+  "metadata": {
+    "prompt": "A portrait of...",
+    "provider": "OPENAI",
+    "model": "dall-e-3",
+    "count": 1
+  }
+}
+```
+
+#### `GET /api/v1/images/[id]`
+
+Get a specific image with usage counts.
+
+#### `DELETE /api/v1/images/[id]`
+
+Delete an image. Fails if the image is in use as a default avatar or chat avatar override.
+
+#### `POST /api/v1/images/[id]?action=add-tag`
+
+Add a tag to an image.
+
+**Request Body**:
+
+```json
+{
+  "tagType": "CHARACTER",
+  "tagId": "char-uuid"
+}
+```
+
+#### `POST /api/v1/images/[id]?action=remove-tag`
+
+Remove a tag from an image.
+
+**Request Body**:
+
+```json
+{
+  "tagId": "char-uuid"
+}
+```
 
 ---
 

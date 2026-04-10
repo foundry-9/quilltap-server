@@ -24,6 +24,7 @@ import type { ConnectionProfile } from '@/lib/schemas/types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/errors'
 import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
 
 // Import from extracted modules
@@ -33,6 +34,7 @@ import {
   buildIdentityReinforcement,
   type OtherParticipantInfo,
   type ProjectContext,
+  type WardrobeContext,
 } from './context/system-prompt-builder'
 import {
   formatMemoriesForContext,
@@ -182,8 +184,8 @@ export interface BuildContextOptions {
   userId: string
   /** Character for system prompt (the character who will respond) */
   character: Character
-  /** Persona information (optional) */
-  persona?: { name: string; description: string } | null
+  /** User character information (optional) */
+  userCharacter?: { name: string; description: string } | null
   /** Chat metadata */
   chat: ChatMetadataBase
   /** Existing messages in the conversation */
@@ -220,6 +222,8 @@ export interface BuildContextOptions {
 
   /** Status change notifications since the responding character's last turn */
   statusChangeNotifications?: string[]
+  /** Outfit change notifications from manual sidebar changes */
+  outfitChangeNotifications?: string[]
 
   // ============================================================================
   // Tool Instructions (native tool rules or text-block tool instructions)
@@ -328,7 +332,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     modelName,
     userId,
     character,
-    persona,
+    userCharacter,
     chat,
     existingMessages,
     newUserMessage,
@@ -373,9 +377,57 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Get the selectedSystemPromptId from the responding participant
   const selectedSystemPromptId = respondingParticipant?.selectedSystemPromptId
 
+  // Load wardrobe context for equipped outfit rendering (if available)
+  let wardrobeContext: WardrobeContext | undefined
+  try {
+    const repos = getRepositories()
+    const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chat.id, character.id)
+    if (equippedSlots) {
+      const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[]
+      if (equippedItemIds.length > 0) {
+        const equippedItemsData = await repos.wardrobe.findByIds(equippedItemIds)
+        const equippedItemsMap = new Map(equippedItemsData.map(item => [item.id, item]))
+
+        const equippedItems: Record<string, { title: string; description?: string | null }> = {}
+        for (const [slot, itemId] of Object.entries(equippedSlots)) {
+          if (itemId) {
+            const item = equippedItemsMap.get(itemId)
+            if (item) {
+              equippedItems[slot] = { title: item.title, description: item.description }
+            }
+          }
+        }
+
+        const wardrobeItems = await repos.wardrobe.findByCharacterId(character.id)
+        wardrobeContext = {
+          equippedItems,
+          wardrobeItems: wardrobeItems.map(item => ({
+            id: item.id,
+            title: item.title,
+            types: item.types,
+            appropriateness: item.appropriateness,
+          })),
+        }
+
+        logger.debug('[ContextManager] Loaded wardrobe context for system prompt', {
+          characterId: character.id,
+          chatId: chat.id,
+          equippedSlotCount: Object.keys(equippedItems).length,
+          totalWardrobeItems: wardrobeItems.length,
+        })
+      }
+    }
+  } catch (error) {
+    logger.warn('[ContextManager] Failed to load wardrobe context', {
+      characterId: character.id,
+      chatId: chat.id,
+      error: getErrorMessage(error),
+    })
+  }
+
   const systemPrompt = buildSystemPrompt(
     character,
-    persona,
+    userCharacter,
     otherParticipantsInfo,
     roleplayTemplate,
     toolInstructions,
@@ -386,7 +438,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     options.timezone,
     options.statusChangeNotifications,
     respondingParticipant?.status as 'active' | 'silent' | 'absent' | 'removed' | undefined,
-    options.chat.scenarioText ?? undefined
+    options.chat.scenarioText ?? undefined,
+    wardrobeContext,
+    options.outfitChangeNotifications
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 
@@ -521,7 +575,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           hasCachedResult: !!cachedCompressionResult,
         })
 
-        const userName = persona?.name || 'User'
+        const userName = userCharacter?.name || 'User'
 
         try {
           compressionResult = await applyContextCompression(
@@ -1002,7 +1056,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const otherParticipantNames = otherParticipantsInfo?.map(p => p.name)
   const identityReminder = buildIdentityReinforcement(
     character.name,
-    persona?.name || 'User',
+    userCharacter?.name || 'User',
     isMultiCharacter ? otherParticipantNames : undefined,
   )
   fullSystemContent += '\n\n' + identityReminder

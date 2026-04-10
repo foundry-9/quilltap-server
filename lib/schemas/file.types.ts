@@ -47,7 +47,7 @@ export const FileEntrySchema = z.object({
   isPlainText: z.boolean().optional(),
 
   // Linking - array of IDs this file is associated with
-  linkedTo: z.array(UUIDSchema).default([]),  // messageId, chatId, characterId, personaId, etc.
+  linkedTo: z.array(UUIDSchema).default([]),  // messageId, chatId, characterId, etc.
 
   // Classification
   source: FileSourceEnum,                  // Where the file came from

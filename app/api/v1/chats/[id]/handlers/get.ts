@@ -6,6 +6,7 @@
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
+ * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,7 +19,7 @@ import { renderMarkdownToHtml, canPreRenderMessage } from '@/lib/services/markdo
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
-import { handleGetAvatars, handleGetState } from '../actions';
+import { handleGetAvatars, handleGetState, handleGetOutfit } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 
@@ -101,6 +102,11 @@ export async function handleGet(
     return handleGetState(chatId, ctx);
   }
 
+  // Handle outfit action - return equipped outfit state
+  if (action === 'outfit') {
+    return handleGetOutfit(chatId, ctx);
+  }
+
   // Handle get-background action - returns story background URL for the chat
   if (action === 'get-background') {
     try {
@@ -165,7 +171,7 @@ export async function handleGet(
     }
 
     const enrichedParticipants = await Promise.all(
-      chatMetadata.participants.map((p) => enrichParticipantDetail(p, repos))
+      chatMetadata.participants.map((p) => enrichParticipantDetail(p, repos, chatId))
     );
 
     // Get roleplay template for rendering patterns
@@ -317,6 +323,7 @@ export async function handleGet(
       agentModeEnabled: chatMetadata.agentModeEnabled ?? false,
       resolvedAgentModeEnabled: resolvedAgentMode.enabled,
       agentModeSource: resolvedAgentMode.enabledSource,
+      avatarGenerationEnabled: chatMetadata.avatarGenerationEnabled ?? null,
     };
 
     return NextResponse.json({ chat });

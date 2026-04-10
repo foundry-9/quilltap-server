@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 
 // Validation schema for the request
-// Note: 'persona' scope removed - personas are now characters with controlledBy: 'user'
+// User-controlled characters use controlledBy: 'user' on the CHARACTER type
 const searchReplaceSchema = z.object({
   scope: z.discriminatedUnion('type', [
     z.object({ type: z.literal('chat'), chatId: z.uuid() }),

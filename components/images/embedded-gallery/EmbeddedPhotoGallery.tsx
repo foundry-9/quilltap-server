@@ -184,7 +184,7 @@ export function EmbeddedPhotoGallery({
           setShowUploadDialog(false)
           fetchImages()
         }}
-        contextType={entityType === 'character' ? 'CHARACTER' : 'PERSONA'}
+        contextType='CHARACTER'
         contextId={entityId}
       />
     </div>
