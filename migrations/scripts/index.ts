@@ -315,6 +315,8 @@ export const migrations: Migration[] = [
   convertImagesToWebPMigration,
   // Rename persona DB columns
   renamePersonaColumnsMigration,
+  // Add narrationDelimiters field to roleplay_templates
+  addNarrationDelimitersFieldMigration,
 ];
 
 export {

@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import type { AnnotationButton } from '@/lib/schemas/template.types'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import type { AnnotationButton, NarrationDelimiters } from '@/lib/schemas/template.types'
 import {
   MARKDOWN_FORMATS,
   insertFormat,
@@ -27,6 +27,8 @@ interface FormattingToolbarProps {
   showPreview?: boolean
   /** Callback to toggle preview mode */
   onTogglePreview?: () => void
+  /** Narration delimiters from the active roleplay template */
+  narrationDelimiters?: NarrationDelimiters
 }
 
 /**
@@ -43,6 +45,7 @@ export default function FormattingToolbar({
   disabled = false,
   showPreview = false,
   onTogglePreview,
+  narrationDelimiters,
 }: FormattingToolbarProps) {
   const [template, setTemplate] = useState<RoleplayTemplateWithAnnotations | null>(null)
   const [loadingTemplate, setLoadingTemplate] = useState(false)
@@ -101,8 +104,38 @@ export default function FormattingToolbar({
     [input, inputRef, setInput]
   )
 
-  const annotationButtons = template?.annotationButtons ?? []
-  const hasAnnotations = !loadingTemplate && annotationButtons.length > 0
+  // Build the narration button from delimiters, and filter out any template
+  // annotation buttons whose prefix/suffix match the narration delimiters
+  const { narrationButton, filteredAnnotationButtons } = useMemo(() => {
+    if (!narrationDelimiters) {
+      return {
+        narrationButton: null,
+        filteredAnnotationButtons: template?.annotationButtons ?? [],
+      }
+    }
+
+    const narPrefix = Array.isArray(narrationDelimiters) ? narrationDelimiters[0] : narrationDelimiters
+    const narSuffix = Array.isArray(narrationDelimiters) ? narrationDelimiters[1] : narrationDelimiters
+
+    const btn: AnnotationButton = {
+      label: 'Narration',
+      abbrev: 'Nar',
+      prefix: narPrefix,
+      suffix: narSuffix,
+    }
+
+    // Remove any template button whose delimiters match the narration delimiters
+    const filtered = (template?.annotationButtons ?? []).filter(
+      (b) => b.prefix !== narPrefix || b.suffix !== narSuffix
+    )
+
+    return { narrationButton: btn, filteredAnnotationButtons: filtered }
+  }, [narrationDelimiters, template])
+
+  const allAnnotationButtons = narrationButton
+    ? [narrationButton, ...filteredAnnotationButtons]
+    : filteredAnnotationButtons
+  const hasAnnotations = !loadingTemplate && allAnnotationButtons.length > 0
 
   return (
     <div className="qt-formatting-toolbar">
@@ -127,7 +160,7 @@ export default function FormattingToolbar({
         <>
           <div className="qt-formatting-toolbar-divider" />
           <div className="qt-formatting-toolbar-section">
-            {annotationButtons.map((button, index) => (
+            {allAnnotationButtons.map((button, index) => (
               <button
                 key={`${button.abbrev}-${index}`}
                 type="button"

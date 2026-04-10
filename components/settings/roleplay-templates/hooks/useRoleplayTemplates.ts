@@ -110,8 +110,8 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to update default template')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || `Failed to update default template (${res.status})`)
       }
 
       setDefaultTemplateId(templateId)
@@ -120,7 +120,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      console.error('Error updating default template', { error: message })
+      console.error('Error updating default template:', message, err)
     } finally {
       setDefaultSaving(false)
     }
@@ -179,8 +179,8 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         })
 
         if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update template')
+          const data = await res.json().catch(() => null)
+          throw new Error(data?.error || `Failed to update template (${res.status})`)
         }
 
         const updated = await res.json()
@@ -197,8 +197,8 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         })
 
         if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to create template')
+          const data = await res.json().catch(() => null)
+          throw new Error(data?.error || `Failed to create template (${res.status})`)
         }
 
         const created = await res.json()
@@ -211,7 +211,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      console.error('Error saving roleplay template', { error: message })
+      console.error('Error saving roleplay template:', message, err)
     } finally {
       setSaving(false)
     }
@@ -227,8 +227,8 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to delete template')
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || `Failed to delete template (${res.status})`)
       }
 
       setTemplates(prev => prev.filter(t => t.id !== templateId))
@@ -238,7 +238,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setError(message)
-      console.error('Error deleting roleplay template', { error: message })
+      console.error('Error deleting roleplay template:', message, err)
     } finally {
       setSaving(false)
     }

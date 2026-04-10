@@ -575,6 +575,7 @@ export function ChatComposer({
             disabled={sending || !hasActiveCharacters}
             showPreview={showPreview}
             onTogglePreview={() => setShowPreview(!showPreview)}
+            narrationDelimiters={narrationDelimiters}
           />
         )}
 

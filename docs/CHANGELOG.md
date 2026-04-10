@@ -10,6 +10,9 @@
 
 #### Fixed
 
+- **Narration Delimiters Migration**: Fixed the `narrationDelimiters` column migration not running — the migration was imported and exported but never added to the `migrations` array, causing `no such column: narrationDelimiters` errors on all roleplay template operations
+- **Roleplay Template Error Reporting**: Improved error handling in roleplay template save/delete operations — `res.json()` in error paths now handles non-JSON responses gracefully, error messages include HTTP status codes, and console logging shows the actual message instead of an opaque `{}`
+- **Document Mode Narration Button**: The formatting toolbar in Document Mode now always shows a "Nar" button derived from the roleplay template's `narrationDelimiters` field, and removes any redundant annotation button whose prefix/suffix matches the narration delimiters
 - **Run Tool: Wardrobe Action Notices**: Fixed wardrobe action notices not appearing for user-invoked `update_outfit_item` and `create_wardrobe_item` calls from the Run Tool modal — tool result payloads now preserve their structured metadata so the inline amber summary renders correctly instead of collapsing into raw JSON
 - **Memory Cleanup: Accurate Max Memories Label**: Changed "Max Memories" / "Hard cap on total memories" to "Maximum Unprotected Memories" with a list of the protection rules (importance ≥ 70%, reinforced 5+ times, manually created, accessed within 3 months), since the hard cap does not delete protected memories
 - **LLM Inspector: Image Generation Logging**: Image generation API calls (character avatars, story backgrounds, in-chat image tool) are now logged in the LLM Inspector with chat/character linkage, provider, model, prompt, duration, and error tracking
