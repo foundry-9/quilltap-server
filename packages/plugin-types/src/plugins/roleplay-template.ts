@@ -1,6 +1,11 @@
 /**
  * Roleplay Template Plugin Interface types for Quilltap plugin development
  *
+ * @deprecated The ROLEPLAY_TEMPLATE plugin capability was removed in Quilltap v4.2.0.
+ * Roleplay templates are now native first-class entities managed through the Settings UI.
+ * These types are preserved for backward compatibility with existing third-party plugins
+ * but will be removed in a future major version.
+ *
  * @module @quilltap/plugin-types/plugins/roleplay-template
  */
 

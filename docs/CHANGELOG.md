@@ -4,6 +4,12 @@
 
 ### 4.2-dev
 
+#### Changed
+
+- **@quilltap/plugin-types 2.2.0**: Removed `ROLEPLAY_TEMPLATE` from `PluginCapability` type, deprecated roleplay template type exports from barrel. Types preserved in `./plugins/roleplay-template` for backward compat.
+- **@quilltap/plugin-utils 2.2.0**: Removed roleplay template builder utilities (`createRoleplayTemplatePlugin`, `createSingleTemplatePlugin`, `validateTemplateConfig`) from main exports and `./roleplay-templates` export path. Updated `@quilltap/plugin-types` dependency to ^2.2.0.
+- **Dependencies**: next 16.2.2→16.2.3, openai 6.33→6.34, react/react-dom 19.2.4→19.2.5, @google/genai 1.48→1.49, storybook 10.3.4→10.3.5, @types/node 22.19.15→22.19.17, dotenv 17.4.0→17.4.1
+
 #### Refactored
 
 - **Roleplay Template System**: Replaced the plugin-based roleplay template architecture with a native JSON-based template system. The `qtap-plugin-template-quilltap-rp` plugin is now a built-in "Quilltap RP" template alongside "Standard". Templates use a new `delimiters` array (replacing `annotationButtons`) with `name`, `buttonName`, `delimiters`, and `style` fields. The `ROLEPLAY_TEMPLATE` plugin capability has been removed entirely. DB migration rewrites all `plugin:quilltap-rp` references to the new built-in template UUID, renames `annotationButtons` column to `delimiters`, and drops the `pluginName` column. Create/edit dialog now includes a full delimiter array editor with add/remove controls. Import handles backward compatibility with old `annotationButtons` format. Rendering patterns are auto-generated from delimiters when not explicitly provided, ensuring custom templates get proper text styling without manual regex configuration.

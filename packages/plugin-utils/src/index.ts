@@ -96,26 +96,6 @@ export type {
 } from './providers';
 
 // ============================================================================
-// Roleplay Template Utilities
-// ============================================================================
-
-export {
-  // Builder functions
-  createRoleplayTemplatePlugin,
-  createSingleTemplatePlugin,
-
-  // Validation utilities
-  validateTemplateConfig,
-  validateRoleplayTemplatePlugin,
-} from './roleplay-templates';
-
-export type {
-  // Builder option types
-  CreateRoleplayTemplatePluginOptions,
-  CreateSingleTemplatePluginOptions,
-} from './roleplay-templates';
-
-// ============================================================================
 // System Prompt Utilities
 // ============================================================================
 

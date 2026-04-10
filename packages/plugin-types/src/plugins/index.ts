@@ -53,16 +53,10 @@ export type {
   ThemePluginExport,
 } from './theme';
 
-export type {
-  AnnotationButton,
-  RenderingPattern,
-  DialogueDetection,
-  NarrationDelimiters,
-  RoleplayTemplateConfig,
-  RoleplayTemplateMetadata,
-  RoleplayTemplatePlugin,
-  RoleplayTemplatePluginExport,
-} from './roleplay-template';
+/**
+ * @deprecated Roleplay template types removed in Quilltap v4.2.0.
+ * Import directly from './roleplay-template' if backward compat is needed.
+ */
 
 export type {
   SearchProviderMetadata,
