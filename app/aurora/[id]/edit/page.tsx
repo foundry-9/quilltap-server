@@ -90,6 +90,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
   const [showWizard, setShowWizard] = useState(false)
   const [physicalDescriptionsRefreshKey, setPhysicalDescriptionsRefreshKey] = useState(0)
+  const [wardrobeRefreshKey, setWardrobeRefreshKey] = useState(0)
 
 
   // Handle applying wizard-generated data
@@ -142,6 +143,36 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           error: err instanceof Error ? err.message : String(err),
         })
         showErrorToast('Failed to create physical description')
+      }
+    }
+
+    // Handle wizard-generated wardrobe items
+    if (data.wardrobeItems && data.wardrobeItems.length > 0) {
+      let wardrobeItemsSaved = 0
+      for (const item of data.wardrobeItems) {
+        try {
+          const res = await fetch(`/api/v1/characters/${id}/wardrobe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: item.title,
+              description: item.description || null,
+              types: item.types,
+              appropriateness: item.appropriateness || null,
+            }),
+          })
+          if (res.ok) {
+            wardrobeItemsSaved++
+          }
+        } catch (err) {
+          console.error('Failed to create wardrobe item', {
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+      if (wardrobeItemsSaved > 0) {
+        showSuccessToast(`${wardrobeItemsSaved} wardrobe item${wardrobeItemsSaved > 1 ? 's' : ''} created`)
+        setWardrobeRefreshKey((prev) => prev + 1)
       }
     }
 
@@ -292,6 +323,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                     />
                     <WardrobeItemList
                       characterId={id}
+                      refreshKey={wardrobeRefreshKey}
                     />
                   </div>
                 )

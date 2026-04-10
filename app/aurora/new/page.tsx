@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
+import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescription, type GeneratedWardrobeItem, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
 import { ImportModal } from '@/components/characters/system-prompts-editor/ImportModal'
 import type { PromptTemplate } from '@/components/characters/system-prompts-editor/types'
 
@@ -26,6 +26,8 @@ export default function NewCharacterPage() {
   const pendingPhysicalDescription = useRef<GeneratedPhysicalDescription | null>(null)
   // Store pending scenarios from wizard to save after character creation
   const pendingScenarios = useRef<Array<{ title: string; content: string }> | null>(null)
+  // Store pending wardrobe items from wizard to save after character creation
+  const pendingWardrobeItems = useRef<GeneratedWardrobeItem[] | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     title: '',
@@ -58,6 +60,10 @@ export default function NewCharacterPage() {
     const normalizedScenarios = normalizeGeneratedScenarios(data.scenarios)
     if (normalizedScenarios.length > 0) {
       pendingScenarios.current = normalizedScenarios
+    }
+    // Store wardrobe items to save after character creation
+    if (data.wardrobeItems && data.wardrobeItems.length > 0) {
+      pendingWardrobeItems.current = data.wardrobeItems
     }
   }
 
@@ -169,6 +175,34 @@ export default function NewCharacterPage() {
           console.error('Error saving physical description', descErr instanceof Error ? descErr.message : String(descErr))
           showErrorToast('Character created, but physical description failed to save')
         }
+      }
+
+      // Save pending wardrobe items if any (from wizard)
+      if (pendingWardrobeItems.current && pendingWardrobeItems.current.length > 0) {
+        let wardrobeItemsSaved = 0
+        for (const item of pendingWardrobeItems.current) {
+          try {
+            const wardrobeRes = await fetch(`/api/v1/characters/${characterId}/wardrobe`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: item.title,
+                description: item.description || null,
+                types: item.types,
+                appropriateness: item.appropriateness || null,
+              }),
+            })
+            if (wardrobeRes.ok) {
+              wardrobeItemsSaved++
+            }
+          } catch (wardrobeErr) {
+            console.error('Error saving wardrobe item', wardrobeErr instanceof Error ? wardrobeErr.message : String(wardrobeErr))
+          }
+        }
+        if (wardrobeItemsSaved > 0) {
+          showSuccessToast(`${wardrobeItemsSaved} wardrobe item${wardrobeItemsSaved > 1 ? 's' : ''} created`)
+        }
+        pendingWardrobeItems.current = null
       }
 
       router.push(`/aurora/${characterId}`)

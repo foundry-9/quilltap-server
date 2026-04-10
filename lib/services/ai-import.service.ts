@@ -42,6 +42,7 @@ export type AIImportStepName =
   | 'first_message'
   | 'system_prompts'
   | 'physical_descriptions'
+  | 'wardrobe_items'
   | 'pronouns'
   | 'memories'
   | 'chats'
@@ -94,6 +95,12 @@ export interface AIImportStepResults {
     completePrompt: string;
     fullDescription: string;
   };
+  wardrobe_items?: Array<{
+    title: string;
+    description: string;
+    types: string[];
+    appropriateness?: string;
+  }>;
   pronouns?: {
     subject: string;
     object: string;
@@ -178,15 +185,35 @@ Respond with JSON array:
 The main prompt should capture the character's essence from the source material. Include specific details about speech patterns, mannerisms, and reactions that make the character unique.`;
 
 const PHYSICAL_DESCRIPTIONS_PROMPT = `Generate physical descriptions of this character at varying detail levels for image generation.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Focus only on the character's physical traits.
 
 Respond with JSON:
 {
-  "shortPrompt": "Extremely concise visual description, max 350 chars. Comma-separated descriptors: hair, eyes, skin, body type, one distinctive feature.",
-  "mediumPrompt": "Concise visual description, max 500 chars. Include hair, eyes, skin, body type, facial features, clothing notes. Continuous description.",
-  "longPrompt": "Detailed visual description, max 750 chars. Complete hair, eye details, skin, facial structure, body type, clothing, posture, marks/features.",
-  "completePrompt": "Comprehensive visual description, max 1000 chars. All physical details optimized for AI image generation.",
-  "fullDescription": "Complete physical description in markdown format with sections: ## Overview, ## Face & Head, ## Body, ## Style & Appearance, ## Distinctive Features"
+  "shortPrompt": "Extremely concise visual description, max 350 chars. Comma-separated descriptors: hair, eyes, skin, body type, one distinctive feature. No clothing.",
+  "mediumPrompt": "Concise visual description, max 500 chars. Include hair, eyes, skin, body type, facial features. No clothing. Continuous description.",
+  "longPrompt": "Detailed visual description, max 750 chars. Complete hair, eye details, skin, facial structure, body type, posture, marks/features. No clothing.",
+  "completePrompt": "Comprehensive visual description, max 1000 chars. All physical details optimized for AI image generation. No clothing.",
+  "fullDescription": "Complete physical description in markdown format with sections: ## Overview, ## Face & Head, ## Body, ## Distinctive Features. No clothing section."
 }`;
+
+const WARDROBE_ITEMS_PROMPT = `Generate wardrobe items for this character based on the source material and their typical clothing and style.
+Each item must cover one or more slot types: "top" (shirts, jackets, dresses that cover the torso), "bottom" (pants, skirts, shorts), "footwear" (shoes, boots, sandals), "accessories" (jewelry, hats, belts, scarves, bags).
+
+A single item can cover multiple slots — for example, a full-length dress would have types ["top", "bottom"].
+
+Generate 3-6 items that represent this character's typical wardrobe. Include a mix of everyday and situational items if the source material provides enough detail.
+
+Respond with JSON array:
+[
+  {
+    "title": "Short descriptive name for the item",
+    "description": "A sentence or two describing the item's appearance in detail",
+    "types": ["top"],
+    "appropriateness": "casual, everyday"
+  }
+]
+
+The "appropriateness" field is a comma-separated list of context tags describing when this item is appropriate (e.g., "casual", "formal", "combat", "sleepwear", "intimate").`;
 
 const PRONOUNS_PROMPT = `Determine the character's pronouns from the source material.
 
@@ -541,6 +568,21 @@ function assembleQtapExport(
         ]
       : [],
     clothingRecords: [],
+    wardrobeItems: stepResults.wardrobe_items
+      ? stepResults.wardrobe_items.map((item) => ({
+          id: crypto.randomUUID(),
+          characterId,
+          title: item.title,
+          description: item.description || null,
+          types: item.types,
+          appropriateness: item.appropriateness || null,
+          isDefault: false,
+          migratedFromClothingRecordId: null,
+          archivedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        }))
+      : [],
     createdAt: now,
     updatedAt: now,
   };
@@ -863,6 +905,39 @@ export async function runAIImportStreaming(
         errors.physical_descriptions = msg;
         onProgress({ type: 'step_error', step: 'physical_descriptions', error: msg });
         logger.warn('[AIImport] Physical descriptions step failed (non-fatal)', { error: msg });
+      }
+    }
+
+    // Step 4b: Wardrobe Items
+    if (shouldRunStep('wardrobe_items')) {
+      onProgress({ type: 'step_start', step: 'wardrobe_items' });
+      try {
+        const raw = await callLLM(
+          provider, apiKey, profile.modelName,
+          charContext,
+          WARDROBE_ITEMS_PROMPT,
+          { temperature: 0.7, maxTokens: 2000, ...llmOpts }
+        );
+        const items = parseLLMJson<Array<{ title: string; description: string; types: string[]; appropriateness?: string }>>(raw);
+        // Validate types
+        const validTypes = new Set(['top', 'bottom', 'footwear', 'accessories']);
+        stepResults.wardrobe_items = items
+          .filter((item) => item.title && item.types?.length > 0)
+          .map((item) => ({
+            ...item,
+            types: item.types.filter((t) => validTypes.has(t)),
+          }))
+          .filter((item) => item.types.length > 0);
+        onProgress({
+          type: 'step_complete',
+          step: 'wardrobe_items',
+          snippet: `${stepResults.wardrobe_items.length} wardrobe item(s) generated`,
+        });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Wardrobe items failed';
+        errors.wardrobe_items = msg;
+        onProgress({ type: 'step_error', step: 'wardrobe_items', error: msg });
+        logger.warn('[AIImport] Wardrobe items step failed (non-fatal)', { error: msg });
       }
     }
 

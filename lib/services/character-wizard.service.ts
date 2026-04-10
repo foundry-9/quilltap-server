@@ -18,6 +18,7 @@ import { parseLLMJson } from '@/lib/services/ai-import.service';
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types';
 import type { FileAttachment } from '@/lib/llm/base';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 // ============================================================================
 // Types
@@ -48,6 +49,7 @@ export interface WizardRequest {
     | 'exampleDialogues'
     | 'systemPrompt'
     | 'physicalDescription'
+    | 'wardrobeItems'
   )[];
   characterId?: string;
 }
@@ -59,6 +61,13 @@ export interface GeneratedPhysicalDescription {
   longPrompt: string;
   completePrompt: string;
   fullDescription: string;
+}
+
+export interface GeneratedWardrobeItem {
+  title: string;
+  description: string;
+  types: WardrobeItemType[];
+  appropriateness?: string;
 }
 
 export interface WizardResult {
@@ -157,21 +166,25 @@ No sentences, just comma-separated descriptors.
 OUTPUT ONLY THE DESCRIPTION, NO EXPLANATION.`,
 
   medium: `Create a concise visual description for image generation, maximum 500 characters.
-Include: hair color/style, eye color, skin tone, body type, facial features, one or two clothing/style notes.
+Include: hair color/style, eye color, skin tone, body type, facial features.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system.
 Write as a continuous description, no line breaks.
 OUTPUT ONLY THE DESCRIPTION, NO EXPLANATION.`,
 
   long: `Create a detailed visual description for image generation, maximum 750 characters.
-Include: complete hair description, eye details, skin, facial structure, body type, typical clothing style, posture, any distinctive marks or features.
+Include: complete hair description, eye details, skin, facial structure, body type, posture, any distinctive marks or features.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system.
 Write as flowing description suitable for stable diffusion or DALL-E.
 OUTPUT ONLY THE DESCRIPTION, NO EXPLANATION.`,
 
   complete: `Create a comprehensive visual description for image generation, maximum 1000 characters.
-Include all physical details: hair (color, length, style, texture), eyes (color, shape, expression), face (shape, features, expression), body (type, height, build), skin (tone, texture, any marks), clothing (typical style, colors, accessories), posture and body language.
+Include all physical details: hair (color, length, style, texture), eyes (color, shape, expression), face (shape, features, expression), body (type, height, build), skin (tone, texture, any marks), posture and body language.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system.
 Optimized for AI image generation.
 OUTPUT ONLY THE DESCRIPTION, NO EXPLANATION.`,
 
   full: `Write a complete, detailed physical description of this character in markdown format.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system.
 Structure with headers:
 ## Overview
 Brief 1-2 sentence summary
@@ -182,14 +195,30 @@ Hair, eyes, face shape, expressions, any facial features
 ## Body
 Build, height, posture, distinguishing physical traits
 
-## Style & Appearance
-Typical clothing, accessories, grooming
-
 ## Distinctive Features
 Unique marks, mannerisms, or visual traits
 
 Be thorough and specific. This will be used as reference for consistent character portrayal.`,
 };
+
+const WARDROBE_ITEMS_PROMPT = `Generate wardrobe items for this character based on their typical clothing and style.
+Each item must cover one or more of these slot types: "top" (shirts, jackets, dresses that cover the torso), "bottom" (pants, skirts, shorts), "footwear" (shoes, boots, sandals), "accessories" (jewelry, hats, belts, scarves, bags).
+
+A single item can cover multiple slots — for example, a full-length dress would have types ["top", "bottom"].
+
+Generate 3-6 items that represent this character's typical wardrobe. Include a mix of everyday and situational items.
+
+Respond with ONLY valid JSON, no markdown fences:
+[
+  {
+    "title": "Short descriptive name for the item",
+    "description": "A sentence or two describing the item's appearance in detail",
+    "types": ["top"],
+    "appropriateness": "casual, everyday"
+  }
+]
+
+The "appropriateness" field is a comma-separated list of context tags describing when this item is appropriate (e.g., "casual", "formal", "combat", "sleepwear", "intimate").`;
 
 // ============================================================================
 // Helper Functions
@@ -483,6 +512,43 @@ export async function generatePhysicalDescriptions(
   return results as GeneratedPhysicalDescription;
 }
 
+/**
+ * Generate wardrobe items from LLM
+ */
+export async function generateWardrobeItems(
+  provider: LLMProvider,
+  apiKey: string,
+  modelName: string,
+  contextPrompt: string,
+  userId?: string,
+  characterId?: string,
+  profileProvider?: string
+): Promise<GeneratedWardrobeItem[]> {
+  const content = await generateField(
+    provider,
+    apiKey,
+    modelName,
+    contextPrompt,
+    WARDROBE_ITEMS_PROMPT,
+    2000,
+    userId,
+    characterId,
+    profileProvider
+  );
+
+  const items = parseLLMJson<GeneratedWardrobeItem[]>(content);
+
+  // Validate types are valid wardrobe slot types
+  const validTypes = new Set(['top', 'bottom', 'footwear', 'accessories']);
+  return items
+    .filter((item) => item.title && item.types?.length > 0)
+    .map((item) => ({
+      ...item,
+      types: item.types.filter((t) => validTypes.has(t)) as WardrobeItemType[],
+    }))
+    .filter((item) => item.types.length > 0);
+}
+
 // ============================================================================
 // Main Service Function
 // ============================================================================
@@ -642,6 +708,16 @@ export async function runCharacterWizard(
     try {
       if (field === 'physicalDescription') {
         generated.physicalDescription = await generatePhysicalDescriptions(
+          primaryProvider,
+          primaryApiKey,
+          primaryProfile.modelName,
+          contextPrompt,
+          userId,
+          request.characterId,
+          primaryProfile.provider
+        );
+      } else if (field === 'wardrobeItems') {
+        generated.wardrobeItems = await generateWardrobeItems(
           primaryProvider,
           primaryApiKey,
           primaryProfile.modelName,
@@ -893,6 +969,18 @@ export async function runCharacterWizardStreaming(
           );
           generated.physicalDescription = physDesc;
           onProgress({ type: 'field_complete', field, snippet: getSnippet(physDesc) });
+        } else if (field === 'wardrobeItems') {
+          const items = await generateWardrobeItems(
+            primaryProvider,
+            primaryApiKey,
+            primaryProfile.modelName,
+            contextPrompt,
+            userId,
+            request.characterId,
+            primaryProfile.provider
+          );
+          generated.wardrobeItems = items;
+          onProgress({ type: 'field_complete', field, snippet: `${items.length} wardrobe item(s) generated` });
         } else {
           const fieldPrompt = FIELD_PROMPTS[field];
           const maxTokens = field === 'exampleDialogues' || field === 'systemPrompt' ? 1000 : field === 'scenarios' ? 4000 : 500;
