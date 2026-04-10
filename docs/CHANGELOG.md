@@ -10,6 +10,7 @@
 
 #### Fixed
 
+- **User Character Default Outfit on Chat Creation**: When starting a new chat, user-controlled characters (e.g., the player character) now get their default wardrobe items equipped automatically. Previously only LLM-controlled characters received default outfits — user characters were excluded both from the fallback path and when the frontend sent explicit outfit selections for LLM characters only.
 - **Narration Delimiters Migration**: Fixed the `narrationDelimiters` column migration not running — the migration was imported and exported but never added to the `migrations` array, causing `no such column: narrationDelimiters` errors on all roleplay template operations
 - **Roleplay Template Error Reporting**: Improved error handling in roleplay template save/delete operations — `res.json()` in error paths now handles non-JSON responses gracefully, error messages include HTTP status codes, and console logging shows the actual message instead of an opaque `{}`
 - **Document Mode Narration Button**: The formatting toolbar in Document Mode now always shows a "Nar" button derived from the roleplay template's `narrationDelimiters` field, and removes any redundant annotation button whose prefix/suffix matches the narration delimiters

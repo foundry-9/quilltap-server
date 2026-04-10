@@ -811,26 +811,41 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   };
   try {
     if (validatedData.outfitSelections && validatedData.outfitSelections.length > 0) {
-      await applyOutfitSelections(chat.id, validatedData.outfitSelections, repos, outfitContext);
-      logger.debug('[Chats v1] Applied explicit outfit selections', {
-        chatId: chat.id,
-        selectionCount: validatedData.outfitSelections.length,
-      });
-    } else {
-      // Default behavior: apply default outfits for all LLM-controlled character participants
-      const llmCharacterIds = participantsWithTimestamps
-        .filter((p) => p.type === 'CHARACTER' && p.controlledBy !== 'user' && p.characterId)
+      // Apply explicit selections, then backfill defaults for any participants not covered
+      const explicitCharacterIds = new Set(validatedData.outfitSelections.map((s) => s.characterId));
+      const missingCharacterIds = participantsWithTimestamps
+        .filter((p) => p.type === 'CHARACTER' && p.characterId && !explicitCharacterIds.has(p.characterId))
         .map((p) => p.characterId as string);
 
-      if (llmCharacterIds.length > 0) {
-        const defaultSelections: OutfitSelection[] = llmCharacterIds.map((characterId) => ({
+      const allSelections: OutfitSelection[] = [
+        ...validatedData.outfitSelections,
+        ...missingCharacterIds.map((characterId) => ({
+          characterId,
+          mode: 'default' as const,
+        })),
+      ];
+
+      await applyOutfitSelections(chat.id, allSelections, repos, outfitContext);
+      logger.debug('[Chats v1] Applied outfit selections (explicit + defaults for uncovered participants)', {
+        chatId: chat.id,
+        explicitCount: validatedData.outfitSelections.length,
+        defaultBackfillCount: missingCharacterIds.length,
+      });
+    } else {
+      // Default behavior: apply default outfits for all character participants (LLM and user-controlled)
+      const allCharacterIds = participantsWithTimestamps
+        .filter((p) => p.type === 'CHARACTER' && p.characterId)
+        .map((p) => p.characterId as string);
+
+      if (allCharacterIds.length > 0) {
+        const defaultSelections: OutfitSelection[] = allCharacterIds.map((characterId) => ({
           characterId,
           mode: 'default' as const,
         }));
         await applyOutfitSelections(chat.id, defaultSelections, repos, outfitContext);
-        logger.debug('[Chats v1] Applied default outfit selections for LLM participants', {
+        logger.debug('[Chats v1] Applied default outfit selections for all participants', {
           chatId: chat.id,
-          characterIds: llmCharacterIds,
+          characterIds: allCharacterIds,
         });
       }
     }
