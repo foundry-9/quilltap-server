@@ -1,5 +1,7 @@
 # Quilltap Roleplay Template Plugin Development Guide
 
+> **DEPRECATED (v4.2.0):** The `ROLEPLAY_TEMPLATE` plugin capability has been removed. Roleplay templates are now native first-class entities managed through the Settings UI. Users can create, edit, and delete custom templates with configurable delimiters, rendering patterns, and CSS styles directly in the application. The built-in "Standard" and "Quilltap RP" templates ship natively. This guide is preserved for historical reference only.
+
 This guide walks you through creating a Quilltap roleplay template plugin from scratch, from an empty directory to publishing on npm.
 
 ## Table of Contents

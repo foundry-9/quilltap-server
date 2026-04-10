@@ -347,28 +347,6 @@ Your templates are available:
 - Across all your devices when logged in
 - Only to you (not shared with others unless exported)
 
-## Plugin-Provided Templates
-
-### Installing Theme Plugins
-
-Additional templates can be installed via plugins:
-
-1. Go to **Settings** → **Plugins**
-2. Search for template plugins
-3. Install the ones you want
-4. New templates appear in your template list
-5. Mark "Built-in" if they come from plugins
-
-### Using Plugin Templates
-
-Plugin templates:
-
-- Appear in your template list
-- Can be previewed and copied
-- Cannot be edited (like built-in templates)
-- Are marked with their plugin name
-- Can be used as-is or copied to customize
-
 ## Troubleshooting
 
 ### Template Not Applying
@@ -434,8 +412,7 @@ Plugin templates:
 3. **Keep it simple** — Complex formatting isn't always better
 4. **Document your style** — Write clear examples in descriptions
 5. **Review and iterate** — Refine templates as you use them
-6. **Share what works** — Share successful templates as plugins
-7. **Backup important templates** — Save copies before major edits
+6. **Backup important templates** — Save copies before major edits
 
 ## In-Chat Navigation
 

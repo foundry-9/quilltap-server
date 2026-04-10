@@ -16,7 +16,6 @@ Plugins are packages of code that add functionality to Quilltap, such as:
 - **Tools** — Add new capabilities to AI chats (search tools, calculations, etc.)
 - **Providers** — Support for additional LLM services or storage backends
 - **Storage backends** — Cloud storage support
-- **Templates** — Pre-built roleplay templates and systems
 - **Utilities** — Various utility features
 
 Plugins can be:
@@ -273,12 +272,6 @@ Most plugins can be uninstalled:
 
 **Installation:** Install → Create profile using new provider in relevant Settings tab
 
-### Template Plugins
-
-**What they do:** Provide pre-built character and roleplay templates
-
-**Installation:** Install → Use when creating characters
-
 ## Managing Multiple Plugins
 
 ### Best Practices
@@ -446,7 +439,6 @@ For local development or plugins not on NPM:
 - [API Keys](api-keys-settings.md) — Credentials for plugins that need them
 - [Tools Usage](tools-usage.md) — Enable/disable tools per chat
 - [Connection Profiles](connection-profiles.md) — If plugin adds new providers
-- [Roleplay Templates](roleplay-templates.md) — If plugin adds templates
 
 ## In-Chat Settings Access
 
