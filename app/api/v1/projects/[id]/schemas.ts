@@ -15,6 +15,8 @@ export const updateProjectSchema = z.object({
   color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/).nullable().optional(),
   icon: z.string().max(50).nullable().optional(),
   defaultAgentModeEnabled: z.boolean().nullable().optional(),
+  defaultAvatarGenerationEnabled: z.boolean().nullable().optional(),
+  defaultImageProfileId: z.string().uuid().nullable().optional(),
   backgroundDisplayMode: z.enum(['latest_chat', 'project', 'static', 'theme']).optional(),
 });
 

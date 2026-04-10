@@ -276,7 +276,7 @@ async function processMessage(
   // Resolve user identity through fallback chain:
   // 1. User-controlled character in chat → 2. Sole user-controlled character → 3. User profile → 4. "User"
   const resolvedIdentity = await resolveUserIdentity(repos, userId, chat)
-  const persona: { name: string; description: string } | null = {
+  const userCharacter: { name: string; description: string } | null = {
     name: resolvedIdentity.name,
     description: resolvedIdentity.description,
   }
@@ -602,6 +602,23 @@ async function processMessage(
     await repos.chats.update(chatId, { forceToolsOnNextMessage: false })
   }
 
+  // Check for pending outfit change notifications (visible to ALL characters in the chat)
+  // These are set when a user manually changes a character's outfit via the sidebar
+  let outfitChangeNotifications: string[] = []
+  const pendingOutfitNotifications = chat.pendingOutfitNotifications as Record<string, string> | null
+  if (pendingOutfitNotifications && Object.keys(pendingOutfitNotifications).length > 0) {
+    outfitChangeNotifications = Object.values(pendingOutfitNotifications)
+    logger.info('[Orchestrator] Delivering pending outfit change notifications', {
+      context: 'wardrobe',
+      chatId,
+      characterId: character?.id,
+      notificationCount: outfitChangeNotifications.length,
+      notifications: outfitChangeNotifications,
+    })
+    // Clear all pending notifications — every character sees them on next turn
+    await repos.chats.update(chatId, { pendingOutfitNotifications: null })
+  }
+
   // Check tool options
   const enabledToolOptions = determineEnabledToolOptions(
     imageProfileId,
@@ -610,6 +627,10 @@ async function processMessage(
 
   // Resolve help tools enabled from character (default: disabled)
   const helpToolsEnabled = character?.defaultHelpToolsEnabled === true
+
+  // Resolve wardrobe capability flags from character (default: enabled when null)
+  const canDressThemselves = character?.canDressThemselves !== false
+  const canCreateOutfits = character?.canCreateOutfits !== false
 
   // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
   // Always pass disabledTools and disabledToolGroups for filtering
@@ -624,7 +645,9 @@ async function processMessage(
     chat.disabledToolGroups ?? [],
     agentMode.enabled, // agentModeEnabled - enables submit_final_response tool
     isMultiCharacter, // isMultiCharacter - enables whisper tool
-    helpToolsEnabled // helpToolsEnabled - enables help_search and help_settings tools
+    helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
+    canDressThemselves, // canDressThemselves - enables list_wardrobe and update_outfit_item
+    canCreateOutfits // canCreateOutfits - enables create_wardrobe_item
   )
 
   const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools)
@@ -638,7 +661,9 @@ async function processMessage(
       streamingState.effectiveProfile.allowWebSearch,
       isMultiCharacter,
       !!chat.projectId,
-      helpToolsEnabled
+      helpToolsEnabled,
+      canDressThemselves,
+      canCreateOutfits
     )
     toolInstructions = buildTextBlockSystemInstructions(textBlockOptions)
     logTextBlockToolUsage(streamingState.effectiveProfile.provider, streamingState.effectiveProfile.modelName, textBlockOptions)
@@ -853,7 +878,7 @@ async function processMessage(
       character,
       characterParticipant,
       connectionProfile: streamingState.effectiveProfile,
-      persona,
+      userCharacter,
       isMultiCharacter,
       participantCharacters,
       roleplayTemplate,
@@ -882,6 +907,10 @@ async function processMessage(
             .filter(m => m.type === 'system' && (m as Record<string, unknown>).systemEventType === 'STATUS_CHANGE')
             .map(m => (m as Record<string, unknown>).description as string)
             .filter(Boolean)
+        : undefined,
+      // Outfit change notifications (separate from status changes for prominence)
+      outfitChangeNotifications: outfitChangeNotifications.length > 0
+        ? outfitChangeNotifications
         : undefined,
       // Status callback for budget-driven compression phases
       onStatusChange: (stage: string, message: string) => {

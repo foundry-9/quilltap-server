@@ -28,8 +28,8 @@ export interface MemoryExtractionContext {
   characterName: string
   /** Character pronouns for context */
   characterPronouns?: Pronouns | null
-  /** Persona name if available (deprecated - use userCharacterId instead) */
-  personaName?: string
+  /** User character name if available */
+  userCharacterName?: string
   /** User character ID - who the memory is about (the user-controlled character in the chat) */
   userCharacterId?: string
   /** All character names in a multi-character chat (for clear identity context) */
@@ -153,8 +153,8 @@ function buildExtractionContext(ctx: MemoryExtractionContext): string {
   parts.push('PARTICIPANTS IN THIS CONVERSATION:')
 
   // User identification
-  if (ctx.personaName) {
-    parts.push(`- USER: ${ctx.personaName} (the human participant)`)
+  if (ctx.userCharacterName) {
+    parts.push(`- USER: ${ctx.userCharacterName} (the human participant)`)
   } else {
     parts.push('- USER: The human participant')
   }
@@ -285,7 +285,7 @@ export async function processMessageForMemory(
         ctx.assistantMessage,
         extractionContext,
         ctx.characterName,
-        ctx.personaName,
+        ctx.userCharacterName,
         selection,
         ctx.userId,
         uncensoredFallback,
@@ -298,7 +298,7 @@ export async function processMessageForMemory(
         ctx.assistantMessage,
         extractionContext,
         ctx.characterName,
-        ctx.personaName,
+        ctx.userCharacterName,
         selection,
         ctx.userId,
         uncensoredFallback,

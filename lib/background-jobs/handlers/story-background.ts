@@ -27,6 +27,8 @@ import {
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
+import { convertToWebP } from '@/lib/files/webp-conversion';
+import { logLLMCall } from '@/lib/services/llm-logging.service';
 
 /**
  * Handle a story background generation job
@@ -161,13 +163,42 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // 8. Derive scene context AND resolve character appearances in parallel
   let sceneContext = payload.sceneContext || chat.title;
 
-  // Build appearance inputs from loaded characters
-  const appearanceInputs: AppearanceResolutionInput[] = validCharacters.map(char => ({
-    characterId: char!.id,
-    characterName: char!.name,
-    physicalDescriptions: char!.physicalDescriptions || [],
-    clothingRecords: char!.clothingRecords || [],
-  }));
+  // Build appearance inputs from loaded characters, enriched with equipped wardrobe items
+  const appearanceInputs: AppearanceResolutionInput[] = [];
+  for (const char of validCharacters) {
+    let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
+    try {
+      const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
+      if (equippedSlots) {
+        const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
+        if (equippedItemIds.length > 0) {
+          const items = await repos.wardrobe.findByIds(equippedItemIds);
+          const itemsMap = new Map(items.map(item => [item.id, item]));
+          equippedWardrobeItems = [];
+          for (const [slot, itemId] of Object.entries(equippedSlots)) {
+            if (itemId) {
+              const item = itemsMap.get(itemId);
+              if (item) {
+                equippedWardrobeItems.push({ slot, title: item.title, description: item.description });
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn('[StoryBackground] Failed to load equipped wardrobe items for character', {
+        characterId: char!.id,
+        chatId: payload.chatId,
+        error: getErrorMessage(err),
+      });
+    }
+    appearanceInputs.push({
+      characterId: char!.id,
+      characterName: char!.name,
+      physicalDescriptions: char!.physicalDescriptions || [],
+      equippedWardrobeItems,
+    });
+  }
 
   // Scene context prompt for appearance resolution
   const scenePromptForAppearance = payload.sceneContext || chat.title;
@@ -354,11 +385,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
     // Fallback: simple first-description logic
     const primary = char!.physicalDescriptions?.[0];
-    const primaryOutfit = char!.clothingRecords?.[0];
     const descParts = [genderPrefix + (primary?.mediumPrompt || primary?.shortPrompt || char!.name)];
-    if (primaryOutfit?.description) {
-      descParts.push(`Wearing: ${primaryOutfit.description}`);
-    }
     return {
       name: char!.name,
       description: descParts.join('. '),
@@ -447,6 +474,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const decryptedKey = apiKey.key_value;
 
   let generationResponse;
+  const genStartTime = Date.now();
   try {
     // Request landscape-oriented image for backgrounds
     generationResponse = await provider.generateImage({
@@ -457,8 +485,50 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       quality: (imageProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
       style: 'natural', // Natural style works better for ambient backgrounds
     }, decryptedKey);
+
+    const genDurationMs = Date.now() - genStartTime;
+    const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
+
+    logLLMCall({
+      userId: job.userId,
+      type: 'IMAGE_GENERATION',
+      chatId: payload.chatId,
+      provider: imageProfile.provider,
+      modelName: imageProfile.modelName,
+      request: {
+        messages: [{ role: 'user', content: finalPrompt }],
+      },
+      response: {
+        content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
+      },
+      durationMs: genDurationMs,
+    }).catch(err => {
+      logger.warn('[StoryBackground] Failed to log image generation to LLM Inspector', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        error: getErrorMessage(err),
+      });
+    });
   } catch (error) {
     const errorMessage = getErrorMessage(error);
+    const genDurationMs = Date.now() - genStartTime;
+
+    logLLMCall({
+      userId: job.userId,
+      type: 'IMAGE_GENERATION',
+      chatId: payload.chatId,
+      provider: imageProfile.provider,
+      modelName: imageProfile.modelName,
+      request: {
+        messages: [{ role: 'user', content: finalPrompt }],
+      },
+      response: {
+        content: '',
+        error: errorMessage,
+      },
+      durationMs: genDurationMs,
+    }).catch(() => { /* never block on logging */ });
+
     logger.error('[StoryBackground] Image generation failed', {
       context: 'background-jobs.story-background',
       jobId: job.id,
@@ -485,11 +555,18 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     });
     return;
   }
-  const buffer = Buffer.from(rawData, 'base64');
+  const rawBuffer = Buffer.from(rawData, 'base64');
+  const providerMimeType = imageData.mimeType || 'image/png';
+  const providerExt = providerMimeType.split('/')[1] || 'png';
+  const providerFilename = `story_background_${Date.now()}.${providerExt}`;
+
+  // Convert to WebP for consistent storage
+  const converted = await convertToWebP(rawBuffer, providerMimeType, providerFilename);
+  const buffer = converted.buffer;
+  const mimeType = converted.mimeType;
+  const originalFilename = converted.filename;
+
   const sha256 = createHash('sha256').update(new Uint8Array(buffer)).digest('hex');
-  const mimeType = imageData.mimeType || 'image/png';
-  const ext = mimeType.split('/')[1] || 'png';
-  const originalFilename = `story_background_${Date.now()}.${ext}`;
   const fileId = crypto.randomUUID();
 
   // Build linkedTo array with chat and character IDs

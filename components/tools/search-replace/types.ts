@@ -7,7 +7,7 @@
 
 /**
  * Scope for search and replace operations
- * Note: 'persona' type removed - personas are now characters with controlledBy: 'user'
+ * User-controlled characters use controlledBy: 'user' on the CHARACTER type
  */
 export type SearchReplaceScope =
   | { type: 'chat'; chatId: string }

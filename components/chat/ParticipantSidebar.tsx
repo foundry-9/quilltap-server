@@ -20,6 +20,7 @@ import { useMemo, useState, useCallback } from 'react'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { Avatar } from '@/components/ui/Avatar'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
+import type { OutfitState, WardrobeCache } from '@/app/salon/[id]/hooks/useOutfit'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
 import type { TurnOrderEntry, TurnOrderStatus } from '@/lib/chat/turn-manager'
 
@@ -61,6 +62,15 @@ interface ParticipantSidebarProps {
   connectionProfiles?: ConnectionProfileOption[]
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
   onParticipantSettingsChange?: (participantId: string, updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
+  // Outfit display
+  outfitState?: OutfitState
+  wardrobeCache?: WardrobeCache
+  outfitLoading?: boolean
+  onEquipSlot?: (participantId: string, slot: string, itemId: string | null) => void
+  // Gift wardrobe item
+  onGiftItem?: (participantId: string) => void
+  // Avatar regeneration
+  onRegenerateAvatar?: (participantId: string) => void
   className?: string
 }
 
@@ -90,6 +100,12 @@ export function ParticipantSidebar({
   connectionProfiles,
   onConnectionProfileChange,
   onParticipantSettingsChange,
+  outfitState,
+  wardrobeCache,
+  outfitLoading,
+  onEquipSlot,
+  onGiftItem,
+  onRegenerateAvatar,
   className = '',
 }: ParticipantSidebarProps) {
   // Collapsed state with localStorage persistence (default: collapsed)
@@ -159,10 +175,10 @@ export function ParticipantSidebar({
     return turnSelectionResult?.nextSpeakerId ?? null
   }, [isGenerating, respondingParticipantId, turnState.lastSpeakerId, turnSelectionResult?.nextSpeakerId])
 
-  // Count active characters (not including personas)
+  // Count active characters (not including user-controlled participants)
   const activeCharacterCount = useMemo(() => {
-    return participants.filter(p => p.type === 'CHARACTER' && p.isActive).length
-  }, [participants])
+    return participants.filter(p => p.type === 'CHARACTER' && p.isActive && p.controlledBy !== 'user' && p.id !== userParticipantId).length
+  }, [participants, userParticipantId])
 
   // Count all active participants (characters + personas) for whisper eligibility
   const activeParticipantCount = useMemo(() => {
@@ -225,10 +241,10 @@ export function ParticipantSidebar({
             // Show pulsating animation during both waiting-for-response AND streaming phases
             const isActivelyGenerating = currentSpeakerId === participant.id && isGenerating
 
-            // Get participant name and avatar from character or persona
-            const name = participant.character?.name || participant.persona?.name || 'Unknown'
-            const avatarUrl = participant.character?.avatarUrl || participant.persona?.avatarUrl || null
-            const defaultImage = participant.character?.defaultImage || participant.persona?.defaultImage || null
+            // Get participant name and avatar from character data
+            const name = participant.character?.name || 'Unknown'
+            const avatarUrl = participant.character?.avatarUrl || null
+            const defaultImage = participant.character?.defaultImage || null
 
             // Get position badge class for collapsed view
             const positionBadgeClass = turnEntry ? getCollapsedPositionBadgeClass(turnEntry.status) : ''
@@ -401,6 +417,11 @@ export function ParticipantSidebar({
           // Get turn order info for this participant
           const turnEntry = turnOrderMap.get(participant.id)
 
+          // Get outfit data for this participant's character
+          const characterId = participant.character?.id
+          const charOutfit = characterId && outfitState ? outfitState[characterId] : undefined
+          const charWardrobe = characterId && wardrobeCache ? wardrobeCache[characterId] : undefined
+
           return (
             <ParticipantCard
               key={participant.id}
@@ -433,6 +454,13 @@ export function ParticipantSidebar({
                 ? (pId, status) => onParticipantSettingsChange(pId, { status, isActive: status === 'active' || status === 'silent' })
                 : undefined}
               onWhisper={activeParticipantCount >= 3 ? onWhisper : undefined}
+              equippedSlots={charOutfit?.slots}
+              equippedItems={charOutfit?.items}
+              wardrobeItems={charWardrobe}
+              onEquipSlot={onEquipSlot}
+              outfitLoading={outfitLoading}
+              onGiftItem={onGiftItem}
+              onRegenerateAvatar={onRegenerateAvatar}
             />
           )
         })}

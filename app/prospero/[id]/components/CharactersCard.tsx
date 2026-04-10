@@ -13,25 +13,14 @@ import Link from 'next/link'
 import Avatar from '@/components/ui/Avatar'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import type { Project } from '../types'
+import { ChevronIcon } from '@/components/ui/ChevronIcon'
 
 interface CharactersCardProps {
   project: Project
   onRemoveCharacter: (characterId: string) => void
+  onToggleAllowAnyCharacter: () => void
   expanded: boolean
   onToggle: () => void
-}
-
-function ChevronIcon({ className, expanded }: { className?: string; expanded: boolean }) {
-  return (
-    <svg
-      className={`${className} transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-    </svg>
-  )
 }
 
 function UsersIcon({ className }: { className?: string }) {
@@ -50,7 +39,7 @@ function CloseIcon({ className }: { className?: string }) {
   )
 }
 
-export function CharactersCard({ project, onRemoveCharacter, expanded, onToggle }: CharactersCardProps) {
+export function CharactersCard({ project, onRemoveCharacter, onToggleAllowAnyCharacter, expanded, onToggle }: CharactersCardProps) {
   const { shouldHideByIds } = useQuickHide()
 
   // Filter characters based on quick-hide rules
@@ -83,13 +72,30 @@ export function CharactersCard({ project, onRemoveCharacter, expanded, onToggle 
       {/* Content - expandable */}
       {expanded && (
         <div className="border-t qt-border-default">
-          {/* Roster mode indicator */}
-          <div className="px-4 py-2 qt-bg-muted">
-            <p className="qt-text-xs qt-text-secondary">
-              {project.allowAnyCharacter
-                ? 'Any character can participate in project chats.'
-                : 'Only roster characters can participate.'}
-            </p>
+          {/* Allow Any Character Toggle */}
+          <div className="flex items-center justify-between px-4 py-3 qt-bg-muted">
+            <div>
+              <h4 className="text-sm font-medium text-foreground">Allow Any Character</h4>
+              <p className="qt-text-xs qt-text-secondary">
+                {project.allowAnyCharacter
+                  ? 'Any character can join project chats.'
+                  : 'Only roster characters can participate.'}
+              </p>
+            </div>
+            <button
+              onClick={onToggleAllowAnyCharacter}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                project.allowAnyCharacter ? 'bg-primary' : 'qt-bg-muted'
+              }`}
+              role="switch"
+              aria-checked={project.allowAnyCharacter}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+                  project.allowAnyCharacter ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
 
           {visibleCharacters.length === 0 ? (

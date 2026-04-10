@@ -177,16 +177,16 @@ class UserScopedCharactersRepository extends UserScopedTaggableRepository<Charac
     return this.baseRepo.getDescriptions(characterId);
   }
 
-  async addPersona(characterId: string, personaId: string, isDefault?: boolean): Promise<Character | null> {
+  async addPartnerLink(characterId: string, partnerId: string, isDefault?: boolean): Promise<Character | null> {
     const character = await this.findById(characterId);
     if (!character) return null;
-    return this.baseRepo.addPersona(characterId, personaId, isDefault);
+    return this.baseRepo.addPartnerLink(characterId, partnerId, isDefault);
   }
 
-  async removePersona(characterId: string, personaId: string): Promise<Character | null> {
+  async removePartnerLink(characterId: string, partnerId: string): Promise<Character | null> {
     const character = await this.findById(characterId);
     if (!character) return null;
-    return this.baseRepo.removePersona(characterId, personaId);
+    return this.baseRepo.removePartnerLink(characterId, partnerId);
   }
 }
 

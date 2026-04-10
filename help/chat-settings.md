@@ -259,6 +259,28 @@ Configure AI-generated atmospheric background images for your chats.
 
 **Learn more:** See [Story Backgrounds](story-backgrounds.md) for detailed information.
 
+### Per-Conversation Avatar Generation
+
+Controls whether Quilltap generates unique AI portraits for each character in a chat. When enabled, character avatars are created automatically based on their physical descriptions and current outfits, giving each conversation its own visual identity — rather like commissioning a portrait painter for every new gathering.
+
+**Setting Options:**
+
+- **Enable Avatar Generation** — Toggle per-conversation avatar generation on or off. Available both when creating a new chat and as a toggle during active conversations.
+- **Regenerate Avatar** — In the participant sidebar, click the refresh button on any character's portrait to queue a new avatar. Useful after outfit changes or when the muse simply failed to capture the right likeness the first time.
+
+**How it works:**
+
+1. When enabled on chat creation, avatars are generated for all LLM-controlled characters as soon as the chat begins
+2. When toggled on during an active chat, generation is queued for all LLM characters
+3. Avatars update automatically when outfit changes occur (if enabled)
+4. Generated avatars appear in the participant sidebar and are specific to that conversation
+
+**Prerequisites:**
+
+- At least one image generation profile configured
+- Characters with physical descriptions produce significantly better results
+- The wardrobe system enhances avatar accuracy — equipped outfits are included in the generation prompt
+
 ### Automation Settings
 
 Controls automatic behavior during chat interactions.

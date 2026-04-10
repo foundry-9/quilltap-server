@@ -181,47 +181,28 @@ export function getRecommendedContextAllocation(
 } {
   const totalLimit = getModelContextLimit(provider, modelName)
 
-  // Scale allocations based on total context size
-  if (totalLimit >= 200000) {
-    // Large context models (Claude, Gemini)
-    return {
-      totalLimit,
-      systemPrompt: 4000,           // ~2% for system prompt
-      memories: 8000,               // ~4% for relevant memories
-      conversationSummary: 4000,    // ~2% for conversation summary
-      recentMessages: totalLimit * 0.6, // 60% for recent messages
-      responseReserve: 8192,        // Reserve for response
-    }
-  } else if (totalLimit >= 100000) {
-    // Medium-large context (GPT-4o)
-    return {
-      totalLimit,
-      systemPrompt: 3000,
-      memories: 6000,
-      conversationSummary: 3000,
-      recentMessages: totalLimit * 0.55,
-      responseReserve: 4096,
-    }
-  } else if (totalLimit >= 32000) {
-    // Medium context
-    return {
-      totalLimit,
-      systemPrompt: 2000,
-      memories: 4000,
-      conversationSummary: 2000,
-      recentMessages: totalLimit * 0.5,
-      responseReserve: 4096,
-    }
-  } else {
-    // Small context (< 32k)
-    return {
-      totalLimit,
-      systemPrompt: 1000,
-      memories: 2000,
-      conversationSummary: 1000,
-      recentMessages: totalLimit * 0.4,
-      responseReserve: 2048,
-    }
+  // Scale allocations as percentages of total context, with minimum floors
+  // System prompt gets up to 5% — enough for character identity, wardrobe,
+  // scenarios, tool instructions, and notifications
+  const systemPrompt = Math.max(1000, Math.floor(totalLimit * 0.05))
+  const memories = Math.max(2000, Math.floor(totalLimit * 0.04))
+  const conversationSummary = Math.max(1000, Math.floor(totalLimit * 0.02))
+  const responseReserve = totalLimit >= 200000 ? 8192
+    : totalLimit >= 100000 ? 4096
+    : totalLimit >= 32000 ? 4096
+    : 2048
+  const recentMessages = totalLimit >= 200000 ? totalLimit * 0.6
+    : totalLimit >= 100000 ? totalLimit * 0.55
+    : totalLimit >= 32000 ? totalLimit * 0.5
+    : totalLimit * 0.4
+
+  return {
+    totalLimit,
+    systemPrompt,
+    memories,
+    conversationSummary,
+    recentMessages,
+    responseReserve,
   }
 }
 

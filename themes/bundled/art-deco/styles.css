@@ -188,6 +188,11 @@
   --qt-chat-silent-border: hsl(88 25% 52%);
   --qt-chat-silent-label-fg: hsl(88 20% 35%);
 
+  /* Chat: Wardrobe action notices — warm gold, like polished brass fittings */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(43 80% 50%) 45%);
+  --qt-chat-wardrobe-border: hsl(43 80% 50%);
+  --qt-chat-wardrobe-label-fg: hsl(43 70% 35%);
+
   --qt-chat-composer-padding-x: 1.25rem;
   --qt-chat-composer-padding-y: 1rem;
 
@@ -249,8 +254,8 @@
   /* Entity-type badge colors — gold-tinted variants */
   --qt-badge-character-bg: hsl(222 47% 11% / 0.15);
   --qt-badge-character-fg: hsl(222 47% 35%);
-  --qt-badge-persona-bg: hsl(43 85% 55% / 0.15);
-  --qt-badge-persona-fg: hsl(43 80% 35%);
+  --qt-badge-user-character-bg: hsl(43 85% 55% / 0.15);
+  --qt-badge-user-character-fg: hsl(43 80% 35%);
   --qt-badge-chat-bg: hsl(142 76% 36% / 0.15);
   --qt-badge-chat-fg: hsl(142 76% 30%);
   --qt-badge-tag-bg: hsl(25 95% 53% / 0.15);
@@ -438,8 +443,8 @@
   /* Entity badge tokens — brighter for dark backgrounds */
   --qt-badge-character-bg: hsl(222 47% 35% / 0.3);
   --qt-badge-character-fg: hsl(222 60% 70%);
-  --qt-badge-persona-bg: hsl(43 85% 55% / 0.25);
-  --qt-badge-persona-fg: hsl(43 85% 70%);
+  --qt-badge-user-character-bg: hsl(43 85% 55% / 0.25);
+  --qt-badge-user-character-fg: hsl(43 85% 70%);
   --qt-badge-chat-bg: hsl(142 76% 36% / 0.3);
   --qt-badge-chat-fg: hsl(142 76% 65%);
   --qt-badge-tag-bg: hsl(25 95% 53% / 0.3);
@@ -494,6 +499,11 @@
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, hsl(88 30% 28%) 40%);
   --qt-chat-silent-border: hsl(88 30% 40%);
   --qt-chat-silent-label-fg: hsl(88 25% 55%);
+
+  /* Chat: Wardrobe action notices — burnished brass for dark mode */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(43 75% 32%) 45%);
+  --qt-chat-wardrobe-border: hsl(43 75% 32%);
+  --qt-chat-wardrobe-label-fg: hsl(43 85% 65%);
 
   /* Links — gold in dark mode */
   --qt-link-color: var(--deco-gold);

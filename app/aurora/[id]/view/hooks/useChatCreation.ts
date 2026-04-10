@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { TimestampConfig } from '@/lib/schemas/types'
+import type { OutfitSelection } from '@/components/wardrobe'
 
 interface UseChatCreationReturn {
   creatingChat: boolean
@@ -17,6 +18,8 @@ interface UseChatCreationReturn {
     scenario: string
     scenarioId?: string
     timestampConfig?: TimestampConfig | null
+    avatarGenerationEnabled?: boolean
+    outfitSelections?: OutfitSelection[]
   }) => Promise<void>
 }
 
@@ -34,6 +37,8 @@ export function useChatCreation(): UseChatCreationReturn {
     scenario: string
     scenarioId?: string
     timestampConfig?: TimestampConfig | null
+    avatarGenerationEnabled?: boolean
+    outfitSelections?: OutfitSelection[]
   }) => {
     const {
       characterId,
@@ -45,6 +50,8 @@ export function useChatCreation(): UseChatCreationReturn {
       scenario,
       scenarioId,
       timestampConfig,
+      avatarGenerationEnabled,
+      outfitSelections,
     } = props
 
     if (!selectedProfileId) {
@@ -81,6 +88,8 @@ export function useChatCreation(): UseChatCreationReturn {
           title: `Chat with ${characterName}`,
           ...(scenarioId ? { scenarioId } : scenario ? { scenario } : {}),
           ...(timestampConfig && timestampConfig.mode !== 'NONE' && { timestampConfig }),
+          ...(avatarGenerationEnabled && { avatarGenerationEnabled }),
+          ...(outfitSelections && outfitSelections.length > 0 && { outfitSelections }),
         }),
       })
 

@@ -35,6 +35,9 @@ export { UsersRepository } from './users.repository';
 export { VectorIndicesRepository } from './vector-indices.repository';
 export { TfidfVocabularyRepository } from './tfidf-vocabulary.repository';
 export { EmbeddingStatusRepository } from './embedding-status.repository';
+export { WardrobeRepository } from './wardrobe.repository';
+export { OutfitPresetsRepository } from './outfit-presets.repository';
+export { CharacterPluginDataRepository } from './character-plugin-data.repository';
 
 // Import all repository classes for container
 import { BackgroundJobsRepository } from './background-jobs.repository';
@@ -59,6 +62,9 @@ import { UsersRepository } from './users.repository';
 import { VectorIndicesRepository } from './vector-indices.repository';
 import { TfidfVocabularyRepository } from './tfidf-vocabulary.repository';
 import { EmbeddingStatusRepository } from './embedding-status.repository';
+import { WardrobeRepository } from './wardrobe.repository';
+import { OutfitPresetsRepository } from './outfit-presets.repository';
+import { CharacterPluginDataRepository } from './character-plugin-data.repository';
 
 /**
  * Container interface for all repository instances.
@@ -88,6 +94,9 @@ export interface RepositoryContainer {
   vectorIndices: VectorIndicesRepository;
   tfidfVocabularies: TfidfVocabularyRepository;
   embeddingStatus: EmbeddingStatusRepository;
+  wardrobe: WardrobeRepository;
+  outfitPresets: OutfitPresetsRepository;
+  characterPluginData: CharacterPluginDataRepository;
 }
 
 /**
@@ -129,6 +138,9 @@ export function createRepositories(): RepositoryContainer {
       vectorIndices: new VectorIndicesRepository(),
       tfidfVocabularies: new TfidfVocabularyRepository(),
       embeddingStatus: new EmbeddingStatusRepository(),
+      wardrobe: new WardrobeRepository(),
+      outfitPresets: new OutfitPresetsRepository(),
+      characterPluginData: new CharacterPluginDataRepository(),
     };
     return repositories;
   } catch (error) {

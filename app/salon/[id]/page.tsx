@@ -23,7 +23,8 @@ import {
   selectNextSpeaker,
   isAllLLMChat,
 } from '@/lib/chat/turn-manager'
-import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
+import { describeOutfit } from '@/lib/wardrobe/outfit-description'
 
 // Import extracted hooks
 import {
@@ -40,6 +41,8 @@ import {
   useImpersonation,
   useChatControls,
   useSSEStreaming,
+  useOutfit,
+  useOutfitNotification,
   type SwipeState,
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
@@ -50,6 +53,7 @@ import {
 } from './components'
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
+import { GiftWardrobeItemModal } from '@/components/wardrobe/gift-wardrobe-item-modal'
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -81,6 +85,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [roleplayTemplateName, setRoleplayTemplateName] = useState<string | null>(null)
   const [roleplayRenderingPatterns, setRoleplayRenderingPatterns] = useState<RenderingPattern[] | undefined>(undefined)
   const [roleplayDialogueDetection, setRoleplayDialogueDetection] = useState<DialogueDetection | null | undefined>(undefined)
+  const [narrationDelimiters, setNarrationDelimiters] = useState<NarrationDelimiters | undefined>(undefined)
   const [turnState, setTurnState] = useState<TurnState>(createInitialTurnState())
   const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
   const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
@@ -89,6 +94,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [pendingToolResults, setPendingToolResults] = useState<PendingToolResult[]>([])
   const [showAllWhispers, setShowAllWhispers] = useState(false)
   const [whisperTarget, setWhisperTarget] = useState<{ participantId: string; name: string } | null>(null)
+  const [giftTarget, setGiftTarget] = useState<{ participantId: string; characterId: string; name: string } | null>(null)
 
   // --- Refs ---
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -106,8 +112,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       for (const p of chat.participants) {
         if (p.character?.name) {
           names[p.id] = p.character.name
-        } else if (p.persona?.name) {
-          names[p.id] = p.persona.name
+        } else if (p.character?.name && p.controlledBy === 'user') {
+          names[p.id] = p.character.name
         }
       }
     }
@@ -116,9 +122,96 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   const handleWhisper = useCallback((participantId: string) => {
     const participant = chat?.participants.find(p => p.id === participantId)
-    const name = participant?.character?.name || participant?.persona?.name || 'Unknown'
+    const name = participant?.character?.name || 'Unknown'
     setWhisperTarget({ participantId, name })
   }, [chat?.participants])
+
+  const handleGiftItem = useCallback((participantId: string) => {
+    const participant = chat?.participants.find(p => p.id === participantId)
+    const characterId = participant?.character?.id
+    const name = participant?.character?.name || 'Unknown'
+    if (characterId) {
+      setGiftTarget({ participantId, characterId, name })
+    }
+  }, [chat?.participants])
+
+  // --- Avatar generation polling ---
+  // After triggering avatar generation, poll fetchChat until the avatar updates
+  const avatarPollRef = useRef<NodeJS.Timeout | null>(null)
+  const avatarPollCountRef = useRef(0)
+
+  const startAvatarPoll = useCallback((characterId: string) => {
+    // Snapshot the current avatar URL for this character to detect when it changes
+    const participant = chat?.participants.find(p => p.character?.id === characterId)
+    const snapshotAvatarUrl = participant?.character?.avatarUrl ?? null
+
+    // Clear any existing poll
+    if (avatarPollRef.current) {
+      clearInterval(avatarPollRef.current)
+    }
+    avatarPollCountRef.current = 0
+
+    avatarPollRef.current = setInterval(async () => {
+      avatarPollCountRef.current++
+      // Poll for up to 2 minutes (24 polls at 5s intervals)
+      if (avatarPollCountRef.current > 24) {
+        if (avatarPollRef.current) clearInterval(avatarPollRef.current)
+        avatarPollRef.current = null
+        return
+      }
+      try {
+        const res = await fetch(`/api/v1/chats/${id}`)
+        if (!res.ok) return
+        const data = await res.json()
+        // Check the enriched participant avatar URL — this changes when avatarOverrides update
+        const updatedParticipant = data.chat?.participants?.find(
+          (p: { character?: { id?: string } }) => p.character?.id === characterId
+        )
+        const newAvatarUrl = updatedParticipant?.character?.avatarUrl ?? null
+        if (newAvatarUrl && newAvatarUrl !== snapshotAvatarUrl) {
+          // Avatar URL changed — do a full fetchChat to update React state
+          if (avatarPollRef.current) clearInterval(avatarPollRef.current)
+          avatarPollRef.current = null
+          await fetchChat()
+          showInfoToast('Avatar updated')
+        }
+      } catch {
+        // Silently continue polling
+      }
+    }, 5000)
+  }, [chat?.participants, id, fetchChat])
+
+  // Cleanup avatar polling on unmount
+  useEffect(() => {
+    return () => {
+      if (avatarPollRef.current) {
+        clearInterval(avatarPollRef.current)
+      }
+    }
+  }, [])
+
+  const handleRegenerateAvatar = useCallback(async (participantId: string) => {
+    const participant = chat?.participants.find(p => p.id === participantId)
+    const characterId = participant?.character?.id
+    const name = participant?.character?.name || 'Unknown'
+    if (!characterId) return
+    try {
+      const res = await fetch(`/api/v1/chats/${id}?action=regenerate-avatar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId }),
+      })
+      if (res.ok) {
+        showInfoToast(`Avatar regeneration queued for ${name}`)
+        startAvatarPoll(characterId)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        showErrorToast(data.error || 'Failed to regenerate avatar')
+      }
+    } catch {
+      showErrorToast('Failed to regenerate avatar')
+    }
+  }, [chat?.participants, id, startAvatarPoll])
 
   const userParticipantIdSet = useMemo(() => {
     if (!chat?.participants) return new Set<string>()
@@ -253,6 +346,90 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // Keep refs in sync with SSE streaming state
   triggerContinueModeRef.current = sseStreaming.triggerContinueMode
   streamingRef.current = sseStreaming.streaming || sseStreaming.waitingForResponse
+
+  // --- Outfit hook ---
+  // Collect all character IDs from participants so we can fetch wardrobe for all of them
+  // (including user-controlled characters that may not have equipped outfits yet)
+  const participantCharacterIds = useMemo(() =>
+    (chat?.participants ?? [])
+      .filter(p => p.type === 'CHARACTER' && p.character?.id)
+      .map(p => p.character!.id),
+    [chat?.participants]
+  )
+  const outfit = useOutfit(id, participantCharacterIds)
+  const outfitNotification = useOutfitNotification(id)
+
+  // Refresh outfit state when a tool result comes back (generation completes)
+  // Invalidate wardrobe cache first since tools may have created/gifted new items
+  // Also detect tool-based outfit changes by comparing state before/after streaming
+  const wasGeneratingForOutfitRef = useRef(false)
+  const preStreamingOutfitRef = useRef<Record<string, Record<string, { title: string } | null>>>({})
+  useEffect(() => {
+    const isGenerating = sseStreaming.streaming || sseStreaming.waitingForResponse
+    if (!wasGeneratingForOutfitRef.current && isGenerating) {
+      // Streaming just started — snapshot current outfit state
+      const snapshot: Record<string, Record<string, { title: string } | null>> = {}
+      for (const [charId, charState] of Object.entries(outfit.outfitState)) {
+        snapshot[charId] = { ...charState.items }
+      }
+      preStreamingOutfitRef.current = snapshot
+    }
+    if (wasGeneratingForOutfitRef.current && !isGenerating) {
+      outfit.invalidateWardrobe()
+      outfit.refreshOutfit().then((newState) => {
+        if (!newState) return
+        // After refresh, compare outfit state to detect tool-based changes
+        const oldSnapshot = preStreamingOutfitRef.current
+        for (const [charId, charState] of Object.entries(newState)) {
+          const oldItems = oldSnapshot[charId]
+          if (!oldItems) continue
+          // Check if any slot changed
+          const changed = (['top', 'bottom', 'footwear', 'accessories'] as const).some(
+            slot => (oldItems[slot]?.title ?? null) !== (charState.items[slot]?.title ?? null)
+          )
+          if (changed) {
+            const participant = chat?.participants.find(p => p.character?.id === charId)
+            const charName = participant?.character?.name
+            if (charName) {
+              const outfitText = describeOutfit({
+                top: charState.items.top?.title ?? null,
+                bottom: charState.items.bottom?.title ?? null,
+                footwear: charState.items.footwear?.title ?? null,
+                accessories: charState.items.accessories?.title ?? null,
+              })
+              outfitNotification.addNotification(charName, 'clothing', outfitText)
+            }
+          }
+        }
+        preStreamingOutfitRef.current = {}
+      })
+    }
+    wasGeneratingForOutfitRef.current = isGenerating
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- outfit.refreshOutfit and invalidateWardrobe are stable (useCallback)
+  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, outfit.refreshOutfit, outfit.invalidateWardrobe])
+
+  // Equip slot handler that maps participantId -> characterId
+  const handleEquipSlot = useCallback(async (participantId: string, slot: string, itemId: string | null) => {
+    const participant = chat?.participants.find(p => p.id === participantId)
+    const characterId = participant?.character?.id
+    const characterName = participant?.character?.name
+    if (characterId) {
+      const newItems = await outfit.equipSlot(characterId, slot, itemId)
+      if (newItems && characterName) {
+        const outfitText = describeOutfit({
+          top: newItems.top?.title ?? null,
+          bottom: newItems.bottom?.title ?? null,
+          footwear: newItems.footwear?.title ?? null,
+          accessories: newItems.accessories?.title ?? null,
+        })
+        outfitNotification.addNotification(characterName, 'clothing', outfitText)
+      }
+      // If avatar generation is enabled, start polling for the auto-triggered avatar update
+      if (chat?.avatarGenerationEnabled) {
+        startAvatarPoll(characterId)
+      }
+    }
+  }, [chat?.participants, chat?.avatarGenerationEnabled, outfit, outfitNotification, startAvatarPoll])
 
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
@@ -472,6 +649,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         setRoleplayTemplateName(null)
         setRoleplayRenderingPatterns(undefined)
         setRoleplayDialogueDetection(undefined)
+        setNarrationDelimiters(undefined)
         return
       }
       try {
@@ -481,15 +659,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           setRoleplayTemplateName(template.name)
           setRoleplayRenderingPatterns(template.renderingPatterns)
           setRoleplayDialogueDetection(template.dialogueDetection)
+          setNarrationDelimiters(template.narrationDelimiters)
         } else {
           setRoleplayTemplateName(null)
           setRoleplayRenderingPatterns(undefined)
           setRoleplayDialogueDetection(undefined)
+          setNarrationDelimiters(undefined)
         }
       } catch {
         setRoleplayTemplateName(null)
         setRoleplayRenderingPatterns(undefined)
         setRoleplayDialogueDetection(undefined)
+        setNarrationDelimiters(undefined)
       }
     }
     fetchTemplateData()
@@ -703,15 +884,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (participant) {
         if (participant.type === 'CHARACTER' && participant.character) {
           return { name: participant.character.name, title: participant.character.title, avatarUrl: participant.character.avatarUrl, defaultImage: participant.character.defaultImage }
-        } else if (participant.type === 'PERSONA' && participant.persona) {
-          return { name: participant.persona.name, title: participant.persona.title, avatarUrl: participant.persona.avatarUrl, defaultImage: participant.persona.defaultImage }
         }
       }
     }
     if (message.role === 'USER') {
-      const persona = participantsWithImpersonation.getFirstPersona()
-      if (persona) {
-        return { name: persona.name, title: persona.title, avatarUrl: persona.avatarUrl, defaultImage: persona.defaultImage }
+      const userChar = participantsWithImpersonation.getFirstUserCharacter()
+      if (userChar) {
+        return { name: userChar.name, title: userChar.title, avatarUrl: userChar.avatarUrl, defaultImage: userChar.defaultImage }
       } else if (chat?.user) {
         return { name: chat.user.name || 'User', title: null, avatarUrl: chat.user.image ?? null, defaultImage: null }
       }
@@ -923,6 +1102,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onAgentModeToggle={chatControls.handleToggleAgentMode}
           storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}
           onRegenerateBackgroundClick={chatControls.handleRegenerateBackground}
+          onRoleplayTemplateChange={fetchChat}
           onSubmit={(e) => sseStreaming.sendMessage(
             e,
             input,
@@ -947,6 +1127,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           }}
           onGalleryClick={modals.openGallery}
           onGenerateImageClick={modals.openGenerateImage}
+          onLibraryFileClick={modals.openLibraryFilePicker}
+          onStandaloneGenerateImageClick={modals.openStandaloneGenerateImage}
           onAddCharacterClick={modals.openAddCharacter}
           onSettingsClick={modals.openChatSettings}
           onRenameClick={modals.openRename}
@@ -962,6 +1144,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onStopStreaming={sseStreaming.stopStreaming}
           hideStopButton={modals.showParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
+          narrationDelimiters={narrationDelimiters}
+          outfitNotificationHasPending={outfitNotification.hasPending}
+          outfitNotificationCount={outfitNotification.pendingCount}
+          onConsumeOutfitNotifications={outfitNotification.consumeNotifications}
         />
 
         {/* Modals */}
@@ -998,6 +1184,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           closeRunTool={modals.closeRunTool}
           stateEditorModalOpen={modals.stateEditorModalOpen}
           closeStateEditor={modals.closeStateEditor}
+          libraryFilePickerOpen={modals.libraryFilePickerOpen}
+          closeLibraryFilePicker={modals.closeLibraryFilePicker}
+          standaloneGenerateImageOpen={modals.standaloneGenerateImageOpen}
+          closeStandaloneGenerateImage={modals.closeStandaloneGenerateImage}
           allLLMPauseModalOpen={modals.allLLMPauseModalOpen}
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}
           reattributeDialogState={modals.reattributeDialogState}
@@ -1016,7 +1206,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           handleConflictResolution={handleConflictResolution}
           resolvingConflict={resolvingConflict}
           getFirstCharacter={participantsWithImpersonation.getFirstCharacter}
-          getFirstPersona={participantsWithImpersonation.getFirstPersona}
+          getFirstUserCharacter={participantsWithImpersonation.getFirstUserCharacter}
           onCharacterAdded={chatControls.handleCharacterAdded}
           onReattributed={handleReattributed}
           onConfirmStopImpersonation={impersonation.handleConfirmStopImpersonation}
@@ -1070,6 +1260,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onConnectionProfileChange={chatControls.handleConnectionProfileChange}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}
+          outfitState={outfit.outfitState}
+          wardrobeCache={outfit.wardrobeCache}
+          outfitLoading={outfit.loading}
+          onEquipSlot={handleEquipSlot}
+          onGiftItem={handleGiftItem}
+          onRegenerateAvatar={chat?.avatarGenerationEnabled ? handleRegenerateAvatar : undefined}
         />
       )}
 
@@ -1083,6 +1279,25 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onSent={async () => {
             setWhisperTarget(null)
             await fetchChat()
+          }}
+        />
+      )}
+
+      {giftTarget && (
+        <GiftWardrobeItemModal
+          recipientCharacterId={giftTarget.characterId}
+          recipientName={giftTarget.name}
+          chatId={id}
+          onClose={() => setGiftTarget(null)}
+          onGifted={(giftInfo) => {
+            outfit.invalidateWardrobe(giftTarget.characterId)
+            if (giftInfo) {
+              const slotsText = giftInfo.types.map(t => `**${t}**`).join(', ')
+              const description = `- received **${giftInfo.title}** (${slotsText})${giftInfo.equipped ? ' — now wearing' : ''}\n`
+              outfitNotification.addNotification(giftTarget.name, 'wardrobe', description)
+            }
+            setGiftTarget(null)
+            outfit.refreshOutfit()
           }}
         />
       )}

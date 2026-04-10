@@ -10,6 +10,18 @@ import { isParticipantPresent, type ParticipantStatus } from '@/lib/schemas/type
 import { calculateCurrentTimestamp, shouldInjectTimestamp, formatTimestampForSystemPrompt } from '@/lib/chat/timestamp-utils'
 import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter'
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
+import { describeOutfit } from '@/lib/wardrobe/outfit-description'
+
+/**
+ * Wardrobe context for system prompt rendering.
+ * Renders slot-based "Current Outfit" and "Available Wardrobe" sections.
+ */
+export interface WardrobeContext {
+  /** Currently equipped items, keyed by slot name (e.g. "top", "footwear") */
+  equippedItems: Record<string, { title: string; description?: string | null }>
+  /** All wardrobe items for this character (used to show non-equipped alternatives) */
+  wardrobeItems: Array<{ id: string; title: string; types: string[]; appropriateness?: string | null }>
+}
 
 /**
  * Other participant info for multi-character system prompts
@@ -40,7 +52,7 @@ export interface ProjectContext {
  */
 export function buildSystemPrompt(
   character: Character,
-  persona?: { name: string; description: string } | null,
+  userCharacter?: { name: string; description: string } | null,
   /** For multi-character chats: info about other participants */
   otherParticipants?: OtherParticipantInfo[],
   /** Roleplay template to prepend (formatting instructions) */
@@ -62,18 +74,22 @@ export function buildSystemPrompt(
   /** The responding character's own participation status */
   respondingCharacterStatus?: 'active' | 'silent' | 'absent' | 'removed',
   /** Scenario text override (from chat-level scenario selection) */
-  scenarioText?: string | null
+  scenarioText?: string | null,
+  /** Wardrobe context for slot-based outfit rendering */
+  wardrobeContext?: WardrobeContext | null,
+  /** Outfit change notifications from manual sidebar changes (separate from status changes for prominence) */
+  outfitChangeNotifications?: string[]
 ): string {
   const parts: string[] = []
 
   // Build template context for {{char}}, {{user}}, etc. replacement
   const templateContext: TemplateContext = {
     char: character.name,
-    user: persona?.name || 'User',
+    user: userCharacter?.name || 'User',
     description: character.description || '',
     personality: character.personality || '',
     scenario: scenarioText || character.scenarios?.[0]?.content || '',
-    persona: persona?.description || '',
+    persona: userCharacter?.description || '',
   }
 
   // Identity preamble: establish who the character is from the very first tokens.
@@ -83,6 +99,16 @@ export function buildSystemPrompt(
     '## Character Identity\nYou are {{char}}. Everything that follows defines who you are and how you behave. Stay in character at all times.',
     templateContext
   ))
+
+  // Outfit change notifications — placed immediately after identity for maximum prominence
+  // These must survive system prompt truncation, so they go early
+  if (outfitChangeNotifications && outfitChangeNotifications.length > 0) {
+    parts.push(
+      '## ⚠️ Outfit Change Notice\n' +
+      'IMPORTANT — The following outfit changes were just made. Acknowledge and incorporate these changes immediately:\n' +
+      outfitChangeNotifications.map(n => `- ${n}`).join('\n')
+    )
+  }
 
   // Handle timestamp injection
   if (timestampConfig && shouldInjectTimestamp(timestampConfig, isInitialMessage ?? false)) {
@@ -193,16 +219,47 @@ export function buildSystemPrompt(
     }
   }
 
-  // Clothing records - outfit context for the LLM
-  if (character.clothingRecords && character.clothingRecords.length > 0) {
-    const clothingLines = character.clothingRecords.map(record => {
-      const contextNote = record.usageContext ? ` (when: ${record.usageContext})` : '';
-      const descText = record.description || '';
-      if (!descText) return `- "${record.name}"${contextNote}`;
-      return `- "${record.name}"${contextNote}: ${descText}`;
-    });
+  // Wardrobe / clothing context for the LLM (slot-based wardrobe system)
+  if (wardrobeContext) {
+    const { equippedItems, wardrobeItems } = wardrobeContext
 
-    parts.push(`\n## Clothing / Outfits\n${clothingLines.join('\n')}`);
+    // Current Outfit section — use canonical describeOutfit utility
+    const formatItem = (slot: string): string | null => {
+      const item = equippedItems[slot]
+      if (!item) return null
+      return item.description ? `${item.title} (${item.description})` : item.title
+    }
+    const outfitDescription = describeOutfit({
+      top: formatItem('top'),
+      bottom: formatItem('bottom'),
+      footwear: formatItem('footwear'),
+      accessories: formatItem('accessories'),
+    })
+    parts.push(`\n## Current Outfit\n${outfitDescription}`)
+
+    // Available Wardrobe section — non-equipped items, token-efficient
+    // Collect IDs of equipped items so we can exclude them
+    const equippedIds = new Set<string>()
+    for (const slot of Object.keys(equippedItems)) {
+      // Find the wardrobe item that matches the equipped title for this slot
+      const equipped = equippedItems[slot]
+      if (equipped) {
+        const match = wardrobeItems.find(w => w.title === equipped.title)
+        if (match) equippedIds.add(match.id)
+      }
+    }
+
+    const availableItems = wardrobeItems.filter(w => !equippedIds.has(w.id))
+    if (availableItems.length > 0) {
+      // Keep it compact — titles only, no descriptions, to minimize token usage
+      const displayItems = availableItems.slice(0, 15)
+      const availableLines = displayItems.map(item => `- ${item.title}`)
+      let section = `\n## Available Wardrobe\n${availableLines.join('\n')}`
+      if (availableItems.length > 15) {
+        section += `\n(and ${availableItems.length - 15} more items — use list_wardrobe to browse)`
+      }
+      parts.push(section)
+    }
   }
 
   // Scenario/setting - use first scenario in the array, process templates
@@ -233,10 +290,10 @@ export function buildSystemPrompt(
     parts.push(toolReinforcement)
   }
 
-  // Persona information if provided (single-character mode)
-  // In multi-character mode, the persona is included in otherParticipants
-  if (persona && (!otherParticipants || otherParticipants.length === 0)) {
-    parts.push(`\n## User Persona\nYou are speaking with ${persona.name}. ${persona.description}`)
+  // User character information if provided (single-character mode)
+  // In multi-character mode, the user character is included in otherParticipants
+  if (userCharacter && (!otherParticipants || otherParticipants.length === 0)) {
+    parts.push(`\n## User Character\nYou are speaking with ${userCharacter.name}. ${userCharacter.description}`)
   }
 
   // Multi-character context section

@@ -279,6 +279,12 @@
   --qt-chat-silent-border: #7a9e8e;
   --qt-chat-silent-label-fg: #5d7e6e;
 
+  /* Chat: Wardrobe action notices — warm amber/gold for dressing room actions */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #c4a24e 40%);
+  --qt-chat-wardrobe-fg: var(--qt-chat-assistant-fg);
+  --qt-chat-wardrobe-border: #c4a24e;
+  --qt-chat-wardrobe-label-fg: #9a7d2e;
+
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
   --qt-chat-composer-radius: var(--radius-lg);
@@ -380,8 +386,8 @@
   /* Entity-type badge colors — desaturated, professional */
   --qt-badge-character-bg: hsl(225 55% 55% / 0.12);
   --qt-badge-character-fg: hsl(225 55% 42%);
-  --qt-badge-persona-bg: hsl(270 45% 55% / 0.12);
-  --qt-badge-persona-fg: hsl(270 45% 42%);
+  --qt-badge-user-character-bg: hsl(270 45% 55% / 0.12);
+  --qt-badge-user-character-fg: hsl(270 45% 42%);
   --qt-badge-chat-bg: hsl(152 50% 38% / 0.12);
   --qt-badge-chat-fg: hsl(152 50% 30%);
   --qt-badge-tag-bg: hsl(25 70% 48% / 0.12);
@@ -414,6 +420,18 @@
   --qt-badge-source-git-fg: hsl(25 70% 38%);
   --qt-badge-source-manual-bg: var(--color-muted);
   --qt-badge-source-manual-fg: var(--color-muted-foreground);
+
+  /* Wardrobe slot badge colors */
+  --qt-badge-wardrobe-top-bg: hsl(220 60% 55% / 0.12);
+  --qt-badge-wardrobe-top-fg: hsl(220 60% 42%);
+  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 38% / 0.12);
+  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 30%);
+  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 48% / 0.12);
+  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 38%);
+  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 55% / 0.12);
+  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 42%);
+  --qt-badge-wardrobe-shared-bg: hsl(240 50% 55% / 0.12);
+  --qt-badge-wardrobe-shared-fg: hsl(240 50% 42%);
 
   /* Capability badge colors */
   --qt-badge-capability-bg: hsl(225 55% 55% / 0.08);
@@ -612,8 +630,8 @@
   /* Entity badge tokens — brighter for dark backgrounds */
   --qt-badge-character-bg: hsl(225 55% 58% / 0.25);
   --qt-badge-character-fg: hsl(225 55% 72%);
-  --qt-badge-persona-bg: hsl(270 45% 58% / 0.25);
-  --qt-badge-persona-fg: hsl(270 45% 72%);
+  --qt-badge-user-character-bg: hsl(270 45% 58% / 0.25);
+  --qt-badge-user-character-fg: hsl(270 45% 72%);
   --qt-badge-chat-bg: hsl(152 50% 40% / 0.25);
   --qt-badge-chat-fg: hsl(152 50% 62%);
   --qt-badge-tag-bg: hsl(25 70% 50% / 0.25);
@@ -639,6 +657,18 @@
   --qt-badge-source-git-bg: hsl(25 70% 50% / 0.25);
   --qt-badge-source-git-fg: hsl(25 70% 62%);
 
+  /* Wardrobe slot badge tokens — dark mode */
+  --qt-badge-wardrobe-top-bg: hsl(220 60% 58% / 0.25);
+  --qt-badge-wardrobe-top-fg: hsl(220 60% 72%);
+  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 40% / 0.25);
+  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 62%);
+  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 50% / 0.25);
+  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 68%);
+  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 58% / 0.25);
+  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 72%);
+  --qt-badge-wardrobe-shared-bg: hsl(240 50% 58% / 0.25);
+  --qt-badge-wardrobe-shared-fg: hsl(240 50% 72%);
+
   /* Capability badge tokens */
   --qt-badge-capability-bg: hsl(225 55% 58% / 0.18);
   --qt-badge-capability-fg: hsl(225 55% 72%);
@@ -658,6 +688,11 @@
   --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 65%, #4a7a6a 35%);
   --qt-chat-silent-border: #4a7a6a;
   --qt-chat-silent-label-fg: #8ab8a4;
+
+  /* Chat: Wardrobe action notices — dark mode */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #8a6d1b 40%);
+  --qt-chat-wardrobe-border: #8a6d1b;
+  --qt-chat-wardrobe-label-fg: #d4b65c;
 
   /* Response status — brighter indicators */
   --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);

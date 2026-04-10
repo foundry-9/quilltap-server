@@ -7,6 +7,7 @@
  */
 
 import type {
+  NarrationDelimiters,
   RoleplayTemplateConfig,
   RoleplayTemplateMetadata,
   RoleplayTemplatePlugin,
@@ -70,6 +71,12 @@ export interface CreateSingleTemplatePluginOptions {
 
   /** Tags for categorization and searchability */
   tags?: string[];
+
+  /**
+   * Narration delimiters — required.
+   * Single string (same open/close, e.g., '*') or [open, close] tuple (e.g., ['[', ']']).
+   */
+  narrationDelimiters: NarrationDelimiters;
 
   /** Template version */
   version?: string;
@@ -201,6 +208,7 @@ export function createSingleTemplatePlugin(
     systemPrompt,
     author,
     tags,
+    narrationDelimiters,
     version,
     initialize,
     enableLogging,
@@ -220,6 +228,7 @@ export function createSingleTemplatePlugin(
       description,
       systemPrompt,
       tags,
+      narrationDelimiters,
     },
     initialize,
     enableLogging,
@@ -262,6 +271,25 @@ export function validateTemplateConfig(template: RoleplayTemplateConfig): boolea
         throw new Error('All tags must be strings');
       }
     }
+  }
+
+  // Validate narrationDelimiters (required)
+  if (!template.narrationDelimiters) {
+    throw new Error('Template narrationDelimiters is required');
+  }
+  if (typeof template.narrationDelimiters === 'string') {
+    if (template.narrationDelimiters.length === 0) {
+      throw new Error('Template narrationDelimiters string must not be empty');
+    }
+  } else if (Array.isArray(template.narrationDelimiters)) {
+    if (template.narrationDelimiters.length !== 2) {
+      throw new Error('Template narrationDelimiters array must have exactly 2 elements [open, close]');
+    }
+    if (!template.narrationDelimiters[0] || !template.narrationDelimiters[1]) {
+      throw new Error('Template narrationDelimiters array elements must not be empty');
+    }
+  } else {
+    throw new Error('Template narrationDelimiters must be a string or [string, string] tuple');
   }
 
   return true;

@@ -37,8 +37,6 @@ export interface CreateMemoryOptions {
   tags?: string[]
   /** Importance score (0-1) */
   importance?: number
-  /** Associated persona ID */
-  personaId?: string | null
   /** Character ID this memory is about (for inter-character memories) */
   aboutCharacterId?: string | null
   /** Source chat ID */
@@ -192,7 +190,6 @@ async function createMemoryDirect(
     keywords: data.keywords || [],
     tags: data.tags || [],
     importance,
-    personaId: data.personaId || null,
     aboutCharacterId: data.aboutCharacterId || null,
     chatId: data.chatId || null,
     source: data.source || 'MANUAL',
@@ -262,7 +259,6 @@ async function createMemoryDirectWithEmbedding(
     keywords: data.keywords || [],
     tags: data.tags || [],
     importance,
-    personaId: data.personaId || null,
     aboutCharacterId: data.aboutCharacterId || null,
     chatId: data.chatId || null,
     source: data.source || 'MANUAL',

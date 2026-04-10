@@ -414,7 +414,7 @@ async function handleExportEntities(req: NextRequest, context: any) {
       case 'roleplay-templates': {
         const templates = await globalRepos.roleplayTemplates.findAll();
         const userTemplates = templates.filter(
-          (t) => !t.isBuiltIn && !t.pluginName && t.userId === user.id
+          (t) => !t.isBuiltIn && t.userId === user.id
         );
         entities = userTemplates.map((t) => ({ id: t.id, name: t.name }));
         break;

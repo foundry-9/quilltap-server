@@ -16,8 +16,8 @@ interface ImageModalProps {
   fileId?: string
   characterId?: string
   characterName?: string
-  personaId?: string
-  personaName?: string
+  userCharacterId?: string
+  userCharacterName?: string
   onDelete?: () => void
 }
 
@@ -29,8 +29,8 @@ export default function ImageModal({
   fileId,
   characterId,
   characterName,
-  personaId,
-  personaName,
+  userCharacterId,
+  userCharacterName,
   onDelete,
 }: ImageModalProps) {
   const [isTagging, setIsTagging] = useState(false)
@@ -68,7 +68,7 @@ export default function ImageModal({
       await copyImageToClipboard(src)
       showSuccessToast('Image copied to clipboard')
     } catch (error) {
-      console.error('Failed to copy image to clipboard:', { error: error instanceof Error ? error.message : String(error) })
+      console.error('Failed to copy image to clipboard:', error)
       showErrorToast('Failed to copy image to clipboard')
     }
   }
@@ -101,8 +101,8 @@ export default function ImageModal({
     }
   }
 
-  const handleTagPersona = async () => {
-    if (!fileId || !personaId) return
+  const handleTagUserCharacter = async () => {
+    if (!fileId || !userCharacterId) return
 
     setIsTagging(true)
     try {
@@ -110,8 +110,8 @@ export default function ImageModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tagType: 'PERSONA',
-          tagId: personaId,
+          tagType: 'CHARACTER',
+          tagId: userCharacterId,
         }),
       })
 
@@ -120,7 +120,7 @@ export default function ImageModal({
         throw new Error(data.error || 'Failed to tag image')
       }
 
-      showSuccessToast(`Image added to ${personaName || 'persona'}'s gallery`)
+      showSuccessToast(`Image added to ${userCharacterName || 'user character'}'s gallery`)
     } catch (error) {
       console.error('Failed to tag image:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast(error instanceof Error ? error.message : 'Failed to tag image')
@@ -160,7 +160,7 @@ export default function ImageModal({
 
   if (!isOpen) return null
 
-  const canTag = fileId && (characterId || personaId)
+  const canTag = fileId && (characterId || userCharacterId)
   const canDelete = fileId
 
   // Use portal to render at document body level, avoiding stacking context issues
@@ -189,16 +189,16 @@ export default function ImageModal({
             </svg>
           </button>
         )}
-        {/* Tag to persona button */}
-        {canTag && personaId && (
+        {/* Tag to user character button */}
+        {canTag && userCharacterId && (
           <button
             onClick={(e) => {
               e.stopPropagation()
-              handleTagPersona()
+              handleTagUserCharacter()
             }}
             disabled={isTagging}
             className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors disabled:opacity-50"
-            title={`Add to ${personaName || 'persona'}'s gallery`}
+            title={`Add to ${userCharacterName || 'user character'}'s gallery`}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />

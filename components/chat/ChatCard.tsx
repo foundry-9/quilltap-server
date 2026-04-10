@@ -47,7 +47,7 @@ export interface ChatCardProject {
   color?: string | null
 }
 
-export interface ChatCardPersona {
+export interface ChatCardUserCharacter {
   id: string
   name: string
   title?: string | null
@@ -64,7 +64,7 @@ export interface ChatCardData {
   updatedAt: string
   lastMessageAt?: string
   project?: ChatCardProject | null
-  persona?: ChatCardPersona | null
+  userCharacter?: ChatCardUserCharacter | null
   /** Last message preview text (optional) */
   previewText?: string | null
   /** Story background image URL - displayed instead of avatars when present */
@@ -298,14 +298,14 @@ export function ChatCard({
             {/* Metadata row */}
             <p className="qt-text-small qt-text-secondary">
               {showAvatars && participantNames}
-              {chat.persona && (
+              {chat.userCharacter && (
                 <>
                   {showAvatars && ' with '}
                   {!showAvatars && 'with '}
-                  {formatCharacterName(chat.persona)}
+                  {formatCharacterName(chat.userCharacter)}
                 </>
               )}
-              {(showAvatars || chat.persona) && ' \u2022 '}
+              {(showAvatars || chat.userCharacter) && ' \u2022 '}
               {dateStr}
             </p>
 

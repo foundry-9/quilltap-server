@@ -143,9 +143,6 @@ logger.error('Failed to connect', { endpoint: 'api.example.com' }, error);
 | `SystemPromptPlugin` | System prompt plugin interface |
 | `SystemPromptData` | Individual prompt entry |
 | `SystemPromptMetadata` | System prompt plugin metadata |
-| `RoleplayTemplatePlugin` | Roleplay template plugin interface |
-| `RoleplayTemplateConfig` | Roleplay template configuration |
-
 ### Common Types
 
 | Type | Description |

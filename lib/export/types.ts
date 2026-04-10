@@ -17,6 +17,7 @@ import type {
   RoleplayTemplate,
   Project,
 } from '@/lib/schemas/types';
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 // ============================================================================
 // EXPORT ENTITY TYPES
@@ -101,6 +102,10 @@ export interface QuilltapExportManifest {
 export interface ExportedCharacter extends Character {
   _linkedPersonaNames?: string[];
   _tagNames?: string[];
+  /** Wardrobe items belonging to this character, exported alongside the character */
+  wardrobeItems?: WardrobeItem[];
+  /** Per-plugin metadata for this character, keyed by plugin name */
+  pluginData?: Record<string, unknown>;
 }
 
 /**

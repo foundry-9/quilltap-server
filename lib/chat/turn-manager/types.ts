@@ -58,6 +58,6 @@ export interface CalculateTurnStateOptions {
   /** All active participants in the chat */
   participants: ChatParticipantBase[];
 
-  /** User's participant ID (persona participant, if exists) */
+  /** User's participant ID (user-controlled character participant, if exists) */
   userParticipantId: string | null;
 }

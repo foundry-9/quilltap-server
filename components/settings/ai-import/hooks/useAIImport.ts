@@ -25,6 +25,7 @@ const INITIAL_STEPS: Record<AIImportStepName, StepProgress> = {
   first_message: { status: 'pending' },
   system_prompts: { status: 'pending' },
   physical_descriptions: { status: 'pending' },
+  wardrobe_items: { status: 'pending' },
   pronouns: { status: 'pending' },
   memories: { status: 'pending' },
   chats: { status: 'pending' },

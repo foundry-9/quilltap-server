@@ -16,6 +16,7 @@ import { handleEmbeddingReindexAll } from './embedding-reindex';
 import { handleStoryBackgroundGeneration } from './story-background';
 import { handleChatDangerClassification } from './chat-danger-classification';
 import { handleSceneStateTracking } from './scene-state-tracking';
+import { handleCharacterAvatarGeneration } from './character-avatar';
 
 /**
  * Job handler function type
@@ -37,6 +38,7 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   STORY_BACKGROUND_GENERATION: handleStoryBackgroundGeneration,
   CHAT_DANGER_CLASSIFICATION: handleChatDangerClassification,
   SCENE_STATE_TRACKING: handleSceneStateTracking,
+  CHARACTER_AVATAR_GENERATION: handleCharacterAvatarGeneration,
 };
 
 /**
@@ -62,3 +64,4 @@ export { handleEmbeddingReindexAll };
 export { handleStoryBackgroundGeneration };
 export { handleChatDangerClassification };
 export { handleSceneStateTracking };
+export { handleCharacterAvatarGeneration };

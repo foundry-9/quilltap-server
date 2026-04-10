@@ -66,6 +66,10 @@ function buildTemplate(overrides: Partial<RoleplayTemplate> = {}): RoleplayTempl
     systemPrompt: overrides.systemPrompt ?? 'Use this format',
     isBuiltIn: overrides.isBuiltIn ?? false,
     tags: overrides.tags ?? [],
+    delimiters: overrides.delimiters ?? [],
+    renderingPatterns: overrides.renderingPatterns ?? [],
+    dialogueDetection: overrides.dialogueDetection ?? null,
+    narrationDelimiters: overrides.narrationDelimiters ?? '*',
     createdAt: timestamp,
     updatedAt: overrides.updatedAt ?? timestamp,
   }
@@ -151,7 +155,7 @@ describe('Roleplay Template Routes', () => {
 
       const req = createMockRequest(
         'http://localhost/api/v1/roleplay-templates',
-        { name: 'Standard', description: 'desc', systemPrompt: 'stay IC' },
+        { name: 'Standard', description: 'desc', systemPrompt: 'stay IC', narrationDelimiters: '*' },
         'POST',
       )
 
@@ -181,6 +185,7 @@ describe('Roleplay Template Routes', () => {
           name: '  My Template  ',
           description: '  desc  ',
           systemPrompt: '  Use this prompt  ',
+          narrationDelimiters: '*',
         },
         'POST',
       )
@@ -196,9 +201,12 @@ describe('Roleplay Template Routes', () => {
         systemPrompt: 'Use this prompt',
         isBuiltIn: false,
         tags: [],
-        annotationButtons: [],
-        renderingPatterns: [],
+        delimiters: [],
+        renderingPatterns: [
+          { pattern: '(?<!\\*)\\*[^\\*]+\\*(?!\\*)', className: 'qt-chat-narration' },
+        ],
         dialogueDetection: null,
+        narrationDelimiters: '*',
       })
       expect(data).toEqual(createdTemplate)
     })

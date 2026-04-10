@@ -31,12 +31,12 @@ export function getFilePath(file: FileEntry): string {
 }
 
 /**
- * Get the avatar file path for an entity (character or persona)
+ * Get the avatar file path for an entity (character)
  *
  * Returns either the default image file path or the avatarUrl.
  * Handles the common pattern of enriching entities with image data.
  *
- * @param entity - Character or Persona with optional defaultImageId and avatarUrl
+ * @param entity - Character with optional defaultImageId and avatarUrl
  * @param file - The file entry if defaultImageId was resolved
  * @returns Object with filepath and url, or null if no avatar
  *

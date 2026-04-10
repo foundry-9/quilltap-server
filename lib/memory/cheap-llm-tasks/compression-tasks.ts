@@ -102,7 +102,7 @@ Produce a single block of condensed memory notes as a bulleted list. Each bullet
  *
  * @param messages - Messages to compress (typically messages 1 through N-windowSize)
  * @param characterName - The character's name for context
- * @param userName - The user's name/persona for context
+ * @param userName - The user's name for context
  * @param targetTokens - Target token count for the compressed output
  * @param selection - The cheap LLM provider selection
  * @param userId - The user ID for API key retrieval

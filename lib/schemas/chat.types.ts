@@ -239,7 +239,7 @@ export const ChatParticipantSchema = z.object({
   // LLM configuration (for AI characters only, ignored when controlledBy is 'user')
   connectionProfileId: UUIDSchema.nullable().optional(),  // Required for LLM control, null for user control
   imageProfileId: UUIDSchema.nullable().optional(),       // Image generation profile
-  roleplayTemplateId: z.string().nullable().optional(),   // Roleplay template override - can be UUID or 'plugin:*' format
+  roleplayTemplateId: z.string().nullable().optional(),   // Roleplay template override
 
   // Per-chat customization
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
@@ -275,7 +275,7 @@ export const ChatParticipantBaseSchema = z.object({
   controlledBy: ControlledByEnum.optional().default('llm'),  // Who controls: 'llm' or 'user'
   connectionProfileId: UUIDSchema.nullable().optional(),
   imageProfileId: UUIDSchema.nullable().optional(),
-  roleplayTemplateId: z.string().nullable().optional(),  // Roleplay template override - can be UUID or 'plugin:*' format
+  roleplayTemplateId: z.string().nullable().optional(),  // Roleplay template override
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
   displayOrder: z.number().default(0),
   /** @deprecated Use `status` field instead. Kept as computed compat field (true when status is active or silent). */
@@ -366,6 +366,9 @@ export const ChatMetadataSchema = z.object({
   /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
 
+  /** Pending outfit change notifications keyed by characterId, cleared after delivery */
+  pendingOutfitNotifications: JsonSchema.nullable().optional(),
+
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),
 
@@ -399,6 +402,15 @@ export const ChatMetadataSchema = z.object({
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
+
+  /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories } } */
+  equippedOutfit: JsonSchema.nullable().optional(),
+
+  /** Per-character generated avatars reflecting current outfit: { [characterId]: { imageId, generatedAt, afterMessageCount } } */
+  characterAvatars: JsonSchema.nullable().optional(),
+
+  /** Whether to auto-generate character avatars when outfits change (null = disabled) */
+  avatarGenerationEnabled: z.boolean().nullable().optional(),
 
   /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
   chatType: z.enum(['salon', 'help']).default('salon'),
@@ -477,6 +489,9 @@ export const ChatMetadataBaseSchema = z.object({
   /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
 
+  /** Pending outfit change notifications keyed by characterId, cleared after delivery */
+  pendingOutfitNotifications: JsonSchema.nullable().optional(),
+
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),
 
@@ -510,6 +525,15 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
+
+  /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories } } */
+  equippedOutfit: JsonSchema.nullable().optional(),
+
+  /** Per-character generated avatars reflecting current outfit: { [characterId]: { imageId, generatedAt, afterMessageCount } } */
+  characterAvatars: JsonSchema.nullable().optional(),
+
+  /** Whether to auto-generate character avatars when outfits change (null = disabled) */
+  avatarGenerationEnabled: z.boolean().nullable().optional(),
 
   /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats */
   chatType: z.enum(['salon', 'help']).default('salon'),

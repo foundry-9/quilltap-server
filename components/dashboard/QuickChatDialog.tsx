@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
+import { OutfitSelector } from '@/components/wardrobe'
 import { useQuickChat } from './hooks'
 
 const CUSTOM_SCENARIO_VALUE = '__custom__'
@@ -31,6 +32,8 @@ export function QuickChatDialog({
     scenarioId,
     scenarios,
     timestampConfig,
+    avatarGenerationEnabled,
+    outfitSelections,
     creatingChat,
     setSelectedProfileId,
     setSelectedPartnerId,
@@ -38,6 +41,8 @@ export function QuickChatDialog({
     setScenario,
     setScenarioId,
     setTimestampConfig,
+    setAvatarGenerationEnabled,
+    setOutfitSelections,
     fetchData,
     handleCreateChat,
     reset,
@@ -141,7 +146,7 @@ export function QuickChatDialog({
                     value={selectedImageProfileId}
                     onChange={setSelectedImageProfileId}
                     characterId={characterId}
-                    personaId={selectedPartnerId}
+                    userCharacterId={selectedPartnerId}
                   />
                 </div>
 
@@ -186,8 +191,28 @@ export function QuickChatDialog({
                 </div>
               </div>
 
-              {/* Right Column: Timestamp Configuration */}
-              <div>
+              {/* Right Column: Outfit & Timestamp Configuration */}
+              <div className="space-y-4">
+                <OutfitSelector
+                  characters={[{ id: characterId, name: characterName }]}
+                  onSelectionsChange={setOutfitSelections}
+                  disabled={creatingChat}
+                />
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={avatarGenerationEnabled}
+                      onChange={(e) => setAvatarGenerationEnabled(e.target.checked)}
+                      className="qt-checkbox"
+                      disabled={creatingChat}
+                    />
+                    <span className="qt-text-small">Auto-generate character avatars</span>
+                  </label>
+                  <p className="qt-text-xs qt-text-muted mt-1">
+                    Generate new portraits when outfits change (uses image API)
+                  </p>
+                </div>
                 <TimestampConfigCard
                   config={timestampConfig}
                   onChange={setTimestampConfig}

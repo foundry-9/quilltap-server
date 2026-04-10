@@ -2,6 +2,15 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [2.2.0] - 2026-04-09
+
+### Removed
+
+- **Breaking:** Removed roleplay template utilities from main exports — `createRoleplayTemplatePlugin`, `createSingleTemplatePlugin`, `validateTemplateConfig`, `validateRoleplayTemplatePlugin` are no longer exported
+- Removed `./roleplay-templates` export path from package.json
+- Roleplay templates are now native first-class entities in Quilltap v4.2.0, no plugin needed
+- Updated `@quilltap/plugin-types` dependency to `^2.2.0`
+
 ## [1.4.0] - 2026-02-25
 
 ### Added

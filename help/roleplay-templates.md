@@ -46,7 +46,7 @@ When a template is active in a chat:
 Templates can include placeholders that get replaced with actual names:
 
 - **{{char}}** — Replaced with the character's name
-- **{{user}}** — Replaced with the user's name or persona
+- **{{user}}** — Replaced with the user's name or user character name
 
 This allows templates to reference character and user names dynamically.
 
@@ -291,13 +291,31 @@ Some templates include dialogue detection:
 5. **Include edge cases** — Address unusual formatting situations
 6. **Be specific** — Exact formatting beats vague guidelines
 
+### Narration Delimiters (Required)
+
+Every roleplay template **must** declare how narration is delimited. This is the `narrationDelimiters` field, which tells the system how to identify narration text in the AI's response — not just for display styling, but for semantic understanding of what is narration versus speech.
+
+Narration delimiters can be:
+
+- **A single character** — The same delimiter opens and closes narration (e.g., `*` for `*narration*`)
+- **A pair of characters** — Different opening and closing delimiters (e.g., `[` and `]` for `[narration]`)
+
+Speech (dialogue) is everything that isn't delimited as narration. If your template uses quotes for speech, that's a display convention — but what the system needs to know is how narration is marked.
+
+**Examples:**
+
+| Template | Narration Delimiters | Narration Looks Like |
+|----------|---------------------|---------------------|
+| Standard | `*` | `*She crossed her arms.* ` |
+| Quilltap RP | `[`, `]` | `[She crossed her arms.]` |
+
 ### Formatting Conventions
 
 Common elements to define:
 
 - **Dialogue** — How speech is marked (quotes, asterisks, etc.)
 - **Actions** — How actions are marked (*action* or [action])
-- **Narration** — How narrative text is formatted
+- **Narration** — How narrative text is formatted (must be declared via narration delimiters)
 - **Thoughts** — How character thoughts are shown
 - **Out-of-Character** — How OOC comments appear ((comment))
 - **Emphasis** — How **bold** and *italic* text should work
@@ -328,28 +346,6 @@ Your templates are available:
 - In Settings → Roleplay Templates for management
 - Across all your devices when logged in
 - Only to you (not shared with others unless exported)
-
-## Plugin-Provided Templates
-
-### Installing Theme Plugins
-
-Additional templates can be installed via plugins:
-
-1. Go to **Settings** → **Plugins**
-2. Search for template plugins
-3. Install the ones you want
-4. New templates appear in your template list
-5. Mark "Built-in" if they come from plugins
-
-### Using Plugin Templates
-
-Plugin templates:
-
-- Appear in your template list
-- Can be previewed and copied
-- Cannot be edited (like built-in templates)
-- Are marked with their plugin name
-- Can be used as-is or copied to customize
 
 ## Troubleshooting
 
@@ -416,8 +412,7 @@ Plugin templates:
 3. **Keep it simple** — Complex formatting isn't always better
 4. **Document your style** — Write clear examples in descriptions
 5. **Review and iterate** — Refine templates as you use them
-6. **Share what works** — Share successful templates as plugins
-7. **Backup important templates** — Save copies before major edits
+6. **Backup important templates** — Save copies before major edits
 
 ## In-Chat Navigation
 

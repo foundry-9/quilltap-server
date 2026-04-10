@@ -36,7 +36,7 @@ const makeCharacter = (id: string, overrides: Partial<Character> = {}): Characte
   sillyTavernData: null,
   isFavorite: false,
   talkativeness: 0.5,
-  personaLinks: [],
+  partnerLinks: [],
   tags: [],
   avatarOverrides: [],
   physicalDescriptions: [],

@@ -10,9 +10,8 @@ import { ChatCard, type ChatCardData } from '@/components/chat/ChatCard'
 
 interface ChatParticipant {
   id: string
-  type: 'CHARACTER' | 'PERSONA'
+  type: 'CHARACTER'
   characterId?: string | null
-  personaId?: string | null
   connectionProfileId?: string | null
   imageProfileId?: string | null
   isActive: boolean
@@ -27,12 +26,6 @@ interface ChatParticipant {
       filepath: string
       url?: string
     }
-    tags?: string[]
-  }
-  persona?: {
-    id: string
-    name: string
-    title?: string | null
     tags?: string[]
   }
 }
@@ -81,12 +74,6 @@ function transformChatToCardData(chat: Chat): ChatCardData {
       tags: p.character!.tags,
     }))
 
-  // Extract first persona participant
-  const personaParticipant = chat.participants.find(
-    p => p.type === 'PERSONA' && p.isActive && p.persona
-  )
-  const persona = personaParticipant?.persona || null
-
   return {
     id: chat.id,
     title: chat.title,
@@ -95,7 +82,6 @@ function transformChatToCardData(chat: Chat): ChatCardData {
     tags: chat.tags,
     updatedAt: chat.updatedAt,
     project: chat.project,
-    persona,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     isDangerousChat: chat.isDangerousChat === true,
   }
@@ -120,9 +106,6 @@ export default function ChatsPage() {
       for (const participant of chat.participants) {
         if (participant.character?.tags) {
           allTagIds.push(...participant.character.tags)
-        }
-        if (participant.persona?.tags) {
-          allTagIds.push(...participant.persona.tags)
         }
       }
 

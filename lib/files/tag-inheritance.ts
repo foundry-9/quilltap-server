@@ -14,7 +14,7 @@ import { logger } from '@/lib/logger';
  * Get inherited tags from linked entities.
  *
  * For each entity ID in linkedEntityIds, looks up the entity
- * (character, persona, chat, connection profile, image profile, embedding profile)
+ * (character, chat, connection profile, image profile, embedding profile)
  * and collects all their tags into a merged set.
  *
  * @param linkedEntityIds - Array of entity UUIDs that a file is linked to

@@ -11,7 +11,6 @@ export type PluginCapability =
   | 'LLM_PROVIDER'
   | 'AUTH_PROVIDER'
   | 'THEME'
-  | 'ROLEPLAY_TEMPLATE'
   | 'TOOL_PROVIDER'
   | 'SEARCH_PROVIDER'
   | 'MODERATION_PROVIDER'

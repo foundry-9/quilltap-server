@@ -28,6 +28,7 @@ const NON_USER_INVOCABLE_TOOLS = new Set([
 const runToolRequestSchema = z.object({
   toolName: z.string().min(1, 'Tool name is required'),
   arguments: z.record(z.string(), z.unknown()).default({}),
+  characterId: z.string().optional(),
 });
 
 /**
@@ -58,9 +59,14 @@ export async function handleRunTool(
   }
 
   // Find the active character participant for context
-  const characterParticipant = chat.participants.find(
-    p => p.type === 'CHARACTER' && p.isActive
-  );
+  // If a characterId was provided, match that specific character; otherwise fall back to first active
+  const characterParticipant = validated.characterId
+    ? chat.participants.find(
+        p => p.type === 'CHARACTER' && p.isActive && p.characterId === validated.characterId
+      )
+    : chat.participants.find(
+        p => p.type === 'CHARACTER' && p.isActive
+      );
 
   const executionContext: ToolExecutionContext = {
     chatId,
@@ -77,11 +83,10 @@ export async function handleRunTool(
     executionContext
   );
 
-  // Format the result for storage
-  // Use string result if available, otherwise JSON-stringify
-  const resultContent = typeof result.result === 'string'
-    ? result.result
-    : JSON.stringify(result.result, null, 2);
+  // Preserve structured result payloads for the chat UI.
+  // Components like `ToolMessage` use rich fields (for example wardrobe action metadata)
+  // to render inline summaries, so avoid flattening objects into JSON strings here.
+  const resultContent = result.result;
 
   // Build a human-readable prompt description
   const argsEntries = Object.entries(validated.arguments);

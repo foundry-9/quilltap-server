@@ -51,25 +51,28 @@ export function CharacterHeader({
   }
 
   return (
-    <div className="mb-8 flex flex-wrap items-start justify-between gap-6 rounded-2xl border qt-border-default/60 qt-bg-card/80 p-6 qt-shadow-sm">
-      <div className="flex flex-grow items-center gap-4">
-        <div className="relative">
-          {getAvatarSrc() ? (
-             
-            <img
-              key={`${character?.defaultImageId || 'no-image'}-${avatarRefreshKey}`}
-              src={getAvatarSrc()!}
-              alt={character?.name || ''}
-              className={getAvatarClasses(style, 'lg').imageClass}
-            />
-          ) : (
-            <div className={getAvatarClasses(style, 'lg').wrapperClass} style={style === 'RECTANGULAR' ? { aspectRatio: '4/5' } : undefined}>
-              <span className={getAvatarClasses(style, 'lg').fallbackClass}>
-                {character?.name?.charAt(0)?.toUpperCase() || '?'}
-              </span>
-            </div>
-          )}
-        </div>
+    <div className="mb-8 grid grid-cols-[auto_1fr_auto] items-stretch gap-6 rounded-2xl border qt-border-default/60 qt-bg-card/80 p-6 qt-shadow-sm">
+      {/* Avatar — grid stretches this cell to card height; image fills via absolute positioning */}
+      <div className={`relative overflow-hidden ${style === 'CIRCULAR' ? 'rounded-full' : ''}`}>
+        {getAvatarSrc() ? (
+          <img
+            key={`${character?.defaultImageId || 'no-image'}-${avatarRefreshKey}`}
+            src={getAvatarSrc()!}
+            alt={character?.name || ''}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-300 dark:bg-slate-700">
+            <span className={getAvatarClasses(style, 'lg').fallbackClass}>
+              {character?.name?.charAt(0)?.toUpperCase() || '?'}
+            </span>
+          </div>
+        )}
+        {/* Invisible sizer: height comes from grid row, width from aspect ratio */}
+        <div className="invisible" style={style === 'CIRCULAR' ? { aspectRatio: '1/1', height: '100%' } : { aspectRatio: '4/5', height: '100%' }} />
+      </div>
+      {/* Name / title */}
+      <div className="flex items-center">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-semibold">

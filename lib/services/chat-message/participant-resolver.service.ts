@@ -37,7 +37,7 @@ export interface ParticipantResolutionResult {
   apiKey: string
   /** Image profile ID if configured */
   imageProfileId: string | null
-  /** The user participant (persona) */
+  /** The user participant (user-controlled character) */
   userParticipant: ChatParticipantBase | null
   /** User participant ID */
   userParticipantId: string | null
@@ -64,7 +64,7 @@ export async function resolveRespondingParticipant(
   isContinueMode: boolean = false
 ): Promise<ParticipantResolutionResult> {
 
-  // Get user participant (persona) for turn management
+  // Get user participant (user-controlled character) for turn management
   const userParticipant = findUserParticipant(chat.participants)
   const userParticipantId = userParticipant?.id ?? null
 

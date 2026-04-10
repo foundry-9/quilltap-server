@@ -24,14 +24,14 @@ export interface MessageServiceContext {
   repos: ReturnType<typeof getRepositories>
   /** Chat metadata */
   chat: ChatMetadataBase
-  /** User participant (persona) */
+  /** User participant (user-controlled character) */
   userParticipant: ChatParticipantBase | null
   /** Responding character participant */
   characterParticipant: ChatParticipantBase
   /** Character data */
   character: Character
-  /** Persona data (if available) - kept for backward compatibility */
-  persona: { name: string; description: string } | null
+  /** User character identity data (name and description of the user-controlled character) */
+  userCharacter: { name: string; description: string } | null
   /** Connection profile for the LLM */
   connectionProfile: ConnectionProfile
   /** Decrypted API key (empty for providers that don't require it) */

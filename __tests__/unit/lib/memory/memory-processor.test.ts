@@ -70,11 +70,11 @@ describe('Memory Processor Types', () => {
       expect(context.cheapLLMSettings).toBeDefined()
     })
 
-    it('should support optional personaName', () => {
+    it('should support optional userCharacterName', () => {
       const context: MemoryExtractionContext = {
         characterId: 'char-123',
         characterName: 'Luna',
-        personaName: 'John',
+        userCharacterName: 'John',
         chatId: 'chat-456',
         userMessage: 'Hello',
         assistantMessage: 'Hi there!',
@@ -84,7 +84,7 @@ describe('Memory Processor Types', () => {
         cheapLLMSettings: testCheapLLMSettings,
       }
 
-      expect(context.personaName).toBe('John')
+      expect(context.userCharacterName).toBe('John')
     })
 
     it('should support optional availableProfiles', () => {
@@ -302,7 +302,7 @@ describe('Memory Inter-Character Tracking Types (v2.7-dev)', () => {
       const context: MemoryExtractionContext = {
         characterId: 'char-luna', // Speaking character
         characterName: 'Luna',
-        personaName: 'Bob the User Character', // User's character name
+        userCharacterName: 'Bob the User Character', // User's character name
         chatId: 'chat-multichar',
         userMessage: 'Bob says hello to Luna',
         assistantMessage: 'Luna waves back at Bob',
@@ -314,7 +314,7 @@ describe('Memory Inter-Character Tracking Types (v2.7-dev)', () => {
       }
 
       expect(context.characterId).toBe('char-luna')
-      expect(context.personaName).toBe('Bob the User Character')
+      expect(context.userCharacterName).toBe('Bob the User Character')
       expect(context.userCharacterId).toBe('char-bob')
     })
   })
@@ -352,7 +352,7 @@ describe('Memory Inter-Character Tracking Types (v2.7-dev)', () => {
       const contextForUserCharMemory: MemoryExtractionContext = {
         characterId: 'char-luna', // Luna holds the memory
         characterName: 'Luna',
-        personaName: 'Bob',
+        userCharacterName: 'Bob',
         chatId: 'chat-123',
         userMessage: 'Bob reveals his favorite color is blue',
         assistantMessage: 'Luna acknowledges Bob likes blue',

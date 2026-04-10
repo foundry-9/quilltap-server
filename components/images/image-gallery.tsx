@@ -28,7 +28,7 @@ export interface ImageData {
 }
 
 interface ImageGalleryProps {
-  tagType?: 'CHARACTER' | 'PERSONA' | 'CHAT' | 'THEME';
+  tagType?: 'CHARACTER' | 'CHAT' | 'THEME';
   tagId?: string;
   onSelectImage?: (image: ImageData) => void;
   selectedImageId?: string;

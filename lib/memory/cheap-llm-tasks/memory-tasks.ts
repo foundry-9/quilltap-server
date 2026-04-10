@@ -225,7 +225,7 @@ function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
  * @param assistantMessage - The assistant's response
  * @param context - Additional context (participant list, etc.)
  * @param characterName - The name of the character responding
- * @param personaName - The user's persona name (optional)
+ * @param userCharacterName - The user character's name (optional)
  * @param selection - The cheap LLM provider selection
  * @param userId - The user ID for API key retrieval
  * @param resolvedMaxTokens - Resolved max output tokens for the cheap LLM profile
@@ -236,7 +236,7 @@ export async function extractMemoryFromMessage(
   assistantMessage: string,
   context: string,
   characterName: string,
-  personaName: string | undefined,
+  userCharacterName: string | undefined,
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
@@ -246,7 +246,7 @@ export async function extractMemoryFromMessage(
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
   const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 4000)
   // Use clear "X says:" format to help the model distinguish speakers
-  const userLabel = personaName ? `${personaName} (the user)` : 'The user'
+  const userLabel = userCharacterName ? `${userCharacterName} (the user)` : 'The user'
   const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
 
   const messages: LLMMessage[] = [
@@ -289,7 +289,7 @@ ${characterLabel} says:
  * @param assistantMessage - The character's response
  * @param context - Additional context (participant list, etc.)
  * @param characterName - The character's name for context
- * @param personaName - The user's persona name (optional)
+ * @param userCharacterName - The user character's name (optional)
  * @param selection - The cheap LLM provider selection
  * @param userId - The user ID for API key retrieval
  * @param resolvedMaxTokens - Resolved max output tokens for the cheap LLM profile
@@ -300,7 +300,7 @@ export async function extractCharacterMemoryFromMessage(
   assistantMessage: string,
   context: string,
   characterName: string,
-  personaName: string | undefined,
+  userCharacterName: string | undefined,
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
@@ -310,7 +310,7 @@ export async function extractCharacterMemoryFromMessage(
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
   const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 4000)
   // Use clear "X says:" format to help the model distinguish speakers
-  const userLabel = personaName ? `${personaName} (the user)` : 'The user'
+  const userLabel = userCharacterName ? `${userCharacterName} (the user)` : 'The user'
   const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
 
   const messages: LLMMessage[] = [

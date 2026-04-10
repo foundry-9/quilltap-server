@@ -7,9 +7,9 @@
 
 ## How these prompts work
 
-Each prompt uses `{{char}}` and `{{user}}` placeholders, which Quilltap replaces with the active character and user persona names at send time. `[MEMORY]` blocks are injected by Quilltap's memory system when available.
+Each prompt uses `{{char}}` and `{{user}}` placeholders, which Quilltap replaces with the active character and user character names at send time. `[MEMORY]` blocks are injected by Quilltap's memory system when available.
 
-These are **system prompts** (sent in the `system` role) unless otherwise noted. The character card, persona, and scenario provide the specific identity — these prompts provide the behavioral framework.
+These are **system prompts** (sent in the `system` role) unless otherwise noted. The character card, user character, and scenario provide the specific identity — these prompts provide the behavioral framework.
 
 ---
 

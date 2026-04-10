@@ -57,17 +57,13 @@ export default function ImageDetailModal({
   }, [isOpen])
 
   // Update tagged entities when image changes
-  // Handle both CHARACTER and legacy PERSONA tags (personas are now characters)
   useEffect(() => {
     if (image.tags) {
       const charIds = new Set<string>()
 
       image.tags.forEach((tag) => {
         const tagId = tag.tagId
-        // Check if this tag matches any character (includes former personas)
-        // Accept both CHARACTER and PERSONA tag types for backwards compatibility
-        if ((tag.tagType === 'CHARACTER' || tag.tagType === 'PERSONA') &&
-            characters.some((c) => c.id === tagId)) {
+        if (tag.tagType === 'CHARACTER' && characters.some((c) => c.id === tagId)) {
           charIds.add(tagId)
         }
       })

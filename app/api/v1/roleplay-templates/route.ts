@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { successResponse, errorResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
+import { generateRenderingPatterns } from '@/lib/chat/annotations';
 
 /**
  * GET /api/v1/roleplay-templates
@@ -55,7 +56,7 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
  */
 export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
   try {const body = await req.json();
-    const { name, description, systemPrompt } = body;
+    const { name, description, systemPrompt, narrationDelimiters } = body;
 
     // Validation
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -74,10 +75,37 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       return errorResponse('Description must be 500 characters or less', 400);
     }
 
+    // Validate narrationDelimiters (required)
+    if (!narrationDelimiters) {
+      return errorResponse('Narration delimiters are required', 400);
+    }
+    if (typeof narrationDelimiters === 'string') {
+      if (narrationDelimiters.length === 0) {
+        return errorResponse('Narration delimiters string must not be empty', 400);
+      }
+    } else if (Array.isArray(narrationDelimiters)) {
+      if (narrationDelimiters.length !== 2 || !narrationDelimiters[0] || !narrationDelimiters[1]) {
+        return errorResponse('Narration delimiters array must have exactly 2 non-empty elements [open, close]', 400);
+      }
+    } else {
+      return errorResponse('Narration delimiters must be a string or [string, string] array', 400);
+    }
+
     // Check for duplicate name among user's own templates
     const existingTemplate = await repos.roleplayTemplates.findByName(user.id, name.trim());
     if (existingTemplate) {
       return errorResponse('A roleplay template with this name already exists', 409);
+    }
+
+    // Auto-generate rendering patterns from delimiters if not explicitly provided
+    const templateDelimiters = body.delimiters || [];
+    let renderingPatterns = body.renderingPatterns || [];
+    if ((!renderingPatterns || renderingPatterns.length === 0) && (templateDelimiters.length > 0 || narrationDelimiters)) {
+      renderingPatterns = generateRenderingPatterns(templateDelimiters, narrationDelimiters as string | [string, string]);
+      logger.debug('Auto-generated rendering patterns from delimiters', {
+        delimiterCount: templateDelimiters.length,
+        patternCount: renderingPatterns.length,
+      });
     }
 
     // Create template
@@ -88,9 +116,10 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       systemPrompt: systemPrompt.trim(),
       isBuiltIn: false,
       tags: [],
-      annotationButtons: [],
-      renderingPatterns: [],
-      dialogueDetection: null,
+      delimiters: templateDelimiters,
+      renderingPatterns,
+      dialogueDetection: body.dialogueDetection || null,
+      narrationDelimiters: narrationDelimiters as string | [string, string],
     });
 
     logger.info('Roleplay template created', {

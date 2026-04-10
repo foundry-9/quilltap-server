@@ -144,7 +144,7 @@
   .qt-badge-destructive,
   .qt-badge-info,
   .qt-badge-character,
-  .qt-badge-persona,
+  .qt-badge-user-character,
   .qt-badge-chat,
   .qt-badge-tag,
   .qt-badge-memory,
@@ -152,7 +152,7 @@
   .qt-badge-project,
   .qt-badge-characters,
   .qt-badge-chats,
-  .qt-badge-personas,
+  .qt-badge-user-characters,
   .qt-badge-enabled,
   .qt-badge-disabled,
   .qt-badge-related,
@@ -169,7 +169,12 @@
   .qt-badge-provider-openrouter,
   .qt-badge-provider-builtin,
   .qt-badge-silent,
-  .qt-badge-absent {
+  .qt-badge-absent,
+  .qt-badge-wardrobe-top,
+  .qt-badge-wardrobe-bottom,
+  .qt-badge-wardrobe-footwear,
+  .qt-badge-wardrobe-accessories,
+  .qt-badge-wardrobe-shared {
     @apply inline-flex items-center justify-center flex-shrink-0;
     padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
     border-radius: var(--qt-badge-radius);
@@ -1251,9 +1256,9 @@
   /**
    * Persona badge (purple)
    */
-  .qt-badge-persona {
-    background-color: var(--qt-badge-persona-bg);
-    color: var(--qt-badge-persona-fg);
+  .qt-badge-user-character {
+    background-color: var(--qt-badge-user-character-bg);
+    color: var(--qt-badge-user-character-fg);
   }
 
   /**
@@ -1318,11 +1323,11 @@
   }
 
   /**
-   * Personas badge (purple) - for dashboard persona count
+   * User characters badge (purple) - for dashboard user character count
    */
-  .qt-badge-personas {
-    background-color: var(--qt-badge-persona-bg);
-    color: var(--qt-badge-persona-fg);
+  .qt-badge-user-characters {
+    background-color: var(--qt-badge-user-character-bg);
+    color: var(--qt-badge-user-character-fg);
   }
 
   /* ==========================================================================
@@ -1423,6 +1428,50 @@
   .qt-badge-version {
     background-color: var(--qt-badge-disabled-bg);
     color: var(--qt-badge-disabled-fg);
+  }
+
+  /* ==========================================================================
+     WARDROBE SLOT BADGES
+     ========================================================================== */
+
+  /**
+   * Wardrobe top badge (blue)
+   */
+  .qt-badge-wardrobe-top {
+    background-color: var(--qt-badge-wardrobe-top-bg);
+    color: var(--qt-badge-wardrobe-top-fg);
+  }
+
+  /**
+   * Wardrobe bottom badge (green)
+   */
+  .qt-badge-wardrobe-bottom {
+    background-color: var(--qt-badge-wardrobe-bottom-bg);
+    color: var(--qt-badge-wardrobe-bottom-fg);
+  }
+
+  /**
+   * Wardrobe footwear badge (amber)
+   */
+  .qt-badge-wardrobe-footwear {
+    background-color: var(--qt-badge-wardrobe-footwear-bg);
+    color: var(--qt-badge-wardrobe-footwear-fg);
+  }
+
+  /**
+   * Wardrobe accessories badge (purple)
+   */
+  .qt-badge-wardrobe-accessories {
+    background-color: var(--qt-badge-wardrobe-accessories-bg);
+    color: var(--qt-badge-wardrobe-accessories-fg);
+  }
+
+  /**
+   * Wardrobe shared/archetype badge (indigo)
+   */
+  .qt-badge-wardrobe-shared {
+    background-color: var(--qt-badge-wardrobe-shared-bg);
+    color: var(--qt-badge-wardrobe-shared-fg);
   }
 
   /* ==========================================================================

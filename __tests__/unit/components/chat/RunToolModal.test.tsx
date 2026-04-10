@@ -75,10 +75,22 @@ function createMockToolWithParams(overrides: Partial<AvailableTool> = {}): Avail
   })
 }
 
+const mockParticipants = [
+  {
+    id: 'participant-1',
+    type: 'CHARACTER' as const,
+    displayOrder: 0,
+    isActive: true,
+    characterId: 'char-abc',
+    character: { name: 'Alice', id: 'char-abc' },
+  },
+]
+
 const baseProps = {
   isOpen: true,
   onClose: jest.fn(),
   chatId: 'chat-123',
+  participants: mockParticipants as any,
   onToolExecuted: jest.fn(),
 }
 
@@ -384,6 +396,7 @@ describe('RunToolModal', () => {
           body: JSON.stringify({
             toolName: 'search_memories',
             arguments: { query: 'test-value' },
+            characterId: 'char-abc',
           }),
         })
       )

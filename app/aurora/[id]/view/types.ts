@@ -61,6 +61,8 @@ export interface Character {
   npc?: boolean
   defaultAgentModeEnabled?: boolean | null
   defaultHelpToolsEnabled?: boolean | null
+  canDressThemselves?: boolean | null
+  canCreateOutfits?: boolean | null
   defaultTimestampConfig?: TimestampConfig | null
   defaultScenarioId?: string | null
   defaultSystemPromptId?: string | null

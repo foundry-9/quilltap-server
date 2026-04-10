@@ -36,21 +36,21 @@ function createCharacter(id: string, name: string, talkativeness = 0.5, isActive
   }
 }
 
-// Helper to create a persona participant
+// Helper to create a user-controlled character participant
 function createPersona(id: string, name: string, isActive = true): ParticipantData {
   return {
     id,
-    type: 'PERSONA',
+    type: 'CHARACTER',
     controlledBy: 'user',
     displayOrder: 0,
     isActive,
     status: isActive ? 'active' : 'absent',
-    character: null,
-    persona: {
-      id: `persona-${id}`,
+    character: {
+      id: `char-${id}`,
       name,
       defaultImage: null,
     },
+    persona: null,
     connectionProfile: null,
   }
 }

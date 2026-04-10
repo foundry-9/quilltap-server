@@ -11,25 +11,7 @@
 
 import { ReactNode } from 'react'
 import { useSidebar } from '@/components/providers/sidebar-provider'
-
-/**
- * Chevron icon for collapse toggle
- */
-function ChevronIcon({ className, rotated }: { className?: string; rotated?: boolean }) {
-  return (
-    <svg
-      className={`${className || ''} transition-transform duration-200 ${rotated ? 'rotate-180' : ''}`}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  )
-}
+import { ChevronIcon } from '@/components/ui/ChevronIcon'
 
 interface SidebarSectionProps {
   /** Unique section identifier for collapse state persistence */

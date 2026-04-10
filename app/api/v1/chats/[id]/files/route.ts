@@ -15,7 +15,11 @@ import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 
 /**
- * POST /api/v1/chats/[id]/files - Upload a file
+ * POST /api/v1/chats/[id]/files - Upload a file or link an existing file
+ *
+ * Actions:
+ *   ?action=link  - Link an existing library file to this chat (JSON body: { fileId })
+ *   (default)     - Upload a new file via FormData
  */
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   async (req: NextRequest, { user, repos }, { id: chatId }) => {
@@ -27,6 +31,14 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         return notFound('Chat');
       }
 
+      // Check for action dispatch
+      const action = req.nextUrl.searchParams.get('action');
+
+      if (action === 'link') {
+        return handleLinkFile(req, repos, chatId);
+      }
+
+      // Default: file upload flow
       // Get the file from form data
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
@@ -94,6 +106,53 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
     }
   }
 );
+
+/**
+ * Handle linking an existing library file to a chat
+ */
+async function handleLinkFile(
+  req: NextRequest,
+  repos: { files: { findById: (id: string) => Promise<any>; addLink: (fileId: string, entityId: string) => Promise<any> } },
+  chatId: string
+): Promise<NextResponse> {
+  const body = await req.json();
+  const { fileId } = body;
+
+  if (!fileId || typeof fileId !== 'string') {
+    return badRequest('fileId is required');
+  }
+
+  // Verify the file exists
+  const file = await repos.files.findById(fileId);
+  if (!file) {
+    return notFound('File');
+  }
+
+  // Link the file to this chat
+  const linkedFile = await repos.files.addLink(fileId, chatId);
+  if (!linkedFile) {
+    return serverError('Failed to link file');
+  }
+
+  const filepath = getFilePath(linkedFile);
+
+  logger.info('[Chats v1 Files] File linked from library', {
+    chatId,
+    fileId: linkedFile.id,
+    filename: linkedFile.originalFilename,
+  });
+
+  return NextResponse.json({
+    file: {
+      id: linkedFile.id,
+      filename: linkedFile.originalFilename,
+      filepath,
+      mimeType: linkedFile.mimeType,
+      size: linkedFile.size,
+      url: filepath,
+    },
+  });
+}
 
 /**
  * GET /api/v1/chats/[id]/files - List files for a chat (includes uploaded files and generated images)

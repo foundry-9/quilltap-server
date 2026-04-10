@@ -5,6 +5,7 @@
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { logger } from '@/lib/logger'
+import { describeOutfit } from '@/lib/wardrobe/outfit-description'
 import { executeCheapLLMTask } from './core-execution'
 import type {
   AppearanceResolutionItem,
@@ -726,17 +727,26 @@ export async function resolveAppearance(
       return `    - ID: ${d.id}, Name: "${d.name}"${context}: ${preview}`
     })
 
-    const clothingParts = char.clothingRecords.map(c => {
-      const context = c.usageContext ? ` (context: ${c.usageContext})` : ''
-      const desc = c.description || '(no description)'
-      return `    - ID: ${c.id}, Name: "${c.name}"${context}: ${desc}`
-    })
+    // Build equipped wardrobe items section using canonical describeOutfit
+    let wardrobeSection = ''
+    if (char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0) {
+      const findItem = (slot: string) => {
+        const item = char.equippedWardrobeItems!.find(i => i.slot === slot)
+        if (!item) return null
+        return item.description ? `${item.title} (${item.description})` : item.title
+      }
+      const outfitDescription = describeOutfit({
+        top: findItem('top'),
+        bottom: findItem('bottom'),
+        footwear: findItem('footwear'),
+        accessories: findItem('accessories'),
+      })
+      wardrobeSection = `\n  Current Outfit (equipped wardrobe — takes precedence over stored clothing records):\n${outfitDescription}`
+    }
 
     return `  Character: ${char.characterName} (ID: ${char.characterId})
   Physical Descriptions:
-${descParts.length > 0 ? descParts.join('\n') : '    (none)'}
-  Clothing Records:
-${clothingParts.length > 0 ? clothingParts.join('\n') : '    (none)'}`
+${descParts.length > 0 ? descParts.join('\n') : '    (none)'}${wardrobeSection}`
   }).join('\n\n')
 
   // Format recent messages

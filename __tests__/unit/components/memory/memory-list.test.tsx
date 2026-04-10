@@ -1,6 +1,17 @@
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import { MemoryList } from '@/components/memory/memory-list'
 
+// Mock IntersectionObserver for infinite scroll
+const mockObserve = jest.fn()
+const mockDisconnect = jest.fn()
+beforeAll(() => {
+  global.IntersectionObserver = jest.fn().mockImplementation(() => ({
+    observe: mockObserve,
+    disconnect: mockDisconnect,
+    unobserve: jest.fn(),
+  })) as any
+})
+
 jest.mock('@/lib/toast', () => ({
   showErrorToast: jest.fn(),
   showSuccessToast: jest.fn(),
@@ -46,7 +57,7 @@ describe('MemoryList', () => {
   }
 
   beforeEach(() => {
-    mockFetch.mockResolvedValue(createMockResponse({ memories: [] }))
+    mockFetch.mockResolvedValue(createMockResponse({ memories: [], totalCount: 0 }))
   })
 
   afterEach(() => {
@@ -65,7 +76,6 @@ describe('MemoryList', () => {
   })
 
   it('fetches memories and displays the count', async () => {
-    // Use mockResolvedValue since useListManager and useEffect may trigger multiple fetches
     mockFetch.mockResolvedValue(createMockResponse({
       memories: [
         {
@@ -93,6 +103,7 @@ describe('MemoryList', () => {
           updatedAt: new Date().toISOString(),
         },
       ],
+      totalCount: 2,
     }))
 
     await renderMemoryList()
@@ -101,7 +112,7 @@ describe('MemoryList', () => {
       expect(screen.getByText(/Memories \(2\)/i)).toBeInTheDocument()
     })
 
-    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining(`/api/v1/memories?characterId=${mockCharacterId}`), undefined)
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining(`/api/v1/memories?characterId=${mockCharacterId}&limit=`), undefined)
   })
 
   it('shows an error message if the fetch fails', async () => {
@@ -128,7 +139,6 @@ describe('MemoryList', () => {
   })
 
   it('opens housekeeping dialog when cleanup is clicked', async () => {
-    // Use mockResolvedValue (not mockResolvedValueOnce) since multiple fetch calls may occur
     mockFetch.mockResolvedValue(createMockResponse({
       memories: [
         {
@@ -144,6 +154,7 @@ describe('MemoryList', () => {
           updatedAt: new Date().toISOString(),
         },
       ],
+      totalCount: 1,
     }))
 
     await renderMemoryList()

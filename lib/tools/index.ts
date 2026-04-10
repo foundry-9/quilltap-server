@@ -262,6 +262,50 @@ export {
   type BuildToolsOptions,
 } from './plugin-tool-builder';
 
+// Wardrobe Tools (Modular Wardrobe System)
+export {
+  wardrobeListToolDefinition,
+  validateWardrobeListInput,
+  type WardrobeListToolInput,
+  type WardrobeListToolOutput,
+  type WardrobeListItemResult,
+} from './wardrobe-list-tool';
+
+export {
+  executeWardrobeListTool,
+  formatWardrobeListResults,
+  WardrobeListError,
+  type WardrobeListToolContext,
+} from './handlers/wardrobe-list-handler';
+
+export {
+  wardrobeUpdateOutfitToolDefinition,
+  validateWardrobeUpdateOutfitInput,
+  type WardrobeUpdateOutfitToolInput,
+  type WardrobeUpdateOutfitToolOutput,
+} from './wardrobe-update-outfit-tool';
+
+export {
+  executeWardrobeUpdateOutfitTool,
+  formatWardrobeUpdateOutfitResults,
+  WardrobeUpdateOutfitError,
+  type WardrobeUpdateOutfitToolContext,
+} from './handlers/wardrobe-update-outfit-handler';
+
+export {
+  wardrobeCreateItemToolDefinition,
+  validateWardrobeCreateItemInput,
+  type WardrobeCreateItemToolInput,
+  type WardrobeCreateItemToolOutput,
+} from './wardrobe-create-item-tool';
+
+export {
+  executeWardrobeCreateItemTool,
+  formatWardrobeCreateItemResults,
+  WardrobeCreateItemError,
+  type WardrobeCreateItemToolContext,
+} from './handlers/wardrobe-create-item-handler';
+
 // Tool Support (for checking model capabilities and tool mode)
 export {
   checkModelSupportsTools,

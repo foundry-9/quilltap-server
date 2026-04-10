@@ -11,19 +11,19 @@ interface HighlightMatch {
 interface TemplateHighlighterProps {
   content: string
   characterName: string
-  personaName?: string | null
+  userCharacterName?: string | null
   showHighlights?: boolean
 }
 
 /**
- * Highlights occurrences of character and persona names in text
+ * Highlights occurrences of character and user character names in text
  * that could be replaced with {{char}} and {{user}} templates.
  * Uses case-insensitive matching.
  */
 export function TemplateHighlighter({
   content,
   characterName,
-  personaName,
+  userCharacterName,
   showHighlights = true,
 }: TemplateHighlighterProps) {
   const { highlightedContent, charCount, userCount } = useMemo(() => {
@@ -46,9 +46,9 @@ export function TemplateHighlighter({
       }
     }
 
-    // Find all persona name matches (case-insensitive)
-    if (personaName && personaName.length > 0) {
-      const userRegex = new RegExp(escapeRegex(personaName), 'gi')
+    // Find all user character name matches (case-insensitive)
+    if (userCharacterName && userCharacterName.length > 0) {
+      const userRegex = new RegExp(escapeRegex(userCharacterName), 'gi')
       let match
       while ((match = userRegex.exec(content)) !== null) {
         // Check for overlap with existing matches
@@ -103,7 +103,7 @@ export function TemplateHighlighter({
         parts.push(
           <span
             key={`user-${index}`}
-            className="px-0.5 rounded border-b-2 qt-badge-persona qt-border-success"
+            className="px-0.5 rounded border-b-2 qt-badge-user-character qt-border-success"
             title={`Could be replaced with {{user}}`}
           >
             {matchedText}
@@ -124,7 +124,7 @@ export function TemplateHighlighter({
       charCount,
       userCount,
     }
-  }, [content, characterName, personaName, showHighlights])
+  }, [content, characterName, userCharacterName, showHighlights])
 
   return (
     <span className="whitespace-pre-wrap">
@@ -134,12 +134,12 @@ export function TemplateHighlighter({
 }
 
 /**
- * Counts occurrences of character and persona names in text fields
+ * Counts occurrences of character and user character names in text fields
  */
 export function countTemplateReplacements(
   fields: Record<string, string | null | undefined>,
   characterName: string,
-  personaName?: string | null
+  userCharacterName?: string | null
 ): { charCount: number; userCount: number; fieldCounts: Record<string, { char: number; user: number }> } {
   let charCount = 0
   let userCount = 0
@@ -160,8 +160,8 @@ export function countTemplateReplacements(
       fieldCharCount = charMatches?.length || 0
     }
 
-    if (personaName && personaName.length > 0) {
-      const userRegex = new RegExp(escapeRegex(personaName), 'gi')
+    if (userCharacterName && userCharacterName.length > 0) {
+      const userRegex = new RegExp(escapeRegex(userCharacterName), 'gi')
       const userMatches = content.match(userRegex)
       fieldUserCount = userMatches?.length || 0
     }
@@ -197,7 +197,7 @@ function escapeRegex(str: string): string {
 interface TemplateDisplayProps {
   content: string
   characterName: string
-  personaName?: string | null
+  userCharacterName?: string | null
 }
 
 interface ContentMatch {
@@ -213,19 +213,19 @@ interface ContentMatch {
  * and also highlights hard-coded names that should be converted to templates.
  *
  * - {{char}} templates are replaced with character name (blue highlight, solid)
- * - {{user}} templates are replaced with persona name (green highlight, solid)
+ * - {{user}} templates are replaced with user character name (green highlight, solid)
  * - Hard-coded character names are highlighted in orange/warning style
- * - Hard-coded persona names are highlighted in orange/warning style
+ * - Hard-coded user character names are highlighted in orange/warning style
  */
 export function TemplateDisplay({
   content,
   characterName,
-  personaName,
+  userCharacterName,
 }: TemplateDisplayProps) {
   const processedContent = useMemo(() => {
     if (!content) return null
 
-    const userName = personaName || 'USER'
+    const userName = userCharacterName || 'USER'
     const matches: ContentMatch[] = []
 
     // Find {{char}} templates (case-insensitive)
@@ -274,10 +274,10 @@ export function TemplateDisplay({
       }
     }
 
-    // Find hard-coded persona names (case-insensitive)
-    if (personaName && personaName.length > 0) {
-      const personaNameRegex = new RegExp(escapeRegex(personaName), 'gi')
-      while ((match = personaNameRegex.exec(content)) !== null) {
+    // Find hard-coded user character names (case-insensitive)
+    if (userCharacterName && userCharacterName.length > 0) {
+      const userCharacterNameRegex = new RegExp(escapeRegex(userCharacterName), 'gi')
+      while ((match = userCharacterNameRegex.exec(content)) !== null) {
         // Check for overlap with existing matches (templates and char names take priority)
         const overlaps = matches.some(
           m => (match!.index >= m.start && match!.index < m.end) ||
@@ -331,8 +331,8 @@ export function TemplateDisplay({
           parts.push(
             <span
               key={`user-template-${index}`}
-              className="px-0.5 rounded border-b-2 qt-badge-persona qt-border-success"
-              title={personaName ? `Persona name (from {{user}})` : 'User (no default persona set)'}
+              className="px-0.5 rounded border-b-2 qt-badge-user-character qt-border-success"
+              title={userCharacterName ? `User character name (from {{user}})` : 'User (no default user character set)'}
             >
               {contentMatch.replacement}
             </span>
@@ -351,12 +351,12 @@ export function TemplateDisplay({
           )
           break
         case 'user-hardcoded':
-          // Hard-coded persona name - warning styling, should be converted
+          // Hard-coded user character name - warning styling, should be converted
           parts.push(
             <span
               key={`user-hardcoded-${index}`}
               className="px-0.5 rounded border-b-2 border-dashed qt-bg-warning/10 qt-border-warning"
-              title="Hard-coded persona name - consider replacing with {{user}}"
+              title="Hard-coded user character name - consider replacing with {{user}}"
             >
               {contentMatch.originalText}
             </span>
@@ -373,7 +373,7 @@ export function TemplateDisplay({
     }
 
     return <>{parts}</>
-  }, [content, characterName, personaName])
+  }, [content, characterName, userCharacterName])
 
   return (
     <span className="whitespace-pre-wrap">

@@ -138,7 +138,11 @@ export async function buildTools(
   /** Whether this is a multi-character chat (enables whisper tool) */
   isMultiCharacter?: boolean,
   /** Whether help tools are enabled for this character (enables help_search and help_settings) */
-  helpToolsEnabled?: boolean
+  helpToolsEnabled?: boolean,
+  /** Whether this character can dress themselves (enables list_wardrobe and update_outfit_item) */
+  canDressThemselves?: boolean,
+  /** Whether this character can create new outfits (enables create_wardrobe_item) */
+  canCreateOutfits?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -204,6 +208,9 @@ export async function buildTools(
     helpSearch: !!helpToolsEnabled,
     helpSettings: !!helpToolsEnabled,
     helpNavigate: !!helpToolsEnabled,
+    wardrobeList: canDressThemselves !== false,
+    wardrobeUpdateOutfit: canDressThemselves !== false,
+    wardrobeCreateItem: canCreateOutfits !== false,
     whisper: !!isMultiCharacter,
     shellInteractivity: isShellEnvironment(),
     toolConfigs,

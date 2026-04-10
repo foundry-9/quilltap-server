@@ -16,6 +16,7 @@ import { resolveDangerousContentSettings } from '@/lib/services/dangerous-conten
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { SceneStateTrackingPayload } from '../queue-service';
+import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 
 const logger = createServiceLogger('SceneStateTrackingHandler');
 
@@ -172,12 +173,46 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
       .map(p => p.characterId)
   );
   const presentCharacters = validCharacters.filter(c => c && presentParticipantCharacterIds.has(c.id));
-  const characterBaselines = presentCharacters.map(char => ({
-    characterId: char!.id,
-    characterName: char!.name,
-    physicalDescription: char!.physicalDescriptions?.[0]?.mediumPrompt || char!.physicalDescriptions?.[0]?.shortPrompt || '',
-    clothingDescription: char!.clothingRecords?.[0]?.description || '',
-    scenario: chat.scenarioText || char!.scenarios?.[0]?.content || undefined,
+
+  // Build character baselines with equipped wardrobe items
+  const characterBaselines = await Promise.all(presentCharacters.map(async (char) => {
+    let clothingDescription = '';
+
+    // Load equipped wardrobe items for clothing description
+    try {
+      const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
+      if (equippedSlots) {
+        const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[];
+        const items = equippedItemIds.length > 0 ? await repos.wardrobe.findByIds(equippedItemIds) : [];
+        const itemsMap = new Map(items.map(item => [item.id, item]));
+        const findTitle = (slot: string): string | null => {
+          const itemId = equippedSlots[slot as keyof typeof equippedSlots];
+          if (!itemId) return null;
+          const item = itemsMap.get(itemId);
+          return item ? (item.description ? `${item.title} (${item.description})` : item.title) : null;
+        };
+        clothingDescription = describeOutfit({
+          top: findTitle('top'),
+          bottom: findTitle('bottom'),
+          footwear: findTitle('footwear'),
+          accessories: findTitle('accessories'),
+        });
+      }
+    } catch (error) {
+      logger.warn('[SceneStateTracking] Failed to load equipped wardrobe for character', {
+        jobId: job.id,
+        characterId: char!.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return {
+      characterId: char!.id,
+      characterName: char!.name,
+      physicalDescription: char!.physicalDescriptions?.[0]?.mediumPrompt || char!.physicalDescriptions?.[0]?.shortPrompt || '',
+      clothingDescription,
+      scenario: chat.scenarioText || char!.scenarios?.[0]?.content || undefined,
+    };
   }));
 
   // 8b. Extract chat scenario context
@@ -262,6 +297,18 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     updatedAt: new Date().toISOString(),
     updatedAtMessageCount: chat.messageCount ?? 0,
   };
+
+  // 10b. Override LLM-derived clothing with authoritative wardrobe equipped state
+  // The LLM derives clothing from narrative, but the wardrobe system is the source of truth
+  const sceneCharacters = (sceneState as any).characters as Array<{ characterId: string; clothing?: string }> | undefined;
+  if (sceneCharacters) {
+    for (const sceneChar of sceneCharacters) {
+      const baseline = characterBaselines.find(b => b.characterId === sceneChar.characterId);
+      if (baseline && baseline.clothingDescription) {
+        sceneChar.clothing = baseline.clothingDescription;
+      }
+    }
+  }
 
   // 11. Create system event for token tracking
   if (result.usage) {

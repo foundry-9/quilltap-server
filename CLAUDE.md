@@ -151,7 +151,7 @@ Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/
 
 ## Claude-specific instructions
 
-- If you have access to Opus and agents, then plan work in Opus for a change of any significant size and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work. Use worktree isolation for agents when appropriate (your agents have a tendency to want to git stash and blow things up for each other sometimes).
+- If you have access to Opus and agents, then plan work in Opus for a change of any significant size and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work. Don't use git stash or worktrees with agents; you have a tendency to make a mess when you do that.
 - For every new feature and all existing functionality that is updated or touched in the backend, make sure that there are debug logs being fired for everything, and appropriate levels of logging for everything else, using the built-in logging system in this app
 - I am developing this in macOS, so take BSD versions of tools into account, and the fact that I have installed homebrew's coreutils and gnu-sed so that you can use GNU versions of things with "g"-prefixed utilities if you need them.
 - I am using "npm run dev" to work on this while we're working, so the base URL is probably `http://localhost:3000/` if you want to try something.

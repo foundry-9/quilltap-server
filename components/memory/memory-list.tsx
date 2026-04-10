@@ -1,13 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { MemoryCard } from './memory-card'
 import { MemoryEditor } from './memory-editor'
 import { HousekeepingDialog } from './housekeeping-dialog'
-import { useListManager } from '@/hooks/useListManager'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { getErrorMessage } from '@/lib/error-utils'
 import { showConfirmation } from '@/lib/alert'
+import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { SectionHeader } from '@/components/ui/SectionHeader'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -41,24 +41,47 @@ interface MemoryListProps {
 type SortBy = 'createdAt' | 'updatedAt' | 'importance'
 type SortOrder = 'asc' | 'desc'
 
+const MEMORIES_PER_PAGE = 30
+
 export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
+  const [memories, setMemories] = useState<Memory[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(true)
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('createdAt')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [sourceFilter, setSourceFilter] = useState<'ALL' | 'AUTO' | 'MANUAL'>('ALL')
+
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [editingMemory, setEditingMemory] = useState<Memory | null>(null)
+  const [showEditor, setShowEditor] = useState(false)
   const [showHousekeeping, setShowHousekeeping] = useState(false)
 
-  // Build the fetch function with current filters
-  const fetchMemoriesWithFilters = useCallback(async (): Promise<Memory[]> => {
+  const observerRef = useRef<IntersectionObserver | null>(null)
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
+  const fetchMemories = useCallback(async (pageNum: number, currentSearch: string, append: boolean = false) => {
+    if (pageNum === 0) {
+      setLoading(true)
+    } else {
+      setLoadingMore(true)
+    }
+
     try {
       const params = new URLSearchParams()
       params.set('characterId', characterId)
-      if (search) params.set('search', search)
+      params.set('limit', String(MEMORIES_PER_PAGE))
+      params.set('offset', String(pageNum * MEMORIES_PER_PAGE))
       params.set('sortBy', sortBy)
       params.set('sortOrder', sortOrder)
+      if (currentSearch) params.set('search', currentSearch)
       if (sourceFilter !== 'ALL') params.set('source', sourceFilter)
 
-      const result = await fetchJson<{ memories: Memory[] }>(
+      const result = await fetchJson<{ memories: Memory[]; totalCount: number }>(
         `/api/v1/memories?${params}`
       )
 
@@ -66,53 +89,117 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         throw new Error(result.error || 'Failed to fetch memories')
       }
 
-      return result.data?.memories || []
+      const newMemories = result.data?.memories || []
+      const total = result.data?.totalCount ?? 0
+
+      if (append) {
+        setMemories(prev => [...prev, ...newMemories])
+      } else {
+        setMemories(newMemories)
+      }
+
+      setTotalCount(total)
+      setHasMore(newMemories.length === MEMORIES_PER_PAGE)
+      setError(null)
     } catch (err) {
       const errorMessage = getErrorMessage(err, 'Failed to fetch memories')
       console.error('MemoryList: Fetch failed', { error: errorMessage })
-      throw new Error(errorMessage)
+      setError(errorMessage)
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
     }
-  }, [characterId, search, sortBy, sortOrder, sourceFilter])
+  }, [characterId, sortBy, sortOrder, sourceFilter])
 
-  // Use the list manager hook for core CRUD operations
-  const {
-    items: memories,
-    loading,
-    error,
-    deletingId,
-    editingItem: editingMemory,
-    showEditor,
-    refetch,
-    handleDelete,
-    handleEdit,
-    handleCreate,
-    handleEditorClose,
-    handleEditorSave,
-  } = useListManager<Memory>({
-    fetchFn: fetchMemoriesWithFilters,
-    deleteFn: async (memoryId: string) => {
-      const result = await fetchJson(
-        `/api/v1/memories/${memoryId}`,
-        { method: 'DELETE' }
-      )
+  // Reset and refetch when filters change or refreshKey changes
+  useEffect(() => {
+    setPage(0)
+    fetchMemories(0, search, false)
+  }, [fetchMemories, search, refreshKey])
 
+  // Debounced search handler
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setSearch(value)
+  }, [])
+
+  // Set up infinite scroll observer
+  useEffect(() => {
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+    }
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          const nextPage = page + 1
+          setPage(nextPage)
+          fetchMemories(nextPage, search, true)
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (loadMoreRef.current) {
+      observerRef.current.observe(loadMoreRef.current)
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+      }
+    }
+  }, [hasMore, loading, loadingMore, page, search, fetchMemories])
+
+  const handleDelete = useCallback(async (id: string) => {
+    const confirmed = await showConfirmation('Are you sure you want to delete this memory?')
+    if (!confirmed) return
+
+    setDeletingId(id)
+    try {
+      const result = await fetchJson(`/api/v1/memories/${id}`, { method: 'DELETE' })
       if (!result.ok) {
         throw new Error(result.error || 'Failed to delete memory')
       }
-    },
-    deleteConfirmMessage: 'Are you sure you want to delete this memory?',
-    deleteSuccessMessage: 'Memory deleted',
-  })
+      setMemories(prev => prev.filter(m => m.id !== id))
+      setTotalCount(prev => prev - 1)
+      showSuccessToast('Memory deleted')
+    } catch (err) {
+      const errorMessage = getErrorMessage(err, 'Failed to delete memory')
+      showErrorToast(errorMessage)
+    } finally {
+      setDeletingId(null)
+    }
+  }, [])
 
-  // Refetch when filters change or refreshKey changes
-  useEffect(() => {
-    refetch()
-  }, [search, sortBy, sortOrder, sourceFilter, refreshKey, refetch])
+  const handleEdit = useCallback((memory: Memory) => {
+    setEditingMemory(memory)
+    setShowEditor(true)
+  }, [])
 
-  const handleHousekeepingComplete = () => {
+  const handleCreate = useCallback(() => {
+    setEditingMemory(null)
+    setShowEditor(true)
+  }, [])
+
+  const handleEditorClose = useCallback(() => {
+    setShowEditor(false)
+    setEditingMemory(null)
+  }, [])
+
+  const handleEditorSave = useCallback(() => {
+    setShowEditor(false)
+    setEditingMemory(null)
+    // Reset to first page and refetch
+    setPage(0)
+    fetchMemories(0, search, false)
+  }, [fetchMemories, search])
+
+  const handleHousekeepingComplete = useCallback(() => {
     setShowHousekeeping(false)
-    refetch()
-  }
+    setPage(0)
+    fetchMemories(0, search, false)
+  }, [fetchMemories, search])
 
   // Show loading state when initially loading
   if (loading && memories.length === 0) {
@@ -125,7 +212,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       <div className="flex items-center justify-between gap-4">
         <SectionHeader
           title="Memories"
-          count={memories.length}
+          count={totalCount}
           action={{
             label: 'Add Memory',
             onClick: handleCreate,
@@ -149,7 +236,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
             type="text"
             placeholder="Search memories..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={handleSearchChange}
             className="qt-input text-sm"
           />
         </div>
@@ -182,7 +269,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
 
       {/* Error State */}
       {error && (
-        <ErrorAlert message={error} onRetry={refetch} />
+        <ErrorAlert message={error} onRetry={() => { setPage(0); fetchMemories(0, search, false) }} />
       )}
 
       {/* Empty State */}
@@ -212,6 +299,19 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
           ))}
         </div>
       )}
+
+      {/* Load more trigger */}
+      <div ref={loadMoreRef} className="py-2">
+        {loadingMore && (
+          <div className="flex items-center justify-center gap-2 qt-text-secondary">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 qt-border-primary border-r-transparent"></div>
+            Loading more memories...
+          </div>
+        )}
+        {!hasMore && memories.length > 0 && memories.length < totalCount && (
+          <p className="text-center qt-text-small">All memories loaded</p>
+        )}
+      </div>
 
       {/* Memory Editor Modal */}
       {showEditor && (

@@ -161,7 +161,7 @@ CREATE TABLE "characters" (
   "npc" INTEGER DEFAULT 0,
   "talkativeness" REAL DEFAULT 0.5,
   "controlledBy" TEXT DEFAULT 'llm',
-  "personaLinks" TEXT DEFAULT '[]',
+  "partnerLinks" TEXT DEFAULT '[]',
   "tags" TEXT DEFAULT '[]',
   "avatarOverrides" TEXT DEFAULT '[]',
   "physicalDescriptions" TEXT DEFAULT '[]',
@@ -175,12 +175,94 @@ CREATE TABLE "characters" (
   "defaultHelpToolsEnabled" INTEGER DEFAULT NULL,
   "defaultTimestampConfig" TEXT DEFAULT NULL,
   "defaultScenarioId" TEXT DEFAULT NULL,
-  "defaultSystemPromptId" TEXT DEFAULT NULL
+  "defaultSystemPromptId" TEXT DEFAULT NULL,
+  "canDressThemselves" INTEGER DEFAULT NULL,
+  "canCreateOutfits" INTEGER DEFAULT NULL
 );
 
 CREATE INDEX "idx_characters_createdAt" ON "characters" ("createdAt" DESC);
 CREATE INDEX "idx_characters_userId" ON "characters" ("userId");
 ```
+
+### wardrobe_items
+
+```sql
+CREATE TABLE "wardrobe_items" (
+  "id" TEXT PRIMARY KEY,
+  "characterId" TEXT,
+  "title" TEXT NOT NULL,
+  "description" TEXT,
+  "types" TEXT NOT NULL DEFAULT '[]',
+  "appropriateness" TEXT,
+  "isDefault" INTEGER DEFAULT 0,
+  "migratedFromClothingRecordId" TEXT,
+  "archivedAt" TEXT DEFAULT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  FOREIGN KEY ("characterId") REFERENCES "characters"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_wardrobe_items_character" ON "wardrobe_items"("characterId");
+```
+
+### outfit_presets
+
+```sql
+CREATE TABLE "outfit_presets" (
+  "id" TEXT PRIMARY KEY,
+  "characterId" TEXT,
+  "name" TEXT NOT NULL,
+  "description" TEXT,
+  "slots" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  FOREIGN KEY ("characterId") REFERENCES "characters"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_outfit_presets_character" ON "outfit_presets"("characterId");
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| characterId | TEXT (UUID, nullable) | Owner character. NULL = archetype (shared across characters) |
+| title | TEXT | Display name of the item |
+| description | TEXT | Detailed description for prompts and image generation |
+| types | TEXT (JSON array) | Coverage slots: `["top"]`, `["bottom"]`, `["top","bottom"]` for dresses, etc. |
+| appropriateness | TEXT | Context tags: "casual", "formal", "intimate", etc. |
+| isDefault | INTEGER | 1 = part of character's default outfit |
+| migratedFromClothingRecordId | TEXT (UUID) | Tracks provenance from legacy clothingRecords migration |
+| createdAt | TEXT (ISO 8601) | Creation timestamp |
+| updatedAt | TEXT (ISO 8601) | Last update timestamp |
+
+### character_plugin_data
+
+Stores arbitrary per-character, per-plugin JSON metadata. Each plugin can store any valid JSON value associated with a character. Quilltap enforces only that the data field is parseable JSON.
+
+```sql
+CREATE TABLE "character_plugin_data" (
+  "id" TEXT PRIMARY KEY,
+  "characterId" TEXT NOT NULL,
+  "pluginName" TEXT NOT NULL,
+  "data" TEXT NOT NULL DEFAULT '{}',
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  UNIQUE("characterId", "pluginName"),
+  FOREIGN KEY ("characterId") REFERENCES "characters"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_cpd_character" ON "character_plugin_data"("characterId");
+CREATE INDEX "idx_cpd_plugin" ON "character_plugin_data"("pluginName");
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| characterId | TEXT (UUID) | Character this data belongs to |
+| pluginName | TEXT | Plugin name (e.g., "qtap-plugin-curl"), max 200 chars |
+| data | TEXT (JSON) | Arbitrary JSON value — any valid JSON (object, array, string, number, boolean, null) |
+| createdAt | TEXT (ISO 8601) | Creation timestamp |
+| updatedAt | TEXT (ISO 8601) | Last update timestamp |
 
 ### chats
 
@@ -231,6 +313,10 @@ CREATE TABLE "chats" (
   "dangerClassifiedAtMessageCount" INTEGER DEFAULT NULL,
   "turnQueue" TEXT DEFAULT '[]',
   "sceneState" TEXT DEFAULT NULL,
+  "equippedOutfit" TEXT DEFAULT NULL,
+  "pendingOutfitNotifications" TEXT DEFAULT NULL,
+  "characterAvatars" TEXT DEFAULT NULL,
+  "avatarGenerationEnabled" INTEGER DEFAULT NULL,
   "chatType" TEXT DEFAULT 'salon',
   "helpPageUrl" TEXT DEFAULT NULL,
   "scenarioText" TEXT DEFAULT NULL
@@ -369,6 +455,8 @@ CREATE TABLE "projects" (
   "defaultDisabledToolGroups" TEXT DEFAULT '[]',
   "state" TEXT DEFAULT '{}',
   "defaultAgentModeEnabled" INTEGER DEFAULT NULL,
+  "defaultAvatarGenerationEnabled" INTEGER DEFAULT NULL,
+  "defaultImageProfileId" TEXT DEFAULT NULL,
   "storyBackgroundsEnabled" INTEGER DEFAULT NULL,
   "staticBackgroundImageId" TEXT DEFAULT NULL,
   "storyBackgroundImageId" TEXT DEFAULT NULL,
@@ -461,7 +549,6 @@ CREATE INDEX "idx_file_permissions_userId" ON "file_permissions" ("userId");
 CREATE TABLE "memories" (
   "id" TEXT PRIMARY KEY,
   "characterId" TEXT NOT NULL,
-  "personaId" TEXT,
   "aboutCharacterId" TEXT,
   "chatId" TEXT,
   "projectId" TEXT,
@@ -519,11 +606,11 @@ CREATE TABLE "roleplay_templates" (
   "description" TEXT,
   "systemPrompt" TEXT NOT NULL,
   "isBuiltIn" INTEGER DEFAULT 0,
-  "pluginName" TEXT,
   "tags" TEXT DEFAULT '[]',
-  "annotationButtons" TEXT DEFAULT '[]',
+  "delimiters" TEXT DEFAULT '[]',
   "renderingPatterns" TEXT DEFAULT '[]',
   "dialogueDetection" TEXT,
+  "narrationDelimiters" TEXT DEFAULT '"*"',
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );

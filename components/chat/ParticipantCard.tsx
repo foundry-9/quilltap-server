@@ -17,14 +17,17 @@
 import { useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
+import { OutfitIndicator } from '@/components/wardrobe/outfit-indicator'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types'
+import type { WardrobeItemSummary } from '@/app/salon/[id]/hooks/useOutfit'
 
 // Special constant for user impersonation selection
 const USER_IMPERSONATION_VALUE = '__user__'
 
 export interface ParticipantData {
   id: string
-  type: 'CHARACTER' | 'PERSONA'
+  type: 'CHARACTER'
   controlledBy?: 'llm' | 'user'
   displayOrder: number
   isActive: boolean
@@ -36,17 +39,6 @@ export interface ParticipantData {
     title?: string | null
     avatarUrl?: string | null
     talkativeness: number
-    defaultImage?: {
-      id: string
-      filepath: string
-      url?: string
-    } | null
-  } | null
-  persona?: {
-    id: string
-    name: string
-    title?: string | null
-    avatarUrl?: string | null
     defaultImage?: {
       id: string
       filepath: string
@@ -79,7 +71,7 @@ interface ParticipantCardProps {
   onSkip?: () => void // Skip turn (for user participants in multi-char chat)
   onTalkativenessChange?: (participantId: string, value: number) => void
   onRemove?: (participantId: string) => void // Phase 6: Remove character from chat
-  isUserParticipant?: boolean // True if this is the user's persona
+  isUserParticipant?: boolean // True if this is the user's character
   canRemove?: boolean // True if this character can be removed (not the only character)
   canSkip?: boolean // True if user can skip their turn (next speaker is null = user's turn)
   // Turn order display
@@ -99,6 +91,16 @@ interface ParticipantCardProps {
   onStatusChange?: (participantId: string, status: 'active' | 'silent' | 'absent' | 'removed') => void
   // Whisper support
   onWhisper?: (participantId: string) => void
+  // Outfit display
+  equippedSlots?: EquippedSlots | null
+  equippedItems?: Record<string, { title: string } | null>
+  wardrobeItems?: WardrobeItemSummary[]
+  onEquipSlot?: (participantId: string, slot: string, itemId: string | null) => void
+  outfitLoading?: boolean
+  // Gift wardrobe item
+  onGiftItem?: (participantId: string) => void
+  // Avatar regeneration
+  onRegenerateAvatar?: (participantId: string) => void
 }
 
 export function ParticipantCard({
@@ -127,12 +129,19 @@ export function ParticipantCard({
   onActiveChange,
   onStatusChange,
   onWhisper,
+  equippedSlots,
+  equippedItems,
+  wardrobeItems,
+  onEquipSlot,
+  outfitLoading,
+  onGiftItem,
+  onRegenerateAvatar,
 }: ParticipantCardProps) {
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
   )
   const isCharacter = participant.type === 'CHARACTER'
-  const entity = isCharacter ? participant.character : participant.persona
+  const entity = participant.character
 
   if (!entity) {
     return null
@@ -159,7 +168,7 @@ export function ParticipantCard({
       // Only LLM-controlled characters can be nudged for AI response
       onNudge(participant.id)
     } else {
-      // User persona or user-controlled character - queue them
+      // User-controlled character - queue them
       onQueue(participant.id)
     }
   }
@@ -292,6 +301,23 @@ export function ParticipantCard({
               </svg>
             </div>
           )}
+          {/* Regenerate avatar button — small camera icon below avatar */}
+          {onRegenerateAvatar && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onRegenerateAvatar(participant.id)
+              }}
+              className="qt-participant-avatar-regenerate"
+              title={`Regenerate avatar for ${name}`}
+              aria-label={`Regenerate avatar for ${name}`}
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Info */}
@@ -334,8 +360,8 @@ export function ParticipantCard({
             </div>
           )}
 
-          {/* Connection profile dropdown for characters */}
-          {isCharacter && connectionProfiles && onConnectionProfileChange ? (
+          {/* Connection profile dropdown for characters (not user-controlled) */}
+          {isCharacter && !isUserParticipant && connectionProfiles && onConnectionProfileChange ? (
             <div className="mt-1">
               <select
                 value={connectionProfileValue}
@@ -364,6 +390,19 @@ export function ParticipantCard({
                 />
               </div>
             )
+          )}
+
+          {/* Outfit indicator for all characters with wardrobe data */}
+          {isCharacter && onEquipSlot && (equippedSlots || (wardrobeItems && wardrobeItems.length > 0) || outfitLoading) && (
+            <OutfitIndicator
+              characterId={participant.character?.id || ''}
+              equippedSlots={equippedSlots ?? null}
+              equippedItems={equippedItems ?? {}}
+              wardrobeItems={wardrobeItems ?? []}
+              onEquipSlot={(slot, itemId) => onEquipSlot(participant.id, slot, itemId)}
+              isLoading={outfitLoading}
+              onGiftItem={onGiftItem ? () => onGiftItem(participant.id) : undefined}
+            />
           )}
 
           {/* Talkativeness slider for characters */}
@@ -483,8 +522,9 @@ export function ParticipantCard({
         )}
 
         {/* Remove button - for characters when canRemove is true
-            canRemove now includes the safety check that at least one user-controlled character remains */}
-        {isCharacter && onRemove && canRemove && (
+            canRemove now includes the safety check that at least one user-controlled character remains
+            User-controlled participants cannot be removed via this button */}
+        {isCharacter && !isUserParticipant && onRemove && canRemove && (
           <button
             onClick={() => onRemove(participant.id)}
             disabled={isGenerating}

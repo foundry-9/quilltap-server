@@ -89,6 +89,18 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'file': 'file_management',
 
   'project': 'project_info',
+
+  // Wardrobe tools
+  'list_wardrobe': 'list_wardrobe',
+  'wardrobe': 'list_wardrobe',
+  'closet': 'list_wardrobe',
+
+  'update_outfit_item': 'update_outfit_item',
+  'equip': 'update_outfit_item',
+  'wear': 'update_outfit_item',
+  'outfit': 'update_outfit_item',
+
+  'create_wardrobe_item': 'create_wardrobe_item',
 }
 
 /**
@@ -128,6 +140,20 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
   help_settings: {
     'section': 'category',
     'type': 'category',
+  },
+  update_outfit_item: {
+    'id': 'item_id',
+    'title': 'item_title',
+    'name': 'item_title',
+  },
+  create_wardrobe_item: {
+    'name': 'title',
+    'type': 'types',
+    'context': 'appropriateness',
+    'to': 'recipient',
+    'for': 'recipient',
+    'give_to': 'recipient',
+    'gift_to': 'recipient',
   },
 }
 

@@ -403,7 +403,6 @@ describe('First Message Context Builder', () => {
           id: 'participant-1',
           type: 'CHARACTER' as const,
           characterId: 'char-bob',
-          personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
 
@@ -439,7 +438,6 @@ describe('First Message Context Builder', () => {
           id: 'participant-speaker',
           type: 'CHARACTER' as const,
           characterId: 'char-speaker', // Same as speakingCharacterId
-          personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
 
@@ -453,7 +451,6 @@ describe('First Message Context Builder', () => {
           id: 'participant-other',
           type: 'CHARACTER' as const,
           characterId: 'char-other',
-          personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
 
@@ -495,13 +492,12 @@ describe('First Message Context Builder', () => {
       expect(result.participantMemories).toEqual([])
     })
 
-    it('skips non-CHARACTER participants', async () => {
+    it('skips user-controlled participants with no characterId', async () => {
       const participants = [
         {
           id: 'persona-participant',
-          type: 'PERSONA' as const,
+          type: 'CHARACTER' as const,
           characterId: null,
-          personaId: 'persona-123',
           connectionProfileId: null,
           imageProfileId: null,
 
@@ -527,7 +523,6 @@ describe('First Message Context Builder', () => {
           id: 'bad-participant',
           type: 'CHARACTER' as const,
           characterId: null, // Invalid
-          personaId: null,
           connectionProfileId: null,
           imageProfileId: null,
 

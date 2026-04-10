@@ -165,7 +165,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
           aliases: data.aliases ?? [],
           pronouns: data.pronouns ?? null,
           isFavorite: data.isFavorite ?? false,
-          personaLinks: data.personaLinks ?? [],
+          partnerLinks: data.partnerLinks ?? [],
           avatarOverrides: data.avatarOverrides ?? [],
           physicalDescriptions: data.physicalDescriptions ?? [],
           systemPrompts: data.systemPrompts ?? [],
@@ -250,63 +250,63 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   // ============================================================================
-  // PERSONA LINK OPERATIONS
+  // PARTNER LINK OPERATIONS
   // ============================================================================
 
   /**
-   * Add a persona link to a character
+   * Add a partner link to a character
    * @param characterId The character ID
-   * @param personaId The persona ID
-   * @param isDefault Whether this persona should be the default
+   * @param partnerId The partner character ID
+   * @param isDefault Whether this partner should be the default
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
-  async addPersona(characterId: string, personaId: string, isDefault = false): Promise<Character | null> {
+  async addPartnerLink(characterId: string, partnerId: string, isDefault = false): Promise<Character | null> {
     return this.safeQuery(
       async () => {
         const character = await this.findById(characterId);
         if (!character) {
-          logger.warn('Character not found for persona link addition', { characterId });
+          logger.warn('Character not found for partner link addition', { characterId });
           return null;
         }
 
-        const existing = character.personaLinks.find((link) => link.personaId === personaId);
+        const existing = character.partnerLinks.find((link) => link.partnerId === partnerId);
         if (!existing) {
-          character.personaLinks.push({ personaId, isDefault });
-          return await this.update(characterId, { personaLinks: character.personaLinks });
+          character.partnerLinks.push({ partnerId, isDefault });
+          return await this.update(characterId, { partnerLinks: character.partnerLinks });
         }
         return character;
       },
-      'Error adding persona link to character',
-      { characterId, personaId }
+      'Error adding partner link to character',
+      { characterId, partnerId }
     );
   }
 
   /**
-   * Remove a persona link from a character
+   * Remove a partner link from a character
    * @param characterId The character ID
-   * @param personaId The persona ID
+   * @param partnerId The partner character ID
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
-  async removePersona(characterId: string, personaId: string): Promise<Character | null> {
+  async removePartnerLink(characterId: string, partnerId: string): Promise<Character | null> {
     return this.safeQuery(
       async () => {
         const character = await this.findById(characterId);
         if (!character) {
-          logger.warn('Character not found for persona link removal', { characterId });
+          logger.warn('Character not found for partner link removal', { characterId });
           return null;
         }
 
-        const beforeCount = character.personaLinks.length;
-        character.personaLinks = character.personaLinks.filter((link) => link.personaId !== personaId);
-        const afterCount = character.personaLinks.length;
+        const beforeCount = character.partnerLinks.length;
+        character.partnerLinks = character.partnerLinks.filter((link) => link.partnerId !== partnerId);
+        const afterCount = character.partnerLinks.length;
 
         if (beforeCount !== afterCount) {
-          return await this.update(characterId, { personaLinks: character.personaLinks });
+          return await this.update(characterId, { partnerLinks: character.partnerLinks });
         }
         return character;
       },
-      'Error removing persona link from character',
-      { characterId, personaId }
+      'Error removing partner link from character',
+      { characterId, partnerId }
     );
   }
 

@@ -187,7 +187,7 @@ The UI shows turn status in several ways:
 
 **Your Turn:**
 - Header shows "Your turn to speak"
-- Amber position badge on your persona card
+- Amber position badge on your user character card
 - Input field may have focus indicator
 
 **Queued Characters:**

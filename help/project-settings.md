@@ -187,6 +187,40 @@ Configure how the project appears in the UI.
 - Displayed with project name
 - Quick visual identification
 
+## Image Generation Settings
+
+Configure how image generation works for chats in this project.
+
+### Default Image Profile
+
+Set a default image generation profile for the project. New chats created in this project will inherit this profile, overriding whatever the global default might be — though a character's own default image profile, should one exist, will take precedence over the project's.
+
+1. Open the **Image Generation** card
+2. Find the **Default Image Profile** dropdown
+3. Select a profile, or "Inherit from global default" to leave it unset
+4. Changes save automatically
+
+The full priority chain for image profiles in a new chat:
+1. Project's default image profile (most specific)
+2. Character's default image profile
+3. Global default image profile
+
+### Avatar Generation
+
+Control whether character avatars are auto-generated when outfits change in new chats.
+
+- **Inherit from global** — uses whatever the global setting dictates
+- **Enabled by default** — new project chats auto-generate avatars
+- **Disabled by default** — new project chats won't auto-generate
+
+### Story Backgrounds
+
+Choose how the project background is displayed:
+- **Theme background** — no image, uses your theme colours
+- **Latest chat background** — shows the most recent background from any chat in the project
+- **Project background** — uses a background generated specifically for this project
+- **Static image** — uses a manually uploaded background image
+
 ## Settings Organization
 
 Settings are typically organized in cards:

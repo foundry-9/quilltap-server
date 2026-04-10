@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-04-09
+
+### Removed
+
+- **Breaking:** Removed `ROLEPLAY_TEMPLATE` from `PluginCapability` type — roleplay templates are now native first-class entities in Quilltap v4.2.0
+- Removed roleplay template type re-exports from `@quilltap/plugin-types/plugins` barrel
+- Types in `./plugins/roleplay-template` are preserved but deprecated — import directly if backward compat is needed
+
 ## [1.15.1] - 2026-02-23
 
 ### Removed

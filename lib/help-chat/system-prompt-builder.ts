@@ -17,7 +17,7 @@ const helpChatLogger = logger.child({ context: 'HelpChat' })
 
 export interface HelpSystemPromptOptions {
   character: Character
-  persona?: { name: string; description: string } | null
+  userCharacter?: { name: string; description: string } | null
   pageContext?: HelpPageContext | null
   additionalPageContexts?: HelpPageContext[]
   otherCharacterNames?: string[]
@@ -30,7 +30,7 @@ export interface HelpSystemPromptOptions {
 export function buildHelpChatSystemPrompt(options: HelpSystemPromptOptions): string {
   const {
     character,
-    persona,
+    userCharacter,
     pageContext,
     additionalPageContexts,
     otherCharacterNames,
@@ -38,7 +38,7 @@ export function buildHelpChatSystemPrompt(options: HelpSystemPromptOptions): str
   } = options
 
   const parts: string[] = []
-  const userName = persona?.name || 'User'
+  const userName = userCharacter?.name || 'User'
 
   // Template context for {{char}}/{{user}} replacement
   const templateContext: TemplateContext = {
@@ -47,7 +47,7 @@ export function buildHelpChatSystemPrompt(options: HelpSystemPromptOptions): str
     description: character.description || '',
     personality: character.personality || '',
     scenario: character.scenarios?.[0]?.content || '',
-    persona: persona?.description || '',
+    persona: userCharacter?.description || '',
   }
 
   // 1. Identity preamble (same anchor as Salon)
@@ -111,9 +111,9 @@ ${pageContext.content}`)
     }
   }
 
-  // 8. Persona info
-  if (persona) {
-    parts.push(`## User Persona\nYou are speaking with ${persona.name}. ${persona.description}`)
+  // 8. User character info
+  if (userCharacter) {
+    parts.push(`## User Character\nYou are speaking with ${userCharacter.name}. ${userCharacter.description}`)
   }
 
   // 9. Multi-character note (if multiple help characters)

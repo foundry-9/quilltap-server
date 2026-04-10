@@ -242,7 +242,7 @@ export function ImportWizard({
       parts.push(`created ${importedChat.createdEntities.characters.length} new character(s)`)
     }
     if (importedChat?.createdEntities?.personas?.length > 0) {
-      parts.push(`created ${importedChat.createdEntities.personas.length} new persona(s)`)
+      parts.push(`created ${importedChat.createdEntities.personas.length} new user character(s)`)
     }
     if (importedChat?.memoryJobCount > 0) {
       parts.push(`queued ${importedChat.memoryJobCount} messages for memory analysis`)

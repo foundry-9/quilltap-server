@@ -1,6 +1,6 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-04-02
+**Last Updated**: 2026-04-08
 **Tool Used**: knip
 **Codebase**: Quilltap v4.0.0-dev
 
@@ -15,7 +15,82 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 | Unused Files | Cleaned up 2026-03-24 |
 | Migration Scripts | Deleted (migrations complete) |
 | Unused Dependencies | @quilltap/theme-storybook removed 2026-04-02; @aws-sdk/client-s3, svgo removed 2026-03-05; bcrypt, qrcode, ts-jest removed 2026-01-30 |
-| Unused Exports | Low priority, ~780 remaining (mostly barrel re-exports) |
+| Unused Exported Types | ~33 flagged; most are intentional plugin/barrel re-exports |
+| Unused Enum Members | 3 in ErrorCode (preserved for future use) |
+| Duplicate Exports | ~39 (named + default pattern, low priority) |
+
+---
+
+## Current Findings (2026-04-08)
+
+### Unused Exported Types (~33)
+
+#### Intentional: Plugin/Barrel Re-exports in `lib/tools/index.ts`
+
+These types are re-exported from the tools barrel file to form the public API surface for plugins and external consumers. They should be preserved.
+
+| Type | Source | Reason to Keep |
+|------|--------|----------------|
+| `BuildToolsOptions` | `lib/tools/index.ts:262` (from `plugin-tool-builder.ts`) | Plugin tool builder API |
+| `WardrobeListToolInput` | `lib/tools/index.ts:269` (from `wardrobe-list-tool.ts`) | Wardrobe tool plugin API |
+| `WardrobeListToolOutput` | `lib/tools/index.ts:270` (from `wardrobe-list-tool.ts`) | Wardrobe tool plugin API |
+| `WardrobeListItemResult` | `lib/tools/index.ts:271` (from `wardrobe-list-tool.ts`) | Wardrobe tool plugin API |
+| `WardrobeListToolContext` | `lib/tools/index.ts:278` (from wardrobe-list-handler) | Wardrobe tool plugin API |
+| `WardrobeUpdateOutfitToolInput` | `lib/tools/index.ts:284` (from wardrobe-update-outfit-tool) | Wardrobe tool plugin API |
+| `WardrobeUpdateOutfitToolOutput` | `lib/tools/index.ts:285` (from wardrobe-update-outfit-tool) | Wardrobe tool plugin API |
+| `WardrobeUpdateOutfitToolContext` | `lib/tools/index.ts:292` (from wardrobe-update-outfit-handler) | Wardrobe tool plugin API |
+| `WardrobeCreateItemToolInput` | `lib/tools/index.ts:298` (from wardrobe-create-item-tool) | Wardrobe tool plugin API |
+| `WardrobeCreateItemToolOutput` | `lib/tools/index.ts:299` (from wardrobe-create-item-tool) | Wardrobe tool plugin API |
+| `WardrobeCreateItemToolContext` | `lib/tools/index.ts:306` (from wardrobe-create-item-handler) | Wardrobe tool plugin API |
+| `ParsedTextBlock` | `lib/tools/index.ts:327` (from `text-block-parser.ts`) | Text block parser API |
+| `ShellSessionState` | `lib/tools/shell/index.ts` (from shell-session.types) | Shell tool plugin API |
+| `AsyncProcessRecord` | `lib/tools/shell/index.ts` (from shell-session.types) | Shell tool plugin API |
+| `ShellCommandRequest` | `lib/tools/shell/index.ts` (from shell-session.types) | Shell tool plugin API |
+| `ShellCommandResult` | `lib/tools/shell/index.ts` (from shell-session.types) | Shell tool plugin API |
+| `ShellAsyncCommandResult` | `lib/tools/shell/index.ts` (from shell-session.types) | Shell tool plugin API |
+| `ShellToolName` | `lib/tools/shell/index.ts` (from shell-tools) | Shell tool plugin API |
+| `ShellToolOutput` | `lib/tools/shell/shell-handler.ts` | Shell tool plugin API |
+
+#### Intentional: Source-Level Exports (used internally or for type safety)
+
+| Type | Location | Reason to Keep |
+|------|----------|----------------|
+| `ToolDefinition` | `lib/tools/registry.ts:16` | Core tool registry interface, used by `ToolRegistry` class |
+| `ToolContext` | `lib/tools/registry.ts:26` | Core tool registry interface, referenced by `ToolDefinition.handler` |
+| `DisplacementRepos` | `lib/wardrobe/outfit-displacement.ts:20` | Used as parameter type in two functions in same file; exported for testability |
+| `RequestFullContextToolInput` | `lib/tools/request-full-context-tool.ts:14` | Tool input type; follows tool type convention |
+
+#### Potentially Actionable
+
+| Type | Location | Notes |
+|------|----------|-------|
+| `BuildToolsOptions` | `lib/tools/plugin-tool-builder.ts:123` | Required by barrel re-export in `lib/tools/index.ts`. Not actionable. |
+| `ParsedTextBlock` | `lib/tools/text-block-parser.ts:24` | Required by barrel re-export in `lib/tools/index.ts`. Not actionable. |
+| `ShellCommandRequest` | `lib/tools/shell/shell-session.types.ts:48` | Imported by `shell-handler.ts` and re-exported from barrel. Not actionable. |
+
+### Unused Enum Members (3)
+
+Three `ErrorCode` enum values in `lib/errors.ts` are not currently referenced but are preserved for future error handling:
+
+| Member | Line |
+|--------|------|
+| `ENCRYPTION_ERROR` | 28 |
+| `DATABASE_ERROR` | 29 |
+| `EXTERNAL_API_ERROR` | 30 |
+
+**Status**: Intentional. These are standard error categories likely to be needed as error handling matures.
+
+### Duplicate Exports (~39)
+
+Knip flags ~39 components/modules that have both named and default exports. This is a common React pattern (named export for testing, default export for lazy loading). Examples include various components across `components/` and renamed legacy exports in auth middleware and the single-user module.
+
+**Status**: Low priority. The named + default pattern is intentional and widely used in the codebase. Legacy aliases (e.g., `withAuth`/`withContext` in auth middleware) may still be needed for backwards compatibility with plugins or older code paths.
+
+### Configuration Hints (2)
+
+Knip suggests removing `packages/**` and `plugins/**` from `knip.json` ignore list. These directories contain independently published npm packages and dynamically loaded plugins respectively, and must remain ignored.
+
+**Status**: No action needed. These are correctly configured false-positive exclusions.
 
 ---
 
@@ -301,23 +376,19 @@ These files are flagged by knip but are actually used:
 
 ## Remaining Work (Low Priority)
 
-### Unused Exports
+### Completed 2026-04-08
 
-Knip reports ~813 unused exports. Most fall into these categories:
+1. **Consolidated duplicate `WardrobeItemType`**: Removed local copy in `lib/tools/wardrobe-create-item-tool.ts`, now imports from `lib/schemas/wardrobe.types.ts`
+2. **Unexported dedup types**: `DedupClusterResult`, `CharacterDedupResult`, and `DedupResult` in `lib/tools/memory-dedup.ts` made file-internal
+3. **Unexported `ValidationResult`**: In `lib/validation/qtap-schema-validator.ts`, made file-internal
 
-1. **Index File Re-exports**: Intentional public API surfaces
-2. **Schema Definitions**: Runtime validation schemas
-3. **Type Exports**: TypeScript type-only exports
-4. **Duplicate exports**: Components with both named and default exports
+### Not Actionable (Reviewed 2026-04-08)
 
-**Recommendation**: Address gradually during regular development.
+- **Source-level barrel duplicates** (`BuildToolsOptions`, `ParsedTextBlock`, `ShellCommandRequest`): Source files must keep `export` for barrel re-exports to work. The knip "duplicate" is inherent to the barrel pattern.
 
-### Unused Enum Members
+### Duplicate Exports (~39)
 
-Three `ErrorCode` enum values are not currently used but may be useful for future error handling:
-- `ENCRYPTION_ERROR`
-- `DATABASE_ERROR`
-- `EXTERNAL_API_ERROR`
+Components with both named and default exports, plus legacy compatibility aliases. Address gradually during regular development.
 
 ### Utility Scripts to Keep
 

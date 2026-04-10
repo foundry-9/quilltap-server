@@ -22,7 +22,7 @@ import { logger } from '@/lib/logger'
 // =============================================================================
 
 /** Result for a single cluster of duplicate memories */
-export interface DedupClusterResult {
+interface DedupClusterResult {
   size: number
   survivorId: string
   survivorSummary: string
@@ -33,7 +33,7 @@ export interface DedupClusterResult {
 }
 
 /** Per-character deduplication result */
-export interface CharacterDedupResult {
+interface CharacterDedupResult {
   characterId: string
   characterName: string
   originalCount: number
@@ -48,7 +48,7 @@ export interface CharacterDedupResult {
 }
 
 /** Overall deduplication result */
-export interface DedupResult {
+interface DedupResult {
   threshold: number
   dryRun: boolean
   characters: CharacterDedupResult[]
