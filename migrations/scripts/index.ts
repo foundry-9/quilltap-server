@@ -165,6 +165,8 @@ import { addNarrationDelimitersFieldMigration } from './add-narration-delimiters
 import { migratePluginTemplatesToNativeMigration } from './migrate-plugin-templates-to-native';
 // Add defaultImageProfileId to projects for project-level image profile default
 import { addProjectDefaultImageProfileMigration } from './add-project-default-image-profile';
+// Create character_plugin_data table for per-character per-plugin metadata
+import { createCharacterPluginDataTableMigration } from './create-character-plugin-data-table';
 
 /**
  * All available migrations.
@@ -325,6 +327,8 @@ export const migrations: Migration[] = [
   migratePluginTemplatesToNativeMigration,
   // Add defaultImageProfileId to projects for project-level image profile default
   addProjectDefaultImageProfileMigration,
+  // Create character_plugin_data table for per-character per-plugin metadata
+  createCharacterPluginDataTableMigration,
 ];
 
 export {
@@ -470,5 +474,7 @@ export {
   migratePluginTemplatesToNativeMigration,
   // Add defaultImageProfileId to projects for project-level image profile default
   addProjectDefaultImageProfileMigration,
+  // Create character_plugin_data table for per-character per-plugin metadata
+  createCharacterPluginDataTableMigration,
 };
 

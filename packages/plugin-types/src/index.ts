@@ -206,6 +206,11 @@ export type {
 
 export type { LogLevel, LogContext, PluginLogger } from './common/logger';
 
+export type {
+  CharacterPluginDataEntry,
+  CharacterPluginDataMap,
+} from './common/character-plugin-data';
+
 // Error classes (these are values, not just types)
 export {
   PluginError,
@@ -229,4 +234,4 @@ export { createConsoleLogger, createNoopLogger } from './common/logger';
  * Version of the plugin-types package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_TYPES_VERSION = '2.0.0';
+export const PLUGIN_TYPES_VERSION = '2.2.1';

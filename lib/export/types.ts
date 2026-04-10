@@ -104,6 +104,8 @@ export interface ExportedCharacter extends Character {
   _tagNames?: string[];
   /** Wardrobe items belonging to this character, exported alongside the character */
   wardrobeItems?: WardrobeItem[];
+  /** Per-plugin metadata for this character, keyed by plugin name */
+  pluginData?: Record<string, unknown>;
 }
 
 /**

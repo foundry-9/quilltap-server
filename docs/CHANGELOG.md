@@ -41,6 +41,9 @@
 
 #### Added
 
+- **Character Plugin Data**: New per-character, per-plugin JSON metadata storage. Plugins can store arbitrary JSON data associated with any character via dedicated REST API endpoints (`/api/v1/characters/[id]/plugin-data`). Data is included in character exports/imports and cleaned up on character deletion. New `character_plugin_data` table with `characterId`+`pluginName` composite unique key.
+- **@quilltap/plugin-types 2.2.1**: Added `CharacterPluginDataEntry` and `CharacterPluginDataMap` types for plugin developers
+- **@quilltap/plugin-utils 2.2.1**: Re-exported character plugin data types from plugin-types
 - **Project Default Image Profile**: Projects can now have their own default image generation profile, set in the "Image Generation" card on the project page. New chats created in that project inherit the project's image profile, overriding both the global default and character-level defaults. The profile resolution chain for story backgrounds also checks the project's profile. New DB column: `projects.defaultImageProfileId`.
 
 - **Character Avatar Regeneration**: Added a small camera button overlay on participant avatars in the chat sidebar that manually triggers avatar regeneration. Only visible when avatar generation is enabled for the chat. After regeneration completes, the avatar auto-refreshes on the page via polling — also applies to avatars generated automatically from outfit changes. New API action: `POST /api/v1/chats/[id]?action=regenerate-avatar`.

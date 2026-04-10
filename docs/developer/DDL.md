@@ -235,6 +235,35 @@ CREATE INDEX "idx_outfit_presets_character" ON "outfit_presets"("characterId");
 | createdAt | TEXT (ISO 8601) | Creation timestamp |
 | updatedAt | TEXT (ISO 8601) | Last update timestamp |
 
+### character_plugin_data
+
+Stores arbitrary per-character, per-plugin JSON metadata. Each plugin can store any valid JSON value associated with a character. Quilltap enforces only that the data field is parseable JSON.
+
+```sql
+CREATE TABLE "character_plugin_data" (
+  "id" TEXT PRIMARY KEY,
+  "characterId" TEXT NOT NULL,
+  "pluginName" TEXT NOT NULL,
+  "data" TEXT NOT NULL DEFAULT '{}',
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  UNIQUE("characterId", "pluginName"),
+  FOREIGN KEY ("characterId") REFERENCES "characters"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_cpd_character" ON "character_plugin_data"("characterId");
+CREATE INDEX "idx_cpd_plugin" ON "character_plugin_data"("pluginName");
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| characterId | TEXT (UUID) | Character this data belongs to |
+| pluginName | TEXT | Plugin name (e.g., "qtap-plugin-curl"), max 200 chars |
+| data | TEXT (JSON) | Arbitrary JSON value — any valid JSON (object, array, string, number, boolean, null) |
+| createdAt | TEXT (ISO 8601) | Creation timestamp |
+| updatedAt | TEXT (ISO 8601) | Last update timestamp |
+
 ### chats
 
 ```sql

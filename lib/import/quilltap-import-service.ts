@@ -1034,6 +1034,13 @@ async function importCharacters(
             warnings
           );
 
+          // Import plugin data for duplicated character
+          await importCharacterPluginData(
+            (rawCharacter as ExportedCharacter).pluginData,
+            newCharacter.id,
+            warnings
+          );
+
           imported++;
           continue;
         }
@@ -1046,6 +1053,13 @@ async function importCharacters(
       // Import wardrobe items for this character
       await importCharacterWardrobeItems(
         (rawCharacter as ExportedCharacter).wardrobeItems,
+        newCharacter.id,
+        warnings
+      );
+
+      // Import plugin data for this character
+      await importCharacterPluginData(
+        (rawCharacter as ExportedCharacter).pluginData,
         newCharacter.id,
         warnings
       );
@@ -1113,6 +1127,45 @@ async function importCharacterWardrobeItems(
       );
       moduleLogger.warn('Failed to import wardrobe item', {
         wardrobeItemId: item.id,
+        characterId: newCharacterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return importedCount;
+}
+
+/**
+ * Import plugin data for a character, assigning entries to the new character ID.
+ */
+async function importCharacterPluginData(
+  pluginData: Record<string, unknown> | undefined,
+  newCharacterId: string,
+  warnings: string[]
+): Promise<number> {
+  if (!pluginData || Object.keys(pluginData).length === 0) return 0;
+
+  const globalRepos = getRepositories();
+  let importedCount = 0;
+
+  for (const [pluginName, data] of Object.entries(pluginData)) {
+    try {
+      await globalRepos.characterPluginData.upsert(newCharacterId, pluginName, data);
+      importedCount++;
+
+      moduleLogger.debug('Imported plugin data for character', {
+        pluginName,
+        newCharacterId,
+      });
+    } catch (error) {
+      warnings.push(
+        `Failed to import plugin data for "${pluginName}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      moduleLogger.warn('Failed to import plugin data', {
+        pluginName,
         characterId: newCharacterId,
         error: error instanceof Error ? error.message : String(error),
       });

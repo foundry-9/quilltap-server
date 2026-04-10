@@ -221,10 +221,28 @@ export async function exportCharacters(
         });
       }
 
+      // Load plugin data for this character
+      let pluginData: Record<string, unknown> = {};
+      try {
+        pluginData = await globalRepos.characterPluginData.getPluginDataMap(id);
+        if (Object.keys(pluginData).length > 0) {
+          logger.debug('Loaded plugin data for character export', {
+            characterId: id,
+            pluginCount: Object.keys(pluginData).length,
+          });
+        }
+      } catch (error) {
+        logger.warn('Failed to load plugin data for character export', {
+          characterId: id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       characters.push({
         ...character,
         ...(tagNames.length > 0 && { _tagNames: tagNames }),
         ...(wardrobeItems.length > 0 && { wardrobeItems }),
+        ...(Object.keys(pluginData).length > 0 && { pluginData }),
       });
     }
   }

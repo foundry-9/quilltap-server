@@ -344,6 +344,16 @@ export async function executeCascadeDelete(
     logger.error(`Failed to delete vector store for character ${characterId}`, { context: { characterId } }, err instanceof Error ? err : undefined)
   }
 
+  // Delete plugin data associated with the character
+  try {
+    const deletedPluginData = await repos.characterPluginData.deleteByCharacterId(characterId)
+    if (deletedPluginData > 0) {
+      logger.info(`Deleted ${deletedPluginData} plugin data entries for character ${characterId}`, { context: { characterId, deletedPluginData } })
+    }
+  } catch (err) {
+    logger.error(`Failed to delete plugin data for character ${characterId}`, { context: { characterId } }, err instanceof Error ? err : undefined)
+  }
+
   // Finally delete the character
   await repos.characters.delete(characterId)
 

@@ -293,6 +293,11 @@
           "type": "array",
           "items": { "$ref": "#/$defs/WardrobeItem" },
           "description": "Wardrobe items belonging to this character, exported alongside the character"
+        },
+        "pluginData": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Per-plugin metadata for this character, keyed by plugin name. Each value is arbitrary JSON."
         }
       }
     },
