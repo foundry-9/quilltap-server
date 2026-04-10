@@ -2,7 +2,11 @@
 
 ## Recent Changes
 
-### 4.2-dev
+### 4.3-dev
+
+(empty — new development starts here)
+
+### 4.2.0
 
 #### Changed
 
