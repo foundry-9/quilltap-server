@@ -16,9 +16,13 @@ const projectRoot = resolve(__dirname, '..', '..', '..');
 
 // Packages that should NOT be bundled - they're provided by the main app at runtime
 const EXTERNAL_PACKAGES = [
-  // Quilltap plugin packages (provided by main app or resolved from node_modules)
+  // Quilltap plugin packages — type-only imports stripped at build time
   '@quilltap/plugin-types',
-  '@quilltap/plugin-utils',
+  // NOTE: @quilltap/plugin-utils is intentionally NOT external here.
+  // This plugin only uses createSystemPromptPlugin from plugin-utils.
+  // Bundling it (with tree-shaking) avoids pulling in the full plugin-utils
+  // at runtime, which would drag in provider utilities that require 'openai'
+  // — a package not available in standalone/Electron deployments.
   // React (provided by main app)
   'react',
   'react-dom',
