@@ -289,6 +289,8 @@
   /* Queue status badge colors */
   --qt-queue-badge-memory-bg: hsl(20 35% 25%);
   --qt-queue-badge-memory-fg: hsl(43 75% 55%);
+  --qt-queue-badge-embedding-bg: hsl(280 30% 28%);
+  --qt-queue-badge-embedding-fg: hsl(43 75% 55%);
   --qt-queue-badge-summary-bg: hsl(142 65% 38%);
   --qt-queue-badge-story-bg: hsl(20 25% 22%);
   --qt-queue-badge-story-fg: hsl(43 50% 72%);
@@ -478,6 +480,8 @@
   /* Queue status badge tokens */
   --qt-queue-badge-memory-bg: hsl(20 35% 30%);
   --qt-queue-badge-memory-fg: hsl(43 80% 62%);
+  --qt-queue-badge-embedding-bg: hsl(280 30% 32%);
+  --qt-queue-badge-embedding-fg: hsl(43 80% 62%);
   --qt-queue-badge-summary-bg: hsl(142 60% 42%);
   --qt-queue-badge-story-bg: hsl(20 22% 25%);
   --qt-queue-badge-story-fg: hsl(43 60% 68%);

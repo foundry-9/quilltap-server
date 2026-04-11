@@ -4,8 +4,8 @@
  * Queue Status Badges
  *
  * Displays a compact badge group in the page toolbar showing active job counts
- * for each background queue: memory, summarization, danger classification,
- * and story background generation.
+ * for each background queue: memory, embedding, summarization, danger
+ * classification, and story background generation.
  *
  * Polling is event-driven:
  * - Starts on route change (page navigation)
@@ -43,10 +43,17 @@ const QUEUE_TYPES = [
     badgeClass: 'qt-queue-badge-memory',
   },
   {
+    key: 'embedding',
+    label: 'Emb',
+    title: 'Embedding queue',
+    jobTypes: ['EMBEDDING_GENERATE', 'EMBEDDING_REFIT', 'EMBEDDING_REINDEX_ALL'],
+    badgeClass: 'qt-queue-badge-embedding',
+  },
+  {
     key: 'summary',
     label: 'Sum',
-    title: 'Summarization queue',
-    jobTypes: ['CONTEXT_SUMMARY'],
+    title: 'Post-turn processing queue (summaries, titles, scene state, rendering)',
+    jobTypes: ['CONTEXT_SUMMARY', 'TITLE_UPDATE', 'SCENE_STATE_TRACKING', 'CONVERSATION_RENDER'],
     badgeClass: 'qt-queue-badge-summary',
   },
   {
@@ -58,9 +65,9 @@ const QUEUE_TYPES = [
   },
   {
     key: 'story',
-    label: 'BG',
-    title: 'Story background generation queue',
-    jobTypes: ['STORY_BACKGROUND_GENERATION'],
+    label: 'Img',
+    title: 'Image generation queue (story backgrounds, character avatars)',
+    jobTypes: ['STORY_BACKGROUND_GENERATION', 'CHARACTER_AVATAR_GENERATION'],
     badgeClass: 'qt-queue-badge-story',
   },
 ] as const

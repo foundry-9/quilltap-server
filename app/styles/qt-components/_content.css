@@ -266,6 +266,7 @@
    */
   .qt-queue-badge,
   .qt-queue-badge-memory,
+  .qt-queue-badge-embedding,
   .qt-queue-badge-summary,
   .qt-queue-badge-danger,
   .qt-queue-badge-story {
@@ -289,6 +290,14 @@
   .qt-queue-badge-memory {
     background: var(--qt-queue-badge-memory-bg);
     color: var(--qt-queue-badge-memory-fg);
+  }
+
+  /**
+   * Embedding queue badge (purple)
+   */
+  .qt-queue-badge-embedding {
+    background: var(--qt-queue-badge-embedding-bg);
+    color: var(--qt-queue-badge-embedding-fg);
   }
 
   /**

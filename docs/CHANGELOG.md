@@ -12,6 +12,10 @@
   - New `upsert_annotation` and `delete_annotation` tools enable characters to add persistent commentary to specific messages
   - Conversation interchanges are embedded as searchable chunks via the existing embedding pipeline
 
+#### Changed
+
+- **Queue Status Badges**: Added "Emb" (embedding) badge showing active embedding jobs. Expanded "Sum" to cover all post-turn processing (context summaries, title updates, scene state tracking, conversation rendering). Added character avatar generation to "BG" badge alongside story backgrounds.
+
 #### Fixed
 
 - **Embedding BLOB Registration**: Fixed race condition where memory embeddings could be stored as JSON text instead of Float32 BLOBs, causing dimension mismatches during vector search. BLOB columns for `memories`, `vector_entries`, and `conversation_chunks` are now registered at database initialization time rather than lazily in individual repositories.
