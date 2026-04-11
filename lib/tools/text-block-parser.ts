@@ -101,6 +101,10 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'outfit': 'update_outfit_item',
 
   'create_wardrobe_item': 'create_wardrobe_item',
+
+  // Scriptorium search
+  'search_scriptorium': 'search_scriptorium',
+  'scriptorium': 'search_scriptorium',
 }
 
 /**
@@ -155,6 +159,12 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
     'give_to': 'recipient',
     'gift_to': 'recipient',
   },
+  search_scriptorium: {
+    'search': 'query',
+    'q': 'query',
+    'count': 'limit',
+    'max': 'limit',
+  },
 }
 
 /**
@@ -168,6 +178,7 @@ const CONTENT_PARAM_MAP: Record<string, string> = {
   search_web: 'query',
   create_note: 'content',
   help_search: 'query',
+  search_scriptorium: 'query',
 }
 
 /**

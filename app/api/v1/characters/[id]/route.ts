@@ -20,6 +20,7 @@
  * - toggle-controlled-by - Toggle user/LLM control
  * - set-default-partner - Set default partner
  * - generate-external-prompt - Generate standalone system prompt for external tools
+ * - refresh-archive - Re-render and re-embed all conversations for this character
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -38,6 +39,7 @@ import { notFound, forbidden, badRequest, serverError } from '@/lib/api/response
 import { runCharacterOptimizer } from '@/lib/services/character-optimizer.service';
 import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.service';
 import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
+import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
 
 // ============================================================================
 // Schemas
@@ -123,7 +125,7 @@ const generateExternalPromptSchema = z.object({
   maxTokens: z.number().int().min(1000).max(20000),
 });
 
-const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt'] as const;
+const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive'] as const;
 type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 // ============================================================================
@@ -704,6 +706,47 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       }
 
       return NextResponse.json({ prompt: result.prompt, tokensUsed: result.tokensUsed });
+    },
+
+    'refresh-archive': async () => {
+      try {
+        // Find all chats this character participates in
+        const chats = await repos.chats.findByCharacterId(id);
+
+        if (chats.length === 0) {
+          return NextResponse.json({ queued: 0 });
+        }
+
+        let queued = 0;
+        for (const chat of chats) {
+          try {
+            await enqueueConversationRender(user.id, {
+              chatId: chat.id,
+              fullReembed: true,
+            });
+            queued++;
+          } catch (err) {
+            // Skip chats that already have a pending render job
+            logger.debug('[Characters v1] Skipped render enqueue (likely already pending)', {
+              characterId: id,
+              chatId: chat.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+
+        logger.info('[Characters v1] Conversation archive refresh queued', {
+          characterId: id,
+          userId: user.id,
+          totalChats: chats.length,
+          queued,
+        });
+
+        return NextResponse.json({ queued, total: chats.length });
+      } catch (error) {
+        logger.error('[Characters v1] Error refreshing conversation archive', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to refresh conversation archive');
+      }
     },
   };
 

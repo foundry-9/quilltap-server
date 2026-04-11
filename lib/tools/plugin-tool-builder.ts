@@ -41,6 +41,9 @@ import {
   deleteAnnotationToolDefinition,
 } from '@/lib/tools/delete-annotation-tool';
 import {
+  searchScriptoriumToolDefinition,
+} from '@/lib/tools/search-scriptorium-tool';
+import {
   wardrobeListToolDefinition,
 } from '@/lib/tools/wardrobe-list-tool';
 import {
@@ -310,10 +313,11 @@ export async function buildToolsForProvider(
     universalTools.push(stateToolDefinition as UniversalTool);
   }
 
-  // Scriptorium tools (always enabled - conversation reading and annotations)
+  // Scriptorium tools (always enabled - conversation reading, annotations, and search)
   universalTools.push(readConversationToolDefinition as UniversalTool);
   universalTools.push(upsertAnnotationToolDefinition as UniversalTool);
   universalTools.push(deleteAnnotationToolDefinition as UniversalTool);
+  universalTools.push(searchScriptoriumToolDefinition as UniversalTool);
 
   // Add whisper tool if enabled (multi-character chats only)
   if (options.whisper) {

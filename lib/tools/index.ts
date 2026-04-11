@@ -328,6 +328,20 @@ export {
   type DeleteAnnotationToolOutput,
 } from './delete-annotation-tool';
 
+export {
+  searchScriptoriumToolDefinition,
+  validateSearchScriptoriumInput,
+  type SearchScriptoriumToolInput,
+  type SearchScriptoriumToolOutput,
+  type SearchScriptoriumResult,
+} from './search-scriptorium-tool';
+
+export {
+  executeSearchScriptoriumTool,
+  formatSearchScriptoriumResults,
+  type SearchScriptoriumToolContext,
+} from './handlers/search-scriptorium-handler';
+
 // Tool Support (for checking model capabilities and tool mode)
 export {
   checkModelSupportsTools,

@@ -26,6 +26,8 @@ export interface ReadConversationToolContext {
   userId: string;
   /** Chat ID to read the conversation from */
   chatId: string;
+  /** Character ID of the calling character (for cross-conversation access control) */
+  characterId?: string;
 }
 
 /**
@@ -56,26 +58,46 @@ export async function executeReadConversationTool(
       };
     }
 
-    const { exclude_annotations } = input as ReadConversationToolInput;
+    const { conversationId, exclude_annotations } = input as ReadConversationToolInput;
+    const targetChatId = conversationId || context.chatId;
 
     // Load chat
-    const chat = await repos.chats.findById(context.chatId);
+    const chat = await repos.chats.findById(targetChatId);
     if (!chat) {
       logger.warn('Read conversation tool: chat not found', {
         context: 'read-conversation-handler',
-        chatId: context.chatId,
+        chatId: targetChatId,
         userId: context.userId,
+        requestedConversationId: conversationId,
       });
       return {
         success: false,
-        error: 'Chat not found.',
+        error: 'Conversation not found.',
       };
+    }
+
+    // When reading a different conversation, verify the calling character participates
+    if (conversationId && conversationId !== context.chatId && context.characterId) {
+      const participatesInChat = chat.participants.some(
+        p => p.characterId === context.characterId
+      );
+      if (!participatesInChat) {
+        logger.warn('Read conversation tool: character does not participate in target chat', {
+          context: 'read-conversation-handler',
+          chatId: targetChatId,
+          characterId: context.characterId,
+        });
+        return {
+          success: false,
+          error: 'Conversation not found.',
+        };
+      }
     }
 
     if (!chat.renderedMarkdown) {
       logger.debug('Read conversation tool: no rendered markdown available', {
         context: 'read-conversation-handler',
-        chatId: context.chatId,
+        chatId: targetChatId,
       });
       return {
         success: false,
@@ -90,16 +112,16 @@ export async function executeReadConversationTool(
       markdown = stripAnnotations(markdown);
       logger.debug('Stripped annotations from rendered markdown', {
         context: 'read-conversation-handler',
-        chatId: context.chatId,
+        chatId: targetChatId,
       });
     } else {
       // Load and merge annotations
-      const annotations = await repos.conversationAnnotations.findByChatId(context.chatId);
+      const annotations = await repos.conversationAnnotations.findByChatId(targetChatId);
       if (annotations.length > 0) {
         markdown = mergeAnnotations(markdown, annotations);
         logger.debug('Merged annotations into rendered markdown', {
           context: 'read-conversation-handler',
-          chatId: context.chatId,
+          chatId: targetChatId,
           annotationCount: annotations.length,
         });
       }
@@ -114,7 +136,7 @@ export async function executeReadConversationTool(
     logger.info('Read conversation tool completed', {
       context: 'read-conversation-handler',
       userId: context.userId,
-      chatId: context.chatId,
+      chatId: targetChatId,
       messageCount,
       interchangeCount,
       markdownLength: markdown.length,
@@ -132,6 +154,7 @@ export async function executeReadConversationTool(
       context: 'read-conversation-handler',
       userId: context.userId,
       chatId: context.chatId,
+      requestedConversationId: (input as Record<string, unknown>)?.conversationId,
     }, error instanceof Error ? error : undefined);
 
     return {

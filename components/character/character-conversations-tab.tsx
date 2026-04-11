@@ -97,6 +97,7 @@ function transformChatToCardData(chat: Chat): ChatCardData {
 export function CharacterConversationsTab({ characterId, characterName, refreshKey }: CharacterConversationsTabProps) {
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshingArchive, setRefreshingArchive] = useState(false)
   const { shouldHideByIds, hideDangerousChats } = useQuickHide()
   const visibleChats = useMemo(
     () => chats.filter(chat => {
@@ -292,6 +293,35 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
     }
   }
 
+  const handleRefreshArchive = async () => {
+    setRefreshingArchive(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${characterId}?action=refresh-archive`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        showSuccessToast(`Queued re-render for ${data.queued} of ${data.total} conversations`)
+        notifyQueueChange()
+        // Start polling to track status updates
+        if (!scriptoriumPollRef.current) {
+          scriptoriumPollRef.current = setInterval(async () => {
+            await fetchChats(0, searchQuery, false)
+          }, 5000)
+          // Stop after 60 seconds to avoid infinite polling
+          setTimeout(() => stopScriptoriumPolling(), 60000)
+        }
+      } else {
+        showErrorToast(data.error || 'Failed to refresh conversation archive')
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to refresh conversation archive')
+    } finally {
+      setRefreshingArchive(false)
+    }
+  }
+
   if (loading && chats.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -338,6 +368,17 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </div>
+        <button
+          onClick={handleRefreshArchive}
+          disabled={refreshingArchive || chats.length === 0}
+          title="Re-render and re-embed all conversations for this character"
+          className="qt-button-ghost text-xs whitespace-nowrap"
+        >
+          <svg className={`w-3.5 h-3.5 ${refreshingArchive ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {refreshingArchive ? 'Refreshing...' : 'Refresh Conversation Archive'}
+        </button>
         <Link
           href={`/aurora/${characterId}/view?action=chat`}
           className="flex items-center gap-2 px-4 py-2 qt-button-primary font-medium text-sm whitespace-nowrap"

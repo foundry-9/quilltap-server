@@ -84,3 +84,18 @@ export interface RenderedConversation {
   /** Structured data for each interchange */
   interchanges: InterchangeInfo[];
 }
+
+// ============================================================================
+// CONVERSATION METADATA (for rendered header)
+// ============================================================================
+
+export interface ConversationMetadata {
+  /** Chat/conversation ID */
+  conversationId: string;
+  /** Conversation title */
+  title: string;
+  /** ISO 8601 timestamp when conversation was created */
+  createdAt: string;
+  /** ISO 8601 timestamp when conversation was last updated */
+  lastUpdatedAt: string;
+}

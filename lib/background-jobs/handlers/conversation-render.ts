@@ -57,7 +57,12 @@ export async function handleConversationRender(job: BackgroundJob): Promise<void
   }
 
   // 4. Render conversation to Markdown
-  const result = renderConversationMarkdown(allEvents, chat.participants, characterNames);
+  const result = renderConversationMarkdown(allEvents, chat.participants, characterNames, {
+    conversationId: payload.chatId,
+    title: chat.title,
+    createdAt: chat.createdAt,
+    lastUpdatedAt: chat.updatedAt,
+  });
 
   logger.debug('[ConversationRender] Rendered conversation', {
     jobId: job.id,
@@ -92,18 +97,16 @@ export async function handleConversationRender(job: BackgroundJob): Promise<void
       const defaultProfile = embeddingProfiles.find(p => p.isDefault) || embeddingProfiles[0];
 
       if (defaultProfile) {
-        const interchangesToEmbed = payload.fullReembed
-          ? result.interchanges
-          : [result.interchanges[result.interchanges.length - 1]];
-
+        // Embed all chunks that don't already have embeddings,
+        // or all chunks if fullReembed is requested
         let embeddedCount = 0;
-        for (const interchange of interchangesToEmbed) {
+        for (const interchange of result.interchanges) {
           const chunk = await repos.conversationChunks.findByInterchangeIndex(
             payload.chatId,
             interchange.index
           );
 
-          if (chunk) {
+          if (chunk && (payload.fullReembed || !chunk.embedding)) {
             await enqueueEmbeddingGenerate(job.userId, {
               entityType: 'CONVERSATION_CHUNK',
               entityId: chunk.id,

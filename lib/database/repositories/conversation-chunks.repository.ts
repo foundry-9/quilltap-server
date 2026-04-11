@@ -177,6 +177,25 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
   }
 
   /**
+   * Find all chunks that have embeddings (non-null embedding field)
+   * Used by Scriptorium search to find semantically searchable chunks.
+   * @returns Promise<ConversationChunk[]> Array of chunks with embeddings
+   */
+  async findAllWithEmbeddings(): Promise<ConversationChunk[]> {
+    return this.safeQuery(
+      async () => {
+        const allChunks = await this._findAll();
+        return allChunks.filter(
+          chunk => chunk.embedding != null && Array.isArray(chunk.embedding) && chunk.embedding.length > 0
+        );
+      },
+      'Error finding chunks with embeddings',
+      {},
+      []
+    );
+  }
+
+  /**
    * Delete all chunks for a chat
    * @param chatId The chat ID
    */

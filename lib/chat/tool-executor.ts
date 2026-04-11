@@ -97,6 +97,11 @@ import {
   type ReadConversationToolContext,
 } from '@/lib/tools/handlers/read-conversation-handler';
 import {
+  executeSearchScriptoriumTool,
+  formatSearchScriptoriumResults,
+  type SearchScriptoriumToolContext,
+} from '@/lib/tools/handlers/search-scriptorium-handler';
+import {
   executeUpsertAnnotationTool,
   formatUpsertAnnotationResults,
   type UpsertAnnotationToolContext,
@@ -205,6 +210,7 @@ const BUILT_IN_TOOLS = new Set([
   'read_conversation',
   'upsert_annotation',
   'delete_annotation',
+  'search_scriptorium',
   // Wardrobe tools
   'list_wardrobe',
   'update_outfit_item',
@@ -732,6 +738,7 @@ export async function executeToolCallWithContext(
       const readContext: ReadConversationToolContext = {
         userId,
         chatId,
+        characterId,
       };
 
       const result = await executeReadConversationTool(toolCall.arguments, readContext);
@@ -823,6 +830,42 @@ export async function executeToolCallWithContext(
           formattedText: formattedResult,
           message_index: result.message_index,
           character_name: result.character_name,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle search_scriptorium (Scriptorium unified search)
+    if (toolCall.name === 'search_scriptorium') {
+      if (!characterId) {
+        return {
+          toolName: 'search_scriptorium',
+          success: false,
+          result: null,
+          error: 'Search requires a character context',
+        };
+      }
+
+      const searchContext: SearchScriptoriumToolContext = {
+        userId,
+        characterId,
+        embeddingProfileId,
+      };
+
+      const result = await executeSearchScriptoriumTool(toolCall.arguments, searchContext);
+
+      const formattedResult = result.success && result.results
+        ? formatSearchScriptoriumResults(result.results)
+        : result.error || 'No results found';
+
+      return {
+        toolName: 'search_scriptorium',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          results: result.results,
+          totalFound: result.totalFound,
+          query: result.query,
         } : null,
         error: result.success ? undefined : result.error,
       };

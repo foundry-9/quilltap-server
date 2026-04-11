@@ -25,6 +25,9 @@ __export(index_exports, {
 });
 module.exports = __toCommonJS(index_exports);
 
+// node_modules/@quilltap/plugin-utils/dist/index.mjs
+var import_plugin_types = require("@quilltap/plugin-types");
+
 // ../../../node_modules/openai/internal/tslib.mjs
 function __classPrivateFieldSet(receiver, state, value, kind, f) {
   if (kind === "m")

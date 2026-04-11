@@ -8,7 +8,7 @@ Imagine, if you will, a tireless scribe seated in the corner of every conversati
 
 ## How It Works
 
-After each turn in a conversation, the Scriptorium automatically renders the entire exchange into a clean Markdown document. This is not a rough sketch on a cocktail napkin — it is a precise, reproducible rendering where every message receives a sequential number and every back-and-forth is gathered into tidy interchanges.
+After each turn in a conversation, the Scriptorium automatically renders the entire exchange into a clean Markdown document. This is not a rough sketch on a cocktail napkin — it is a precise, reproducible rendering where every message receives a sequential number and every back-and-forth is gathered into tidy interchanges. Each rendered conversation is crowned with a metadata header — a brief dossier listing the conversation's title, creation date, participants, and vital statistics — ensuring that even the most casual reader can determine precisely what they are looking at before committing to the full text.
 
 ### Message Numbering
 
@@ -30,6 +30,8 @@ The Scriptorium provides three tools that characters can use during conversation
 
 This tool allows a character to read the full rendered conversation document. It can be called with or without annotations included, giving the character a complete view of everything that has transpired — every message, every interchange, every dramatic revelation and quiet aside.
 
+When supplied with a `conversationId` — perhaps one unearthed by the `search_scriptorium` tool — it can read any conversation in the archive, not merely the one currently in progress. Without a `conversationId`, it reads the present conversation, as one would naturally expect.
+
 When annotations are included, the character sees not only the conversation itself but also any commentary that has been affixed to specific messages by any character in the chat.
 
 ### upsert_annotation
@@ -41,6 +43,12 @@ Annotations appear as fenced code blocks within the rendered Markdown, clearly a
 ### delete_annotation
 
 Should a character decide that a particular annotation has outlived its usefulness — perhaps the observation was premature, or the sardonic aside was a touch too sardonic — this tool removes it cleanly. The annotation vanishes as though it had never been, which is more than can be said for most regrettable remarks made at parties.
+
+### search_scriptorium
+
+This is the tool that transforms the Scriptorium from a mere record-keeping operation into something rather more resembling an actual research library. When invoked, it searches across both a character's personal memories *and* the full archive of rendered conversations simultaneously, returning a unified set of results ranked by relevance.
+
+One may optionally restrict the search to particular sources — memories only, or conversations only — should one wish to narrow the field of inquiry. The results include sufficient metadata to identify the provenance of each finding: for memories, the importance and summary; for conversations, the title, interchange number, and participants. Armed with a conversation ID from the search results, a character can then call `read_conversation` to review the full text, completing the journey from vague recollection to precise citation.
 
 ## Why It Matters
 

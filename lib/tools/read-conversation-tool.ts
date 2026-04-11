@@ -11,6 +11,7 @@
  * Input parameters for the read conversation tool
  */
 export interface ReadConversationToolInput {
+  conversationId?: string
   exclude_annotations?: boolean
 }
 
@@ -33,10 +34,15 @@ export const readConversationToolDefinition = {
   function: {
     name: 'read_conversation',
     description:
-      'Read the rendered Markdown version of this conversation. Returns the full conversation with sequential message numbering and interchange grouping. Use this to review what has been said, find specific messages by number, or get context about the conversation history.',
+      'Read the rendered Markdown version of a conversation. Without a conversationId, reads the current conversation. With a conversationId (e.g., from search_scriptorium results), reads that specific conversation. Returns the full conversation with sequential message numbering and interchange grouping.',
     parameters: {
       type: 'object',
       properties: {
+        conversationId: {
+          type: 'string',
+          description:
+            'Optional ID of a specific conversation to read. If omitted, reads the current conversation. Use search_scriptorium to find conversation IDs.',
+        },
         exclude_annotations: {
           type: 'boolean',
           description:
@@ -60,6 +66,13 @@ export function validateReadConversationInput(
   }
 
   const obj = input as Record<string, unknown>
+
+  // Optional conversationId
+  if (obj.conversationId !== undefined) {
+    if (typeof obj.conversationId !== 'string' || obj.conversationId.trim().length === 0) {
+      return false
+    }
+  }
 
   // Optional exclude_annotations
   if (obj.exclude_annotations !== undefined) {

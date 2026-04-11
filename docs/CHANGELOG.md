@@ -6,6 +6,11 @@
 
 #### Added
 
+- **Scriptorium (Phase 2)**: Unified search and cross-conversation access
+  - Rendered conversations now include a metadata header with title, ID, dates, participants, and counts
+  - New `search_scriptorium` tool searches across both character memories and conversation chunks with unified ranking
+  - `read_conversation` tool now accepts an optional `conversationId` parameter to read any conversation, not just the current one
+  - Metadata header is embedded with chunk 0 for semantic searchability of conversation titles
 - **Scriptorium (Phase 1)**: Deterministic Markdown rendering of conversations with annotation support and semantic search chunking
   - Conversations are automatically rendered to Markdown after each turn with sequential message numbering and interchange grouping
   - New `read_conversation` tool allows characters to read the full rendered conversation with or without annotations

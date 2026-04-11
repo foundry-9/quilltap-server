@@ -10,9 +10,31 @@
 import { stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks/chat-tasks'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { ChatEvent, ChatParticipantBase } from '@/lib/schemas/types'
-import type { InterchangeInfo, RenderedConversation } from '@/lib/schemas/scriptorium.types'
+import type { InterchangeInfo, RenderedConversation, ConversationMetadata } from '@/lib/schemas/scriptorium.types'
 
 const logger = createServiceLogger('ScriptoriumRenderer')
+
+/**
+ * Format an ISO 8601 timestamp as a human-readable date and time.
+ * Example: "April 11, 2026 at 3:45 PM"
+ */
+function formatDateTime(iso: string): string {
+  try {
+    const date = new Date(iso)
+    const datePart = date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+    const timePart = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+    return `${datePart} at ${timePart}`
+  } catch {
+    return iso
+  }
+}
 
 /**
  * Renders a chat conversation into numbered, structured Markdown.
@@ -24,12 +46,14 @@ const logger = createServiceLogger('ScriptoriumRenderer')
  * @param messages - Raw chat events from the conversation
  * @param participants - Chat participant metadata
  * @param characterNames - Map of participantId to display name
+ * @param metadata - Optional conversation metadata for header
  * @returns Rendered conversation with full markdown and structured interchange data
  */
 export function renderConversationMarkdown(
   messages: ChatEvent[],
   participants: ChatParticipantBase[],
   characterNames: Map<string, string>,
+  metadata?: ConversationMetadata,
 ): RenderedConversation {
   logger.debug('Rendering conversation markdown', {
     messageCount: messages.length,
@@ -43,6 +67,7 @@ export function renderConversationMarkdown(
     role: string
     content: string
     participantId: string | null | undefined
+    createdAt: string
   }> = []
 
   for (const m of messages) {
@@ -59,6 +84,7 @@ export function renderConversationMarkdown(
         role,
         content: cleaned,
         participantId: m.participantId,
+        createdAt: m.createdAt,
       })
     } else {
       visibleMessages.push({
@@ -66,6 +92,7 @@ export function renderConversationMarkdown(
         role,
         content: m.content,
         participantId: m.participantId,
+        createdAt: m.createdAt,
       })
     }
   }
@@ -115,9 +142,10 @@ export function renderConversationMarkdown(
       }
     }
 
-    // Render this message
+    // Render this message with timestamp
+    const messageTimestamp = formatDateTime(msg.createdAt)
     const messageHeader = `### Message ${globalMessageIndex} (${displayName})`
-    const messageBlock = `${messageHeader}\n\n${msg.content}\n`
+    const messageBlock = `Past conversation message timestamp: ${messageTimestamp}\n\n${messageHeader}\n\n${msg.content}\n`
 
     currentInterchange.messageIds.push(msg.id)
     currentInterchange.participantNames.add(displayName)
@@ -136,13 +164,74 @@ export function renderConversationMarkdown(
     })
   }
 
+  // Build metadata header if metadata is provided
+  let metadataHeader = ''
+  if (metadata) {
+    // Collect all unique participant display names
+    const allParticipantNames = new Set<string>()
+    for (const ic of interchanges) {
+      for (const name of ic.participantNames) {
+        allParticipantNames.add(name)
+      }
+    }
+
+    // Derive conversation time span from first/last visible message timestamps
+    const firstMessageTime = visibleMessages.length > 0 ? visibleMessages[0].createdAt : metadata.createdAt
+    const lastMessageTime = visibleMessages.length > 0 ? visibleMessages[visibleMessages.length - 1].createdAt : metadata.lastUpdatedAt
+
+    const firstDate = new Date(firstMessageTime)
+    const lastDate = new Date(lastMessageTime)
+    const sameDay = firstDate.toLocaleDateString('en-US') === lastDate.toLocaleDateString('en-US')
+
+    const spanDatePart = firstDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    const spanFromTime = firstDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    const spanToTime = lastDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
+    const spanText = sameDay
+      ? `${spanDatePart} from ${spanFromTime} to ${spanToTime}`
+      : `${formatDateTime(firstMessageTime)} to ${formatDateTime(lastMessageTime)}`
+
+    const nowText = formatDateTime(new Date().toISOString())
+
+    metadataHeader = [
+      `# Conversation: ${metadata.title}`,
+      '',
+      '**Metadata:**',
+      `- Conversation ID: ${metadata.conversationId}`,
+      `- Created: ${formatDateTime(metadata.createdAt)}`,
+      `- Last Updated: ${formatDateTime(metadata.lastUpdatedAt)}`,
+      `- Participants: ${Array.from(allParticipantNames).join(', ') || 'None'}`,
+      `- Message Count: ${globalMessageIndex}`,
+      `- Interchange Count: ${interchanges.length}`,
+      '',
+      '---',
+      '',
+      `\u26A0\uFE0F ARCHIVE VIEW \u2014 This conversation occurred on ${spanText}.`,
+      `Current time: ${nowText}. You are reading history, not in active conversation.`,
+      '',
+      '---',
+      '',
+    ].join('\n')
+
+    // Prepend metadata header to interchange 0's content so it's embedded with chunk 0
+    if (interchanges.length > 0) {
+      interchanges[0] = {
+        ...interchanges[0],
+        content: metadataHeader + interchanges[0].content,
+      }
+    }
+  }
+
   // Build the full markdown
+  // When metadata is present, it's already in interchange 0's content,
+  // so the join naturally includes it at the top
   const markdown = interchanges.map(ic => ic.content).join('\n')
 
   logger.debug('Rendered conversation', {
     interchangeCount: interchanges.length,
     totalMessages: globalMessageIndex,
     markdownLength: markdown.length,
+    hasMetadata: !!metadata,
   })
 
   return { markdown, interchanges }
