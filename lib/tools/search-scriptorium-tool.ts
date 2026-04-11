@@ -28,6 +28,8 @@ export interface SearchScriptoriumResult {
     memoryId?: string
     summary?: string
     importance?: number
+    effectiveWeight?: number
+    createdAt?: string
     source?: 'AUTO' | 'MANUAL'
     // Conversation-specific
     conversationId?: string

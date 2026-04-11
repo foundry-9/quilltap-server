@@ -104,6 +104,8 @@ export async function executeSearchScriptoriumTool(
                 memoryId: mr.memory.id,
                 summary: mr.memory.summary,
                 importance: mr.memory.importance,
+                effectiveWeight: mr.effectiveWeight,
+                createdAt: mr.memory.createdAt,
                 source: mr.memory.source,
               },
             })
