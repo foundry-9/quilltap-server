@@ -1,12 +1,14 @@
 /**
  * Centralized clipboard utilities that work in both Electron and browser contexts.
  *
- * In Electron, `navigator.clipboard.write()` with image ClipboardItems is not
- * supported — it only reliably handles text. Image copies go through
- * `window.quilltap.copyImageToClipboard` IPC, which uses Electron's native
- * `clipboard.writeImage()` via `nativeImage`.
+ * Always prefers the standard Clipboard API (`navigator.clipboard.write()`) for
+ * image copies — this works in modern browsers and Electron ≥ 25, and critically
+ * ensures that copied images are paste-able back into the same renderer process
+ * (e.g. fullscreen viewer → ChatComposer).
  *
- * In a regular browser, the standard Clipboard API works as expected.
+ * Falls back to Electron's `clipboard.writeImage()` via IPC (`window.quilltap`)
+ * only when the browser API throws. The native path writes to the OS clipboard
+ * for external-app interop, but the renderer may not see it as `image/*` on paste.
  */
 
 /** Whether the Electron bridge exposes image clipboard support. */
@@ -73,9 +75,15 @@ function convertToPngBlob(blob: Blob): Promise<Blob> {
 /**
  * Copy an image to the clipboard from a fetch-able URL (relative or absolute).
  *
- * In Electron: fetches the image, converts to a data URL, and sends via IPC
- * so the main process can use `nativeImage` + `clipboard.writeImage()`.
- * In browser: uses the standard `navigator.clipboard.write()` API.
+ * Always tries the standard Clipboard API first — in modern Chromium (including
+ * Electron ≥ 25) `navigator.clipboard.write()` with image/png ClipboardItems
+ * works, and the result is readable by the same renderer on paste. This ensures
+ * copy → paste round-trips within the app (e.g. fullscreen viewer → ChatComposer).
+ *
+ * Falls back to Electron's native `clipboard.writeImage()` via IPC only when the
+ * browser API fails (older Electron builds, permissions issues, etc.). The native
+ * path writes to the OS clipboard so external apps can paste the image, but the
+ * renderer's `clipboardData.items` may not expose it as `image/*` on every platform.
  *
  * @returns `true` on success, `false` on failure.
  */
@@ -83,14 +91,24 @@ export async function copyImageToClipboard(src: string): Promise<boolean> {
   const response = await fetch(src);
   const blob = await response.blob();
 
+  // Try the standard Clipboard API first — works in browsers and modern Electron
+  try {
+    const pngBlob = blob.type === 'image/png' ? blob : await convertToPngBlob(blob);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+    console.debug('[clipboard-utils] Copied image via Clipboard API', { src });
+    return true;
+  } catch (browserErr) {
+    console.debug('[clipboard-utils] Clipboard API write failed, trying fallback', {
+      error: browserErr instanceof Error ? browserErr.message : String(browserErr),
+    });
+  }
+
+  // Fallback: Electron IPC path (native clipboard.writeImage via nativeImage)
   if (hasElectronClipboard()) {
-    console.debug('[clipboard-utils] Copying image via Electron IPC', { src });
+    console.debug('[clipboard-utils] Copying image via Electron IPC fallback', { src });
     const dataUrl = await blobToDataUrl(blob);
     return window.quilltap!.copyImageToClipboard(dataUrl);
   }
 
-  // Browser: standard Clipboard API (only supports image/png)
-  const pngBlob = blob.type === 'image/png' ? blob : await convertToPngBlob(blob);
-  await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
-  return true;
+  throw new Error('No clipboard write method available');
 }
