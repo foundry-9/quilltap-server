@@ -235,6 +235,23 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
     }
   }
 
+  // Scriptorium status polling: re-fetch chats while render/embed is in progress
+  const scriptoriumPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const scriptoriumPollChatIdRef = useRef<string | null>(null)
+
+  const stopScriptoriumPolling = useCallback(() => {
+    if (scriptoriumPollRef.current) {
+      clearInterval(scriptoriumPollRef.current)
+      scriptoriumPollRef.current = null
+    }
+    scriptoriumPollChatIdRef.current = null
+  }, [])
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => stopScriptoriumPolling()
+  }, [stopScriptoriumPolling])
+
   const handleRenderConversation = async (chatId: string) => {
     try {
       const res = await fetch(`/api/v1/chats/${chatId}?action=render-conversation`, {
@@ -245,9 +262,28 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
       if (res.ok) {
         showSuccessToast('Conversation rendering queued')
         notifyQueueChange()
-        // Refresh to update status
+        // Refresh immediately
         setPage(0)
         fetchChats(0, searchQuery, false)
+
+        // Start polling to track status updates (red → amber → green)
+        if (!scriptoriumPollRef.current) {
+          scriptoriumPollChatIdRef.current = chatId
+          scriptoriumPollRef.current = setInterval(async () => {
+            await fetchChats(0, searchQuery, false)
+            // Check if the target chat has reached 'embedded' status
+            const targetId = scriptoriumPollChatIdRef.current
+            if (targetId) {
+              setChats(currentChats => {
+                const target = currentChats.find(c => c.id === targetId)
+                if (target?.scriptoriumStatus === 'embedded') {
+                  stopScriptoriumPolling()
+                }
+                return currentChats
+              })
+            }
+          }, 5000)
+        }
       } else {
         showErrorToast(data.error || 'Failed to queue conversation rendering')
       }
