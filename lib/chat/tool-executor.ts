@@ -91,6 +91,21 @@ import {
   formatWardrobeCreateItemResults,
   type WardrobeCreateItemToolContext,
 } from '@/lib/tools/handlers/wardrobe-create-item-handler';
+import {
+  executeReadConversationTool,
+  formatReadConversationResults,
+  type ReadConversationToolContext,
+} from '@/lib/tools/handlers/read-conversation-handler';
+import {
+  executeUpsertAnnotationTool,
+  formatUpsertAnnotationResults,
+  type UpsertAnnotationToolContext,
+} from '@/lib/tools/handlers/upsert-annotation-handler';
+import {
+  executeDeleteAnnotationTool,
+  formatDeleteAnnotationResults,
+  type DeleteAnnotationToolContext,
+} from '@/lib/tools/handlers/delete-annotation-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -186,6 +201,10 @@ const BUILT_IN_TOOLS = new Set([
   'state',
   'submit_final_response',
   'whisper',
+  // Scriptorium tools
+  'read_conversation',
+  'upsert_annotation',
+  'delete_annotation',
   // Wardrobe tools
   'list_wardrobe',
   'update_outfit_item',
@@ -703,6 +722,107 @@ export async function executeToolCallWithContext(
           equipped: result.equipped,
           recipient_name: result.recipient_name,
           current_state: result.current_state,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle read_conversation (Scriptorium)
+    if (toolCall.name === 'read_conversation') {
+      const readContext: ReadConversationToolContext = {
+        userId,
+        chatId,
+      };
+
+      const result = await executeReadConversationTool(toolCall.arguments, readContext);
+      const formattedResult = formatReadConversationResults(result);
+
+      return {
+        toolName: 'read_conversation',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          messageCount: result.messageCount,
+          interchangeCount: result.interchangeCount,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle upsert_annotation (Scriptorium)
+    if (toolCall.name === 'upsert_annotation') {
+      // Resolve character name from calling participant
+      let characterName = 'Unknown';
+      if (context.callingParticipantId) {
+        const repos = getRepositories();
+        const chat = await repos.chats.findById(chatId);
+        if (chat) {
+          const participant = chat.participants.find(p => p.id === context.callingParticipantId);
+          if (participant?.characterId) {
+            const character = await repos.characters.findById(participant.characterId);
+            if (character) {
+              characterName = character.name;
+            }
+          }
+        }
+      }
+
+      const annotationContext: UpsertAnnotationToolContext = {
+        userId,
+        chatId,
+        characterName,
+      };
+
+      const result = await executeUpsertAnnotationTool(toolCall.arguments, annotationContext);
+      const formattedResult = formatUpsertAnnotationResults(result);
+
+      return {
+        toolName: 'upsert_annotation',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          message_index: result.message_index,
+          character_name: result.character_name,
+          action: result.action,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle delete_annotation (Scriptorium)
+    if (toolCall.name === 'delete_annotation') {
+      // Resolve character name from calling participant (same as upsert)
+      let characterName = 'Unknown';
+      if (context.callingParticipantId) {
+        const repos = getRepositories();
+        const chat = await repos.chats.findById(chatId);
+        if (chat) {
+          const participant = chat.participants.find(p => p.id === context.callingParticipantId);
+          if (participant?.characterId) {
+            const character = await repos.characters.findById(participant.characterId);
+            if (character) {
+              characterName = character.name;
+            }
+          }
+        }
+      }
+
+      const deleteContext: DeleteAnnotationToolContext = {
+        userId,
+        chatId,
+        characterName,
+      };
+
+      const result = await executeDeleteAnnotationTool(toolCall.arguments, deleteContext);
+      const formattedResult = formatDeleteAnnotationResults(result);
+
+      return {
+        toolName: 'delete_annotation',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          message_index: result.message_index,
+          character_name: result.character_name,
         } : null,
         error: result.success ? undefined : result.error,
       };

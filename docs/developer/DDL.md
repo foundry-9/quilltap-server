@@ -313,6 +313,7 @@ CREATE TABLE "chats" (
   "dangerClassifiedAtMessageCount" INTEGER DEFAULT NULL,
   "turnQueue" TEXT DEFAULT '[]',
   "sceneState" TEXT DEFAULT NULL,
+  "renderedMarkdown" TEXT DEFAULT NULL,
   "equippedOutfit" TEXT DEFAULT NULL,
   "pendingOutfitNotifications" TEXT DEFAULT NULL,
   "characterAvatars" TEXT DEFAULT NULL,
@@ -327,6 +328,68 @@ CREATE INDEX "idx_chats_createdAt" ON "chats" ("createdAt" DESC);
 CREATE INDEX "idx_chats_projectId" ON "chats" ("projectId");
 CREATE INDEX "idx_chats_userId" ON "chats" ("userId");
 ```
+
+### conversation_annotations
+
+```sql
+CREATE TABLE "conversation_annotations" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "messageIndex" INTEGER NOT NULL,
+  "sourceMessageId" TEXT,
+  "characterName" TEXT NOT NULL,
+  "content" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  UNIQUE("chatId", "messageIndex", "characterName"),
+  FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_conversation_annotations_chatId" ON "conversation_annotations"("chatId");
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| chatId | TEXT (UUID) | Chat this annotation belongs to |
+| messageIndex | INTEGER | 0-based message number in rendered output |
+| sourceMessageId | TEXT (UUID, nullable) | Original message UUID for resilience |
+| characterName | TEXT | Annotation author |
+| content | TEXT | Annotation text |
+| createdAt | TEXT (ISO 8601) | Creation timestamp |
+| updatedAt | TEXT (ISO 8601) | Last update timestamp |
+
+### conversation_chunks
+
+```sql
+CREATE TABLE "conversation_chunks" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "interchangeIndex" INTEGER NOT NULL,
+  "content" TEXT NOT NULL,
+  "participantNames" TEXT DEFAULT '[]',
+  "messageIds" TEXT DEFAULT '[]',
+  "embedding" BLOB,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  UNIQUE("chatId", "interchangeIndex"),
+  FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_conversation_chunks_chatId" ON "conversation_chunks"("chatId");
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| chatId | TEXT (UUID) | Chat this chunk belongs to |
+| interchangeIndex | INTEGER | 0-based interchange number |
+| content | TEXT | Rendered Markdown for this interchange |
+| participantNames | TEXT (JSON array) | Names of participants in this interchange |
+| messageIds | TEXT (JSON array) | Message UUIDs included in this interchange |
+| embedding | BLOB (nullable) | Float32 vector embedding (same format as memories.embedding) |
+| createdAt | TEXT (ISO 8601) | Creation timestamp |
+| updatedAt | TEXT (ISO 8601) | Last update timestamp |
 
 ### chat_messages
 
@@ -919,7 +982,7 @@ CREATE TABLE sqlite_stat4(tbl, idx, neq, nlt, ndlt, sample);
 ## Notes
 
 - **No triggers or views** exist in either database.
-- **No foreign key constraints** are defined between tables (referential integrity is enforced at the application layer), except `tfidf_vocabularies.profileId → embedding_profiles.id` with `ON DELETE CASCADE`.
+- **No foreign key constraints** are defined between tables (referential integrity is enforced at the application layer), except `tfidf_vocabularies.profileId → embedding_profiles.id`, `conversation_annotations.chatId → chats.id`, and `conversation_chunks.chatId → chats.id` with `ON DELETE CASCADE`.
 - All `TEXT DEFAULT '[]'` and `TEXT DEFAULT '{}'` columns store JSON. The application parses them with Zod schemas.
 - All IDs are UUIDs stored as TEXT.
 - All timestamps (`createdAt`, `updatedAt`) are ISO 8601 strings.

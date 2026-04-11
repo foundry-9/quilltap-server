@@ -268,6 +268,16 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
             const messageCount = messages.filter((msg) => msg.type === 'message' && msg.role !== 'SYSTEM' && msg.role !== 'TOOL').length;
             const memoryCount = await repos.memories.countByChatId(chat.id);
 
+            // Scriptorium status: check rendered markdown and embedded chunks
+            const hasRenderedMarkdown = !!chat.renderedMarkdown;
+            let embeddedChunkCount = 0;
+            let totalChunkCount = 0;
+            if (hasRenderedMarkdown) {
+              const chunks = await repos.conversationChunks.findByChatId(chat.id);
+              totalChunkCount = chunks.length;
+              embeddedChunkCount = chunks.filter(c => c.embedding !== null && c.embedding !== undefined).length;
+            }
+
             const recentMessages = messages
               .filter((msg) => msg.type === 'message')
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -311,6 +321,9 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
                 messages: messageCount,
                 memories: memoryCount,
               },
+              scriptoriumStatus: hasRenderedMarkdown
+                ? (embeddedChunkCount >= totalChunkCount && totalChunkCount > 0 ? 'embedded' : 'rendered')
+                : 'none',
             };
           })
         );

@@ -45,6 +45,7 @@ interface Chat {
     }
   }>
   isDangerousChat?: boolean
+  scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
   _count?: {
     messages: number
     memories?: number
@@ -89,6 +90,7 @@ function transformChatToCardData(chat: Chat): ChatCardData {
     previewText: getPreviewText(chat.messages),
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     isDangerousChat: chat.isDangerousChat === true,
+    scriptoriumStatus: chat.scriptoriumStatus || 'none',
   }
 }
 
@@ -233,6 +235,27 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
     }
   }
 
+  const handleRenderConversation = async (chatId: string) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=render-conversation`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        showSuccessToast('Conversation rendering queued')
+        notifyQueueChange()
+        // Refresh to update status
+        setPage(0)
+        fetchChats(0, searchQuery, false)
+      } else {
+        showErrorToast(data.error || 'Failed to queue conversation rendering')
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to render conversation')
+    }
+  }
+
   if (loading && chats.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -334,6 +357,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
               actionType="delete"
               onDelete={deleteChat}
               onReextractMemories={handleReextractMemories}
+              onRenderConversation={handleRenderConversation}
               characterName={characterName}
             />
           ))}

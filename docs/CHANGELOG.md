@@ -4,6 +4,14 @@
 
 ### 4.3-dev
 
+#### Added
+
+- **Scriptorium (Phase 1)**: Deterministic Markdown rendering of conversations with annotation support and semantic search chunking
+  - Conversations are automatically rendered to Markdown after each turn with sequential message numbering and interchange grouping
+  - New `read_conversation` tool allows characters to read the full rendered conversation with or without annotations
+  - New `upsert_annotation` and `delete_annotation` tools enable characters to add persistent commentary to specific messages
+  - Conversation interchanges are embedded as searchable chunks via the existing embedding pipeline
+
 ### 4.2.2
 
 - fix: Image copy button in fullscreen viewers (gallery, image modal, tool messages) produced clipboard data that couldn't be pasted back into the ChatComposer under Electron. The Electron IPC path used native `clipboard.writeImage()` which the renderer's paste handler didn't recognize as `image/*`. Now tries the standard Clipboard API first for in-app round-trip compatibility, falling back to Electron IPC for external-app interop.

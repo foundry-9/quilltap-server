@@ -71,6 +71,8 @@ export interface ChatCardData {
   storyBackgroundUrl?: string | null
   /** Whether this chat has been classified as dangerous */
   isDangerousChat?: boolean
+  /** Scriptorium rendering status: none = not rendered, rendered = markdown only, embedded = fully indexed */
+  scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
 }
 
 export interface ChatCardProps {
@@ -91,6 +93,8 @@ export interface ChatCardProps {
   onRemove?: (chatId: string) => void
   /** Callback for memory re-extraction action */
   onReextractMemories?: (chatId: string) => void
+  /** Callback for Scriptorium re-render action */
+  onRenderConversation?: (chatId: string) => void
   /** Whether this card should be highlighted (e.g., newly imported) */
   highlighted?: boolean
   /** Ref to forward to the card element */
@@ -192,6 +196,7 @@ export function ChatCard({
   onDelete,
   onRemove,
   onReextractMemories,
+  onRenderConversation,
   highlighted = false,
   cardRef,
   characterName,
@@ -288,6 +293,37 @@ export function ChatCard({
                     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                   </svg>
                   {chat.memoryCount}
+                </button>
+              )}
+              {chat.scriptoriumStatus !== undefined && (
+                <button
+                  type="button"
+                  className={`chat-card__badge inline-flex items-center gap-1 rounded-full px-2 py-0.5 qt-body-sm font-semibold flex-shrink-0 transition-colors cursor-pointer ${
+                    chat.scriptoriumStatus === 'embedded'
+                      ? 'qt-bg-success/10 qt-text-success hover:qt-bg-success/20'
+                      : chat.scriptoriumStatus === 'rendered'
+                      ? 'qt-bg-warning/10 qt-text-warning hover:qt-bg-warning/20'
+                      : 'bg-destructive/10 qt-text-destructive hover:bg-destructive/20'
+                  }`}
+                  title={
+                    chat.scriptoriumStatus === 'embedded'
+                      ? 'Scriptorium: Rendered and embedded — click to re-render'
+                      : chat.scriptoriumStatus === 'rendered'
+                      ? 'Scriptorium: Rendered but not fully embedded — click to re-render'
+                      : 'Scriptorium: Not yet rendered — click to render'
+                  }
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onRenderConversation?.(chat.id)
+                  }}
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                  </svg>
                 </button>
               )}
               {chat.isDangerousChat && (

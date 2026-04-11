@@ -11,7 +11,7 @@ import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
-import { enqueueChatDangerClassification, enqueueSceneStateTracking } from '@/lib/background-jobs/queue-service'
+import { enqueueChatDangerClassification, enqueueSceneStateTracking, enqueueConversationRender } from '@/lib/background-jobs/queue-service'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ConnectionProfile, ChatParticipantBase, MessageEvent, CheapLLMSettings } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
@@ -422,5 +422,27 @@ export async function triggerSceneStateTracking(
     })
   } catch (error) {
     logger.error('Failed to trigger scene state tracking', {}, error as Error)
+  }
+}
+
+/**
+ * Trigger conversation rendering (Scriptorium)
+ *
+ * Enqueues a background job to deterministically render the conversation
+ * to Markdown and update interchange chunks for embedding.
+ */
+export async function triggerConversationRender(
+  repos: ReturnType<typeof getRepositories>,
+  options: {
+    chatId: string
+    userId: string
+  }
+): Promise<void> {
+  try {
+    await enqueueConversationRender(options.userId, {
+      chatId: options.chatId,
+    })
+  } catch (error) {
+    logger.error('Failed to trigger conversation render', {}, error as Error)
   }
 }

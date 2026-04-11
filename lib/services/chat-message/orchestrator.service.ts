@@ -63,6 +63,7 @@ import {
 import { getProvider } from '@/lib/plugins/provider-registry'
 import {
   triggerSceneStateTracking,
+  triggerConversationRender,
 } from './memory-trigger.service'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
@@ -193,6 +194,18 @@ export async function handleSendMessage(
             })
           } catch (error) {
             logger.warn('Failed to trigger scene state tracking', {
+              chatId,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+
+        // Trigger conversation render (Scriptorium) - runs on every turn with content
+        if (result.hasContent) {
+          try {
+            await triggerConversationRender(repos, { chatId, userId })
+          } catch (error) {
+            logger.warn('Failed to trigger conversation render', {
               chatId,
               error: error instanceof Error ? error.message : String(error),
             })

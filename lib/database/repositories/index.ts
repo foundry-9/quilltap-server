@@ -38,6 +38,8 @@ export { EmbeddingStatusRepository } from './embedding-status.repository';
 export { WardrobeRepository } from './wardrobe.repository';
 export { OutfitPresetsRepository } from './outfit-presets.repository';
 export { CharacterPluginDataRepository } from './character-plugin-data.repository';
+export { ConversationAnnotationsRepository } from './conversation-annotations.repository';
+export { ConversationChunksRepository } from './conversation-chunks.repository';
 
 // Import all repository classes for container
 import { BackgroundJobsRepository } from './background-jobs.repository';
@@ -65,6 +67,8 @@ import { EmbeddingStatusRepository } from './embedding-status.repository';
 import { WardrobeRepository } from './wardrobe.repository';
 import { OutfitPresetsRepository } from './outfit-presets.repository';
 import { CharacterPluginDataRepository } from './character-plugin-data.repository';
+import { ConversationAnnotationsRepository } from './conversation-annotations.repository';
+import { ConversationChunksRepository } from './conversation-chunks.repository';
 
 /**
  * Container interface for all repository instances.
@@ -97,6 +101,8 @@ export interface RepositoryContainer {
   wardrobe: WardrobeRepository;
   outfitPresets: OutfitPresetsRepository;
   characterPluginData: CharacterPluginDataRepository;
+  conversationAnnotations: ConversationAnnotationsRepository;
+  conversationChunks: ConversationChunksRepository;
 }
 
 /**
@@ -141,6 +147,8 @@ export function createRepositories(): RepositoryContainer {
       wardrobe: new WardrobeRepository(),
       outfitPresets: new OutfitPresetsRepository(),
       characterPluginData: new CharacterPluginDataRepository(),
+      conversationAnnotations: new ConversationAnnotationsRepository(),
+      conversationChunks: new ConversationChunksRepository(),
     };
     return repositories;
   } catch (error) {

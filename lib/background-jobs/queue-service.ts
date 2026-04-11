@@ -85,13 +85,15 @@ export interface LLMLogCleanupPayload {
  */
 export interface EmbeddingGeneratePayload {
   /** Type of entity being embedded */
-  entityType: 'MEMORY';
-  /** ID of the entity (memory ID) */
+  entityType: 'MEMORY' | 'CONVERSATION_CHUNK';
+  /** ID of the entity (memory ID or conversation chunk ID) */
   entityId: string;
   /** ID of the character (for memories) */
   characterId?: string;
   /** ID of the embedding profile to use */
   profileId: string;
+  /** Chat ID (for conversation chunks) */
+  chatId?: string;
 }
 
 /**
@@ -152,6 +154,23 @@ export interface ChatDangerClassificationPayload {
  * Result of enqueueing a chat danger classification job
  */
 export interface ChatDangerClassificationEnqueueResult {
+  jobId: string;
+  isNew: boolean;
+}
+
+/**
+ * Payload for conversation render job (Scriptorium)
+ */
+export interface ConversationRenderPayload {
+  chatId: string;
+  /** If true, embed all interchange chunks (not just the newest). Used for on-demand re-render. */
+  fullReembed?: boolean;
+}
+
+/**
+ * Result of enqueueing a conversation render job
+ */
+export interface ConversationRenderEnqueueResult {
   jobId: string;
   isNew: boolean;
 }
@@ -232,6 +251,39 @@ export async function enqueueSceneStateTracking(
   }
 
   const jobId = await enqueueJob(userId, 'SCENE_STATE_TRACKING', payload as unknown as Record<string, unknown>, {
+    // Lower priority than interactive tasks
+    priority: options?.priority ?? -1,
+    ...options,
+  });
+  return { jobId, isNew: true };
+}
+
+/**
+ * Enqueue a conversation render job (Scriptorium)
+ * Skips if there's already a pending/processing job for the same chat
+ */
+export async function enqueueConversationRender(
+  userId: string,
+  payload: ConversationRenderPayload,
+  options?: EnqueueJobOptions
+): Promise<ConversationRenderEnqueueResult> {
+  const repos = getRepositories();
+
+  // Check for existing pending/processing render jobs for this chat
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existingJob = pendingJobs.find(job => job.type === 'CONVERSATION_RENDER');
+
+  if (existingJob) {
+    logger.info('[ConversationRender] Reusing existing pending job for chat', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      existingJobId: existingJob.id,
+      existingStatus: existingJob.status,
+    });
+    return { jobId: existingJob.id, isNew: false };
+  }
+
+  const jobId = await enqueueJob(userId, 'CONVERSATION_RENDER', payload as unknown as Record<string, unknown>, {
     // Lower priority than interactive tasks
     priority: options?.priority ?? -1,
     ...options,

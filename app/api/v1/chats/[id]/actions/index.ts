@@ -28,3 +28,4 @@ export { handleReclassifyDanger } from './danger-classification';
 export { handleGetOutfit, handleEquipSlot } from './outfit';
 export { handleToggleAvatarGeneration } from './toggle-avatar-generation';
 export { handleRegenerateAvatar } from './regenerate-avatar';
+export { handleRenderConversation } from './render-conversation';

@@ -112,12 +112,52 @@ export const SQLITE_TABLES = [
       "showSystemEventsOverride" INTEGER,
       "requestFullContextOnNextMessage" INTEGER DEFAULT 0,
       "createdAt" TEXT NOT NULL,
-      "updatedAt" TEXT NOT NULL
+      "updatedAt" TEXT NOT NULL,
+      "renderedMarkdown" TEXT DEFAULT NULL
     )`,
     indexes: [
       `CREATE INDEX IF NOT EXISTS "idx_chats_userId" ON "chats" ("userId")`,
       `CREATE INDEX IF NOT EXISTS "idx_chats_createdAt" ON "chats" ("createdAt" DESC)`,
       `CREATE INDEX IF NOT EXISTS "idx_chats_projectId" ON "chats" ("projectId")`,
+    ],
+  },
+  // Conversation annotations (Scriptorium: per-message annotations by characters)
+  {
+    name: 'conversation_annotations',
+    sql: `CREATE TABLE IF NOT EXISTS "conversation_annotations" (
+      "id" TEXT PRIMARY KEY,
+      "chatId" TEXT NOT NULL,
+      "messageIndex" INTEGER NOT NULL,
+      "sourceMessageId" TEXT,
+      "characterName" TEXT NOT NULL,
+      "content" TEXT NOT NULL,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL,
+      UNIQUE("chatId", "messageIndex", "characterName"),
+      FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_conversation_annotations_chatId" ON "conversation_annotations"("chatId")`,
+    ],
+  },
+  // Conversation chunks (Scriptorium: interchange-level rendered Markdown with embeddings)
+  {
+    name: 'conversation_chunks',
+    sql: `CREATE TABLE IF NOT EXISTS "conversation_chunks" (
+      "id" TEXT PRIMARY KEY,
+      "chatId" TEXT NOT NULL,
+      "interchangeIndex" INTEGER NOT NULL,
+      "content" TEXT NOT NULL,
+      "participantNames" TEXT DEFAULT '[]',
+      "messageIds" TEXT DEFAULT '[]',
+      "embedding" BLOB,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL,
+      UNIQUE("chatId", "interchangeIndex"),
+      FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_conversation_chunks_chatId" ON "conversation_chunks"("chatId")`,
     ],
   },
   // Chat messages - normalized table (one row per message)

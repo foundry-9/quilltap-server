@@ -306,6 +306,28 @@ export {
   type WardrobeCreateItemToolContext,
 } from './handlers/wardrobe-create-item-handler';
 
+// Scriptorium Tools (Conversation Rendering + Annotations)
+export {
+  readConversationToolDefinition,
+  validateReadConversationInput,
+  type ReadConversationToolInput,
+  type ReadConversationToolOutput,
+} from './read-conversation-tool';
+
+export {
+  upsertAnnotationToolDefinition,
+  validateUpsertAnnotationInput,
+  type UpsertAnnotationToolInput,
+  type UpsertAnnotationToolOutput,
+} from './upsert-annotation-tool';
+
+export {
+  deleteAnnotationToolDefinition,
+  validateDeleteAnnotationInput,
+  type DeleteAnnotationToolInput,
+  type DeleteAnnotationToolOutput,
+} from './delete-annotation-tool';
+
 // Tool Support (for checking model capabilities and tool mode)
 export {
   checkModelSupportsTools,

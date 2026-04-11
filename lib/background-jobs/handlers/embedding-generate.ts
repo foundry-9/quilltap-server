@@ -19,7 +19,11 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
   const payload = job.payload as unknown as EmbeddingGeneratePayload;
   const repos = getRepositories();
 
-  // Currently only MEMORY is supported
+  // Route to entity-specific handler
+  if (payload.entityType === 'CONVERSATION_CHUNK') {
+    return handleConversationChunkEmbedding(job, payload, repos);
+  }
+
   if (payload.entityType !== 'MEMORY') {
     throw new Error(`Unsupported entity type: ${payload.entityType}`);
   }
@@ -99,6 +103,60 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
       context: 'handleEmbeddingGenerate',
       jobId: job.id,
       memoryId: payload.entityId,
+      error: errorMessage,
+    });
+
+    throw error;
+  }
+}
+
+/**
+ * Handle embedding generation for a conversation chunk (Scriptorium)
+ * Uses the same embedding infrastructure as memories but stores
+ * the embedding directly on the chunk row (Float32 BLOB, same format).
+ */
+async function handleConversationChunkEmbedding(
+  job: BackgroundJob,
+  payload: EmbeddingGeneratePayload,
+  repos: ReturnType<typeof getRepositories>
+): Promise<void> {
+  const chunk = await repos.conversationChunks.findById(payload.entityId);
+  if (!chunk) {
+    logger.warn('[EmbeddingGenerate] Conversation chunk not found', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: payload.entityId,
+      chatId: payload.chatId,
+    });
+    return;
+  }
+
+  try {
+    const embeddingResult = await generateEmbeddingForUser(
+      chunk.content,
+      job.userId,
+      payload.profileId
+    );
+
+    // Store embedding directly on the chunk (same Float32 BLOB format as memories)
+    await repos.conversationChunks.updateEmbedding(chunk.id, embeddingResult.embedding);
+
+    logger.info('[EmbeddingGenerate] Conversation chunk embedding generated', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: chunk.id,
+      chatId: payload.chatId,
+      interchangeIndex: chunk.interchangeIndex,
+      dimensions: embeddingResult.dimensions,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    logger.error('[EmbeddingGenerate] Failed to generate conversation chunk embedding', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: payload.entityId,
+      chatId: payload.chatId,
       error: errorMessage,
     });
 

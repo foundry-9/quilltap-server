@@ -1,0 +1,60 @@
+---
+url: /settings?tab=chat
+---
+
+# The Scriptorium
+
+Imagine, if you will, a tireless scribe seated in the corner of every conversation you have — the sort of fellow who never spills the ink, never loses his place, and never once complains about the hours. The Scriptorium is precisely that: a system that renders your conversations into persistent, deterministic Markdown documents, complete with numbered messages, grouped interchanges, and the capacity for your characters to scribble annotations in the margins like so many well-read academics arguing over a first edition.
+
+## How It Works
+
+After each turn in a conversation, the Scriptorium automatically renders the entire exchange into a clean Markdown document. This is not a rough sketch on a cocktail napkin — it is a precise, reproducible rendering where every message receives a sequential number and every back-and-forth is gathered into tidy interchanges.
+
+### Message Numbering
+
+Messages are numbered sequentially starting from 0, because even scribes must bow to the conventions of computer science. Each message in the conversation receives exactly one number, assigned in the order it was spoken (or typed, or dramatically declaimed, depending on your style).
+
+### Interchanges
+
+Messages are grouped into **interchanges** — logical clusters that represent a turn of conversation. When you say something and a character responds, that exchange forms an interchange. In multi-character chats, an interchange encompasses the full chain of responses that follows a single prompt. Think of it as a scene in a play: the curtain rises, the dialogue unfolds, the curtain falls, and the Scriptorium dutifully records the whole affair before the next act begins.
+
+### Searchable Chunks
+
+Each interchange is embedded as a searchable chunk through the existing embedding pipeline. This means that the substance of your conversations becomes discoverable — one can search not merely for keywords but for the semantic meaning of what was discussed, like a librarian who actually read every book in the collection rather than just filing them by spine color.
+
+## The Tools
+
+The Scriptorium provides three tools that characters can use during conversation. These are not tools you call directly — rather, your AI characters employ them as the situation demands, much like a well-trained butler who simply knows when to bring the tea.
+
+### read_conversation
+
+This tool allows a character to read the full rendered conversation document. It can be called with or without annotations included, giving the character a complete view of everything that has transpired — every message, every interchange, every dramatic revelation and quiet aside.
+
+When annotations are included, the character sees not only the conversation itself but also any commentary that has been affixed to specific messages by any character in the chat.
+
+### upsert_annotation
+
+Characters can attach persistent annotations to specific messages, identified by message number. Each character may have exactly **one annotation per message** — calling this tool again on the same message replaces the previous annotation rather than stacking them up like an overenthusiastic reviewer's sticky notes.
+
+Annotations appear as fenced code blocks within the rendered Markdown, clearly attributed to the character who wrote them. They serve as a character's private marginalia — observations, reactions, analytical notes, or the occasional sardonic aside that one simply cannot keep to oneself.
+
+### delete_annotation
+
+Should a character decide that a particular annotation has outlived its usefulness — perhaps the observation was premature, or the sardonic aside was a touch too sardonic — this tool removes it cleanly. The annotation vanishes as though it had never been, which is more than can be said for most regrettable remarks made at parties.
+
+## Why It Matters
+
+The Scriptorium transforms ephemeral chat messages into structured, searchable documents. Characters can review what has been said with perfect fidelity, annotate the record with their own perspectives, and the entire corpus becomes discoverable through semantic search. It is, in short, the difference between a conversation that evaporates like morning fog and one that is preserved in the archives for future reference — indexed, annotated, and ready for consultation at a moment's notice.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/settings?tab=chat")`
+
+## Related Topics
+
+- [Chat Settings](chat-settings.md)
+- [Using Tools in Chat](tools-usage.md)
+- [Scene State Tracker](scene-state-tracker.md)
+- [Embedding Profiles](embedding-profiles.md)

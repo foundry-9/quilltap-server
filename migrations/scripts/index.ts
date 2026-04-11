@@ -167,6 +167,10 @@ import { migratePluginTemplatesToNativeMigration } from './migrate-plugin-templa
 import { addProjectDefaultImageProfileMigration } from './add-project-default-image-profile';
 // Create character_plugin_data table for per-character per-plugin metadata
 import { createCharacterPluginDataTableMigration } from './create-character-plugin-data-table';
+// Add renderedMarkdown field to chats for Scriptorium conversation rendering
+import { addRenderedMarkdownFieldMigration } from './add-rendered-markdown-field';
+// Create conversation tables for Scriptorium (annotations + chunks)
+import { createConversationTablesMigration } from './create-conversation-tables';
 
 /**
  * All available migrations.
@@ -329,6 +333,10 @@ export const migrations: Migration[] = [
   addProjectDefaultImageProfileMigration,
   // Create character_plugin_data table for per-character per-plugin metadata
   createCharacterPluginDataTableMigration,
+  // Add renderedMarkdown field to chats for Scriptorium conversation rendering
+  addRenderedMarkdownFieldMigration,
+  // Create conversation tables for Scriptorium (annotations + chunks)
+  createConversationTablesMigration,
 ];
 
 export {
@@ -476,5 +484,9 @@ export {
   addProjectDefaultImageProfileMigration,
   // Create character_plugin_data table for per-character per-plugin metadata
   createCharacterPluginDataTableMigration,
+  // Add renderedMarkdown field to chats for Scriptorium conversation rendering
+  addRenderedMarkdownFieldMigration,
+  // Create conversation tables for Scriptorium (annotations + chunks)
+  createConversationTablesMigration,
 };
 

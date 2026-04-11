@@ -288,6 +288,25 @@ export type {
 } from './template.types';
 
 // ============================================================================
+// SCRIPTORIUM TYPES
+// ============================================================================
+export {
+  ConversationAnnotationSchema,
+  ConversationAnnotationInputSchema,
+  ConversationChunkSchema,
+  ConversationChunkInputSchema,
+} from './scriptorium.types';
+
+export type {
+  ConversationAnnotation,
+  ConversationAnnotationInput,
+  ConversationChunk,
+  ConversationChunkInput,
+  InterchangeInfo,
+  RenderedConversation,
+} from './scriptorium.types';
+
+// ============================================================================
 // JOB TYPES
 // ============================================================================
 export {

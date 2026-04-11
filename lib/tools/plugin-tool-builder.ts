@@ -32,6 +32,15 @@ import {
   getAllShellToolDefinitions,
 } from '@/lib/tools';
 import {
+  readConversationToolDefinition,
+} from '@/lib/tools/read-conversation-tool';
+import {
+  upsertAnnotationToolDefinition,
+} from '@/lib/tools/upsert-annotation-tool';
+import {
+  deleteAnnotationToolDefinition,
+} from '@/lib/tools/delete-annotation-tool';
+import {
   wardrobeListToolDefinition,
 } from '@/lib/tools/wardrobe-list-tool';
 import {
@@ -300,6 +309,11 @@ export async function buildToolsForProvider(
   if (options.state !== false) {
     universalTools.push(stateToolDefinition as UniversalTool);
   }
+
+  // Scriptorium tools (always enabled - conversation reading and annotations)
+  universalTools.push(readConversationToolDefinition as UniversalTool);
+  universalTools.push(upsertAnnotationToolDefinition as UniversalTool);
+  universalTools.push(deleteAnnotationToolDefinition as UniversalTool);
 
   // Add whisper tool if enabled (multi-character chats only)
   if (options.whisper) {
