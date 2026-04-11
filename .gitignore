@@ -169,3 +169,4 @@ plugins/**/package-lock.json
 help/help-index.json
 
 .nvmrc
+.claude/commands/local-information.md
