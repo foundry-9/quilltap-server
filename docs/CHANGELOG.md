@@ -12,6 +12,10 @@
   - New `upsert_annotation` and `delete_annotation` tools enable characters to add persistent commentary to specific messages
   - Conversation interchanges are embedded as searchable chunks via the existing embedding pipeline
 
+#### Fixed
+
+- **Embedding BLOB Registration**: Fixed race condition where memory embeddings could be stored as JSON text instead of Float32 BLOBs, causing dimension mismatches during vector search. BLOB columns for `memories`, `vector_entries`, and `conversation_chunks` are now registered at database initialization time rather than lazily in individual repositories.
+
 ### 4.2.2
 
 - fix: Image copy button in fullscreen viewers (gallery, image modal, tool messages) produced clipboard data that couldn't be pasted back into the ChatComposer under Electron. The Electron IPC path used native `clipboard.writeImage()` which the renderer's paste handler didn't recognize as `image/*`. Now tries the standard Clipboard API first for in-app round-trip compatibility, falling back to Electron IPC for external-app interop.

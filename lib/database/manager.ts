@@ -110,6 +110,16 @@ export async function initializeDatabase(): Promise<DatabaseBackend> {
       const config = getDatabaseConfig();
       const backend = await createBackend(config.backend);
 
+      // Register known BLOB columns before exposing the backend.
+      // This ensures all collections created via getCollection() will
+      // correctly serialize/deserialize Float32 embeddings as BLOBs,
+      // regardless of which repository is accessed first.
+      if (backend instanceof SQLiteBackend) {
+        backend.registerBlobColumns('memories', ['embedding']);
+        backend.registerBlobColumns('vector_entries', ['embedding']);
+        backend.registerBlobColumns('conversation_chunks', ['embedding']);
+      }
+
       setDatabaseBackend(backend);
       setDbInitialized(true);
 
