@@ -64,7 +64,7 @@ describe('GET /api/v1/tools', () => {
     // Check we got built-in tools
     const toolIds = data.tools.map((tool: any) => tool.id)
     expect(toolIds).toContain('generate_image')
-    expect(toolIds).toContain('search_memories')
+    expect(toolIds).toContain('search')
     expect(toolIds).toContain('search_web')
     expect(toolIds).toContain('project_info')
     expect(toolIds).toContain('file_management')

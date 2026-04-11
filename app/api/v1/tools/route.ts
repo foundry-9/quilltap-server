@@ -23,7 +23,6 @@ import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler';
 import { isShellEnvironment } from '@/lib/paths';
 import {
   imageGenerationToolDefinition,
-  memorySearchToolDefinition,
   webSearchToolDefinition,
   projectInfoToolDefinition,
   fileManagementToolDefinition,
@@ -43,13 +42,16 @@ import {
   shellSudoSyncToolDefinition,
   shellCpHostToolDefinition,
 } from '@/lib/tools';
+import {
+  searchScriptoriumToolDefinition,
+} from '@/lib/tools/search-scriptorium-tool';
 
 /**
  * Map from built-in tool IDs to their OpenAI-format definitions (for schema inclusion)
  */
 const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<string, unknown> } }> = {
   generate_image: imageGenerationToolDefinition,
-  search_memories: memorySearchToolDefinition,
+  search: searchScriptoriumToolDefinition,
   search_web: webSearchToolDefinition,
   project_info: projectInfoToolDefinition,
   file_management: fileManagementToolDefinition,
@@ -82,11 +84,11 @@ const BUILT_IN_TOOLS = [
     category: 'media',
   },
   {
-    id: 'search_memories',
-    name: 'Search Memories',
-    description: 'Search through character memories and past conversations',
+    id: 'search',
+    name: 'Search',
+    description: 'Search through the Scriptorium (character memories, past conversations, and story backgrounds)',
     source: 'built-in' as const,
-    category: 'memory',
+    category: 'search',
   },
   {
     id: 'search_web',

@@ -17,7 +17,6 @@ import { getProvider, getImageProviderConstraints } from '@/lib/plugins/provider
 import { toolRegistry } from '@/lib/plugins/tool-registry';
 import {
   imageGenerationToolDefinition,
-  memorySearchToolDefinition,
   webSearchToolDefinition,
   projectInfoToolDefinition,
   fileManagementToolDefinition,
@@ -139,9 +138,6 @@ export interface BuildToolsOptions {
   /** The image provider type (e.g., 'GROK', 'OPENAI') */
   imageProviderType?: string;
 
-  /** Whether to enable memory search tool */
-  memorySearch?: boolean;
-
   /** Whether to enable web search tool */
   webSearch?: boolean;
 
@@ -212,7 +208,6 @@ export interface BuildToolsOptions {
  * const tools = buildToolsForProvider('OPENAI', {
  *   imageGeneration: true,
  *   imageProviderType: 'OPENAI',
- *   memorySearch: true,
  *   webSearch: true,
  * });
  * ```
@@ -229,7 +224,6 @@ export async function buildToolsForProvider(
   logger_.debug('buildToolsForProvider called', {
     options: {
       imageGeneration: options.imageGeneration,
-      memorySearch: options.memorySearch,
       webSearch: options.webSearch,
       projectInfo: options.projectInfo,
       fileManagement: options.fileManagement,
@@ -261,11 +255,6 @@ export async function buildToolsForProvider(
 
     const imageTool = applyImageConstraintsToTool(baseTool, constraints, logger_);
     universalTools.push(imageTool);
-  }
-
-  // Add memory search tool if enabled
-  if (options.memorySearch) {
-    universalTools.push(memorySearchToolDefinition as UniversalTool);
   }
 
   // Add web search tool if enabled

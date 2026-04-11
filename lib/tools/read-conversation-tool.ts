@@ -34,14 +34,14 @@ export const readConversationToolDefinition = {
   function: {
     name: 'read_conversation',
     description:
-      'Read the rendered Markdown version of a conversation. Without a conversationId, reads the current conversation. With a conversationId (e.g., from search_scriptorium results), reads that specific conversation. Returns the full conversation with sequential message numbering and interchange grouping.',
+      'Read the rendered Markdown version of a conversation. Without a conversationId, reads the current conversation. With a conversationId (e.g., from search results), reads that specific conversation. Returns the full conversation with sequential message numbering and interchange grouping.',
     parameters: {
       type: 'object',
       properties: {
         conversationId: {
           type: 'string',
           description:
-            'Optional ID of a specific conversation to read. If omitted, reads the current conversation. Use search_scriptorium to find conversation IDs.',
+            'Optional ID of a specific conversation to read. If omitted, reads the current conversation. Use search to find conversation IDs.',
         },
         exclude_annotations: {
           type: 'boolean',

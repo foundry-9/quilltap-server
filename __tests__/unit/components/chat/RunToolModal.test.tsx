@@ -52,7 +52,7 @@ import type { AvailableTool } from '@/app/api/v1/tools/route'
 // Helper to create mock tools
 function createMockTool(overrides: Partial<AvailableTool> = {}): AvailableTool {
   return {
-    id: 'search_memories',
+    id: 'search',
     name: 'Search Memories',
     description: 'Search character memories',
     source: 'built-in',
@@ -146,7 +146,7 @@ describe('RunToolModal', () => {
 
     it('displays available tools grouped by category', async () => {
       const tools = [
-        createMockTool({ id: 'search_memories', name: 'Search Memories', category: 'memory' }),
+        createMockTool({ id: 'search', name: 'Search Memories', category: 'memory' }),
         createMockTool({ id: 'generate_image', name: 'Generate Image', category: 'media' }),
       ]
       mockFetchTools(tools)
@@ -189,7 +189,7 @@ describe('RunToolModal', () => {
 
     it('filters tools by search query matching description', async () => {
       const tools = [
-        createMockTool({ id: 'search_memories', name: 'Search Memories', description: 'Search character memories', category: 'memory' }),
+        createMockTool({ id: 'search', name: 'Search Memories', description: 'Search character memories', category: 'memory' }),
         createMockTool({ id: 'generate_image', name: 'Generate Image', description: 'Generate an image', category: 'media' }),
       ]
       mockFetchTools(tools)
@@ -382,7 +382,7 @@ describe('RunToolModal', () => {
       fireEvent.click(screen.getByTestId('set-form-values'))
       fireEvent.click(screen.getByTestId('set-form-valid'))
 
-      mockFetchExecute({ success: true, result: { toolName: 'search_memories', success: true } })
+      mockFetchExecute({ success: true, result: { toolName: 'search', success: true } })
 
       await act(async () => {
         fireEvent.click(screen.getByText('Run Tool'))
@@ -394,7 +394,7 @@ describe('RunToolModal', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            toolName: 'search_memories',
+            toolName: 'search',
             arguments: { query: 'test-value' },
             characterId: 'char-abc',
           }),
@@ -411,7 +411,7 @@ describe('RunToolModal', () => {
 
       fireEvent.click(screen.getByText('Search Memories'))
 
-      mockFetchExecute({ success: true, result: { toolName: 'search_memories', success: true } })
+      mockFetchExecute({ success: true, result: { toolName: 'search', success: true } })
 
       await act(async () => {
         fireEvent.click(screen.getByText('Run Tool'))

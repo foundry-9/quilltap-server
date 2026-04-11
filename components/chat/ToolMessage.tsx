@@ -216,8 +216,8 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🎨',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
-    search_memories: {
-      displayName: 'Memory Search',
+    search: {
+      displayName: 'Search',
       icon: '🧠',
       bgColor: 'qt-bg-muted border qt-border-default',
     },

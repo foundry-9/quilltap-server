@@ -10,10 +10,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import type { ToolExecutionContext as PluginToolContext } from '@/lib/plugins/interfaces/tool-plugin'
 import {
   executeImageGenerationTool,
-  executeMemorySearchTool,
-  formatMemorySearchResults,
   type ImageToolExecutionContext,
-  type MemorySearchToolContext,
 } from '@/lib/tools';
 import {
   executeWebSearchTool,
@@ -194,7 +191,6 @@ export async function executeToolCall(
 // These should NOT be routed to the plugin registry
 const BUILT_IN_TOOLS = new Set([
   'generate_image',
-  'search_memories',
   'search_web',
   'project_info',
   'file_management',
@@ -210,7 +206,7 @@ const BUILT_IN_TOOLS = new Set([
   'read_conversation',
   'upsert_annotation',
   'delete_annotation',
-  'search_scriptorium',
+  'search',
   // Wardrobe tools
   'list_wardrobe',
   'update_outfit_item',
@@ -353,44 +349,6 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle memory search
-    if (toolCall.name === 'search_memories') {
-      // If no character is configured, return error
-      if (!characterId) {
-        return {
-          toolName: 'search_memories',
-          success: false,
-          result: null,
-          error: 'Memory search requires a character context',
-        };
-      }
-
-      // Execute memory search tool
-      const memoryContext: MemorySearchToolContext = {
-        userId,
-        characterId,
-        embeddingProfileId,
-      };
-
-      const result = await executeMemorySearchTool(toolCall.arguments, memoryContext);
-
-      // Format results for LLM consumption
-      const formattedResult = result.success && result.memories
-        ? formatMemorySearchResults(result.memories)
-        : result.error || 'No memories found';
-
-      return {
-        toolName: 'search_memories',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          memories: result.memories,
-          totalFound: result.totalFound,
-          query: result.query,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
 
     // Handle web search
     if (toolCall.name === 'search_web') {
@@ -835,11 +793,11 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle search_scriptorium (Scriptorium unified search)
-    if (toolCall.name === 'search_scriptorium') {
+    // Handle search (Scriptorium unified search)
+    if (toolCall.name === 'search') {
       if (!characterId) {
         return {
-          toolName: 'search_scriptorium',
+          toolName: 'search',
           success: false,
           result: null,
           error: 'Search requires a character context',
@@ -859,7 +817,7 @@ export async function executeToolCallWithContext(
         : result.error || 'No results found';
 
       return {
-        toolName: 'search_scriptorium',
+        toolName: 'search',
         success: result.success,
         result: result.success ? {
           formattedText: formattedResult,

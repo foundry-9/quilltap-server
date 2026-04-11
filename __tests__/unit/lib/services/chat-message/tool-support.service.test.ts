@@ -59,7 +59,7 @@ describe('tool-support.service', () => {
 
       expect(result).toEqual({
         imageGeneration: true,
-        memorySearch: true,
+        search: true,
         webSearch: false,
       })
     })
@@ -69,17 +69,17 @@ describe('tool-support.service', () => {
 
       expect(result).toEqual({
         imageGeneration: false,
-        memorySearch: true,
+        search: true,
         webSearch: true,
       })
     })
 
-    it('should always enable memory search', () => {
+    it('should always enable search', () => {
       const result1 = determineEnabledToolOptions(null, false)
       const result2 = determineEnabledToolOptions('img-1', true)
 
-      expect(result1.memorySearch).toBe(true)
-      expect(result2.memorySearch).toBe(true)
+      expect(result1.search).toBe(true)
+      expect(result2.search).toBe(true)
     })
 
     it('should enable all tools when both options provided', () => {
@@ -87,7 +87,7 @@ describe('tool-support.service', () => {
 
       expect(result).toEqual({
         imageGeneration: true,
-        memorySearch: true,
+        search: true,
         webSearch: true,
       })
     })
@@ -97,7 +97,7 @@ describe('tool-support.service', () => {
 
       expect(result).toEqual({
         imageGeneration: false,
-        memorySearch: true,
+        search: true,
         webSearch: false,
       })
     })

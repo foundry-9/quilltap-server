@@ -13,7 +13,7 @@
  *
  * This set contains the function names of tools that are built into Quilltap:
  * - `generate_image` - AI image generation
- * - `search_memories` - Search character/chat memories
+ * - `search` - Search the Scriptorium (memories, conversations, backgrounds)
  * - `search_web` - Web search (when enabled)
  * - `project_info` - Get project metadata
  * - `file_management` - Read/write project files
@@ -23,7 +23,7 @@
  */
 export const BUILTIN_TOOL_NAMES = new Set([
   'generate_image',
-  'search_memories',
+  'search',
   'search_web',
   'project_info',
   'file_management',

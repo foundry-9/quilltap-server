@@ -16,8 +16,8 @@ import { logger } from '@/lib/logger'
 export interface TextBlockPromptOptions {
   /** Enable whisper (private messaging) tool */
   whisper?: boolean
-  /** Enable memory search tool */
-  memorySearch?: boolean
+  /** Enable search tool */
+  search?: boolean
   /** Enable image generation tool */
   imageGeneration?: boolean
   /** Enable web search tool */
@@ -63,13 +63,13 @@ Format: [[WHISPER to="character name"]]your private message[[/WHISPER]]
 Example: [[WHISPER to="Elena"]]I need to tell you something the others shouldn't hear.[[/WHISPER]]`)
   }
 
-  if (options.memorySearch !== false) {
+  if (options.search !== false) {
     toolDocs.push(`
-### Memory Search
-Search your memories for information about past conversations, preferences, or facts.
-Format: [[SEARCH_MEMORIES]]what to search for[[/SEARCH_MEMORIES]]
-Example: [[SEARCH_MEMORIES]]user's favorite food[[/SEARCH_MEMORIES]]
-Example: [[SEARCH_MEMORIES limit="3"]]what we discussed about the garden[[/SEARCH_MEMORIES]]`)
+### Search
+Search the Scriptorium for information about past conversations, preferences, or facts.
+Format: [[SEARCH]]what to search for[[/SEARCH]]
+Example: [[SEARCH]]user's favorite food[[/SEARCH]]
+Example: [[SEARCH limit="3"]]what we discussed about the garden[[/SEARCH]]`)
   }
 
   if (options.imageGeneration) {

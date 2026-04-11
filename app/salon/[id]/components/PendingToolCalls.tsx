@@ -16,7 +16,7 @@ interface PendingToolCallsProps {
 
 const DISPLAY_NAMES: Record<string, string> = {
   'generate_image': 'Image Generation',
-  'search_memories': 'Memory Search',
+  'search': 'Search',
   'search_web': 'Web Search',
 }
 
@@ -27,7 +27,7 @@ export function PendingToolCalls({ pendingToolCalls }: PendingToolCallsProps) {
 
   const getEmojiForTools = () => {
     if (pendingToolCalls.some(tc => tc.name === 'generate_image')) return '🎨'
-    if (pendingToolCalls.some(tc => tc.name === 'search_memories')) return '🧠'
+    if (pendingToolCalls.some(tc => tc.name === 'search')) return '🧠'
     if (pendingToolCalls.some(tc => tc.name === 'search_web')) return '🔍'
     return '⚙️'
   }

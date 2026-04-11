@@ -30,7 +30,7 @@ The Scriptorium provides three tools that characters can use during conversation
 
 This tool allows a character to read the full rendered conversation document. It can be called with or without annotations included, giving the character a complete view of everything that has transpired — every message, every interchange, every dramatic revelation and quiet aside.
 
-When supplied with a `conversationId` — perhaps one unearthed by the `search_scriptorium` tool — it can read any conversation in the archive, not merely the one currently in progress. Without a `conversationId`, it reads the present conversation, as one would naturally expect.
+When supplied with a `conversationId` — perhaps one unearthed by the `search` tool — it can read any conversation in the archive, not merely the one currently in progress. Without a `conversationId`, it reads the present conversation, as one would naturally expect.
 
 When annotations are included, the character sees not only the conversation itself but also any commentary that has been affixed to specific messages by any character in the chat.
 
@@ -44,7 +44,7 @@ Annotations appear as fenced code blocks within the rendered Markdown, clearly a
 
 Should a character decide that a particular annotation has outlived its usefulness — perhaps the observation was premature, or the sardonic aside was a touch too sardonic — this tool removes it cleanly. The annotation vanishes as though it had never been, which is more than can be said for most regrettable remarks made at parties.
 
-### search_scriptorium
+### search
 
 This is the tool that transforms the Scriptorium from a mere record-keeping operation into something rather more resembling an actual research library. When invoked, it searches across both a character's personal memories *and* the full archive of rendered conversations simultaneously, returning a unified set of results ranked by relevance.
 

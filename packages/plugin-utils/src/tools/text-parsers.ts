@@ -37,15 +37,17 @@ export interface ParsedTextTool {
  */
 const TOOL_NAME_ALIASES: Record<string, string> = {
   // Direct mappings
-  'search_memories': 'search_memories',
+  'search': 'search',
   'generate_image': 'generate_image',
   'search_web': 'search_web',
 
-  // Memory tool aliases
-  'memory': 'search_memories',
-  'memory_search': 'search_memories',
-  'search_memory': 'search_memories',
-  'memories': 'search_memories',
+  // Memory/Search tool aliases
+  'memory': 'search',
+  'memory_search': 'search',
+  'search_memory': 'search',
+  'memories': 'search',
+  'search_memories': 'search',
+  'search_scriptorium': 'search',
 
   // Image tool aliases
   'image': 'generate_image',
@@ -54,7 +56,6 @@ const TOOL_NAME_ALIASES: Record<string, string> = {
   'gen_image': 'generate_image',
 
   // Web search aliases
-  'search': 'search_web',
   'web_search': 'search_web',
   'websearch': 'search_web',
   'web': 'search_web',
@@ -84,9 +85,9 @@ export function normalizeToolName(name: string): string {
  */
 export function convertToToolCallRequest(parsed: ParsedTextTool): ToolCallRequest {
   switch (parsed.toolName) {
-    case 'search_memories':
+    case 'search':
       return {
-        name: 'search_memories',
+        name: 'search',
         arguments: {
           query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || '',
           limit: parsed.arguments.limit,

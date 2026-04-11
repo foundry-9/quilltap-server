@@ -56,7 +56,7 @@ export interface SearchScriptoriumToolOutput {
 export const searchScriptoriumToolDefinition = {
   type: 'function',
   function: {
-    name: 'search_scriptorium',
+    name: 'search',
     description:
       'Search across your memories and past conversation history. Returns results from both your personal memories and rendered conversations, ranked by relevance. Use this to find information from past interactions, recall conversation details, or locate specific discussions by topic.',
     parameters: {

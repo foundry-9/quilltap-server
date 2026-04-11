@@ -44,7 +44,7 @@ describe('pseudo-tool.service', () => {
   it('documents newly added wardrobe tools in text-block instructions', () => {
     const instructions = buildTextBlockSystemInstructions({
       whisper: false,
-      memorySearch: true,
+      search: true,
       imageGeneration: false,
       webSearch: false,
       state: true,

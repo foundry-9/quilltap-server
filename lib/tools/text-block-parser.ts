@@ -51,7 +51,6 @@ export interface ToolCallRequest {
 const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   // Direct mappings
   'whisper': 'whisper',
-  'search_memories': 'search_memories',
   'generate_image': 'generate_image',
   'search_web': 'search_web',
   'create_note': 'create_note',
@@ -66,14 +65,9 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'navigate': 'help_navigate',  // Common alias
 
   // Common aliases
-  'memory': 'search_memories',
-  'search_memory': 'search_memories',
-  'memories': 'search_memories',
-
   'image': 'generate_image',
   'create_image': 'generate_image',
 
-  'search': 'search_web',
   'web_search': 'search_web',
 
   'note': 'create_note',
@@ -103,8 +97,13 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'create_wardrobe_item': 'create_wardrobe_item',
 
   // Scriptorium search
-  'search_scriptorium': 'search_scriptorium',
-  'scriptorium': 'search_scriptorium',
+  'search': 'search',
+  'scriptorium': 'search',
+  'memory': 'search',
+  'memories': 'search',
+  'search_memory': 'search',
+  'search_memories': 'search',
+  'search_scriptorium': 'search',
 }
 
 /**
@@ -118,12 +117,6 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
     'character': 'target',
     'msg': 'message',
     'text': 'message',
-  },
-  search_memories: {
-    'search': 'query',
-    'q': 'query',
-    'count': 'limit',
-    'max': 'limit',
   },
   generate_image: {
     'description': 'prompt',
@@ -159,7 +152,7 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
     'give_to': 'recipient',
     'gift_to': 'recipient',
   },
-  search_scriptorium: {
+  search: {
     'search': 'query',
     'q': 'query',
     'count': 'limit',
@@ -173,12 +166,11 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
  */
 const CONTENT_PARAM_MAP: Record<string, string> = {
   whisper: 'message',
-  search_memories: 'query',
   generate_image: 'prompt',
   search_web: 'query',
   create_note: 'content',
   help_search: 'query',
-  search_scriptorium: 'query',
+  search: 'query',
 }
 
 /**

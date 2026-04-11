@@ -200,7 +200,6 @@ export async function buildTools(
   let tools = await buildToolsForProvider(connectionProfile.provider, {
     imageGeneration: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
-    memorySearch: true,
     webSearch: connectionProfile.allowWebSearch,
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,

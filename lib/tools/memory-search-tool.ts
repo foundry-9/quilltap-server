@@ -47,9 +47,9 @@ export interface MemorySearchToolOutput {
 export const memorySearchToolDefinition = {
   type: 'function',
   function: {
-    name: 'search_memories',
+    name: 'search',
     description:
-      'Search your memories for specific information about the user, past conversations, or facts you should remember. Use this when you need to recall details about past interactions, user preferences, important events, or anything you have previously learned about the user. This helps you provide more personalized and contextually aware responses.',
+      'Search the Scriptorium (memories, past conversations, and story backgrounds) for specific information about the user, past conversations, or facts you should remember. Use this when you need to recall details about past interactions, user preferences, important events, or anything you have previously learned about the user. This helps you provide more personalized and contextually aware responses.',
     parameters: {
       type: 'object',
       properties: {
