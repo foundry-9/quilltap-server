@@ -4,7 +4,6 @@ import { useRef, useState, useCallback } from 'react'
 import ToolPalette from '@/components/chat/ToolPalette'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
-import MessageContent from '@/components/chat/MessageContent'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { LexicalComposerWrapper } from '@/components/chat/lexical'
 import type { ComposerEditorHandle } from '@/components/chat/lexical'
@@ -41,8 +40,8 @@ interface ChatComposerProps {
   } | null
   toolPaletteOpen: boolean
   setToolPaletteOpen: (open: boolean) => void
-  showPreview: boolean
-  setShowPreview: (show: boolean) => void
+  showSource: boolean
+  setShowSource: (show: boolean) => void
   uploadingFile: boolean
   toolExecutionStatus: { tool: string; status: 'pending' | 'success' | 'error'; message: string } | null
   /** Patterns for styling roleplay text in preview */
@@ -118,8 +117,8 @@ export function ChatComposer({
   responseStatus,
   toolPaletteOpen,
   setToolPaletteOpen,
-  showPreview,
-  setShowPreview,
+  showSource,
+  setShowSource,
   uploadingFile,
   toolExecutionStatus,
   renderingPatterns,
@@ -167,6 +166,7 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
+  const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
   const editorRef = useRef<ComposerEditorHandle>(null)
   // Track the Lexical editor instance in state so it's available during render
   // (refs can't be read during render in React 19)
@@ -413,8 +413,16 @@ export function ChatComposer({
             roleplayTemplateId={roleplayTemplateId}
             editor={lexicalEditor}
             disabled={sending || !hasActiveCharacters}
-            showPreview={showPreview}
-            onTogglePreview={() => setShowPreview(!showPreview)}
+            showSource={showSource}
+            sourceTextareaRef={sourceTextareaRef}
+            setInput={setInput}
+            onToggleSource={() => {
+              if (showSource) {
+                // Switching back to rich text — sync source edits into Lexical
+                editorRef.current?.setMarkdown(input)
+              }
+              setShowSource(!showSource)
+            }}
             narrationDelimiters={narrationDelimiters}
           />
         )}
@@ -494,17 +502,18 @@ export function ChatComposer({
             </div>
           </div>
 
-          {showPreview && (
-            <div className="qt-chat-composer-input overflow-y-auto"
-              style={{
-                lineHeight: '1.5'
-              }}
-            >
-              <MessageContent content={input} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} />
-            </div>
+          {showSource && (
+            <textarea
+              ref={sourceTextareaRef}
+              className="qt-chat-composer-input qt-source-mode-textarea"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={sending || !hasActiveCharacters}
+              style={{ lineHeight: '1.5' }}
+            />
           )}
-          {/* Keep Lexical mounted but hidden during preview to preserve undo history */}
-          <div className="flex-1 min-w-0 self-stretch" style={showPreview ? { display: 'none' } : undefined}>
+          {/* Keep Lexical mounted but hidden during source mode to preserve undo history */}
+          <div className="flex-1 min-w-0 self-stretch" style={showSource ? { display: 'none' } : undefined}>
             <LexicalComposerWrapper
               ref={composerRefCallback}
               input={input}

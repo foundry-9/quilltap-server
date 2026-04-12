@@ -1060,8 +1060,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           responseStatus={sseStreaming.responseStatus}
           toolPaletteOpen={modals.toolPaletteOpen}
           setToolPaletteOpen={modals.setToolPaletteOpen}
-          showPreview={modals.showPreview}
-          setShowPreview={modals.setShowPreview}
+          showSource={modals.showPreview}
+          setShowSource={modals.setShowPreview}
           uploadingFile={uploadingFile}
           toolExecutionStatus={sseStreaming.toolExecutionStatus}
           renderingPatterns={roleplayRenderingPatterns}

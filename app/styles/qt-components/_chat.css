@@ -457,6 +457,18 @@
   }
 
   /**
+   * Source mode textarea — monospace raw markdown editing
+   */
+  .qt-source-mode-textarea {
+    @apply resize-none overflow-y-auto flex-1 min-w-0 self-stretch;
+    font-family: var(--qt-formatting-code-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace);
+    font-size: 0.8125rem;
+    tab-size: 2;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  /**
    * Lexical editor contenteditable styling
    * Ensures the rich text editor matches the textarea appearance.
    */
@@ -974,28 +986,15 @@
   }
 
   /**
-   * Preview button - toggle for preview mode in formatting toolbar
+   * Source mode toggle button
    */
-  .qt-formatting-button-preview {
+  .qt-formatting-button-source {
     @apply flex items-center justify-center;
     min-width: 1.75rem;
     height: 1.75rem;
     padding: 0 0.375rem;
   }
 
-  /**
-   * Preview button active state - highlighted when preview is on
-   */
-  .qt-formatting-button-preview-active {
-    background: var(--color-primary);
-    color: var(--color-primary-foreground);
-    border-color: var(--color-primary);
-  }
-
-  .qt-formatting-button-preview-active:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-primary) 85%, black);
-    border-color: color-mix(in srgb, var(--color-primary) 85%, black);
-  }
 
   /**
    * Active state for formatting toggle buttons (e.g., CODE block toggle)

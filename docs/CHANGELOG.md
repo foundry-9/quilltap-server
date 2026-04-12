@@ -24,6 +24,11 @@
   - Tooltips updated (Bold, Italic, Unordered List, Ordered List, Blockquote, Heading N)
   - UL/OL button labels changed to `• …` and `1. …` for clarity
   - New themeable CSS custom properties: `--qt-formatting-heading-font`, `--qt-formatting-code-font`
+- **Scriptorium (Phase 3.1 cont.)**: Source mode editor and toolbar source-mode support
+  - Replaced "Preview message" toggle with "Source mode" toggle — shows raw markdown in a monospace textarea for direct editing
+  - When toggling back to rich text mode, source edits are synced into the Lexical editor
+  - All formatting toolbar buttons (bold, italic, headings, lists, blockquote, code, delimiters) work in source mode with textarea manipulation
+  - Source mode uses `qt-source-mode-textarea` CSS class with monospace font
 - **Scriptorium (Phase 2)**: Unified search and cross-conversation access
   - Rendered conversations now include a metadata header with title, ID, dates, participants, and counts
   - New unified `search` tool replaces `search_memories`, searching across both character memories and conversation chunks with unified ranking
