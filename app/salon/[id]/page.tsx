@@ -46,6 +46,7 @@ import {
   type SwipeState,
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
+import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import {
   ChatComposer,
   VirtualizedMessageList,
@@ -99,7 +100,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // --- Refs ---
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const inputRef = useRef<ComposerEditorHandle>(null)
   const hasRestoredTurnStateRef = useRef<boolean>(false)
   const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
   const wasGeneratingRef = useRef(false)
@@ -335,7 +336,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     scrollOnUserMessage: () => scrollOnUserMessage(),
     scrollOnStreamComplete: () => scrollOnStreamComplete(),
     setAttachedFiles,
-    inputRef: inputRef as React.RefObject<HTMLTextAreaElement>,
+    inputRef: inputRef as React.RefObject<ComposerEditorHandle>,
     setFileWriteApprovalState: modals.setFileWriteApprovalState,
     setSudoApprovalState: modals.setSudoApprovalState,
     setWorkspaceAcknowledgementState: modals.setWorkspaceAcknowledgementState,
@@ -473,7 +474,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     viewSourceMessageIds,
     setInput,
     setAttachedFiles,
-    inputRef as React.RefObject<HTMLTextAreaElement>,
+    inputRef as React.RefObject<ComposerEditorHandle>,
     messagesEndRef as React.RefObject<HTMLDivElement>,
     chatSettings,
   )
@@ -622,19 +623,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const awaitingTagInfo = quickHideActive && isCurrentChat && !chatContext.tagsFetched
   const chatHidden = quickHideActive && isCurrentChat && chatContext.tagsFetched && shouldHideByIds(chatTags)
 
-  // --- Textarea helpers ---
-  const getTextareaMaxHeight = useCallback(() => {
-    if (typeof globalThis === 'undefined' || !globalThis.window) return 200
-    return globalThis.window.innerHeight / 3
-  }, [])
-
-  const resizeTextarea = useCallback((textarea: HTMLTextAreaElement) => {
-    textarea.style.height = '0'
-    const maxHeight = getTextareaMaxHeight()
-    const newHeight = Math.min(textarea.scrollHeight, maxHeight)
-    textarea.style.height = newHeight + 'px'
-  }, [getTextareaMaxHeight])
-
   // --- Initialization effects ---
   useEffect(() => {
     fetchChat()
@@ -676,27 +664,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     fetchTemplateData()
   }, [chat?.roleplayTemplateId])
 
-  // --- Textarea focus and resize effects ---
+  // --- Editor focus effect ---
   useEffect(() => {
     const timer = setTimeout(() => {
       inputRef.current?.focus()
       inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      if (inputRef.current) {
-        resizeTextarea(inputRef.current)
-      }
     }, 100)
     return () => clearTimeout(timer)
-  }, [resizeTextarea])
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (inputRef.current) {
-        resizeTextarea(inputRef.current)
-      }
-    }
-    globalThis.window?.addEventListener('resize', handleResize)
-    return () => globalThis.window?.removeEventListener('resize', handleResize)
-  }, [resizeTextarea])
+  }, [])
 
   // Focus textarea when generation completes + refresh LLM logs
   useEffect(() => {

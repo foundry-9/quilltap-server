@@ -1,14 +1,22 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import type { LexicalEditor } from 'lexical'
+import { FORMAT_TEXT_COMMAND } from 'lexical'
 import type { TemplateDelimiter, NarrationDelimiters } from '@/lib/schemas/template.types'
 import {
   MARKDOWN_FORMATS,
-  insertFormat,
   getDelimiterTooltip,
   delimiterToPrefixSuffix,
   type MarkdownFormatConfig,
 } from '@/lib/chat/annotations'
+import {
+  INSERT_HEADING_COMMAND,
+  INSERT_UNORDERED_LIST_COMMAND,
+  INSERT_ORDERED_LIST_COMMAND,
+  INSERT_DELIMITER_COMMAND,
+} from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
+import type { HeadingTagType } from '@lexical/rich-text'
 
 interface RoleplayTemplateWithDelimiters {
   id: string
@@ -20,9 +28,8 @@ interface RoleplayTemplateWithDelimiters {
 
 interface FormattingToolbarProps {
   roleplayTemplateId?: string | null
-  inputRef: React.RefObject<HTMLTextAreaElement | null>
-  input: string
-  setInput: (value: string) => void
+  /** Lexical editor instance for dispatching formatting commands */
+  editor: LexicalEditor
   disabled?: boolean
   /** Whether preview mode is active */
   showPreview?: boolean
@@ -37,12 +44,11 @@ interface FormattingToolbarProps {
  *
  * Displays Markdown formatting buttons (bold, italic, headers, lists)
  * and roleplay delimiter buttons based on the active template.
+ * Dispatches Lexical commands for formatting.
  */
 export default function FormattingToolbar({
   roleplayTemplateId,
-  inputRef,
-  input,
-  setInput,
+  editor,
   disabled = false,
   showPreview = false,
   onTogglePreview,
@@ -83,27 +89,42 @@ export default function FormattingToolbar({
     fetchTemplate()
   }, [roleplayTemplateId])
 
-  // Handle Markdown format button click
+  // Handle Markdown format button click — dispatch Lexical commands
   const handleMarkdownClick = useCallback(
     (format: MarkdownFormatConfig) => {
-      const textarea = inputRef.current
-      if (!textarea) return
-
-      insertFormat(textarea, input, format, setInput)
+      switch (format.type) {
+        case 'bold':
+          editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')
+          break
+        case 'italic':
+          editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')
+          break
+        case 'h1':
+        case 'h2':
+        case 'h3':
+          editor.dispatchCommand(INSERT_HEADING_COMMAND, format.type as HeadingTagType)
+          break
+        case 'ul':
+          editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined)
+          break
+        case 'ol':
+          editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined)
+          break
+      }
+      // Refocus the editor after formatting
+      editor.focus()
     },
-    [input, inputRef, setInput]
+    [editor]
   )
 
-  // Handle delimiter button click
+  // Handle delimiter button click — wrap selection with literal delimiter text
   const handleDelimiterClick = useCallback(
     (delimiter: TemplateDelimiter) => {
-      const textarea = inputRef.current
-      if (!textarea) return
-
       const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
-      insertFormat(textarea, input, { prefix, suffix }, setInput)
+      editor.dispatchCommand(INSERT_DELIMITER_COMMAND, { prefix, suffix })
+      editor.focus()
     },
-    [input, inputRef, setInput]
+    [editor]
   )
 
   // Build the narration button from delimiters, and filter out any template

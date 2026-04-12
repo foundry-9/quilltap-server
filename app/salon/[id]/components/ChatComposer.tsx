@@ -1,20 +1,19 @@
 'use client'
 
-import { useRef, useEffect, useLayoutEffect, useCallback } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import ToolPalette from '@/components/chat/ToolPalette'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
 import MessageContent from '@/components/chat/MessageContent'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
+import { LexicalComposerWrapper } from '@/components/chat/lexical'
+import type { ComposerEditorHandle } from '@/components/chat/lexical'
 import type { AttachedFile, PendingToolResult } from '../types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
 import type { OutfitNotifications } from '../hooks/useOutfitNotification'
 
 // Platform detection for keyboard shortcuts
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
-
-// Use useLayoutEffect on client, useEffect on server (for SSR compatibility)
-const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
 interface ChatComposerProps {
   id: string
@@ -26,8 +25,8 @@ interface ChatComposerProps {
   pendingToolResults: PendingToolResult[]
   /** Remove a pending tool result */
   onRemovePendingToolResult: (id: string) => void
-  /** External ref for the textarea, enabling parent components to focus it */
-  inputRef?: React.MutableRefObject<HTMLTextAreaElement | null>
+  /** External ref for the editor, enabling parent components to focus it */
+  inputRef?: React.MutableRefObject<ComposerEditorHandle | null>
   disabled: boolean
   sending: boolean
   hasActiveCharacters: boolean
@@ -103,19 +102,6 @@ interface ChatComposerProps {
   onConsumeOutfitNotifications?: () => OutfitNotifications
 }
 
-const resizeTextarea = (textarea: HTMLTextAreaElement, maxHeight: number) => {
-  // Set to 0 first to force browser to recalculate scrollHeight for shrinking
-  textarea.style.height = '0'
-  const newHeight = Math.min(textarea.scrollHeight, maxHeight)
-  textarea.style.height = newHeight + 'px'
-}
-
-const getTextareaMaxHeight = (): number => {
-  if (typeof globalThis === 'undefined' || !globalThis.window) return 200
-  const windowHeight = globalThis.window.innerHeight
-  return windowHeight / 3
-}
-
 export function ChatComposer({
   id,
   input,
@@ -181,126 +167,45 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const editorRef = useRef<ComposerEditorHandle>(null)
+  // Track the Lexical editor instance in state so it's available during render
+  // (refs can't be read during render in React 19)
+  const [lexicalEditor, setLexicalEditor] = useState<import('lexical').LexicalEditor | null>(null)
 
-  // Callback ref that assigns the textarea element to both our internal ref
-  // and the parent's external ref, so parent can focus the textarea directly
-  const textareaRefCallback = useCallback((node: HTMLTextAreaElement | null) => {
-    inputRef.current = node
-    if (externalInputRef) {
-      externalInputRef.current = node
-    }
-  }, [externalInputRef])
-  // Track the last external input value to detect when parent clears it
-  const lastExternalInputRef = useRef(input)
-  // Debounce timer for parent state updates
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Calculate maxHeight once on mount and update on resize
-  const maxHeightRef = useRef(getTextareaMaxHeight())
-
-  useEffect(() => {
-    const handleResize = () => {
-      maxHeightRef.current = getTextareaMaxHeight()
-      if (inputRef.current) {
-        resizeTextarea(inputRef.current, maxHeightRef.current)
+  // Sync external ref with internal editor ref
+  const setEditorRef = useCallback(
+    (handle: ComposerEditorHandle | null) => {
+      editorRef.current = handle
+      if (externalInputRef) {
+        externalInputRef.current = handle
       }
-    }
+    },
+    [externalInputRef],
+  )
 
-    globalThis.window?.addEventListener('resize', handleResize)
-    return () => {
-      globalThis.window?.removeEventListener('resize', handleResize)
-    }
-  }, [])
-
-  // Handler that triggers the file input click - the file input lives in this component
+  // Handler that triggers the file input click
   const handleAttachFileClick = () => {
     fileInputRef.current?.click()
-    // Also call the parent's callback in case it needs to do something
     onAttachFileClick?.()
   }
 
-  // Only sync when parent clears the input (e.g., after submission)
-  // This avoids race conditions with concurrent rendering during typing
-  useIsomorphicLayoutEffect(() => {
-    const textarea = inputRef.current
-    if (!textarea) return
-
-    // Only sync if parent cleared the input (input is now empty but textarea isn't)
-    // This is the main case we need: after submission, parent sets input to ''
-    if (input === '' && textarea.value !== '' && lastExternalInputRef.current !== '') {
-      textarea.value = ''
-      resizeTextarea(textarea, maxHeightRef.current)
-    }
-    lastExternalInputRef.current = input
-  }, [input])
-
-  // Cleanup debounce timer on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current)
-      }
-    }
-  }, [])
-
-  // onChange handler - debounces parent state updates to avoid excessive re-renders
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value
-
-    // Resize immediately for responsive UI
-    if (inputRef.current) {
-      resizeTextarea(inputRef.current, maxHeightRef.current)
-    }
-
-    // Debounce the parent state update to avoid render storms in React 19
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current)
-    }
-    debounceTimerRef.current = setTimeout(() => {
-      setInput(newValue)
-    }, 16) // ~1 frame, enough to batch rapid keystrokes
-  }, [setInput])
-
-  // Helper to insert a newline at cursor position
-  const insertNewline = (textarea: HTMLTextAreaElement) => {
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const currentValue = textarea.value
-    const newValue = currentValue.substring(0, start) + '\n' + currentValue.substring(end)
-    textarea.value = newValue
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current)
-    }
-    debounceTimerRef.current = setTimeout(() => {
-      setInput(newValue)
-    }, 16)
-    setTimeout(() => {
-      textarea.selectionStart = textarea.selectionEnd = start + 1
-      resizeTextarea(textarea, maxHeightRef.current)
-    }, 0)
-  }
-
-  // Helper to submit the form
-  const submitForm = (textarea: HTMLTextAreaElement) => {
-    const currentValue = textarea.value
-    if (currentValue.trim() || attachedFiles.length > 0 || pendingToolResults.length > 0) {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current)
-        debounceTimerRef.current = null
-      }
-      setInput(currentValue)
-      const form = textarea.form
-      if (form) {
-        setTimeout(() => {
+  // Submit handler: reads markdown from Lexical and dispatches form submit
+  const handleEditorSubmit = useCallback(() => {
+    const markdown = editorRef.current?.getMarkdown() ?? ''
+    if (markdown.trim() || attachedFiles.length > 0 || pendingToolResults.length > 0) {
+      setInput(markdown)
+      // Use a microtask to ensure setInput has propagated
+      setTimeout(() => {
+        const form = document.querySelector<HTMLFormElement>(`#composer-form-${id}`)
+        if (form) {
           form.dispatchEvent(new Event('submit', { bubbles: true }))
           setTimeout(() => {
-            textarea.focus({ preventScroll: true })
+            editorRef.current?.focus({ preventScroll: true })
           }, 10)
-        }, 0)
-      }
+        }
+      }, 0)
     }
-  }
+  }, [id, attachedFiles.length, pendingToolResults.length, setInput])
 
   // Handle outfit notification insertion
   const handleInsertOutfitNotification = useCallback(() => {
@@ -328,81 +233,18 @@ export function ChatComposer({
       wrappedText = notificationText
     }
 
-    // Insert at the top of the textarea
-    const textarea = inputRef.current
-    if (textarea) {
-      const currentValue = textarea.value
-      const newValue = currentValue ? `${wrappedText}\n\n${currentValue}` : `${wrappedText}\n`
-      textarea.value = newValue
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current)
-      }
-      setInput(newValue)
-      setTimeout(() => {
-        if (inputRef.current) {
-          resizeTextarea(inputRef.current, maxHeightRef.current)
-          inputRef.current.focus()
-          inputRef.current.selectionStart = inputRef.current.selectionEnd = wrappedText.length + 1
-        }
-      }, 0)
-    }
-  }, [onConsumeOutfitNotifications, narrationDelimiters, setInput])
+    // Prepend to editor
+    editorRef.current?.prependText(wrappedText)
+  }, [onConsumeOutfitNotifications, narrationDelimiters])
 
-  // Handle paste events to detect and upload images
-  const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items
-    if (!items) return
-
-    // Check for image items in clipboard
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-      if (item.type.startsWith('image/')) {
-        e.preventDefault() // Prevent default paste behavior for images
-        const file = item.getAsFile()
-        if (file) {
-          // Generate a unique filename with timestamp
-          const timestamp = Date.now()
-          const extension = file.type.split('/')[1] || 'png'
-          const filename = `pasted-image-${timestamp}.${extension}`
-          const renamedFile = new File([file], filename, { type: file.type })
-
-          // Upload the pasted image
-          await onImagePaste(renamedFile)
-        }
-        return // Only handle the first image
-      }
-    }
-    // Allow normal text paste to proceed if no images found
-  }, [onImagePaste])
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const textarea = e.currentTarget
-
-    if (documentEditingMode) {
-      // Document mode: Enter = newline, Ctrl/Cmd+Enter = submit
-      const isSubmitShortcut = isMac
-        ? (e.metaKey && !e.ctrlKey && e.key === 'Enter')
-        : (e.ctrlKey && !e.metaKey && e.key === 'Enter')
-
-      if (isSubmitShortcut) {
-        e.preventDefault()
-        submitForm(textarea)
-      } else if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
-        // Plain Enter in document mode = newline
-        e.preventDefault()
-        insertNewline(textarea)
-      }
-    } else {
-      // Chat mode: Enter = submit, Shift+Enter = newline
-      if (e.key === 'Enter' && e.shiftKey) {
-        e.preventDefault()
-        insertNewline(textarea)
-      } else if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault()
-        submitForm(textarea)
-      }
-    }
-  }
+  // Capture the Lexical editor instance when the wrapper mounts
+  const composerRefCallback = useCallback(
+    (handle: ComposerEditorHandle | null) => {
+      setEditorRef(handle)
+      setLexicalEditor(handle?.getEditor() ?? null)
+    },
+    [setEditorRef],
+  )
 
   return (
     <div className="qt-chat-composer">
@@ -566,12 +408,10 @@ export function ChatComposer({
         />
 
         {/* Formatting toolbar - shown above the form when document editing mode is enabled */}
-        {documentEditingMode && (
+        {documentEditingMode && lexicalEditor && (
           <FormattingToolbar
             roleplayTemplateId={roleplayTemplateId}
-            inputRef={inputRef}
-            input={input}
-            setInput={setInput}
+            editor={lexicalEditor}
             disabled={sending || !hasActiveCharacters}
             showPreview={showPreview}
             onTogglePreview={() => setShowPreview(!showPreview)}
@@ -579,7 +419,7 @@ export function ChatComposer({
           />
         )}
 
-        <form onSubmit={onSubmit} className="qt-chat-composer-inner">
+        <form id={`composer-form-${id}`} onSubmit={onSubmit} className="qt-chat-composer-inner">
           {/* Hidden file input */}
           <input
             ref={fileInputRef}
@@ -654,7 +494,7 @@ export function ChatComposer({
             </div>
           </div>
 
-          {showPreview ? (
+          {showPreview && (
             <div className="qt-chat-composer-input overflow-y-auto"
               style={{
                 lineHeight: '1.5'
@@ -662,22 +502,20 @@ export function ChatComposer({
             >
               <MessageContent content={input} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} />
             </div>
-          ) : (
-            <textarea
-              ref={textareaRefCallback}
-              defaultValue={input}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              disabled={sending || !hasActiveCharacters}
-              rows={1}
-              placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
-              className="qt-chat-composer-input resize-none overflow-y-auto"
-              style={{
-                lineHeight: '1.5'
-              }}
-            />
           )}
+          {/* Keep Lexical mounted but hidden during preview to preserve undo history */}
+          <div className="flex-1 min-w-0 self-stretch" style={showPreview ? { display: 'none' } : undefined}>
+            <LexicalComposerWrapper
+              ref={composerRefCallback}
+              input={input}
+              setInput={setInput}
+              onSubmit={handleEditorSubmit}
+              onImagePaste={onImagePaste}
+              documentEditingMode={documentEditingMode}
+              disabled={sending || !hasActiveCharacters}
+              placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
+            />
+          </div>
 
           {/* Right side buttons */}
           {(streaming || waitingForResponse) && !hideStopButton ? (

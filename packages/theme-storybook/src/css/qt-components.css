@@ -1183,8 +1183,123 @@
   color: var(--color-foreground);
 }
 
-.qt-chat-composer-input:focus {
+.qt-chat-composer-input:focus,
+.qt-chat-composer-input:focus-within {
   outline: none;
+}
+
+/* Lexical editor rich text node styles */
+.qt-lexical-contenteditable {
+  overflow-y: auto;
+  position: relative;
+}
+
+.qt-lexical-contenteditable [contenteditable] {
+  outline: none;
+  min-height: 1.5em;
+}
+
+.qt-lexical-placeholder {
+  color: var(--color-muted-foreground);
+  font-size: 0.875rem;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: var(--qt-input-padding-y, 0.5rem) var(--qt-input-padding-x, 0.75rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qt-lexical-root {
+  outline: none;
+  min-height: 1.5em;
+}
+
+.qt-lexical-paragraph {
+  margin: 0;
+}
+
+.qt-lexical-bold {
+  font-weight: 700;
+}
+
+.qt-lexical-italic {
+  font-style: italic;
+}
+
+.qt-lexical-underline {
+  text-decoration: underline;
+}
+
+.qt-lexical-strikethrough {
+  text-decoration: line-through;
+}
+
+.qt-lexical-code {
+  font-family: monospace;
+  font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.1);
+  padding: 0.1em 0.3em;
+  border-radius: 0.2em;
+}
+
+.qt-lexical-h1 {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin: 0.5em 0 0.25em;
+}
+
+.qt-lexical-h2 {
+  font-size: 1.125rem;
+  font-weight: bold;
+  margin: 0.4em 0 0.2em;
+}
+
+.qt-lexical-h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.3em 0 0.15em;
+}
+
+.qt-lexical-ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.25em 0;
+}
+
+.qt-lexical-ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin: 0.25em 0;
+}
+
+.qt-lexical-li {
+  margin: 0.1em 0;
+}
+
+.qt-lexical-blockquote {
+  border-left: 4px solid rgba(0, 0, 0, 0.2);
+  padding-left: 0.75rem;
+  font-style: italic;
+  margin: 0.25em 0;
+}
+
+.qt-lexical-link {
+  text-decoration: underline;
+  color: hsl(var(--primary, 220 90% 56%));
+}
+
+.qt-lexical-code-block {
+  font-family: monospace;
+  font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 0.5em 0.75em;
+  border-radius: 0.3em;
+  margin: 0.25em 0;
+  overflow-x: auto;
+  tab-size: 2;
 }
 
 .qt-chat-composer-input::placeholder {

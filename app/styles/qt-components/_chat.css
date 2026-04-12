@@ -450,9 +450,123 @@
     border: 1px solid var(--qt-input-border);
   }
 
-  .qt-chat-composer-input:focus {
+  .qt-chat-composer-input:focus,
+  .qt-chat-composer-input:focus-within {
     border-color: var(--qt-input-focus-ring);
     --tw-ring-color: var(--qt-input-focus-ring);
+  }
+
+  /**
+   * Lexical editor contenteditable styling
+   * Ensures the rich text editor matches the textarea appearance.
+   */
+  .qt-chat-composer-input.qt-lexical-contenteditable {
+    @apply overflow-y-auto h-full;
+    position: relative;
+  }
+
+  .qt-lexical-contenteditable [contenteditable] {
+    outline: none;
+    min-height: 1.5em;
+  }
+
+  /**
+   * Lexical placeholder — positioned absolutely over the editor
+   */
+  .qt-lexical-placeholder {
+    @apply text-muted-foreground text-sm pointer-events-none;
+    @apply absolute;
+    padding: var(--qt-input-padding-y) var(--qt-input-padding-x);
+    top: 0;
+    left: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /**
+   * Lexical rich text node styles
+   */
+  .qt-lexical-root {
+    outline: none;
+    min-height: 1.5em;
+  }
+
+  .qt-lexical-paragraph {
+    margin: 0;
+  }
+
+  .qt-lexical-bold {
+    font-weight: 700;
+  }
+
+  .qt-lexical-italic {
+    font-style: italic;
+  }
+
+  .qt-lexical-underline {
+    text-decoration: underline;
+  }
+
+  .qt-lexical-strikethrough {
+    text-decoration: line-through;
+  }
+
+  .qt-lexical-code {
+    @apply font-mono text-xs;
+    background: var(--qt-code-bg, rgba(0, 0, 0, 0.1));
+    padding: 0.1em 0.3em;
+    border-radius: 0.2em;
+  }
+
+  .qt-lexical-h1 {
+    @apply text-xl font-bold;
+    margin: 0.5em 0 0.25em;
+  }
+
+  .qt-lexical-h2 {
+    @apply text-lg font-bold;
+    margin: 0.4em 0 0.2em;
+  }
+
+  .qt-lexical-h3 {
+    @apply text-base font-semibold;
+    margin: 0.3em 0 0.15em;
+  }
+
+  .qt-lexical-ul {
+    @apply list-disc pl-6;
+    margin: 0.25em 0;
+  }
+
+  .qt-lexical-ol {
+    @apply list-decimal pl-6;
+    margin: 0.25em 0;
+  }
+
+  .qt-lexical-li {
+    margin: 0.1em 0;
+  }
+
+  .qt-lexical-blockquote {
+    @apply border-l-4 pl-3 italic;
+    border-color: var(--qt-border-color, rgba(0, 0, 0, 0.2));
+    margin: 0.25em 0;
+  }
+
+  .qt-lexical-link {
+    @apply underline;
+    color: var(--qt-link-color, hsl(var(--primary)));
+  }
+
+  .qt-lexical-code-block {
+    @apply font-mono text-xs;
+    background: var(--qt-code-bg, rgba(0, 0, 0, 0.15));
+    padding: 0.5em 0.75em;
+    border-radius: 0.3em;
+    margin: 0.25em 0;
+    overflow-x: auto;
+    tab-size: 2;
   }
 
   /**

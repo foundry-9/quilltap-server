@@ -6,6 +6,7 @@ import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
+import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import type { FileWriteApprovalState, SudoApprovalState, WorkspaceAcknowledgementState } from './useModalState'
 
 export interface PendingToolCall {
@@ -111,7 +112,7 @@ interface UseSSEStreamingParams {
   scrollOnUserMessage: () => void
   scrollOnStreamComplete: () => void
   setAttachedFiles: (files: any[]) => void
-  inputRef: React.RefObject<HTMLTextAreaElement | null>
+  inputRef: React.RefObject<ComposerEditorHandle | null>
   setFileWriteApprovalState: (state: FileWriteApprovalState | null) => void
   setSudoApprovalState: (state: SudoApprovalState | null) => void
   setWorkspaceAcknowledgementState: (state: WorkspaceAcknowledgementState | null) => void
@@ -342,10 +343,6 @@ export function useSSEStreaming({
     // Track the current responding participant across chained turns (mutable for closures)
     let currentParticipantId = firstCharParticipant?.id || null
     setRespondingParticipantId(currentParticipantId)
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto'
-    }
-
     // Build display content with file indicators
     const displayContent = messageAttachments.length > 0
       ? `${userMessage}${userMessage ? '\n' : ''}[Attached: ${messageAttachments.map(f => f.filename).join(', ')}]`
@@ -616,7 +613,7 @@ export function useSSEStreaming({
       setResponseStatus(null)
       focusInput()
     }
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, inputRef, setFileWriteApprovalState, setSudoApprovalState, setWorkspaceAcknowledgementState, readSSEStream, extractErrorMessage, focusInput])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, setFileWriteApprovalState, setSudoApprovalState, setWorkspaceAcknowledgementState, readSSEStream, extractErrorMessage, focusInput])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.

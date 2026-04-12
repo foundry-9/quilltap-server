@@ -6,6 +6,13 @@
 
 #### Added
 
+- **Scriptorium (Phase 3.1)**: Lexical rich text editor integration for chat composer
+  - Replaced plain textarea in ChatComposer with Meta's Lexical rich text framework
+  - Rich text formatting (bold, italic, headings, lists) via document mode toolbar now uses native Lexical commands
+  - Custom markdown transformer set preserves roleplay delimiters (e.g. `*narration*`) as literal text — italic uses underscore only
+  - Undo/redo support via Lexical's built-in HistoryPlugin
+  - Messages continue to be stored and transmitted as plain markdown strings — no schema changes
+  - Foundation for Phase 3 collaborative document editing features
 - **Scriptorium (Phase 2)**: Unified search and cross-conversation access
   - Rendered conversations now include a metadata header with title, ID, dates, participants, and counts
   - New unified `search` tool replaces `search_memories`, searching across both character memories and conversation chunks with unified ranking
