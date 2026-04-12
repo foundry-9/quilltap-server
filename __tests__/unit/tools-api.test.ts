@@ -68,9 +68,31 @@ describe('GET /api/v1/tools', () => {
     expect(toolIds).toContain('search_web')
     expect(toolIds).toContain('project_info')
     expect(toolIds).toContain('file_management')
+    expect(toolIds).toContain('help_search')
+    expect(toolIds).toContain('help_settings')
 
     // request_full_context should never be in user-facing tool list
     expect(toolIds).not.toContain('request_full_context')
+    expect(toolIds).not.toContain('search_memories')
+  })
+
+  it('returns schema for the unified search tool and not the removed legacy tool', async () => {
+    const res = await listTools(createMockRequest('http://localhost/api/v1/tools?includeSchemas=true'))
+    const data = await res.json()
+
+    expect(res.status).toBe(200)
+
+    const searchTool = data.tools.find((tool: any) => tool.id === 'search')
+    expect(searchTool).toBeDefined()
+    expect(searchTool.parameters).toMatchObject({
+      required: ['query'],
+      properties: expect.objectContaining({
+        query: expect.objectContaining({ type: 'string' }),
+        sources: expect.objectContaining({ type: 'array' }),
+      }),
+    })
+
+    expect(data.tools.find((tool: any) => tool.id === 'search_memories')).toBeUndefined()
   })
 
   it('flags unavailable tools based on chat context', async () => {

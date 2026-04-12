@@ -23,6 +23,8 @@ describe('Built-in Tool Names', () => {
         'project_info',
         'file_management',
         'request_full_context',
+        'help_search',
+        'help_settings',
       ];
 
       for (const tool of expectedTools) {
@@ -71,7 +73,12 @@ describe('Built-in Tool Names', () => {
 
     it('should contain at least 4 built-in tools', () => {
       const toolNames = getBuiltinToolNames();
-      expect(toolNames.size).toBeGreaterThanOrEqual(6);
+      expect(toolNames.size).toBeGreaterThanOrEqual(8);
+    });
+
+    it('should not include removed legacy tool names', () => {
+      const toolNames = getBuiltinToolNames();
+      expect(toolNames.has('search_memories')).toBe(false);
     });
   });
 

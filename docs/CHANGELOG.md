@@ -4,6 +4,16 @@
 
 ### 4.3-dev
 
+#### Tests
+
+- Added unit tests for conversation-render background job handler
+- Added unit tests for FormattingToolbar source-mode formatting operations
+- Added unit tests for useHealthCheck hook (shared polling, lock conflict detection)
+- Added unit tests for read-conversation-handler (annotation merging, cross-conversation access control, truncation)
+- Added unit tests for search-scriptorium-handler (unified search, graceful memory failure, result formatting)
+- Updated builtin-tools tests for help_search/help_settings tools and removed search_memories
+- Updated tools-api tests for unified search tool schema and legacy tool removal
+
 #### Added
 
 - **Scriptorium (Phase 3.1)**: Lexical rich text editor integration for chat composer
