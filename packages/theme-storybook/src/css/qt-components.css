@@ -1263,6 +1263,24 @@
   margin: 0.3em 0 0.15em;
 }
 
+.qt-lexical-h4 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0.25em 0 0.1em;
+}
+
+.qt-lexical-h5 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin: 0.2em 0 0.1em;
+}
+
+.qt-lexical-h6 {
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin: 0.2em 0 0.1em;
+}
+
 .qt-lexical-ul {
   list-style-type: disc;
   padding-left: 1.5rem;

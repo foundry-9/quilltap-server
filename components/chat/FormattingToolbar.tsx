@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import type { LexicalEditor } from 'lexical'
-import { FORMAT_TEXT_COMMAND } from 'lexical'
+import { FORMAT_TEXT_COMMAND, $getSelection, $isRangeSelection, $createTextNode, $createParagraphNode, $getRoot } from 'lexical'
+import { $isCodeNode, $createCodeNode } from '@lexical/code'
+import { $setBlocksType } from '@lexical/selection'
 import type { TemplateDelimiter, NarrationDelimiters } from '@/lib/schemas/template.types'
 import {
   MARKDOWN_FORMATS,
@@ -14,9 +16,8 @@ import {
   INSERT_HEADING_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
   INSERT_ORDERED_LIST_COMMAND,
-  INSERT_DELIMITER_COMMAND,
 } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
-import type { HeadingTagType } from '@lexical/rich-text'
+import { type HeadingTagType, $createQuoteNode } from '@lexical/rich-text'
 
 interface RoleplayTemplateWithDelimiters {
   id: string
@@ -56,6 +57,23 @@ export default function FormattingToolbar({
 }: FormattingToolbarProps) {
   const [template, setTemplate] = useState<RoleplayTemplateWithDelimiters | null>(null)
   const [loadingTemplate, setLoadingTemplate] = useState(false)
+  const [inCodeBlock, setInCodeBlock] = useState(false)
+
+  // Track whether the cursor is inside a code block
+  useEffect(() => {
+    return editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        const selection = $getSelection()
+        if (!$isRangeSelection(selection)) {
+          setInCodeBlock(false)
+          return
+        }
+        const anchorNode = selection.anchor.getNode()
+        const parent = anchorNode.getParent()
+        setInCodeBlock(parent !== null && $isCodeNode(parent))
+      })
+    })
+  }, [editor])
 
   // Fetch template info when roleplayTemplateId changes
   useEffect(() => {
@@ -90,38 +108,131 @@ export default function FormattingToolbar({
   }, [roleplayTemplateId])
 
   // Handle Markdown format button click — dispatch Lexical commands
+  // Uses editor.update() to ensure selection context is available
   const handleMarkdownClick = useCallback(
     (format: MarkdownFormatConfig) => {
-      switch (format.type) {
-        case 'bold':
-          editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')
-          break
-        case 'italic':
-          editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')
-          break
-        case 'h1':
-        case 'h2':
-        case 'h3':
-          editor.dispatchCommand(INSERT_HEADING_COMMAND, format.type as HeadingTagType)
-          break
-        case 'ul':
-          editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined)
-          break
-        case 'ol':
-          editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined)
-          break
-      }
-      // Refocus the editor after formatting
+      editor.update(() => {
+        // Ensure there's a selection — if the editor hasn't been focused yet,
+        // $getSelection() returns null. Select the end of the first block.
+        let selection = $getSelection()
+        if (!$isRangeSelection(selection)) {
+          const root = $getRoot()
+          const firstChild = root.getFirstChild()
+          if (firstChild) {
+            firstChild.selectEnd()
+            selection = $getSelection()
+          }
+          if (!$isRangeSelection(selection)) return
+        }
+
+        switch (format.type) {
+          case 'bold':
+            editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')
+            break
+          case 'italic':
+            editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')
+            break
+          case 'h1':
+          case 'h2':
+          case 'h3':
+          case 'h4':
+          case 'h5':
+          case 'h6':
+            editor.dispatchCommand(INSERT_HEADING_COMMAND, format.type as HeadingTagType)
+            break
+          case 'ul':
+            editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined)
+            break
+          case 'ol':
+            editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined)
+            break
+          case 'blockquote':
+            $setBlocksType(selection, () => $createQuoteNode())
+            break
+        }
+      })
       editor.focus()
     },
     [editor]
   )
 
-  // Handle delimiter button click — wrap selection with literal delimiter text
+  // Handle code block toggle
+  const handleCodeBlockClick = useCallback(() => {
+    editor.update(() => {
+      const selection = $getSelection()
+      if (!$isRangeSelection(selection)) return
+
+      // With a non-collapsed selection, toggle inline code formatting
+      if (!selection.isCollapsed()) {
+        editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'code')
+        return
+      }
+
+      // Collapsed cursor: toggle code block
+      const anchorNode = selection.anchor.getNode()
+      const codeBlock = anchorNode.getParent()
+
+      if (codeBlock && $isCodeNode(codeBlock)) {
+        // Exit the code block: convert its text content to a paragraph
+        const text = codeBlock.getTextContent()
+        const paragraph = $createParagraphNode()
+        if (text) {
+          paragraph.append($createTextNode(text))
+        }
+        codeBlock.replace(paragraph)
+        paragraph.selectEnd()
+      } else {
+        // Enter a code block: convert current block to CodeNode
+        $setBlocksType(selection, () => $createCodeNode())
+      }
+    })
+    editor.focus()
+  }, [editor])
+
+  // Prevent toolbar buttons from stealing focus/selection from the editor
+  const preventFocusLoss = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+  }, [])
+
+  // Handle delimiter button click — wrap/unwrap selection, or insert at cursor
   const handleDelimiterClick = useCallback(
     (delimiter: TemplateDelimiter) => {
       const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
-      editor.dispatchCommand(INSERT_DELIMITER_COMMAND, { prefix, suffix })
+      editor.update(() => {
+        const selection = $getSelection()
+        if (!$isRangeSelection(selection)) return
+
+        const selectedText = selection.getTextContent()
+        if (selectedText) {
+          // Toggle: unwrap if already wrapped, wrap if not
+          if (selectedText.startsWith(prefix) && selectedText.endsWith(suffix)) {
+            const inner = selectedText.slice(prefix.length, selectedText.length - suffix.length)
+            selection.insertRawText(inner)
+          } else {
+            selection.insertRawText(`${prefix}${selectedText}${suffix}`)
+          }
+        } else {
+          // No selection: insert delimiters with cursor between them
+          selection.insertRawText(`${prefix}${suffix}`)
+          // Reposition cursor between the delimiters
+          const updatedSelection = $getSelection()
+          if ($isRangeSelection(updatedSelection)) {
+            const nodes = updatedSelection.getNodes()
+            if (nodes.length > 0) {
+              const lastNode = nodes[nodes.length - 1]
+              if (lastNode.getType() === 'text') {
+                const cursorPos = lastNode.getTextContentSize() - suffix.length
+                updatedSelection.setTextNodeRange(
+                  lastNode as import('lexical').TextNode,
+                  cursorPos,
+                  lastNode as import('lexical').TextNode,
+                  cursorPos,
+                )
+              }
+            }
+          }
+        }
+      })
       editor.focus()
     },
     [editor]
@@ -169,14 +280,25 @@ export default function FormattingToolbar({
           <button
             key={format.type}
             type="button"
+            onMouseDown={preventFocusLoss}
             onClick={() => handleMarkdownClick(format)}
             disabled={disabled}
             className={`qt-formatting-button qt-formatting-button-${format.type}`}
-            title={`Insert ${format.label}`}
+            title={format.tooltip}
           >
             {format.label}
           </button>
         ))}
+        <button
+          type="button"
+          onMouseDown={preventFocusLoss}
+          onClick={handleCodeBlockClick}
+          disabled={disabled}
+          className={`qt-formatting-button qt-formatting-button-code-block${inCodeBlock ? ' qt-formatting-button-active' : ''}`}
+          title={inCodeBlock ? 'End code block' : 'Insert code block'}
+        >
+          {inCodeBlock ? '/CODE' : 'CODE'}
+        </button>
       </div>
 
       {/* RP template buttons - only shown when template has delimiters */}
@@ -188,6 +310,7 @@ export default function FormattingToolbar({
               <button
                 key={`${delimiter.buttonName}-${index}`}
                 type="button"
+                onMouseDown={preventFocusLoss}
                 onClick={() => handleDelimiterClick(delimiter)}
                 disabled={disabled}
                 className="qt-rp-annotation-button"
@@ -207,6 +330,7 @@ export default function FormattingToolbar({
           <div className="qt-formatting-toolbar-section">
             <button
               type="button"
+              onMouseDown={preventFocusLoss}
               onClick={onTogglePreview}
               disabled={disabled}
               className={`qt-formatting-button qt-formatting-button-preview ${showPreview ? 'qt-formatting-button-preview-active' : ''}`}

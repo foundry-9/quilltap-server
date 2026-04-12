@@ -534,6 +534,21 @@
     margin: 0.3em 0 0.15em;
   }
 
+  .qt-lexical-h4 {
+    @apply text-sm font-semibold;
+    margin: 0.25em 0 0.1em;
+  }
+
+  .qt-lexical-h5 {
+    @apply text-xs font-semibold;
+    margin: 0.2em 0 0.1em;
+  }
+
+  .qt-lexical-h6 {
+    @apply text-xs font-medium;
+    margin: 0.2em 0 0.1em;
+  }
+
   .qt-lexical-ul {
     @apply list-disc pl-6;
     margin: 0.25em 0;
@@ -928,6 +943,37 @@
   }
 
   /**
+   * Heading buttons - serif font to distinguish from body text buttons
+   */
+  .qt-formatting-button-h1,
+  .qt-formatting-button-h2,
+  .qt-formatting-button-h3,
+  .qt-formatting-button-h4,
+  .qt-formatting-button-h5,
+  .qt-formatting-button-h6 {
+    font-family: var(--qt-formatting-heading-font, Georgia, 'Times New Roman', serif);
+  }
+
+  /**
+   * Blockquote button - larger smart quote character for readability
+   */
+  .qt-formatting-button-blockquote {
+    font-family: var(--qt-formatting-heading-font, Georgia, 'Times New Roman', serif);
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+    padding-top: 0.35em;
+    padding-bottom: 0;
+  }
+
+  /**
+   * Code block button - monospace font
+   */
+  .qt-formatting-button-code-block {
+    font-family: var(--qt-formatting-code-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace);
+  }
+
+  /**
    * Preview button - toggle for preview mode in formatting toolbar
    */
   .qt-formatting-button-preview {
@@ -947,6 +993,20 @@
   }
 
   .qt-formatting-button-preview-active:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-primary) 85%, black);
+    border-color: color-mix(in srgb, var(--color-primary) 85%, black);
+  }
+
+  /**
+   * Active state for formatting toggle buttons (e.g., CODE block toggle)
+   */
+  .qt-formatting-button-active {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
+    border-color: var(--color-primary);
+  }
+
+  .qt-formatting-button-active:hover:not(:disabled) {
     background: color-mix(in srgb, var(--color-primary) 85%, black);
     border-color: color-mix(in srgb, var(--color-primary) 85%, black);
   }

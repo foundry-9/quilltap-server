@@ -13,6 +13,17 @@
   - Undo/redo support via Lexical's built-in HistoryPlugin
   - Messages continue to be stored and transmitted as plain markdown strings — no schema changes
   - Foundation for Phase 3 collaborative document editing features
+- **Scriptorium (Phase 3.1 cont.)**: Formatting toolbar enhancements
+  - CODE button toggles code blocks (no selection) or inline code (with selection); shows as /CODE when cursor is inside a code block
+  - Blockquote button with smart-quote label converts blocks to blockquotes
+  - H4, H5, H6 heading buttons added
+  - Delimiter buttons (Nar, OOC, etc.) now toggle: wrap selected text, or unwrap if already delimited
+  - Enter on a blank trailing line inside a code block exits the block and creates a new paragraph
+  - All toolbar buttons now preserve editor selection via `onMouseDown` preventDefault
+  - Button styling: headings use serif font, CODE uses monospace, blockquote uses bold serif smart-quote
+  - Tooltips updated (Bold, Italic, Unordered List, Ordered List, Blockquote, Heading N)
+  - UL/OL button labels changed to `• …` and `1. …` for clarity
+  - New themeable CSS custom properties: `--qt-formatting-heading-font`, `--qt-formatting-code-font`
 - **Scriptorium (Phase 2)**: Unified search and cross-conversation access
   - Rendered conversations now include a metadata header with title, ID, dates, participants, and counts
   - New unified `search` tool replaces `search_memories`, searching across both character memories and conversation chunks with unified ranking
