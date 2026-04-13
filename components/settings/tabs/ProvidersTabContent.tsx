@@ -64,7 +64,6 @@ export function ProvidersTabContent() {
               saving={saving}
               loadingProfiles={loadingProfiles}
               connectionProfiles={connectionProfiles}
-              embeddingProfiles={embeddingProfiles}
               onUpdate={handleCheapLLMUpdate}
             />
           ) : (

@@ -687,9 +687,7 @@ async function processMessage(
   // Build message context
   const modelParams = streamingState.effectiveProfile.parameters as Record<string, unknown>
   const contextChatSettings = chatSettings ? {
-    cheapLLMSettings: chatSettings.cheapLLMSettings ? {
-      embeddingProfileId: chatSettings.cheapLLMSettings.embeddingProfileId ?? undefined,
-    } : undefined,
+    cheapLLMSettings: chatSettings.cheapLLMSettings ? {} : undefined,
     defaultTimestampConfig: chatSettings.defaultTimestampConfig,
   } : null
 
@@ -824,15 +822,12 @@ async function processMessage(
 
     // Search memories using extracted keywords
     const searchQuery = keywordResult.result.join(' ')
-    const embeddingProfileId = chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined
-
     try {
       const memoryResults = await searchMemoriesSemantic(
         character.id,
         searchQuery,
         {
           userId,
-          embeddingProfileId,
           limit: 20,
           minImportance: 0.3,
         }
@@ -961,7 +956,7 @@ async function processMessage(
     character.id,
     characterParticipant.id,
     imageProfileId,
-    chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined,
+    undefined, // embeddingProfileId: always use default embedding profile
     chat.projectId,
     options.browserUserAgent,
   )

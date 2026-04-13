@@ -1,14 +1,13 @@
 'use client'
 
 import { SettingsCard } from '@/components/ui/SettingsCard'
-import type { ChatSettings, CheapLLMSettings as CheapLLMSettingsType, ConnectionProfile, EmbeddingProfile, CheapLLMStrategy, EmbeddingProvider } from './types'
+import type { ChatSettings, CheapLLMSettings as CheapLLMSettingsType, ConnectionProfile, CheapLLMStrategy, EmbeddingProvider } from './types'
 
 export interface CheapLLMSettingsProps {
   settings: ChatSettings
   saving: boolean
   loadingProfiles: boolean
   connectionProfiles: ConnectionProfile[]
-  embeddingProfiles: EmbeddingProfile[]
   onUpdate: (updates: Partial<CheapLLMSettingsType>) => Promise<void>
 }
 
@@ -21,7 +20,6 @@ export function CheapLLMSettings({
   saving,
   loadingProfiles,
   connectionProfiles,
-  embeddingProfiles,
   onUpdate,
 }: CheapLLMSettingsProps) {
   return (
@@ -173,38 +171,7 @@ export function CheapLLMSettings({
           </div>
         </div>
 
-        {/* Embedding Profile Selection */}
-        <div>
-          <label className="block qt-text-label mb-2">
-            Embedding Profile (Optional)
-          </label>
-          <p className="qt-text-xs mb-2">
-            Specific embedding profile to use. Leave blank to use the default for the selected embedding provider.
-          </p>
-          <select
-            value={settings?.cheapLLMSettings.embeddingProfileId || ''}
-            onChange={(e) => onUpdate({ embeddingProfileId: e.target.value || null })}
-            disabled={saving}
-            className="qt-select"
-          >
-            <option value="">Use default for provider</option>
-            {embeddingProfiles.map((profile) => {
-              // OpenAI requires API key, Ollama doesn't
-              const requiresApiKey = profile.provider === 'OPENAI'
-              const hasApiKey = Boolean(profile.apiKey)
-              return (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name} ({profile.provider} • {profile.modelName}){requiresApiKey && !hasApiKey ? ' ⚠️ No API Key' : ''}
-                </option>
-              )
-            })}
-          </select>
-          {embeddingProfiles.length === 0 && (
-            <p className="mt-1 text-xs qt-text-warning">
-              No embedding profiles found. Create one in the Embedding Profiles tab.
-            </p>
-          )}
-        </div>
+        {/* Embedding profile is managed globally via Embedding Profiles — the default profile is always used */}
       </div>
     </SettingsCard>
   )

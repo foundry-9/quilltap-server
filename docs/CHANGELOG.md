@@ -76,6 +76,9 @@
 
 #### Fixed
 
+- **Memory search dimension mismatch fallback**: When the search embedding profile produces different dimensions than the stored vector index, `searchMemoriesSemantic` now detects the mismatch before calling vector search and falls back to text-based search instead of silently returning zero results
+- **Text search fallback broadened to per-word matching**: The text-based memory search fallback now searches for individual significant words (filtering stop words) when the full query phrase doesn't match, so multi-word queries like "nudism experiences girl dated before Tracey" find relevant memories even without exact substring matches
+- **Removed per-chat embedding profile override**: The `embeddingProfileId` field in `cheapLLMSettings` was removed — the system now always uses the single default embedding profile for all search operations, preventing mismatches between the profile used to build the vector index and the one used at search time
 - **Tasks Queue UI**: The paused-jobs count was never shown in the queue stats panel because the API response omitted the `paused` field — it is now included.
 - **Tasks Queue UI**: Jobs of type `SCENE_STATE_TRACKING`, `CHARACTER_AVATAR_GENERATION`, and `CONVERSATION_RENDER` appeared as raw type identifiers instead of human-readable names; they now display correctly.
 - **Tasks Queue UI**: Non-LLM background jobs (embedding generation, vocabulary refit, re-index, avatar generation, conversation render, and story background generation) were incorrectly contributing 500 estimated tokens each to the queue token estimate; they now correctly contribute 0.

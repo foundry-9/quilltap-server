@@ -46,7 +46,7 @@ export interface BuildMessageContextOptions {
   isMultiCharacter: boolean
   participantCharacters?: Map<string, Character>
   roleplayTemplate: { systemPrompt: string } | null
-  chatSettings: { cheapLLMSettings?: { embeddingProfileId?: string }; defaultTimestampConfig?: TimestampConfig | null; timezone?: string | null } | null
+  chatSettings: { cheapLLMSettings?: Record<string, unknown>; defaultTimestampConfig?: TimestampConfig | null; timezone?: string | null } | null
   toolInstructions?: string
   newUserMessage?: string
   isContinueMode: boolean
@@ -353,7 +353,7 @@ export async function buildMessageContext(
     existingMessages: conversationMessages,
     newUserMessage,
     roleplayTemplate,
-    embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
+    embeddingProfileId: undefined, // always use default embedding profile
     skipMemories: false,
     maxMemories: 10,
     minMemoryImportance: 0.3,

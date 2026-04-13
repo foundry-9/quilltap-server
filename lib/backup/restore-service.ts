@@ -762,7 +762,6 @@ function remapBackupData(
         ...remapped.cheapLLMSettings,
         ...(remapped.cheapLLMSettings.userDefinedProfileId ? { userDefinedProfileId: remapper.remap(remapped.cheapLLMSettings.userDefinedProfileId) } : {}),
         ...(remapped.cheapLLMSettings.defaultCheapProfileId ? { defaultCheapProfileId: remapper.remap(remapped.cheapLLMSettings.defaultCheapProfileId) } : {}),
-        ...(remapped.cheapLLMSettings.embeddingProfileId ? { embeddingProfileId: remapper.remap(remapped.cheapLLMSettings.embeddingProfileId) } : {}),
         ...(remapped.cheapLLMSettings.imagePromptProfileId ? { imagePromptProfileId: remapper.remap(remapped.cheapLLMSettings.imagePromptProfileId) } : {}),
       };
     }

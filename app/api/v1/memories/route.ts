@@ -506,11 +506,7 @@ async function handleHousekeep(
     userId: user.id,
   };
 
-  // Get embedding profile from chat settings
-  const chatSettings = await repos.chatSettings.findByUserId(user.id);
-  if (chatSettings?.cheapLLMSettings?.embeddingProfileId) {
-    options.embeddingProfileId = chatSettings.cheapLLMSettings.embeddingProfileId;
-  }
+  // Embedding profile is always the system default — no per-chat override
 
   // Run housekeeping (or preview if dryRun)
   const result = options.dryRun
@@ -577,11 +573,7 @@ async function handleHousekeepPreview(
     options.mergeSimilar = searchParams.get('mergeSimilar') === 'true';
   }
 
-  // Get embedding profile from chat settings
-  const chatSettings = await repos.chatSettings.findByUserId(user.id);
-  if (chatSettings?.cheapLLMSettings?.embeddingProfileId) {
-    options.embeddingProfileId = chatSettings.cheapLLMSettings.embeddingProfileId;
-  }
+  // Embedding profile is always the system default — no per-chat override
 
   const preview = await getHousekeepingPreview(characterId, options);
 

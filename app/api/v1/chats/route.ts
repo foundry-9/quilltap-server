@@ -456,11 +456,9 @@ async function autoGenerateFirstMessage(
   let projectContext: { name: string; description?: string | null; instructions?: string | null } | null = null;
 
   try {
-    const chatSettings = await repos.chatSettings.findByUserId(userId);
-    const embeddingProfileId = chatSettings?.cheapLLMSettings?.embeddingProfileId;const firstMessageContext = await buildFirstMessageContext(context.character.id, participants, {
+    const firstMessageContext = await buildFirstMessageContext(context.character.id, participants, {
       userId,
       projectId,
-      embeddingProfileId: embeddingProfileId ?? undefined,
     });
 
     participantMemories = firstMessageContext.participantMemories.map((m) => ({

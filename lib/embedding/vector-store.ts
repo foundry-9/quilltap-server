@@ -310,12 +310,13 @@ export class CharacterVectorStore implements ICharacterVectorStore {
     }
 
     // Validate query dimensions — log and return empty results instead of crashing.
-    // Mismatches can occur transiently when embeddings are mid-migration between formats.
+    // Mismatches typically mean the search embedding profile differs from the one
+    // used to build the index — the caller should fall back to text search.
     if (this.dimensions !== null && queryEmbedding.length !== this.dimensions) {
-      logger.debug('Query vector dimension mismatch, returning empty results', {
+      logger.warn('Query vector dimension mismatch — search embedding profile likely differs from index', {
         context: 'CharacterVectorStore.search',
         characterId: this.characterId,
-        expectedDimensions: this.dimensions,
+        storedDimensions: this.dimensions,
         queryDimensions: queryEmbedding.length,
       })
       return []
