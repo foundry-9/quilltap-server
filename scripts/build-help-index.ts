@@ -1,13 +1,17 @@
 #!/usr/bin/env tsx
 /**
- * Build Help Index Script
+ * Build Help Index Script (DEPRECATED)
+ *
+ * @deprecated As of v2.15.0, help documentation is embedded at runtime using the
+ * user's chosen embedding profile. Help docs are synced from disk to the database
+ * via lib/help/help-doc-sync.ts and embedded through the background job system.
+ * This script is retained for development/testing purposes only.
  *
  * Creates a gzipped MessagePack bundle of help documentation with embeddings.
  * Uses OpenAI's text-embedding-3-small model for generating embeddings.
  *
  * Usage:
  *   OPENAI_API_KEY=sk-xxx tsx scripts/build-help-index.ts
- *   OPENAI_API_KEY=sk-xxx npm run build:help
  *
  * Output:
  *   public/help-bundle.msgpack.gz (~3-4MB compressed)

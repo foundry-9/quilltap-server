@@ -171,6 +171,8 @@ import { createCharacterPluginDataTableMigration } from './create-character-plug
 import { addRenderedMarkdownFieldMigration } from './add-rendered-markdown-field';
 // Create conversation tables for Scriptorium (annotations + chunks)
 import { createConversationTablesMigration } from './create-conversation-tables';
+// Create help_docs table for runtime-embedded help documentation
+import { createHelpDocsTableMigration } from './create-help-docs-table';
 
 /**
  * All available migrations.
@@ -337,6 +339,8 @@ export const migrations: Migration[] = [
   addRenderedMarkdownFieldMigration,
   // Create conversation tables for Scriptorium (annotations + chunks)
   createConversationTablesMigration,
+  // Create help_docs table for runtime-embedded help documentation
+  createHelpDocsTableMigration,
 ];
 
 export {
@@ -488,5 +492,7 @@ export {
   addRenderedMarkdownFieldMigration,
   // Create conversation tables for Scriptorium (annotations + chunks)
   createConversationTablesMigration,
+  // Create help_docs table for runtime-embedded help documentation
+  createHelpDocsTableMigration,
 };
 

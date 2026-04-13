@@ -3,6 +3,10 @@
  * Validates provider-specific calls, fallbacks, and similarity helpers.
  */
 
+// Unmock the embedding service since jest.setup.ts mocks it globally,
+// but this test needs the real module to test its actual behavior.
+jest.unmock('@/lib/embedding/embedding-service')
+
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))

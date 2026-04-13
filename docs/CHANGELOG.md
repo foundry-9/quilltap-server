@@ -4,6 +4,11 @@
 
 ### 4.3-dev
 
+#### Removed
+
+- Pre-built help bundle (`public/help-bundle.msgpack.gz`) — help docs are now embedded at runtime
+- `build:help` npm script — no longer needed
+
 #### Tests
 
 - Added unit tests for conversation-render background job handler
@@ -16,6 +21,16 @@
 
 #### Added
 
+- **Unified Embedding Swap**: EMBEDDING_REINDEX_ALL now performs a full system-wide re-embed covering help documentation, character memories, and conversation chunks (Scriptorium)
+  - Help docs are synced from disk to a new `help_docs` database table and embedded at runtime using the user's chosen embedding profile — no more pre-built MessagePack bundle
+  - When switching embedding profiles, users are prompted to "Re-embed Everything" (not just memories)
+  - Help docs are embedded first (highest priority), followed by memories, then conversation chunks
+  - All progress is tracked via the existing "Emb" queue badge in the header
+  - BUILTIN TF-IDF vocabulary refit now includes help docs in the corpus for better coverage
+  - Conversation chunks now have full `embedding_status` tracking (PENDING/EMBEDDED/FAILED)
+  - New default profiles automatically trigger a full system reindex on creation
+  - New migration: `create-help-docs-table-v1` for the `help_docs` table
+- **Ollama Embedding Model Fetch**: "Fetch Installed Models" button in the embedding profile modal dynamically queries Ollama's `/api/tags` endpoint to show installed models in a dropdown, merging with static suggestions
 - **Scriptorium (Phase 3.1)**: Lexical rich text editor integration for chat composer
   - Replaced plain textarea in ChatComposer with Meta's Lexical rich text framework
   - Rich text formatting (bold, italic, headings, lists) via document mode toolbar now uses native Lexical commands

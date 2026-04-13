@@ -23,7 +23,7 @@ export type EmbeddingStatusValue = z.infer<typeof EmbeddingStatusEnum>;
 /**
  * Entity types that can be embedded
  */
-export const EmbeddableEntityTypeEnum = z.enum(['MEMORY', 'FILE']);
+export const EmbeddableEntityTypeEnum = z.enum(['MEMORY', 'FILE', 'HELP_DOC', 'CONVERSATION_CHUNK']);
 export type EmbeddableEntityType = z.infer<typeof EmbeddableEntityTypeEnum>;
 
 /**

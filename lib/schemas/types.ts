@@ -394,3 +394,15 @@ export type {
   EmbeddingStatus,
   EmbeddingStatusInput,
 } from './embedding-job.types';
+
+// ============================================================================
+// HELP DOC TYPES (runtime-embedded help documentation)
+// ============================================================================
+export {
+  HelpDocSchema,
+} from './help-doc.types';
+
+export type {
+  HelpDoc,
+  HelpDocInput,
+} from './help-doc.types';

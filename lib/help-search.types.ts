@@ -2,11 +2,12 @@
  * Help Search Types
  *
  * TypeScript interfaces for the help documentation search system.
- * Used by both the build script and runtime loader.
+ * Help docs are stored in the database and embedded at runtime
+ * using the user's chosen embedding profile.
  */
 
 /**
- * A single help document with its embedding
+ * A single help document (without embedding — embedding is managed separately)
  */
 export interface HelpDocument {
   /** Unique document ID (derived from filename) */
@@ -17,26 +18,16 @@ export interface HelpDocument {
   path: string
   /** URL route this help document is associated with */
   url: string
-  /** Full document content */
+  /** Full document content (frontmatter stripped) */
   content: string
-  /** Embedding vector */
-  embedding: number[]
 }
 
 /**
- * The complete help bundle structure
+ * A help document with its embedding vector (for search operations)
  */
-export interface HelpBundle {
-  /** Bundle format version */
-  version: string
-  /** ISO timestamp when bundle was generated */
-  generated: string
-  /** OpenAI embedding model used */
-  embeddingModel: string
-  /** Number of dimensions in each embedding vector */
-  embeddingDimensions: number
-  /** All help documents with their embeddings */
-  documents: HelpDocument[]
+export interface HelpDocumentWithEmbedding extends HelpDocument {
+  /** Embedding vector (Float32 array from DB) */
+  embedding: number[]
 }
 
 /**

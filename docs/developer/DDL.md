@@ -606,6 +606,39 @@ CREATE INDEX "idx_file_permissions_scope" ON "file_permissions" ("scope");
 CREATE INDEX "idx_file_permissions_userId" ON "file_permissions" ("userId");
 ```
 
+### help_docs
+
+Stores help documentation synced from the `help/` directory on disk. Unlike the old pre-built MessagePack bundle, help docs are now stored in the database and embedded at runtime using the user's chosen embedding profile, allowing the embedding model to be swapped system-wide. Introduced in v2.15.0 (migration: `create-help-docs-table-v1`).
+
+```sql
+CREATE TABLE "help_docs" (
+  "id" TEXT PRIMARY KEY,
+  "title" TEXT NOT NULL,
+  "path" TEXT NOT NULL UNIQUE,
+  "url" TEXT NOT NULL DEFAULT '',
+  "content" TEXT NOT NULL,
+  "contentHash" TEXT NOT NULL,
+  "embedding" BLOB,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
+CREATE INDEX "idx_help_docs_path" ON "help_docs" ("path");
+CREATE INDEX "idx_help_docs_url" ON "help_docs" ("url");
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| title | TEXT | Document title (from first H1 or filename) |
+| path | TEXT | Relative path to Markdown file (e.g., `help/aurora.md`). Unique constraint. |
+| url | TEXT | URL route this doc is associated with (e.g., `/aurora`, `/settings?tab=chat`) |
+| content | TEXT | Full document content with frontmatter stripped |
+| contentHash | TEXT | SHA-256 hash of raw file content, used for change detection during sync |
+| embedding | BLOB (nullable) | Float32 embedding vector, generated at runtime using user's embedding profile |
+| createdAt | TEXT (ISO 8601) | Creation timestamp |
+| updatedAt | TEXT (ISO 8601) | Last update timestamp |
+
 ### memories
 
 ```sql

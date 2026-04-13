@@ -93,6 +93,24 @@ export async function handleEmbeddingRefit(job: BackgroundJob): Promise<void> {
   // Prepare documents for TF-IDF fitting
   const documents = allMemories.map(m => `${m.summary}\n\n${m.content}`);
 
+  // Include help docs in the corpus for better vocabulary coverage
+  try {
+    const helpDocs = await repos.helpDocs.findAll();
+    for (const doc of helpDocs) {
+      documents.push(`${doc.title}\n\n${doc.content}`);
+    }
+    logger.debug('[EmbeddingRefit] Added help docs to corpus', {
+      context: 'handleEmbeddingRefit',
+      helpDocCount: helpDocs.length,
+      totalDocuments: documents.length,
+    });
+  } catch (error) {
+    logger.warn('[EmbeddingRefit] Failed to load help docs for corpus, continuing without them', {
+      context: 'handleEmbeddingRefit',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   // Get TF-IDF vectorizer
   const TfIdfVectorizer = await getTfIdfVectorizer();
   const vectorizer = new TfIdfVectorizer(true); // Include bigrams

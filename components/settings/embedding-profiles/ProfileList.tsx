@@ -9,6 +9,7 @@ import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { ProfileCard, ProfileCardBadge, ProfileCardMetadata } from '@/components/ui/ProfileCard'
 import { ProviderBadge } from './ProviderBadge'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
+import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { EmbeddingProfile } from './types'
 
 interface ProfileListProps {
@@ -64,9 +65,10 @@ export function ProfileList({
       if (!result.ok) {
         throw new Error(result.error || `Failed to trigger ${action}`)
       }
+      notifyQueueChange()
       setRefitSuccess(profile.provider === 'BUILTIN'
-        ? 'Vocabulary refit job queued. Check the Tasks Queue for progress.'
-        : 'Re-embedding job queued. Check the Tasks Queue for progress.'
+        ? 'Vocabulary refit job queued. Help docs, memories, and conversations will be re-embedded. Track progress via the Emb badge.'
+        : 'Re-embedding everything — help docs, memories, and conversations. Track progress via the Emb badge.'
       )
     })
   }
@@ -174,7 +176,7 @@ export function ProfileList({
           // Add refit/reindex button for default profiles
           if (profile.isDefault) {
             actions.push({
-              label: profile.provider === 'BUILTIN' ? 'Refit Vocabulary' : 'Re-embed All',
+              label: profile.provider === 'BUILTIN' ? 'Refit Vocabulary' : 'Re-embed Everything',
               onClick: () => handleRefit(profile),
               variant: 'secondary' as const,
             })

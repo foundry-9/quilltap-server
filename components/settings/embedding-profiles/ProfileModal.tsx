@@ -7,6 +7,7 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
+import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ApiKey, EmbeddingModel, EmbeddingProfile, EmbeddingProfileFormData } from './types'
 import type { EmbeddingProviderInfo } from './hooks/useEmbeddingProfiles'
 
@@ -39,6 +40,8 @@ export function ProfileModal({
   const [showReembedDialog, setShowReembedDialog] = useState(false)
   const [reembedProfileId, setReembedProfileId] = useState<string | null>(null)
   const [reembedLoading, setReembedLoading] = useState(false)
+  const [fetchedModels, setFetchedModels] = useState<EmbeddingModel[]>([])
+  const [fetchingModels, setFetchingModels] = useState(false)
 
   // Default to first available provider or 'BUILTIN'
   const defaultProvider = embeddingProviders[0]?.name || 'BUILTIN'
@@ -55,11 +58,12 @@ export function ProfileModal({
 
   const handleModelSelect = (modelId: string) => {
     form.setField('modelName', modelId)
-    // Auto-fill dimensions if we know them
-    const models = embeddingModels[form.formData.provider] || []
-    const model = models.find(m => m.id === modelId)
-    if (model) {
-      form.setField('dimensions', model.dimensions.toString())
+    // Auto-fill dimensions if we know them from static or fetched models
+    const staticModel = (embeddingModels[form.formData.provider] || []).find(m => m.id === modelId)
+    const fetchedModel = fetchedModels.find(m => m.id === modelId)
+    const dims = staticModel?.dimensions || fetchedModel?.dimensions
+    if (dims) {
+      form.setField('dimensions', dims.toString())
     }
   }
 
@@ -115,6 +119,7 @@ export function ProfileModal({
       await fetchJson(`/api/v1/embedding-profiles/${reembedProfileId}?action=reindex`, {
         method: 'POST',
       })
+      notifyQueueChange()
     } finally {
       setReembedLoading(false)
       setShowReembedDialog(false)
@@ -140,6 +145,28 @@ export function ProfileModal({
     form.setField('apiKeyId', '')
     form.setField('modelName', '')
     form.setField('dimensions', '')
+    setFetchedModels([])
+  }
+
+  const handleFetchModels = async () => {
+    setFetchingModels(true)
+    try {
+      const baseUrl = form.formData.baseUrl || undefined
+      const params = new URLSearchParams({
+        action: 'fetch-models',
+        provider: form.formData.provider,
+      })
+      if (baseUrl) params.set('baseUrl', baseUrl)
+
+      const result = await fetchJson<{ models: EmbeddingModel[] }>(
+        `/api/v1/embedding-profiles?${params.toString()}`
+      )
+      if (result.ok && result.data?.models) {
+        setFetchedModels(result.data.models)
+      }
+    } finally {
+      setFetchingModels(false)
+    }
   }
 
   // Get current provider info
@@ -153,7 +180,16 @@ export function ProfileModal({
   const needsApiKey = currentProviderInfo?.requiresApiKey ?? false
   const needsBaseUrl = currentProviderInfo?.requiresBaseUrl ?? false
 
-  const currentModels = embeddingModels[form.formData.provider] || []
+  const staticModels = embeddingModels[form.formData.provider] || []
+  // Merge fetched models with static models, preferring fetched (they're installed)
+  const currentModels = fetchedModels.length > 0
+    ? [
+        ...fetchedModels,
+        // Add static models not in the fetched list (as suggestions)
+        ...staticModels.filter(s => !fetchedModels.some(f => f.id === s.id)),
+      ]
+    : staticModels
+  const canFetchModels = needsBaseUrl // Ollama-style providers with a base URL
   // BUILTIN doesn't require a model name (it's auto-set)
   const isValid = form.formData.name.trim() && (isBuiltin || form.formData.modelName.trim())
 
@@ -268,9 +304,28 @@ export function ProfileModal({
             {/* Model Selection - not needed for BUILTIN */}
             {!isBuiltin && (
               <div>
-                <label className="qt-label mb-1">
-                  Model *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="qt-label">
+                    Model *
+                  </label>
+                  {canFetchModels && (
+                    <button
+                      type="button"
+                      onClick={handleFetchModels}
+                      disabled={fetchingModels}
+                      className="qt-button-ghost qt-button-sm"
+                    >
+                      {fetchingModels ? (
+                        <span className="flex items-center gap-1">
+                          <span className="qt-spinner-sm" />
+                          Fetching...
+                        </span>
+                      ) : (
+                        'Fetch Installed Models'
+                      )}
+                    </button>
+                  )}
+                </div>
                 {currentModels.length > 0 ? (
                   <div className="space-y-2">
                     <select
@@ -281,7 +336,7 @@ export function ProfileModal({
                       <option value="">Select a model...</option>
                       {currentModels.map(model => (
                         <option key={model.id} value={model.id}>
-                          {model.name} ({model.dimensions} dims)
+                          {model.name}{model.dimensions ? ` (${model.dimensions} dims)` : ''}
                         </option>
                       ))}
                     </select>
@@ -298,7 +353,7 @@ export function ProfileModal({
                     value={form.formData.modelName}
                     onChange={form.handleChange}
                     className="qt-input"
-                    placeholder="text-embedding-3-small"
+                    placeholder={canFetchModels ? 'nomic-embed-text' : 'text-embedding-3-small'}
                   />
                 )}
               </div>
@@ -344,7 +399,7 @@ export function ProfileModal({
     <BaseModal
       isOpen={showReembedDialog}
       onClose={handleReembedDecline}
-      title="Re-embed Memories?"
+      title="Re-embed Everything?"
       maxWidth="md"
       footer={
         <div className="flex gap-2 justify-end">
@@ -368,20 +423,22 @@ export function ProfileModal({
                 Queuing...
               </span>
             ) : (
-              'Re-embed All Memories'
+              'Re-embed Everything'
             )}
           </button>
         </div>
       }
     >
       <p className="text-foreground">
-        You&apos;ve switched the default embedding profile. Existing memories were
-        embedded with a different model and may not search correctly until they
-        are re-embedded with the new profile.
+        You&apos;ve switched the default embedding profile. All existing
+        embeddings were created with a different model and need to be
+        regenerated — this includes help documentation, character memories,
+        and conversation history.
       </p>
       <p className="mt-3 qt-text-secondary qt-text-small">
-        This will queue a background job to re-embed all character memories.
-        You can monitor progress in the Tasks Queue under Data &amp; System settings.
+        Help documentation will be embedded first, followed by character
+        memories and conversation history. You can track progress via the
+        Emb badge in the header.
       </p>
     </BaseModal>
     </>

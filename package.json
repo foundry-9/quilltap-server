@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.3.0-dev.16",
+  "version": "4.3.0-dev.18",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -19,7 +19,6 @@
   "scripts": {
     "build": "npm run build:next",
     "build:docker": "tsx scripts/build-push-docker.ts",
-    "build:help": "tsx scripts/build-help-index.ts",
     "build:next": "npm run build:plugins && next build",
     "build:package": "tsx scripts/build-quilltap-package.ts",
     "build:standalone": "tsx scripts/build-standalone-tarball.ts",

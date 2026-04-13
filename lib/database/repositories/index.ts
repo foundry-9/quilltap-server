@@ -40,6 +40,7 @@ export { OutfitPresetsRepository } from './outfit-presets.repository';
 export { CharacterPluginDataRepository } from './character-plugin-data.repository';
 export { ConversationAnnotationsRepository } from './conversation-annotations.repository';
 export { ConversationChunksRepository } from './conversation-chunks.repository';
+export { HelpDocsRepository } from './help-docs.repository';
 
 // Import all repository classes for container
 import { BackgroundJobsRepository } from './background-jobs.repository';
@@ -69,6 +70,7 @@ import { OutfitPresetsRepository } from './outfit-presets.repository';
 import { CharacterPluginDataRepository } from './character-plugin-data.repository';
 import { ConversationAnnotationsRepository } from './conversation-annotations.repository';
 import { ConversationChunksRepository } from './conversation-chunks.repository';
+import { HelpDocsRepository } from './help-docs.repository';
 
 /**
  * Container interface for all repository instances.
@@ -103,6 +105,7 @@ export interface RepositoryContainer {
   characterPluginData: CharacterPluginDataRepository;
   conversationAnnotations: ConversationAnnotationsRepository;
   conversationChunks: ConversationChunksRepository;
+  helpDocs: HelpDocsRepository;
 }
 
 /**
@@ -149,6 +152,7 @@ export function createRepositories(): RepositoryContainer {
       characterPluginData: new CharacterPluginDataRepository(),
       conversationAnnotations: new ConversationAnnotationsRepository(),
       conversationChunks: new ConversationChunksRepository(),
+      helpDocs: new HelpDocsRepository(),
     };
     return repositories;
   } catch (error) {

@@ -314,6 +314,42 @@ jest.mock('@/lib/file-storage/manager', () => {
   }
 })
 
+// Mock embedding service — required here because SWC's import hoisting prevents
+// test-level jest.mock from taking effect before ES imports resolve.
+// Tests that need the REAL embedding service (e.g. embedding-service.test.ts)
+// should use jest.unmock('@/lib/embedding/embedding-service') at the top.
+jest.mock('@/lib/embedding/embedding-service', () => ({
+  generateEmbeddingForUser: jest.fn().mockResolvedValue({
+    embedding: [0.1, 0.2, 0.3],
+    model: 'test-model',
+    dimensions: 3,
+    provider: 'TEST',
+  }),
+  extractSearchTerms: jest.fn((query: string) => {
+    const words = query.toLowerCase().split(/\s+/).filter((w: string) => w.length > 2)
+    return { terms: words, phrases: [] }
+  }),
+  textSimilarity: jest.fn().mockReturnValue(0.5),
+  cosineSimilarity: jest.fn((a: number[], b: number[]) => {
+    let sum = 0
+    for (let i = 0; i < a.length && i < b.length; i++) {
+      sum += a[i] * b[i]
+    }
+    return sum
+  }),
+  isEmbeddingAvailable: jest.fn().mockResolvedValue(false),
+  EmbeddingError: class EmbeddingError extends Error {
+    constructor(message: string, public code: string = 'EMBEDDING_ERROR') {
+      super(message)
+      this.name = 'EmbeddingError'
+    }
+  },
+  generateEmbedding: jest.fn(),
+  getDefaultEmbeddingProfile: jest.fn().mockResolvedValue(null),
+  getEmbeddingProfile: jest.fn().mockResolvedValue(null),
+  getUserEmbeddingProfiles: jest.fn().mockResolvedValue([]),
+}))
+
 // Mock vector store for embedding operations
 jest.mock('@/lib/embedding/vector-store', () => ({
   getVectorStoreManager: jest.fn().mockReturnValue({

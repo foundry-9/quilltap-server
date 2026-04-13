@@ -20,6 +20,10 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
   const repos = getRepositories();
 
   // Route to entity-specific handler
+  if (payload.entityType === 'HELP_DOC') {
+    return handleHelpDocEmbedding(job, payload, repos);
+  }
+
   if (payload.entityType === 'CONVERSATION_CHUNK') {
     return handleConversationChunkEmbedding(job, payload, repos);
   }
@@ -141,6 +145,12 @@ async function handleConversationChunkEmbedding(
     // Store embedding directly on the chunk (same Float32 BLOB format as memories)
     await repos.conversationChunks.updateEmbedding(chunk.id, embeddingResult.embedding);
 
+    await repos.embeddingStatus.markAsEmbedded(
+      'CONVERSATION_CHUNK',
+      payload.entityId,
+      payload.profileId
+    );
+
     logger.info('[EmbeddingGenerate] Conversation chunk embedding generated', {
       context: 'handleEmbeddingGenerate',
       jobId: job.id,
@@ -152,11 +162,88 @@ async function handleConversationChunkEmbedding(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
+    await repos.embeddingStatus.markAsFailed(
+      'CONVERSATION_CHUNK',
+      payload.entityId,
+      payload.profileId,
+      errorMessage
+    );
+
     logger.error('[EmbeddingGenerate] Failed to generate conversation chunk embedding', {
       context: 'handleEmbeddingGenerate',
       jobId: job.id,
       chunkId: payload.entityId,
       chatId: payload.chatId,
+      error: errorMessage,
+    });
+
+    throw error;
+  }
+}
+
+/**
+ * Handle embedding generation for a help document.
+ * Uses the same embedding infrastructure as memories but stores
+ * the embedding directly on the help doc row (Float32 BLOB, same format).
+ */
+async function handleHelpDocEmbedding(
+  job: BackgroundJob,
+  payload: EmbeddingGeneratePayload,
+  repos: ReturnType<typeof getRepositories>
+): Promise<void> {
+  const doc = await repos.helpDocs.findById(payload.entityId);
+  if (!doc) {
+    logger.warn('[EmbeddingGenerate] Help doc not found', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      docId: payload.entityId,
+    });
+    await repos.embeddingStatus.markAsFailed(
+      'HELP_DOC',
+      payload.entityId,
+      payload.profileId,
+      'Help doc not found'
+    );
+    return;
+  }
+
+  try {
+    const textToEmbed = `${doc.title}\n\n${doc.content}`;
+    const embeddingResult = await generateEmbeddingForUser(
+      textToEmbed,
+      job.userId,
+      payload.profileId
+    );
+
+    await repos.helpDocs.updateEmbedding(doc.id, embeddingResult.embedding);
+
+    await repos.embeddingStatus.markAsEmbedded(
+      'HELP_DOC',
+      payload.entityId,
+      payload.profileId
+    );
+
+    logger.info('[EmbeddingGenerate] Help doc embedding generated', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      docId: doc.id,
+      title: doc.title,
+      dimensions: embeddingResult.dimensions,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    await repos.embeddingStatus.markAsFailed(
+      'HELP_DOC',
+      payload.entityId,
+      payload.profileId,
+      errorMessage
+    );
+
+    logger.error('[EmbeddingGenerate] Failed to generate help doc embedding', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      docId: payload.entityId,
       error: errorMessage,
     });
 

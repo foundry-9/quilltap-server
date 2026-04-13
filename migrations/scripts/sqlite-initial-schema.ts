@@ -160,6 +160,25 @@ export const SQLITE_TABLES = [
       `CREATE INDEX IF NOT EXISTS "idx_conversation_chunks_chatId" ON "conversation_chunks"("chatId")`,
     ],
   },
+  // Help docs (runtime-embedded help documentation)
+  {
+    name: 'help_docs',
+    sql: `CREATE TABLE IF NOT EXISTS "help_docs" (
+      "id" TEXT PRIMARY KEY,
+      "title" TEXT NOT NULL,
+      "path" TEXT NOT NULL UNIQUE,
+      "url" TEXT NOT NULL DEFAULT '',
+      "content" TEXT NOT NULL,
+      "contentHash" TEXT NOT NULL,
+      "embedding" BLOB,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_help_docs_path" ON "help_docs"("path")`,
+      `CREATE INDEX IF NOT EXISTS "idx_help_docs_url" ON "help_docs"("url")`,
+    ],
+  },
   // Chat messages - normalized table (one row per message)
   // MongoDB stores as { chatId, messages: [...] } but SQLite normalizes to individual rows
   {
