@@ -4,13 +4,6 @@
 
 ### 4.3-dev
 
-#### Fixed
-
-- **Tasks Queue UI**: The paused-jobs count was never shown in the queue stats panel because the API response omitted the `paused` field — it is now included.
-- **Tasks Queue UI**: Jobs of type `SCENE_STATE_TRACKING`, `CHARACTER_AVATAR_GENERATION`, and `CONVERSATION_RENDER` appeared as raw type identifiers instead of human-readable names; they now display correctly.
-- **Tasks Queue UI**: Non-LLM background jobs (embedding generation, vocabulary refit, re-index, avatar generation, conversation render, and story background generation) were incorrectly contributing 500 estimated tokens each to the queue token estimate; they now correctly contribute 0.
-- **Tasks Queue UI**: The `ProcessorStatus` type now includes `embeddingInFlight` and `embeddingConcurrency` to match what the API actually returns.
-
 #### Removed
 
 - Pre-built help bundle (`public/help-bundle.msgpack.gz`) — help docs are now embedded at runtime
@@ -83,6 +76,10 @@
 
 #### Fixed
 
+- **Tasks Queue UI**: The paused-jobs count was never shown in the queue stats panel because the API response omitted the `paused` field — it is now included.
+- **Tasks Queue UI**: Jobs of type `SCENE_STATE_TRACKING`, `CHARACTER_AVATAR_GENERATION`, and `CONVERSATION_RENDER` appeared as raw type identifiers instead of human-readable names; they now display correctly.
+- **Tasks Queue UI**: Non-LLM background jobs (embedding generation, vocabulary refit, re-index, avatar generation, conversation render, and story background generation) were incorrectly contributing 500 estimated tokens each to the queue token estimate; they now correctly contribute 0.
+- **Tasks Queue UI**: The `ProcessorStatus` type now includes `embeddingInFlight` and `embeddingConcurrency` to match what the API actually returns.
 - **Embedding model swap dimension mismatch**: Full re-embed (EMBEDDING_REINDEX_ALL) now clears each character's vector index before enqueuing new jobs, so switching to a model with different dimensions (e.g. 1536 → 4096) no longer fails every job with "Vector dimension mismatch"
 - **Stale embedding jobs on re-embed**: Re-embed now cancels all pending/failed/orphaned EMBEDDING_GENERATE jobs from the previous run before enqueuing fresh ones, preventing zombie jobs from competing for processor slots
 - **Slow re-embed enqueue**: Reindex handler now batch-inserts all embedding jobs in chunks of 200 (single SQLite transactions) instead of 3 sequential DB calls per entity — enqueue phase drops from minutes to seconds for large instances
