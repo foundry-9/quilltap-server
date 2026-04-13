@@ -1,7 +1,9 @@
 /**
  * Background Job Processor
  *
- * Processes queued background jobs one at a time using setInterval polling.
+ * Processes queued background jobs using setInterval polling.
+ * Most job types run one at a time; EMBEDDING_GENERATE jobs run with
+ * configurable concurrency to saturate local embedding providers.
  * Jobs are claimed atomically from the database and executed by type-specific handlers.
  */
 
@@ -19,7 +21,7 @@ let isProcessing = false;
 /** Default polling interval in ms */
 const DEFAULT_POLL_INTERVAL = 2000;
 
-/** Rate limit delay between job completions in ms */
+/** Rate limit delay between job completions in ms (for non-embedding jobs) */
 const RATE_LIMIT_DELAY = 500;
 
 /** Per-job execution timeout in ms (3 minutes) */
@@ -28,8 +30,23 @@ const JOB_EXECUTION_TIMEOUT_MS = 3 * 60 * 1000;
 /** How often to check for stuck PROCESSING jobs (5 minutes) */
 const STUCK_JOB_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
+/**
+ * Maximum number of EMBEDDING_GENERATE jobs that may execute concurrently.
+ * Matches a reasonable OLLAMA_NUM_PARALLEL value.
+ */
+const EMBEDDING_CONCURRENCY = 8;
+
+/** Small delay between claiming successive embedding jobs (ms) */
+const EMBEDDING_CLAIM_DELAY = 50;
+
 /** Stuck job recovery timer */
 let stuckJobCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+/** Number of embedding jobs currently in-flight */
+let embeddingInFlight = 0;
+
+/** Job types eligible for concurrent processing */
+const CONCURRENT_JOB_TYPES = new Set(['EMBEDDING_GENERATE']);
 
 /**
  * Start the job processor
@@ -49,7 +66,7 @@ export function startProcessor(intervalMs: number = DEFAULT_POLL_INTERVAL): void
     });
   }, intervalMs);
 
-  logger.info('[JobQueue] Processor started', { intervalMs });
+  logger.info('[JobQueue] Processor started', { intervalMs, embeddingConcurrency: EMBEDDING_CONCURRENCY });
 
   // Reset any stuck jobs on startup
   resetStuckJobs().catch((error) => {
@@ -94,11 +111,47 @@ export function isProcessorRunning(): boolean {
 }
 
 /**
+ * Execute a single job with timeout, mark it completed or failed.
+ * Returns true if the job succeeded, false on failure.
+ */
+async function executeJob(job: BackgroundJob): Promise<boolean> {
+  const repos = getRepositories();
+
+  try {
+    const handler = getHandler(job.type);
+    await Promise.race([
+      handler(job),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Job execution timed out after ${JOB_EXECUTION_TIMEOUT_MS / 1000}s`)), JOB_EXECUTION_TIMEOUT_MS)
+      ),
+    ]);
+
+    await repos.backgroundJobs.markCompleted(job.id);
+    logger.info('[JobQueue] Job completed successfully', {
+      jobId: job.id,
+      type: job.type,
+    });
+    return true;
+  } catch (error) {
+    const errorMessage = getErrorMessage(error);
+    await repos.backgroundJobs.markFailed(job.id, errorMessage);
+
+    logger.warn('[JobQueue] Job failed', {
+      jobId: job.id,
+      type: job.type,
+      attempts: job.attempts,
+      error: errorMessage,
+    });
+    return false;
+  }
+}
+
+/**
  * Process the next available job
  * Returns true if a job was processed, false if no jobs were available
  */
 export async function processNextJob(): Promise<boolean> {
-  // Prevent concurrent processing
+  // Prevent concurrent entry for non-embedding work
   if (isProcessing) {
     return false;
   }
@@ -110,8 +163,8 @@ export async function processNextJob(): Promise<boolean> {
     const job = await repos.backgroundJobs.claimNextJob();
 
     if (!job) {
-      // Auto-stop when queue is empty
-      if (processorRunning) {
+      // Auto-stop when queue is empty and no embedding jobs are in-flight
+      if (processorRunning && embeddingInFlight === 0) {
         stopProcessor();
         logger.info('[JobQueue] Processor auto-stopped - queue is empty');
       }
@@ -124,40 +177,70 @@ export async function processNextJob(): Promise<boolean> {
       attempts: job.attempts,
     });
 
-    try {
-      const handler = getHandler(job.type);
-      await Promise.race([
-        handler(job),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Job execution timed out after ${JOB_EXECUTION_TIMEOUT_MS / 1000}s`)), JOB_EXECUTION_TIMEOUT_MS)
-        ),
-      ]);
-
-      await repos.backgroundJobs.markCompleted(job.id);
-      logger.info('[JobQueue] Job completed successfully', {
-        jobId: job.id,
-        type: job.type,
-      });
-
-      // Rate limit delay to avoid overwhelming LLM providers
-      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY));
-
+    // Concurrent path for embedding jobs
+    if (CONCURRENT_JOB_TYPES.has(job.type)) {
+      runEmbeddingJob(job);
+      // After dispatching, try to fill remaining concurrency slots immediately
+      await fillEmbeddingSlots();
       return true;
-    } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      await repos.backgroundJobs.markFailed(job.id, errorMessage);
-
-      logger.warn('[JobQueue] Job failed', {
-        jobId: job.id,
-        type: job.type,
-        attempts: job.attempts,
-        error: errorMessage,
-      });
-
-      return true; // Job was processed (even though it failed)
     }
+
+    // Sequential path for everything else
+    await executeJob(job);
+
+    // Rate limit delay to avoid overwhelming LLM providers
+    await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY));
+
+    return true;
   } finally {
     isProcessing = false;
+  }
+}
+
+/**
+ * Fire an embedding job without awaiting it.
+ * Tracks in-flight count so we respect the concurrency limit.
+ */
+function runEmbeddingJob(job: BackgroundJob): void {
+  embeddingInFlight++;
+  logger.debug('[JobQueue] Embedding job dispatched', {
+    jobId: job.id,
+    inFlight: embeddingInFlight,
+    max: EMBEDDING_CONCURRENCY,
+  });
+
+  executeJob(job).finally(() => {
+    embeddingInFlight--;
+  });
+}
+
+/**
+ * Claim and dispatch embedding jobs until concurrency slots are full
+ * or no more embedding jobs are available.
+ */
+async function fillEmbeddingSlots(): Promise<void> {
+  const repos = getRepositories();
+
+  while (embeddingInFlight < EMBEDDING_CONCURRENCY) {
+    const job = await repos.backgroundJobs.claimNextJob();
+    if (!job) break;
+
+    logger.info('[JobQueue] Processing job', {
+      jobId: job.id,
+      type: job.type,
+      attempts: job.attempts,
+    });
+
+    if (CONCURRENT_JOB_TYPES.has(job.type)) {
+      runEmbeddingJob(job);
+      // Small delay between claims to avoid hammering the DB
+      await new Promise((resolve) => setTimeout(resolve, EMBEDDING_CLAIM_DELAY));
+    } else {
+      // Hit a non-embedding job — run it sequentially then stop filling
+      await executeJob(job);
+      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY));
+      break;
+    }
   }
 }
 
@@ -225,9 +308,13 @@ export function ensureProcessorRunning(): void {
 export function getProcessorStatus(): {
   running: boolean;
   processing: boolean;
+  embeddingInFlight: number;
+  embeddingConcurrency: number;
 } {
   return {
     running: processorRunning,
     processing: isProcessing,
+    embeddingInFlight,
+    embeddingConcurrency: EMBEDDING_CONCURRENCY,
   };
 }

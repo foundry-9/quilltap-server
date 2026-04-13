@@ -4,6 +4,15 @@
 
 ### 4.3-dev
 
+#### Fixed
+
+- **Embedding model swap dimension mismatch**: Full re-embed (EMBEDDING_REINDEX_ALL) now clears each character's vector index before enqueuing new jobs, so switching to a model with different dimensions (e.g. 1536 → 4096) no longer fails every job with "Vector dimension mismatch"
+- **Stale embedding jobs on re-embed**: Re-embed now cancels all pending/failed EMBEDDING_GENERATE jobs from the previous run before enqueuing fresh ones, preventing zombie jobs from competing for processor slots
+
+#### Changed
+
+- **Concurrent embedding processing**: EMBEDDING_GENERATE jobs now run up to 8 at a time in the background job processor, while all other job types remain single-threaded — significantly faster bulk re-embeds, especially with local providers like Ollama
+
 #### Removed
 
 - Pre-built help bundle (`public/help-bundle.msgpack.gz`) — help docs are now embedded at runtime

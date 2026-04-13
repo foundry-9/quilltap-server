@@ -514,6 +514,46 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
+   * Cancel all pending/failed jobs of a given type.
+   * Used during re-embed to clear stale EMBEDDING_GENERATE jobs before
+   * enqueuing fresh ones.
+   */
+  async cancelByType(type: BackgroundJobType): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
+        const result = await collection.updateMany(
+          {
+            type,
+            status: { $in: ['PENDING', 'FAILED'] },
+          } as TypedQueryFilter<BackgroundJob>,
+          {
+            $set: {
+              status: 'DEAD',
+              lastError: 'Superseded by new reindex',
+              updatedAt: now,
+            },
+          } as any
+        );
+
+        if (result.modifiedCount > 0) {
+          logger.info('Cancelled background jobs by type', {
+            context: 'BackgroundJobsRepository.cancelByType',
+            type,
+            cancelledCount: result.modifiedCount,
+          });
+        }
+
+        return result.modifiedCount;
+      },
+      'Error cancelling background jobs by type',
+      { type },
+      0
+    );
+  }
+
+  /**
    * Pause a pending or failed job
    */
   async pause(id: string): Promise<BackgroundJob | null> {

@@ -19,6 +19,7 @@ import { logger } from '@/lib/logger';
 import type { EmbeddingReindexAllPayload } from '../queue-service';
 import { enqueueEmbeddingGenerate } from '../queue-service';
 import { syncHelpDocs } from '@/lib/help/help-doc-sync';
+import { getVectorStoreManager } from '@/lib/embedding/vector-store';
 
 /**
  * Handle an embedding reindex all job — full system-wide re-embedding
@@ -37,6 +38,16 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   const profile = await repos.embeddingProfiles.findById(payload.profileId);
   if (!profile) {
     throw new Error(`Embedding profile not found: ${payload.profileId}`);
+  }
+
+  // Cancel any stale EMBEDDING_GENERATE jobs from a previous run so they
+  // don't compete with the fresh ones we're about to enqueue.
+  const cancelledCount = await repos.backgroundJobs.cancelByType('EMBEDDING_GENERATE');
+  if (cancelledCount > 0) {
+    logger.info('[EmbeddingReindexAll] Cancelled stale embedding jobs', {
+      context: 'handleEmbeddingReindexAll',
+      cancelledCount,
+    });
   }
 
   // Mark all existing statuses as PENDING
@@ -103,6 +114,19 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   // Phase 2: Character memories
   // ============================================================================
   const characters = await repos.characters.findByUserId(job.userId);
+  const vectorStoreManager = getVectorStoreManager();
+
+  // Clear all character vector indices (entries + meta) so the dimension
+  // constraint resets.  Without this, switching to an embedding model with
+  // a different vector size (e.g. 1536 → 4096) will fail every job with
+  // "Vector dimension mismatch".
+  for (const character of characters) {
+    await vectorStoreManager.deleteStore(character.id);
+    logger.debug('[EmbeddingReindexAll] Cleared vector index for character', {
+      context: 'handleEmbeddingReindexAll',
+      characterId: character.id,
+    });
+  }
 
   for (const character of characters) {
     const characterMemories = await repos.memories.findByCharacterId(character.id);
