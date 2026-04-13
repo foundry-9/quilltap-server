@@ -11,7 +11,7 @@
 
 #### Changed
 
-- **Concurrent embedding processing**: EMBEDDING_GENERATE jobs now run up to 8 at a time in the background job processor, while all other job types remain single-threaded — significantly faster bulk re-embeds, especially with local providers like Ollama
+- **Concurrent embedding processing**: EMBEDDING_GENERATE jobs now run up to 4 at a time in the background job processor (with a 10-minute per-job timeout), while all other job types remain single-threaded — significantly faster bulk re-embeds, especially with local providers like Ollama
 
 #### Removed
 

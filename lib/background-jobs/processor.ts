@@ -27,14 +27,18 @@ const RATE_LIMIT_DELAY = 500;
 /** Per-job execution timeout in ms (3 minutes) */
 const JOB_EXECUTION_TIMEOUT_MS = 3 * 60 * 1000;
 
+/** Per-job execution timeout for embedding jobs in ms (10 minutes).
+ *  Local providers like Ollama can be slow under concurrent load. */
+const EMBEDDING_TIMEOUT_MS = 10 * 60 * 1000;
+
 /** How often to check for stuck PROCESSING jobs (5 minutes) */
 const STUCK_JOB_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
  * Maximum number of EMBEDDING_GENERATE jobs that may execute concurrently.
- * Matches a reasonable OLLAMA_NUM_PARALLEL value.
+ * Kept moderate to avoid overwhelming local providers like Ollama.
  */
-const EMBEDDING_CONCURRENCY = 8;
+const EMBEDDING_CONCURRENCY = 4;
 
 /** Small delay between claiming successive embedding jobs (ms) */
 const EMBEDDING_CLAIM_DELAY = 50;
@@ -116,13 +120,14 @@ export function isProcessorRunning(): boolean {
  */
 async function executeJob(job: BackgroundJob): Promise<boolean> {
   const repos = getRepositories();
+  const timeoutMs = CONCURRENT_JOB_TYPES.has(job.type) ? EMBEDDING_TIMEOUT_MS : JOB_EXECUTION_TIMEOUT_MS;
 
   try {
     const handler = getHandler(job.type);
     await Promise.race([
       handler(job),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Job execution timed out after ${JOB_EXECUTION_TIMEOUT_MS / 1000}s`)), JOB_EXECUTION_TIMEOUT_MS)
+        setTimeout(() => reject(new Error(`Job execution timed out after ${timeoutMs / 1000}s`)), timeoutMs)
       ),
     ]);
 
