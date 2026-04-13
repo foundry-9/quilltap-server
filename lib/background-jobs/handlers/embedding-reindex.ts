@@ -17,9 +17,35 @@ import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import type { EmbeddingReindexAllPayload } from '../queue-service';
-import { enqueueEmbeddingGenerate } from '../queue-service';
+import { ensureProcessorRunning } from '../processor';
 import { syncHelpDocs } from '@/lib/help/help-doc-sync';
 import { getVectorStoreManager } from '@/lib/embedding/vector-store';
+
+/** Max jobs per batch insert (SQLite variable limit is 999; stay well under). */
+const BATCH_SIZE = 200;
+
+/**
+ * Build a raw job record ready for batch insert.
+ */
+function buildJobRecord(
+  userId: string,
+  payload: Record<string, unknown>,
+): Omit<BackgroundJob, 'id' | 'createdAt' | 'updatedAt'> {
+  const now = new Date().toISOString();
+  return {
+    userId,
+    type: 'EMBEDDING_GENERATE',
+    status: 'PENDING',
+    payload,
+    priority: 0,
+    attempts: 0,
+    maxAttempts: 3,
+    lastError: null,
+    scheduledAt: now,
+    startedAt: null,
+    completedAt: null,
+  };
+}
 
 /**
  * Handle an embedding reindex all job — full system-wide re-embedding
@@ -57,6 +83,8 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     markedCount,
   });
 
+  // Collect all job records, then batch-insert them at the end.
+  const jobRecords: Omit<BackgroundJob, 'id' | 'createdAt' | 'updatedAt'>[] = [];
   let helpDocCount = 0;
   let memoryCount = 0;
   let chunkCount = 0;
@@ -82,24 +110,11 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     await repos.helpDocs.clearAllEmbeddings();
 
     for (const doc of allHelpDocs) {
-      await repos.embeddingStatus.upsertByEntity(
-        'HELP_DOC',
-        doc.id,
-        payload.profileId,
-        {
-          userId: job.userId,
-          status: 'PENDING',
-          embeddedAt: null,
-          error: null,
-        }
-      );
-
-      await enqueueEmbeddingGenerate(job.userId, {
+      jobRecords.push(buildJobRecord(job.userId, {
         entityType: 'HELP_DOC',
         entityId: doc.id,
         profileId: payload.profileId,
-      });
-
+      }));
       helpDocCount++;
     }
   } catch (error) {
@@ -132,25 +147,12 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     const characterMemories = await repos.memories.findByCharacterId(character.id);
 
     for (const memory of characterMemories) {
-      await repos.embeddingStatus.upsertByEntity(
-        'MEMORY',
-        memory.id,
-        payload.profileId,
-        {
-          userId: job.userId,
-          status: 'PENDING',
-          embeddedAt: null,
-          error: null,
-        }
-      );
-
-      await enqueueEmbeddingGenerate(job.userId, {
+      jobRecords.push(buildJobRecord(job.userId, {
         entityType: 'MEMORY',
         entityId: memory.id,
         characterId: memory.characterId,
         profileId: payload.profileId,
-      });
-
+      }));
       memoryCount++;
     }
   }
@@ -165,25 +167,12 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
       const chunks = await repos.conversationChunks.findByChatId(chat.id);
 
       for (const chunk of chunks) {
-        await repos.embeddingStatus.upsertByEntity(
-          'CONVERSATION_CHUNK',
-          chunk.id,
-          payload.profileId,
-          {
-            userId: job.userId,
-            status: 'PENDING',
-            embeddedAt: null,
-            error: null,
-          }
-        );
-
-        await enqueueEmbeddingGenerate(job.userId, {
+        jobRecords.push(buildJobRecord(job.userId, {
           entityType: 'CONVERSATION_CHUNK',
           entityId: chunk.id,
           chatId: chat.id,
           profileId: payload.profileId,
-        });
-
+        }));
         chunkCount++;
       }
     }
@@ -194,6 +183,29 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     });
   }
 
+  // ============================================================================
+  // Batch insert all jobs
+  // ============================================================================
+  const totalJobs = jobRecords.length;
+  let inserted = 0;
+
+  for (let i = 0; i < totalJobs; i += BATCH_SIZE) {
+    const batch = jobRecords.slice(i, i + BATCH_SIZE);
+    await repos.backgroundJobs.createBatch(batch);
+    inserted += batch.length;
+
+    if (inserted % 1000 === 0 || inserted === totalJobs) {
+      logger.debug('[EmbeddingReindexAll] Batch insert progress', {
+        context: 'handleEmbeddingReindexAll',
+        inserted,
+        total: totalJobs,
+      });
+    }
+  }
+
+  // Start the processor now that all jobs are enqueued
+  ensureProcessorRunning();
+
   logger.info('[EmbeddingReindexAll] Full system reindex jobs enqueued', {
     context: 'handleEmbeddingReindexAll',
     jobId: job.id,
@@ -201,6 +213,6 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     helpDocCount,
     memoryCount,
     chunkCount,
-    totalEnqueued: helpDocCount + memoryCount + chunkCount,
+    totalEnqueued: totalJobs,
   });
 }

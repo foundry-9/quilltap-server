@@ -4,15 +4,6 @@
 
 ### 4.3-dev
 
-#### Fixed
-
-- **Embedding model swap dimension mismatch**: Full re-embed (EMBEDDING_REINDEX_ALL) now clears each character's vector index before enqueuing new jobs, so switching to a model with different dimensions (e.g. 1536 → 4096) no longer fails every job with "Vector dimension mismatch"
-- **Stale embedding jobs on re-embed**: Re-embed now cancels all pending/failed EMBEDDING_GENERATE jobs from the previous run before enqueuing fresh ones, preventing zombie jobs from competing for processor slots
-
-#### Changed
-
-- **Concurrent embedding processing**: EMBEDDING_GENERATE jobs now run up to 4 at a time in the background job processor (with a 10-minute per-job timeout), while all other job types remain single-threaded — significantly faster bulk re-embeds, especially with local providers like Ollama
-
 #### Removed
 
 - Pre-built help bundle (`public/help-bundle.msgpack.gz`) — help docs are now embedded at runtime
@@ -77,6 +68,7 @@
 
 #### Changed
 
+- **Concurrent embedding processing**: EMBEDDING_GENERATE jobs now run up to 4 at a time in the background job processor (with a 10-minute per-job timeout), while all other job types remain single-threaded — significantly faster bulk re-embeds, especially with local providers like Ollama
 - perf: Consolidated health-check polling from `InstanceLockGate` and `VersionGuardGate` into a shared `useHealthCheck` hook — eliminates ~24 requests/minute of continuous `/api/health` polling during normal operation (now fires once on mount and only polls when a 409 is detected)
 - **Queue Status Badges**: Added "Emb" (embedding) badge showing active embedding jobs. Expanded "Sum" to cover all post-turn processing (context summaries, title updates, scene state tracking, conversation rendering). Added character avatar generation to "Img" badge (renamed from "BG"). Badge order: Mem|Emb|Sum|Dgr|Img.
 - **Scriptorium Status Auto-Update**: Scriptorium badge on conversation cards now polls every 5 seconds after a render is triggered, showing real-time status transitions (red → amber → green) as rendering and embedding complete.
@@ -84,6 +76,9 @@
 
 #### Fixed
 
+- **Embedding model swap dimension mismatch**: Full re-embed (EMBEDDING_REINDEX_ALL) now clears each character's vector index before enqueuing new jobs, so switching to a model with different dimensions (e.g. 1536 → 4096) no longer fails every job with "Vector dimension mismatch"
+- **Stale embedding jobs on re-embed**: Re-embed now cancels all pending/failed/orphaned EMBEDDING_GENERATE jobs from the previous run before enqueuing fresh ones, preventing zombie jobs from competing for processor slots
+- **Slow re-embed enqueue**: Reindex handler now batch-inserts all embedding jobs in chunks of 200 (single SQLite transactions) instead of 3 sequential DB calls per entity — enqueue phase drops from minutes to seconds for large instances
 - **Embedding BLOB Registration**: Fixed race condition where memory embeddings could be stored as JSON text instead of Float32 BLOBs, causing dimension mismatches during vector search. BLOB columns for `memories`, `vector_entries`, and `conversation_chunks` are now registered at database initialization time rather than lazily in individual repositories.
 
 ### 4.2.2
