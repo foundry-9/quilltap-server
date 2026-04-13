@@ -47333,6 +47333,15 @@ function sanitizeSchemaForGoogle(schema) {
     if (UNSUPPORTED_SCHEMA_FIELDS.includes(key)) {
       continue;
     }
+    if (key === "type") {
+      if (typeof value === "string") {
+        sanitized[key] = value.toUpperCase();
+        continue;
+      } else if (Array.isArray(value)) {
+        sanitized[key] = value.map((v) => typeof v === "string" ? v.toUpperCase() : v);
+        continue;
+      }
+    }
     if (value && typeof value === "object") {
       sanitized[key] = sanitizeSchemaForGoogle(value);
     } else {
@@ -47357,9 +47366,6 @@ var GoogleProvider = class {
     if (lowerName.includes("gemini-3") || lowerName.includes("gemini-3.")) {
       return true;
     }
-    if (lowerName === "gemini-pro-latest") {
-      return true;
-    }
     const thinkingModels = [
       "gemini-2.5-pro",
       // 2.5 Pro has thinking capabilities
@@ -47380,18 +47386,11 @@ var GoogleProvider = class {
       // Image generation model, no function calling
       "gemini-2.0-flash-exp-image-generation",
       // Experimental image model
-      "imagen",
+      "imagen"
       // Imagen models don't support function calling
-      "gemini-pro-latest",
-      // Resolves to Gemini 3, which doesn't support function calling
-      "gemini-flash-latest"
-      // May resolve to a model without function calling
     ];
     const lowerName = modelName.toLowerCase();
     if (noToolsModels.some((m2) => lowerName.includes(m2.toLowerCase()))) {
-      return false;
-    }
-    if (lowerName.includes("gemini-3")) {
       return false;
     }
     if (lowerName.includes("-image") && !lowerName.includes("vision")) {
@@ -47638,7 +47637,7 @@ var GoogleProvider = class {
     return { contents, systemInstruction, shouldDisableTools, attachmentResults: { sent, failed } };
   }
   async sendMessage(params, apiKey) {
-    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": getQuilltapUserAgent() } } });
     const tools = [];
     if (params.tools && params.tools.length > 0) {
       tools.push({
@@ -47715,7 +47714,10 @@ var GoogleProvider = class {
           totalTokens: usage?.totalTokenCount ?? 0
         },
         // Convert SDK response class to plain object for Zod validation
-        raw: JSON.parse(JSON.stringify(response)),
+        raw: {
+          ...JSON.parse(JSON.stringify(response)),
+          functionCalls: response.functionCalls ? response.functionCalls.map((fc) => ({ name: fc.name, args: fc.args })) : void 0
+        },
         attachmentResults,
         thoughtSignature
       };
@@ -47729,7 +47731,7 @@ var GoogleProvider = class {
     }
   }
   async *streamMessage(params, apiKey) {
-    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": getQuilltapUserAgent() } } });
     const tools = [];
     if (params.tools && params.tools.length > 0) {
       tools.push({
@@ -47845,7 +47847,7 @@ var GoogleProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": getQuilltapUserAgent() } } });
       await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: "test"
@@ -47858,7 +47860,7 @@ var GoogleProvider = class {
   }
   async getAvailableModels(apiKey) {
     try {
-      const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": getQuilltapUserAgent() } } });
       const modelList = [];
       const pager = await ai.models.list();
       for await (const model of pager) {
@@ -47919,8 +47921,7 @@ var GoogleProvider = class {
             level: "info",
             message: "This is a thinking/reasoning model. Responses may take longer as the model reasons through complex problems."
           }
-        ],
-        missingCapabilities: ["function-calling"]
+        ]
       };
     }
     if (lowerModelId.includes("gemini-3") && lowerModelId.includes("image")) {
@@ -47985,8 +47986,7 @@ var GoogleProvider = class {
             level: "info",
             message: "This is Gemini 3 Pro, a thinking/reasoning model. Responses may take longer as the model reasons through complex problems."
           }
-        ],
-        missingCapabilities: ["function-calling"]
+        ]
       };
     }
     if (lowerModelId.includes("gemini-1.5")) {
@@ -48635,6 +48635,12 @@ var plugin = {
    */
   parseToolCalls: (response) => {
     try {
+      if (response && response.functionCalls && Array.isArray(response.functionCalls)) {
+        return response.functionCalls.map((fc) => ({
+          name: fc.name,
+          arguments: fc.args || {}
+        }));
+      }
       const toolCalls = parseGoogleToolCalls(response);
       return toolCalls;
     } catch (error) {
