@@ -90,8 +90,23 @@ function estimateTokensForJob(job: BackgroundJob): number {
     case 'TITLE_UPDATE': {
       return baseTokens + 300;
     }
-    case 'LLM_LOG_CLEANUP': {
-      // No LLM tokens needed for cleanup
+    case 'CHAT_DANGER_CLASSIFICATION': {
+      return baseTokens + 1000;
+    }
+    case 'SCENE_STATE_TRACKING': {
+      return baseTokens + 800;
+    }
+    case 'LLM_LOG_CLEANUP':
+    case 'EMBEDDING_GENERATE':
+    case 'EMBEDDING_REFIT':
+    case 'EMBEDDING_REINDEX_ALL':
+    case 'CHARACTER_AVATAR_GENERATION':
+    case 'CONVERSATION_RENDER': {
+      // These jobs do not consume LLM text-generation tokens
+      return 0;
+    }
+    case 'STORY_BACKGROUND_GENERATION': {
+      // Image generation job — no LLM text tokens
       return 0;
     }
     default:
@@ -111,6 +126,9 @@ function getJobTypeName(type: string): string {
     EMBEDDING_REINDEX_ALL: 'Re-embed All Memories',
     STORY_BACKGROUND_GENERATION: 'Story Background',
     CHAT_DANGER_CLASSIFICATION: 'Danger Classification',
+    SCENE_STATE_TRACKING: 'Scene State Tracking',
+    CHARACTER_AVATAR_GENERATION: 'Avatar Generation',
+    CONVERSATION_RENDER: 'Conversation Render',
   };
   return typeNames[type] || type;
 }
@@ -261,6 +279,7 @@ async function handleTasksQueue(req: NextRequest, context: any) {
         failed: stats.failed,
         completed: stats.completed,
         dead: stats.dead,
+        paused: stats.paused,
         activeTotal: activeJobs.length,
       },
       jobs: jobDetails,
