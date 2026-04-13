@@ -627,6 +627,46 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Reset stuck processing jobs (for recovery after crash)
    * Jobs that have been processing for longer than timeout are reset to FAILED
    */
+  /**
+   * Kill ALL jobs in PROCESSING state on startup.
+   * No job can legitimately be mid-flight when the server has just started,
+   * so they are all orphans from a previous run.  Marking them DEAD avoids
+   * retrying stale work that may belong to an outdated embedding profile or
+   * model configuration.
+   */
+  async resetAllProcessingJobs(): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
+
+        const result = await collection.updateMany(
+          {
+            status: 'PROCESSING',
+          },
+          {
+            $set: {
+              status: 'DEAD',
+              lastError: 'Orphaned on startup — killed',
+              updatedAt: now,
+            },
+          } as any
+        );
+
+        if (result.modifiedCount > 0) {
+          logger.info('Killed orphaned PROCESSING jobs on startup', {
+            context: 'BackgroundJobsRepository.resetAllProcessingJobs',
+            count: result.modifiedCount,
+          });
+        }
+        return result.modifiedCount;
+      },
+      'Error resetting all processing jobs',
+      {},
+      0
+    );
+  }
+
   async resetStuckJobs(timeoutMinutes: number = 10): Promise<number> {
     return this.safeQuery(
       async () => {

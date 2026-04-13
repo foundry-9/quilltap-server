@@ -72,9 +72,10 @@ export function startProcessor(intervalMs: number = DEFAULT_POLL_INTERVAL): void
 
   logger.info('[JobQueue] Processor started', { intervalMs, embeddingConcurrency: EMBEDDING_CONCURRENCY });
 
-  // Reset any stuck jobs on startup
-  resetStuckJobs().catch((error) => {
-    logger.error('[JobQueue] Error resetting stuck jobs on startup', {
+  // Reset ALL orphaned PROCESSING jobs on startup — no job can legitimately
+  // be in PROCESSING state when the server just started.
+  resetOrphanedJobs().catch((error) => {
+    logger.error('[JobQueue] Error resetting orphaned jobs on startup', {
       error: getErrorMessage(error),
     });
   });
@@ -156,7 +157,7 @@ async function executeJob(job: BackgroundJob): Promise<boolean> {
  * Returns true if a job was processed, false if no jobs were available
  */
 export async function processNextJob(): Promise<boolean> {
-  // Prevent concurrent entry for non-embedding work
+  // Prevent concurrent entry
   if (isProcessing) {
     return false;
   }
@@ -164,6 +165,11 @@ export async function processNextJob(): Promise<boolean> {
   isProcessing = true;
 
   try {
+    // If embedding slots are full, skip claiming until some finish
+    if (embeddingInFlight >= EMBEDDING_CONCURRENCY) {
+      return false;
+    }
+
     const repos = getRepositories();
     const job = await repos.backgroundJobs.claimNextJob();
 
@@ -216,6 +222,15 @@ function runEmbeddingJob(job: BackgroundJob): void {
 
   executeJob(job).finally(() => {
     embeddingInFlight--;
+    // Proactively fill the freed slot instead of waiting for the next
+    // interval tick (up to 2s idle otherwise).
+    if (processorRunning && embeddingInFlight < EMBEDDING_CONCURRENCY) {
+      fillEmbeddingSlots().catch((error) => {
+        logger.error('[JobQueue] Error back-filling embedding slot', {
+          error: getErrorMessage(error),
+        });
+      });
+    }
   });
 }
 
@@ -282,6 +297,16 @@ export async function processJobs(maxJobs: number = 10): Promise<{
   });
 
   return { processed, succeeded, failed };
+}
+
+/**
+ * Reset ALL orphaned PROCESSING jobs back to PENDING.
+ * Called once on startup — no job can legitimately be mid-flight when
+ * the server has just started.
+ */
+async function resetOrphanedJobs(): Promise<number> {
+  const repos = getRepositories();
+  return repos.backgroundJobs.resetAllProcessingJobs();
 }
 
 /**

@@ -79,6 +79,7 @@
 - **Embedding model swap dimension mismatch**: Full re-embed (EMBEDDING_REINDEX_ALL) now clears each character's vector index before enqueuing new jobs, so switching to a model with different dimensions (e.g. 1536 → 4096) no longer fails every job with "Vector dimension mismatch"
 - **Stale embedding jobs on re-embed**: Re-embed now cancels all pending/failed/orphaned EMBEDDING_GENERATE jobs from the previous run before enqueuing fresh ones, preventing zombie jobs from competing for processor slots
 - **Slow re-embed enqueue**: Reindex handler now batch-inserts all embedding jobs in chunks of 200 (single SQLite transactions) instead of 3 sequential DB calls per entity — enqueue phase drops from minutes to seconds for large instances
+- **Orphaned PROCESSING jobs blocking new work**: On startup, all PROCESSING jobs are now killed (DEAD) instead of reset to PENDING, since no job can legitimately be mid-flight at server start. Prevents stale retries from blocking fresh batch-inserted jobs. Embedding concurrency also guards against over-claiming via early bail when slots are full, with proactive back-fill when a slot frees.
 - **Embedding BLOB Registration**: Fixed race condition where memory embeddings could be stored as JSON text instead of Float32 BLOBs, causing dimension mismatches during vector search. BLOB columns for `memories`, `vector_entries`, and `conversation_chunks` are now registered at database initialization time rather than lazily in individual repositories.
 
 ### 4.2.2
