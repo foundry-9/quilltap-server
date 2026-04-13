@@ -85,7 +85,7 @@ export interface LLMLogCleanupPayload {
  */
 export interface EmbeddingGeneratePayload {
   /** Type of entity being embedded */
-  entityType: 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC';
+  entityType: 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC' | 'MOUNT_CHUNK';
   /** ID of the entity (memory ID, conversation chunk ID, or help doc ID) */
   entityId: string;
   /** ID of the character (for memories) */

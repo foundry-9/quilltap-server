@@ -345,6 +345,19 @@ export function getLLMLogsDatabasePath(): string {
 }
 
 /**
+ * Get the mount index database file path
+ *
+ * Separate database for document mount point tracking, file inventory,
+ * checksums, chunks, and embeddings. Isolated from the main database
+ * so the mount index can be rebuilt without affecting core data.
+ *
+ * @returns Mount index database path (<base>/data/quilltap-mount-index.db)
+ */
+export function getMountIndexDatabasePath(): string {
+  return path.join(getDataDir(), 'quilltap-mount-index.db');
+}
+
+/**
  * Get the main database key file path
  *
  * The .dbkey file contains the encrypted pepper used for SQLCipher database
@@ -366,6 +379,18 @@ export function getDbKeyPath(): string {
  */
 export function getLLMLogsDbKeyPath(): string {
   return path.join(getDataDir(), 'quilltap-llm-logs.dbkey');
+}
+
+/**
+ * Get the mount index database key file path
+ *
+ * Separate .dbkey file for the mount index database, using the same pepper
+ * but stored independently for operational isolation.
+ *
+ * @returns Mount index database key file path (<base>/data/quilltap-mount-index.dbkey)
+ */
+export function getMountIndexDbKeyPath(): string {
+  return path.join(getDataDir(), 'quilltap-mount-index.dbkey');
 }
 
 /**

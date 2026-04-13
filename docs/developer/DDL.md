@@ -1,6 +1,6 @@
 # Quilltap Database Schema Reference (DDL)
 
-This document describes the two SQLite databases used by Quilltap, how to access them, and the complete schema of every table.
+This document describes the three SQLite databases used by Quilltap, how to access them, and the complete schema of every table.
 
 ## Database Overview
 
@@ -8,8 +8,9 @@ This document describes the two SQLite databases used by Quilltap, how to access
 |----------|----------|---------|
 | **Main** | `quilltap.db` | All application data: users, characters, chats, messages, projects, files, memories, settings, etc. |
 | **LLM Logs** | `quilltap-llm-logs.db` | LLM request/response debug data. Isolated so high-churn logging can't corrupt main data. |
+| **Mount Index** | `quilltap-mount-index.db` | Document mount point tracking: file inventory, checksums, text chunks, and embeddings for external document directories. |
 
-Both databases live in `<data-dir>/data/`. Alongside them:
+All three databases live in `<data-dir>/data/`. Alongside them:
 
 ```
 <data-dir>/data/
@@ -17,6 +18,8 @@ Both databases live in `<data-dir>/data/`. Alongside them:
 ├── quilltap.dbkey            # Encryption key file (main DB)
 ├── quilltap-llm-logs.db
 ├── quilltap-llm-logs.dbkey   # Encryption key file (LLM logs DB)
+├── quilltap-mount-index.db
+├── quilltap-mount-index.dbkey # Encryption key file (mount index DB)
 ├── quilltap.lock             # Instance lock (prevents dual-instance corruption)
 └── backups/                  # Physical backups
 ```
@@ -31,11 +34,11 @@ Both databases live in `<data-dir>/data/`. Alongside them:
 | Docker | `/app/quilltap/` |
 | Lima VM | `/data/quilltap/` (VirtioFS mount) |
 
-Override with `QUILLTAP_DATA_DIR` env var, `--data-dir` CLI flag, or `SQLITE_PATH` / `SQLITE_LLM_LOGS_PATH` for individual databases.
+Override with `QUILLTAP_DATA_DIR` env var, `--data-dir` CLI flag, or `SQLITE_PATH` / `SQLITE_LLM_LOGS_PATH` / `SQLITE_MOUNT_INDEX_PATH` for individual databases.
 
 ## Encryption
 
-Both databases are encrypted with **SQLCipher** (AES-256-CBC with HMAC-SHA512). The standard `sqlite3` CLI **cannot** open them.
+All three databases are encrypted with **SQLCipher** (AES-256-CBC with HMAC-SHA512). The standard `sqlite3` CLI **cannot** open them.
 
 ### How the key works
 
@@ -1012,9 +1015,92 @@ CREATE TABLE sqlite_stat4(tbl, idx, neq, nlt, ndlt, sample);
 
 ---
 
+## Mount Index Database Schema (`quilltap-mount-index.db`)
+
+This database uses the same encryption mechanism as the main database (same pepper, separate `.dbkey` file). Foreign keys are **enabled** (unlike the LLM logs DB).
+
+Tables are auto-created on first access by their respective repositories via `CREATE TABLE IF NOT EXISTS`.
+
+### doc_mount_points
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_points" (
+  "id" TEXT PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "basePath" TEXT NOT NULL,
+  "mountType" TEXT NOT NULL DEFAULT 'filesystem',
+  "includePatterns" TEXT NOT NULL DEFAULT '["*.md","*.txt","*.pdf","*.docx"]',
+  "excludePatterns" TEXT NOT NULL DEFAULT '[".git","node_modules",".obsidian",".trash"]',
+  "enabled" INTEGER NOT NULL DEFAULT 1,
+  "lastScannedAt" TEXT,
+  "scanStatus" TEXT NOT NULL DEFAULT 'idle',
+  "lastScanError" TEXT,
+  "fileCount" INTEGER NOT NULL DEFAULT 0,
+  "chunkCount" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+```
+
+### doc_mount_files
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_files" (
+  "id" TEXT PRIMARY KEY,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "relativePath" TEXT NOT NULL,
+  "fileName" TEXT NOT NULL,
+  "fileType" TEXT NOT NULL,
+  "sha256" TEXT NOT NULL,
+  "fileSizeBytes" INTEGER NOT NULL,
+  "lastModified" TEXT NOT NULL,
+  "conversionStatus" TEXT NOT NULL DEFAULT 'pending',
+  "conversionError" TEXT,
+  "plainTextLength" INTEGER,
+  "chunkCount" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+```
+
+### doc_mount_chunks
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_chunks" (
+  "id" TEXT PRIMARY KEY,
+  "fileId" TEXT NOT NULL REFERENCES "doc_mount_files"("id"),
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "chunkIndex" INTEGER NOT NULL,
+  "content" TEXT NOT NULL,
+  "tokenCount" INTEGER NOT NULL,
+  "headingContext" TEXT,
+  "embedding" BLOB,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+```
+
+The `embedding` column stores Float32 arrays as BLOBs (same format as `conversation_chunks.embedding`).
+
+### project_doc_mount_links
+
+```sql
+CREATE TABLE IF NOT EXISTS "project_doc_mount_links" (
+  "id" TEXT PRIMARY KEY,
+  "projectId" TEXT NOT NULL,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+```
+
+Note: `projectId` references the `projects` table in the main database. Cross-database foreign keys are not enforced by SQLite; referential integrity is maintained at the application layer.
+
+---
+
 ## Notes
 
-- **No triggers or views** exist in either database.
+- **No triggers or views** exist in any database.
 - **No foreign key constraints** are defined between tables (referential integrity is enforced at the application layer), except `tfidf_vocabularies.profileId → embedding_profiles.id`, `conversation_annotations.chatId → chats.id`, and `conversation_chunks.chatId → chats.id` with `ON DELETE CASCADE`.
 - All `TEXT DEFAULT '[]'` and `TEXT DEFAULT '{}'` columns store JSON. The application parses them with Zod schemas.
 - All IDs are UUIDs stored as TEXT.
@@ -1028,6 +1114,7 @@ CREATE TABLE sqlite_stat4(tbl, idx, neq, nlt, ndlt, sample);
 |------|---------|
 | `lib/database/backends/sqlite/client.ts` | Main DB connection, SQLCipher key, PRAGMAs |
 | `lib/database/backends/sqlite/llm-logs-client.ts` | LLM logs DB connection |
+| `lib/database/backends/sqlite/mount-index-client.ts` | Mount index DB connection |
 | `lib/database/backends/sqlite/backend.ts` | Backend lifecycle, initialization |
 | `lib/database/config.ts` | Config schema and path resolution |
 | `lib/database/manager.ts` | Singleton database manager |

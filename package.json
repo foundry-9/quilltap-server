@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.3.0-dev.27",
+  "version": "4.3.0-dev.30",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -75,6 +75,7 @@
     "create-quilltap-theme": "^2.0.7",
     "jest-fetch-mock": "^3.0.3",
     "lexical": "^0.43.0",
+    "mammoth": "^1.12.0",
     "next": "^16.2.3",
     "node-fetch": "^3.3.2",
     "openai": "^6.34.0",

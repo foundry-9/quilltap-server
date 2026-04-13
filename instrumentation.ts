@@ -246,13 +246,14 @@ export async function register() {
           closeSQLite();
         } catch { /* ignore — module may not be loaded yet */ }
 
-        const { getSQLiteDatabasePath, getLLMLogsDatabasePath } = await import('./lib/paths');
+        const { getSQLiteDatabasePath, getLLMLogsDatabasePath, getMountIndexDatabasePath } = await import('./lib/paths');
         const { isDatabaseEncrypted } = await import('./lib/startup/db-encryption-state');
         const { convertDatabaseToEncrypted } = await import('./lib/startup/db-encryption-converter');
         const fsMod = await import('fs');
 
         const mainDbPath = getSQLiteDatabasePath();
         const llmLogsDbPath = getLLMLogsDatabasePath();
+        const mountIndexDbPath = getMountIndexDatabasePath();
         const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
 
         // Convert main database if it exists and is plaintext
@@ -295,6 +296,27 @@ export async function register() {
               error: convErr instanceof Error ? convErr.message : String(convErr),
             });
             // Non-fatal for LLM logs — they're expendable
+          }
+        }
+
+        // Convert mount index database if it exists and is plaintext
+        if (fsMod.default.existsSync(mountIndexDbPath) && !isDatabaseEncrypted(mountIndexDbPath)) {
+          logger.info('Phase -0.5b: Converting mount index database to encrypted format', {
+            context: 'instrumentation.register',
+            dbPath: mountIndexDbPath,
+          });
+
+          try {
+            convertDatabaseToEncrypted(mountIndexDbPath, pepper);
+            logger.info('Mount index database encryption conversion complete', {
+              context: 'instrumentation.register',
+            });
+          } catch (convErr) {
+            logger.warn('Mount index database encryption conversion failed — continuing', {
+              context: 'instrumentation.register',
+              error: convErr instanceof Error ? convErr.message : String(convErr),
+            });
+            // Non-fatal for mount index — it can be rebuilt
           }
         }
       }
@@ -492,6 +514,27 @@ export async function register() {
         logger.warn('Error during filesystem reconciliation, continuing startup', {
           context: 'instrumentation.register',
           error: reconcileError instanceof Error ? reconcileError.message : String(reconcileError),
+        });
+      }
+
+      // ================================================================
+      // PHASE 3.3: Document Mount Point Scan (after filesystem ready)
+      // ================================================================
+      // Fire-and-forget: scan runs asynchronously so large vaults don't
+      // block server startup. Embedding jobs are enqueued during scan
+      // and processed by the background job processor after Phase 3.5.
+      try {
+        const { scanAllMountPoints } = await import('./lib/mount-index/scan-runner');
+        scanAllMountPoints().catch((scanError) => {
+          logger.warn('Document mount point scan failed', {
+            context: 'instrumentation.register',
+            error: scanError instanceof Error ? scanError.message : String(scanError),
+          });
+        });
+      } catch (mountScanError) {
+        logger.warn('Error initializing document mount point scanner, continuing startup', {
+          context: 'instrumentation.register',
+          error: mountScanError instanceof Error ? mountScanError.message : String(mountScanError),
         });
       }
 

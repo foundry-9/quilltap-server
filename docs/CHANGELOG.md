@@ -21,6 +21,18 @@
 
 #### Added
 
+- **Scriptorium (Phase 3.2)**: Document mount points and auto-embedding
+  - Mount external document directories (filesystem paths, Obsidian vaults) as searchable knowledge sources
+  - New `quilltap-mount-index.db` database (third database, separate from main and LLM logs) with SQLCipher encryption, WAL mode, and graceful degradation
+  - Four new tables: `doc_mount_points`, `doc_mount_files`, `doc_mount_chunks`, `project_doc_mount_links` (many-to-many)
+  - Format conversion pipeline: PDF (pdf-parse v2), Word (.docx via mammoth.js), Markdown (regex syntax stripping), plain text
+  - Intelligent chunking engine: 800-1200 token chunks with 200-token overlap, heading context tracking
+  - SHA-256 checksum-based change detection on startup — new/modified files automatically re-ingested, deleted files purged
+  - Auto-embedding via existing embedding infrastructure with new `MOUNT_CHUNK` entity type
+  - New `'documents'` source type in the unified search tool — document chunks appear alongside memories and conversations
+  - Fire-and-forget startup scanning (Phase 3.3) — large vaults don't block server startup
+  - REST API: `/api/v1/mount-points` CRUD, `?action=scan` manual re-scan trigger, `/api/v1/projects/[id]/mount-points` link/unlink
+  - New npm dependency: `mammoth` for DOCX text extraction
 - **Unified Embedding Swap**: EMBEDDING_REINDEX_ALL now performs a full system-wide re-embed covering help documentation, character memories, and conversation chunks (Scriptorium)
   - Help docs are synced from disk to a new `help_docs` database table and embedded at runtime using the user's chosen embedding profile — no more pre-built MessagePack bundle
   - When switching embedding profiles, users are prompted to "Re-embed Everything" (not just memories)

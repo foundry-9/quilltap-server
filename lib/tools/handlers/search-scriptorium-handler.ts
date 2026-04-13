@@ -9,6 +9,7 @@
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
+import { searchDocumentChunks } from '@/lib/mount-index/document-search'
 import { getRepositories } from '@/lib/repositories/factory'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
@@ -27,6 +28,7 @@ export interface SearchScriptoriumToolContext {
   userId: string
   characterId: string
   embeddingProfileId?: string
+  projectId?: string
 }
 
 /**
@@ -55,13 +57,14 @@ export async function executeSearchScriptoriumTool(
 
     const {
       query,
-      sources = ['memories', 'conversations'],
+      sources = ['memories', 'conversations', 'documents'],
       limit = 10,
       minImportance = 0,
     } = input
 
     const searchMemories = sources.includes('memories')
     const searchConversations = sources.includes('conversations')
+    const searchDocuments = sources.includes('documents')
 
     logger.debug('Executing search scriptorium', {
       context: 'search-scriptorium-handler',
@@ -72,6 +75,7 @@ export async function executeSearchScriptoriumTool(
       limit,
       searchMemories,
       searchConversations,
+      searchDocuments,
     })
 
     const results: SearchScriptoriumResult[] = []
@@ -167,6 +171,49 @@ export async function executeSearchScriptoriumTool(
       }
     }
 
+    // Search documents if requested
+    if (searchDocuments) {
+      try {
+        const embeddingResult = await generateEmbeddingForUser(
+          query,
+          context.userId,
+          context.embeddingProfileId
+        )
+
+        const documentResults = await searchDocumentChunks(
+          embeddingResult.embedding,
+          { projectId: context.projectId, limit, minScore: 0.3 }
+        )
+
+        for (const dr of documentResults) {
+          results.push({
+            content: dr.content.length > 500
+              ? dr.content.substring(0, 500) + '...'
+              : dr.content,
+            sourceType: 'document',
+            relevanceScore: dr.score,
+            metadata: {
+              mountPointName: dr.mountPointName,
+              fileName: dr.fileName,
+              filePath: dr.relativePath,
+              chunkIndex: dr.chunkIndex,
+              headingContext: dr.headingContext ?? undefined,
+            },
+          })
+        }
+
+        logger.debug('Document search completed', {
+          context: 'search-scriptorium-handler',
+          documentResultCount: documentResults.length,
+        })
+      } catch (error) {
+        logger.warn('Document search failed, continuing with other sources', {
+          context: 'search-scriptorium-handler',
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
     // Sort all results by relevance score and limit
     results.sort((a, b) => b.relevanceScore - a.relevanceScore)
     const limitedResults = results.slice(0, limit)
@@ -178,6 +225,7 @@ export async function executeSearchScriptoriumTool(
       totalFound: limitedResults.length,
       memorySources: limitedResults.filter(r => r.sourceType === 'memory').length,
       conversationSources: limitedResults.filter(r => r.sourceType === 'conversation').length,
+      documentSources: limitedResults.filter(r => r.sourceType === 'document').length,
     })
 
     return {
@@ -220,11 +268,16 @@ export function formatSearchScriptoriumResults(results: SearchScriptoriumResult[
       return `[Result ${index + 1} - Memory] (Importance: ${importanceLabel}, Relevance: ${(result.relevanceScore * 100).toFixed(0)}%)
 Summary: ${result.metadata.summary || 'No summary'}
 Details: ${result.content}`
-    } else {
+    } else if (result.sourceType === 'conversation') {
       return `[Result ${index + 1} - Conversation] (Relevance: ${(result.relevanceScore * 100).toFixed(0)}%, Chat: ${result.metadata.conversationTitle || 'Untitled'})
 Conversation ID: ${result.metadata.conversationId}
 Interchange: ${result.metadata.interchangeIndex}
 Participants: ${result.metadata.participantNames?.join(', ') || 'Unknown'}
+Content: ${result.content}`
+    } else {
+      const heading = result.metadata.headingContext ? `, Section: ${result.metadata.headingContext}` : ''
+      return `[Result ${index + 1} - Document] (Relevance: ${(result.relevanceScore * 100).toFixed(0)}%, Source: ${result.metadata.mountPointName || 'Unknown'}${heading})
+File: ${result.metadata.filePath || result.metadata.fileName || 'Unknown'}
 Content: ${result.content}`
     }
   })
