@@ -11,7 +11,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { useProjectDetail, useProjectChats, useProjectFiles, useProjectCardState } from './hooks'
+import { useProjectDetail, useProjectChats, useProjectFiles, useProjectCardState, useProjectDocumentStores } from './hooks'
 import { useStoryBackground } from '@/hooks/useStoryBackground'
 import {
   ProjectDetailHeader,
@@ -21,6 +21,7 @@ import {
   ModelBehaviorCard,
   ImageGenerationCard,
   ChatsSection,
+  DocumentStoresCard,
 } from './components'
 
 export default function ProjectDetailPage() {
@@ -61,6 +62,15 @@ export default function ProjectDetailPage() {
 
   const { files, fetchFiles } = useProjectFiles(projectId)
 
+  const {
+    linkedStores,
+    allStores,
+    fetchLinkedStores,
+    fetchAllStores,
+    linkStore,
+    unlinkStore,
+  } = useProjectDocumentStores(projectId)
+
   // Card expansion state - all open on first visit, all closed on subsequent visits
   const { cardState, toggleCard } = useProjectCardState(projectId)
 
@@ -76,12 +86,14 @@ export default function ProjectDetailPage() {
     fetchProject()
     fetchChats()
     fetchFiles()
+    fetchLinkedStores()
+    fetchAllStores()
     // Fetch image profiles for the default image profile selector
     fetch('/api/v1/image-profiles')
       .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load image profiles')))
       .then(data => setImageProfiles(data?.profiles || []))
       .catch(() => {/* non-critical, selector will just be empty */})
-  }, [projectId, fetchProject, fetchChats, fetchFiles])
+  }, [projectId, fetchProject, fetchChats, fetchFiles, fetchLinkedStores, fetchAllStores])
 
   if (loading) {
     return (
@@ -129,6 +141,14 @@ export default function ProjectDetailPage() {
           onToggle={() => toggleCard('files')}
           projectId={projectId}
           onFilesChange={fetchFiles}
+        />
+        <DocumentStoresCard
+          linkedStores={linkedStores}
+          allStores={allStores}
+          expanded={cardState.documentStores}
+          onToggle={() => toggleCard('documentStores')}
+          onLink={linkStore}
+          onUnlink={unlinkStore}
         />
         <CharactersCard
           project={project}

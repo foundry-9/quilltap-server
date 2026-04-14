@@ -13,6 +13,7 @@ export { SettingsCard } from './SettingsCard'
 export { ModelBehaviorCard } from './ModelBehaviorCard'
 export { ImageGenerationCard } from './ImageGenerationCard'
 export { ChatsSection } from './ChatsSection'
+export { DocumentStoresCard } from './DocumentStoresCard'
 
 // Legacy tab components (kept for backwards compatibility)
 export { ProjectTabs } from './ProjectTabs'

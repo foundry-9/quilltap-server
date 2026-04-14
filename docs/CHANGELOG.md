@@ -21,6 +21,11 @@
 
 #### Added
 
+- **Project Document Stores**: Link/unlink document stores on the project detail page
+  - New "Document Stores" expandable card on the Prospero project page
+  - Shows linked stores with name, type, file count, and total size
+  - Inline picker to link available document stores to the project
+  - Unlink button on each linked store
 - **Scriptorium (Phase 3.3)**: Quilltap-native document editing tools
   - 10 new LLM tools for reading, editing, and searching files in document stores and project files
   - **Tier 1 — Text primitives**: `doc_read_file`, `doc_write_file`, `doc_str_replace`, `doc_insert_text`, `doc_grep`, `doc_list_files`
