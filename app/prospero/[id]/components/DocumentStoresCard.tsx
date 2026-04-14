@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
-import type { DocumentStore } from '@/app/document-stores/types'
+import type { DocumentStore } from '@/app/scriptorium/types'
 
 interface DocumentStoresCardProps {
   linkedStores: DocumentStore[]
@@ -97,7 +97,7 @@ export function DocumentStoresCard({
         <div className="flex items-center gap-3">
           <DatabaseIcon className="w-5 h-5 qt-text-primary" />
           <div className="text-left">
-            <h3 className="qt-heading-4 text-foreground">Document Stores</h3>
+            <h3 className="qt-heading-4 text-foreground">The Scriptorium</h3>
             <p className="qt-text-small qt-text-secondary">
               {linkedStores.length} store{linkedStores.length !== 1 ? 's' : ''} linked
             </p>

@@ -13,7 +13,7 @@ These tools require:
 1. A **project** associated with the chat
 2. At least one **document store** linked to the project (for the `document_store` scope)
 
-Configure document stores from the **Document Stores** page and link them to projects from the project detail page.
+Configure document stores from **The Scriptorium** page and link them to projects from the project detail page.
 
 ## Scopes
 

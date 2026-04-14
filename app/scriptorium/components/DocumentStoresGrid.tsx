@@ -34,7 +34,7 @@ export function DocumentStoresGrid({
     if (target.closest('button') || target.closest('a')) {
       return
     }
-    router.push(`/document-stores/${storeId}`)
+    router.push(`/scriptorium/${storeId}`)
   }
 
   if (stores.length === 0) {

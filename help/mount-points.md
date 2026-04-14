@@ -1,8 +1,8 @@
 ---
-url: /document-stores
+url: /scriptorium
 ---
 
-# Document Stores
+# The Scriptorium
 
 Consider, if you will, the predicament of the well-read conversationalist who possesses an impressive private library but cannot consult it during discussion. The document mount point system corrects this unfortunate oversight by allowing you to point Quilltap at directories full of documents — your notes, your research, your accumulated wisdom filed away in Markdown, PDF, Word, or plain text — and have their contents indexed, chunked, embedded, and made searchable alongside your memories and conversation history.
 
@@ -27,7 +27,7 @@ Documents are divided into chunks of approximately 800 to 1,200 tokens each, wit
 
 ## Managing Document Stores
 
-Document stores are managed from the **Document Stores** page, accessible via the database icon in the left sidebar. From there you can:
+Document stores are managed from the **Scriptorium** page, accessible via the database icon in the left sidebar. From there you can:
 
 - **Add** a document store by providing a name and filesystem path
 - **Edit** settings including name, path, mount type, include/exclude patterns, and enabled status
@@ -50,8 +50,8 @@ To search only documents, specify `sources: ["documents"]` in the search tool ca
 
 ## In-Chat Navigation
 
-To navigate to the Document Stores page:
+To navigate to The Scriptorium:
 
 ```
-help_navigate(url: "/document-stores")
+help_navigate(url: "/scriptorium")
 ```

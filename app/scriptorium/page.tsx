@@ -87,10 +87,10 @@ export default function DocumentStoresPage() {
   }
 
   return (
-    <div className="qt-page-container text-foreground">
+    <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/scriptorium.webp)' } as React.CSSProperties}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <div>
-          <h1 className="text-3xl font-semibold leading-tight">Document Stores</h1>
+          <h1 className="text-3xl font-semibold leading-tight">The Scriptorium</h1>
           <p className="mt-1 qt-text-small">Mount external document directories as searchable knowledge sources</p>
         </div>
         <button

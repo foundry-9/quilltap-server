@@ -4,6 +4,12 @@
 
 ### 4.3-dev
 
+#### UI
+
+- Renamed "Document Stores" to "The Scriptorium" — new route `/scriptorium` (was `/document-stores`), registered as a formal subsystem with background image and thumbnail
+- Added scriptorium.webp background image and thumbnail for The Scriptorium pages
+- Replaced sidebar icons: database icon → unrolled scroll for The Scriptorium, person silhouette → sculpted bust for Characters, folder → drafting compass over blueprint for Projects (Prospero)
+
 #### Refactoring
 
 - Removed dead code: `lib/tools/handlers/memory-search-handler.ts` (unused file)

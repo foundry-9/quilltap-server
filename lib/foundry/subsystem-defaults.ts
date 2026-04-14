@@ -27,7 +27,8 @@ export type SubsystemId =
   | 'calliope'
   | 'lantern'
   | 'pascal'
-  | 'saquel';
+  | 'saquel'
+  | 'scriptorium';
 
 /**
  * Static definition of a Foundry subsystem.
@@ -145,6 +146,14 @@ export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinit
     href: '/settings?tab=system',
     thumbnail: '/images/thumbnails/saquel.webp',
     backgroundImage: '/images/saquel.webp',
+  },
+  scriptorium: {
+    id: 'scriptorium',
+    name: 'The Scriptorium',
+    description: 'Document stores and external knowledge sources',
+    href: '/scriptorium',
+    thumbnail: '/images/thumbnails/scriptorium.webp',
+    backgroundImage: '/images/scriptorium.webp',
   },
 };
 

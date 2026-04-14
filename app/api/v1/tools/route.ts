@@ -656,7 +656,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
               tool.unavailableReason = 'Chat must be associated with a project';
             } else if (!chatContext.hasDocumentStores) {
               tool.available = false;
-              tool.unavailableReason = 'Project must have linked document stores (configure in Project > Document Stores)';
+              tool.unavailableReason = 'Project must have linked document stores (configure in Project > The Scriptorium)';
             }
             break;
           case 'chdir':

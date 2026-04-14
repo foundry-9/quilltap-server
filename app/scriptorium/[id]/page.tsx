@@ -90,8 +90,8 @@ export default function DocumentStoreDetailPage() {
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <p className="text-lg qt-text-destructive mb-4">{error || 'Document store not found'}</p>
-          <button onClick={() => router.push('/document-stores')} className="qt-button-secondary">
-            Back to Document Stores
+          <button onClick={() => router.push('/scriptorium')} className="qt-button-secondary">
+            Back to The Scriptorium
           </button>
         </div>
       </div>
@@ -103,15 +103,15 @@ export default function DocumentStoreDetailPage() {
     : 'Never'
 
   return (
-    <div className="qt-page-container text-foreground">
+    <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/scriptorium.webp)' } as React.CSSProperties}>
       {/* Header */}
       <div className="mb-6">
         <button
-          onClick={() => router.push('/document-stores')}
+          onClick={() => router.push('/scriptorium')}
           className="inline-flex items-center gap-1 text-sm qt-text-secondary hover:text-foreground mb-4 transition-colors"
         >
           <ChevronLeftIcon className="w-4 h-4" />
-          Back to Document Stores
+          Back to The Scriptorium
         </button>
 
         <div className="flex flex-wrap items-start justify-between gap-4">

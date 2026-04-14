@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useState } from 'react'
-import type { DocumentStore } from '@/app/document-stores/types'
+import type { DocumentStore } from '@/app/scriptorium/types'
 
 interface UseProjectDocumentStoresReturn {
   /** Document stores currently linked to this project */
