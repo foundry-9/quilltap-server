@@ -96,6 +96,8 @@ interface VirtualizedMessageListProps {
   participantNames?: Record<string, string>
   /** Set of participant IDs controlled by the user */
   userParticipantIdSet?: Set<string>
+  /** Whether the Concierge has flagged this chat as dangerous */
+  isDangerousChat?: boolean
 }
 
 export function VirtualizedMessageList({
@@ -143,6 +145,7 @@ export function VirtualizedMessageList({
   getMessageAvatar,
   participantNames,
   userParticipantIdSet,
+  isDangerousChat = false,
 }: VirtualizedMessageListProps) {
   // Resolve per-message character from participantData, falling back to first character
   const getCharacterForMessage = (message: Message): CharacterData | undefined => {
@@ -268,6 +271,7 @@ export function VirtualizedMessageList({
                     !(message.participantId && userParticipantIdSet.has(message.participantId)) &&
                     !message.targetParticipantIds.some(id => userParticipantIdSet.has(id))
                   }
+                  isDangerousChat={isDangerousChat}
                 />
               </div>
             )
@@ -331,6 +335,7 @@ export function VirtualizedMessageList({
           renderingPatterns={roleplayRenderingPatterns}
           dialogueDetection={roleplayDialogueDetection}
           shouldShowAvatars={shouldShowAvatars()}
+          isDangerousChat={isDangerousChat}
         />
 
         <div ref={messagesEndRef} />

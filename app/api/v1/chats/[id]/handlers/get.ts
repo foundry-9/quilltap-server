@@ -324,6 +324,8 @@ export async function handleGet(
       resolvedAgentModeEnabled: resolvedAgentMode.enabled,
       agentModeSource: resolvedAgentMode.enabledSource,
       avatarGenerationEnabled: chatMetadata.avatarGenerationEnabled ?? null,
+      isDangerousChat: chatMetadata.isDangerousChat ?? null,
+      dangerCategories: chatMetadata.dangerCategories || [],
     };
 
     return NextResponse.json({ chat });

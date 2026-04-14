@@ -130,12 +130,11 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  // 5. Build portrait prompt — 3/4 shot from thighs up, with scenario context
+  // 5. Build portrait prompt — 3/4 shot from thighs up, no scenario context
+  // Scenario text is deliberately excluded: it often mentions other characters
+  // or narrative elements that cause image models to depict multiple people.
   const appearanceText = appearanceParts.join('. ');
-  const scenarioContext = chat.scenarioText
-    ? ` Setting: ${chat.scenarioText.substring(0, 300)}.`
-    : '';
-  const prompt = `Solo portrait of a single person: ${character.name}. Show exactly one figure, from the thighs up, three-quarter view. ${appearanceText}.${scenarioContext} Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
+  const prompt = `Solo portrait of a single person: ${character.name}. Show exactly one figure, from the thighs up, three-quarter view. ${appearanceText}. Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
 
   logger.debug('[CharacterAvatar] Generated portrait prompt', {
     context: 'background-jobs.character-avatar',

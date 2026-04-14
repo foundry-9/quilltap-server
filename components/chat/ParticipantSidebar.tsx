@@ -71,6 +71,8 @@ interface ParticipantSidebarProps {
   onGiftItem?: (participantId: string) => void
   // Avatar regeneration
   onRegenerateAvatar?: (participantId: string) => void
+  // Danger state — when the Concierge has flagged this chat
+  isDangerousChat?: boolean
   className?: string
 }
 
@@ -106,6 +108,7 @@ export function ParticipantSidebar({
   onEquipSlot,
   onGiftItem,
   onRegenerateAvatar,
+  isDangerousChat = false,
   className = '',
 }: ParticipantSidebarProps) {
   // Collapsed state with localStorage persistence (default: collapsed)
@@ -461,6 +464,7 @@ export function ParticipantSidebar({
               outfitLoading={outfitLoading}
               onGiftItem={onGiftItem}
               onRegenerateAvatar={onRegenerateAvatar}
+              isDangerousChat={isDangerousChat}
             />
           )
         })}

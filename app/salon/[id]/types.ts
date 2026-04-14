@@ -141,6 +141,10 @@ export interface Chat {
   imageProfileId?: string | null
   /** Whether to auto-generate character avatars when outfits change */
   avatarGenerationEnabled?: boolean | null
+  /** Whether the Concierge has classified this chat as dangerous (null = not yet classified) */
+  isDangerousChat?: boolean | null
+  /** Categories of dangerous content detected (e.g. 'nsfw', 'violence') */
+  dangerCategories?: string[]
 }
 
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'

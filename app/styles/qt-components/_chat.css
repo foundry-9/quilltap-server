@@ -1719,6 +1719,35 @@
   }
 
   /**
+   * Dangerous chat — red border on participant cards when the Concierge
+   * has flagged this conversation and is auto-routing to uncensored providers.
+   */
+  .qt-participant-card-dangerous {
+    border-color: var(--color-destructive, #dc2626);
+    box-shadow: 0 0 0 1px var(--color-destructive, #dc2626);
+  }
+
+  /**
+   * Dangerous chat — red ring on message avatars in the chat window
+   * when the Concierge has flagged the conversation.
+   * Targets the Avatar component's image container (the overflow-hidden div).
+   */
+  .qt-chat-avatar-dangerous .overflow-hidden {
+    outline: 2px solid var(--color-destructive, #dc2626);
+    outline-offset: 2px;
+  }
+
+  /**
+   * Danger badge for breadcrumb header
+   */
+  .qt-danger-badge {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium;
+    background: color-mix(in srgb, var(--color-destructive, #dc2626) 15%, transparent);
+    color: var(--color-destructive, #dc2626);
+    border: 1px solid color-mix(in srgb, var(--color-destructive, #dc2626) 40%, transparent);
+  }
+
+  /**
    * Status badges for silent/absent participants
    */
   .qt-badge-silent {

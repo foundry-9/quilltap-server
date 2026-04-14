@@ -101,6 +101,8 @@ interface ParticipantCardProps {
   onGiftItem?: (participantId: string) => void
   // Avatar regeneration
   onRegenerateAvatar?: (participantId: string) => void
+  // Danger state — when the Concierge has flagged this chat
+  isDangerousChat?: boolean
 }
 
 export function ParticipantCard({
@@ -136,6 +138,7 @@ export function ParticipantCard({
   outfitLoading,
   onGiftItem,
   onRegenerateAvatar,
+  isDangerousChat = false,
 }: ParticipantCardProps) {
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
@@ -244,10 +247,11 @@ export function ParticipantCard({
 
   // Determine card class based on state
   const getCardClass = (): string => {
-    if (isInactive) return 'qt-participant-card-inactive'
-    if (participantStatus === 'silent') return isCurrentTurn ? 'qt-participant-card-active qt-participant-card-silent' : 'qt-participant-card qt-participant-card-silent'
-    if (isCurrentTurn) return 'qt-participant-card-active'
-    return 'qt-participant-card'
+    const dangerClass = isDangerousChat ? ' qt-participant-card-dangerous' : ''
+    if (isInactive) return 'qt-participant-card-inactive' + dangerClass
+    if (participantStatus === 'silent') return (isCurrentTurn ? 'qt-participant-card-active qt-participant-card-silent' : 'qt-participant-card qt-participant-card-silent') + dangerClass
+    if (isCurrentTurn) return 'qt-participant-card-active' + dangerClass
+    return 'qt-participant-card' + dangerClass
   }
 
   return (

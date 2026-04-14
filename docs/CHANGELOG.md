@@ -6,6 +6,11 @@
 
 #### UI
 
+- Added Concierge danger indicators to the Salon chat view:
+  - Breadcrumb header shows a red "Flagged" badge with warning icon when the chat is classified as dangerous
+  - Participant sidebar cards get a red border when the chat is flagged
+  - Message avatars in the chat window get a red outline when the chat is flagged
+  - Streaming message avatars also show the danger indicator
 - Renamed "Document Stores" to "The Scriptorium" — new route `/scriptorium` (was `/document-stores`), registered as a formal subsystem with background image and thumbnail
 - Added scriptorium.webp background image and thumbnail for The Scriptorium pages
 - Replaced sidebar icons: database icon → unrolled scroll for The Scriptorium, person silhouette → sculpted bust for Characters, folder → drafting compass over blueprint for Projects (Prospero)
@@ -29,6 +34,7 @@
 
 #### Improvements
 
+- Removed scenario text from character avatar generation prompts to prevent image models from depicting multiple people when the scenario mentions other characters
 - Enhanced participant action logging: update, remove, add, and reactivate actions now log character names, status transitions, updated fields, and failure details at appropriate levels (debug/info/warn)
 
 #### Removed
