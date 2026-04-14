@@ -34,8 +34,17 @@ export function getGroupCheckState(
 /**
  * Build hierarchical structure from flat tool list
  */
+/**
+ * Built-in tool categories that get their own group in the UI.
+ * Tools with these categories are separated from the main "Built-in Tools" group.
+ */
+const BUILT_IN_CATEGORY_GROUPS: Record<string, string> = {
+  documents: 'Document Editing',
+}
+
 export function buildToolHierarchy(availableTools: AvailableTool[]): ToolGroup[] {
   const builtInTools: AvailableTool[] = []
+  const builtInCategoryTools = new Map<string, AvailableTool[]>()
   const pluginGroups = new Map<string, {
     displayName: string
     subgroups: Map<string, { displayName: string; tools: AvailableTool[] }>
@@ -44,7 +53,15 @@ export function buildToolHierarchy(availableTools: AvailableTool[]): ToolGroup[]
 
   for (const tool of availableTools) {
     if (tool.source === 'built-in') {
-      builtInTools.push(tool)
+      // Check if this tool's category gets its own group
+      if (tool.category && BUILT_IN_CATEGORY_GROUPS[tool.category]) {
+        if (!builtInCategoryTools.has(tool.category)) {
+          builtInCategoryTools.set(tool.category, [])
+        }
+        builtInCategoryTools.get(tool.category)!.push(tool)
+      } else {
+        builtInTools.push(tool)
+      }
     } else if (tool.pluginName || tool.source === 'plugin') {
       // Use pluginName if available, fall back to tool id for ungrouped plugin tools
       const effectivePluginName = tool.pluginName || tool.id
@@ -85,6 +102,18 @@ export function buildToolHierarchy(availableTools: AvailableTool[]): ToolGroup[]
       type: 'built-in',
       subgroups: [],
       tools: builtInTools,
+    })
+  }
+
+  // Add built-in category groups (e.g., "Document Editing")
+  for (const [category, tools] of builtInCategoryTools) {
+    const displayName = BUILT_IN_CATEGORY_GROUPS[category] || category
+    groups.push({
+      id: `built-in:${category}`,
+      displayName,
+      type: 'built-in',
+      subgroups: [],
+      tools,
     })
   }
 
@@ -129,6 +158,13 @@ export function extractAllGroupIds(tools: AvailableTool[]): { groupIds: Set<stri
 
   // Built-in tools group
   groupIds.add('built-in')
+
+  // Built-in category groups
+  for (const tool of tools) {
+    if (tool.source === 'built-in' && tool.category && BUILT_IN_CATEGORY_GROUPS[tool.category]) {
+      groupIds.add(`built-in:${tool.category}`)
+    }
+  }
 
   // Plugin groups and subgroups
   for (const tool of tools) {
