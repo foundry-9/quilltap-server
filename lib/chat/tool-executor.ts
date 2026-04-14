@@ -74,6 +74,12 @@ import {
   type ShellToolContext,
 } from '@/lib/tools/shell';
 import {
+  executeDocEditTool,
+  formatDocEditResults,
+  isDocEditTool,
+  type DocEditToolContext,
+} from '@/lib/tools/handlers/doc-edit-handler';
+import {
   executeWardrobeListTool,
   formatWardrobeListResults,
   type WardrobeListToolContext,
@@ -218,6 +224,17 @@ const BUILT_IN_TOOLS = new Set([
   'async_result',
   'sudo_sync',
   'cp_host',
+  // Document editing tools (Scriptorium Phase 3.3)
+  'doc_read_file',
+  'doc_write_file',
+  'doc_str_replace',
+  'doc_insert_text',
+  'doc_grep',
+  'doc_list_files',
+  'doc_read_frontmatter',
+  'doc_update_frontmatter',
+  'doc_read_heading',
+  'doc_update_heading',
 ]);
 
 export async function executeToolCallWithContext(
@@ -926,6 +943,27 @@ export async function executeToolCallWithContext(
         result: result.success ? {
           formattedText: formatShellResults(result),
           ...result.result,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle document editing tools (Scriptorium Phase 3.3)
+    if (isDocEditTool(toolCall.name)) {
+      const docEditContext: DocEditToolContext = {
+        userId,
+        chatId,
+        projectId: context.projectId,
+      };
+
+      const result = await executeDocEditTool(toolCall.name, toolCall.arguments, docEditContext);
+
+      return {
+        toolName: toolCall.name,
+        success: result.success,
+        result: result.success ? {
+          formattedText: formatDocEditResults(toolCall.name, result),
+          ...(result.result && typeof result.result === 'object' ? result.result as Record<string, unknown> : {}),
         } : null,
         error: result.success ? undefined : result.error,
       };

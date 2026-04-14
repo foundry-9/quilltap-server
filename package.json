@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.3.0-dev.29",
+  "version": "4.3.0-dev.30",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -94,6 +94,7 @@
     "sharp": "^0.34.5",
     "tar": "^7.5.13",
     "unified": "^11.0.5",
+    "yaml": "^2.8.3",
     "yauzl": "^3.3.0",
     "zod": "^4.3.6"
   },

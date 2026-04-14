@@ -51,6 +51,16 @@ import {
 import {
   wardrobeCreateItemToolDefinition,
 } from '@/lib/tools/wardrobe-create-item-tool';
+import { docReadFileTool } from '@/lib/tools/doc-read-file-tool';
+import { docWriteFileTool } from '@/lib/tools/doc-write-file-tool';
+import { docStrReplaceTool } from '@/lib/tools/doc-str-replace-tool';
+import { docInsertTextTool } from '@/lib/tools/doc-insert-text-tool';
+import { docGrepTool } from '@/lib/tools/doc-grep-tool';
+import { docListFilesTool } from '@/lib/tools/doc-list-files-tool';
+import { docReadFrontmatterTool } from '@/lib/tools/doc-read-frontmatter-tool';
+import { docUpdateFrontmatterTool } from '@/lib/tools/doc-update-frontmatter-tool';
+import { docReadHeadingTool } from '@/lib/tools/doc-read-heading-tool';
+import { docUpdateHeadingTool } from '@/lib/tools/doc-update-heading-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -183,6 +193,9 @@ export interface BuildToolsOptions {
   /** Whether to enable shell interactivity tools (only in VM/Docker environments) */
   shellInteractivity?: boolean;
 
+  /** Whether to enable document editing tools (Scriptorium Phase 3.3) */
+  documentEditing?: boolean;
+
   /** Whether to include tools from the tool registry (plugin tools) */
   includePluginTools?: boolean;
 
@@ -239,6 +252,7 @@ export async function buildToolsForProvider(
       wardrobeUpdateOutfit: options.wardrobeUpdateOutfit,
       wardrobeCreateItem: options.wardrobeCreateItem,
       shellInteractivity: options.shellInteractivity,
+      documentEditing: options.documentEditing,
       includePluginTools: options.includePluginTools,
     },
   });
@@ -327,6 +341,20 @@ export async function buildToolsForProvider(
   // Add submit_final_response tool if agent mode is enabled
   if (options.agentMode) {
     universalTools.push(submitFinalResponseToolDefinition as UniversalTool);
+  }
+
+  // Add document editing tools if enabled (Scriptorium Phase 3.3)
+  if (options.documentEditing) {
+    universalTools.push(docReadFileTool as UniversalTool);
+    universalTools.push(docWriteFileTool as UniversalTool);
+    universalTools.push(docStrReplaceTool as UniversalTool);
+    universalTools.push(docInsertTextTool as UniversalTool);
+    universalTools.push(docGrepTool as UniversalTool);
+    universalTools.push(docListFilesTool as UniversalTool);
+    universalTools.push(docReadFrontmatterTool as UniversalTool);
+    universalTools.push(docUpdateFrontmatterTool as UniversalTool);
+    universalTools.push(docReadHeadingTool as UniversalTool);
+    universalTools.push(docUpdateHeadingTool as UniversalTool);
   }
 
   // Add shell interactivity tools if enabled (only in VM/Docker environments)

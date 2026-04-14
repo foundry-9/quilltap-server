@@ -21,6 +21,19 @@
 
 #### Added
 
+- **Scriptorium (Phase 3.3)**: Quilltap-native document editing tools
+  - 10 new LLM tools for reading, editing, and searching files in document stores and project files
+  - **Tier 1 — Text primitives**: `doc_read_file`, `doc_write_file`, `doc_str_replace`, `doc_insert_text`, `doc_grep`, `doc_list_files`
+  - **Tier 2 — Markdown-aware**: `doc_read_frontmatter`, `doc_update_frontmatter`, `doc_read_heading`, `doc_update_heading`
+  - Unified path resolution across three scopes: document stores, project files, and general files
+  - `str_replace` with unique-match constraint — text itself serves as the "address", no structural IDs needed
+  - Unicode diacritics normalization for search and replace (e.g., "Nimue" matches "Nimuë")
+  - Lightweight markdown parser for heading trees and YAML frontmatter (using `yaml` npm package)
+  - Path traversal prevention and mount point access control
+  - Optimistic concurrency via mtime-based conflict detection
+  - Fire-and-forget single-file re-indexing after edits to keep search results current
+  - Tools automatically enabled when a project has linked document stores
+  - New npm dependency: `yaml` for frontmatter parsing/serialization
 - **Document Stores UI**: Full management interface for document mount points
   - New "Document Stores" button in left sidebar navigation (database icon, below Files)
   - List page at `/document-stores` with card grid showing name, path, type, file/chunk counts, scan status, and last scan time

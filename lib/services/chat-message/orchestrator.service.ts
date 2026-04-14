@@ -645,6 +645,21 @@ async function processMessage(
   const canDressThemselves = character?.canDressThemselves !== false
   const canCreateOutfits = character?.canCreateOutfits !== false
 
+  // Determine if document editing tools should be enabled (Scriptorium Phase 3.3)
+  // Enabled when the project has linked document stores
+  let documentEditingEnabled = false
+  if (chat.projectId) {
+    try {
+      const mountLinks = await repos.projectDocMountLinks.findByProjectId(chat.projectId)
+      documentEditingEnabled = mountLinks.length > 0
+    } catch (mountLinkError) {
+      logger.debug('[Orchestrator] Failed to check mount point links for doc editing tools', {
+        projectId: chat.projectId,
+        error: mountLinkError instanceof Error ? mountLinkError.message : String(mountLinkError),
+      })
+    }
+  }
+
   // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
   // Always pass disabledTools and disabledToolGroups for filtering
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
@@ -660,7 +675,8 @@ async function processMessage(
     isMultiCharacter, // isMultiCharacter - enables whisper tool
     helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
     canDressThemselves, // canDressThemselves - enables list_wardrobe and update_outfit_item
-    canCreateOutfits // canCreateOutfits - enables create_wardrobe_item
+    canCreateOutfits, // canCreateOutfits - enables create_wardrobe_item
+    documentEditingEnabled // documentEditingEnabled - enables doc_* editing tools
   )
 
   const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools)

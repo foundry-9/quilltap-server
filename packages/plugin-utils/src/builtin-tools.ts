@@ -30,6 +30,17 @@ export const BUILTIN_TOOL_NAMES = new Set([
   'request_full_context',
   'help_search',
   'help_settings',
+  // Document editing tools (Scriptorium Phase 3.3)
+  'doc_read_file',
+  'doc_write_file',
+  'doc_str_replace',
+  'doc_insert_text',
+  'doc_grep',
+  'doc_list_files',
+  'doc_read_frontmatter',
+  'doc_update_frontmatter',
+  'doc_read_heading',
+  'doc_update_heading',
 ]);
 
 /**
