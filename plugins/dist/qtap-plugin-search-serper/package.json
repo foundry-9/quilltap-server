@@ -7,8 +7,8 @@
     "build": "node esbuild.config.mjs"
   },
   "dependencies": {
-    "@quilltap/plugin-types": "^2.2.0",
-    "@quilltap/plugin-utils": "^2.2.0"
+    "@quilltap/plugin-types": "^2.2.1",
+    "@quilltap/plugin-utils": "^2.2.2"
   },
   "devDependencies": {
     "esbuild": "^0.28.0"

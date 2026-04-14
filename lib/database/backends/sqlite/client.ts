@@ -10,6 +10,7 @@ import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { stopPeriodicCheckpoints, runShutdownCheckpoint } from './protection';
 import { closeLLMLogsSQLiteClient } from './llm-logs-client';
+import { closeMountIndexSQLiteClient } from './mount-index-client';
 import { releaseActiveInstanceLock } from './instance-lock';
 
 // ============================================================================
@@ -222,6 +223,7 @@ export function setupSQLiteShutdownHandlers(): void {
   shutdownHandlersRegistered = true;
 
   const handleShutdown = () => {
+    closeMountIndexSQLiteClient();
     closeLLMLogsSQLiteClient();
     closeSQLiteClient();
     releaseActiveInstanceLock();

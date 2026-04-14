@@ -406,3 +406,20 @@ export type {
   HelpDoc,
   HelpDocInput,
 } from './help-doc.types';
+
+// ============================================================================
+// DOCUMENT MOUNT INDEX TYPES (Project Scriptorium Phase 3.2)
+// ============================================================================
+export {
+  DocMountPointSchema,
+  DocMountFileSchema,
+  DocMountChunkSchema,
+  ProjectDocMountLinkSchema,
+} from './mount-index.types';
+
+export type {
+  DocMountPoint,
+  DocMountFile,
+  DocMountChunk,
+  ProjectDocMountLink,
+} from './mount-index.types';

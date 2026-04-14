@@ -41,6 +41,10 @@ export { CharacterPluginDataRepository } from './character-plugin-data.repositor
 export { ConversationAnnotationsRepository } from './conversation-annotations.repository';
 export { ConversationChunksRepository } from './conversation-chunks.repository';
 export { HelpDocsRepository } from './help-docs.repository';
+export { DocMountPointsRepository } from './doc-mount-points.repository';
+export { DocMountFilesRepository } from './doc-mount-files.repository';
+export { DocMountChunksRepository } from './doc-mount-chunks.repository';
+export { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
 
 // Import all repository classes for container
 import { BackgroundJobsRepository } from './background-jobs.repository';
@@ -71,6 +75,10 @@ import { CharacterPluginDataRepository } from './character-plugin-data.repositor
 import { ConversationAnnotationsRepository } from './conversation-annotations.repository';
 import { ConversationChunksRepository } from './conversation-chunks.repository';
 import { HelpDocsRepository } from './help-docs.repository';
+import { DocMountPointsRepository } from './doc-mount-points.repository';
+import { DocMountFilesRepository } from './doc-mount-files.repository';
+import { DocMountChunksRepository } from './doc-mount-chunks.repository';
+import { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
 
 /**
  * Container interface for all repository instances.
@@ -106,6 +114,10 @@ export interface RepositoryContainer {
   conversationAnnotations: ConversationAnnotationsRepository;
   conversationChunks: ConversationChunksRepository;
   helpDocs: HelpDocsRepository;
+  docMountPoints: DocMountPointsRepository;
+  docMountFiles: DocMountFilesRepository;
+  docMountChunks: DocMountChunksRepository;
+  projectDocMountLinks: ProjectDocMountLinksRepository;
 }
 
 /**
@@ -153,6 +165,10 @@ export function createRepositories(): RepositoryContainer {
       conversationAnnotations: new ConversationAnnotationsRepository(),
       conversationChunks: new ConversationChunksRepository(),
       helpDocs: new HelpDocsRepository(),
+      docMountPoints: new DocMountPointsRepository(),
+      docMountFiles: new DocMountFilesRepository(),
+      docMountChunks: new DocMountChunksRepository(),
+      projectDocMountLinks: new ProjectDocMountLinksRepository(),
     };
     return repositories;
   } catch (error) {

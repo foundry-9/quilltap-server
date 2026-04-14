@@ -149,7 +149,8 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
 
   /**
    * Claim the next available job atomically
-   * Uses findOneAndUpdate for concurrent-safe job claiming
+   * Uses findOneAndUpdate for concurrent-safe job claiming.
+   * Jobs are sorted by priority (highest first), then creation time (oldest first).
    */
   async claimNextJob(): Promise<BackgroundJob | null> {
     return this.safeQuery(
@@ -173,6 +174,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
           } as any,
           {
             returnDocument: 'after',
+            sort: { priority: -1, createdAt: 1 },
           }
         );
 

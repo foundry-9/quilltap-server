@@ -28,6 +28,10 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
     return handleConversationChunkEmbedding(job, payload, repos);
   }
 
+  if (payload.entityType === 'MOUNT_CHUNK') {
+    return handleMountChunkEmbedding(job, payload, repos);
+  }
+
   if (payload.entityType !== 'MEMORY') {
     throw new Error(`Unsupported entity type: ${payload.entityType}`);
   }
@@ -244,6 +248,75 @@ async function handleHelpDocEmbedding(
       context: 'handleEmbeddingGenerate',
       jobId: job.id,
       docId: payload.entityId,
+      error: errorMessage,
+    });
+
+    throw error;
+  }
+}
+
+/**
+ * Handle embedding generation for a document mount chunk.
+ * Uses the same embedding infrastructure as conversation chunks but stores
+ * the embedding on the mount chunk row in the mount index database.
+ */
+async function handleMountChunkEmbedding(
+  job: BackgroundJob,
+  payload: EmbeddingGeneratePayload,
+  repos: ReturnType<typeof getRepositories>
+): Promise<void> {
+  const chunk = await repos.docMountChunks.findById(payload.entityId);
+  if (!chunk) {
+    logger.warn('[EmbeddingGenerate] Mount chunk not found', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: payload.entityId,
+    });
+    await repos.embeddingStatus.markAsFailed(
+      'MOUNT_CHUNK',
+      payload.entityId,
+      payload.profileId,
+      'Mount chunk not found'
+    );
+    return;
+  }
+
+  try {
+    const embeddingResult = await generateEmbeddingForUser(
+      chunk.content,
+      job.userId,
+      payload.profileId
+    );
+
+    await repos.docMountChunks.updateEmbedding(chunk.id, embeddingResult.embedding);
+
+    await repos.embeddingStatus.markAsEmbedded(
+      'MOUNT_CHUNK',
+      payload.entityId,
+      payload.profileId
+    );
+
+    logger.info('[EmbeddingGenerate] Mount chunk embedding generated', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: chunk.id,
+      mountPointId: chunk.mountPointId,
+      dimensions: embeddingResult.dimensions,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    await repos.embeddingStatus.markAsFailed(
+      'MOUNT_CHUNK',
+      payload.entityId,
+      payload.profileId,
+      errorMessage
+    );
+
+    logger.error('[EmbeddingGenerate] Failed to generate mount chunk embedding', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: payload.entityId,
       error: errorMessage,
     });
 

@@ -85,7 +85,7 @@ export interface LLMLogCleanupPayload {
  */
 export interface EmbeddingGeneratePayload {
   /** Type of entity being embedded */
-  entityType: 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC';
+  entityType: 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC' | 'MOUNT_CHUNK';
   /** ID of the entity (memory ID, conversation chunk ID, or help doc ID) */
   entityId: string;
   /** ID of the character (for memories) */
@@ -399,8 +399,23 @@ export interface EmbeddingGenerateEnqueueResult {
 }
 
 /**
+ * Default priorities for embedding entity types.
+ * Chat-related embeddings (memories, conversation chunks) run before
+ * batch operations (document mount chunks, help docs) so that chat
+ * responsiveness is never blocked by background indexing.
+ */
+const EMBEDDING_ENTITY_PRIORITIES: Record<EmbeddingGeneratePayload['entityType'], number> = {
+  MEMORY: 10,
+  CONVERSATION_CHUNK: 10,
+  HELP_DOC: 0,
+  MOUNT_CHUNK: 0,
+};
+
+/**
  * Enqueue an embedding generate job
- * Skips if there's already a pending/processing job for the same entity
+ * Skips if there's already a pending/processing job for the same entity.
+ * Priority defaults based on entity type: chat-related types (MEMORY,
+ * CONVERSATION_CHUNK) get higher priority than batch types.
  */
 export async function enqueueEmbeddingGenerate(
   userId: string,
@@ -417,7 +432,11 @@ export async function enqueueEmbeddingGenerate(
     return { jobId: existingJob.id, isNew: false };
   }
 
-  const jobId = await enqueueJob(userId, 'EMBEDDING_GENERATE', payload as unknown as Record<string, unknown>, options);
+  const priority = options?.priority ?? EMBEDDING_ENTITY_PRIORITIES[payload.entityType] ?? 0;
+  const jobId = await enqueueJob(userId, 'EMBEDDING_GENERATE', payload as unknown as Record<string, unknown>, {
+    ...options,
+    priority,
+  });
   return { jobId, isNew: true };
 }
 

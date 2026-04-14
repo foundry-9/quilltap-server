@@ -71,6 +71,27 @@ function CharacterIcon({ className }: { className?: string }) {
 }
 
 /**
+ * Document store icon (database/archive)
+ */
+function DocumentStoreIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <ellipse cx="12" cy="5" rx="9" ry="3" />
+      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+    </svg>
+  )
+}
+
+/**
  * Chat/message icon
  */
 function ChatIcon({ className }: { className?: string }) {
@@ -100,6 +121,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'projects', label: 'Projects', tooltip: 'View all projects', href: '/prospero', icon: FolderIcon },
   { id: 'files', label: 'Files', tooltip: 'View all files', href: '/files', icon: FileIcon },
+  { id: 'document-stores', label: 'Document Stores', tooltip: 'View document stores', href: '/document-stores', icon: DocumentStoreIcon },
   { id: 'characters', label: 'Characters', tooltip: 'View all characters', href: '/aurora', icon: CharacterIcon },
   { id: 'chats', label: 'Chats', tooltip: 'View all chats', href: '/salon', icon: ChatIcon },
 ]

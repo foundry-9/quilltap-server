@@ -11,7 +11,7 @@
  */
 export interface SearchScriptoriumToolInput {
   query: string
-  sources?: ('memories' | 'conversations')[]
+  sources?: ('memories' | 'conversations' | 'documents')[]
   limit?: number
   minImportance?: number
 }
@@ -21,7 +21,7 @@ export interface SearchScriptoriumToolInput {
  */
 export interface SearchScriptoriumResult {
   content: string
-  sourceType: 'memory' | 'conversation'
+  sourceType: 'memory' | 'conversation' | 'document'
   relevanceScore: number
   metadata: {
     // Memory-specific
@@ -36,6 +36,12 @@ export interface SearchScriptoriumResult {
     interchangeIndex?: number
     conversationTitle?: string
     participantNames?: string[]
+    // Document-specific
+    mountPointName?: string
+    fileName?: string
+    filePath?: string
+    chunkIndex?: number
+    headingContext?: string
   }
 }
 
@@ -58,7 +64,7 @@ export const searchScriptoriumToolDefinition = {
   function: {
     name: 'search',
     description:
-      'Search across your memories and past conversation history. Returns results from both your personal memories and rendered conversations, ranked by relevance. Use this to find information from past interactions, recall conversation details, or locate specific discussions by topic.',
+      'Search across your memories, past conversation history, and mounted documents. Returns results from your personal memories, rendered conversations, and indexed document collections, ranked by relevance. Use this to find information from past interactions, recall conversation details, locate specific discussions by topic, or search through reference documents.',
     parameters: {
       type: 'object',
       properties: {
@@ -73,10 +79,10 @@ export const searchScriptoriumToolDefinition = {
           type: 'array',
           items: {
             type: 'string',
-            enum: ['memories', 'conversations'],
+            enum: ['memories', 'conversations', 'documents'],
           },
           description:
-            'Which sources to search. Defaults to all sources if not specified.',
+            'Which sources to search. Defaults to all sources if not specified. Use "documents" to search through mounted document collections.',
         },
         limit: {
           type: 'integer',
@@ -121,7 +127,7 @@ export function validateSearchScriptoriumInput(
     if (!Array.isArray(obj.sources)) {
       return false
     }
-    const validSources = ['memories', 'conversations']
+    const validSources = ['memories', 'conversations', 'documents']
     for (const s of obj.sources) {
       if (typeof s !== 'string' || !validSources.includes(s)) {
         return false

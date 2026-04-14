@@ -21,12 +21,14 @@ import {
   DeleteResult,
   SQLITE_CAPABILITIES,
 } from '../../interfaces';
-import { SQLiteConfig, loadSQLiteConfig, loadLLMLogsConfig } from '../../config';
+import { SQLiteConfig, loadSQLiteConfig, loadLLMLogsConfig, loadMountIndexConfig } from '../../config';
 import { getSQLiteClient, closeSQLiteClient, isSQLiteConnected, setupSQLiteShutdownHandlers } from './client';
 import { runIntegrityCheck, startPeriodicCheckpoints } from './protection';
 import { createPhysicalBackup, createLLMLogsPhysicalBackup, applyRetentionPolicy } from './physical-backup';
 import { getLLMLogsSQLiteClient, closeLLMLogsSQLiteClient } from './llm-logs-client';
 import { runLLMLogsIntegrityCheck, startLLMLogsPeriodicCheckpoints } from './llm-logs-protection';
+import { getMountIndexSQLiteClient } from './mount-index-client';
+import { runMountIndexIntegrityCheck, startMountIndexPeriodicCheckpoints } from './mount-index-protection';
 import { acquireInstanceLock, releaseActiveInstanceLock, InstanceLockError } from './instance-lock';
 import { getInstanceLockPath } from '@/lib/paths';
 import { generateDDL, extractSchemaMetadata } from '../../schema-translator';
@@ -230,14 +232,14 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   async findOneAndUpdate(
     filter: TypedQueryFilter<T>,
     update: UpdateSpec<T>,
-    options?: { returnDocument?: 'before' | 'after'; upsert?: boolean }
+    options?: { returnDocument?: 'before' | 'after'; upsert?: boolean; sort?: import('../../interfaces').SortSpec }
   ): Promise<T | null> {
     try {
       const returnAfter = options?.returnDocument !== 'before';
 
       // Always find the document first to get its ID
       // This is needed for returnDocument: 'after' since the filter may not match post-update
-      const before = await this.findOne(filter);
+      const before = await this.findOne(filter, options?.sort ? { sort: options.sort } : undefined);
 
       if (!before) {
         if (options?.upsert) {
@@ -572,6 +574,22 @@ export class SQLiteBackend implements DatabaseBackend {
           error: error instanceof Error ? error.message : String(error),
         });
         // Do NOT rethrow — main DB is fine, only logs are affected
+      }
+
+      // Initialize the dedicated mount index database (failure is non-fatal)
+      try {
+        const mountIndexConfig = loadMountIndexConfig();
+        const mountIndexDb = getMountIndexSQLiteClient(mountIndexConfig);
+
+        if (mountIndexDb) {
+          runMountIndexIntegrityCheck(mountIndexDb);
+          startMountIndexPeriodicCheckpoints(mountIndexDb);
+        }
+      } catch (error) {
+        logger.error('Failed to initialize mount index database — document mounts will be unavailable', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Do NOT rethrow — main DB is fine, only mount index is affected
       }
 
       logger.info('SQLite backend connected', { path: this.config.path });

@@ -21,6 +21,28 @@
 
 #### Added
 
+- **Document Stores UI**: Full management interface for document mount points
+  - New "Document Stores" button in left sidebar navigation (database icon, below Files)
+  - List page at `/document-stores` with card grid showing name, path, type, file/chunk counts, scan status, and last scan time
+  - Create dialog with name, path, mount type (filesystem/Obsidian), include/exclude pattern configuration
+  - Edit dialog with all fields plus enable/disable toggle
+  - Delete confirmation dialog with clear warning about data removal
+  - Scan button on each card triggers filesystem scan and embedding job queuing with progress feedback
+  - Detail page at `/document-stores/[id]` with summary stats, pattern display, and full file table
+  - File table with sortable columns (name, type, size, conversion status, embedding chunks, last modified), filter search, and summary bar
+  - Updated help file to reference new UI instead of API-only management
+- **Scriptorium (Phase 3.2)**: Document mount points and auto-embedding
+  - Mount external document directories (filesystem paths, Obsidian vaults) as searchable knowledge sources
+  - New `quilltap-mount-index.db` database (third database, separate from main and LLM logs) with SQLCipher encryption, WAL mode, and graceful degradation
+  - Four new tables: `doc_mount_points`, `doc_mount_files`, `doc_mount_chunks`, `project_doc_mount_links` (many-to-many)
+  - Format conversion pipeline: PDF (pdf-parse v2), Word (.docx via mammoth.js), Markdown (regex syntax stripping), plain text
+  - Intelligent chunking engine: 800-1200 token chunks with 200-token overlap, heading context tracking
+  - SHA-256 checksum-based change detection on startup — new/modified files automatically re-ingested, deleted files purged
+  - Auto-embedding via existing embedding infrastructure with new `MOUNT_CHUNK` entity type
+  - New `'documents'` source type in the unified search tool — document chunks appear alongside memories and conversations
+  - Fire-and-forget startup scanning (Phase 3.3) — large vaults don't block server startup
+  - REST API: `/api/v1/mount-points` CRUD, `?action=scan` manual re-scan trigger, `/api/v1/projects/[id]/mount-points` link/unlink
+  - New npm dependency: `mammoth` for DOCX text extraction
 - **Unified Embedding Swap**: EMBEDDING_REINDEX_ALL now performs a full system-wide re-embed covering help documentation, character memories, and conversation chunks (Scriptorium)
   - Help docs are synced from disk to a new `help_docs` database table and embedded at runtime using the user's chosen embedding profile — no more pre-built MessagePack bundle
   - When switching embedding profiles, users are prompted to "Re-embed Everything" (not just memories)
@@ -76,6 +98,12 @@
 
 #### Fixed
 
+- **Background job queue now respects priority**: `claimNextJob()` sorts by `priority DESC, createdAt ASC` instead of arbitrary order — the `priority` column existed but was never consulted
+- **Chat-related embeddings prioritized over batch operations**: Memory and conversation chunk embeddings now enqueue at priority 10, while mount chunk and help doc embeddings enqueue at priority 0, preventing large document store scans from starving real-time chat responsiveness
+- **Google plugin (1.1.22)**: Fixed tool/function calling with Google Gemini SDK — uppercase schema `type` fields for API compatibility, switched `userAgentExtra` to `httpOptions.headers` for newer SDK versions, re-enabled function calling for Gemini 3 models, and improved function call extraction from raw responses
+- **Memory search dimension mismatch fallback**: When the search embedding profile produces different dimensions than the stored vector index, `searchMemoriesSemantic` now detects the mismatch before calling vector search and falls back to text-based search instead of silently returning zero results
+- **Text search fallback broadened to per-word matching**: The text-based memory search fallback now searches for individual significant words (filtering stop words) when the full query phrase doesn't match, so multi-word queries find relevant memories even without exact substring matches
+- **Removed per-chat embedding profile override**: The `embeddingProfileId` field in `cheapLLMSettings` was removed — the system now always uses the single default embedding profile for all search operations, preventing mismatches between the profile used to build the vector index and the one used at search time
 - **Tasks Queue UI**: The paused-jobs count was never shown in the queue stats panel because the API response omitted the `paused` field — it is now included.
 - **Tasks Queue UI**: Jobs of type `SCENE_STATE_TRACKING`, `CHARACTER_AVATAR_GENERATION`, and `CONVERSATION_RENDER` appeared as raw type identifiers instead of human-readable names; they now display correctly.
 - **Tasks Queue UI**: Non-LLM background jobs (embedding generation, vocabulary refit, re-index, avatar generation, conversation render, and story background generation) were incorrectly contributing 500 estimated tokens each to the queue token estimate; they now correctly contribute 0.

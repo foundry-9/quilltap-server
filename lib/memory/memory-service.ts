@@ -409,6 +409,23 @@ export async function searchMemoriesSemantic(
     )
 
     const vectorStore = await getCharacterVectorStore(characterId)
+    const storedDimensions = vectorStore.getDimensions()
+
+    // Check for dimension mismatch before searching — if the search embedding
+    // profile differs from the one used to build the index, vector search will
+    // return nothing. Fall back to text search immediately rather than silently
+    // returning empty results.
+    if (storedDimensions !== null && embeddingResult.embedding.length !== storedDimensions) {
+      logger.warn('[Memory] Embedding dimension mismatch — search profile produces different dimensions than stored index, falling back to text search', {
+        characterId,
+        query: query.substring(0, 100),
+        storedDimensions,
+        queryDimensions: embeddingResult.embedding.length,
+        userId: options.userId,
+        embeddingProfileId: options.embeddingProfileId ?? 'default',
+      })
+      return searchMemoriesText(characterId, query, options)
+    }
 
     // Search vectors
     const vectorResults = vectorStore.search(
@@ -464,6 +481,11 @@ export async function searchMemoriesSemantic(
 
 /**
  * Text-based memory search (fallback when embeddings unavailable)
+ *
+ * Searches for the full query phrase first, then broadens to individual
+ * significant words if the full phrase doesn't match enough results.
+ * This is critical when this function is the fallback for a failed
+ * semantic search (e.g. dimension mismatch).
  */
 async function searchMemoriesText(
   characterId: string,
@@ -477,7 +499,49 @@ async function searchMemoriesText(
   const repos = getRepositories()
   const limit = options.limit || 20
 
+  // Try full-phrase search first
   let memories = await repos.memories.searchByContent(characterId, query)
+
+  // If full-phrase search returned too few results, broaden to per-word search.
+  // Filter out common stop words to keep results relevant.
+  const STOP_WORDS = new Set([
+    'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+    'of', 'with', 'by', 'is', 'was', 'are', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+    'should', 'may', 'might', 'can', 'shall', 'that', 'this', 'these',
+    'those', 'it', 'its', 'my', 'your', 'his', 'her', 'our', 'their',
+    'what', 'which', 'who', 'whom', 'how', 'when', 'where', 'why',
+    'not', 'no', 'nor', 'if', 'then', 'than', 'so', 'as', 'about',
+    'from', 'into', 'up', 'out', 'off', 'over', 'under', 'again',
+    'before', 'after', 'between', 'through',
+  ])
+
+  if (memories.length < limit) {
+    const queryWords = query.toLowerCase().split(/\s+/)
+      .filter(w => w.length > 2 && !STOP_WORDS.has(w))
+
+    if (queryWords.length > 0) {
+      const existingIds = new Set(memories.map(m => m.id))
+
+      // Search for each significant word individually
+      for (const word of queryWords) {
+        const wordResults = await repos.memories.searchByContent(characterId, word)
+        for (const mem of wordResults) {
+          if (!existingIds.has(mem.id)) {
+            existingIds.add(mem.id)
+            memories.push(mem)
+          }
+        }
+      }
+
+      logger.debug('[Memory] Text search broadened to per-word search', {
+        characterId,
+        query: query.substring(0, 100),
+        significantWords: queryWords,
+        totalCandidates: memories.length,
+      })
+    }
+  }
 
   // Apply filters
   if (options.minImportance !== undefined) {
@@ -489,25 +553,35 @@ async function searchMemoriesText(
 
   // Score based on text matching
   const queryLower = query.toLowerCase()
+  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w))
   const results: SemanticSearchResult[] = memories.map(memory => {
     let score = 0
     const contentLower = memory.content.toLowerCase()
     const summaryLower = memory.summary.toLowerCase()
 
-    // Exact match in summary is highest score
+    // Exact full-phrase match in summary is highest score
     if (summaryLower.includes(queryLower)) {
-      score += 0.5
+      score += 0.4
     }
-    // Match in content
+    // Exact full-phrase match in content
     if (contentLower.includes(queryLower)) {
       score += 0.3
     }
+
+    // Per-word matching in content and summary
+    if (queryWords.length > 0) {
+      const contentWordMatches = queryWords.filter(w => contentLower.includes(w)).length
+      const summaryWordMatches = queryWords.filter(w => summaryLower.includes(w)).length
+      // Score based on proportion of query words matched
+      score += 0.2 * (contentWordMatches / queryWords.length)
+      score += 0.1 * (summaryWordMatches / queryWords.length)
+    }
+
     // Keyword matches
-    const queryWords = queryLower.split(/\s+/)
     const matchingKeywords = memory.keywords.filter(kw =>
       queryWords.some(qw => kw.toLowerCase().includes(qw))
     )
-    score += 0.2 * (matchingKeywords.length / Math.max(memory.keywords.length, 1))
+    score += 0.1 * (matchingKeywords.length / Math.max(memory.keywords.length, 1))
 
     const { effectiveWeight } = calculateEffectiveWeight(memory)
 
@@ -519,14 +593,17 @@ async function searchMemoriesText(
     }
   })
 
+  // Filter out zero-score results (no words matched at all)
+  const scoredResults = results.filter(r => r.score > 0)
+
   // Combine text score with effective weight for final ranking
-  results.sort((a, b) => {
+  scoredResults.sort((a, b) => {
     const finalScoreA = a.score * 0.6 + (a.effectiveWeight ?? 0) * 0.4
     const finalScoreB = b.score * 0.6 + (b.effectiveWeight ?? 0) * 0.4
     return finalScoreB - finalScoreA
   })
 
-  return results.slice(0, limit)
+  return scoredResults.slice(0, limit)
 }
 
 /**

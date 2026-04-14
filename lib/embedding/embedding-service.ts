@@ -242,18 +242,34 @@ export async function generateEmbeddingForUser(
   profileId?: string
 ): Promise<EmbeddingResult> {
   let profile: EmbeddingProfile | null = null
+  let profileSource = 'default'
 
   if (profileId) {
     profile = await getEmbeddingProfile(profileId)
+    if (profile) {
+      profileSource = 'explicit'
+    }
   }
 
   if (!profile) {
     profile = await getDefaultEmbeddingProfile(userId)
+    profileSource = profileId ? 'default (explicit not found)' : 'default'
   }
 
   if (!profile) {
     throw new EmbeddingError('No embedding profile configured')
   }
+
+  logger.debug('[Embedding] Generating embedding for user', {
+    context: 'embedding-service',
+    profileId: profile.id,
+    profileName: profile.name,
+    provider: profile.provider,
+    modelName: profile.modelName,
+    dimensions: profile.dimensions,
+    profileSource,
+    textLength: text.length,
+  })
 
   return generateEmbedding(text, profile, userId)
 }

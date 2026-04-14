@@ -14014,7 +14014,7 @@ function createPluginLogger(pluginName, minLevel = "debug") {
 }
 var BUILTIN_TOOL_NAMES = /* @__PURE__ */ new Set([
   "generate_image",
-  "search_memories",
+  "search",
   "search_web",
   "project_info",
   "file_management",

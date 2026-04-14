@@ -274,7 +274,7 @@ export interface DatabaseCollection<T = unknown> {
   findOneAndUpdate(
     filter: TypedQueryFilter<T>,
     update: UpdateSpec<T>,
-    options?: { returnDocument?: 'before' | 'after'; upsert?: boolean }
+    options?: { returnDocument?: 'before' | 'after'; upsert?: boolean; sort?: SortSpec }
   ): Promise<T | null>;
 
   /**
