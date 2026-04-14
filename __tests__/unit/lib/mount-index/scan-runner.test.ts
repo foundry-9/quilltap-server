@@ -193,7 +193,8 @@ describe('scanAllMountPoints', () => {
     mockScanMountPoint.mockResolvedValue(makeOkScanResult('mp-1', 3))
     mockEnqueueEmbeddingJobsForMountPoint.mockRejectedValue(new Error('Queue unavailable'))
 
-    // Should not throw
-    const results = await expect(scanAllMountPoints()).resolves.toHaveLength(1)
+    // Should not throw; scan result is still returned
+    const results = await scanAllMountPoints()
+    expect(results).toHaveLength(1)
   })
 })
