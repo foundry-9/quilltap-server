@@ -17,6 +17,14 @@
   - `document-stores/[id]/page.tsx`: status indicators, error box, and pattern badges use `qt-*` classes
   - `document-stores/page.tsx`: action button uses `qt-button-primary`
 
+#### Bug Fixes
+
+- Fixed chat participant status changes (absent/remove) not updating in the UI under Electron due to Chromium caching stale GET responses; added `cache: 'no-store'` to all chat-related fetch calls in the Salon view
+
+#### Improvements
+
+- Enhanced participant action logging: update, remove, add, and reactivate actions now log character names, status transitions, updated fields, and failure details at appropriate levels (debug/info/warn)
+
 #### Removed
 
 - Pre-built help bundle (`public/help-bundle.msgpack.gz`) — help docs are now embedded at runtime

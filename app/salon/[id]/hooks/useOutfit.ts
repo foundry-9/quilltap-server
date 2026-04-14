@@ -125,7 +125,7 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
 
     setLoading(true)
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=outfit`)
+      const res = await fetch(`/api/v1/chats/${chatId}?action=outfit`, { cache: 'no-store' })
       if (!res.ok) {
         console.warn('[useOutfit] Failed to fetch outfit state', res.status)
         return null

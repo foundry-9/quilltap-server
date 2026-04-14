@@ -161,7 +161,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         return
       }
       try {
-        const res = await fetch(`/api/v1/chats/${id}`)
+        const res = await fetch(`/api/v1/chats/${id}`, { cache: 'no-store' })
         if (!res.ok) return
         const data = await res.json()
         // Check the enriched participant avatar URL — this changes when avatarOverrides update
