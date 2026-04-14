@@ -45,6 +45,18 @@ import {
 import {
   searchScriptoriumToolDefinition,
 } from '@/lib/tools/search-scriptorium-tool';
+import {
+  docReadFileTool,
+  docWriteFileTool,
+  docStrReplaceTool,
+  docInsertTextTool,
+  docGrepTool,
+  docListFilesTool,
+  docReadFrontmatterTool,
+  docUpdateFrontmatterTool,
+  docReadHeadingTool,
+  docUpdateHeadingTool,
+} from '@/lib/tools';
 
 /**
  * Map from built-in tool IDs to their OpenAI-format definitions (for schema inclusion)
@@ -70,6 +82,16 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   list_wardrobe: wardrobeListToolDefinition,
   update_outfit_item: wardrobeUpdateOutfitToolDefinition,
   create_wardrobe_item: wardrobeCreateItemToolDefinition,
+  doc_read_file: docReadFileTool,
+  doc_write_file: docWriteFileTool,
+  doc_str_replace: docStrReplaceTool,
+  doc_insert_text: docInsertTextTool,
+  doc_grep: docGrepTool,
+  doc_list_files: docListFilesTool,
+  doc_read_frontmatter: docReadFrontmatterTool,
+  doc_update_frontmatter: docUpdateFrontmatterTool,
+  doc_read_heading: docReadHeadingTool,
+  doc_update_heading: docUpdateHeadingTool,
 };
 
 /**
@@ -216,6 +238,77 @@ const BUILT_IN_TOOLS = [
     source: 'built-in' as const,
     category: 'utility',
   },
+  // Document editing tools (Scriptorium Phase 3.3)
+  {
+    id: 'doc_read_file',
+    name: 'Read Document',
+    description: 'Read file contents from document stores or project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_write_file',
+    name: 'Write Document',
+    description: 'Write or create a file in document stores or project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_str_replace',
+    name: 'Find & Replace in Document',
+    description: 'Find and replace exact text in a file (unique match required)',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_insert_text',
+    name: 'Insert Text in Document',
+    description: 'Insert text at a specific position in a file',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_grep',
+    name: 'Search Documents',
+    description: 'Search for text across files in document stores and project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_list_files',
+    name: 'List Documents',
+    description: 'List files available in document stores and project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_read_frontmatter',
+    name: 'Read Frontmatter',
+    description: 'Read YAML frontmatter from a markdown file',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_update_frontmatter',
+    name: 'Update Frontmatter',
+    description: 'Update YAML frontmatter properties in a markdown file',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_read_heading',
+    name: 'Read Heading Section',
+    description: 'Read all content under a specific heading in a markdown file',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_update_heading',
+    name: 'Update Heading Section',
+    description: 'Replace content under a specific heading in a markdown file',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
   // Note: request_full_context and submit_final_response are intentionally excluded
   // - request_full_context is a safety valve that should always be available
   // - submit_final_response is an agent-mode internal tool
@@ -263,6 +356,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     let chatContext: {
       hasImageProfile: boolean;
       hasProject: boolean;
+      hasDocumentStores: boolean;
       allowsWebSearch: boolean;
       isMultiCharacter: boolean;
       canDressThemselves: boolean;
@@ -315,7 +409,18 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
             }
           }
 
-          chatContext = { hasImageProfile, hasProject, allowsWebSearch, isMultiCharacter, canDressThemselves, canCreateOutfits };
+          // Check if project has linked document stores
+          let hasDocumentStores = false;
+          if (hasProject && chat.projectId) {
+            try {
+              const mountLinks = await repos.projectDocMountLinks.findByProjectId(chat.projectId);
+              hasDocumentStores = mountLinks.length > 0;
+            } catch {
+              // Non-critical, default to false
+            }
+          }
+
+          chatContext = { hasImageProfile, hasProject, hasDocumentStores, allowsWebSearch, isMultiCharacter, canDressThemselves, canCreateOutfits };
         }
       } catch (chatError) {
         logger.warn('[Tools v1] Failed to load chat for availability check', {
@@ -493,6 +598,24 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
             if (!chatContext.canCreateOutfits) {
               tool.available = false;
               tool.unavailableReason = 'Character does not have wardrobe item creation enabled';
+            }
+            break;
+          case 'doc_read_file':
+          case 'doc_write_file':
+          case 'doc_str_replace':
+          case 'doc_insert_text':
+          case 'doc_grep':
+          case 'doc_list_files':
+          case 'doc_read_frontmatter':
+          case 'doc_update_frontmatter':
+          case 'doc_read_heading':
+          case 'doc_update_heading':
+            if (!chatContext.hasProject) {
+              tool.available = false;
+              tool.unavailableReason = 'Chat must be associated with a project';
+            } else if (!chatContext.hasDocumentStores) {
+              tool.available = false;
+              tool.unavailableReason = 'Project must have linked document stores (configure in Project > Document Stores)';
             }
             break;
           case 'chdir':
