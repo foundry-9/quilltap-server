@@ -61,6 +61,10 @@ import { docReadFrontmatterTool } from '@/lib/tools/doc-read-frontmatter-tool';
 import { docUpdateFrontmatterTool } from '@/lib/tools/doc-update-frontmatter-tool';
 import { docReadHeadingTool } from '@/lib/tools/doc-read-heading-tool';
 import { docUpdateHeadingTool } from '@/lib/tools/doc-update-heading-tool';
+import { docMoveFileTool } from '@/lib/tools/doc-move-file-tool';
+import { docDeleteFileTool } from '@/lib/tools/doc-delete-file-tool';
+import { docCreateFolderTool } from '@/lib/tools/doc-create-folder-tool';
+import { docDeleteFolderTool } from '@/lib/tools/doc-delete-folder-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -355,6 +359,10 @@ export async function buildToolsForProvider(
     universalTools.push(docUpdateFrontmatterTool as UniversalTool);
     universalTools.push(docReadHeadingTool as UniversalTool);
     universalTools.push(docUpdateHeadingTool as UniversalTool);
+    universalTools.push(docMoveFileTool as UniversalTool);
+    universalTools.push(docDeleteFileTool as UniversalTool);
+    universalTools.push(docCreateFolderTool as UniversalTool);
+    universalTools.push(docDeleteFolderTool as UniversalTool);
   }
 
   // Add shell interactivity tools if enabled (only in VM/Docker environments)

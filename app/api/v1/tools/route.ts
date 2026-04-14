@@ -56,6 +56,10 @@ import {
   docUpdateFrontmatterTool,
   docReadHeadingTool,
   docUpdateHeadingTool,
+  docMoveFileTool,
+  docDeleteFileTool,
+  docCreateFolderTool,
+  docDeleteFolderTool,
 } from '@/lib/tools';
 
 /**
@@ -92,6 +96,10 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   doc_update_frontmatter: docUpdateFrontmatterTool,
   doc_read_heading: docReadHeadingTool,
   doc_update_heading: docUpdateHeadingTool,
+  doc_move_file: docMoveFileTool,
+  doc_delete_file: docDeleteFileTool,
+  doc_create_folder: docCreateFolderTool,
+  doc_delete_folder: docDeleteFolderTool,
 };
 
 /**
@@ -306,6 +314,35 @@ const BUILT_IN_TOOLS = [
     id: 'doc_update_heading',
     name: 'Update Heading Section',
     description: 'Replace content under a specific heading in a markdown file',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  // Document file management tools (Scriptorium Phase 3.4)
+  {
+    id: 'doc_move_file',
+    name: 'Move/Rename Document',
+    description: 'Move or rename a file in document stores or project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_delete_file',
+    name: 'Delete Document',
+    description: 'Permanently delete a file from document stores or project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_create_folder',
+    name: 'Create Folder',
+    description: 'Create a new folder in document stores or project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_delete_folder',
+    name: 'Delete Folder',
+    description: 'Delete an empty folder from document stores or project files',
     source: 'built-in' as const,
     category: 'documents',
   },
@@ -610,6 +647,10 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
           case 'doc_update_frontmatter':
           case 'doc_read_heading':
           case 'doc_update_heading':
+          case 'doc_move_file':
+          case 'doc_delete_file':
+          case 'doc_create_folder':
+          case 'doc_delete_folder':
             if (!chatContext.hasProject) {
               tool.available = false;
               tool.unavailableReason = 'Chat must be associated with a project';

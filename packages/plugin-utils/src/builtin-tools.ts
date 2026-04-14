@@ -41,6 +41,11 @@ export const BUILTIN_TOOL_NAMES = new Set([
   'doc_update_frontmatter',
   'doc_read_heading',
   'doc_update_heading',
+  // Document file management tools (Scriptorium Phase 3.4)
+  'doc_move_file',
+  'doc_delete_file',
+  'doc_create_folder',
+  'doc_delete_folder',
 ]);
 
 /**

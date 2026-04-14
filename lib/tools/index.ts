@@ -364,6 +364,12 @@ export { docUpdateFrontmatterTool, validateDocUpdateFrontmatterInput, type DocUp
 export { docReadHeadingTool, validateDocReadHeadingInput, type DocReadHeadingInput, type DocReadHeadingOutput } from './doc-read-heading-tool';
 export { docUpdateHeadingTool, validateDocUpdateHeadingInput, type DocUpdateHeadingInput, type DocUpdateHeadingOutput } from './doc-update-heading-tool';
 
+// Document File Management Tools (Scriptorium Phase 3.4)
+export { docMoveFileTool, validateDocMoveFileInput, type DocMoveFileInput, type DocMoveFileOutput } from './doc-move-file-tool';
+export { docDeleteFileTool, validateDocDeleteFileInput, type DocDeleteFileInput, type DocDeleteFileOutput } from './doc-delete-file-tool';
+export { docCreateFolderTool, validateDocCreateFolderInput, type DocCreateFolderInput, type DocCreateFolderOutput } from './doc-create-folder-tool';
+export { docDeleteFolderTool, validateDocDeleteFolderInput, type DocDeleteFolderInput, type DocDeleteFolderOutput } from './doc-delete-folder-tool';
+
 export {
   executeDocEditTool,
   formatDocEditResults,

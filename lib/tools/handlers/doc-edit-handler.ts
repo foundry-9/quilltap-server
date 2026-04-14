@@ -41,6 +41,10 @@ import type { DocReadFrontmatterInput, DocReadFrontmatterOutput } from '../doc-r
 import type { DocUpdateFrontmatterInput, DocUpdateFrontmatterOutput } from '../doc-update-frontmatter-tool';
 import type { DocReadHeadingInput, DocReadHeadingOutput } from '../doc-read-heading-tool';
 import type { DocUpdateHeadingInput, DocUpdateHeadingOutput } from '../doc-update-heading-tool';
+import type { DocMoveFileInput, DocMoveFileOutput } from '../doc-move-file-tool';
+import type { DocDeleteFileInput, DocDeleteFileOutput } from '../doc-delete-file-tool';
+import type { DocCreateFolderInput, DocCreateFolderOutput } from '../doc-create-folder-tool';
+import type { DocDeleteFolderInput, DocDeleteFolderOutput } from '../doc-delete-folder-tool';
 
 const logger = createServiceLogger('DocEdit:Handler');
 
@@ -59,6 +63,10 @@ export const DOC_EDIT_TOOL_NAMES = new Set([
   'doc_update_frontmatter',
   'doc_read_heading',
   'doc_update_heading',
+  'doc_move_file',
+  'doc_delete_file',
+  'doc_create_folder',
+  'doc_delete_folder',
 ]);
 
 /**
@@ -109,6 +117,14 @@ export async function executeDocEditTool(
         return await handleReadHeading(input as unknown as DocReadHeadingInput, context);
       case 'doc_update_heading':
         return await handleUpdateHeading(input as unknown as DocUpdateHeadingInput, context);
+      case 'doc_move_file':
+        return await handleMoveFile(input as unknown as DocMoveFileInput, context);
+      case 'doc_delete_file':
+        return await handleDeleteFile(input as unknown as DocDeleteFileInput, context);
+      case 'doc_create_folder':
+        return await handleCreateFolder(input as unknown as DocCreateFolderInput, context);
+      case 'doc_delete_folder':
+        return await handleDeleteFolder(input as unknown as DocDeleteFolderInput, context);
       default:
         return { success: false, error: `Unknown doc-edit tool: ${toolName}` };
     }
@@ -917,4 +933,194 @@ async function handleUpdateHeading(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+// ============================================================================
+// Tier 3: File Management Handlers (Scriptorium Phase 3.4)
+// ============================================================================
+
+// --- doc_move_file ---
+
+async function handleMoveFile(
+  input: DocMoveFileInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: DocMoveFileOutput; error?: string; formattedText?: string }> {
+  const scope = (input.scope || 'document_store') as DocEditScope;
+
+  // Resolve source path
+  const resolvedSource = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+
+  // Verify source exists and is a file
+  try {
+    const stat = await fs.stat(resolvedSource.absolutePath);
+    if (!stat.isFile()) {
+      return { success: false, error: `Source path is not a file: ${input.path}` };
+    }
+  } catch {
+    return { success: false, error: `Source file not found: ${input.path}` };
+  }
+
+  // Resolve destination path (same scope and mount point)
+  const resolvedDest = await resolveDocEditPath(scope, input.new_path, buildResolutionContext(input, context));
+
+  // Check destination doesn't already exist
+  try {
+    await fs.access(resolvedDest.absolutePath);
+    return { success: false, error: `Destination already exists: ${input.new_path}. Move will not overwrite existing files.` };
+  } catch {
+    // Good — destination doesn't exist
+  }
+
+  // Ensure parent directory of destination exists
+  const destParent = path.dirname(resolvedDest.absolutePath);
+  await fs.mkdir(destParent, { recursive: true });
+
+  // Perform the move
+  await fs.rename(resolvedSource.absolutePath, resolvedDest.absolutePath);
+
+  logger.info('Moved file', {
+    from: input.path,
+    to: input.new_path,
+    scope,
+  });
+
+  // Trigger re-indexing for the new path if in document_store
+  if (resolvedSource.scope === 'document_store' && resolvedSource.mountPointId) {
+    reindexSingleFile(resolvedSource.mountPointId, resolvedDest.relativePath, resolvedDest.absolutePath)
+      .catch(err => {
+        logger.warn('Background re-index failed for moved file', {
+          path: resolvedDest.relativePath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+  }
+
+  const result: DocMoveFileOutput = {
+    success: true,
+    old_path: input.path,
+    new_path: input.new_path,
+  };
+
+  return {
+    success: true,
+    result,
+    formattedText: `Moved: ${input.path} → ${input.new_path}`,
+  };
+}
+
+// --- doc_delete_file ---
+
+async function handleDeleteFile(
+  input: DocDeleteFileInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: DocDeleteFileOutput; error?: string; formattedText?: string }> {
+  const scope = (input.scope || 'document_store') as DocEditScope;
+  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+
+  // Verify the file exists and is a file
+  try {
+    const stat = await fs.stat(resolved.absolutePath);
+    if (!stat.isFile()) {
+      return { success: false, error: `Path is not a file: ${input.path}` };
+    }
+  } catch {
+    return { success: false, error: `File not found: ${input.path}` };
+  }
+
+  // Delete the file
+  await fs.unlink(resolved.absolutePath);
+
+  logger.info('Deleted file', {
+    path: input.path,
+    scope,
+  });
+
+  const result: DocDeleteFileOutput = {
+    success: true,
+    path: input.path,
+  };
+
+  return {
+    success: true,
+    result,
+    formattedText: `Deleted file: ${input.path}`,
+  };
+}
+
+// --- doc_create_folder ---
+
+async function handleCreateFolder(
+  input: DocCreateFolderInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: DocCreateFolderOutput; error?: string; formattedText?: string }> {
+  const scope = (input.scope || 'document_store') as DocEditScope;
+  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+
+  // Create the directory (recursive, idempotent)
+  await fs.mkdir(resolved.absolutePath, { recursive: true });
+
+  logger.info('Created folder', {
+    path: input.path,
+    scope,
+  });
+
+  const result: DocCreateFolderOutput = {
+    success: true,
+    path: input.path,
+  };
+
+  return {
+    success: true,
+    result,
+    formattedText: `Created folder: ${input.path}`,
+  };
+}
+
+// --- doc_delete_folder ---
+
+async function handleDeleteFolder(
+  input: DocDeleteFolderInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: DocDeleteFolderOutput; error?: string; formattedText?: string }> {
+  const scope = (input.scope || 'document_store') as DocEditScope;
+  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+
+  // Verify the path exists and is a directory
+  try {
+    const stat = await fs.stat(resolved.absolutePath);
+    if (!stat.isDirectory()) {
+      return { success: false, error: `Path is not a folder: ${input.path}` };
+    }
+  } catch {
+    return { success: false, error: `Folder not found: ${input.path}` };
+  }
+
+  // Check that the directory is empty
+  const entries = await fs.readdir(resolved.absolutePath);
+  if (entries.length > 0) {
+    return {
+      success: false,
+      error: `Folder is not empty: ${input.path} (contains ${entries.length} item${entries.length === 1 ? '' : 's'}). Only empty folders can be deleted. Use doc_list_files to see the contents.`,
+      formattedText: `Error: Folder "${input.path}" is not empty (${entries.length} item${entries.length === 1 ? '' : 's'}). Only empty folders can be deleted.`,
+    };
+  }
+
+  // Delete the empty directory
+  await fs.rmdir(resolved.absolutePath);
+
+  logger.info('Deleted folder', {
+    path: input.path,
+    scope,
+  });
+
+  const result: DocDeleteFolderOutput = {
+    success: true,
+    path: input.path,
+  };
+
+  return {
+    success: true,
+    result,
+    formattedText: `Deleted folder: ${input.path}`,
+  };
 }

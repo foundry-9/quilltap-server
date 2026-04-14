@@ -21,6 +21,14 @@
 
 #### Added
 
+- **Scriptorium (Phase 3.4)**: File management tools for document editing
+  - `doc_move_file` — Move or rename files within document stores, project files, or general files
+  - `doc_delete_file` — Permanently delete files
+  - `doc_create_folder` — Create folders (with parent directory creation, idempotent)
+  - `doc_delete_folder` — Delete empty folders (non-empty folders are rejected for safety)
+  - All four tools support all three scopes (document_store, project, general)
+  - Completes the 14-tool `doc_*` family, closing MCP feature gaps for file management
+- Help documentation for document editing tools (`help/document-editing-tools.md`)
 - **Project Document Stores**: Link/unlink document stores on the project detail page
   - New "Document Stores" expandable card on the Prospero project page
   - Shows linked stores with name, type, file count, and total size
