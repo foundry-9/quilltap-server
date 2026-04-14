@@ -95,7 +95,7 @@ export default function DocumentStoresPage() {
         </div>
         <button
           onClick={() => setCreateDialogOpen(true)}
-          className="qt-button inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="qt-button-primary"
         >
           Add Document Store
         </button>

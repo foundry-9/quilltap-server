@@ -119,7 +119,7 @@ export default function DocumentStoreDetailPage() {
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-semibold leading-tight">{store.name}</h1>
               {!store.enabled && (
-                <span className="inline-flex items-center rounded-full bg-gray-500/20 px-2.5 py-1 text-xs font-medium text-gray-400">
+                <span className="qt-badge-disabled inline-flex items-center">
                   Disabled
                 </span>
               )}
@@ -169,16 +169,16 @@ export default function DocumentStoreDetailPage() {
           ) : store.embeddedChunkCount === store.chunkCount ? (
             <>
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-green-400" />
-                <span className="text-sm font-medium text-green-400">Complete</span>
+                <span className="h-2 w-2 rounded-full qt-dot-success" />
+                <span className="text-sm font-medium qt-text-success">Complete</span>
               </div>
               <div className="text-xs qt-text-secondary">{store.embeddedChunkCount}/{store.chunkCount} chunks embedded</div>
             </>
           ) : (
             <>
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
-                <span className="text-sm font-medium text-amber-400">{Math.round((store.embeddedChunkCount / store.chunkCount) * 100)}%</span>
+                <span className="h-2 w-2 animate-pulse rounded-full qt-dot-warning" />
+                <span className="text-sm font-medium qt-text-warning">{Math.round((store.embeddedChunkCount / store.chunkCount) * 100)}%</span>
               </div>
               <div className="text-xs qt-text-secondary">{store.embeddedChunkCount}/{store.chunkCount} chunks embedded</div>
             </>
@@ -188,9 +188,9 @@ export default function DocumentStoreDetailPage() {
 
       {/* Scan error display */}
       {store.scanStatus === 'error' && store.lastScanError && (
-        <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-          <h3 className="text-sm font-semibold text-red-400 mb-1">Last Scan Error</h3>
-          <p className="text-sm text-red-300">{store.lastScanError}</p>
+        <div className="mb-6 rounded-xl qt-border-destructive/30 qt-bg-destructive/10 border p-4">
+          <h3 className="text-sm font-semibold qt-text-destructive mb-1">Last Scan Error</h3>
+          <p className="text-sm qt-text-destructive">{store.lastScanError}</p>
         </div>
       )}
 
@@ -200,7 +200,7 @@ export default function DocumentStoreDetailPage() {
           <h3 className="text-xs font-medium qt-text-secondary uppercase tracking-wider mb-2">Include Patterns</h3>
           <div className="flex flex-wrap gap-1.5">
             {store.includePatterns.map((p, i) => (
-              <span key={i} className="inline-flex rounded bg-green-500/15 px-2 py-0.5 text-xs font-mono text-green-400">
+              <span key={i} className="inline-flex rounded qt-bg-success/10 qt-text-success px-2 py-0.5 text-xs font-mono">
                 {p}
               </span>
             ))}
@@ -210,7 +210,7 @@ export default function DocumentStoreDetailPage() {
           <h3 className="text-xs font-medium qt-text-secondary uppercase tracking-wider mb-2">Exclude Patterns</h3>
           <div className="flex flex-wrap gap-1.5">
             {store.excludePatterns.map((p, i) => (
-              <span key={i} className="inline-flex rounded bg-red-500/15 px-2 py-0.5 text-xs font-mono text-red-400">
+              <span key={i} className="inline-flex rounded qt-bg-destructive/10 qt-text-destructive px-2 py-0.5 text-xs font-mono">
                 {p}
               </span>
             ))}

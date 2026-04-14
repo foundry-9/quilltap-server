@@ -24,29 +24,29 @@ function formatBytes(bytes: number): string {
 }
 
 function FileTypeBadge({ type }: { type: string }) {
-  const colors: Record<string, string> = {
-    markdown: 'bg-green-500/20 text-green-400',
-    txt: 'bg-gray-500/20 text-gray-400',
-    pdf: 'bg-red-500/20 text-red-400',
-    docx: 'bg-blue-500/20 text-blue-400',
+  const badgeClass: Record<string, string> = {
+    markdown: 'qt-badge-success',
+    txt: 'qt-badge-disabled',
+    pdf: 'qt-badge-destructive',
+    docx: 'qt-badge-info',
   }
   return (
-    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${colors[type] || 'bg-gray-500/20 text-gray-400'}`}>
+    <span className={`inline-flex items-center ${badgeClass[type] || 'qt-badge-disabled'}`}>
       {type.toUpperCase()}
     </span>
   )
 }
 
 function ConversionBadge({ status, error }: { status: string; error: string | null }) {
-  const styles: Record<string, string> = {
-    converted: 'bg-green-500/20 text-green-400',
-    pending: 'bg-amber-500/20 text-amber-400',
-    failed: 'bg-red-500/20 text-red-400',
-    skipped: 'bg-gray-500/20 text-gray-400',
+  const badgeClass: Record<string, string> = {
+    converted: 'qt-badge-success',
+    pending: 'qt-badge-warning',
+    failed: 'qt-badge-destructive',
+    skipped: 'qt-badge-disabled',
   }
   return (
     <span
-      className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${styles[status] || 'bg-gray-500/20 text-gray-400'}`}
+      className={`inline-flex items-center ${badgeClass[status] || 'qt-badge-disabled'}`}
       title={error || undefined}
     >
       {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -60,7 +60,7 @@ function EmbeddingIndicator({ chunkCount }: { chunkCount: number }) {
   }
   return (
     <span className="inline-flex items-center gap-1 text-xs text-foreground">
-      <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
+      <span className="h-1.5 w-1.5 rounded-full qt-dot-success" />
       {chunkCount} chunk{chunkCount !== 1 ? 's' : ''}
     </span>
   )
@@ -162,13 +162,13 @@ export function FileTable({ files, loading }: FileTableProps) {
             <strong className="text-foreground">{totalChunks}</strong> chunks
           </span>
           {conversionStats.converted > 0 && (
-            <span className="text-green-400 text-xs">{conversionStats.converted} converted</span>
+            <span className="qt-text-success text-xs">{conversionStats.converted} converted</span>
           )}
           {conversionStats.pending > 0 && (
-            <span className="text-amber-400 text-xs">{conversionStats.pending} pending</span>
+            <span className="qt-text-warning text-xs">{conversionStats.pending} pending</span>
           )}
           {conversionStats.failed > 0 && (
-            <span className="text-red-400 text-xs">{conversionStats.failed} failed</span>
+            <span className="qt-text-destructive text-xs">{conversionStats.failed} failed</span>
           )}
         </div>
         <div className="ml-auto">
