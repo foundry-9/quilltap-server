@@ -26,7 +26,8 @@
   - Shows linked stores with name, type, file count, and total size
   - Inline picker to link available document stores to the project
   - Unlink button on each linked store
-- **Document editing tools in tool settings**: All 10 doc_* tools appear in the tool settings UI (per-chat and per-project defaults) with availability status based on whether the project has linked document stores; grouped under their own "Document Editing" section separate from other built-in tools
+- **Document editing tools in tool settings**: All 10 doc_* tools appear in the tool settings UI (per-chat and per-project defaults) with availability status based on whether the project has linked document stores
+- **Tool settings grouping**: Built-in tools are now organized into collapsible groups by category — "Document Editing", "Wardrobe", "Workspace" (VM/Docker shell tools), and "Quilltap Help" — each toggleable as a unit
 - **Scriptorium (Phase 3.3)**: Quilltap-native document editing tools
   - 10 new LLM tools for reading, editing, and searching files in document stores and project files
   - **Tier 1 — Text primitives**: `doc_read_file`, `doc_write_file`, `doc_str_replace`, `doc_insert_text`, `doc_grep`, `doc_list_files`

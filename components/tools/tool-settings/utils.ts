@@ -40,6 +40,9 @@ export function getGroupCheckState(
  */
 const BUILT_IN_CATEGORY_GROUPS: Record<string, string> = {
   documents: 'Document Editing',
+  wardrobe: 'Wardrobe',
+  shell: 'Workspace',
+  help: 'Quilltap Help',
 }
 
 export function buildToolHierarchy(availableTools: AvailableTool[]): ToolGroup[] {

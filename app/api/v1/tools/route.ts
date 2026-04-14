@@ -222,21 +222,21 @@ const BUILT_IN_TOOLS = [
     name: 'List Wardrobe',
     description: 'Retrieve wardrobe items and outfit presets for the current character',
     source: 'built-in' as const,
-    category: 'utility',
+    category: 'wardrobe',
   },
   {
     id: 'update_outfit_item',
     name: 'Update Outfit',
     description: 'Equip or remove a wardrobe item, or apply an outfit preset',
     source: 'built-in' as const,
-    category: 'utility',
+    category: 'wardrobe',
   },
   {
     id: 'create_wardrobe_item',
     name: 'Create Wardrobe Item',
     description: 'Create a new wardrobe item, optionally equip it, or gift it to another character',
     source: 'built-in' as const,
-    category: 'utility',
+    category: 'wardrobe',
   },
   // Document editing tools (Scriptorium Phase 3.3)
   {
