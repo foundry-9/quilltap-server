@@ -30,7 +30,18 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
 }))
 
 jest.mock('@/lib/embedding/vector-store', () => ({
-  getCharacterVectorStore: jest.fn(),
+  getVectorStoreManager: jest.fn().mockReturnValue({
+    unloadStore: jest.fn(),
+  }),
+}))
+
+jest.mock('@/lib/database/repositories/vector-indices.repository', () => ({
+  getVectorIndicesRepository: jest.fn().mockReturnValue({
+    entryExists: jest.fn().mockResolvedValue(false),
+    addEntry: jest.fn().mockResolvedValue(undefined),
+    updateEntryEmbedding: jest.fn().mockResolvedValue(true),
+    saveMeta: jest.fn().mockResolvedValue(undefined),
+  }),
 }))
 
 import { handleEmbeddingGenerate } from '@/lib/background-jobs/handlers/embedding-generate'

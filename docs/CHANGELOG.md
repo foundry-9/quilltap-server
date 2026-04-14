@@ -98,6 +98,8 @@
 
 #### Fixed
 
+- **Embedding generate OOM fix**: The `EMBEDDING_GENERATE` handler for memories now writes directly to the database via `VectorIndicesRepository` instead of loading the entire character vector store into memory. Previously, generating an embedding for a single memory would load *all* vectors for that character (e.g. 12,000+ entries × 1,536 dimensions ≈ 150+ MB) just to insert one row — causing V8 heap exhaustion and crashes in Electron when processing large instances.
+- **Docker/Lima/WSL heap limit raised to 4 GB**: `--max-old-space-size` bumped from 2048 to 4096 in `Dockerfile`, `Dockerfile.ci`, and `lima/wsl-init.sh`
 - **Background job queue now respects priority**: `claimNextJob()` sorts by `priority DESC, createdAt ASC` instead of arbitrary order — the `priority` column existed but was never consulted
 - **Chat-related embeddings prioritized over batch operations**: Memory and conversation chunk embeddings now enqueue at priority 10, while mount chunk and help doc embeddings enqueue at priority 0, preventing large document store scans from starving real-time chat responsiveness
 - **Google plugin (1.1.22)**: Fixed tool/function calling with Google Gemini SDK — uppercase schema `type` fields for API compatibility, switched `userAgentExtra` to `httpOptions.headers` for newer SDK versions, re-enabled function calling for Gemini 3 models, and improved function call extraction from raw responses

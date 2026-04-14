@@ -8,7 +8,8 @@
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
+import { getVectorStoreManager } from '@/lib/embedding/vector-store';
+import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-indices.repository';
 import { logger } from '@/lib/logger';
 import type { EmbeddingGeneratePayload } from '../queue-service';
 
@@ -70,17 +71,26 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
       { embedding: embeddingResult.embedding }
     );
 
-    // Add to vector store
-    const vectorStore = await getCharacterVectorStore(memory.characterId);
-    if (vectorStore.hasVector(memory.id)) {
-      await vectorStore.updateVector(memory.id, embeddingResult.embedding);
+    // Write directly to the database instead of loading the full in-memory
+    // vector store. Loading the store for a character with thousands of entries
+    // (e.g. 12k+ vectors × 1536 dimensions) would consume hundreds of MB of
+    // heap just to insert one row.
+    const vectorRepo = getVectorIndicesRepository();
+    const exists = await vectorRepo.entryExists(memory.id);
+    if (exists) {
+      await vectorRepo.updateEntryEmbedding(memory.id, embeddingResult.embedding);
     } else {
-      await vectorStore.addVector(memory.id, embeddingResult.embedding, {
-        memoryId: memory.id,
+      await vectorRepo.addEntry({
+        id: memory.id,
         characterId: memory.characterId,
+        embedding: embeddingResult.embedding,
       });
     }
-    await vectorStore.save();
+    await vectorRepo.saveMeta(memory.characterId, embeddingResult.dimensions);
+
+    // Invalidate the cached in-memory store for this character so the next
+    // search operation reloads fresh data from the database.
+    getVectorStoreManager().unloadStore(memory.characterId);
 
     // Mark status as embedded
     await repos.embeddingStatus.markAsEmbedded(
