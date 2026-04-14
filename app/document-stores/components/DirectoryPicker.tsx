@@ -143,9 +143,9 @@ export function DirectoryPicker({ value, onChange, name, placeholder, required }
             {browseLoading ? (
               <div className="px-3 py-4 text-center text-sm qt-text-secondary">Loading...</div>
             ) : browseError ? (
-              <div className="px-3 py-4 text-center text-sm text-red-400">{browseError}</div>
+              <div className="px-3 py-4 text-center text-sm qt-text-destructive">{browseError}</div>
             ) : browseResult?.error ? (
-              <div className="px-3 py-4 text-center text-sm text-amber-400">{browseResult.error}</div>
+              <div className="px-3 py-4 text-center text-sm qt-text-warning">{browseResult.error}</div>
             ) : browseResult?.directories.length === 0 ? (
               <div className="px-3 py-4 text-center text-sm qt-text-secondary">No subdirectories</div>
             ) : (

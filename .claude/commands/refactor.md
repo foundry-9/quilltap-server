@@ -13,7 +13,7 @@ Refactor the code in this repository to conform better to the following standard
 - Places to focus, in order (unless otherwise specified)
   - Data backend
   - API (should conform to RESTful `/api/v{version number}/{entity-type}/{id if applicable}?action={action}`
-    concept, so CRUD is done with GET/POST/PUT/PATCH/DELETE as appopriate, but anything else is done using action verbs, with body usually holding the data to use in the operation
+    concept, so CRUD is done with GET/POST/PUT/PATCH/DELETE as appropriate, but anything else is done using action verbs, with body usually holding the data to use in the operation
   - UI or front-end
 - Specific areas to target in addition to the above
   - API conformance to standard above

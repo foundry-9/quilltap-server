@@ -62,15 +62,15 @@ function formatBytes(bytes: number): string {
 function ScanStatusBadge({ status, error }: { status: string; error: string | null }) {
   if (status === 'scanning') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-400">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+      <span className="qt-badge-warning inline-flex items-center gap-1">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full qt-dot-warning" />
         Scanning
       </span>
     )
   }
   if (status === 'error') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-400" title={error || 'Scan error'}>
+      <span className="qt-badge-destructive inline-flex items-center gap-1" title={error || 'Scan error'}>
         Error
       </span>
     )
@@ -83,8 +83,8 @@ function EmbeddingStatusBadge({ embedded, total }: { embedded: number; total: nu
 
   if (embedded === total) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
-        <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
+      <span className="qt-badge-success inline-flex items-center gap-1">
+        <span className="h-1.5 w-1.5 rounded-full qt-dot-success" />
         Embedded
       </span>
     )
@@ -92,18 +92,18 @@ function EmbeddingStatusBadge({ embedded, total }: { embedded: number; total: nu
 
   const pct = Math.round((embedded / total) * 100)
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-400">
-      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+    <span className="qt-badge-warning inline-flex items-center gap-1">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full qt-dot-warning" />
       {pct}% embedded
     </span>
   )
 }
 
 function MountTypeBadge({ type }: { type: string }) {
+  const badgeClass = type === 'obsidian' ? 'qt-badge-related' : 'qt-badge-info'
   const label = type === 'obsidian' ? 'Obsidian' : 'Filesystem'
-  const bg = type === 'obsidian' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${bg}`}>
+    <span className={`${badgeClass} inline-flex items-center`}>
       {label}
     </span>
   )
@@ -136,7 +136,7 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, sc
         <ScanStatusBadge status={store.scanStatus} error={store.lastScanError} />
         <EmbeddingStatusBadge embedded={store.embeddedChunkCount} total={store.chunkCount} />
         {!store.enabled && (
-          <span className="inline-flex items-center rounded-full bg-gray-500/20 px-2 py-0.5 text-xs font-medium text-gray-400">
+          <span className="qt-badge-disabled inline-flex items-center">
             Disabled
           </span>
         )}

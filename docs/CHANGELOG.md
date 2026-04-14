@@ -4,6 +4,19 @@
 
 ### 4.3-dev
 
+#### Refactoring
+
+- Removed dead code: `lib/tools/handlers/memory-search-handler.ts` (unused file)
+- Fixed unused variable destructuring in `app/api/v1/messages/[id]/route.ts` swipe regeneration handler
+- Added `qt-dot-success`, `qt-dot-warning`, `qt-dot-destructive`, `qt-dot-info` utility classes to `_utilities.css`
+- Refactored document-stores UI components to use `qt-*` semantic classes instead of raw Tailwind color classes:
+  - `DocumentStoreCard.tsx`: badge components now use `qt-badge-*` classes
+  - `FileTable.tsx`: badge components use `qt-badge-*`, status text uses `qt-text-*`
+  - `DeleteDocumentStoreDialog.tsx`: uses `qt-dialog-overlay`/`qt-dialog` and `qt-button-*` classes
+  - `DirectoryPicker.tsx`: error/warning text uses `qt-text-destructive`/`qt-text-warning`
+  - `document-stores/[id]/page.tsx`: status indicators, error box, and pattern badges use `qt-*` classes
+  - `document-stores/page.tsx`: action button uses `qt-button-primary`
+
 #### Removed
 
 - Pre-built help bundle (`public/help-bundle.msgpack.gz`) — help docs are now embedded at runtime

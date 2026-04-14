@@ -350,7 +350,8 @@ async function handleGenerateSwipe(
   if (cascadeAction !== 'KEEP_MEMORIES') {
     const memoryCount = await repos.memories.countBySourceMessageId(messageId);
     if (memoryCount > 0) {
-      const { deleted, vectorsRemoved } = await deleteMemoriesBySourceMessageWithVectors(messageId);}
+      await deleteMemoriesBySourceMessageWithVectors(messageId);
+    }
   }
 
   // Create new swipe message
