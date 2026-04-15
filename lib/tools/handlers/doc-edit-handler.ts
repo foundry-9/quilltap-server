@@ -48,6 +48,7 @@ import type { DocDeleteFolderInput, DocDeleteFolderOutput } from '../doc-delete-
 import type { DocOpenDocumentInput, DocOpenDocumentOutput } from '../doc-open-document-tool';
 import type { DocCloseDocumentInput, DocCloseDocumentOutput } from '../doc-close-document-tool';
 import { getRepositories } from '@/lib/database/repositories';
+import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 
 const logger = createServiceLogger('DocEdit:Handler');
 
@@ -195,14 +196,16 @@ function buildResolutionContext(
 }
 
 /**
- * Trigger re-indexing for document store files after a write.
+ * Trigger re-indexing and embedding for document store files after a write.
  */
 async function triggerReindexIfNeeded(resolved: ResolvedPath): Promise<void> {
   if (resolved.scope === 'document_store' && resolved.mountPointId) {
+    const mountPointId = resolved.mountPointId;
     // Fire-and-forget: don't block the tool response on re-indexing
-    reindexSingleFile(resolved.mountPointId, resolved.relativePath, resolved.absolutePath)
+    reindexSingleFile(mountPointId, resolved.relativePath, resolved.absolutePath)
+      .then(() => enqueueEmbeddingJobsForMountPoint(mountPointId))
       .catch(err => {
-        logger.warn('Background re-index failed', {
+        logger.warn('Background re-index or embedding failed', {
           path: resolved.relativePath,
           error: err instanceof Error ? err.message : String(err),
         });
