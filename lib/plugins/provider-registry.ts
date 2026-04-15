@@ -308,13 +308,16 @@ class ProviderRegistry extends AbstractProviderRegistry<LLMProviderPlugin> {
   /**
    * Check whether a specific model supports assistant message prefill.
    * Returns true (default) if the plugin doesn't implement the check.
+   *
+   * Uses dynamic access because modelSupportsPrefill was added in
+   * @quilttap/plugin-types 2.3.0 and may not be in the installed type defs yet.
    */
   modelSupportsPrefill(providerName: string, modelId: string): boolean {
-    const plugin = this.getProvider(providerName);
-    if (!plugin?.modelSupportsPrefill) {
+    const plugin = this.getProvider(providerName) as Record<string, unknown> | null;
+    if (!plugin || typeof plugin.modelSupportsPrefill !== 'function') {
       return true;
     }
-    return plugin.modelSupportsPrefill(modelId);
+    return (plugin.modelSupportsPrefill as (model: string) => boolean)(modelId);
   }
 
   // =========================================================================
