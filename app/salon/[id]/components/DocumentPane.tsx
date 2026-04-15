@@ -38,6 +38,7 @@ interface DocumentPaneProps {
   isLLMEditing: boolean
   roleplayTemplateId?: string | null
   onContentChange: (content: string) => void
+  onBlur: () => void
   onToggleFocusMode: () => void
   onCloseDocument: () => void
   onTitleChange?: (title: string) => void
@@ -127,6 +128,7 @@ export default function DocumentPane({
   isLLMEditing,
   roleplayTemplateId,
   onContentChange,
+  onBlur,
   onToggleFocusMode,
   onCloseDocument,
   onTitleChange,
@@ -252,7 +254,7 @@ export default function DocumentPane({
         />
 
         {/* Editor Area */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" onBlur={onBlur}>
           <DocumentEditorPlugins
             content={document.content}
             onContentChange={onContentChange}

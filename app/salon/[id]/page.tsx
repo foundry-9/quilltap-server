@@ -1262,6 +1262,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 isLLMEditing={documentModeHook.isLLMEditing}
                 roleplayTemplateId={chat?.roleplayTemplateId}
                 onContentChange={documentModeHook.handleContentChange}
+                onBlur={documentModeHook.flushSave}
                 onToggleFocusMode={documentModeHook.toggleFocusMode}
                 onCloseDocument={documentModeHook.closeDocument}
               />

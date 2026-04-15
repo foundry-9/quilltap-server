@@ -46,6 +46,7 @@ interface UseDocumentModeReturn {
   handleLLMEditStart: () => void
   handleLLMEditEnd: () => Promise<void>
   saveDocument: () => Promise<void>
+  flushSave: () => void
 }
 
 interface OpenDocumentParams {
@@ -313,6 +314,17 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     }, AUTOSAVE_DEBOUNCE_MS)
   }, [saveDocument])
 
+  // Flush: cancel any pending debounce and save immediately if dirty
+  const flushSave = useCallback(() => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+    if (isDirty) {
+      saveDocument()
+    }
+  }, [isDirty, saveDocument])
+
   // Open a document — returns the ActiveDocument on success, null on failure
   const openDocument = useCallback(async (params: OpenDocumentParams): Promise<ActiveDocument | null> => {
     // Save current document if dirty
@@ -461,5 +473,6 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     handleLLMEditStart,
     handleLLMEditEnd,
     saveDocument,
+    flushSave,
   }
 }
