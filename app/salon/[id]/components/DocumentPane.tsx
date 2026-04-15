@@ -36,6 +36,8 @@ interface DocumentPaneProps {
   isDirty: boolean
   isSaving: boolean
   isLLMEditing: boolean
+  /** Increments on each external content load to force editor remount */
+  contentVersion: number
   roleplayTemplateId?: string | null
   onContentChange: (content: string) => void
   onBlur: () => void
@@ -126,6 +128,7 @@ export default function DocumentPane({
   isDirty,
   isSaving,
   isLLMEditing,
+  contentVersion,
   roleplayTemplateId,
   onContentChange,
   onBlur,
@@ -245,8 +248,8 @@ export default function DocumentPane({
         </div>
       </div>
 
-      {/* Editor with shared Lexical config */}
-      <LexicalComposer initialConfig={initialConfig}>
+      {/* Editor with shared Lexical config — key forces remount on external content changes */}
+      <LexicalComposer key={contentVersion} initialConfig={initialConfig}>
         {/* Formatting Toolbar */}
         <DocumentToolbarWrapper
           roleplayTemplateId={roleplayTemplateId}

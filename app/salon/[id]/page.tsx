@@ -1260,6 +1260,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 isDirty={documentModeHook.isDirty}
                 isSaving={documentModeHook.isSaving}
                 isLLMEditing={documentModeHook.isLLMEditing}
+                contentVersion={documentModeHook.contentVersion}
                 roleplayTemplateId={chat?.roleplayTemplateId}
                 onContentChange={documentModeHook.handleContentChange}
                 onBlur={documentModeHook.flushSave}

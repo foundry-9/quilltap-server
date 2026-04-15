@@ -47,6 +47,8 @@ interface UseDocumentModeReturn {
   handleLLMEditEnd: () => Promise<void>
   saveDocument: () => Promise<void>
   flushSave: () => void
+  /** Increments on each external content load to force editor remount */
+  contentVersion: number
 }
 
 interface OpenDocumentParams {
@@ -152,6 +154,8 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isLLMEditing, setIsLLMEditing] = useState(false)
+  // Bumps on every external content load (LLM edit, reload) to force Lexical remount
+  const [contentVersion, setContentVersion] = useState(0)
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const contentRef = useRef<string>('')
@@ -218,6 +222,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
       })
       contentRef.current = contentData.content || ''
       savedContentRef.current = contentData.content || ''
+      setContentVersion(v => v + 1)
     } catch (error) {
       console.error('[DocumentMode] Failed to load active document', error)
     }
@@ -367,6 +372,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
       setActiveDocument(doc)
       contentRef.current = data.content || ''
       savedContentRef.current = data.content || ''
+      setContentVersion(v => v + 1)
       setIsDirty(false)
       setDocumentMode(targetMode)
 
@@ -441,6 +447,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
           } : null)
           contentRef.current = data.content || ''
           savedContentRef.current = data.content || ''
+          setContentVersion(v => v + 1)
           setIsDirty(false)
         }
       } catch (error) {
@@ -474,5 +481,6 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     handleLLMEditEnd,
     saveDocument,
     flushSave,
+    contentVersion,
   }
 }
