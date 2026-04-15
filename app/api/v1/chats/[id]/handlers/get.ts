@@ -326,6 +326,8 @@ export async function handleGet(
       avatarGenerationEnabled: chatMetadata.avatarGenerationEnabled ?? null,
       isDangerousChat: chatMetadata.isDangerousChat ?? null,
       dangerCategories: chatMetadata.dangerCategories || [],
+      documentMode: chatMetadata.documentMode || 'normal',
+      dividerPosition: chatMetadata.dividerPosition ?? 45,
     };
 
     return NextResponse.json({ chat });
