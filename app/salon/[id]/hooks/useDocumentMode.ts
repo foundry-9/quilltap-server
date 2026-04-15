@@ -66,6 +66,8 @@ export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDoc
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const contentRef = useRef<string>('')
+  // Tracks the last-saved content so we can distinguish real edits from Lexical re-sync
+  const savedContentRef = useRef<string>('')
 
   // Initialize from chat data when it loads
   useEffect(() => {
@@ -123,6 +125,7 @@ export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDoc
         mtime: contentData.mtime,
       })
       contentRef.current = contentData.content || ''
+      savedContentRef.current = contentData.content || ''
     } catch (error) {
       console.error('[DocumentMode] Failed to load active document', error)
     }
@@ -173,6 +176,7 @@ export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDoc
 
       if (res.ok) {
         const data = await res.json()
+        savedContentRef.current = contentRef.current
         setIsDirty(false)
         setActiveDocument(prev => prev ? { ...prev, mtime: data.mtime } : null)
       }
@@ -186,8 +190,15 @@ export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDoc
   // Handle content changes with debounced autosave
   const handleContentChange = useCallback((content: string) => {
     contentRef.current = content
-    setIsDirty(true)
     setActiveDocument(prev => prev ? { ...prev, content } : null)
+
+    // Only mark dirty if content actually differs from what was last saved/loaded
+    if (content === savedContentRef.current) {
+      setIsDirty(false)
+      return
+    }
+
+    setIsDirty(true)
 
     // Debounce autosave
     if (autosaveTimerRef.current) {
@@ -239,6 +250,7 @@ export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDoc
 
       setActiveDocument(doc)
       contentRef.current = data.content || ''
+      savedContentRef.current = data.content || ''
       setIsDirty(false)
       setDocumentMode(targetMode)
 
@@ -312,6 +324,7 @@ export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDoc
             mtime: data.mtime,
           } : null)
           contentRef.current = data.content || ''
+          savedContentRef.current = data.content || ''
           setIsDirty(false)
         }
       } catch (error) {
