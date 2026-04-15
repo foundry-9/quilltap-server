@@ -238,6 +238,7 @@ const BUILT_IN_TOOLS = new Set([
   // Document UI tools (Scriptorium Phase 3.5)
   'doc_open_document',
   'doc_close_document',
+  'doc_focus',
 ]);
 
 export async function executeToolCallWithContext(

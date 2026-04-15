@@ -12,6 +12,7 @@
  */
 
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react'
+import DocumentGutter, { type LinePosition } from './DocumentGutter'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
 import { ContentEditable } from '@lexical/react/LexicalContentEditable'
@@ -31,7 +32,9 @@ import { composerTheme } from '@/components/chat/lexical/theme'
 import { MarkdownBridgePlugin, COMPOSER_TRANSFORMERS } from '@/components/chat/lexical/plugins/MarkdownBridgePlugin'
 import { FormattingCommandPlugin } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
-import type { ActiveDocument, DocumentMode } from '../hooks/useDocumentMode'
+import DocumentChangeTracker from './DocumentChangeTracker'
+import DocumentFocusPlugin from './DocumentFocusPlugin'
+import type { ActiveDocument, DocumentMode, FocusRequest } from '../hooks/useDocumentMode'
 
 interface DocumentPaneProps {
   document: ActiveDocument
@@ -42,11 +45,22 @@ interface DocumentPaneProps {
   /** Increments on each external content load to force editor remount */
   contentVersion: number
   roleplayTemplateId?: string | null
+  /** Block index (0-based) where AI attention last landed; null when unset */
+  attentionLine?: number | null
+  /** Content at document open / last save — used to diff changed lines for the gutter */
+  baselineContent: string
+  getScrollPosition: (filePath: string) => number
+  setScrollPosition: (filePath: string, pos: number) => void
   onContentChange: (content: string) => void
   onBlur: () => void
   onToggleFocusMode: () => void
   onCloseDocument: () => void
   onTitleChange?: (title: string) => void
+  /** doc_focus tool request from the LLM */
+  focusRequest?: FocusRequest | null
+  onFocusResolved?: (lineIndex: number) => void
+  onFocusCleared?: () => void
+  onFocusProcessed?: () => void
 }
 
 /**
@@ -65,10 +79,26 @@ function DocumentEditorPlugins({
   content,
   onContentChange,
   disabled,
+  baselineContent,
+  onChangedLines,
+  onLinePositions,
+  scrollContainerRef,
+  focusRequest,
+  onFocusResolved,
+  onFocusCleared,
+  onFocusProcessed,
 }: {
   content: string
   onContentChange: (content: string) => void
   disabled: boolean
+  baselineContent: string
+  onChangedLines: (lines: Set<number>) => void
+  onLinePositions: (positions: LinePosition[], totalHeight: number) => void
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  focusRequest?: FocusRequest | null
+  onFocusResolved?: (lineIndex: number) => void
+  onFocusCleared?: () => void
+  onFocusProcessed?: () => void
 }) {
   const [editor] = useLexicalComposerContext()
 
@@ -100,6 +130,20 @@ function DocumentEditorPlugins({
         initialMarkdown={content}
       />
       <FormattingCommandPlugin />
+      <DocumentChangeTracker
+        baselineContent={baselineContent}
+        onChangedLines={onChangedLines}
+        onLinePositions={onLinePositions}
+      />
+      {focusRequest !== undefined && onFocusResolved && onFocusCleared && onFocusProcessed && (
+        <DocumentFocusPlugin
+          focusRequest={focusRequest ?? null}
+          scrollContainerRef={scrollContainerRef}
+          onFocusResolved={onFocusResolved}
+          onFocusCleared={onFocusCleared}
+          onFocusProcessed={onFocusProcessed}
+        />
+      )}
     </>
   )
 }
@@ -147,19 +191,43 @@ export default function DocumentPane({
   isLLMEditing,
   contentVersion,
   roleplayTemplateId,
+  attentionLine = null,
+  baselineContent,
+  getScrollPosition,
+  setScrollPosition,
   onContentChange,
   onBlur,
   onToggleFocusMode,
   onCloseDocument,
   onTitleChange,
+  focusRequest,
+  onFocusResolved,
+  onFocusCleared,
+  onFocusProcessed,
 }: DocumentPaneProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [showSource, setShowSource] = useState(false)
   const [editTitle, setEditTitle] = useState(document.displayTitle)
+  // Gutter state — populated by DocumentChangeTracker plugin
+  const [changedLines, setChangedLines] = useState<Set<number>>(new Set())
+  const [linePositions, setLinePositions] = useState<LinePosition[]>([])
+  const [totalHeight, setTotalHeight] = useState(0)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const wordCount = useMemo(() => countWords(document.content), [document.content])
+
+  // Stable callbacks for DocumentChangeTracker — avoid re-registering the update listener
+  const handleChangedLines = useCallback((lines: Set<number>) => {
+    setChangedLines(lines)
+  }, [])
+
+  const handleLinePositions = useCallback((positions: LinePosition[], height: number) => {
+    setLinePositions(positions)
+    setTotalHeight(height)
+  }, [])
 
   const initialConfig = useMemo(
     () => ({
@@ -192,6 +260,41 @@ export default function DocumentPane({
 
   const toggleSourceMode = useCallback(() => {
     setShowSource((prev) => !prev)
+  }, [])
+
+  // Throttled scroll handler — saves position ~100ms after last scroll event
+  const handleScroll = useCallback(() => {
+    if (scrollThrottleRef.current) return
+    scrollThrottleRef.current = setTimeout(() => {
+      scrollThrottleRef.current = null
+      if (scrollContainerRef.current) {
+        setScrollPosition(document.filePath, scrollContainerRef.current.scrollTop)
+      }
+    }, 100)
+  }, [document.filePath, setScrollPosition])
+
+  // Restore scroll position after contentVersion changes (Lexical remount)
+  useEffect(() => {
+    const savedPos = getScrollPosition(document.filePath)
+    if (savedPos > 0 && scrollContainerRef.current) {
+      // Double RAF to ensure Lexical has rendered content before we scroll
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = savedPos
+          }
+        })
+      })
+    }
+  }, [contentVersion, document.filePath, getScrollPosition])
+
+  // Cleanup throttle timer on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollThrottleRef.current) {
+        clearTimeout(scrollThrottleRef.current)
+      }
+    }
   }, [])
 
   // Handle title editing
@@ -301,7 +404,7 @@ export default function DocumentPane({
         />
 
         {showSource ? (
-          <div className="flex-1 overflow-y-auto" onBlur={onBlur}>
+          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto" onBlur={onBlur} onScroll={handleScroll}>
             <textarea
               ref={sourceTextareaRef}
               className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
@@ -313,12 +416,28 @@ export default function DocumentPane({
             />
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto" onBlur={onBlur}>
-            <DocumentEditorPlugins
-              content={document.content}
-              onContentChange={onContentChange}
-              disabled={isLLMEditing}
+          <div ref={scrollContainerRef} className="qt-doc-editor-with-gutter" onBlur={onBlur} onScroll={handleScroll}>
+            <DocumentGutter
+              changedLines={changedLines}
+              attentionLine={attentionLine}
+              linePositions={linePositions}
+              totalHeight={totalHeight}
             />
+            <div className="flex-1">
+              <DocumentEditorPlugins
+                content={document.content}
+                onContentChange={onContentChange}
+                disabled={isLLMEditing}
+                baselineContent={baselineContent}
+                onChangedLines={handleChangedLines}
+                onLinePositions={handleLinePositions}
+                scrollContainerRef={scrollContainerRef}
+                focusRequest={focusRequest}
+                onFocusResolved={onFocusResolved}
+                onFocusCleared={onFocusCleared}
+                onFocusProcessed={onFocusProcessed}
+              />
+            </div>
           </div>
         )}
       </LexicalComposer>

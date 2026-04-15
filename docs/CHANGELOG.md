@@ -20,6 +20,10 @@
 
 #### Features
 
+- **Document Mode Quality of Life (Scriptorium Phase 3.6)**: Three improvements to the document editing experience
+  - **Scroll position persistence**: Document pane remembers scroll position across re-renders, tool calls, layout transitions, and document reopen within the same session
+  - **Left-hand gutter**: Narrow gutter beside document content showing change markers (blue bars on modified lines since last save) and an attention marker (eye icon at the last `doc_focus` target)
+  - **`doc_focus` tool**: LLM participants can scroll the user's viewport to a heading, text passage, or line number — with ephemeral highlight animation and persistent gutter eye icon. Supports `anchor` (heading), `highlight` (text search), `line` (line number), and `clear_focus` parameters
 - **Document Mode (Scriptorium Phase 3.5)**: Split-panel editor for collaborative document editing alongside chat
   - Three layout states: Normal (chat only), Split (chat + document), Focus (document only)
   - Resizable divider between chat and document panes with minimum width enforcement

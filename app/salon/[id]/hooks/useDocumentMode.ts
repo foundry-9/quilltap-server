@@ -24,6 +24,13 @@ export interface ActiveDocument {
 
 export type DocumentMode = 'normal' | 'split' | 'focus'
 
+export interface FocusRequest {
+  anchor?: string
+  highlight?: string
+  line?: number
+  clear_focus?: boolean
+}
+
 interface UseDocumentModeParams {
   chatId: string
   chat: Chat | null
@@ -51,6 +58,17 @@ interface UseDocumentModeReturn {
   reloadFromServer: () => Promise<void>
   /** Increments on each external content load to force editor remount */
   contentVersion: number
+  /** Scroll position persistence keyed by file path */
+  getScrollPosition: (filePath: string) => number
+  setScrollPosition: (filePath: string, pos: number) => void
+  /** Focus/attention state for the document editor */
+  attentionLine: number | null
+  setAttentionLine: (line: number | null) => void
+  focusRequest: FocusRequest | null
+  handleDocFocus: (result: FocusRequest) => void
+  clearFocusRequest: () => void
+  /** The document content as of the last save */
+  baselineContent: string
 }
 
 interface OpenDocumentParams {
@@ -159,11 +177,16 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
   // Bumps on every external content load (LLM edit, reload) to force Lexical remount
   const [contentVersion, setContentVersion] = useState(0)
 
+  const [attentionLine, setAttentionLine] = useState<number | null>(null)
+  const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null)
+
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const contentRef = useRef<string>('')
   // Tracks the last-saved content so we can distinguish real edits from Lexical re-sync
   const savedContentRef = useRef<string>('')
   const onAutosaveNotifyRef = useRef(onAutosaveNotify)
+  // Scroll position map keyed by file path — persists across document re-opens
+  const scrollPositionsRef = useRef(new Map<string, number>())
 
   const clearAutosaveTimer = useCallback(() => {
     if (autosaveTimerRef.current) {
@@ -487,6 +510,31 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     }
   }, [applyDocumentState, chatId, loadActiveDocument])
 
+  // Scroll position helpers
+  const getScrollPosition = useCallback((filePath: string): number => {
+    return scrollPositionsRef.current.get(filePath) ?? 0
+  }, [])
+
+  const setScrollPosition = useCallback((filePath: string, pos: number): void => {
+    scrollPositionsRef.current.set(filePath, pos)
+  }, [])
+
+  // Focus/attention helpers
+  const handleDocFocus = useCallback((result: FocusRequest): void => {
+    if (result.clear_focus) {
+      setAttentionLine(null)
+      setFocusRequest(null)
+    } else {
+      // Don't eagerly set attentionLine here — the DocumentFocusPlugin
+      // resolves the target and calls setAttentionLine after scrolling
+      setFocusRequest(result)
+    }
+  }, [])
+
+  const clearFocusRequest = useCallback((): void => {
+    setFocusRequest(null)
+  }, [])
+
   // Cleanup autosave timer on unmount
   useEffect(() => {
     return () => {
@@ -512,5 +560,13 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     flushSave,
     reloadFromServer,
     contentVersion,
+    getScrollPosition,
+    setScrollPosition,
+    attentionLine,
+    setAttentionLine,
+    focusRequest,
+    handleDocFocus,
+    clearFocusRequest,
+    get baselineContent() { return savedContentRef.current },
   }
 }

@@ -47,6 +47,7 @@ import type { DocCreateFolderInput, DocCreateFolderOutput } from '../doc-create-
 import type { DocDeleteFolderInput, DocDeleteFolderOutput } from '../doc-delete-folder-tool';
 import type { DocOpenDocumentInput, DocOpenDocumentOutput } from '../doc-open-document-tool';
 import type { DocCloseDocumentInput, DocCloseDocumentOutput } from '../doc-close-document-tool';
+import type { DocFocusInput, DocFocusOutput } from '../doc-focus-tool';
 import { getRepositories } from '@/lib/database/repositories';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 
@@ -73,6 +74,7 @@ export const DOC_EDIT_TOOL_NAMES = new Set([
   'doc_delete_folder',
   'doc_open_document',
   'doc_close_document',
+  'doc_focus',
 ]);
 
 /**
@@ -135,6 +137,8 @@ export async function executeDocEditTool(
         return await handleOpenDocument(input as unknown as DocOpenDocumentInput, context);
       case 'doc_close_document':
         return await handleCloseDocument(input as unknown as DocCloseDocumentInput, context);
+      case 'doc_focus':
+        return await handleDocFocus(input as unknown as DocFocusInput, context);
       default:
         return { success: false, error: `Unknown doc-edit tool: ${toolName}` };
     }
@@ -1302,5 +1306,41 @@ async function handleCloseDocument(
     success: true,
     result,
     formattedText: message,
+  };
+}
+
+/**
+ * Handle doc_focus: focus the user's attention on a location in the open document.
+ * Scrolls to anchor, highlight, or line number. Can also clear focus.
+ */
+async function handleDocFocus(
+  input: DocFocusInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
+  logger.debug('doc_focus requested', { chatId: context.chatId, ...input });
+
+  // If clear_focus is true, return immediately
+  if (input.clear_focus) {
+    return { success: true, result: { success: true, clear_focus: true } };
+  }
+
+  // Query the database to check if a document is open
+  const repos = getRepositories();
+  const activeDoc = await repos.chatDocuments.findActiveForChat(context.chatId);
+
+  // If no active document, return error
+  if (!activeDoc) {
+    return { success: false, error: 'No document is open in Document Mode.' };
+  }
+
+  // Otherwise return success with the params passed through
+  return {
+    success: true,
+    result: {
+      success: true,
+      anchor: input.anchor,
+      highlight: input.highlight,
+      line: input.line,
+    },
   };
 }

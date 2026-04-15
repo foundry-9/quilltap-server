@@ -58,7 +58,7 @@ import { GiftWardrobeItemModal } from '@/components/wardrobe/gift-wardrobe-item-
 import SplitLayout from './components/SplitLayout'
 import DocumentPane from './components/DocumentPane'
 import DocumentPickerModal from './components/DocumentPickerModal'
-import { useDocumentMode } from './hooks/useDocumentMode'
+import { useDocumentMode, type FocusRequest } from './hooks/useDocumentMode'
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -355,10 +355,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setWorkspaceAcknowledgementState: modals.setWorkspaceAcknowledgementState,
     getFirstCharacterParticipant: participantsWithImpersonation.getFirstCharacterParticipant,
     setPauseState: chatControls.setPauseState,
-    onToolResult: (name, success) => {
+    onToolResult: (name, success, result) => {
       // React to LLM opening/closing documents
       if (success && (name === 'doc_open_document' || name === 'doc_close_document')) {
         documentModeHook.reloadFromServer()
+      }
+      // React to LLM focusing on document location
+      if (name === 'doc_focus' && success && result) {
+        documentModeHook.handleDocFocus(result as FocusRequest)
       }
     },
   })
@@ -1268,10 +1272,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 isLLMEditing={documentModeHook.isLLMEditing}
                 contentVersion={documentModeHook.contentVersion}
                 roleplayTemplateId={chat?.roleplayTemplateId}
+                attentionLine={documentModeHook.attentionLine}
+                baselineContent={documentModeHook.baselineContent}
+                getScrollPosition={documentModeHook.getScrollPosition}
+                setScrollPosition={documentModeHook.setScrollPosition}
                 onContentChange={documentModeHook.handleContentChange}
                 onBlur={documentModeHook.flushSave}
                 onToggleFocusMode={documentModeHook.toggleFocusMode}
                 onCloseDocument={documentModeHook.closeDocument}
+                focusRequest={documentModeHook.focusRequest}
+                onFocusResolved={documentModeHook.setAttentionLine}
+                onFocusCleared={() => documentModeHook.setAttentionLine(null)}
+                onFocusProcessed={documentModeHook.clearFocusRequest}
               />
             ) : null
           }

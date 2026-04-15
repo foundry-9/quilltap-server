@@ -1563,6 +1563,52 @@
     }
   }
 
+  /* Document Gutter */
+  .qt-doc-editor-with-gutter {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .qt-doc-gutter {
+    position: relative;
+    flex-shrink: 0;
+    width: 20px;
+    border-right: 1px solid var(--qt-border-color, rgba(128, 128, 128, 0.2));
+  }
+
+  .qt-doc-gutter-change {
+    position: absolute;
+    left: 6px;
+    width: 3px;
+    border-radius: 1.5px;
+    background-color: var(--qt-gutter-change-color, #3b82f6);
+    opacity: 0.6;
+  }
+
+  .qt-doc-gutter-eye {
+    position: absolute;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    color: var(--qt-gutter-eye-color, #f59e0b);
+    opacity: 0.85;
+    pointer-events: none;
+  }
+
+  /* Focus highlight animation */
+  @keyframes qt-doc-focus-fade {
+    0% { background-color: var(--qt-focus-highlight-color, rgba(250, 204, 21, 0.4)); }
+    100% { background-color: transparent; }
+  }
+
+  .qt-doc-focus-highlight {
+    animation: qt-doc-focus-fade 2.5s ease-out forwards;
+    border-radius: 2px;
+  }
+
   /**
    * Chat messages container
    */
