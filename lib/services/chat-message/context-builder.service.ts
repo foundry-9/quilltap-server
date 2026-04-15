@@ -12,6 +12,7 @@ import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
+import { modelSupportsPrefill } from '@/lib/plugins/provider-registry'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import {
   processFileAttachmentFallback,
@@ -428,18 +429,41 @@ export async function buildMessageContext(
     }
   })
 
-  // In multi-character chats, append an assistant prefill message to anchor
-  // the model's response to the correct character identity. This forces the
-  // LLM to continue as the designated character rather than picking up
-  // another character's voice from the conversation flow.
-  // The [Name] prefix is already stripped by stripCharacterNamePrefix() downstream.
+  // In multi-character chats, anchor the model's response to the correct
+  // character identity. The [Name] prefix is stripped by
+  // stripCharacterNamePrefix() downstream.
   if (isMultiCharacter) {
-    formattedMessages.push({
-      role: 'assistant',
-      content: `[${character.name}]`,
-      thoughtSignature: undefined,
-      name: undefined,
-    })
+    const prefillSupported = modelSupportsPrefill(
+      connectionProfile.provider,
+      connectionProfile.modelName
+    )
+
+    if (prefillSupported) {
+      // Traditional approach: append an assistant prefill message to force
+      // the LLM to continue as the designated character.
+      formattedMessages.push({
+        role: 'assistant',
+        content: `[${character.name}]`,
+        thoughtSignature: undefined,
+        name: undefined,
+      })
+    } else {
+      // For models that don't support assistant prefill (e.g., Claude 4.6),
+      // add an explicit instruction to the system prompt instead.
+      logger.debug('Model does not support assistant prefill, using system prompt instruction', {
+        provider: connectionProfile.provider,
+        model: connectionProfile.modelName,
+        character: character.name,
+      })
+      const systemIdx = formattedMessages.findIndex(m => m.role === 'system')
+      if (systemIdx >= 0) {
+        formattedMessages[systemIdx] = {
+          ...formattedMessages[systemIdx],
+          content: formattedMessages[systemIdx].content +
+            `\n\nIMPORTANT: You are ${character.name}. Always begin your response with [${character.name}] to identify yourself.`,
+        }
+      }
+    }
   }
 
   return {

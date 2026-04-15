@@ -13493,6 +13493,8 @@ var AnthropicProvider = class {
         error instanceof Error ? error : void 0
       );
       const fallbackModels = [
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
         "claude-opus-4-5-20251101",
         "claude-sonnet-4-5-20250929",
         "claude-haiku-4-5-20251001",
@@ -13931,6 +13933,22 @@ var plugin = {
   getModelInfo: () => {
     return [
       {
+        id: "claude-opus-4-6",
+        name: "Claude Opus 4.6",
+        contextWindow: 2e5,
+        maxOutputTokens: 16e3,
+        supportsImages: true,
+        supportsTools: true
+      },
+      {
+        id: "claude-sonnet-4-6",
+        name: "Claude Sonnet 4.6",
+        contextWindow: 2e5,
+        maxOutputTokens: 16e3,
+        supportsImages: true,
+        supportsTools: true
+      },
+      {
         id: "claude-sonnet-4-5-20250929",
         name: "Claude Sonnet 4.5",
         contextWindow: 2e5,
@@ -13987,6 +14005,12 @@ var plugin = {
         supportsTools: true
       }
     ];
+  },
+  modelSupportsPrefill: (model) => {
+    if (/claude-(?:opus|sonnet|haiku)-4-6/.test(model)) {
+      return false;
+    }
+    return true;
   },
   /**
    * Render the Anthropic icon
