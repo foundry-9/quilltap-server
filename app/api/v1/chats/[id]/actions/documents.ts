@@ -288,13 +288,16 @@ export async function handleWriteDocument(
     await fs.writeFile(resolved.absolutePath, data.content, 'utf-8');
     const stat = await fs.stat(resolved.absolutePath);
 
-    // Trigger re-indexing and embedding for document store files
+    // Trigger re-indexing, embedding, and stats refresh for document store files
     if (data.scope === 'document_store' && resolved.mountPointId) {
       const mountPointId = resolved.mountPointId;
       reindexSingleFile(mountPointId, resolved.relativePath, resolved.absolutePath)
-        .then(() => enqueueEmbeddingJobsForMountPoint(mountPointId))
+        .then(() => Promise.all([
+          enqueueEmbeddingJobsForMountPoint(mountPointId),
+          repos.docMountPoints.refreshStats(mountPointId),
+        ]))
         .catch(err => {
-          logger.warn('Background re-index or embedding failed after document save', {
+          logger.warn('Background re-index, embedding, or stats refresh failed after document save', {
             path: data.filePath,
             error: err instanceof Error ? err.message : String(err),
           });

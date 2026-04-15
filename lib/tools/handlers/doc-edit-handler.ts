@@ -201,11 +201,15 @@ function buildResolutionContext(
 async function triggerReindexIfNeeded(resolved: ResolvedPath): Promise<void> {
   if (resolved.scope === 'document_store' && resolved.mountPointId) {
     const mountPointId = resolved.mountPointId;
+    const repos = getRepositories();
     // Fire-and-forget: don't block the tool response on re-indexing
     reindexSingleFile(mountPointId, resolved.relativePath, resolved.absolutePath)
-      .then(() => enqueueEmbeddingJobsForMountPoint(mountPointId))
+      .then(() => Promise.all([
+        enqueueEmbeddingJobsForMountPoint(mountPointId),
+        repos.docMountPoints.refreshStats(mountPointId),
+      ]))
       .catch(err => {
-        logger.warn('Background re-index or embedding failed', {
+        logger.warn('Background re-index, embedding, or stats refresh failed', {
           path: resolved.relativePath,
           error: err instanceof Error ? err.message : String(err),
         });

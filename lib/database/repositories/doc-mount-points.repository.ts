@@ -183,6 +183,43 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
   }
 
   /**
+   * Recompute and update cached stats (fileCount, chunkCount, totalSizeBytes)
+   * from the actual file and chunk records. Called after single-file reindexing
+   * to keep summary stats accurate without requiring a full scan.
+   */
+  async refreshStats(id: string): Promise<void> {
+    await this.safeQuery(
+      async () => {
+        const { getRepositories } = await import('./index');
+        const repos = getRepositories();
+
+        const files = await repos.docMountFiles.findByMountPointId(id);
+        const chunks = await repos.docMountChunks.findByMountPointId(id);
+
+        const fileCount = files.length;
+        const chunkCount = chunks.length;
+        const totalSizeBytes = files.reduce((sum, f) => sum + (f.fileSizeBytes || 0), 0);
+
+        await this._update(id, {
+          fileCount,
+          chunkCount,
+          totalSizeBytes,
+        } as Partial<DocMountPoint>);
+
+        logger.debug('Refreshed mount point stats', {
+          context: 'DocMountPointsRepository.refreshStats',
+          id,
+          fileCount,
+          chunkCount,
+          totalSizeBytes,
+        });
+      },
+      'Error refreshing mount point stats',
+      { id }
+    );
+  }
+
+  /**
    * Update the scan status of a mount point
    * @param id The mount point ID
    * @param status The new scan status
