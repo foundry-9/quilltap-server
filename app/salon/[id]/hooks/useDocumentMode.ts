@@ -27,6 +27,8 @@ export type DocumentMode = 'normal' | 'split' | 'focus'
 interface UseDocumentModeParams {
   chatId: string
   chat: Chat | null
+  /** Called after autosave with a diff message to send to the LLM */
+  onAutosaveNotify?: (message: string) => void
 }
 
 interface UseDocumentModeReturn {
@@ -56,7 +58,93 @@ interface OpenDocumentParams {
 
 const AUTOSAVE_DEBOUNCE_MS = 30000
 
-export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDocumentModeReturn {
+/**
+ * Generate a simple unified diff between two strings.
+ * Produces output similar to `git diff` with @@ line markers.
+ */
+function generateUnifiedDiff(oldText: string, newText: string, filename: string): string {
+  const oldLines = oldText.split('\n')
+  const newLines = newText.split('\n')
+  const hunks: string[] = []
+
+  // Simple LCS-based diff: walk both arrays and find changed regions
+  let i = 0
+  let j = 0
+  while (i < oldLines.length || j < newLines.length) {
+    // Skip matching lines
+    if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
+      i++
+      j++
+      continue
+    }
+
+    // Found a difference — collect the hunk
+    const hunkStartOld = i + 1
+    const hunkStartNew = j + 1
+    const removedLines: string[] = []
+    const addedLines: string[] = []
+
+    // Collect divergent lines until we find a match again
+    const lookAhead = 3 // lines to look ahead for re-sync
+    let synced = false
+    while (i < oldLines.length || j < newLines.length) {
+      // Check if we can re-sync
+      if (i < oldLines.length && j < newLines.length) {
+        // Look for the current old line in upcoming new lines
+        let foundInNew = -1
+        for (let k = j; k < Math.min(j + lookAhead, newLines.length); k++) {
+          if (oldLines[i] === newLines[k]) { foundInNew = k; break }
+        }
+        // Look for the current new line in upcoming old lines
+        let foundInOld = -1
+        for (let k = i; k < Math.min(i + lookAhead, oldLines.length); k++) {
+          if (newLines[j] === oldLines[k]) { foundInOld = k; break }
+        }
+
+        if (foundInNew === j && foundInOld === i) {
+          // Lines match — we've re-synced
+          synced = true
+          break
+        }
+        if (foundInNew >= 0 && (foundInOld < 0 || foundInNew - j <= foundInOld - i)) {
+          // Old line was removed, new lines were added before it
+          while (j < foundInNew) { addedLines.push(newLines[j]); j++ }
+          removedLines.push(oldLines[i]); i++
+          // Continue to see if more changes follow
+          continue
+        }
+        if (foundInOld >= 0) {
+          // New line was added, old lines were removed before it
+          while (i < foundInOld) { removedLines.push(oldLines[i]); i++ }
+          addedLines.push(newLines[j]); j++
+          continue
+        }
+      }
+
+      // No re-sync found — consume both sides
+      if (i < oldLines.length) { removedLines.push(oldLines[i]); i++ }
+      if (j < newLines.length) { addedLines.push(newLines[j]); j++ }
+
+      // Check if next lines match
+      if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
+        synced = true
+        break
+      }
+    }
+
+    if (removedLines.length > 0 || addedLines.length > 0) {
+      hunks.push(`@@ -${hunkStartOld},${removedLines.length} +${hunkStartNew},${addedLines.length} @@`)
+      for (const line of removedLines) hunks.push(`-${line}`)
+      for (const line of addedLines) hunks.push(`+${line}`)
+    }
+  }
+
+  if (hunks.length === 0) return ''
+
+  return `--- a/${filename}\n+++ b/${filename}\n${hunks.join('\n')}`
+}
+
+export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentModeParams): UseDocumentModeReturn {
   const [documentMode, setDocumentMode] = useState<DocumentMode>('normal')
   const [activeDocument, setActiveDocument] = useState<ActiveDocument | null>(null)
   const [dividerPosition, setDividerPositionState] = useState(45)
@@ -179,15 +267,28 @@ export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDoc
 
       if (res.ok) {
         const data = await res.json()
-        savedContentRef.current = contentRef.current
+        const oldContent = savedContentRef.current
+        const newContent = contentRef.current
+        savedContentRef.current = newContent
         setIsDirty(false)
         setActiveDocument(prev => prev ? { ...prev, mtime: data.mtime } : null)
+
+        // Generate and send diff notification to the LLM
+        if (onAutosaveNotify && oldContent !== newContent && activeDocument) {
+          const diff = generateUnifiedDiff(oldContent, newContent, activeDocument.displayTitle || activeDocument.filePath)
+          if (diff) {
+            onAutosaveNotify(
+              `I've made changes to "${activeDocument.displayTitle || activeDocument.filePath}":\n\n\`\`\`diff\n${diff}\n\`\`\``
+            )
+          }
+        }
       }
     } catch (error) {
       console.error('[DocumentMode] Failed to save document', error)
     } finally {
       setIsSaving(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- onAutosaveNotify is a ref-based callback, stable by design
   }, [chatId, activeDocument, isDirty])
 
   // Handle content changes with debounced autosave

@@ -242,7 +242,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const modals = useModalState()
 
   // --- Document Mode hook (Scriptorium Phase 3.5) ---
-  const documentModeHook = useDocumentMode({ chatId: id, chat })
+  const sendProgrammaticMessageRef = useRef<((msg: string) => void) | null>(null)
+  const documentModeHook = useDocumentMode({
+    chatId: id,
+    chat,
+    onAutosaveNotify: (msg) => sendProgrammaticMessageRef.current?.(msg),
+  })
   const [showDocumentPicker, setShowDocumentPicker] = useState(false)
 
   // --- File attachments hook ---
@@ -978,6 +983,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       chatControls.userStoppedStreamRef,
     )
   }, [sseStreaming, setPendingToolResults, chatControls.userStoppedStreamRef])
+
+  // Wire up the ref so the document mode hook can send messages
+  sendProgrammaticMessageRef.current = sendProgrammaticMessage
 
   // Handle document open — opens the document and sends a notification message to the LLM
   const handleOpenDocument = useCallback(async (params: Parameters<typeof documentModeHook.openDocument>[0]) => {
