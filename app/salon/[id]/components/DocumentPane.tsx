@@ -18,12 +18,15 @@ import { ContentEditable } from '@lexical/react/LexicalContentEditable'
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin'
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin'
 import { ListPlugin } from '@lexical/react/LexicalListPlugin'
+import { CheckListPlugin } from '@lexical/react/LexicalCheckListPlugin'
+import { TablePlugin } from '@lexical/react/LexicalTablePlugin'
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { HeadingNode, QuoteNode } from '@lexical/rich-text'
 import { ListNode, ListItemNode } from '@lexical/list'
 import { LinkNode } from '@lexical/link'
 import { CodeNode, CodeHighlightNode } from '@lexical/code'
+import { TableNode, TableCellNode, TableRowNode } from '@lexical/table'
 import { composerTheme } from '@/components/chat/lexical/theme'
 import { MarkdownBridgePlugin, COMPOSER_TRANSFORMERS } from '@/components/chat/lexical/plugins/MarkdownBridgePlugin'
 import { FormattingCommandPlugin } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
@@ -88,6 +91,8 @@ function DocumentEditorPlugins({
       />
       <HistoryPlugin />
       <ListPlugin />
+      <CheckListPlugin />
+      <TablePlugin />
       <MarkdownShortcutPlugin transformers={COMPOSER_TRANSFORMERS} />
       <MarkdownBridgePlugin
         input={content}
@@ -137,6 +142,7 @@ export default function DocumentPane({
   onTitleChange,
 }: DocumentPaneProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [showSource, setShowSource] = useState(false)
   const [editTitle, setEditTitle] = useState(document.displayTitle)
   const titleInputRef = useRef<HTMLInputElement>(null)
 
@@ -146,7 +152,7 @@ export default function DocumentPane({
     () => ({
       namespace: 'DocumentEditor',
       theme: composerTheme,
-      nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, CodeHighlightNode],
+      nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, CodeNode, CodeHighlightNode, TableNode, TableCellNode, TableRowNode],
       editable: !isLLMEditing,
       onError: (error: Error) => {
         console.error('[DocumentPane] Editor error:', error)
@@ -218,6 +224,17 @@ export default function DocumentPane({
         )}
 
         <div className="flex items-center gap-1">
+          {/* Toggle source/rich text */}
+          <button
+            className={`qt-doc-header-button ${showSource ? 'qt-chat-toolbar-button-active' : ''}`}
+            onClick={() => setShowSource(!showSource)}
+            title={showSource ? 'Switch to rich text editor' : 'Switch to Markdown source'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+          </button>
+
           {/* Toggle focus/split */}
           <button
             className="qt-doc-header-button"
@@ -248,23 +265,37 @@ export default function DocumentPane({
         </div>
       </div>
 
-      {/* Editor with shared Lexical config — key forces remount on external content changes */}
-      <LexicalComposer key={contentVersion} initialConfig={initialConfig}>
-        {/* Formatting Toolbar */}
-        <DocumentToolbarWrapper
-          roleplayTemplateId={roleplayTemplateId}
-          disabled={isLLMEditing}
-        />
-
-        {/* Editor Area */}
+      {showSource ? (
+        /* Markdown source editor */
         <div className="flex-1 overflow-y-auto" onBlur={onBlur}>
-          <DocumentEditorPlugins
-            content={document.content}
-            onContentChange={onContentChange}
+          <textarea
+            className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
+            value={document.content}
+            onChange={(e) => onContentChange(e.target.value)}
             disabled={isLLMEditing}
+            spellCheck={false}
+            style={{ lineHeight: '1.6', minHeight: '100%' }}
           />
         </div>
-      </LexicalComposer>
+      ) : (
+        /* Rich text editor with shared Lexical config — key forces remount on external content changes */
+        <LexicalComposer key={contentVersion} initialConfig={initialConfig}>
+          {/* Formatting Toolbar */}
+          <DocumentToolbarWrapper
+            roleplayTemplateId={roleplayTemplateId}
+            disabled={isLLMEditing}
+          />
+
+          {/* Editor Area */}
+          <div className="flex-1 overflow-y-auto" onBlur={onBlur}>
+            <DocumentEditorPlugins
+              content={document.content}
+              onContentChange={onContentChange}
+              disabled={isLLMEditing}
+            />
+          </div>
+        </LexicalComposer>
+      )}
 
       {/* Status Bar */}
       <div className="qt-doc-status-bar">

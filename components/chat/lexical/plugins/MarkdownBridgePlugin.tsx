@@ -29,6 +29,7 @@ import {
   HEADING,
   ORDERED_LIST,
   UNORDERED_LIST,
+  CHECK_LIST,
   QUOTE,
   LINK,
   STRIKETHROUGH,
@@ -57,6 +58,7 @@ export const COMPOSER_TRANSFORMERS: Transformer[] = [
   CODE,
   UNORDERED_LIST,
   ORDERED_LIST,
+  CHECK_LIST,
   // Text match transformers
   LINK,
 ]
