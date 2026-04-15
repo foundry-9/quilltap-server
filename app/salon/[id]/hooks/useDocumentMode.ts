@@ -87,7 +87,10 @@ export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDoc
   // Load the active document for this chat from the API
   const loadActiveDocument = useCallback(async () => {
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=active-document`)
+      const res = await fetch(`/api/v1/chats/${chatId}?action=active-document`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
       if (!res.ok) return
 
       const data = await res.json()
