@@ -949,6 +949,46 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [messages, modals])
 
+  // Send a programmatic message (used for Document Mode notifications)
+  const sendProgrammaticMessage = useCallback((messageText: string) => {
+    // Set the input and trigger send via a synthetic form event
+    setInput(messageText)
+    // Use setTimeout to ensure state is updated before send
+    setTimeout(() => {
+      const syntheticEvent = { preventDefault: () => {} } as React.FormEvent
+      sseStreaming.sendMessage(
+        syntheticEvent,
+        messageText,
+        setInput,
+        [],
+        [],
+        setPendingToolResults,
+        clearDraft,
+        chatControls.userStoppedStreamRef,
+      )
+    }, 0)
+  }, [sseStreaming, setInput, setPendingToolResults, clearDraft, chatControls.userStoppedStreamRef])
+
+  // Handle document open — opens the document and sends a notification message to the LLM
+  const handleOpenDocument = useCallback(async (params: Parameters<typeof documentModeHook.openDocument>[0]) => {
+    const doc = await documentModeHook.openDocument(params)
+    if (!doc) return
+
+    // Build a concise notification message for the LLM
+    const scopeLabel = doc.scope === 'document_store' && doc.mountPoint
+      ? `document store "${doc.mountPoint}"`
+      : doc.scope === 'project'
+      ? 'the project library'
+      : 'the general library'
+
+    const isNew = !params.filePath
+    const message = isNew
+      ? `I've opened a new blank document "${doc.displayTitle}" for us to work on together. You can use doc_read_file and the other doc_* editing tools to read and edit this document (path: "${doc.filePath}", scope: "${doc.scope}"${doc.mountPoint ? `, mount_point: "${doc.mountPoint}"` : ''}).`
+      : `I've opened "${doc.displayTitle}" from ${scopeLabel} for us to work on together. You can use doc_read_file to read it and the other doc_* editing tools to collaborate on it (path: "${doc.filePath}", scope: "${doc.scope}"${doc.mountPoint ? `, mount_point: "${doc.mountPoint}"` : ''}).`
+
+    sendProgrammaticMessage(message)
+  }, [documentModeHook, sendProgrammaticMessage])
+
   const handleReattributed = useCallback(async () => {
     const messageId = modals.reattributeDialogState?.messageId
     modals.setReattributeDialogState(null)
@@ -1218,7 +1258,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           projectId={chat?.projectId}
           projectName={chat?.projectName}
           onSelectDocument={(params) => {
-            documentModeHook.openDocument(params)
+            handleOpenDocument(params)
             setShowDocumentPicker(false)
           }}
         />

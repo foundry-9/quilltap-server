@@ -36,7 +36,7 @@ interface UseDocumentModeReturn {
   isDirty: boolean
   isSaving: boolean
   isLLMEditing: boolean
-  openDocument: (params: OpenDocumentParams) => Promise<void>
+  openDocument: (params: OpenDocumentParams) => Promise<ActiveDocument | null>
   closeDocument: () => Promise<void>
   toggleFocusMode: () => void
   setDividerPosition: (position: number) => void
@@ -198,8 +198,8 @@ export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDoc
     }, AUTOSAVE_DEBOUNCE_MS)
   }, [saveDocument])
 
-  // Open a document
-  const openDocument = useCallback(async (params: OpenDocumentParams) => {
+  // Open a document — returns the ActiveDocument on success, null on failure
+  const openDocument = useCallback(async (params: OpenDocumentParams): Promise<ActiveDocument | null> => {
     // Save current document if dirty
     if (isDirty && activeDocument) {
       await saveDocument()
@@ -222,12 +222,12 @@ export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDoc
 
       if (!res.ok) {
         console.error('[DocumentMode] Failed to open document')
-        return
+        return null
       }
 
       const data = await res.json()
 
-      setActiveDocument({
+      const doc: ActiveDocument = {
         id: data.document.id,
         filePath: data.document.filePath,
         scope: data.document.scope,
@@ -235,12 +235,17 @@ export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDoc
         displayTitle: data.document.displayTitle || data.document.filePath,
         content: data.content || '',
         mtime: data.mtime,
-      })
+      }
+
+      setActiveDocument(doc)
       contentRef.current = data.content || ''
       setIsDirty(false)
       setDocumentMode(targetMode)
+
+      return doc
     } catch (error) {
       console.error('[DocumentMode] Failed to open document', error)
+      return null
     }
   }, [chatId, isDirty, activeDocument, saveDocument])
 
