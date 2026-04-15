@@ -355,6 +355,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     setWorkspaceAcknowledgementState: modals.setWorkspaceAcknowledgementState,
     getFirstCharacterParticipant: participantsWithImpersonation.getFirstCharacterParticipant,
     setPauseState: chatControls.setPauseState,
+    onToolResult: (name, success) => {
+      // React to LLM opening/closing documents
+      if (success && (name === 'doc_open_document' || name === 'doc_close_document')) {
+        documentModeHook.reloadFromServer()
+      }
+    },
   })
 
   // Keep refs in sync with SSE streaming state

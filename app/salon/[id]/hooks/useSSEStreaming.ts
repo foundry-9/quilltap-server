@@ -118,6 +118,8 @@ interface UseSSEStreamingParams {
   setWorkspaceAcknowledgementState: (state: WorkspaceAcknowledgementState | null) => void
   getFirstCharacterParticipant: () => import('../types').Participant | undefined
   setPauseState: (paused: boolean) => void
+  /** Called when a tool result arrives, allowing the page to react to specific tools */
+  onToolResult?: (name: string, success: boolean, result: unknown) => void
 }
 
 export function useSSEStreaming({
@@ -142,6 +144,7 @@ export function useSSEStreaming({
   setWorkspaceAcknowledgementState,
   getFirstCharacterParticipant,
   setPauseState,
+  onToolResult: onToolResultCallback,
 }: UseSSEStreamingParams) {
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
@@ -498,6 +501,9 @@ export function useSSEStreaming({
               showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
             }
           }
+
+          // Notify the page about tool results (for Document Mode, etc.)
+          onToolResultCallback?.(name, success, result)
         },
         onDone: async (fullContent, data) => {
           if (data.emptyResponse) {
@@ -613,6 +619,7 @@ export function useSSEStreaming({
       setResponseStatus(null)
       focusInput()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
   }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, setFileWriteApprovalState, setSudoApprovalState, setWorkspaceAcknowledgementState, readSSEStream, extractErrorMessage, focusInput])
 
   /**

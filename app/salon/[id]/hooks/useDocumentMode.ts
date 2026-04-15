@@ -47,6 +47,8 @@ interface UseDocumentModeReturn {
   handleLLMEditEnd: () => Promise<void>
   saveDocument: () => Promise<void>
   flushSave: () => void
+  /** Reload document state from server (after LLM opens/closes via tool) */
+  reloadFromServer: () => Promise<void>
   /** Increments on each external content load to force editor remount */
   contentVersion: number
 }
@@ -456,6 +458,28 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     }
   }, [chatId, activeDocument])
 
+  // Reload document state from server — used when LLM opens/closes a document via tools
+  const reloadFromServer = useCallback(async () => {
+    try {
+      // Fetch the chat to get current documentMode
+      const chatRes = await fetch(`/api/v1/chats/${chatId}`)
+      if (!chatRes.ok) return
+      const chatData = await chatRes.json()
+      const mode = (chatData.chat?.documentMode as DocumentMode) || 'normal'
+      setDocumentMode(mode)
+      setDividerPositionState(chatData.chat?.dividerPosition || 45)
+
+      if (mode !== 'normal') {
+        await loadActiveDocument()
+      } else {
+        setActiveDocument(null)
+        setIsDirty(false)
+      }
+    } catch (error) {
+      console.error('[DocumentMode] Failed to reload from server', error)
+    }
+  }, [chatId, loadActiveDocument])
+
   // Cleanup autosave timer on unmount
   useEffect(() => {
     return () => {
@@ -481,6 +505,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     handleLLMEditEnd,
     saveDocument,
     flushSave,
+    reloadFromServer,
     contentVersion,
   }
 }
