@@ -70,6 +70,8 @@
 
 #### Tests
 
+- Added regression tests for chat document mode metadata (`documentMode`, `dividerPosition`) in chats GET handler responses
+- Added unit tests for chat document actions covering recent-document ordering/limits and active-document responses
 - Added unit tests for conversation-render background job handler
 - Added unit tests for FormattingToolbar source-mode formatting operations
 - Added unit tests for useHealthCheck hook (shared polling, lock conflict detection)
