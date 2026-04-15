@@ -58,6 +58,14 @@
 
 - Reduced Turbopack NFT tracing warnings from 9 to 1 by adding `turbopackIgnore` annotations to dynamic-loader.ts, converting themes route to dynamic imports, and adding `outputFileTracingExcludes` for next.config.js
 
+#### Dependencies
+
+- Updated `better-sqlite3-multiple-ciphers` ^12.8.0 → ^12.9.0 (root + quilltap package)
+- Updated `@openrouter/sdk` ^0.12.2 → ^0.12.8 (root + openrouter plugin)
+- Updated `@google/genai` ^1.49.0 → ^1.50.1 (google plugin)
+- Updated `autoprefixer` ^10.4.27 → ^10.5.0
+- Updated `postcss` ^8.5.9 → ^8.5.10
+
 #### Bug Fixes
 
 - Fixed chat participant status changes (absent/remove) not updating in the UI under Electron due to Chromium caching stale GET responses; added `cache: 'no-store'` to all chat-related fetch calls in the Salon view
