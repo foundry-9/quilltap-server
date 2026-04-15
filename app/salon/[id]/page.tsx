@@ -950,24 +950,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [messages, modals])
 
   // Send a programmatic message (used for Document Mode notifications)
+  // Passes the text directly to sendMessage without touching the composer input state
   const sendProgrammaticMessage = useCallback((messageText: string) => {
-    // Set the input and trigger send via a synthetic form event
-    setInput(messageText)
-    // Use setTimeout to ensure state is updated before send
-    setTimeout(() => {
-      const syntheticEvent = { preventDefault: () => {} } as React.FormEvent
-      sseStreaming.sendMessage(
-        syntheticEvent,
-        messageText,
-        setInput,
-        [],
-        [],
-        setPendingToolResults,
-        clearDraft,
-        chatControls.userStoppedStreamRef,
-      )
-    }, 0)
-  }, [sseStreaming, setInput, setPendingToolResults, clearDraft, chatControls.userStoppedStreamRef])
+    const syntheticEvent = { preventDefault: () => {} } as React.FormEvent
+    const noop = () => {}
+    sseStreaming.sendMessage(
+      syntheticEvent,
+      messageText,
+      noop,          // don't clear — composer input was never set
+      [],
+      [],
+      setPendingToolResults,
+      noop,          // don't clear draft — this isn't a draft
+      chatControls.userStoppedStreamRef,
+    )
+  }, [sseStreaming, setPendingToolResults, chatControls.userStoppedStreamRef])
 
   // Handle document open — opens the document and sends a notification message to the LLM
   const handleOpenDocument = useCallback(async (params: Parameters<typeof documentModeHook.openDocument>[0]) => {
