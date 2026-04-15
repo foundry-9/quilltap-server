@@ -35,6 +35,14 @@ interface MountPoint {
   type: string
 }
 
+interface MountPointFile {
+  id: string
+  relativePath: string
+  size?: number
+  mimeType?: string
+  updatedAt?: string
+}
+
 export default function DocumentPickerModal({
   isOpen,
   onClose,
@@ -44,8 +52,10 @@ export default function DocumentPickerModal({
 }: Readonly<DocumentPickerModalProps>) {
   const [step, setStep] = useState<'source' | 'browse'>('source')
   const [selectedScope, setSelectedScope] = useState<'project' | 'document_store' | 'general'>('project')
-  const [selectedMountPoint, setSelectedMountPoint] = useState<string | null>(null)
+  const [selectedMountPoint, setSelectedMountPoint] = useState<MountPoint | null>(null)
   const [mountPoints, setMountPoints] = useState<MountPoint[]>([])
+  const [mountPointFiles, setMountPointFiles] = useState<MountPointFile[]>([])
+  const [mountPointFilesLoading, setMountPointFilesLoading] = useState(false)
   const [loading, setLoading] = useState(false)
 
   // Fetch mount points when modal opens
@@ -61,6 +71,7 @@ export default function DocumentPickerModal({
       setStep('source')
       setSelectedScope('project')
       setSelectedMountPoint(null)
+      setMountPointFiles([])
     }
   }, [isOpen])
 
@@ -79,29 +90,76 @@ export default function DocumentPickerModal({
     }
   }
 
+  const fetchMountPointFiles = async (mp: MountPoint) => {
+    try {
+      setMountPointFilesLoading(true)
+      const res = await fetch(`/api/v1/mount-points/${mp.id}/files`)
+      if (res.ok) {
+        const data = await res.json()
+        // Filter to markdown/text files and sort by path
+        const files = (data.files || [])
+          .filter((f: MountPointFile) => {
+            const ext = f.relativePath.split('.').pop()?.toLowerCase()
+            return ['md', 'txt', 'markdown'].includes(ext || '')
+          })
+          .sort((a: MountPointFile, b: MountPointFile) =>
+            a.relativePath.localeCompare(b.relativePath)
+          )
+        setMountPointFiles(files)
+      }
+    } catch (error) {
+      console.error('[DocumentPickerModal] Failed to fetch mount point files', error)
+    } finally {
+      setMountPointFilesLoading(false)
+    }
+  }
+
   const handleNewBlank = useCallback(() => {
     onSelectDocument({})
     onClose()
   }, [onSelectDocument, onClose])
 
-  const handleSelectScope = useCallback((scope: 'project' | 'document_store' | 'general', mountPoint?: string) => {
+  const handleSelectScope = useCallback((scope: 'project' | 'document_store' | 'general', mp?: MountPoint) => {
     setSelectedScope(scope)
-    setSelectedMountPoint(mountPoint || null)
+    setSelectedMountPoint(mp || null)
     setStep('browse')
+
+    // Fetch files for document stores
+    if (scope === 'document_store' && mp) {
+      fetchMountPointFiles(mp)
+    }
   }, [])
 
   const handleFileSelect = useCallback((file: FileInfo) => {
     onSelectDocument({
       filePath: file.filepath || file.filename,
       scope: selectedScope,
-      mountPoint: selectedMountPoint || undefined,
+      mountPoint: selectedMountPoint?.name || undefined,
     })
     onClose()
   }, [onSelectDocument, selectedScope, selectedMountPoint, onClose])
 
+  const handleMountPointFileSelect = useCallback((file: MountPointFile) => {
+    onSelectDocument({
+      filePath: file.relativePath,
+      scope: 'document_store',
+      mountPoint: selectedMountPoint?.name || undefined,
+    })
+    onClose()
+  }, [onSelectDocument, selectedMountPoint, onClose])
+
   const handleBack = useCallback(() => {
     setStep('source')
+    setMountPointFiles([])
   }, [])
+
+  // Format file size for display
+  const formatSize = (bytes?: number) => {
+    if (!bytes) return ''
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
 
   return (
     <BaseModal
@@ -169,7 +227,7 @@ export default function DocumentPickerModal({
               {mountPoints.map((mp) => (
                 <button
                   key={mp.id}
-                  onClick={() => handleSelectScope('document_store', mp.name)}
+                  onClick={() => handleSelectScope('document_store', mp)}
                   className="w-full flex items-center gap-3 p-4 rounded-lg border qt-border hover:qt-bg-hover transition-colors text-left"
                 >
                   <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center qt-bg-muted">
@@ -192,7 +250,7 @@ export default function DocumentPickerModal({
         </div>
       ) : (
         <div className="flex flex-col" style={{ height: '60vh' }}>
-          {/* Back button */}
+          {/* Back button and scope label */}
           <div className="flex items-center gap-2 px-4 py-2 border-b qt-border">
             <button
               onClick={handleBack}
@@ -206,17 +264,55 @@ export default function DocumentPickerModal({
             <span className="text-sm qt-text-muted">
               {selectedScope === 'project' ? projectName || 'Project' :
                selectedScope === 'general' ? 'General Library' :
-               selectedMountPoint || 'Document Store'}
+               selectedMountPoint?.name || 'Document Store'}
             </span>
           </div>
 
-          {/* File browser */}
-          <div className="flex-1 overflow-hidden">
-            <FileBrowser
-              projectId={selectedScope === 'project' ? (projectId || null) : null}
-              onFileClick={handleFileSelect}
-              showUpload={false}
-            />
+          {/* File browser — different component per scope */}
+          <div className="flex-1 overflow-y-auto">
+            {selectedScope === 'document_store' ? (
+              /* Mount point file list */
+              <div className="p-2">
+                {mountPointFilesLoading ? (
+                  <div className="text-center py-8 qt-text-muted text-sm">Loading files...</div>
+                ) : mountPointFiles.length === 0 ? (
+                  <div className="text-center py-8 qt-text-muted text-sm">
+                    No Markdown files found in this document store.
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {mountPointFiles.map((file) => (
+                      <button
+                        key={file.id}
+                        onClick={() => handleMountPointFileSelect(file)}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
+                      >
+                        <svg className="w-4 h-4 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm qt-text-primary truncate" title={file.relativePath}>
+                            {file.relativePath}
+                          </div>
+                        </div>
+                        {file.size != null && (
+                          <span className="text-xs qt-text-muted flex-shrink-0">
+                            {formatSize(file.size)}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Project or general library — use FileBrowser */
+              <FileBrowser
+                projectId={selectedScope === 'project' ? (projectId || null) : null}
+                onFileClick={handleFileSelect}
+                showUpload={false}
+              />
+            )}
           </div>
         </div>
       )}
