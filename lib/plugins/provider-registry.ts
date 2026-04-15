@@ -305,6 +305,18 @@ class ProviderRegistry extends AbstractProviderRegistry<LLMProviderPlugin> {
     return model?.pricing ?? null;
   }
 
+  /**
+   * Check whether a specific model supports assistant message prefill.
+   * Returns true (default) if the plugin doesn't implement the check.
+   */
+  modelSupportsPrefill(providerName: string, modelId: string): boolean {
+    const plugin = this.getProvider(providerName);
+    if (!plugin?.modelSupportsPrefill) {
+      return true;
+    }
+    return plugin.modelSupportsPrefill(modelId);
+  }
+
   // =========================================================================
   // HOT-LOADING (LLM-specific)
   // =========================================================================
@@ -542,6 +554,15 @@ export function getDefaultContextWindow(name: string): number {
  */
 export function getModelPricing(providerName: string, modelId: string): { input: number; output: number } | null {
   return providerRegistry.getModelPricing(providerName, modelId);
+}
+
+/**
+ * Check whether a specific model supports assistant message prefill.
+ * Some newer models (e.g., Claude 4.6) no longer support ending the messages
+ * array with an assistant role message.
+ */
+export function modelSupportsPrefill(providerName: string, modelId: string): boolean {
+  return providerRegistry.modelSupportsPrefill(providerName, modelId);
 }
 
 /**

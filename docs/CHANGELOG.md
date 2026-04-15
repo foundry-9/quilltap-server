@@ -4,6 +4,16 @@
 
 ### 4.3-dev
 
+#### Fixes
+
+- **Claude 4.6 compatibility**: Fixed multi-character chat identity anchoring for Claude 4.6 models (Sonnet 4.6, Opus 4.6) which no longer support assistant message prefill. When a model doesn't support prefill, the system prompt is used to instruct the model to self-identify instead.
+- **Anthropic plugin**: Added Claude Opus 4.6 and Claude Sonnet 4.6 to model lists and fallback models
+
+#### Plugin System
+
+- Added `modelSupportsPrefill` optional method to `TextProviderPlugin` interface for per-model prefill capability detection
+- Bumped `qtap-plugin-anthropic` to v1.0.27
+
 #### Features
 
 - **Document Mode (Scriptorium Phase 3.5)**: Split-panel editor for collaborative document editing alongside chat
