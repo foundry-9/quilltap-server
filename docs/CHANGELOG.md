@@ -10,18 +10,25 @@
   - Three layout states: Normal (chat only), Split (chat + document), Focus (document only)
   - Resizable divider between chat and document panes with minimum width enforcement
   - Document picker modal with source selection (new blank, project library, mounted stores)
+  - Document picker shows "Recent" section with previously opened documents for quick reopen
+  - Document store file browsing uses the mount point's indexed files (not the project file browser)
   - Lexical-based document editor with formatting toolbar, word count, and save status
   - `doc_open_document` and `doc_close_document` tools for LLM participants
   - Keyboard shortcuts: Cmd+Shift+D (toggle document mode), Cmd+Shift+F (toggle focus), Escape (exit focus)
-  - Debounced autosave with LLM edit locking
-  - Document state persists per chat and restores on revisit
+  - Debounced autosave (30s idle) with immediate flush on editor blur
+  - Sends unified diff to LLM on autosave so it can see what the user changed
+  - Sends LLM notification message with file path and tool instructions when a document opens
+  - Document editor updates live when LLM edits the file via doc_* tools
+  - Document state persists per chat and restores on page reload or revisit
+  - Closed documents are preserved as inactive records for quick-reopen history
+  - Editing document store files triggers re-indexing, embedding, and stats refresh
   - Responsive: Document Mode button hidden below 1026px viewport width
 - Renamed "Document Mode" to "Composition Mode" for the existing ChatComposer toggle (avoids confusion with the new split-panel feature)
 
 #### Database
 
 - Added `documentMode` and `dividerPosition` columns to `chats` table
-- Added `chat_documents` table for tracking document associations per chat
+- Added `chat_documents` table for tracking document associations per chat (inactive records preserved for history)
 
 #### UI
 
