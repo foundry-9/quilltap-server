@@ -323,13 +323,34 @@ CREATE TABLE "chats" (
   "avatarGenerationEnabled" INTEGER DEFAULT NULL,
   "chatType" TEXT DEFAULT 'salon',
   "helpPageUrl" TEXT DEFAULT NULL,
-  "scenarioText" TEXT DEFAULT NULL
+  "scenarioText" TEXT DEFAULT NULL,
+  "documentMode" TEXT DEFAULT 'normal',
+  "dividerPosition" INTEGER DEFAULT 45
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");
 CREATE INDEX "idx_chats_createdAt" ON "chats" ("createdAt" DESC);
 CREATE INDEX "idx_chats_projectId" ON "chats" ("projectId");
 CREATE INDEX "idx_chats_userId" ON "chats" ("userId");
+```
+
+### chat_documents
+
+```sql
+CREATE TABLE "chat_documents" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "filePath" TEXT NOT NULL,
+  "scope" TEXT NOT NULL DEFAULT 'project',
+  "mountPoint" TEXT,
+  "displayTitle" TEXT,
+  "isActive" INTEGER DEFAULT 1,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
+CREATE INDEX "idx_chat_documents_chatId" ON "chat_documents" ("chatId");
+CREATE UNIQUE INDEX "idx_chat_documents_unique" ON "chat_documents" ("chatId", "filePath", "scope", "mountPoint");
 ```
 
 ### conversation_annotations

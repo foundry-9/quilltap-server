@@ -45,6 +45,7 @@ export { DocMountPointsRepository } from './doc-mount-points.repository';
 export { DocMountFilesRepository } from './doc-mount-files.repository';
 export { DocMountChunksRepository } from './doc-mount-chunks.repository';
 export { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
+export { ChatDocumentsRepository } from './chat-documents.repository';
 
 // Import all repository classes for container
 import { BackgroundJobsRepository } from './background-jobs.repository';
@@ -79,6 +80,7 @@ import { DocMountPointsRepository } from './doc-mount-points.repository';
 import { DocMountFilesRepository } from './doc-mount-files.repository';
 import { DocMountChunksRepository } from './doc-mount-chunks.repository';
 import { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
+import { ChatDocumentsRepository } from './chat-documents.repository';
 
 /**
  * Container interface for all repository instances.
@@ -118,6 +120,7 @@ export interface RepositoryContainer {
   docMountFiles: DocMountFilesRepository;
   docMountChunks: DocMountChunksRepository;
   projectDocMountLinks: ProjectDocMountLinksRepository;
+  chatDocuments: ChatDocumentsRepository;
 }
 
 /**
@@ -169,6 +172,7 @@ export function createRepositories(): RepositoryContainer {
       docMountFiles: new DocMountFilesRepository(),
       docMountChunks: new DocMountChunksRepository(),
       projectDocMountLinks: new ProjectDocMountLinksRepository(),
+      chatDocuments: new ChatDocumentsRepository(),
     };
     return repositories;
   } catch (error) {

@@ -33,6 +33,11 @@ import {
   handleToggleAvatarGeneration,
   handleRegenerateAvatar,
   handleRenderConversation,
+  handleActiveDocument,
+  handleOpenDocument,
+  handleCloseDocument,
+  handleReadDocument,
+  handleWriteDocument,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -62,6 +67,11 @@ const CHAT_POST_ACTIONS = [
   'toggle-avatar-generation',
   'regenerate-avatar',
   'render-conversation',
+  'active-document',
+  'open-document',
+  'close-document',
+  'read-document',
+  'write-document',
 ] as const;
 
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
@@ -113,6 +123,11 @@ export async function handlePost(
     'toggle-avatar-generation': () => handleToggleAvatarGeneration(chatId, ctx),
     'regenerate-avatar': () => handleRegenerateAvatar(req, chatId, ctx),
     'render-conversation': () => handleRenderConversation(chatId, ctx),
+    'active-document': () => handleActiveDocument(chatId, ctx),
+    'open-document': () => handleOpenDocument(req, chatId, ctx),
+    'close-document': () => handleCloseDocument(chatId, ctx),
+    'read-document': () => handleReadDocument(req, chatId, ctx),
+    'write-document': () => handleWriteDocument(req, chatId, ctx),
   };
 
   return actionHandlers[action]();

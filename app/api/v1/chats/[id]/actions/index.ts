@@ -29,3 +29,10 @@ export { handleGetOutfit, handleEquipSlot } from './outfit';
 export { handleToggleAvatarGeneration } from './toggle-avatar-generation';
 export { handleRegenerateAvatar } from './regenerate-avatar';
 export { handleRenderConversation } from './render-conversation';
+export {
+  handleActiveDocument,
+  handleOpenDocument,
+  handleCloseDocument,
+  handleReadDocument,
+  handleWriteDocument,
+} from './documents';

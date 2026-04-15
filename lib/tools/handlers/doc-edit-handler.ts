@@ -45,6 +45,9 @@ import type { DocMoveFileInput, DocMoveFileOutput } from '../doc-move-file-tool'
 import type { DocDeleteFileInput, DocDeleteFileOutput } from '../doc-delete-file-tool';
 import type { DocCreateFolderInput, DocCreateFolderOutput } from '../doc-create-folder-tool';
 import type { DocDeleteFolderInput, DocDeleteFolderOutput } from '../doc-delete-folder-tool';
+import type { DocOpenDocumentInput, DocOpenDocumentOutput } from '../doc-open-document-tool';
+import type { DocCloseDocumentInput, DocCloseDocumentOutput } from '../doc-close-document-tool';
+import { getRepositories } from '@/lib/database/repositories';
 
 const logger = createServiceLogger('DocEdit:Handler');
 
@@ -67,6 +70,8 @@ export const DOC_EDIT_TOOL_NAMES = new Set([
   'doc_delete_file',
   'doc_create_folder',
   'doc_delete_folder',
+  'doc_open_document',
+  'doc_close_document',
 ]);
 
 /**
@@ -125,6 +130,10 @@ export async function executeDocEditTool(
         return await handleCreateFolder(input as unknown as DocCreateFolderInput, context);
       case 'doc_delete_folder':
         return await handleDeleteFolder(input as unknown as DocDeleteFolderInput, context);
+      case 'doc_open_document':
+        return await handleOpenDocument(input as unknown as DocOpenDocumentInput, context);
+      case 'doc_close_document':
+        return await handleCloseDocument(input as unknown as DocCloseDocumentInput, context);
       default:
         return { success: false, error: `Unknown doc-edit tool: ${toolName}` };
     }
@@ -1122,5 +1131,169 @@ async function handleDeleteFolder(
     success: true,
     result,
     formattedText: `Deleted folder: ${input.path}`,
+  };
+}
+
+// ============================================================================
+// Document UI Tools (Phase 3.5)
+// ============================================================================
+
+/**
+ * Handle doc_open_document: open a document in the split-panel editor.
+ * This is a UI tool — it writes to the chat_documents table and returns
+ * a structured response that the frontend interprets to open the editor pane.
+ */
+async function handleOpenDocument(
+  input: DocOpenDocumentInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
+  const repos = getRepositories();
+  const scope = (input.scope || 'project') as 'document_store' | 'project' | 'general';
+  const mode = input.mode || 'split';
+  let filePath = input.path;
+  let displayTitle = input.title || 'Untitled document';
+  let isNew = false;
+  let mtime: number | undefined;
+
+  if (filePath) {
+    // Opening an existing file — resolve the path to verify it exists
+    try {
+      const resolved = await resolveDocEditPath(scope, filePath, { projectId: context.projectId, mountPoint: input.mount_point });
+      const stat = await fs.stat(resolved.absolutePath);
+      mtime = stat.mtimeMs;
+      // Use filename as display title if not provided
+      if (!input.title) {
+        displayTitle = path.basename(filePath);
+      }
+    } catch (error) {
+      if (error instanceof PathResolutionError) {
+        return { success: false, error: error.message };
+      }
+      return { success: false, error: `File not found: ${filePath}` };
+    }
+  } else {
+    // Creating a new blank document
+    isNew = true;
+    const uuid = crypto.randomUUID();
+    filePath = `${uuid}.md`;
+
+    // Determine save location based on project context
+    const targetScope = context.projectId ? 'project' : 'general';
+    try {
+      const resolved = await resolveDocEditPath(targetScope as DocEditScope, filePath, { projectId: context.projectId });
+      // Create the blank file
+      await fs.mkdir(path.dirname(resolved.absolutePath), { recursive: true });
+      await fs.writeFile(resolved.absolutePath, '', 'utf-8');
+      const stat = await fs.stat(resolved.absolutePath);
+      mtime = stat.mtimeMs;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { success: false, error: `Failed to create blank document: ${errorMsg}` };
+    }
+  }
+
+  // Update the chat_documents table
+  try {
+    await repos.chatDocuments.openDocument(context.chatId, {
+      filePath,
+      scope,
+      mountPoint: input.mount_point,
+      displayTitle,
+    });
+
+    // Update the chat's document mode
+    await repos.chats.update(context.chatId, {
+      documentMode: mode,
+    } as Record<string, unknown>);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error('Failed to persist document association', {
+      chatId: context.chatId,
+      filePath,
+      error: errorMsg,
+    });
+    return { success: false, error: `Failed to open document: ${errorMsg}` };
+  }
+
+  const result: DocOpenDocumentOutput = {
+    success: true,
+    filePath,
+    scope,
+    mountPoint: input.mount_point,
+    displayTitle,
+    mode,
+    isNew,
+    mtime,
+  };
+
+  logger.info('Opened document in Document Mode', {
+    chatId: context.chatId,
+    filePath,
+    scope,
+    mode,
+    isNew,
+  });
+
+  return {
+    success: true,
+    result,
+    formattedText: isNew
+      ? `Created and opened new document "${displayTitle}" in ${mode} mode.`
+      : `Opened document "${displayTitle}" (${filePath}) in ${mode} mode.`,
+  };
+}
+
+/**
+ * Handle doc_close_document: close the document editor pane.
+ * Returns to normal chat layout. Document state is cached for the session.
+ */
+async function handleCloseDocument(
+  input: DocCloseDocumentInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
+  const repos = getRepositories();
+
+  try {
+    const closed = await repos.chatDocuments.closeDocument(context.chatId);
+
+    // Update the chat's document mode back to normal
+    await repos.chats.update(context.chatId, {
+      documentMode: 'normal',
+    } as Record<string, unknown>);
+
+    if (!closed) {
+      return {
+        success: true,
+        result: { success: true, message: 'No document was open.' },
+        formattedText: 'No document was open to close.',
+      };
+    }
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error('Failed to close document', {
+      chatId: context.chatId,
+      error: errorMsg,
+    });
+    return { success: false, error: `Failed to close document: ${errorMsg}` };
+  }
+
+  const message = input.reason
+    ? `Closed the document. ${input.reason}`
+    : 'Closed the document and returned to chat view.';
+
+  const result: DocCloseDocumentOutput = {
+    success: true,
+    message,
+  };
+
+  logger.info('Closed document in Document Mode', {
+    chatId: context.chatId,
+    reason: input.reason,
+  });
+
+  return {
+    success: true,
+    result,
+    formattedText: message,
   };
 }

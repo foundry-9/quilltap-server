@@ -333,8 +333,14 @@ export const ChatMetadataSchema = z.object({
   /** Server-side turn queue for chained responses (JSON array of participant IDs) */
   turnQueue: z.string().default('[]'),
 
-  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
+
+  /** Document Mode layout state: normal (chat only), split (chat + document), focus (document only) */
+  documentMode: z.enum(['normal', 'split', 'focus']).default('normal'),
+
+  /** Divider position for split mode as percentage of main area width (20-80) */
+  dividerPosition: z.number().min(20).max(80).default(45),
 
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),
@@ -459,8 +465,14 @@ export const ChatMetadataBaseSchema = z.object({
   allLLMPauseTurnCount: z.number().default(0),
   /** Server-side turn queue for chained responses (JSON array of participant IDs) */
   turnQueue: z.string().default('[]'),
-  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
+
+  /** Document Mode layout state: normal (chat only), split (chat + document), focus (document only) */
+  documentMode: z.enum(['normal', 'split', 'focus']).default('normal'),
+
+  /** Divider position for split mode as percentage of main area width (20-80) */
+  dividerPosition: z.number().min(20).max(80).default(45),
 
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),

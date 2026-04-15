@@ -307,6 +307,23 @@ export type {
 } from './scriptorium.types';
 
 // ============================================================================
+// CHAT DOCUMENT TYPES (Scriptorium Phase 3.5)
+// ============================================================================
+export {
+  DocScopeSchema,
+  ChatDocumentSchema,
+  ChatDocumentInputSchema,
+  DocumentModeSchema,
+} from './chat-document.types';
+
+export type {
+  DocScope,
+  ChatDocument,
+  ChatDocumentInput,
+  DocumentMode,
+} from './chat-document.types';
+
+// ============================================================================
 // JOB TYPES
 // ============================================================================
 export {

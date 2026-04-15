@@ -173,6 +173,8 @@ import { addRenderedMarkdownFieldMigration } from './add-rendered-markdown-field
 import { createConversationTablesMigration } from './create-conversation-tables';
 // Create help_docs table for runtime-embedded help documentation
 import { createHelpDocsTableMigration } from './create-help-docs-table';
+// Add document mode fields for Scriptorium Phase 3.5
+import { addDocumentModeFieldsMigration } from './add-document-mode-fields';
 
 /**
  * All available migrations.
@@ -341,6 +343,8 @@ export const migrations: Migration[] = [
   createConversationTablesMigration,
   // Create help_docs table for runtime-embedded help documentation
   createHelpDocsTableMigration,
+  // Add document mode fields for Scriptorium Phase 3.5
+  addDocumentModeFieldsMigration,
 ];
 
 export {
@@ -494,5 +498,7 @@ export {
   createConversationTablesMigration,
   // Create help_docs table for runtime-embedded help documentation
   createHelpDocsTableMigration,
+  // Add document mode fields for Scriptorium Phase 3.5
+  addDocumentModeFieldsMigration,
 };
 

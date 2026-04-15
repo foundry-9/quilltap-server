@@ -465,7 +465,7 @@ export function ChatComposer({
             />
             </div>
 
-            {/* Main toolbar buttons - hamburger and document mode */}
+            {/* Main toolbar buttons - hamburger and composition mode */}
             <div className="qt-chat-toolbar">
               {/* Tool palette toggle button */}
               <button
@@ -483,7 +483,7 @@ export function ChatComposer({
                 </svg>
               </button>
 
-              {/* Document editing mode toggle button */}
+              {/* Composition mode toggle button */}
               <button
                 type="button"
                 onClick={(e) => {
@@ -492,7 +492,7 @@ export function ChatComposer({
                 }}
                 className={`qt-chat-toolbar-button ${documentEditingMode ? 'qt-chat-toolbar-button-active' : ''}`}
                 title={documentEditingMode
-                  ? `Document mode (${isMac ? 'Cmd' : 'Ctrl'}+Enter to send)`
+                  ? `Composition mode (${isMac ? 'Cmd' : 'Ctrl'}+Enter to send)`
                   : `Chat mode (Enter to send)`}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

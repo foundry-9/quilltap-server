@@ -55,6 +55,10 @@ import {
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
 import { GiftWardrobeItemModal } from '@/components/wardrobe/gift-wardrobe-item-modal'
+import SplitLayout from './components/SplitLayout'
+import DocumentPane from './components/DocumentPane'
+import DocumentPickerModal from './components/DocumentPickerModal'
+import { useDocumentMode } from './hooks/useDocumentMode'
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -236,6 +240,10 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // --- Modal state hook ---
   const modals = useModalState()
+
+  // --- Document Mode hook (Scriptorium Phase 3.5) ---
+  const documentModeHook = useDocumentMode({ chatId: id, chat })
+  const [showDocumentPicker, setShowDocumentPicker] = useState(false)
 
   // --- File attachments hook ---
   const fileHook = useFileAttachments(id, chat?.projectId)
@@ -703,6 +711,46 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [llmLoggingEnabled, toggleInspector])
 
+  // Keyboard shortcuts for Document Mode (Scriptorium Phase 3.5)
+  useEffect(() => {
+    const handleDocKeyDown = (e: KeyboardEvent) => {
+      // Cmd+Shift+D / Ctrl+Shift+D: Toggle document mode (normal ↔ split)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'D') {
+        e.preventDefault()
+        if (documentModeHook.documentMode === 'normal') {
+          if (documentModeHook.activeDocument) {
+            // Re-open existing document in split mode
+            documentModeHook.toggleFocusMode()
+          } else {
+            // No document open — show picker
+            setShowDocumentPicker(true)
+          }
+        } else {
+          documentModeHook.closeDocument()
+        }
+        return
+      }
+
+      // Cmd+Shift+F / Ctrl+Shift+F: Toggle focus mode (split ↔ focus)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'F') {
+        if (documentModeHook.documentMode !== 'normal' && documentModeHook.activeDocument) {
+          e.preventDefault()
+          documentModeHook.toggleFocusMode()
+        }
+        return
+      }
+
+      // Escape: Exit focus mode to split
+      if (e.key === 'Escape' && documentModeHook.documentMode === 'focus') {
+        e.preventDefault()
+        documentModeHook.toggleFocusMode()
+      }
+    }
+
+    document.addEventListener('keydown', handleDocKeyDown)
+    return () => document.removeEventListener('keydown', handleDocKeyDown)
+  }, [documentModeHook])
+
   // --- Toolbar setup ---
   const { setLeftContent, setRightContent } = usePageToolbar()
 
@@ -970,27 +1018,50 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <div className="qt-chat-main">
-        {/* Whisper toggle - shown in multi-character chats */}
-        {participantsWithImpersonation.isMultiChar && (
-          <div className="flex items-center justify-end gap-2 px-4 py-1">
-            <span className="qt-text-secondary text-xs">All Whispers</span>
-            <button
-              onClick={() => setShowAllWhispers(!showAllWhispers)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
-              }`}
-              role="switch"
-              aria-checked={showAllWhispers}
-              title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                  showAllWhispers ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-        )}
+        <SplitLayout
+          mode={documentModeHook.documentMode}
+          dividerPosition={documentModeHook.dividerPosition}
+          onDividerPositionChange={documentModeHook.setDividerPosition}
+          chatContent={
+            <>
+              {/* Document Mode header controls */}
+              <div className="flex items-center justify-between px-4 py-1">
+                {/* Whisper toggle - shown in multi-character chats */}
+                {participantsWithImpersonation.isMultiChar ? (
+                  <div className="flex items-center gap-2">
+                    <span className="qt-text-secondary text-xs">All Whispers</span>
+                    <button
+                      onClick={() => setShowAllWhispers(!showAllWhispers)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
+                      }`}
+                      role="switch"
+                      aria-checked={showAllWhispers}
+                      title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+                          showAllWhispers ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                ) : <div />}
+
+                {/* Open document button */}
+                {documentModeHook.documentMode === 'normal' && (
+                  <button
+                    className="qt-doc-open-button"
+                    onClick={() => setShowDocumentPicker(true)}
+                    title="Open a document alongside this chat (Cmd+Shift+D)"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Open document</span>
+                  </button>
+                )}
+              </div>
 
         <VirtualizedMessageList
           messages={visibleMessages}
@@ -1135,6 +1206,36 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           outfitNotificationHasPending={outfitNotification.hasPending}
           outfitNotificationCount={outfitNotification.pendingCount}
           onConsumeOutfitNotifications={outfitNotification.consumeNotifications}
+        />
+            </>
+          }
+          documentContent={
+            documentModeHook.activeDocument ? (
+              <DocumentPane
+                document={documentModeHook.activeDocument}
+                mode={documentModeHook.documentMode}
+                isDirty={documentModeHook.isDirty}
+                isSaving={documentModeHook.isSaving}
+                isLLMEditing={documentModeHook.isLLMEditing}
+                roleplayTemplateId={chat?.roleplayTemplateId}
+                onContentChange={documentModeHook.handleContentChange}
+                onToggleFocusMode={documentModeHook.toggleFocusMode}
+                onCloseDocument={documentModeHook.closeDocument}
+              />
+            ) : null
+          }
+        />
+
+        {/* Document Picker Modal */}
+        <DocumentPickerModal
+          isOpen={showDocumentPicker}
+          onClose={() => setShowDocumentPicker(false)}
+          projectId={chat?.projectId}
+          projectName={chat?.projectName}
+          onSelectDocument={(params) => {
+            documentModeHook.openDocument(params)
+            setShowDocumentPicker(false)
+          }}
         />
 
         {/* Modals */}

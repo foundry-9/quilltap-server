@@ -4,6 +4,25 @@
 
 ### 4.3-dev
 
+#### Features
+
+- **Document Mode (Scriptorium Phase 3.5)**: Split-panel editor for collaborative document editing alongside chat
+  - Three layout states: Normal (chat only), Split (chat + document), Focus (document only)
+  - Resizable divider between chat and document panes with minimum width enforcement
+  - Document picker modal with source selection (new blank, project library, mounted stores)
+  - Lexical-based document editor with formatting toolbar, word count, and save status
+  - `doc_open_document` and `doc_close_document` tools for LLM participants
+  - Keyboard shortcuts: Cmd+Shift+D (toggle document mode), Cmd+Shift+F (toggle focus), Escape (exit focus)
+  - Debounced autosave with LLM edit locking
+  - Document state persists per chat and restores on revisit
+  - Responsive: Document Mode button hidden below 1026px viewport width
+- Renamed "Document Mode" to "Composition Mode" for the existing ChatComposer toggle (avoids confusion with the new split-panel feature)
+
+#### Database
+
+- Added `documentMode` and `dividerPosition` columns to `chats` table
+- Added `chat_documents` table for tracking document associations per chat
+
 #### UI
 
 - Added Concierge danger indicators to the Salon chat view:

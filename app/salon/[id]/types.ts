@@ -121,8 +121,12 @@ export interface Chat {
   activeTypingParticipantId?: string | null
   /** Turns since last user input or pause (for all-LLM pause logic) */
   allLLMPauseTurnCount?: number
-  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode?: boolean
+  /** Document Mode layout state: normal (chat only), split (chat + document), focus (document only) */
+  documentMode?: 'normal' | 'split' | 'focus'
+  /** Divider position for split mode as percentage of main area width */
+  dividerPosition?: number
   /** Whether agent mode is enabled for this chat */
   agentModeEnabled?: boolean | null
   /** Resolved agent mode enabled state (from cascade: global → character → project → chat) */

@@ -16,7 +16,7 @@ import { $isCodeNode, $createCodeHighlightNode } from '@lexical/code';
  *
  * Manages two modes:
  * - Chat mode: Enter to submit, Shift+Enter for new line
- * - Document mode: Cmd+Enter (Mac) or Ctrl+Enter (non-Mac) to submit
+ * - Composition mode: Cmd+Enter (Mac) or Ctrl+Enter (non-Mac) to submit
  *
  * Also handles code block escape: pressing Enter on a blank trailing
  * line inside a code block exits the block and creates a new paragraph.
@@ -111,7 +111,7 @@ export default function KeyboardPlugin({
       }
 
       if (documentEditingMode) {
-        // Document mode: Cmd+Enter (Mac) or Ctrl+Enter (non-Mac)
+        // Composition mode: Cmd+Enter (Mac) or Ctrl+Enter (non-Mac)
         if (isMac) {
           // Mac: Cmd+Enter (metaKey true, ctrlKey false)
           if (event.metaKey && !event.ctrlKey) {
@@ -127,7 +127,7 @@ export default function KeyboardPlugin({
             return true;
           }
         }
-        // Plain Enter in document mode: let Lexical handle paragraph insertion
+        // Plain Enter in composition mode: let Lexical handle paragraph insertion
         return false;
       } else {
         // Chat mode: Enter to submit, Shift+Enter for linebreak

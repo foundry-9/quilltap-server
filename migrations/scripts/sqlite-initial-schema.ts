@@ -113,12 +113,33 @@ export const SQLITE_TABLES = [
       "requestFullContextOnNextMessage" INTEGER DEFAULT 0,
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL,
-      "renderedMarkdown" TEXT DEFAULT NULL
+      "renderedMarkdown" TEXT DEFAULT NULL,
+      "documentMode" TEXT DEFAULT 'normal',
+      "dividerPosition" INTEGER DEFAULT 45
     )`,
     indexes: [
       `CREATE INDEX IF NOT EXISTS "idx_chats_userId" ON "chats" ("userId")`,
       `CREATE INDEX IF NOT EXISTS "idx_chats_createdAt" ON "chats" ("createdAt" DESC)`,
       `CREATE INDEX IF NOT EXISTS "idx_chats_projectId" ON "chats" ("projectId")`,
+    ],
+  },
+  // Chat documents (Scriptorium Phase 3.5: document associations for Document Mode)
+  {
+    name: 'chat_documents',
+    sql: `CREATE TABLE IF NOT EXISTS "chat_documents" (
+      "id" TEXT PRIMARY KEY,
+      "chatId" TEXT NOT NULL,
+      "filePath" TEXT NOT NULL,
+      "scope" TEXT NOT NULL DEFAULT 'project',
+      "mountPoint" TEXT,
+      "displayTitle" TEXT,
+      "isActive" INTEGER DEFAULT 1,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_chat_documents_chatId" ON "chat_documents" ("chatId")`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_chat_documents_unique" ON "chat_documents" ("chatId", "filePath", "scope", "mountPoint")`,
     ],
   },
   // Conversation annotations (Scriptorium: per-message annotations by characters)

@@ -65,6 +65,8 @@ import { docMoveFileTool } from '@/lib/tools/doc-move-file-tool';
 import { docDeleteFileTool } from '@/lib/tools/doc-delete-file-tool';
 import { docCreateFolderTool } from '@/lib/tools/doc-create-folder-tool';
 import { docDeleteFolderTool } from '@/lib/tools/doc-delete-folder-tool';
+import { docOpenDocumentTool } from '@/lib/tools/doc-open-document-tool';
+import { docCloseDocumentTool } from '@/lib/tools/doc-close-document-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -363,6 +365,8 @@ export async function buildToolsForProvider(
     universalTools.push(docDeleteFileTool as UniversalTool);
     universalTools.push(docCreateFolderTool as UniversalTool);
     universalTools.push(docDeleteFolderTool as UniversalTool);
+    universalTools.push(docOpenDocumentTool as UniversalTool);
+    universalTools.push(docCloseDocumentTool as UniversalTool);
   }
 
   // Add shell interactivity tools if enabled (only in VM/Docker environments)
