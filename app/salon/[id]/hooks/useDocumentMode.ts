@@ -54,7 +54,7 @@ interface OpenDocumentParams {
   mode?: 'split' | 'focus'
 }
 
-const AUTOSAVE_DEBOUNCE_MS = 2500
+const AUTOSAVE_DEBOUNCE_MS = 30000
 
 export function useDocumentMode({ chatId, chat }: UseDocumentModeParams): UseDocumentModeReturn {
   const [documentMode, setDocumentMode] = useState<DocumentMode>('normal')
