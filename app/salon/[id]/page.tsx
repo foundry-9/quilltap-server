@@ -1024,44 +1024,27 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onDividerPositionChange={documentModeHook.setDividerPosition}
           chatContent={
             <>
-              {/* Document Mode header controls */}
-              <div className="flex items-center justify-between px-4 py-1">
-                {/* Whisper toggle - shown in multi-character chats */}
-                {participantsWithImpersonation.isMultiChar ? (
-                  <div className="flex items-center gap-2">
-                    <span className="qt-text-secondary text-xs">All Whispers</span>
-                    <button
-                      onClick={() => setShowAllWhispers(!showAllWhispers)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
-                      }`}
-                      role="switch"
-                      aria-checked={showAllWhispers}
-                      title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                          showAllWhispers ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                ) : <div />}
-
-                {/* Open document button */}
-                {documentModeHook.documentMode === 'normal' && (
+              {/* Whisper toggle - shown in multi-character chats */}
+              {participantsWithImpersonation.isMultiChar && (
+                <div className="flex items-center justify-end gap-2 px-4 py-1">
+                  <span className="qt-text-secondary text-xs">All Whispers</span>
                   <button
-                    className="qt-doc-open-button"
-                    onClick={() => setShowDocumentPicker(true)}
-                    title="Open a document alongside this chat (Cmd+Shift+D)"
+                    onClick={() => setShowAllWhispers(!showAllWhispers)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
+                    }`}
+                    role="switch"
+                    aria-checked={showAllWhispers}
+                    title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span>Open document</span>
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+                        showAllWhispers ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
                   </button>
-                )}
-              </div>
+                </div>
+              )}
 
         <VirtualizedMessageList
           messages={visibleMessages}
@@ -1156,6 +1139,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           roleplayTemplateId={chat?.roleplayTemplateId}
           documentEditingMode={chatControls.documentEditingMode}
           onToggleDocumentEditingMode={chatControls.handleToggleDocumentEditingMode}
+          onOpenDocumentClick={() => setShowDocumentPicker(true)}
+          isDocumentModeActive={documentModeHook.documentMode !== 'normal'}
           agentModeEnabled={chatControls.agentModeEnabled}
           onAgentModeToggle={chatControls.handleToggleAgentMode}
           storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}
