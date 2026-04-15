@@ -34,6 +34,16 @@ const nextConfig = {
     ],
   },
 
+  // Exclude project root files that get unintentionally traced via dynamic
+  // filesystem operations in paths.ts (os.homedir, process.cwd, etc.)
+  outputFileTracingExcludes: {
+    '/*': [
+      './next.config.js',
+      './next.config.mjs',
+      './next.config.ts',
+    ],
+  },
+
   // Experimental features
   experimental: {
     serverActions: {

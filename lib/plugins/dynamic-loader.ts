@@ -40,12 +40,12 @@ if (typeof __non_webpack_require__ !== 'undefined') {
   Module = __non_webpack_require__('module') as unknown as NodeModuleInternal;
 } else {
   const nodeModule = require('node:module');
-  dynamicRequire = nodeModule.createRequire(process.cwd() + '/') as NodeRequire;
+  dynamicRequire = nodeModule.createRequire(/*turbopackIgnore: true*/ process.cwd() + '/') as NodeRequire;
   Module = nodeModule as unknown as NodeModuleInternal;
 }
 
 // Get the app's node_modules path for peer dependency resolution
-const appNodeModules = join(process.cwd(), 'node_modules');
+const appNodeModules = join(/*turbopackIgnore: true*/ process.cwd(), 'node_modules');
 
 // Peer dependencies that external plugins can use from the host app
 const PEER_DEPENDENCIES = new Set([
@@ -57,7 +57,7 @@ const PEER_DEPENDENCIES = new Set([
 
 function clearRequireCache(modulePath: string): void {
   try {
-    const resolvedPath = dynamicRequire.resolve(modulePath);
+    const resolvedPath = dynamicRequire.resolve(/*turbopackIgnore: true*/ modulePath);
     delete dynamicRequire.cache[resolvedPath];
   } catch {
     // Module may not be in cache yet
@@ -113,7 +113,7 @@ export function loadExternalPluginModule(modulePath: string): unknown {
   clearRequireCache(modulePath);
 
   try {
-    return dynamicRequire(modulePath);
+    return dynamicRequire(/*turbopackIgnore: true*/ modulePath);
   } finally {
     Module._resolveFilename = originalResolveFilename;
   }
@@ -136,9 +136,9 @@ export function loadExternalPluginModule(modulePath: string): unknown {
  */
 export function loadPluginModule(pluginPath: string, manifest: PluginManifest): unknown | null {
   const mainFile = manifest.main || 'index.js';
-  const modulePath = resolve(pluginPath, mainFile);
+  const modulePath = resolve(/*turbopackIgnore: true*/ pluginPath, mainFile);
 
-  if (!existsSync(modulePath)) {
+  if (!existsSync(/*turbopackIgnore: true*/ modulePath)) {
     logger.error('Plugin main file not found', {
       context: 'dynamic-loader',
       plugin: manifest.name,
@@ -156,7 +156,7 @@ export function loadPluginModule(pluginPath: string, manifest: PluginManifest): 
 
   // Bundled plugin: clear require cache and load directly
   clearRequireCache(modulePath);
-  return dynamicRequire(modulePath);
+  return dynamicRequire(/*turbopackIgnore: true*/ modulePath);
 }
 
 /**

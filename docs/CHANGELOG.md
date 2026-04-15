@@ -54,6 +54,10 @@
   - `document-stores/[id]/page.tsx`: status indicators, error box, and pattern badges use `qt-*` classes
   - `document-stores/page.tsx`: action button uses `qt-button-primary`
 
+#### Build
+
+- Reduced Turbopack NFT tracing warnings from 9 to 1 by adding `turbopackIgnore` annotations to dynamic-loader.ts, converting themes route to dynamic imports, and adding `outputFileTracingExcludes` for next.config.js
+
 #### Bug Fixes
 
 - Fixed chat participant status changes (absent/remove) not updating in the UI under Electron due to Chromium caching stale GET responses; added `cache: 'no-store'` to all chat-related fetch calls in the Salon view
