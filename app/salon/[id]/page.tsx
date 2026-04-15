@@ -695,23 +695,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- llmLogs.refreshLogs is stable (useCallback)
   }, [sseStreaming.streaming, sseStreaming.waitingForResponse, sseStreaming.sending, llmLogs.refreshLogs])
 
-  // Refetch document content after LLM response completes if doc_* editing tools were used
+  // Refetch document content after LLM response completes when a document is open.
+  // Always refetch rather than trying to detect doc_* edits — reading a file is cheap
+  // and this avoids race conditions with pendingToolCalls being cleared.
   const wasGeneratingForDocRef = useRef(false)
   useEffect(() => {
     const isGenerating = sseStreaming.streaming || sseStreaming.waitingForResponse || sseStreaming.sending
     if (wasGeneratingForDocRef.current && !isGenerating && documentModeHook.activeDocument) {
-      // Check if any doc_* editing tools were called during this response
-      const docEditTools = sseStreaming.pendingToolCalls.filter(tc =>
-        tc.name.startsWith('doc_') && tc.name !== 'doc_read_file' && tc.name !== 'doc_list_files' &&
-        tc.name !== 'doc_grep' && tc.name !== 'doc_read_frontmatter' && tc.name !== 'doc_read_heading'
-      )
-      if (docEditTools.length > 0) {
-        documentModeHook.handleLLMEditEnd()
-      }
+      documentModeHook.handleLLMEditEnd()
     }
     wasGeneratingForDocRef.current = isGenerating
   // eslint-disable-next-line react-hooks/exhaustive-deps -- handleLLMEditEnd is stable (useCallback)
-  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, sseStreaming.sending, sseStreaming.pendingToolCalls, documentModeHook.activeDocument])
+  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, sseStreaming.sending, documentModeHook.activeDocument])
 
   // Keyboard shortcut: Cmd+Shift+L / Ctrl+Shift+L to toggle inspector
   const llmLoggingEnabled = chatSettings?.llmLoggingSettings?.enabled !== false
