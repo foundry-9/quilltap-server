@@ -110,9 +110,17 @@ function DocumentEditorPlugins({
 function DocumentToolbarWrapper({
   roleplayTemplateId,
   disabled,
+  showSource,
+  sourceTextareaRef,
+  onContentChange,
+  onToggleSource,
 }: {
   roleplayTemplateId?: string | null
   disabled: boolean
+  showSource: boolean
+  sourceTextareaRef: React.RefObject<HTMLTextAreaElement | null>
+  onContentChange: (content: string) => void
+  onToggleSource: () => void
 }) {
   const [editor] = useLexicalComposerContext()
 
@@ -122,6 +130,10 @@ function DocumentToolbarWrapper({
         roleplayTemplateId={roleplayTemplateId}
         editor={editor}
         disabled={disabled}
+        showSource={showSource}
+        sourceTextareaRef={sourceTextareaRef}
+        setInput={onContentChange}
+        onToggleSource={onToggleSource}
       />
     </div>
   )
@@ -145,6 +157,7 @@ export default function DocumentPane({
   const [showSource, setShowSource] = useState(false)
   const [editTitle, setEditTitle] = useState(document.displayTitle)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
 
   const wordCount = useMemo(() => countWords(document.content), [document.content])
 
@@ -162,11 +175,29 @@ export default function DocumentPane({
     [],
   )
 
+  useEffect(() => {
+    if (!isEditingTitle) {
+      setEditTitle(document.displayTitle)
+    }
+  }, [document.displayTitle, isEditingTitle])
+
+  useEffect(() => {
+    if (!isEditingTitle) {
+      return
+    }
+
+    const frame = requestAnimationFrame(() => titleInputRef.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [isEditingTitle])
+
+  const toggleSourceMode = useCallback(() => {
+    setShowSource((prev) => !prev)
+  }, [])
+
   // Handle title editing
   const handleTitleClick = useCallback(() => {
     setIsEditingTitle(true)
     setEditTitle(document.displayTitle)
-    setTimeout(() => titleInputRef.current?.focus(), 0)
   }, [document.displayTitle])
 
   const handleTitleSubmit = useCallback(() => {
@@ -224,22 +255,13 @@ export default function DocumentPane({
         )}
 
         <div className="flex items-center gap-1">
-          {/* Toggle source/rich text */}
-          <button
-            className={`qt-doc-header-button ${showSource ? 'qt-chat-toolbar-button-active' : ''}`}
-            onClick={() => setShowSource(!showSource)}
-            title={showSource ? 'Switch to rich text editor' : 'Switch to Markdown source'}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-            </svg>
-          </button>
-
           {/* Toggle focus/split */}
           <button
+            type="button"
             className="qt-doc-header-button"
             onClick={onToggleFocusMode}
             title={mode === 'focus' ? 'Show chat' : 'Maximize'}
+            aria-label={mode === 'focus' ? 'Show chat' : 'Maximize document'}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {mode === 'focus' ? (
@@ -254,9 +276,11 @@ export default function DocumentPane({
 
           {/* Exit document mode */}
           <button
+            type="button"
             className="qt-doc-header-button"
             onClick={onCloseDocument}
             title="Exit document mode"
+            aria-label="Exit document mode"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -265,28 +289,30 @@ export default function DocumentPane({
         </div>
       </div>
 
-      {showSource ? (
-        /* Markdown source editor */
-        <div className="flex-1 overflow-y-auto" onBlur={onBlur}>
-          <textarea
-            className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
-            value={document.content}
-            onChange={(e) => onContentChange(e.target.value)}
-            disabled={isLLMEditing}
-            spellCheck={false}
-            style={{ lineHeight: '1.6', minHeight: '100%' }}
-          />
-        </div>
-      ) : (
-        /* Rich text editor with shared Lexical config — key forces remount on external content changes */
-        <LexicalComposer key={contentVersion} initialConfig={initialConfig}>
-          {/* Formatting Toolbar */}
-          <DocumentToolbarWrapper
-            roleplayTemplateId={roleplayTemplateId}
-            disabled={isLLMEditing}
-          />
+      {/* Shared editor shell — key forces remount on external content changes */}
+      <LexicalComposer key={contentVersion} initialConfig={initialConfig}>
+        <DocumentToolbarWrapper
+          roleplayTemplateId={roleplayTemplateId}
+          disabled={isLLMEditing}
+          showSource={showSource}
+          sourceTextareaRef={sourceTextareaRef}
+          onContentChange={onContentChange}
+          onToggleSource={toggleSourceMode}
+        />
 
-          {/* Editor Area */}
+        {showSource ? (
+          <div className="flex-1 overflow-y-auto" onBlur={onBlur}>
+            <textarea
+              ref={sourceTextareaRef}
+              className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
+              value={document.content}
+              onChange={(e) => onContentChange(e.target.value)}
+              disabled={isLLMEditing}
+              spellCheck={false}
+              style={{ lineHeight: '1.6', minHeight: '100%' }}
+            />
+          </div>
+        ) : (
           <div className="flex-1 overflow-y-auto" onBlur={onBlur}>
             <DocumentEditorPlugins
               content={document.content}
@@ -294,8 +320,8 @@ export default function DocumentPane({
               disabled={isLLMEditing}
             />
           </div>
-        </LexicalComposer>
-      )}
+        )}
+      </LexicalComposer>
 
       {/* Status Bar */}
       <div className="qt-doc-status-bar">

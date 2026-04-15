@@ -163,6 +163,65 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
   const contentRef = useRef<string>('')
   // Tracks the last-saved content so we can distinguish real edits from Lexical re-sync
   const savedContentRef = useRef<string>('')
+  const onAutosaveNotifyRef = useRef(onAutosaveNotify)
+
+  const clearAutosaveTimer = useCallback(() => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+  }, [])
+
+  const applyDocumentState = useCallback((document: ActiveDocument | null, incrementVersion = true) => {
+    setActiveDocument(document)
+
+    const content = document?.content || ''
+    contentRef.current = content
+    savedContentRef.current = content
+    setIsDirty(false)
+
+    if (incrementVersion) {
+      setContentVersion(v => v + 1)
+    }
+  }, [])
+
+  const persistChatState = useCallback(async (updates: Partial<{ documentMode: DocumentMode; dividerPosition: number }>) => {
+    try {
+      await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: updates }),
+      })
+    } catch (error) {
+      console.error('[DocumentMode] Failed to persist chat document state', error)
+    }
+  }, [chatId])
+
+  const readDocumentContent = useCallback(async (
+    filePath: string,
+    scope: ActiveDocument['scope'],
+    mountPoint?: string | null,
+  ) => {
+    const response = await fetch(`/api/v1/chats/${chatId}?action=read-document`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filePath,
+        scope,
+        mountPoint,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to read document content')
+    }
+
+    return response.json() as Promise<{ content?: string; mtime?: number }>
+  }, [chatId])
+
+  useEffect(() => {
+    onAutosaveNotifyRef.current = onAutosaveNotify
+  }, [onAutosaveNotify])
 
   // Initialize from chat data when it loads
   useEffect(() => {
@@ -190,30 +249,18 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
 
       const data = await res.json()
       if (!data.document) {
-        // No active document — reset to normal
         setDocumentMode('normal')
+        applyDocumentState(null, false)
         return
       }
 
-      // Fetch the file content
-      const contentRes = await fetch(`/api/v1/chats/${chatId}?action=read-document`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filePath: data.document.filePath,
-          scope: data.document.scope,
-          mountPoint: data.document.mountPoint,
-        }),
-      })
+      const contentData = await readDocumentContent(
+        data.document.filePath,
+        data.document.scope,
+        data.document.mountPoint,
+      )
 
-      if (!contentRes.ok) {
-        console.error('[DocumentMode] Failed to read document content')
-        return
-      }
-
-      const contentData = await contentRes.json()
-
-      setActiveDocument({
+      applyDocumentState({
         id: data.document.id,
         filePath: data.document.filePath,
         scope: data.document.scope,
@@ -222,39 +269,18 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
         content: contentData.content || '',
         mtime: contentData.mtime,
       })
-      contentRef.current = contentData.content || ''
-      savedContentRef.current = contentData.content || ''
-      setContentVersion(v => v + 1)
     } catch (error) {
       console.error('[DocumentMode] Failed to load active document', error)
     }
-  }, [chatId])
+  }, [applyDocumentState, chatId, readDocumentContent])
 
-  // Persist document mode to the server
-  const persistMode = useCallback(async (mode: DocumentMode) => {
-    try {
-      await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { documentMode: mode } }),
-      })
-    } catch (error) {
-      console.error('[DocumentMode] Failed to persist mode', error)
-    }
-  }, [chatId])
+  const persistMode = useCallback((mode: DocumentMode) => {
+    void persistChatState({ documentMode: mode })
+  }, [persistChatState])
 
-  // Persist divider position to the server
-  const persistDividerPosition = useCallback(async (position: number) => {
-    try {
-      await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { dividerPosition: position } }),
-      })
-    } catch (error) {
-      console.error('[DocumentMode] Failed to persist divider position', error)
-    }
-  }, [chatId])
+  const persistDividerPosition = useCallback((position: number) => {
+    void persistChatState({ dividerPosition: position })
+  }, [persistChatState])
 
   // Save the document content
   const saveDocument = useCallback(async () => {
@@ -270,25 +296,29 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
           scope: activeDocument.scope,
           mountPoint: activeDocument.mountPoint,
           content: contentRef.current,
+          mtime: activeDocument.mtime,
         }),
       })
 
-      if (res.ok) {
-        const data = await res.json()
-        const oldContent = savedContentRef.current
-        const newContent = contentRef.current
-        savedContentRef.current = newContent
-        setIsDirty(false)
-        setActiveDocument(prev => prev ? { ...prev, mtime: data.mtime } : null)
+      if (!res.ok) {
+        console.error('[DocumentMode] Failed to save document', { status: res.status })
+        return
+      }
 
-        // Generate and send diff notification to the LLM
-        if (onAutosaveNotify && oldContent !== newContent && activeDocument) {
-          const diff = generateUnifiedDiff(oldContent, newContent, activeDocument.displayTitle || activeDocument.filePath)
-          if (diff) {
-            onAutosaveNotify(
-              `I've made changes to "${activeDocument.displayTitle || activeDocument.filePath}":\n\n\`\`\`diff\n${diff}\n\`\`\``
-            )
-          }
+      const data = await res.json()
+      const oldContent = savedContentRef.current
+      const newContent = contentRef.current
+      savedContentRef.current = newContent
+      setIsDirty(false)
+      setActiveDocument(prev => prev ? { ...prev, mtime: data.mtime } : null)
+
+      const notifyAutosave = onAutosaveNotifyRef.current
+      if (notifyAutosave && oldContent !== newContent && activeDocument) {
+        const diff = generateUnifiedDiff(oldContent, newContent, activeDocument.displayTitle || activeDocument.filePath)
+        if (diff) {
+          notifyAutosave(
+            `I've made changes to "${activeDocument.displayTitle || activeDocument.filePath}":\n\n\`\`\`diff\n${diff}\n\`\`\``
+          )
         }
       }
     } catch (error) {
@@ -296,7 +326,6 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     } finally {
       setIsSaving(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- onAutosaveNotify is a ref-based callback, stable by design
   }, [chatId, activeDocument, isDirty])
 
   // Handle content changes with debounced autosave
@@ -313,24 +342,19 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     setIsDirty(true)
 
     // Debounce autosave
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current)
-    }
+    clearAutosaveTimer()
     autosaveTimerRef.current = setTimeout(() => {
       saveDocument()
     }, AUTOSAVE_DEBOUNCE_MS)
-  }, [saveDocument])
+  }, [clearAutosaveTimer, saveDocument])
 
   // Flush: cancel any pending debounce and save immediately if dirty
   const flushSave = useCallback(() => {
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current)
-      autosaveTimerRef.current = null
-    }
+    clearAutosaveTimer()
     if (isDirty) {
       saveDocument()
     }
-  }, [isDirty, saveDocument])
+  }, [clearAutosaveTimer, isDirty, saveDocument])
 
   // Open a document — returns the ActiveDocument on success, null on failure
   const openDocument = useCallback(async (params: OpenDocumentParams): Promise<ActiveDocument | null> => {
@@ -371,11 +395,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
         mtime: data.mtime,
       }
 
-      setActiveDocument(doc)
-      contentRef.current = data.content || ''
-      savedContentRef.current = data.content || ''
-      setContentVersion(v => v + 1)
-      setIsDirty(false)
+      applyDocumentState(doc)
       setDocumentMode(targetMode)
 
       return doc
@@ -383,7 +403,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
       console.error('[DocumentMode] Failed to open document', error)
       return null
     }
-  }, [chatId, isDirty, activeDocument, saveDocument])
+  }, [applyDocumentState, chatId, isDirty, activeDocument, saveDocument])
 
   // Close the document
   const closeDocument = useCallback(async () => {
@@ -401,11 +421,10 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
       console.error('[DocumentMode] Failed to close document', error)
     }
 
-    setActiveDocument(null)
-    setIsDirty(false)
+    applyDocumentState(null, false)
     setDocumentMode('normal')
     await persistMode('normal')
-  }, [chatId, isDirty, activeDocument, saveDocument, persistMode])
+  }, [applyDocumentState, chatId, isDirty, activeDocument, saveDocument, persistMode])
 
   // Toggle between split and focus modes
   const toggleFocusMode = useCallback(() => {
@@ -430,33 +449,22 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     // Refetch document content after LLM edits
     if (activeDocument) {
       try {
-        const res = await fetch(`/api/v1/chats/${chatId}?action=read-document`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filePath: activeDocument.filePath,
-            scope: activeDocument.scope,
-            mountPoint: activeDocument.mountPoint,
-          }),
-        })
+        const data = await readDocumentContent(
+          activeDocument.filePath,
+          activeDocument.scope,
+          activeDocument.mountPoint,
+        )
 
-        if (res.ok) {
-          const data = await res.json()
-          setActiveDocument(prev => prev ? {
-            ...prev,
-            content: data.content || '',
-            mtime: data.mtime,
-          } : null)
-          contentRef.current = data.content || ''
-          savedContentRef.current = data.content || ''
-          setContentVersion(v => v + 1)
-          setIsDirty(false)
-        }
+        applyDocumentState({
+          ...activeDocument,
+          content: data.content || '',
+          mtime: data.mtime,
+        })
       } catch (error) {
         console.error('[DocumentMode] Failed to refetch document after LLM edit', error)
       }
     }
-  }, [chatId, activeDocument])
+  }, [applyDocumentState, activeDocument, readDocumentContent])
 
   // Reload document state from server — used when LLM opens/closes a document via tools
   const reloadFromServer = useCallback(async () => {
@@ -472,22 +480,19 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
       if (mode !== 'normal') {
         await loadActiveDocument()
       } else {
-        setActiveDocument(null)
-        setIsDirty(false)
+        applyDocumentState(null, false)
       }
     } catch (error) {
       console.error('[DocumentMode] Failed to reload from server', error)
     }
-  }, [chatId, loadActiveDocument])
+  }, [applyDocumentState, chatId, loadActiveDocument])
 
   // Cleanup autosave timer on unmount
   useEffect(() => {
     return () => {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current)
-      }
+      clearAutosaveTimer()
     }
-  }, [])
+  }, [clearAutosaveTimer])
 
   return {
     documentMode,

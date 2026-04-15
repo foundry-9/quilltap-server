@@ -74,6 +74,7 @@
 
 #### Improvements
 
+- Refactored Scriptorium Document Mode for a steadier editing flow: source/rich editing now shares the same toolbar path, split-pane resizing stays in sync with persisted layout, keyboard resizing works on the divider, and autosaves use mtime conflict protection to avoid overwriting external edits
 - Removed scenario text from character avatar generation prompts to prevent image models from depicting multiple people when the scenario mentions other characters
 - Enhanced participant action logging: update, remove, add, and reactivate actions now log character names, status transitions, updated fields, and failure details at appropriate levels (debug/info/warn)
 

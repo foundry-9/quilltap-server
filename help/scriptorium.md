@@ -22,6 +22,10 @@ Messages are grouped into **interchanges** — logical clusters that represent a
 
 Each interchange is embedded as a searchable chunk through the existing embedding pipeline. This means that the substance of your conversations becomes discoverable — one can search not merely for keywords but for the semantic meaning of what was discussed, like a librarian who actually read every book in the collection rather than just filing them by spine color.
 
+### Editing Beside the Conversation
+
+When Document Mode is open in the Salon, the Scriptorium also serves as your in-chat writing desk. You may work in rich text or flip over to raw Markdown source, and the formatting controls remain close at hand for either style of composition. The split view remembers its layout for each chat, and the divider may be adjusted with the mouse or the keyboard — a small courtesy, perhaps, but a civilized one.
+
 ## The Tools
 
 The Scriptorium provides three tools that characters can use during conversation. These are not tools you call directly — rather, your AI characters employ them as the situation demands, much like a well-trained butler who simply knows when to bring the tea.

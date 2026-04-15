@@ -28,6 +28,18 @@ interface SplitLayoutProps {
   documentContent: ReactNode | null
 }
 
+function clampDividerPosition(rawPercentage: number, containerWidth: number): number {
+  if (containerWidth <= 0) {
+    return Math.max(20, Math.min(80, Math.round(rawPercentage)))
+  }
+
+  const minChatPercent = (320 / containerWidth) * 100
+  const maxChatPercent = 100 - (360 / containerWidth) * 100
+  const clamped = Math.max(minChatPercent, Math.min(maxChatPercent, rawPercentage))
+
+  return Math.max(20, Math.min(80, Math.round(clamped)))
+}
+
 export default function SplitLayout({
   mode,
   dividerPosition,
@@ -44,6 +56,8 @@ export default function SplitLayout({
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
+    positionRef.current = dividerPosition
+    setCurrentPosition(dividerPosition)
     setIsDragging(true)
 
     const container = containerRef.current
@@ -54,17 +68,9 @@ export default function SplitLayout({
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       const relativeX = moveEvent.clientX - containerRect.left
-      let percentage = (relativeX / containerWidth) * 100
+      const percentage = (relativeX / containerWidth) * 100
 
-      // Enforce minimum widths: 320px for chat, 360px for document
-      const minChatPercent = (320 / containerWidth) * 100
-      const maxChatPercent = 100 - (360 / containerWidth) * 100
-
-      percentage = Math.max(minChatPercent, Math.min(maxChatPercent, percentage))
-      // Clamp to 20-80 range as well
-      percentage = Math.max(20, Math.min(80, percentage))
-
-      positionRef.current = Math.round(percentage)
+      positionRef.current = clampDividerPosition(percentage, containerWidth)
       setCurrentPosition(positionRef.current)
     }
 
@@ -81,7 +87,40 @@ export default function SplitLayout({
     document.addEventListener('mouseup', onMouseUp)
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
-  }, [onDividerPositionChange])
+  }, [dividerPosition, onDividerPositionChange])
+
+  const handleDividerKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (mode !== 'split') {
+      return
+    }
+
+    const containerWidth = containerRef.current?.getBoundingClientRect().width ?? 0
+    const basePosition = isDragging ? currentPosition : dividerPosition
+    let nextPosition: number | null = null
+
+    switch (event.key) {
+      case 'ArrowLeft':
+        nextPosition = basePosition - 5
+        break
+      case 'ArrowRight':
+        nextPosition = basePosition + 5
+        break
+      case 'Home':
+        nextPosition = 20
+        break
+      case 'End':
+        nextPosition = 80
+        break
+      default:
+        return
+    }
+
+    event.preventDefault()
+    const clamped = clampDividerPosition(nextPosition, containerWidth)
+    positionRef.current = clamped
+    setCurrentPosition(clamped)
+    onDividerPositionChange(clamped)
+  }, [mode, isDragging, currentPosition, dividerPosition, onDividerPositionChange])
 
   // Normal mode: just render chat content at full width
   if (mode === 'normal' || !documentContent) {
@@ -119,11 +158,13 @@ export default function SplitLayout({
         className={`qt-doc-divider ${isDragging ? 'qt-doc-divider-active' : ''}`}
         onMouseDown={handleMouseDown}
         role="separator"
+        aria-label="Resize chat and document panes"
         aria-orientation="vertical"
         aria-valuenow={splitPos}
         aria-valuemin={20}
         aria-valuemax={80}
         tabIndex={0}
+        onKeyDown={handleDividerKeyDown}
       >
         <div className="qt-doc-divider-grip">
           <span />

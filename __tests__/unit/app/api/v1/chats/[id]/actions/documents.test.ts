@@ -20,7 +20,24 @@ jest.mock('@/lib/mount-index/embedding-scheduler', () => ({
   enqueueEmbeddingJobsForMountPoint: jest.fn(),
 }))
 
-const { handleRecentDocuments, handleActiveDocument } = require('@/app/api/v1/chats/[id]/actions/documents')
+jest.mock('fs/promises', () => ({
+  mkdir: jest.fn(),
+  writeFile: jest.fn(),
+  stat: jest.fn(),
+}))
+
+const {
+  resolveDocEditPath,
+  readFileWithMtime,
+  writeFileWithMtimeCheck,
+} = require('@/lib/doc-edit')
+
+const {
+  handleRecentDocuments,
+  handleActiveDocument,
+  handleOpenDocument,
+  handleWriteDocument,
+} = require('@/app/api/v1/chats/[id]/actions/documents')
 
 describe('chats [id] document actions', () => {
   let ctx: any
@@ -30,9 +47,17 @@ describe('chats [id] document actions', () => {
 
     ctx = {
       repos: {
+        chats: {
+          findById: jest.fn(),
+          update: jest.fn(),
+        },
         chatDocuments: {
           findByChatId: jest.fn(),
           findActiveForChat: jest.fn(),
+          openDocument: jest.fn(),
+        },
+        docMountPoints: {
+          refreshStats: jest.fn(),
         },
       },
     }
@@ -107,5 +132,92 @@ describe('chats [id] document actions', () => {
 
     expect(response.status).toBe(200)
     expect(body.document).toBeNull()
+  })
+
+  it('stores blank documents under general scope when the chat has no project', async () => {
+    const chatId = 'chat-blank'
+    ctx.repos.chats.findById.mockResolvedValueOnce({ id: chatId, projectId: null })
+    resolveDocEditPath.mockResolvedValueOnce({
+      absolutePath: '/tmp/blank-doc.md',
+      scope: 'general',
+      relativePath: 'blank-doc.md',
+    })
+    writeFileWithMtimeCheck.mockResolvedValueOnce({ mtime: 987654321 })
+    ctx.repos.chatDocuments.openDocument.mockImplementationOnce(async (_chatId: string, data: any) => ({
+      id: 'doc-blank',
+      ...data,
+    }))
+
+    const request = {
+      json: jest.fn().mockResolvedValue({ title: 'Blank draft' }),
+    } as any
+
+    const response = await handleOpenDocument(request, chatId, ctx)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(ctx.repos.chatDocuments.openDocument).toHaveBeenCalledWith(
+      chatId,
+      expect.objectContaining({
+        scope: 'general',
+        displayTitle: 'Blank draft',
+      })
+    )
+    expect(body.document.scope).toBe('general')
+  })
+
+  it('writes document content with mtime conflict protection when provided', async () => {
+    const chatId = 'chat-write'
+    ctx.repos.chats.findById.mockResolvedValueOnce({ id: chatId, projectId: 'project-1' })
+    resolveDocEditPath.mockResolvedValueOnce({
+      absolutePath: '/tmp/project/doc.md',
+      scope: 'project',
+      relativePath: 'doc.md',
+      mountPointId: null,
+    })
+    writeFileWithMtimeCheck.mockResolvedValueOnce({ mtime: 123456789 })
+
+    const request = {
+      json: jest.fn().mockResolvedValue({
+        filePath: 'doc.md',
+        scope: 'project',
+        content: '# Updated',
+        mtime: 111,
+      }),
+    } as any
+
+    const response = await handleWriteDocument(request, chatId, ctx)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(writeFileWithMtimeCheck).toHaveBeenCalledWith('/tmp/project/doc.md', '# Updated', 111)
+    expect(body).toMatchObject({ success: true, mtime: 123456789 })
+  })
+
+  it('returns a conflict when the document changed on disk before saving', async () => {
+    const chatId = 'chat-conflict'
+    ctx.repos.chats.findById.mockResolvedValueOnce({ id: chatId, projectId: 'project-1' })
+    resolveDocEditPath.mockResolvedValueOnce({
+      absolutePath: '/tmp/project/doc.md',
+      scope: 'project',
+      relativePath: 'doc.md',
+      mountPointId: null,
+    })
+    writeFileWithMtimeCheck.mockRejectedValueOnce(new Error('File was modified by another process (mtime mismatch). Please reload and try again.'))
+
+    const request = {
+      json: jest.fn().mockResolvedValue({
+        filePath: 'doc.md',
+        scope: 'project',
+        content: '# Updated again',
+        mtime: 222,
+      }),
+    } as any
+
+    const response = await handleWriteDocument(request, chatId, ctx)
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error).toMatch(/reload/i)
   })
 })
