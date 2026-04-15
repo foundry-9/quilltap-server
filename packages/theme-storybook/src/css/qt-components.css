@@ -1297,6 +1297,47 @@
   margin: 0.1em 0;
 }
 
+/* Checklist items */
+.qt-lexical-checklist {
+  list-style: none;
+  padding-left: 0;
+}
+
+.qt-lexical-li-checked,
+.qt-lexical-li-unchecked {
+  position: relative;
+  padding-left: 1.5rem;
+  list-style: none;
+  margin: 0.15em 0;
+}
+
+.qt-lexical-li-checked::before,
+.qt-lexical-li-unchecked::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.25rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--qt-border-color, rgba(0, 0, 0, 0.3));
+  cursor: pointer;
+}
+
+.qt-lexical-li-checked::before {
+  background: hsl(var(--primary, 220 90% 56%));
+  border-color: hsl(var(--primary, 220 90% 56%));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");
+  background-size: 12px 12px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.qt-lexical-li-checked {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
 .qt-lexical-blockquote {
   border-left: 4px solid rgba(0, 0, 0, 0.2);
   padding-left: 0.75rem;
@@ -1318,6 +1359,30 @@
   margin: 0.25em 0;
   overflow-x: auto;
   tab-size: 2;
+}
+
+/* Lexical table styling */
+.qt-lexical-contenteditable table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+}
+
+.qt-lexical-contenteditable th,
+.qt-lexical-contenteditable td {
+  border: 1px solid var(--qt-border-color, rgba(0, 0, 0, 0.2));
+  padding: 0.375rem 0.75rem;
+  text-align: left;
+  min-width: 60px;
+}
+
+.qt-lexical-contenteditable th {
+  font-weight: 600;
+  background: var(--color-muted, rgba(0, 0, 0, 0.05));
+}
+
+.qt-lexical-contenteditable tr:nth-child(even) td {
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .qt-chat-composer-input::placeholder {

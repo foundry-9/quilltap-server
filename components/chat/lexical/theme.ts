@@ -34,9 +34,12 @@ export const composerTheme: EditorThemeClasses = {
     ul: 'qt-lexical-ul',
     ol: 'qt-lexical-ol',
     listitem: 'qt-lexical-li',
+    listitemChecked: 'qt-lexical-li-checked',
+    listitemUnchecked: 'qt-lexical-li-unchecked',
     nested: {
       listitem: 'qt-lexical-li-nested',
     },
+    checklist: 'qt-lexical-checklist',
   },
   quote: 'qt-lexical-blockquote',
   link: 'qt-lexical-link',

@@ -35,7 +35,27 @@ import {
   STRIKETHROUGH,
   HIGHLIGHT,
   type Transformer,
+  type ElementTransformer,
 } from '@lexical/markdown'
+import { TABLE_TRANSFORMER } from '@/components/chat/lexical/transformers/table-transformer'
+
+/**
+ * Case-insensitive CHECK_LIST transformer.
+ *
+ * Lexical's built-in CHECK_LIST uses `match[3] === 'x'` (case-sensitive) to
+ * determine checked state, so `[X]` renders as unchecked. This wrapper
+ * normalizes the capture group to lowercase before delegating to the original.
+ */
+const CASE_INSENSITIVE_CHECK_LIST: ElementTransformer = {
+  ...CHECK_LIST,
+  replace(...args) {
+    const match = args[2]
+    if (match[3] && match[3].toLowerCase() === 'x') {
+      match[3] = 'x'
+    }
+    return CHECK_LIST.replace(...args)
+  },
+}
 
 /**
  * Custom transformer set.
@@ -52,15 +72,18 @@ export const COMPOSER_TRANSFORMERS: Transformer[] = [
   STRIKETHROUGH,
   INLINE_CODE,
   HIGHLIGHT,
-  // Element transformers
+  // Element transformers — CHECK_LIST must precede UNORDERED_LIST/ORDERED_LIST
+  // because their regexps overlap and first match wins
   HEADING,
   QUOTE,
   CODE,
+  CASE_INSENSITIVE_CHECK_LIST,
   UNORDERED_LIST,
   ORDERED_LIST,
-  CHECK_LIST,
   // Text match transformers
   LINK,
+  // Multiline element transformers
+  TABLE_TRANSFORMER,
 ]
 
 interface MarkdownBridgePluginProps {

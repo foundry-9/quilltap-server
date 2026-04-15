@@ -68,6 +68,8 @@
 
 #### Bug Fixes
 
+- Fixed document editor checkboxes not rendering: `CHECK_LIST` transformer was ordered after `UNORDERED_LIST` (whose regex consumed the line first), and Lexical's built-in `match[3] === 'x'` comparison was case-sensitive so `[X]` rendered as unchecked
+- Fixed document editor tables not converting between markdown source and rich text: added custom multiline-element transformer for GFM pipe-delimited table syntax with column alignment support
 - Fixed chat participant status changes (absent/remove) not updating in the UI under Electron due to Chromium caching stale GET responses; added `cache: 'no-store'` to all chat-related fetch calls in the Salon view
 
 #### Improvements
