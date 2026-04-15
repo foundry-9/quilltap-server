@@ -24,7 +24,7 @@
     "build:standalone": "tsx scripts/build-standalone-tarball.ts",
     "build:plugins": "tsx scripts/build-plugins.ts",
     "deploy:dev": "./cicd/deploy.sh",
-    "dev": "next dev --webpack",
+    "dev": "next dev --turbopack",
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
     "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts",
     "lint": "eslint .",

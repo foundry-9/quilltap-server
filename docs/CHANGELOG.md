@@ -4,6 +4,10 @@
 
 ### 4.3-dev
 
+#### Developer Experience
+
+- Switched dev server from webpack (`--webpack`) to Turbopack (`--turbopack`) for significantly faster on-demand route compilation
+
 #### Fixes
 
 - **Claude 4.6 compatibility**: Fixed multi-character chat identity anchoring for Claude 4.6 models (Sonnet 4.6, Opus 4.6) which no longer support assistant message prefill. When a model doesn't support prefill, the system prompt is used to instruct the model to self-identify instead.
