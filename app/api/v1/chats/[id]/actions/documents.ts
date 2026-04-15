@@ -60,15 +60,20 @@ export async function handleRecentDocuments(
   { repos }: AuthenticatedContext
 ): Promise<NextResponse> {
   try {
-    const recentDocs = await repos.chatDocuments.findRecentForChat(chatId);
+    // Return all documents for the chat (active + inactive), sorted by most recent
+    const allDocs = await repos.chatDocuments.findByChatId(chatId);
+    const sorted = allDocs
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 10);
 
     return successResponse({
-      documents: recentDocs.map(doc => ({
+      documents: sorted.map(doc => ({
         id: doc.id,
         filePath: doc.filePath,
         scope: doc.scope,
         mountPoint: doc.mountPoint,
         displayTitle: doc.displayTitle,
+        isActive: doc.isActive,
         updatedAt: doc.updatedAt,
       })),
     });
