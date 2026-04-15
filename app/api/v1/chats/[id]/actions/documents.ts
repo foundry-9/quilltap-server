@@ -55,6 +55,35 @@ const writeDocumentSchema = z.object({
 /**
  * Get the active document for a chat
  */
+export async function handleRecentDocuments(
+  chatId: string,
+  { repos }: AuthenticatedContext
+): Promise<NextResponse> {
+  try {
+    const recentDocs = await repos.chatDocuments.findRecentForChat(chatId);
+
+    return successResponse({
+      documents: recentDocs.map(doc => ({
+        id: doc.id,
+        filePath: doc.filePath,
+        scope: doc.scope,
+        mountPoint: doc.mountPoint,
+        displayTitle: doc.displayTitle,
+        updatedAt: doc.updatedAt,
+      })),
+    });
+  } catch (error) {
+    logger.error('Failed to get recent documents', {
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serverError('Failed to get recent documents');
+  }
+}
+
+/**
+ * Get the active document for a chat
+ */
 export async function handleActiveDocument(
   chatId: string,
   { repos }: AuthenticatedContext

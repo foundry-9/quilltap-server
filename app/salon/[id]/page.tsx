@@ -1270,6 +1270,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         <DocumentPickerModal
           isOpen={showDocumentPicker}
           onClose={() => setShowDocumentPicker(false)}
+          chatId={id}
           projectId={chat?.projectId}
           projectName={chat?.projectName}
           onSelectDocument={(params) => {

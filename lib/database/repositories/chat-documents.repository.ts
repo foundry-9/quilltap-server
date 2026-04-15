@@ -6,6 +6,7 @@
  *
  * Handles document associations for Scriptorium Phase 3.5 Document Mode —
  * tracks which documents are open alongside each chat in the split-panel editor.
+ * Closed documents are kept as inactive records for quick-reopen.
  */
 
 import {
@@ -21,6 +22,7 @@ import { TypedQueryFilter } from '../interfaces';
  * Implements CRUD operations for chat-document associations.
  * Phase 3.5 enforces one active document per chat; the schema
  * supports future multi-document tabs without migration.
+ * Closed documents are kept as inactive for quick-reopen history.
  */
 export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument> {
   constructor() {
@@ -91,8 +93,28 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
   }
 
   /**
+   * Find recent inactive documents for a chat, sorted by most recently updated.
+   * Used by the document picker for quick-reopen options.
+   */
+  async findRecentForChat(chatId: string, limit = 5): Promise<ChatDocument[]> {
+    return this.safeQuery(
+      async () => {
+        const allDocs = await this.findByFilter({ chatId } as TypedQueryFilter<ChatDocument>);
+        return allDocs
+          .filter(doc => !doc.isActive)
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+          .slice(0, limit);
+      },
+      'Error finding recent documents for chat',
+      { chatId },
+      []
+    );
+  }
+
+  /**
    * Open a document for a chat. If a document is already open,
-   * the existing one is deactivated and the new one is created.
+   * the existing one is deactivated (kept for history).
+   * If the requested document was previously opened, reactivates it.
    * Auto-saves are handled by the caller before this method is invoked.
    */
   async openDocument(chatId: string, data: {
@@ -104,7 +126,7 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
     // Deactivate any currently active document for this chat
     const currentDoc = await this.findActiveForChat(chatId);
     if (currentDoc) {
-      await this.delete(currentDoc.id);
+      await this.update(currentDoc.id, { isActive: false });
       logger.debug('Deactivated previous document for chat', {
         context: 'ChatDocumentsRepository.openDocument',
         chatId,
@@ -113,7 +135,31 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
       });
     }
 
-    // Create the new document association
+    // Check if this document was previously opened (reactivate instead of duplicate)
+    const allDocs = await this.findByChatId(chatId);
+    const existingDoc = allDocs.find(doc =>
+      doc.filePath === data.filePath &&
+      doc.scope === data.scope &&
+      (doc.mountPoint || null) === (data.mountPoint || null)
+    );
+
+    if (existingDoc) {
+      const updated = await this.update(existingDoc.id, {
+        isActive: true,
+        displayTitle: data.displayTitle ?? existingDoc.displayTitle,
+      });
+
+      logger.debug('Reactivated existing document for chat', {
+        context: 'ChatDocumentsRepository.openDocument',
+        chatId,
+        docId: existingDoc.id,
+        filePath: data.filePath,
+      });
+
+      return updated || existingDoc;
+    }
+
+    // Create a new document association
     const doc = await this.create({
       chatId,
       filePath: data.filePath,
@@ -136,7 +182,7 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
 
   /**
    * Close the active document for a chat.
-   * Removes the association entirely.
+   * Deactivates instead of deleting, preserving history for quick-reopen.
    */
   async closeDocument(chatId: string): Promise<boolean> {
     const currentDoc = await this.findActiveForChat(chatId);
@@ -148,7 +194,7 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
       return false;
     }
 
-    await this.delete(currentDoc.id);
+    await this.update(currentDoc.id, { isActive: false });
 
     logger.debug('Closed document for chat', {
       context: 'ChatDocumentsRepository.closeDocument',

@@ -31,6 +31,7 @@ export { handleRegenerateAvatar } from './regenerate-avatar';
 export { handleRenderConversation } from './render-conversation';
 export {
   handleActiveDocument,
+  handleRecentDocuments,
   handleOpenDocument,
   handleCloseDocument,
   handleReadDocument,

@@ -19,6 +19,7 @@ import FileBrowser, { type FileInfo } from '@/components/files/FileBrowser'
 interface DocumentPickerModalProps {
   isOpen: boolean
   onClose: () => void
+  chatId: string
   projectId?: string | null
   projectName?: string | null
   onSelectDocument: (params: {
@@ -43,9 +44,19 @@ interface MountPointFile {
   updatedAt?: string
 }
 
+interface RecentDocument {
+  id: string
+  filePath: string
+  scope: 'project' | 'document_store' | 'general'
+  mountPoint?: string | null
+  displayTitle?: string | null
+  updatedAt: string
+}
+
 export default function DocumentPickerModal({
   isOpen,
   onClose,
+  chatId,
   projectId,
   projectName,
   onSelectDocument,
@@ -56,13 +67,16 @@ export default function DocumentPickerModal({
   const [mountPoints, setMountPoints] = useState<MountPoint[]>([])
   const [mountPointFiles, setMountPointFiles] = useState<MountPointFile[]>([])
   const [mountPointFilesLoading, setMountPointFilesLoading] = useState(false)
+  const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Fetch mount points when modal opens
+  // Fetch mount points and recent documents when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchMountPoints()
+      fetchRecentDocuments()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch functions are stable
   }, [isOpen])
 
   // Reset state when modal closes
@@ -87,6 +101,21 @@ export default function DocumentPickerModal({
       console.error('[DocumentPickerModal] Failed to fetch mount points', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchRecentDocuments = async () => {
+    try {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=recent-documents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setRecentDocuments(data.documents || [])
+      }
+    } catch (error) {
+      console.error('[DocumentPickerModal] Failed to fetch recent documents', error)
     }
   }
 
@@ -116,6 +145,15 @@ export default function DocumentPickerModal({
 
   const handleNewBlank = useCallback(() => {
     onSelectDocument({})
+    onClose()
+  }, [onSelectDocument, onClose])
+
+  const handleReopenDocument = useCallback((doc: RecentDocument) => {
+    onSelectDocument({
+      filePath: doc.filePath,
+      scope: doc.scope,
+      mountPoint: doc.mountPoint || undefined,
+    })
     onClose()
   }, [onSelectDocument, onClose])
 
@@ -185,6 +223,37 @@ export default function DocumentPickerModal({
               <div className="text-sm qt-text-secondary">Create an empty Markdown document</div>
             </div>
           </button>
+
+          {/* Recent documents — quick reopen */}
+          {recentDocuments.length > 0 && (
+            <>
+              <div className="text-xs uppercase tracking-wider qt-text-muted pt-1">Recent</div>
+              {recentDocuments.map((doc) => {
+                const scopeLabel = doc.scope === 'document_store' && doc.mountPoint
+                  ? doc.mountPoint
+                  : doc.scope === 'project'
+                  ? 'Project'
+                  : 'General'
+                return (
+                  <button
+                    key={doc.id}
+                    onClick={() => handleReopenDocument(doc)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border qt-border hover:qt-bg-hover transition-colors text-left"
+                  >
+                    <svg className="w-5 h-5 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium qt-text-primary truncate">
+                        {doc.displayTitle || doc.filePath}
+                      </div>
+                      <div className="text-xs qt-text-secondary">{scopeLabel}</div>
+                    </div>
+                  </button>
+                )
+              })}
+            </>
+          )}
 
           {/* Project library (if chat has a project) */}
           {projectId && (
