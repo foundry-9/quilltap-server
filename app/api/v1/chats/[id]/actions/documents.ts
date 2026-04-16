@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { successResponse, badRequest, conflict, serverError } from '@/lib/api/responses';
+import { successResponse, badRequest, conflict, notFound, serverError } from '@/lib/api/responses';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import {
   resolveDocEditPath,
@@ -294,17 +294,30 @@ export async function handleReadDocument(
   const body = await req.json();
   const data = readDocumentSchema.parse(body);
 
+  let chatContext;
   try {
-    const chatContext = await resolveChatDocumentPath(chatId, context, {
+    chatContext = await resolveChatDocumentPath(chatId, context, {
       scope: data.scope as DocEditScope,
       filePath: data.filePath,
       mountPoint: data.mountPoint,
     });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn('Failed to resolve document path for read', {
+      chatId,
+      filePath: data.filePath,
+      scope: data.scope,
+      mountPoint: data.mountPoint,
+      error: message,
+    });
+    return badRequest(`Could not resolve ${data.filePath}: ${message}`);
+  }
 
-    if (!chatContext) {
-      return badRequest('Chat not found');
-    }
+  if (!chatContext) {
+    return badRequest('Chat not found');
+  }
 
+  try {
     const fileData = await readFileWithMtime(chatContext.resolved.absolutePath);
 
     logger.debug('Read document for document mode', {
@@ -317,8 +330,23 @@ export async function handleReadDocument(
       content: fileData.content,
       mtime: fileData.mtime,
     });
-  } catch {
-    return badRequest(`File not found: ${data.filePath}`);
+  } catch (error) {
+    const code = error instanceof Error && 'code' in error ? (error as NodeJS.ErrnoException).code : undefined;
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (code === 'ENOENT') {
+      logger.debug('Document not found on disk', { chatId, filePath: data.filePath, scope: data.scope });
+      return notFound(`File not found: ${data.filePath}`);
+    }
+
+    logger.error('Failed to read document', {
+      chatId,
+      filePath: data.filePath,
+      scope: data.scope,
+      code,
+      error: message,
+    });
+    return serverError(`Failed to read document: ${message}`);
   }
 }
 

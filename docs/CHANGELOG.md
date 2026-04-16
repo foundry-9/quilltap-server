@@ -146,6 +146,12 @@
 
 #### Fixes
 
+- **Document Mode save/read races with LLM**: Fixed `Failed to read document content` and `Failed to save document {}` errors triggered by races between the 30s autosave debounce and LLM document tool calls
+  - Autosave is now cancelled when the LLM begins editing and skipped while an LLM edit is in flight — eliminates the mtime conflict when the LLM rewrites the file out from under the user
+  - Save 409 responses now silently adopt the server's latest content (or just refresh local mtime if the user has unsaved edits) instead of surfacing a scary error
+  - `onToolResult` now reloads document state after `doc_write_file`, `doc_move_file`, and `doc_delete_file` (previously only reloaded after open/close), keeping the editor's cached content and mtime in sync with what the LLM wrote to disk
+  - Server-side `handleReadDocument` no longer swallows every error as "File not found" — distinguishes missing-file errors (404) from real failures (500) and logs the underlying cause
+- **Document Mode false "Unsaved" status after LLM edit**: After the LLM edited a document via tool, the status line incorrectly flipped to "Unsaved" because Lexical's post-remount re-serialization of the refreshed content differed trivially from the disk bytes (whitespace/list formatting normalization). The hook now treats the first content change after a server-driven state load as an external sync and adopts Lexical's normalized output as the saved baseline, so the status correctly shows "Saved" until the user actually types.
 - **Scriptorium `read_conversation` tool**: Removed 50,000 character truncation limit that was cutting off the end of long conversations when delivered to LLM participants
 - **Document Mode `doc_focus` highlight**: Fixed highlight overlay not appearing — overlay was positioned at pre-scroll viewport coordinates (off-screen) because it was created before smooth scroll completed; now defers to `scrollend` event
 - **Document Mode `doc_focus` highlight**: Increased default highlight opacity from 0.35 to 0.95 for better visibility during the 2.5s fade

@@ -185,6 +185,12 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
   // Tracks the last-saved content so we can distinguish real edits from Lexical re-sync
   const savedContentRef = useRef<string>('')
   const onAutosaveNotifyRef = useRef(onAutosaveNotify)
+  // Mirrors isLLMEditing so memoized callbacks can read the latest value without resubscribing
+  const isLLMEditingRef = useRef(false)
+  // When true, the next handleContentChange is treated as Lexical's post-remount
+  // re-serialization (which may not byte-match the disk content, e.g. whitespace)
+  // and adopted as the new saved baseline rather than flagging dirty.
+  const absorbNextContentChangeRef = useRef(false)
   // Scroll position map keyed by file path — persists across document re-opens
   const scrollPositionsRef = useRef(new Map<string, number>())
 
@@ -204,6 +210,11 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     setIsDirty(false)
 
     if (incrementVersion) {
+      // Lexical will remount (key={contentVersion}) and re-serialize the loaded
+      // markdown. Its normalized output may differ from the disk content in
+      // trivial ways (whitespace, list spacing), so absorb that first change as
+      // the new baseline instead of flagging the doc as dirty.
+      absorbNextContentChangeRef.current = true
       setContentVersion(v => v + 1)
     }
   }, [])
@@ -323,8 +334,41 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
         }),
       })
 
+      if (res.status === 409) {
+        // Someone (likely the LLM) wrote the file while we had it open. Re-read
+        // the current disk content. If the user has no actual pending edits,
+        // silently adopt the server version; otherwise leave the unsaved
+        // content alone and just refresh mtime so the next save can succeed.
+        const localContent = contentRef.current
+        const hadLocalEdits = localContent !== savedContentRef.current
+        try {
+          const latest = await readDocumentContent(
+            activeDocument.filePath,
+            activeDocument.scope,
+            activeDocument.mountPoint,
+          )
+          if (!hadLocalEdits) {
+            applyDocumentState({
+              ...activeDocument,
+              content: latest.content || '',
+              mtime: latest.mtime,
+            })
+          } else {
+            setActiveDocument(prev => prev ? { ...prev, mtime: latest.mtime } : null)
+          }
+          console.warn('[DocumentMode] Document changed on disk during save; reloaded mtime', {
+            filePath: activeDocument.filePath,
+            hadLocalEdits,
+          })
+        } catch (reloadError) {
+          console.warn('[DocumentMode] Failed to reload document after save conflict', reloadError)
+        }
+        return
+      }
+
       if (!res.ok) {
-        console.error('[DocumentMode] Failed to save document', { status: res.status })
+        const bodyText = await res.text().catch(() => '')
+        console.warn('[DocumentMode] Failed to save document', { status: res.status, body: bodyText })
         return
       }
 
@@ -349,12 +393,23 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     } finally {
       setIsSaving(false)
     }
-  }, [chatId, activeDocument, isDirty])
+  }, [chatId, activeDocument, isDirty, readDocumentContent, applyDocumentState])
 
   // Handle content changes with debounced autosave
   const handleContentChange = useCallback((content: string) => {
     contentRef.current = content
     setActiveDocument(prev => prev ? { ...prev, content } : null)
+
+    // First change after an external state load (initial open, LLM edit refetch,
+    // server reload) is Lexical's normalized re-serialization of the just-loaded
+    // content. Adopt it as the saved baseline so the status reads "Saved" and
+    // future byte-exact comparisons work.
+    if (absorbNextContentChangeRef.current) {
+      absorbNextContentChangeRef.current = false
+      savedContentRef.current = content
+      setIsDirty(false)
+      return
+    }
 
     // Only mark dirty if content actually differs from what was last saved/loaded
     if (content === savedContentRef.current) {
@@ -363,6 +418,15 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     }
 
     setIsDirty(true)
+
+    // While the LLM is actively editing, don't schedule an autosave — it would
+    // race the LLM's disk write and fail with an mtime conflict. handleLLMEditEnd
+    // re-reads the file and we'll pick up any real user edits on the next change
+    // after it finishes.
+    if (isLLMEditingRef.current) {
+      clearAutosaveTimer()
+      return
+    }
 
     // Debounce autosave
     clearAutosaveTimer()
@@ -464,10 +528,15 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
 
   // LLM edit coordination
   const handleLLMEditStart = useCallback(() => {
+    isLLMEditingRef.current = true
     setIsLLMEditing(true)
-  }, [])
+    // Cancel any pending autosave — letting it fire while the LLM is writing to
+    // disk would produce an mtime conflict.
+    clearAutosaveTimer()
+  }, [clearAutosaveTimer])
 
   const handleLLMEditEnd = useCallback(async () => {
+    isLLMEditingRef.current = false
     setIsLLMEditing(false)
     // Refetch document content after LLM edits
     if (activeDocument) {
@@ -484,7 +553,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
           mtime: data.mtime,
         })
       } catch (error) {
-        console.error('[DocumentMode] Failed to refetch document after LLM edit', error)
+        console.warn('[DocumentMode] Failed to refetch document after LLM edit', error)
       }
     }
   }, [applyDocumentState, activeDocument, readDocumentContent])

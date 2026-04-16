@@ -360,6 +360,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       if (success && (name === 'doc_open_document' || name === 'doc_close_document')) {
         documentModeHook.reloadFromServer()
       }
+      // React to LLM writing/moving/deleting files — any of these can invalidate
+      // the editor's cached content or mtime. reloadFromServer re-reads the
+      // active document (if still open) and refreshes state, keeping the next
+      // autosave from racing on a stale mtime or missing path.
+      if (success && (name === 'doc_write_file' || name === 'doc_move_file' || name === 'doc_delete_file')) {
+        documentModeHook.reloadFromServer()
+      }
       // React to LLM focusing on document location
       if (name === 'doc_focus' && success && result) {
         documentModeHook.handleDocFocus(result as FocusRequest)
