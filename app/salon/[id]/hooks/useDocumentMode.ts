@@ -61,9 +61,9 @@ interface UseDocumentModeReturn {
   /** Scroll position persistence keyed by file path */
   getScrollPosition: (filePath: string) => number
   setScrollPosition: (filePath: string, pos: number) => void
-  /** Focus/attention state for the document editor */
-  attentionLine: number | null
-  setAttentionLine: (line: number | null) => void
+  /** Pixel offset (from content top) where the AI attention eye sits; null when unset */
+  attentionTop: number | null
+  setAttentionTop: (top: number | null) => void
   focusRequest: FocusRequest | null
   handleDocFocus: (result: FocusRequest) => void
   clearFocusRequest: () => void
@@ -177,7 +177,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
   // Bumps on every external content load (LLM edit, reload) to force Lexical remount
   const [contentVersion, setContentVersion] = useState(0)
 
-  const [attentionLine, setAttentionLine] = useState<number | null>(null)
+  const [attentionTop, setAttentionTop] = useState<number | null>(null)
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null)
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -521,12 +521,13 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
 
   // Focus/attention helpers
   const handleDocFocus = useCallback((result: FocusRequest): void => {
+    console.debug('[useDocumentMode] handleDocFocus called', result)
     if (result.clear_focus) {
-      setAttentionLine(null)
+      setAttentionTop(null)
       setFocusRequest(null)
     } else {
-      // Don't eagerly set attentionLine here — the DocumentFocusPlugin
-      // resolves the target and calls setAttentionLine after scrolling
+      // Don't eagerly set attentionTop here — the DocumentFocusPlugin
+      // resolves the target and calls setAttentionTop after scrolling
       setFocusRequest(result)
     }
   }, [])
@@ -562,8 +563,8 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     contentVersion,
     getScrollPosition,
     setScrollPosition,
-    attentionLine,
-    setAttentionLine,
+    attentionTop,
+    setAttentionTop,
     focusRequest,
     handleDocFocus,
     clearFocusRequest,

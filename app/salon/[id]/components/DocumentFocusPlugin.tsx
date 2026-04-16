@@ -5,7 +5,7 @@
  *
  * Resolves anchor/highlight/line targets against the live editor content,
  * scrolls the viewport, applies ephemeral highlight animation, and
- * reports the resolved line index for the gutter eye icon.
+ * reports the resolved pixel position for the gutter eye icon.
  *
  * Scriptorium Phase 3.6
  *
@@ -21,45 +21,107 @@ import type { FocusRequest } from '../hooks/useDocumentMode'
 interface DocumentFocusPluginProps {
   focusRequest: FocusRequest | null
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
-  onFocusResolved: (lineIndex: number) => void
+  onFocusResolved: (pixelTop: number) => void
   onFocusCleared: () => void
   onFocusProcessed: () => void
 }
 
 /**
- * Walk a block element's text nodes to find and wrap the first occurrence of
- * `text` in a <mark> element with class `qt-doc-focus-highlight`.
- * The mark is automatically removed after 3 seconds to restore the DOM.
+ * Walk a block element's text nodes to find the first occurrence of `text`,
+ * then create a fixed-position overlay on document.body that highlights it.
+ *
+ * The overlay is placed outside Lexical's DOM tree entirely because Lexical
+ * uses a MutationObserver on its root element — any child appended there
+ * is detected as an unexpected mutation and removed immediately.
+ *
+ * Uses position: fixed with viewport coordinates from getBoundingClientRect.
+ * Since the highlight is ephemeral (2.5s) and we just auto-scrolled to the
+ * target, the text will stay under the overlay for the duration.
+ *
+ * Matching is case-insensitive to stay consistent with block resolution.
+ * Returns a { top } content-relative measurement for eye positioning, or null.
  */
-function applyHighlight(blockEl: HTMLElement, text: string): void {
+function applyHighlight(
+  blockEl: HTMLElement,
+  text: string,
+  rootEl: HTMLElement,
+): { top: number } | null {
+  const lowerText = text.toLowerCase()
   const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT)
   let node: Text | null
   while ((node = walker.nextNode() as Text | null)) {
-    const idx = node.textContent?.indexOf(text) ?? -1
+    const nodeContent = node.textContent ?? ''
+    const idx = nodeContent.toLowerCase().indexOf(lowerText)
     if (idx >= 0) {
-      try {
-        const range = document.createRange()
-        range.setStart(node, idx)
-        range.setEnd(node, idx + text.length)
-        const mark = document.createElement('mark')
-        mark.className = 'qt-doc-focus-highlight'
-        range.surroundContents(mark)
-        // Remove after animation completes
-        setTimeout(() => {
-          const parent = mark.parentNode
-          if (parent) {
-            while (mark.firstChild) parent.insertBefore(mark.firstChild, mark)
-            parent.removeChild(mark)
-          }
-        }, 3000)
-      } catch (err) {
-        // surroundContents can fail if the range crosses element boundaries —
-        // log a debug warning but don't break the focus flow
-        console.debug('[DocumentFocusPlugin] Could not apply highlight (range crosses element boundary)', err)
+      const range = document.createRange()
+      range.setStart(node, idx)
+      range.setEnd(node, idx + text.length)
+
+      const rangeRect = range.getBoundingClientRect()
+      const rootRect = rootEl.getBoundingClientRect()
+
+      // Content-relative top for the gutter eye icon
+      const contentTop = rangeRect.top - rootRect.top + rootEl.scrollTop
+
+      console.debug('[DocumentFocusPlugin] Highlight overlay placement', {
+        viewport: { top: rangeRect.top, left: rangeRect.left, width: rangeRect.width, height: rangeRect.height },
+        contentTop,
+      })
+
+      // Skip if dimensions are invalid
+      if (rangeRect.width <= 0 || rangeRect.height <= 0) {
+        console.warn('[DocumentFocusPlugin] Range has zero dimensions — skipping overlay')
+        return { top: contentTop }
       }
-      break
+
+      // Read theme highlight color (or use warm yellow default)
+      const highlightColor = getComputedStyle(rootEl).getPropertyValue('--qt-focus-highlight-color').trim()
+        || 'rgba(250, 204, 21, 0.35)'
+
+      // Create a fixed-position overlay on document.body — outside Lexical's
+      // MutationObserver scope so it won't be removed.
+      const overlay = document.createElement('div')
+      overlay.style.cssText = [
+        'position: fixed',
+        'pointer-events: none',
+        `left: ${rangeRect.left}px`,
+        `top: ${rangeRect.top}px`,
+        `width: ${rangeRect.width}px`,
+        `height: ${rangeRect.height}px`,
+        `background-color: ${highlightColor}`,
+        'border-radius: 2px',
+        'z-index: 9999',
+        'transition: opacity 2.5s ease-out',
+      ].join('; ')
+
+      document.body.appendChild(overlay)
+
+      // Trigger the fade on the next frame so the browser registers the initial state
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          overlay.style.opacity = '0'
+        })
+      })
+
+      // Remove from DOM after animation completes
+      setTimeout(() => {
+        overlay.remove()
+      }, 3000)
+
+      return { top: contentTop }
     }
   }
+  return null
+}
+
+/**
+ * Measure a DOM element's vertical position relative to the editor root element,
+ * accounting for scroll offset. Returns the top offset in content coordinates.
+ */
+function measureElementTop(el: HTMLElement, rootEl: HTMLElement): number {
+  const rootRect = rootEl.getBoundingClientRect()
+  const elRect = el.getBoundingClientRect()
+  return elRect.top - rootRect.top + rootEl.scrollTop
 }
 
 export default function DocumentFocusPlugin({
@@ -72,6 +134,7 @@ export default function DocumentFocusPlugin({
   const [editor] = useLexicalComposerContext()
 
   useEffect(() => {
+    console.debug('[DocumentFocusPlugin] useEffect fired', { focusRequest })
     if (!focusRequest) return
 
     // Handle clear_focus — reset attention line and clear the request
@@ -207,13 +270,27 @@ export default function DocumentFocusPlugin({
         })
       }
 
-      // Apply highlight decoration to matched text
-      if (highlight && targetEl) {
-        applyHighlight(targetEl, highlight)
+      // Apply highlight decoration and measure position for the gutter eye icon.
+      // The highlight overlay gives sub-block accuracy (e.g., a specific list
+      // item within a list block). Falls back to the block element position.
+      let resolvedTop: number | null = null
+
+      if (highlight && targetEl && rootEl) {
+        const result = applyHighlight(targetEl, highlight, rootEl)
+        if (result) {
+          resolvedTop = result.top
+        }
       }
 
-      // Report resolved line to gutter eye icon
-      onFocusResolved(blockIndex)
+      if (resolvedTop === null && rootEl && targetEl) {
+        resolvedTop = measureElementTop(targetEl, rootEl)
+      }
+
+      if (resolvedTop !== null) {
+        console.debug('[DocumentFocusPlugin] Eye position resolved', { pixelTop: resolvedTop })
+        onFocusResolved(resolvedTop)
+      }
+
       onFocusProcessed()
     })
   }, [focusRequest, editor, scrollContainerRef, onFocusResolved, onFocusCleared, onFocusProcessed])

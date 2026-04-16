@@ -10,6 +10,11 @@
 
 #### Fixes
 
+- **Document Mode gutter**: Fixed false change markers appearing on document open by comparing block text content against block text content (instead of raw markdown vs. plain text)
+- **Document Mode gutter eye**: Eye icon now positions at the exact pixel offset of the highlighted text, not the top of the containing block — fixes misalignment when highlighting text inside lists
+- **Document Mode highlight**: Fixed highlight overlay being invisible — Lexical's MutationObserver was removing overlays appended to the editor root. Overlay is now a fixed-position element on document.body, outside Lexical's DOM tree
+- **Document Mode highlight**: Fixed highlighted text vanishing (surroundContents corrupting Lexical's managed DOM) by switching to a non-destructive overlay approach
+- **Document Mode highlight**: Fixed case-sensitive text matching — highlight search now uses case-insensitive matching, consistent with block resolution
 - **Claude 4.6 compatibility**: Fixed multi-character chat identity anchoring for Claude 4.6 models (Sonnet 4.6, Opus 4.6) which no longer support assistant message prefill. When a model doesn't support prefill, the system prompt is used to instruct the model to self-identify instead.
 - **Anthropic plugin**: Added Claude Opus 4.6 and Claude Sonnet 4.6 to model lists and fallback models
 

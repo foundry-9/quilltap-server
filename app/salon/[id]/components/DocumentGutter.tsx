@@ -4,10 +4,10 @@
  * DocumentGutter - Margin gutter for the Document Mode editor
  *
  * Displays change markers (thin colored bars) beside changed lines and
- * an attention (eye) icon at the line where doc_focus last pointed.
+ * an attention (eye) icon at the pixel offset where doc_focus last pointed.
  * This is a presentational component; all state is passed in as props.
  *
- * Scriptorium Phase 3.5
+ * Scriptorium Phase 3.6
  *
  * @module app/salon/[id]/components/DocumentGutter
  */
@@ -25,7 +25,8 @@ export interface LinePosition {
 
 interface DocumentGutterProps {
   changedLines: Set<number>
-  attentionLine: number | null
+  /** Pixel offset from content top where the AI attention eye should sit; null when unset */
+  attentionTop: number | null
   linePositions: LinePosition[]
   /** Total content height to match editor height */
   totalHeight: number
@@ -33,7 +34,7 @@ interface DocumentGutterProps {
 
 export default function DocumentGutter({
   changedLines,
-  attentionLine,
+  attentionTop,
   linePositions,
   totalHeight,
 }: DocumentGutterProps) {
@@ -50,13 +51,11 @@ export default function DocumentGutter({
   }, [changedLines, linePositions])
 
   const attentionMarker = useMemo(() => {
-    if (attentionLine === null) return null
-    const pos = linePositions.find((p) => p.index === attentionLine)
-    if (!pos) return null
+    if (attentionTop === null) return null
     return (
       <div
         className="qt-doc-gutter-eye"
-        style={{ top: pos.top + Math.floor((pos.height - 16) / 2) }}
+        style={{ top: attentionTop }}
         aria-label="AI attention"
       >
         <svg
@@ -72,7 +71,7 @@ export default function DocumentGutter({
         </svg>
       </div>
     )
-  }, [attentionLine, linePositions])
+  }, [attentionTop])
 
   return (
     <div className="qt-doc-gutter" style={{ height: totalHeight }}>

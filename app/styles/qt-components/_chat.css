@@ -1515,6 +1515,7 @@
   .qt-doc-editor-area {
     @apply flex-1;
     @apply overflow-y-auto;
+    position: relative;
     padding: 1rem 1.5rem;
   }
 
@@ -1598,16 +1599,9 @@
     pointer-events: none;
   }
 
-  /* Focus highlight animation */
-  @keyframes qt-doc-focus-fade {
-    0% { background-color: var(--qt-focus-highlight-color, rgba(250, 204, 21, 0.4)); }
-    100% { background-color: transparent; }
-  }
-
-  .qt-doc-focus-highlight {
-    animation: qt-doc-focus-fade 2.5s ease-out forwards;
-    border-radius: 2px;
-  }
+  /* Focus highlight: DocumentFocusPlugin creates a fixed-position overlay on
+     document.body with all styles inline. Themes can override the highlight
+     color by setting --qt-focus-highlight-color on the editor root. */
 
   /**
    * Chat messages container

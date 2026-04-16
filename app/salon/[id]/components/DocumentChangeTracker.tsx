@@ -6,6 +6,10 @@
  * Listens to Lexical editor updates, diffs current block content against baseline,
  * and measures block element positions for the gutter.
  *
+ * Captures baseline as block-level text (via getTextContent) when the baseline prop
+ * changes, so both sides of the diff use the same representation — avoiding false
+ * positives from comparing raw markdown against Lexical's plain-text output.
+ *
  * Scriptorium Phase 3.6
  *
  * @module app/salon/[id]/components/DocumentChangeTracker
@@ -25,6 +29,18 @@ interface DocumentChangeTrackerProps {
   onLinePositions: (positions: LinePosition[], totalHeight: number) => void
 }
 
+/**
+ * Read current block text contents from a Lexical editor state.
+ */
+function readBlockTexts(editor: ReturnType<typeof useLexicalComposerContext>[0]): string[] {
+  let blockTexts: string[] = []
+  editor.getEditorState().read(() => {
+    const root = $getRoot()
+    blockTexts = root.getChildren().map((node) => node.getTextContent())
+  })
+  return blockTexts
+}
+
 export default function DocumentChangeTracker({
   baselineContent,
   onChangedLines,
@@ -32,12 +48,23 @@ export default function DocumentChangeTracker({
 }: DocumentChangeTrackerProps) {
   const [editor] = useLexicalComposerContext()
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const baselineRef = useRef(baselineContent)
+  // Baseline stored as block-level text array (same format as current block texts)
+  const baselineBlockTextsRef = useRef<string[]>([])
 
-  // Keep baselineRef in sync so the update listener always sees the latest baseline
+  // When baselineContent changes (document open or save), capture the current
+  // editor block texts as the new baseline. After a save the editor state matches
+  // the saved content, so capturing block texts here gives us an apples-to-apples
+  // comparison target that avoids markdown-vs-plain-text mismatches.
   useEffect(() => {
-    baselineRef.current = baselineContent
-  }, [baselineContent])
+    baselineBlockTextsRef.current = readBlockTexts(editor)
+
+    console.debug('[DocumentChangeTracker] Baseline captured', {
+      blockCount: baselineBlockTextsRef.current.length,
+    })
+
+    // Baseline just changed — content matches, so no changed lines
+    onChangedLines(new Set())
+  }, [baselineContent, editor, onChangedLines])
 
   useEffect(() => {
     const unregister = editor.registerUpdateListener(({ editorState }) => {
@@ -54,16 +81,14 @@ export default function DocumentChangeTracker({
           blockTexts = root.getChildren().map((node) => node.getTextContent())
         })
 
-        // Build baseline lines — split on single newlines, treating each non-empty
-        // line as a potential block (simple heuristic matching Lexical's flat block model)
-        const baselineLines = baselineRef.current.split('\n')
+        const baselineTexts = baselineBlockTextsRef.current
 
-        // Diff: a block is changed if its text differs from the corresponding baseline line
+        // Diff: a block is changed if its text differs from the corresponding baseline block
         const changedSet = new Set<number>()
-        const maxLen = Math.max(blockTexts.length, baselineLines.length)
+        const maxLen = Math.max(blockTexts.length, baselineTexts.length)
         for (let i = 0; i < maxLen; i++) {
           const current = blockTexts[i] ?? ''
-          const baseline = baselineLines[i] ?? ''
+          const baseline = baselineTexts[i] ?? ''
           if (current !== baseline) {
             changedSet.add(i)
           }
@@ -71,13 +96,15 @@ export default function DocumentChangeTracker({
 
         console.debug('[DocumentChangeTracker] Block diff complete', {
           currentBlocks: blockTexts.length,
-          baselineLines: baselineLines.length,
+          baselineBlocks: baselineTexts.length,
           changedCount: changedSet.size,
         })
 
         onChangedLines(changedSet)
 
-        // Measure DOM positions after the read, using rAF to ensure DOM is up to date
+        // Measure DOM positions after the read, using rAF to ensure DOM is up to date.
+        // Positions are computed relative to the root element's top so they align
+        // with the gutter (a sibling in the same scroll container).
         requestAnimationFrame(() => {
           const rootElement = editor.getRootElement()
           if (!rootElement) {
@@ -85,12 +112,16 @@ export default function DocumentChangeTracker({
             return
           }
 
+          const rootRect = rootElement.getBoundingClientRect()
           const children = Array.from(rootElement.children) as HTMLElement[]
-          const positions: LinePosition[] = children.map((child, index) => ({
-            index,
-            top: child.offsetTop,
-            height: child.offsetHeight,
-          }))
+          const positions: LinePosition[] = children.map((child, index) => {
+            const childRect = child.getBoundingClientRect()
+            return {
+              index,
+              top: childRect.top - rootRect.top + rootElement.scrollTop,
+              height: childRect.height,
+            }
+          })
 
           const totalHeight = rootElement.scrollHeight
 
@@ -111,37 +142,6 @@ export default function DocumentChangeTracker({
       }
     }
   }, [editor, onChangedLines, onLinePositions])
-
-  // When baseline changes (e.g. after a save), re-run the diff immediately by
-  // dispatching a no-op update that will be picked up by the update listener.
-  // We trigger this by directly computing the diff from the current editor state.
-  useEffect(() => {
-    const currentState = editor.getEditorState()
-    let blockTexts: string[] = []
-    currentState.read(() => {
-      const root = $getRoot()
-      blockTexts = root.getChildren().map((node) => node.getTextContent())
-    })
-
-    const baselineLines = baselineContent.split('\n')
-    const changedSet = new Set<number>()
-    const maxLen = Math.max(blockTexts.length, baselineLines.length)
-    for (let i = 0; i < maxLen; i++) {
-      const current = blockTexts[i] ?? ''
-      const baseline = baselineLines[i] ?? ''
-      if (current !== baseline) {
-        changedSet.add(i)
-      }
-    }
-
-    console.debug('[DocumentChangeTracker] Baseline changed, re-diffing', {
-      currentBlocks: blockTexts.length,
-      baselineLines: baselineLines.length,
-      changedCount: changedSet.size,
-    })
-
-    onChangedLines(changedSet)
-  }, [baselineContent, editor, onChangedLines])
 
   return null
 }

@@ -1272,7 +1272,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 isLLMEditing={documentModeHook.isLLMEditing}
                 contentVersion={documentModeHook.contentVersion}
                 roleplayTemplateId={chat?.roleplayTemplateId}
-                attentionLine={documentModeHook.attentionLine}
+                attentionTop={documentModeHook.attentionTop}
                 baselineContent={documentModeHook.baselineContent}
                 getScrollPosition={documentModeHook.getScrollPosition}
                 setScrollPosition={documentModeHook.setScrollPosition}
@@ -1281,8 +1281,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 onToggleFocusMode={documentModeHook.toggleFocusMode}
                 onCloseDocument={documentModeHook.closeDocument}
                 focusRequest={documentModeHook.focusRequest}
-                onFocusResolved={documentModeHook.setAttentionLine}
-                onFocusCleared={() => documentModeHook.setAttentionLine(null)}
+                onFocusResolved={documentModeHook.setAttentionTop}
+                onFocusCleared={() => documentModeHook.setAttentionTop(null)}
                 onFocusProcessed={documentModeHook.clearFocusRequest}
               />
             ) : null

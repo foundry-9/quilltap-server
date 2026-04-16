@@ -45,8 +45,8 @@ interface DocumentPaneProps {
   /** Increments on each external content load to force editor remount */
   contentVersion: number
   roleplayTemplateId?: string | null
-  /** Block index (0-based) where AI attention last landed; null when unset */
-  attentionLine?: number | null
+  /** Pixel offset from content top where AI attention eye sits; null when unset */
+  attentionTop?: number | null
   /** Content at document open / last save — used to diff changed lines for the gutter */
   baselineContent: string
   getScrollPosition: (filePath: string) => number
@@ -58,7 +58,7 @@ interface DocumentPaneProps {
   onTitleChange?: (title: string) => void
   /** doc_focus tool request from the LLM */
   focusRequest?: FocusRequest | null
-  onFocusResolved?: (lineIndex: number) => void
+  onFocusResolved?: (pixelTop: number) => void
   onFocusCleared?: () => void
   onFocusProcessed?: () => void
 }
@@ -96,7 +96,7 @@ function DocumentEditorPlugins({
   onLinePositions: (positions: LinePosition[], totalHeight: number) => void
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   focusRequest?: FocusRequest | null
-  onFocusResolved?: (lineIndex: number) => void
+  onFocusResolved?: (pixelTop: number) => void
   onFocusCleared?: () => void
   onFocusProcessed?: () => void
 }) {
@@ -191,7 +191,7 @@ export default function DocumentPane({
   isLLMEditing,
   contentVersion,
   roleplayTemplateId,
-  attentionLine = null,
+  attentionTop = null,
   baselineContent,
   getScrollPosition,
   setScrollPosition,
@@ -419,7 +419,7 @@ export default function DocumentPane({
           <div ref={scrollContainerRef} className="qt-doc-editor-with-gutter" onBlur={onBlur} onScroll={handleScroll}>
             <DocumentGutter
               changedLines={changedLines}
-              attentionLine={attentionLine}
+              attentionTop={attentionTop}
               linePositions={linePositions}
               totalHeight={totalHeight}
             />
