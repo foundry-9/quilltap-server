@@ -179,17 +179,5 @@ export function formatReadConversationResults(output: ReadConversationToolOutput
     return 'No conversation content available.';
   }
 
-  const markdown = output.markdown;
-
-  // Truncate if over 50000 characters
-  if (markdown.length > 50000) {
-    return (
-      markdown.slice(0, 50000) +
-      '\n\n---\n*[Conversation truncated. ' +
-      `Showing first 50000 of ${markdown.length} characters. ` +
-      `${output.messageCount} messages across ${output.interchangeCount} interchanges total.]*`
-    );
-  }
-
-  return markdown;
+  return output.markdown;
 }

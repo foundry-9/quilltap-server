@@ -147,8 +147,8 @@ describe('read-conversation-handler', () => {
     })
   })
 
-  it('formats large markdown results with a truncation notice', () => {
-    const markdown = 'x'.repeat(50010)
+  it('returns full markdown without truncation for large results', () => {
+    const markdown = 'x'.repeat(100000)
 
     const formatted = formatReadConversationResults({
       success: true,
@@ -157,9 +157,6 @@ describe('read-conversation-handler', () => {
       interchangeCount: 4,
     })
 
-    expect(formatted.length).toBeGreaterThan(50000)
-    expect(formatted.length).toBeLessThan(markdown.length + 200)
-    expect(formatted).toContain('Conversation truncated')
-    expect(formatted).toContain('12 messages across 4 interchanges total.')
+    expect(formatted).toBe(markdown)
   })
 })

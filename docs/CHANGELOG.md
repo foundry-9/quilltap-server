@@ -10,6 +10,7 @@
 
 #### Fixes
 
+- **Scriptorium `read_conversation` tool**: Removed 50,000 character truncation limit that was cutting off the end of long conversations when delivered to LLM participants
 - **Document Mode gutter**: Fixed false change markers appearing on document open by comparing block text content against block text content (instead of raw markdown vs. plain text)
 - **Document Mode gutter eye**: Eye icon now positions at the exact pixel offset of the highlighted text, not the top of the containing block — fixes misalignment when highlighting text inside lists
 - **Document Mode highlight**: Fixed highlight overlay being invisible — Lexical's MutationObserver was removing overlays appended to the editor root. Overlay is now a fixed-position element on document.body, outside Lexical's DOM tree
