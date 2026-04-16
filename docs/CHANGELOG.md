@@ -11,6 +11,9 @@
 #### Fixes
 
 - **Scriptorium `read_conversation` tool**: Removed 50,000 character truncation limit that was cutting off the end of long conversations when delivered to LLM participants
+- **Document Mode `doc_focus` highlight**: Fixed highlight overlay not appearing — overlay was positioned at pre-scroll viewport coordinates (off-screen) because it was created before smooth scroll completed; now defers to `scrollend` event
+- **Document Mode `doc_focus` highlight**: Increased default highlight opacity from 0.35 to 0.95 for better visibility during the 2.5s fade
+- **Document Mode `doc_focus` targeting**: Fixed eye icon and highlight overlay resolving their target independently (two lookups that could disagree due to DOM/Lexical node index mismatch); now resolves the Lexical node key once and uses `editor.getElementByKey()` for both consumers
 - **Document Mode gutter**: Fixed false change markers appearing on document open by comparing block text content against block text content (instead of raw markdown vs. plain text)
 - **Document Mode gutter eye**: Eye icon now positions at the exact pixel offset of the highlighted text, not the top of the containing block — fixes misalignment when highlighting text inside lists
 - **Document Mode highlight**: Fixed highlight overlay being invisible — Lexical's MutationObserver was removing overlays appended to the editor root. Overlay is now a fixed-position element on document.body, outside Lexical's DOM tree

@@ -76,7 +76,7 @@ function applyHighlight(
 
       // Read theme highlight color (or use warm yellow default)
       const highlightColor = getComputedStyle(rootEl).getPropertyValue('--qt-focus-highlight-color').trim()
-        || 'rgba(250, 204, 21, 0.35)'
+        || 'rgba(250, 204, 21, 0.95)'
 
       // Create a fixed-position overlay on document.body — outside Lexical's
       // MutationObserver scope so it won't be removed.
@@ -147,9 +147,9 @@ export default function DocumentFocusPlugin({
 
     const { anchor, highlight, line } = focusRequest
 
-    // Resolve target block index from editor state
-    let resolvedBlockIndex: number | null = null
-    let highlightScope: { start: number; end: number } | null = null
+    // Resolve target node key from editor state — the key is the single
+    // canonical reference that both scrolling/eye and highlight consume.
+    let resolvedNodeKey: string | null = null
 
     editor.getEditorState().read(() => {
       const root = $getRoot()
@@ -157,6 +157,9 @@ export default function DocumentFocusPlugin({
       const blockCount = children.length
 
       if (blockCount === 0) return
+
+      let resolvedIndex: number | null = null
+      let highlightScope: { start: number; end: number } | null = null
 
       // --- Anchor resolution ---
       if (anchor) {
@@ -170,7 +173,6 @@ export default function DocumentFocusPlugin({
             const text = child.getTextContent().toLowerCase()
             if (text === normalizedAnchor || text.includes(normalizedAnchor)) {
               foundAnchorIndex = i
-              // HeadingNode tag is 'h1' | 'h2' | ... | 'h6'
               const tag = child.getTag()
               foundAnchorLevel = parseInt(tag.replace('h', ''), 10)
               break
@@ -179,7 +181,7 @@ export default function DocumentFocusPlugin({
         }
 
         if (foundAnchorIndex !== null && foundAnchorLevel !== null) {
-          resolvedBlockIndex = foundAnchorIndex
+          resolvedIndex = foundAnchorIndex
 
           // Determine scope: from anchor to the next heading of same or higher level
           let scopeEnd = children.length
@@ -210,7 +212,7 @@ export default function DocumentFocusPlugin({
         for (let i = searchStart; i < searchEnd; i++) {
           const text = children[i].getTextContent().toLowerCase()
           if (text.includes(normalizedHighlight)) {
-            resolvedBlockIndex = i
+            resolvedIndex = i
             found = true
             break
           }
@@ -218,80 +220,111 @@ export default function DocumentFocusPlugin({
 
         if (!found) {
           console.warn('[DocumentFocusPlugin] Highlight text not found within scope:', highlight)
-          // Keep resolvedBlockIndex from anchor if available
         }
       }
 
       // --- Line number fallback ---
-      if (resolvedBlockIndex === null) {
+      if (resolvedIndex === null) {
         if (typeof line === 'number') {
-          resolvedBlockIndex = Math.max(0, Math.min(line, blockCount - 1))
+          resolvedIndex = Math.max(0, Math.min(line, blockCount - 1))
         } else {
-          // Nothing to resolve — use first block
-          resolvedBlockIndex = 0
+          resolvedIndex = 0
         }
       }
+
+      // Capture the node key — this is the canonical reference that maps
+      // directly to a DOM element via editor.getElementByKey().
+      resolvedNodeKey = children[resolvedIndex].__key
     })
 
-    if (resolvedBlockIndex === null) {
+    if (resolvedNodeKey === null) {
       console.warn('[DocumentFocusPlugin] Could not resolve any target block — skipping')
       onFocusProcessed()
       return
     }
 
-    const blockIndex = resolvedBlockIndex
-
-    console.debug('[DocumentFocusPlugin] Resolved target block', {
-      blockIndex,
+    console.debug('[DocumentFocusPlugin] Resolved target node', {
+      nodeKey: resolvedNodeKey,
       anchor,
       highlight,
       line,
     })
 
-    // Scroll and highlight after a rAF so DOM is settled
+    // Scroll and highlight after a rAF so DOM is settled.
+    // Use the resolved node key to get the DOM element — this is the single
+    // canonical lookup that both scroll/eye and highlight consume.
+    const nodeKey = resolvedNodeKey
     requestAnimationFrame(() => {
       const rootEl = editor.getRootElement()
-      const targetEl = rootEl?.children[blockIndex] as HTMLElement | undefined
+      const targetEl = editor.getElementByKey(nodeKey) as HTMLElement | undefined
+
+      // Apply highlight and resolve gutter eye position.
+      // Must run AFTER scroll completes so getBoundingClientRect returns
+      // viewport coordinates that match where the text actually is.
+      const applyHighlightAndResolve = () => {
+        let resolvedTop: number | null = null
+
+        if (highlight && targetEl && rootEl) {
+          const result = applyHighlight(targetEl, highlight, rootEl)
+          if (result) {
+            resolvedTop = result.top
+          }
+        }
+
+        if (resolvedTop === null && rootEl && targetEl) {
+          resolvedTop = measureElementTop(targetEl, rootEl)
+        }
+
+        if (resolvedTop !== null) {
+          console.debug('[DocumentFocusPlugin] Eye position resolved', { pixelTop: resolvedTop })
+          onFocusResolved(resolvedTop)
+        }
+
+        onFocusProcessed()
+      }
 
       // Scroll the container so target is ~1/3 from top
       const container = scrollContainerRef.current
       if (container && targetEl) {
         const targetTop = targetEl.offsetTop
         const containerHeight = container.clientHeight
-        container.scrollTo({
-          top: Math.max(0, targetTop - containerHeight / 3),
-          behavior: 'smooth',
-        })
-        console.debug('[DocumentFocusPlugin] Scrolled to block', { targetTop, containerHeight })
+        const scrollTarget = Math.max(0, targetTop - containerHeight / 3)
+
+        // If no actual scrolling is needed, apply highlight immediately
+        if (Math.abs(container.scrollTop - scrollTarget) < 1) {
+          console.debug('[DocumentFocusPlugin] No scroll needed, applying highlight immediately')
+          container.scrollTo({ top: scrollTarget })
+          applyHighlightAndResolve()
+        } else {
+          // Smooth-scroll, then apply the highlight once scrolling finishes
+          // so getBoundingClientRect returns the final viewport position.
+          const onScrollEnd = () => {
+            container.removeEventListener('scrollend', onScrollEnd)
+            clearTimeout(fallbackTimer)
+            applyHighlightAndResolve()
+          }
+
+          // Fallback timer in case scrollend doesn't fire (e.g., scroll
+          // is interrupted or browser doesn't support scrollend)
+          const fallbackTimer = setTimeout(() => {
+            container.removeEventListener('scrollend', onScrollEnd)
+            applyHighlightAndResolve()
+          }, 600)
+
+          container.addEventListener('scrollend', onScrollEnd, { once: true })
+          container.scrollTo({
+            top: scrollTarget,
+            behavior: 'smooth',
+          })
+          console.debug('[DocumentFocusPlugin] Scrolled to block', { targetTop, containerHeight })
+        }
       } else {
         console.warn('[DocumentFocusPlugin] Could not scroll — missing container or target element', {
           hasContainer: !!container,
           hasTarget: !!targetEl,
         })
+        applyHighlightAndResolve()
       }
-
-      // Apply highlight decoration and measure position for the gutter eye icon.
-      // The highlight overlay gives sub-block accuracy (e.g., a specific list
-      // item within a list block). Falls back to the block element position.
-      let resolvedTop: number | null = null
-
-      if (highlight && targetEl && rootEl) {
-        const result = applyHighlight(targetEl, highlight, rootEl)
-        if (result) {
-          resolvedTop = result.top
-        }
-      }
-
-      if (resolvedTop === null && rootEl && targetEl) {
-        resolvedTop = measureElementTop(targetEl, rootEl)
-      }
-
-      if (resolvedTop !== null) {
-        console.debug('[DocumentFocusPlugin] Eye position resolved', { pixelTop: resolvedTop })
-        onFocusResolved(resolvedTop)
-      }
-
-      onFocusProcessed()
     })
   }, [focusRequest, editor, scrollContainerRef, onFocusResolved, onFocusCleared, onFocusProcessed])
 
