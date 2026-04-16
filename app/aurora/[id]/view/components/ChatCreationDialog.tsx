@@ -233,7 +233,12 @@ export function ChatCreationDialog({
             <div className="space-y-4">
               {onOutfitSelectionsChange && (
                 <OutfitSelector
-                  characters={[{ id: characterId, name: characterName || 'Character' }]}
+                  characters={(() => {
+                    const list = [{ id: characterId, name: characterName || 'Character' }]
+                    const userChar = userControlledCharacters.find(c => c.id === selectedUserCharacterId)
+                    if (userChar) list.push({ id: userChar.id, name: userChar.name })
+                    return list
+                  })()}
                   onSelectionsChange={onOutfitSelectionsChange}
                   disabled={creatingChat}
                 />

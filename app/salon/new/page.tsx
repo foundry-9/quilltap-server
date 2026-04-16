@@ -708,9 +708,14 @@ export default function NewChatPage() {
             {selectedCharacters.filter(sc => sc.controlledBy === 'llm').length > 0 && (
               <div className="rounded-xl border qt-border-default qt-bg-card p-6">
                 <OutfitSelector
-                  characters={selectedCharacters
-                    .filter(sc => sc.controlledBy === 'llm')
-                    .map(sc => ({ id: sc.character.id, name: sc.character.name }))}
+                  characters={(() => {
+                    const list = selectedCharacters
+                      .filter(sc => sc.controlledBy === 'llm')
+                      .map(sc => ({ id: sc.character.id, name: sc.character.name }))
+                    const userChar = userControlledCharacters.find(c => c.id === selectedUserCharacterId)
+                    if (userChar) list.push({ id: userChar.id, name: userChar.name })
+                    return list
+                  })()}
                   onSelectionsChange={setOutfitSelections}
                   disabled={creating}
                 />

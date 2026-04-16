@@ -194,7 +194,12 @@ export function QuickChatDialog({
               {/* Right Column: Outfit & Timestamp Configuration */}
               <div className="space-y-4">
                 <OutfitSelector
-                  characters={[{ id: characterId, name: characterName }]}
+                  characters={(() => {
+                    const list = [{ id: characterId, name: characterName }]
+                    const userChar = userControlledCharacters.find(c => c.id === selectedPartnerId)
+                    if (userChar) list.push({ id: userChar.id, name: userChar.name })
+                    return list
+                  })()}
                   onSelectionsChange={setOutfitSelections}
                   disabled={creatingChat}
                 />

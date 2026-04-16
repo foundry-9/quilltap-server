@@ -118,6 +118,8 @@ When you begin a new conversation, you will be asked how to handle the character
 - **Let Character Choose** --- The character examines the scenario and their own wardrobe, then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph), the character simply falls back to their default outfit with admirable composure.
 - **None** --- The character begins with no equipped outfit; what they wear (if anything) is left to the narrative
 
+If you have also chosen a **Play As** character to represent yourself in the conversation, that character appears in the outfit selector too --- so you may dress your own persona alongside the cast, sparing yourself the indignity of arriving at a gala in whatever you happened to be wearing at your last engagement.
+
 This ensures that every conversation starts with the appropriate sartorial context, whether your character is attending a gala or has just tumbled out of bed.
 
 ## How the Wardrobe Affects Image Generation
