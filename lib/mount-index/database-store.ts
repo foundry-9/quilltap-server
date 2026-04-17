@@ -665,6 +665,16 @@ export async function databaseDocumentExists(
   return doc !== null;
 }
 
+export async function databaseFolderExists(
+  mountPointId: string,
+  relativePath: string
+): Promise<boolean> {
+  const repos = getRepositories();
+  const rel = normaliseRelativePath(relativePath);
+  const folder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, rel);
+  return folder !== null;
+}
+
 export async function databaseFolderHasContents(
   mountPointId: string,
   relativePath: string

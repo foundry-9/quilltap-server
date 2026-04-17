@@ -68,6 +68,7 @@ import { getRepositories } from '@/lib/database/repositories';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import {
   databaseDocumentExists,
+  databaseFolderExists,
   databaseFolderHasContents,
   deleteDatabaseDocument,
   moveDatabaseDocument,
@@ -1182,6 +1183,9 @@ async function handleMoveFile(
   // Database-backed mount: route move through the database-store module.
   if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
     if (!await databaseDocumentExists(resolvedSource.mountPointId, resolvedSource.relativePath)) {
+      if (await databaseFolderExists(resolvedSource.mountPointId, resolvedSource.relativePath)) {
+        return { success: false, error: `Path is a folder, not a file: ${input.path}. Use doc_move_folder to rename or move folders.` };
+      }
       return { success: false, error: `Source file not found: ${input.path}` };
     }
     if (await databaseDocumentExists(resolvedSource.mountPointId, resolvedDest.relativePath)) {
@@ -1272,6 +1276,9 @@ async function handleDeleteFile(
   if (resolved.mountType === 'database' && resolved.mountPointId) {
     const deleted = await deleteDatabaseDocument(resolved.mountPointId, resolved.relativePath);
     if (!deleted) {
+      if (await databaseFolderExists(resolved.mountPointId, resolved.relativePath)) {
+        return { success: false, error: `Path is a folder, not a file: ${input.path}. Use doc_delete_folder to remove folders.` };
+      }
       return { success: false, error: `File not found: ${input.path}` };
     }
     logger.info('Deleted database document', { path: input.path, scope });
@@ -1385,6 +1392,11 @@ async function handleDeleteFolder(
           formattedText: `Error: Folder "${input.path}" is not empty. Only empty folders can be deleted.`,
         };
       }
+      if (errorMsg.toLowerCase().includes('not found')) {
+        if (await databaseDocumentExists(resolved.mountPointId, resolved.relativePath)) {
+          return { success: false, error: `Path is a file, not a folder: ${input.path}. Use doc_delete_file to delete files.` };
+        }
+      }
       return { success: false, error: errorMsg };
     }
   }
@@ -1461,6 +1473,11 @@ async function handleMoveFolder(
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.toLowerCase().includes('not found')) {
+        if (await databaseDocumentExists(resolvedSource.mountPointId, resolvedSource.relativePath)) {
+          return { success: false, error: `Source path is a file, not a folder: ${input.path}. Use doc_move_file to rename or move files.` };
+        }
+      }
       return { success: false, error: errorMsg };
     }
   }
