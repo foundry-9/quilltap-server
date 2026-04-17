@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { formatAutosaveNotification } from '@/lib/doc-edit'
+import { formatAutosaveNotification } from '@/lib/doc-edit/unified-diff'
 import type { Chat } from '../types'
 import {
   closeDocumentForChat,
