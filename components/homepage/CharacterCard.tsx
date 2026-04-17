@@ -10,7 +10,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import Avatar from '@/components/ui/Avatar'
-import { QuickChatDialog } from '@/components/dashboard/QuickChatDialog'
+import { NewChatModal } from '@/components/new-chat'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import type { HomepageCharacter } from './types'
@@ -81,7 +81,7 @@ export function CharacterCard({ character }: CharacterCardProps) {
       </div>
 
       {showDialog && (
-        <QuickChatDialog
+        <NewChatModal
           characterId={character.id}
           characterName={character.name}
           isOpen={true}

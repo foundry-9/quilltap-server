@@ -71,9 +71,9 @@ jest.mock('@/components/ui/Avatar', () => {
   }
 })
 
-// Mock QuickChatDialog
-jest.mock('@/components/dashboard/QuickChatDialog', () => ({
-  QuickChatDialog: function MockQuickChatDialog({
+// Mock NewChatModal
+jest.mock('@/components/new-chat', () => ({
+  NewChatModal: function MockNewChatModal({
     characterId,
     characterName,
     isOpen,
@@ -82,7 +82,7 @@ jest.mock('@/components/dashboard/QuickChatDialog', () => ({
     if (!isOpen) return null
     return (
       <div
-        data-testid="quick-chat-dialog"
+        data-testid="new-chat-modal"
         data-character-id={characterId}
         data-character-name={characterName}
         role="dialog"
@@ -908,9 +908,9 @@ describe('CharacterCard', () => {
     fireEvent.click(chatButton)
 
     await waitFor(() => {
-      expect(screen.getByTestId('quick-chat-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('new-chat-modal')).toBeInTheDocument()
     })
-    expect(screen.getByTestId('quick-chat-dialog')).toHaveAttribute(
+    expect(screen.getByTestId('new-chat-modal')).toHaveAttribute(
       'data-character-id',
       'char-123'
     )
@@ -924,14 +924,14 @@ describe('CharacterCard', () => {
     fireEvent.click(chatButton)
 
     await waitFor(() => {
-      expect(screen.getByTestId('quick-chat-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('new-chat-modal')).toBeInTheDocument()
     })
 
     const closeButton = screen.getByRole('button', { name: /Close/i })
     fireEvent.click(closeButton)
 
     await waitFor(() => {
-      expect(screen.queryByTestId('quick-chat-dialog')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('new-chat-modal')).not.toBeInTheDocument()
     })
   })
 
