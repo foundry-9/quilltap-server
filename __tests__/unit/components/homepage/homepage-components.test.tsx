@@ -738,8 +738,15 @@ describe('ProjectItem', () => {
   it('links to project page', () => {
     const project = createMockProject({ id: 'proj-123' })
     render(<ProjectItem project={project} />)
-    const link = screen.getByRole('link')
-    expect(link).toHaveAttribute('href', '/prospero/proj-123')
+    const links = screen.getAllByRole('link')
+    expect(links[0]).toHaveAttribute('href', '/prospero/proj-123')
+  })
+
+  it('renders a new-chat button linking to /salon/new with projectId', () => {
+    const project = createMockProject({ id: 'proj-123' })
+    const { container } = render(<ProjectItem project={project} />)
+    const chatLink = container.querySelector('a[href="/salon/new?projectId=proj-123"]')
+    expect(chatLink).toBeInTheDocument()
   })
 
   it('renders formatted time', () => {
@@ -758,10 +765,9 @@ describe('ProjectItem', () => {
 
   it('applies hover styling', () => {
     const { container } = render(<ProjectItem project={createMockProject()} />)
-    const link = container.querySelector('a')
-    expect(link).toBeInTheDocument()
-    // Verify the link contains styling for hover and transition
-    const className = link?.getAttribute('class') || ''
+    const wrapper = container.querySelector('.hover\\:qt-bg-muted\\/50')
+    expect(wrapper).toBeInTheDocument()
+    const className = wrapper?.getAttribute('class') || ''
     expect(className).toContain('rounded-lg')
   })
 

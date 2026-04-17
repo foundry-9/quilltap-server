@@ -131,6 +131,7 @@
 
 #### Improvements
 
+- **Homepage Active Projects — new-chat shortcut**: Each entry in the homepage's "Active Projects" list now has a small green chat icon that jumps straight to `/salon/new?projectId=…`, matching the "New Chat" flow available from the project detail page
 - **New chat dialogs — user outfit selection**: The Quick Chat dialog (homepage), `/salon/new` page, and character-view chat creation dialog now expose outfit selection for the selected "Play As" character alongside the LLM character(s), so you can dress your own persona when starting a chat (not just theirs)
 - **Concurrent embedding processing**: EMBEDDING_GENERATE jobs now run up to 4 at a time in the background job processor (with a 10-minute per-job timeout), while all other job types remain single-threaded — significantly faster bulk re-embeds, especially with local providers like Ollama
 - **Queue Status Badges**: Added "Emb" (embedding) badge showing active embedding jobs. Expanded "Sum" to cover all post-turn processing (context summaries, title updates, scene state tracking, conversation rendering). Added character avatar generation to "Img" badge (renamed from "BG"). Badge order: Mem|Emb|Sum|Dgr|Img.
