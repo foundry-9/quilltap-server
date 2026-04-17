@@ -51,7 +51,7 @@ export type DocMountPointType = DocMountPoint['mountType'];
 export const DocMountFolderSchema = z.object({
   id: UUIDSchema,
   mountPointId: UUIDSchema,
-  parentId: UUIDSchema.nullable(),    // null = mount-point root
+  parentId: UUIDSchema.nullable().optional(),    // null = mount-point root
   name: z.string().min(1),             // Folder segment only (no slashes)
   path: z.string(),                    // Full relative path; '' for root; denormalised for fast lookup
   createdAt: TimestampSchema,
