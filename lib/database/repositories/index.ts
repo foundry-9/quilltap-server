@@ -44,6 +44,8 @@ export { HelpDocsRepository } from './help-docs.repository';
 export { DocMountPointsRepository } from './doc-mount-points.repository';
 export { DocMountFilesRepository } from './doc-mount-files.repository';
 export { DocMountChunksRepository } from './doc-mount-chunks.repository';
+export { DocMountDocumentsRepository } from './doc-mount-documents.repository';
+export { DocMountBlobsRepository } from './doc-mount-blobs.repository';
 export { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
 export { ChatDocumentsRepository } from './chat-documents.repository';
 
@@ -79,6 +81,8 @@ import { HelpDocsRepository } from './help-docs.repository';
 import { DocMountPointsRepository } from './doc-mount-points.repository';
 import { DocMountFilesRepository } from './doc-mount-files.repository';
 import { DocMountChunksRepository } from './doc-mount-chunks.repository';
+import { DocMountDocumentsRepository } from './doc-mount-documents.repository';
+import { DocMountBlobsRepository } from './doc-mount-blobs.repository';
 import { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
 import { ChatDocumentsRepository } from './chat-documents.repository';
 
@@ -119,6 +123,8 @@ export interface RepositoryContainer {
   docMountPoints: DocMountPointsRepository;
   docMountFiles: DocMountFilesRepository;
   docMountChunks: DocMountChunksRepository;
+  docMountDocuments: DocMountDocumentsRepository;
+  docMountBlobs: DocMountBlobsRepository;
   projectDocMountLinks: ProjectDocMountLinksRepository;
   chatDocuments: ChatDocumentsRepository;
 }
@@ -171,6 +177,8 @@ export function createRepositories(): RepositoryContainer {
       docMountPoints: new DocMountPointsRepository(),
       docMountFiles: new DocMountFilesRepository(),
       docMountChunks: new DocMountChunksRepository(),
+      docMountDocuments: new DocMountDocumentsRepository(),
+      docMountBlobs: new DocMountBlobsRepository(),
       projectDocMountLinks: new ProjectDocMountLinksRepository(),
       chatDocuments: new ChatDocumentsRepository(),
     };

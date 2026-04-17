@@ -18,29 +18,33 @@ interface CreateDocumentStoreDialogProps {
 }
 
 export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDocumentStoreDialogProps) {
-  const [mountType, setMountType] = useState<'filesystem' | 'obsidian'>('filesystem')
+  const [mountType, setMountType] = useState<'filesystem' | 'obsidian' | 'database'>('filesystem')
   const [basePath, setBasePath] = useState('')
 
   if (!open) return null
+
+  const isDatabaseBacked = mountType === 'database'
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     const name = formData.get('name') as string
-    const includeStr = formData.get('includePatterns') as string
-    const excludeStr = formData.get('excludePatterns') as string
+    const includeStr = (formData.get('includePatterns') as string) ?? ''
+    const excludeStr = (formData.get('excludePatterns') as string) ?? ''
 
     const data: CreateDocumentStoreData = {
       name,
-      basePath,
+      basePath: isDatabaseBacked ? '' : basePath,
       mountType,
     }
 
-    if (includeStr.trim()) {
-      data.includePatterns = includeStr.split(',').map(p => p.trim()).filter(Boolean)
-    }
-    if (excludeStr.trim()) {
-      data.excludePatterns = excludeStr.split(',').map(p => p.trim()).filter(Boolean)
+    if (!isDatabaseBacked) {
+      if (includeStr.trim()) {
+        data.includePatterns = includeStr.split(',').map(p => p.trim()).filter(Boolean)
+      }
+      if (excludeStr.trim()) {
+        data.excludePatterns = excludeStr.split(',').map(p => p.trim()).filter(Boolean)
+      }
     }
 
     onSubmit(data)
@@ -64,19 +68,8 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
           </div>
 
           <div className="mb-4">
-            <label className="qt-label mb-2 block">Path</label>
-            <DirectoryPicker
-              value={basePath}
-              onChange={setBasePath}
-              required
-              placeholder="/path/to/documents"
-            />
-            <p className="mt-1 text-xs qt-text-secondary">Absolute filesystem path to the document directory</p>
-          </div>
-
-          <div className="mb-4">
             <label className="qt-label mb-2 block">Type</label>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -86,7 +79,7 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
                   onChange={() => setMountType('filesystem')}
                   className="qt-radio"
                 />
-                <span className="text-sm text-foreground">Filesystem</span>
+                <span className="text-sm text-foreground">Filesystem — read/write documents on disk</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -97,34 +90,71 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
                   onChange={() => setMountType('obsidian')}
                   className="qt-radio"
                 />
-                <span className="text-sm text-foreground">Obsidian Vault</span>
+                <span className="text-sm text-foreground">Obsidian Vault — filesystem with Obsidian-friendly defaults</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="mountType"
+                  value="database"
+                  checked={mountType === 'database'}
+                  onChange={() => setMountType('database')}
+                  className="qt-radio"
+                />
+                <span className="text-sm text-foreground">Database-backed — everything stays encrypted inside Quilltap</span>
               </label>
             </div>
           </div>
 
-          <div className="mb-4">
-            <label className="qt-label mb-2 block">Include Patterns (optional)</label>
-            <input
-              type="text"
-              name="includePatterns"
-              placeholder="*.md, *.txt, *.pdf, *.docx"
-              defaultValue="*.md, *.txt, *.pdf, *.docx"
-              className="qt-input"
-            />
-            <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files to include</p>
-          </div>
+          {!isDatabaseBacked && (
+            <div className="mb-4">
+              <label className="qt-label mb-2 block">Path</label>
+              <DirectoryPicker
+                value={basePath}
+                onChange={setBasePath}
+                required
+                placeholder="/path/to/documents"
+              />
+              <p className="mt-1 text-xs qt-text-secondary">Absolute filesystem path to the document directory</p>
+            </div>
+          )}
 
-          <div className="mb-4">
-            <label className="qt-label mb-2 block">Exclude Patterns (optional)</label>
-            <input
-              type="text"
-              name="excludePatterns"
-              placeholder=".git, node_modules, .obsidian, .trash"
-              defaultValue=".git, node_modules, .obsidian, .trash"
-              className="qt-input"
-            />
-            <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files/directories to exclude</p>
-          </div>
+          {isDatabaseBacked && (
+            <div className="mb-4 qt-callout">
+              <p className="text-sm">
+                Database-backed stores live entirely inside Quilltap&apos;s encrypted mount-index database — no
+                filesystem path required. Documents and blobs you upload are included in the standard Quilltap backups.
+              </p>
+            </div>
+          )}
+
+          {!isDatabaseBacked && (
+            <>
+              <div className="mb-4">
+                <label className="qt-label mb-2 block">Include Patterns (optional)</label>
+                <input
+                  type="text"
+                  name="includePatterns"
+                  placeholder="*.md, *.txt, *.pdf, *.docx"
+                  defaultValue="*.md, *.txt, *.pdf, *.docx"
+                  className="qt-input"
+                />
+                <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files to include</p>
+              </div>
+
+              <div className="mb-4">
+                <label className="qt-label mb-2 block">Exclude Patterns (optional)</label>
+                <input
+                  type="text"
+                  name="excludePatterns"
+                  placeholder=".git, node_modules, .obsidian, .trash"
+                  defaultValue=".git, node_modules, .obsidian, .trash"
+                  className="qt-input"
+                />
+                <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files/directories to exclude</p>
+              </div>
+            </>
+          )}
 
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={onClose} className="qt-button-secondary">

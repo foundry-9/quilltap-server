@@ -47,8 +47,8 @@ function detectFileType(filePath: string): 'pdf' | 'docx' | 'markdown' | 'txt' |
  * 6. Embedding jobs are NOT enqueued here (same pattern as scanner)
  *
  * @param mountPointId - The mount point this file belongs to
- * @param relativePath - Path relative to mount point basePath
- * @param absolutePath - Absolute filesystem path to the file
+ * @param relativePath - Path relative to mount point basePath (or virtual path for database-backed stores)
+ * @param absolutePath - Absolute filesystem path to the file, or empty string for database-backed stores
  */
 export async function reindexSingleFile(
   mountPointId: string,
@@ -69,17 +69,40 @@ export async function reindexSingleFile(
   }
 
   try {
-    // Read file stats and compute hash
-    const [stat, sha256] = await Promise.all([
-      fs.stat(absolutePath),
-      computeSha256(absolutePath),
-    ]);
+    // Database-backed store: bytes come from doc_mount_documents, not the
+    // filesystem. Skip fs.stat / convertToPlainText and chunk directly.
+    const mountPoint = await repos.docMountPoints.findById(mountPointId);
+    const isDatabaseBacked = mountPoint?.mountType === 'database';
 
-    // Convert to plain text
-    const plainText = await convertToPlainText(absolutePath, fileType);
-    if (!plainText || plainText.trim().length === 0) {
-      logger.debug('File conversion produced no text after edit', { relativePath });
-      return;
+    let plainText: string;
+    let sha256: string;
+    let fileSizeBytes: number;
+    let lastModifiedIso: string;
+
+    if (isDatabaseBacked) {
+      const doc = await repos.docMountDocuments.findByMountPointAndPath(mountPointId, relativePath);
+      if (!doc) {
+        logger.debug('Database document not found for reindex, skipping', { relativePath });
+        return;
+      }
+      plainText = doc.content;
+      sha256 = doc.contentSha256;
+      fileSizeBytes = Buffer.byteLength(doc.content, 'utf-8');
+      lastModifiedIso = doc.lastModified;
+    } else {
+      const [stat, computedSha] = await Promise.all([
+        fs.stat(absolutePath),
+        computeSha256(absolutePath),
+      ]);
+      const converted = await convertToPlainText(absolutePath, fileType);
+      if (!converted || converted.trim().length === 0) {
+        logger.debug('File conversion produced no text after edit', { relativePath });
+        return;
+      }
+      plainText = converted;
+      sha256 = computedSha;
+      fileSizeBytes = stat.size;
+      lastModifiedIso = stat.mtime.toISOString();
     }
 
     // Chunk the text
@@ -96,8 +119,8 @@ export async function reindexSingleFile(
       await repos.docMountChunks.deleteByFileId(existingFile.id);
       await repos.docMountFiles.update(existingFile.id, {
         sha256,
-        fileSizeBytes: stat.size,
-        lastModified: stat.mtime.toISOString(),
+        fileSizeBytes,
+        lastModified: lastModifiedIso,
         conversionStatus: 'converted',
         conversionError: null,
         plainTextLength: plainText.length,
@@ -111,8 +134,9 @@ export async function reindexSingleFile(
         fileName: path.basename(relativePath),
         fileType,
         sha256,
-        fileSizeBytes: stat.size,
-        lastModified: stat.mtime.toISOString(),
+        fileSizeBytes,
+        lastModified: lastModifiedIso,
+        source: isDatabaseBacked ? 'database' : 'filesystem',
         conversionStatus: 'converted',
         plainTextLength: plainText.length,
         chunkCount: chunks.length,

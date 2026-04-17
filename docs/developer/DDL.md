@@ -1048,7 +1048,7 @@ Tables are auto-created on first access by their respective repositories via `CR
 CREATE TABLE IF NOT EXISTS "doc_mount_points" (
   "id" TEXT PRIMARY KEY,
   "name" TEXT NOT NULL,
-  "basePath" TEXT NOT NULL,
+  "basePath" TEXT NOT NULL DEFAULT '',
   "mountType" TEXT NOT NULL DEFAULT 'filesystem',
   "includePatterns" TEXT NOT NULL DEFAULT '["*.md","*.txt","*.pdf","*.docx"]',
   "excludePatterns" TEXT NOT NULL DEFAULT '[".git","node_modules",".obsidian",".trash"]',
@@ -1064,6 +1064,8 @@ CREATE TABLE IF NOT EXISTS "doc_mount_points" (
 );
 ```
 
+`mountType` is one of `'filesystem'`, `'obsidian'`, or `'database'`. For `'database'` stores the `basePath` column is empty — all document bytes live in `doc_mount_documents` and attached blobs in `doc_mount_blobs` within this same SQLCipher-encrypted database.
+
 ### doc_mount_files
 
 ```sql
@@ -1076,6 +1078,7 @@ CREATE TABLE IF NOT EXISTS "doc_mount_files" (
   "sha256" TEXT NOT NULL,
   "fileSizeBytes" INTEGER NOT NULL,
   "lastModified" TEXT NOT NULL,
+  "source" TEXT NOT NULL DEFAULT 'filesystem',
   "conversionStatus" TEXT NOT NULL DEFAULT 'pending',
   "conversionError" TEXT,
   "plainTextLength" INTEGER,
@@ -1084,6 +1087,8 @@ CREATE TABLE IF NOT EXISTS "doc_mount_files" (
   "updatedAt" TEXT NOT NULL
 );
 ```
+
+`source` is `'filesystem'` when the bytes live on disk (filesystem/obsidian mounts) or `'database'` when they live in `doc_mount_documents`. The column is added by `DocMountFilesRepository` on first access for legacy mount-index databases that predate database-backed stores.
 
 ### doc_mount_chunks
 
@@ -1117,6 +1122,52 @@ CREATE TABLE IF NOT EXISTS "project_doc_mount_links" (
 ```
 
 Note: `projectId` references the `projects` table in the main database. Cross-database foreign keys are not enforced by SQLite; referential integrity is maintained at the application layer.
+
+### doc_mount_documents
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_documents" (
+  "id" TEXT PRIMARY KEY,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "relativePath" TEXT NOT NULL,
+  "fileName" TEXT NOT NULL,
+  "fileType" TEXT NOT NULL,
+  "content" TEXT NOT NULL,
+  "contentSha256" TEXT NOT NULL,
+  "plainTextLength" INTEGER NOT NULL,
+  "lastModified" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_documents_mp_path"
+  ON "doc_mount_documents" ("mountPointId", "relativePath");
+```
+
+Text content for database-backed mount points. Every row is mirrored in `doc_mount_files` (with `source='database'`) so existing scanning, search, and embedding paths treat it identically to on-disk files.
+
+### doc_mount_blobs
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_blobs" (
+  "id" TEXT PRIMARY KEY,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "relativePath" TEXT NOT NULL,
+  "originalFileName" TEXT NOT NULL,
+  "originalMimeType" TEXT NOT NULL,
+  "storedMimeType" TEXT NOT NULL,
+  "sizeBytes" INTEGER NOT NULL,
+  "sha256" TEXT NOT NULL,
+  "description" TEXT NOT NULL DEFAULT '',
+  "descriptionUpdatedAt" TEXT,
+  "data" BLOB NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_blobs_mp_path"
+  ON "doc_mount_blobs" ("mountPointId", "relativePath");
+```
+
+Binary assets (images first; any MIME type later) for **any** mount point type. Images are transcoded to WebP on upload using the `sharp` dependency; `originalMimeType` preserves the uploaded format while `storedMimeType` is what `data` actually contains. `description` is user-supplied alt-text / transcript consumed by the embedding pipeline.
 
 ---
 

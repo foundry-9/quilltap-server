@@ -35,7 +35,8 @@ export type ExportEntityType =
   | 'image-profiles'
   | 'embedding-profiles'
   | 'tags'
-  | 'projects';
+  | 'projects'
+  | 'document-stores';
 
 // ============================================================================
 // EXPORT MANIFEST
@@ -67,6 +68,9 @@ export interface QuilltapExportCounts {
   tags?: number;
   memories?: number;
   projects?: number;
+  documentStores?: number;
+  documentStoreDocuments?: number;
+  documentStoreBlobs?: number;
 }
 
 /**
@@ -222,6 +226,58 @@ export interface ProjectsExportData {
 }
 
 /**
+ * Document store / Scriptorium export data
+ *
+ * Portable representation of a set of document stores. For database-backed
+ * mount points the full content lives in `documents` (text) and `blobs`
+ * (base64-encoded bytes). For filesystem/obsidian mounts only the
+ * configuration round-trips — users keep the external files themselves.
+ *
+ * `basePath` is included as a courtesy but is instance-specific; importers
+ * should prompt the user to rebind it or drop the mount if the path cannot
+ * be located on the target machine.
+ */
+export interface ExportedDocumentStore {
+  id: string;
+  name: string;
+  basePath: string;
+  mountType: 'filesystem' | 'obsidian' | 'database';
+  includePatterns: string[];
+  excludePatterns: string[];
+  enabled: boolean;
+}
+
+export interface ExportedDocumentStoreDocument {
+  mountPointId: string;
+  relativePath: string;
+  fileName: string;
+  fileType: 'markdown' | 'txt';
+  content: string;
+  contentSha256: string;
+  plainTextLength: number;
+  lastModified: string;
+}
+
+export interface ExportedDocumentStoreBlob {
+  mountPointId: string;
+  relativePath: string;
+  originalFileName: string;
+  originalMimeType: string;
+  storedMimeType: string;
+  sizeBytes: number;
+  sha256: string;
+  description: string;
+  /** Raw bytes, base64-encoded for JSON safety. */
+  dataBase64: string;
+}
+
+export interface DocumentStoresExportData {
+  mountPoints: ExportedDocumentStore[];
+  documents: ExportedDocumentStoreDocument[];
+  blobs: ExportedDocumentStoreBlob[];
+}
+
+/**
  * Union of all possible export data structures
  */
 export type QuilltapExportData =
@@ -232,7 +288,8 @@ export type QuilltapExportData =
   | ImageProfilesExportData
   | EmbeddingProfilesExportData
   | TagsExportData
-  | ProjectsExportData;
+  | ProjectsExportData
+  | DocumentStoresExportData;
 
 /**
  * Complete export structure with manifest and data

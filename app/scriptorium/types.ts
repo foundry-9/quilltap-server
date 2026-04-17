@@ -8,7 +8,7 @@ export interface DocumentStore {
   id: string
   name: string
   basePath: string
-  mountType: 'filesystem' | 'obsidian'
+  mountType: 'filesystem' | 'obsidian' | 'database'
   includePatterns: string[]
   excludePatterns: string[]
   enabled: boolean
@@ -62,8 +62,9 @@ export interface UseDocumentStoresReturn {
 
 export interface CreateDocumentStoreData {
   name: string
+  /** Absolute path for filesystem/obsidian mounts; empty string for database. */
   basePath: string
-  mountType?: 'filesystem' | 'obsidian'
+  mountType?: 'filesystem' | 'obsidian' | 'database'
   includePatterns?: string[]
   excludePatterns?: string[]
   enabled?: boolean
@@ -72,8 +73,23 @@ export interface CreateDocumentStoreData {
 export interface UpdateDocumentStoreData {
   name?: string
   basePath?: string
-  mountType?: 'filesystem' | 'obsidian'
+  mountType?: 'filesystem' | 'obsidian' | 'database'
   includePatterns?: string[]
   excludePatterns?: string[]
   enabled?: boolean
+}
+
+export interface DocumentStoreBlob {
+  id: string
+  mountPointId: string
+  relativePath: string
+  originalFileName: string
+  originalMimeType: string
+  storedMimeType: string
+  sizeBytes: number
+  sha256: string
+  description: string
+  descriptionUpdatedAt: string | null
+  createdAt: string
+  updatedAt: string
 }

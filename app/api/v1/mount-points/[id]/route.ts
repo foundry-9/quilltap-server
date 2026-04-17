@@ -26,8 +26,9 @@ import { detachMountPoint, refreshMountPoint } from '@/lib/mount-index/watcher';
 
 const updateMountPointSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  basePath: z.string().min(1).optional(),
-  mountType: z.enum(['filesystem', 'obsidian']).optional(),
+  // basePath may be empty when switching to (or already is) a database-backed store.
+  basePath: z.string().optional(),
+  mountType: z.enum(['filesystem', 'obsidian', 'database']).optional(),
   includePatterns: z.array(z.string()).optional(),
   excludePatterns: z.array(z.string()).optional(),
   enabled: z.boolean().optional(),
@@ -163,6 +164,15 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
       logger.debug('[Mount Points v1] Deleted associated files', {
         mountPointId: id,
         filesDeleted,
+      });
+
+      // Delete DB-backed document bodies and blobs (no-ops on filesystem mounts).
+      const documentsDeleted = await repos.docMountDocuments.deleteByMountPointId(id);
+      const blobsDeleted = await repos.docMountBlobs.deleteByMountPointId(id);
+      logger.debug('[Mount Points v1] Deleted DB-backed documents and blobs', {
+        mountPointId: id,
+        documentsDeleted,
+        blobsDeleted,
       });
 
       // Delete project links

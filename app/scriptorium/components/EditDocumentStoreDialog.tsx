@@ -18,31 +18,35 @@ interface EditDocumentStoreDialogProps {
 }
 
 export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocumentStoreDialogProps) {
-  const [mountType, setMountType] = useState<'filesystem' | 'obsidian'>(store?.mountType || 'filesystem')
+  const [mountType, setMountType] = useState<'filesystem' | 'obsidian' | 'database'>(store?.mountType || 'filesystem')
   const [basePath, setBasePath] = useState(store?.basePath || '')
   const [enabled, setEnabled] = useState(store?.enabled ?? true)
 
   if (!store) return null
 
+  const isDatabaseBacked = mountType === 'database'
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     const name = formData.get('name') as string
-    const includeStr = formData.get('includePatterns') as string
-    const excludeStr = formData.get('excludePatterns') as string
+    const includeStr = (formData.get('includePatterns') as string) ?? ''
+    const excludeStr = (formData.get('excludePatterns') as string) ?? ''
 
     const data: UpdateDocumentStoreData = {
       name,
-      basePath,
+      basePath: isDatabaseBacked ? '' : basePath,
       mountType,
       enabled,
     }
 
-    if (includeStr.trim()) {
-      data.includePatterns = includeStr.split(',').map(p => p.trim()).filter(Boolean)
-    }
-    if (excludeStr.trim()) {
-      data.excludePatterns = excludeStr.split(',').map(p => p.trim()).filter(Boolean)
+    if (!isDatabaseBacked) {
+      if (includeStr.trim()) {
+        data.includePatterns = includeStr.split(',').map(p => p.trim()).filter(Boolean)
+      }
+      if (excludeStr.trim()) {
+        data.excludePatterns = excludeStr.split(',').map(p => p.trim()).filter(Boolean)
+      }
     }
 
     onSubmit(store.id, data)
@@ -65,20 +69,22 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
             />
           </div>
 
-          <div className="mb-4">
-            <label className="qt-label mb-2 block">Path</label>
-            <DirectoryPicker
-              value={basePath}
-              onChange={setBasePath}
-              required
-              placeholder="/path/to/documents"
-            />
-            <p className="mt-1 text-xs qt-text-secondary">Absolute filesystem path to the document directory</p>
-          </div>
+          {!isDatabaseBacked && (
+            <div className="mb-4">
+              <label className="qt-label mb-2 block">Path</label>
+              <DirectoryPicker
+                value={basePath}
+                onChange={setBasePath}
+                required
+                placeholder="/path/to/documents"
+              />
+              <p className="mt-1 text-xs qt-text-secondary">Absolute filesystem path to the document directory</p>
+            </div>
+          )}
 
           <div className="mb-4">
             <label className="qt-label mb-2 block">Type</label>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
@@ -101,7 +107,23 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
                 />
                 <span className="text-sm text-foreground">Obsidian Vault</span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="mountType"
+                  value="database"
+                  checked={mountType === 'database'}
+                  onChange={() => setMountType('database')}
+                  className="qt-radio"
+                />
+                <span className="text-sm text-foreground">Database-backed</span>
+              </label>
             </div>
+            {isDatabaseBacked && (
+              <p className="mt-2 text-xs qt-text-secondary italic">
+                Database-backed stores have no filesystem path or include/exclude patterns. Switching from a filesystem mount type will drop the current base path.
+              </p>
+            )}
           </div>
 
           <div className="mb-4">
@@ -117,27 +139,31 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
             <p className="mt-1 text-xs qt-text-secondary">Disabled stores won&apos;t be scanned or searched</p>
           </div>
 
-          <div className="mb-4">
-            <label className="qt-label mb-2 block">Include Patterns</label>
-            <input
-              type="text"
-              name="includePatterns"
-              defaultValue={store.includePatterns.join(', ')}
-              className="qt-input"
-            />
-            <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files to include</p>
-          </div>
+          {!isDatabaseBacked && (
+            <>
+              <div className="mb-4">
+                <label className="qt-label mb-2 block">Include Patterns</label>
+                <input
+                  type="text"
+                  name="includePatterns"
+                  defaultValue={store.includePatterns.join(', ')}
+                  className="qt-input"
+                />
+                <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files to include</p>
+              </div>
 
-          <div className="mb-4">
-            <label className="qt-label mb-2 block">Exclude Patterns</label>
-            <input
-              type="text"
-              name="excludePatterns"
-              defaultValue={store.excludePatterns.join(', ')}
-              className="qt-input"
-            />
-            <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files/directories to exclude</p>
-          </div>
+              <div className="mb-4">
+                <label className="qt-label mb-2 block">Exclude Patterns</label>
+                <input
+                  type="text"
+                  name="excludePatterns"
+                  defaultValue={store.excludePatterns.join(', ')}
+                  className="qt-input"
+                />
+                <p className="mt-1 text-xs qt-text-secondary">Comma-separated glob patterns for files/directories to exclude</p>
+              </div>
+            </>
+          )}
 
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={onClose} className="qt-button-secondary">

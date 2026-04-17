@@ -19,12 +19,18 @@ import { attachMountPoint } from '@/lib/mount-index/watcher';
 
 const createMountPointSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
-  basePath: z.string().min(1, 'Base path is required'),
-  mountType: z.enum(['filesystem', 'obsidian']).optional().default('filesystem'),
+  // basePath is only meaningful for filesystem/obsidian mounts. Database-backed
+  // stores (mountType === 'database') persist everything inside
+  // quilltap-mount-index.db and ignore this value.
+  basePath: z.string().optional().default(''),
+  mountType: z.enum(['filesystem', 'obsidian', 'database']).optional().default('filesystem'),
   includePatterns: z.array(z.string()).optional(),
   excludePatterns: z.array(z.string()).optional(),
   enabled: z.boolean().optional().default(true),
-});
+}).refine(
+  (data) => data.mountType === 'database' || (data.basePath && data.basePath.length > 0),
+  { message: 'Base path is required for filesystem and obsidian mount types', path: ['basePath'] }
+);
 
 // ============================================================================
 // GET Handler
@@ -100,19 +106,23 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     totalSizeBytes: 0,
   });
 
-  // Verify basePath is accessible
+  // Database-backed stores have no basePath to verify — SQLCipher has already
+  // persisted the mount point row, and documents are added via the doc_* tools
+  // or the blob API once the user starts writing.
   let warning: string | undefined;
-  try {
-    await fs.access(validatedData.basePath);
-    logger.debug('[Mount Points v1] Base path is accessible', {
-      basePath: validatedData.basePath,
-    });
-  } catch {
-    warning = `Base path '${validatedData.basePath}' is not currently accessible. The mount point was created but scanning will fail until the path is available.`;
-    logger.warn('[Mount Points v1] Base path not accessible', {
-      basePath: validatedData.basePath,
-      mountPointId: mountPoint.id,
-    });
+  if (validatedData.mountType !== 'database') {
+    try {
+      await fs.access(validatedData.basePath);
+      logger.debug('[Mount Points v1] Base path is accessible', {
+        basePath: validatedData.basePath,
+      });
+    } catch {
+      warning = `Base path '${validatedData.basePath}' is not currently accessible. The mount point was created but scanning will fail until the path is available.`;
+      logger.warn('[Mount Points v1] Base path not accessible', {
+        basePath: validatedData.basePath,
+        mountPointId: mountPoint.id,
+      });
+    }
   }
 
   logger.info('[Mount Points v1] Mount point created', {

@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useDocumentStoreDetail } from './hooks/useDocumentStoreDetail'
 import { FileTable } from './components'
+import { BlobManager } from './components/BlobManager'
 import { EditDocumentStoreDialog } from '../components/EditDocumentStoreDialog'
 import type { UpdateDocumentStoreData } from '../types'
 
@@ -123,17 +124,27 @@ export default function DocumentStoreDetailPage() {
                   Disabled
                 </span>
               )}
+              {store.mountType === 'database' && (
+                <span className="qt-badge inline-flex items-center">
+                  Database-backed
+                </span>
+              )}
             </div>
-            <p className="mt-1 qt-text-small font-mono text-xs">{store.basePath}</p>
+            {store.mountType === 'database' ? (
+              <p className="mt-1 qt-text-small text-xs italic">Stored encrypted in the mount-index database.</p>
+            ) : (
+              <p className="mt-1 qt-text-small font-mono text-xs">{store.basePath}</p>
+            )}
           </div>
           <div className="flex gap-2">
             <button
               onClick={scanStore}
               disabled={scanning || store.scanStatus === 'scanning'}
               className={`qt-button-secondary inline-flex items-center gap-1.5 ${scanning || store.scanStatus === 'scanning' ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title={store.mountType === 'database' ? 'Rechunk all documents in this database-backed store' : undefined}
             >
               <RefreshIcon className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
-              {scanning ? 'Scanning...' : 'Scan Now'}
+              {scanning ? 'Scanning...' : store.mountType === 'database' ? 'Re-chunk' : 'Scan Now'}
             </button>
             <button
               onClick={() => setEditDialogOpen(true)}
@@ -194,35 +205,40 @@ export default function DocumentStoreDetailPage() {
         </div>
       )}
 
-      {/* Pattern info */}
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-          <h3 className="text-xs font-medium qt-text-secondary uppercase tracking-wider mb-2">Include Patterns</h3>
-          <div className="flex flex-wrap gap-1.5">
-            {store.includePatterns.map((p, i) => (
-              <span key={i} className="inline-flex rounded qt-bg-success/10 qt-text-success px-2 py-0.5 text-xs font-mono">
-                {p}
-              </span>
-            ))}
+      {/* Pattern info (hidden for database-backed stores — they accept any path) */}
+      {store.mountType !== 'database' && (
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-xl qt-bg-card border qt-border-default p-4">
+            <h3 className="text-xs font-medium qt-text-secondary uppercase tracking-wider mb-2">Include Patterns</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {store.includePatterns.map((p, i) => (
+                <span key={i} className="inline-flex rounded qt-bg-success/10 qt-text-success px-2 py-0.5 text-xs font-mono">
+                  {p}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-xl qt-bg-card border qt-border-default p-4">
+            <h3 className="text-xs font-medium qt-text-secondary uppercase tracking-wider mb-2">Exclude Patterns</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {store.excludePatterns.map((p, i) => (
+                <span key={i} className="inline-flex rounded qt-bg-destructive/10 qt-text-destructive px-2 py-0.5 text-xs font-mono">
+                  {p}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
-        <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-          <h3 className="text-xs font-medium qt-text-secondary uppercase tracking-wider mb-2">Exclude Patterns</h3>
-          <div className="flex flex-wrap gap-1.5">
-            {store.excludePatterns.map((p, i) => (
-              <span key={i} className="inline-flex rounded qt-bg-destructive/10 qt-text-destructive px-2 py-0.5 text-xs font-mono">
-                {p}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Files section */}
       <div className="border-t qt-border-default/60 pt-6">
         <h2 className="text-xl font-semibold mb-4">Indexed Files</h2>
         <FileTable files={files} loading={filesLoading} />
       </div>
+
+      {/* Blob manager — available on every store type */}
+      <BlobManager mountPointId={store.id} mountPointName={store.name} />
 
       {/* Edit dialog */}
       {editDialogOpen && (

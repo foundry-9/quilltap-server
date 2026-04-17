@@ -6,6 +6,14 @@
 
 #### Features
 
+- **Scriptorium — Database-backed document stores and universal blob layer**
+  - New `mountType: 'database'` option for Scriptorium document stores. Documents and binary assets live entirely inside the SQLCipher-encrypted `quilltap-mount-index.db` — no filesystem path required. DB-backed stores are automatically covered by the existing 24-hour physical-backup sweep.
+  - New universal blob table (`doc_mount_blobs`) available to every mount type. Uploaded images are transcoded to WebP server-side via `sharp`; original filename, original MIME type, user-supplied description, and SHA256 are preserved as metadata.
+  - New blob REST endpoints: `GET`/`POST /api/v1/mount-points/:id/blobs` (list / upload multipart) and `GET`/`PATCH`/`DELETE /api/v1/mount-points/:id/blobs/<path>` (stream / update description / delete).
+  - Four new `doc_*` tools — `doc_write_blob`, `doc_read_blob`, `doc_list_blobs`, `doc_delete_blob` — let characters upload, reference, and curate images alongside the existing document editing tools.
+  - Scriptorium UI gains a third "Database-backed" mount type option and a BlobManager on every store detail page (thumbnail grid, description editing, "Copy Markdown" helper).
+  - `MessageContent` renderer accepts a `blobMountPointId` prop; when set, relative Markdown image references like `![alt](images/avatar.webp)` resolve through the blob API so DB-backed assets display inline.
+  - `.qtap` export/import gains a new `document-stores` entity type that round-trips mount point configuration plus — for DB-backed mounts — document bodies and base64-encoded blobs.
 - **Scriptorium (Phase 1)**: Deterministic Markdown rendering of conversations with annotation support and semantic search chunking
   - Conversations are automatically rendered to Markdown after each turn with sequential message numbering and interchange grouping
   - New `read_conversation` tool allows characters to read the full rendered conversation with or without annotations

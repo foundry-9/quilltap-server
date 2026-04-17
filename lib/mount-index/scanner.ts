@@ -210,6 +210,7 @@ export async function processMountFile(
       sha256,
       fileSizeBytes: stat.size,
       lastModified: stat.mtime.toISOString(),
+      source: 'filesystem',
       conversionStatus: 'converted',
       plainTextLength: plainText.length,
       chunkCount: chunks.length,
@@ -302,6 +303,33 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
     chunksCreated: 0,
     errors: [],
   };
+
+  // Database-backed stores have no filesystem to walk. Delegate to
+  // rescanDatabaseMountPoint, which re-emits write events so the embedding
+  // scheduler rechunks every document.
+  if (mountPoint.mountType === 'database') {
+    logger.info('Starting database-backed mount point rescan', {
+      mountPointId: mountPoint.id,
+      name: mountPoint.name,
+    });
+    await repos.docMountPoints.updateScanStatus(mountPoint.id, 'scanning');
+    try {
+      const { rescanDatabaseMountPoint } = await import('./database-store');
+      const count = await rescanDatabaseMountPoint(mountPoint);
+      result.filesScanned = count;
+      result.filesModified = count;
+      await updateMountPointTotals(mountPoint.id);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error('Database-backed rescan failed', {
+        mountPointId: mountPoint.id,
+        error: errorMsg,
+      });
+      await repos.docMountPoints.updateScanStatus(mountPoint.id, 'error', errorMsg);
+      result.errors.push(`Rescan failed: ${errorMsg}`);
+    }
+    return result;
+  }
 
   logger.info('Starting mount point scan', {
     mountPointId: mountPoint.id,

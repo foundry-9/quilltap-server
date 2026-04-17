@@ -36,6 +36,9 @@ import type {
   SanitizedConnectionProfile,
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
+  ExportedDocumentStore,
+  ExportedDocumentStoreDocument,
+  ExportedDocumentStoreBlob,
 } from '@/lib/export/types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
@@ -54,6 +57,10 @@ interface AnyExportData {
   roleplayTemplates?: ExportedRoleplayTemplate[];
   projects?: ExportedProject[];
   memories?: Memory[];
+  // Document store export payload (Scriptorium)
+  mountPoints?: ExportedDocumentStore[];
+  documents?: ExportedDocumentStoreDocument[];
+  blobs?: ExportedDocumentStoreBlob[];
 }
 
 /**
@@ -527,6 +534,22 @@ export async function executeImport(
       );
       imported.memories = counts.imported;
       skipped.memories = counts.skipped;
+    }
+
+    // 9. Document stores (Scriptorium) — mount point configs plus, for
+    //    database-backed mounts, document bodies and blobs.
+    if (data.mountPoints && data.mountPoints.length > 0) {
+      const counts = await importDocumentStores(
+        data.mountPoints,
+        data.documents ?? [],
+        data.blobs ?? [],
+        options,
+        repos,
+        warnings
+      );
+      imported.documentStores = counts.mountPoints;
+      imported.documentStoreDocuments = counts.documents;
+      imported.documentStoreBlobs = counts.blobs;
     }
 
     // Post-import reconciliation
@@ -1339,6 +1362,152 @@ async function importMemories(
   }
 
   return { imported, skipped };
+}
+
+interface DocumentStoreImportCounts {
+  mountPoints: number;
+  documents: number;
+  blobs: number;
+}
+
+async function importDocumentStores(
+  mountPoints: ExportedDocumentStore[],
+  documents: ExportedDocumentStoreDocument[],
+  blobs: ExportedDocumentStoreBlob[],
+  options: ImportOptions,
+  _userRepos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
+): Promise<DocumentStoreImportCounts> {
+  const counts: DocumentStoreImportCounts = { mountPoints: 0, documents: 0, blobs: 0 };
+
+  // Document stores are instance-scoped, not user-scoped — use the global
+  // repository container.
+  const globalRepos = getRepositories();
+
+  // Map source mountPointId → target mountPointId so we can rewrite
+  // documents/blobs to the mount points we end up creating or reusing.
+  const idMap = new Map<string, string>();
+
+  const existingStores = await globalRepos.docMountPoints.findAll();
+  const byName = new Map(existingStores.map(s => [s.name.toLowerCase(), s]));
+
+  for (const mp of mountPoints) {
+    try {
+      const existing = byName.get(mp.name.toLowerCase());
+      if (existing) {
+        if (options.conflictStrategy === 'skip') {
+          idMap.set(mp.id, existing.id);
+          continue;
+        }
+        if (options.conflictStrategy === 'overwrite') {
+          // Drop existing documents, blobs, files, chunks before replacing.
+          await globalRepos.docMountDocuments.deleteByMountPointId(existing.id);
+          await globalRepos.docMountBlobs.deleteByMountPointId(existing.id);
+          await globalRepos.docMountChunks.deleteByMountPointId(existing.id);
+          await globalRepos.docMountFiles.deleteByMountPointId(existing.id);
+          await globalRepos.docMountPoints.update(existing.id, {
+            name: mp.name,
+            basePath: mp.mountType === 'database' ? '' : mp.basePath,
+            mountType: mp.mountType,
+            includePatterns: mp.includePatterns,
+            excludePatterns: mp.excludePatterns,
+            enabled: mp.enabled,
+          });
+          idMap.set(mp.id, existing.id);
+          counts.mountPoints++;
+          continue;
+        }
+        // 'duplicate' — fall through to create a freshly-named mount point.
+      }
+
+      const name = existing && options.conflictStrategy === 'duplicate'
+        ? `${mp.name} (imported)`
+        : mp.name;
+      const created = await globalRepos.docMountPoints.create({
+        name,
+        basePath: mp.mountType === 'database' ? '' : mp.basePath,
+        mountType: mp.mountType,
+        includePatterns: mp.includePatterns,
+        excludePatterns: mp.excludePatterns,
+        enabled: mp.enabled,
+        lastScannedAt: null,
+        scanStatus: 'idle',
+        lastScanError: null,
+        fileCount: 0,
+        chunkCount: 0,
+        totalSizeBytes: 0,
+      });
+      idMap.set(mp.id, created.id);
+      counts.mountPoints++;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      warnings.push(`Failed to import mount point "${mp.name}": ${msg}`);
+      moduleLogger.warn('Failed to import mount point', { name: mp.name, error: msg });
+    }
+  }
+
+  // Documents — database-backed only; filesystem/obsidian sources keep their
+  // documents on disk.
+  for (const doc of documents) {
+    const targetMountId = idMap.get(doc.mountPointId);
+    if (!targetMountId) continue;
+    try {
+      const nowIso = new Date().toISOString();
+      await globalRepos.docMountDocuments.create({
+        mountPointId: targetMountId,
+        relativePath: doc.relativePath,
+        fileName: doc.fileName,
+        fileType: doc.fileType,
+        content: doc.content,
+        contentSha256: doc.contentSha256,
+        plainTextLength: doc.plainTextLength,
+        lastModified: doc.lastModified || nowIso,
+      });
+      // Mirror into doc_mount_files so scan/search treat it uniformly.
+      await globalRepos.docMountFiles.create({
+        mountPointId: targetMountId,
+        relativePath: doc.relativePath,
+        fileName: doc.fileName,
+        fileType: doc.fileType,
+        sha256: doc.contentSha256,
+        fileSizeBytes: Buffer.byteLength(doc.content, 'utf-8'),
+        lastModified: doc.lastModified || nowIso,
+        source: 'database',
+        conversionStatus: 'converted',
+        plainTextLength: doc.plainTextLength,
+        chunkCount: 0,
+      });
+      counts.documents++;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      warnings.push(`Failed to import document "${doc.relativePath}": ${msg}`);
+    }
+  }
+
+  // Blobs — universal across mount types.
+  for (const blob of blobs) {
+    const targetMountId = idMap.get(blob.mountPointId);
+    if (!targetMountId) continue;
+    try {
+      const data = Buffer.from(blob.dataBase64, 'base64');
+      await globalRepos.docMountBlobs.create({
+        mountPointId: targetMountId,
+        relativePath: blob.relativePath,
+        originalFileName: blob.originalFileName,
+        originalMimeType: blob.originalMimeType,
+        storedMimeType: blob.storedMimeType,
+        sha256: blob.sha256,
+        description: blob.description,
+        data,
+      });
+      counts.blobs++;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      warnings.push(`Failed to import blob "${blob.relativePath}": ${msg}`);
+    }
+  }
+
+  return counts;
 }
 
 // ============================================================================

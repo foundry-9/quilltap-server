@@ -36,6 +36,11 @@ import {
   updateMountPointTotals,
 } from './scanner';
 import { enqueueEmbeddingJobsForMountPoint } from './embedding-scheduler';
+import {
+  onDocumentWritten,
+  onDocumentDeleted,
+  onDocumentMoved,
+} from './db-store-events';
 import { DocMountPoint } from '@/lib/schemas/mount-index.types';
 
 const logger = createServiceLogger('MountIndex:Watcher');
@@ -59,6 +64,53 @@ const FILE_DEBOUNCE_MS = 750;
 
 /** Per-mount-point debounce — batches embedding enqueue after a burst of edits */
 const EMBEDDING_DEBOUNCE_MS = 2000;
+
+// ============================================================================
+// DATABASE-BACKED STORE EVENT BRIDGE
+// ============================================================================
+//
+// Database-backed stores have no chokidar instance — they emit events from
+// database-store.ts when documents are written/deleted/moved. Bridge those
+// events into the same embedding-enqueue debounce semantics the filesystem
+// watcher uses, so downstream behaviour stays uniform.
+
+interface DatabaseStoreDebouncer {
+  timer: NodeJS.Timeout | null;
+  pending: boolean;
+}
+const databaseStoreDebouncers = new Map<string, DatabaseStoreDebouncer>();
+
+function scheduleDatabaseStoreEmbedding(mountPointId: string): void {
+  let state = databaseStoreDebouncers.get(mountPointId);
+  if (!state) {
+    state = { timer: null, pending: false };
+    databaseStoreDebouncers.set(mountPointId, state);
+  }
+  state.pending = true;
+  if (state.timer) clearTimeout(state.timer);
+  state.timer = setTimeout(async () => {
+    state!.timer = null;
+    if (!state!.pending) return;
+    state!.pending = false;
+    try {
+      const enqueued = await enqueueEmbeddingJobsForMountPoint(mountPointId);
+      logger.debug('Embedding enqueue completed for database-backed store', {
+        mountPointId,
+        enqueued,
+      });
+    } catch (err) {
+      logger.warn('Failed to enqueue embedding jobs for database-backed store', {
+        mountPointId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }, EMBEDDING_DEBOUNCE_MS);
+}
+
+// Subscribe once at module load — the emitter lives for the process lifetime.
+onDocumentWritten(event => scheduleDatabaseStoreEmbedding(event.mountPointId));
+onDocumentDeleted(event => scheduleDatabaseStoreEmbedding(event.mountPointId));
+onDocumentMoved(event => scheduleDatabaseStoreEmbedding(event.mountPointId));
 
 // ============================================================================
 // HELPERS
@@ -191,6 +243,18 @@ async function handleUnlink(
 // ============================================================================
 
 async function startWatcherFor(mountPoint: DocMountPoint): Promise<void> {
+  // Database-backed stores have no filesystem to watch — content changes
+  // flow through db-store-events, which the module-level subscription below
+  // translates into the same embedding-scheduler enqueues the chokidar path
+  // triggers.
+  if (mountPoint.mountType === 'database') {
+    logger.debug('Skipping filesystem watcher for database-backed mount point', {
+      mountPointId: mountPoint.id,
+      name: mountPoint.name,
+    });
+    return;
+  }
+
   // Guard: basePath must exist and be accessible
   try {
     await fs.access(mountPoint.basePath);

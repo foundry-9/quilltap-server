@@ -31,6 +31,10 @@ import type {
   TagsExportData,
   ProjectsExportData,
   MemoryCollection,
+  DocumentStoresExportData,
+  ExportedDocumentStore,
+  ExportedDocumentStoreDocument,
+  ExportedDocumentStoreBlob,
 } from './types';
 import type {
   Character,
@@ -501,6 +505,80 @@ export async function exportProjects(
   };
 }
 
+/**
+ * Export document stores (Scriptorium mount points).
+ *
+ * Returns every mount point's configuration plus — for database-backed
+ * mounts — the document bodies and blobs that live inside
+ * quilltap-mount-index.db. Filesystem/obsidian mounts export their
+ * configuration only; the user keeps the files on disk.
+ *
+ * Blob bytes are base64-encoded for JSON safety.
+ */
+export async function exportDocumentStores(
+  _userId: string,
+  mountPointIds: string[]
+): Promise<DocumentStoresExportData> {
+  // Document stores are instance-scoped (Quilltap is single-user) so we use
+  // the global repository container — UserScopedRepositoryContainer does not
+  // wrap the docMount* repos on purpose.
+  const repos = getRepositories();
+
+  const mountPoints: ExportedDocumentStore[] = [];
+  const documents: ExportedDocumentStoreDocument[] = [];
+  const blobs: ExportedDocumentStoreBlob[] = [];
+
+  for (const id of mountPointIds) {
+    const mp = await repos.docMountPoints.findById(id);
+    if (!mp) continue;
+    mountPoints.push({
+      id: mp.id,
+      name: mp.name,
+      basePath: mp.basePath,
+      mountType: mp.mountType,
+      includePatterns: mp.includePatterns,
+      excludePatterns: mp.excludePatterns,
+      enabled: mp.enabled,
+    });
+
+    if (mp.mountType === 'database') {
+      const docs = await repos.docMountDocuments.findByMountPointId(mp.id);
+      for (const d of docs) {
+        documents.push({
+          mountPointId: d.mountPointId,
+          relativePath: d.relativePath,
+          fileName: d.fileName,
+          fileType: d.fileType,
+          content: d.content,
+          contentSha256: d.contentSha256,
+          plainTextLength: d.plainTextLength,
+          lastModified: d.lastModified,
+        });
+      }
+    }
+
+    // Blobs are universal — export for every mount type so uploads persist.
+    const blobMetas = await repos.docMountBlobs.listByMountPoint(mp.id);
+    for (const meta of blobMetas) {
+      const data = await repos.docMountBlobs.readData(meta.id);
+      if (!data) continue;
+      blobs.push({
+        mountPointId: meta.mountPointId,
+        relativePath: meta.relativePath,
+        originalFileName: meta.originalFileName,
+        originalMimeType: meta.originalMimeType,
+        storedMimeType: meta.storedMimeType,
+        sizeBytes: meta.sizeBytes,
+        sha256: meta.sha256,
+        description: meta.description,
+        dataBase64: data.toString('base64'),
+      });
+    }
+  }
+
+  return { mountPoints, documents, blobs };
+}
+
 // ============================================================================
 // PUBLIC API FUNCTIONS
 // ============================================================================
@@ -636,6 +714,20 @@ export async function createExport(
         break;
       }
 
+      case 'document-stores': {
+        const globalReposDS = getRepositories();
+        const allStores = options.scope === 'all'
+          ? await globalReposDS.docMountPoints.findAll()
+          : [];
+        const ids = options.scope === 'all'
+          ? allStores.map(s => s.id)
+          : entityIds;
+
+        data = await exportDocumentStores(userId, ids);
+        entityCount = data.mountPoints.length;
+        break;
+      }
+
       default:
         throw new Error(`Unknown export type: ${options.type}`);
     }
@@ -645,6 +737,13 @@ export async function createExport(
     counts[options.type] = entityCount;
     if (memoryCount > 0) {
       counts.memories = memoryCount;
+    }
+    // Document stores carry two extra counts for document bodies and blobs —
+    // surface them in the manifest so importers know what they're about to load.
+    if (options.type === 'document-stores' && data && 'documents' in data && 'blobs' in data) {
+      counts.documentStores = entityCount;
+      counts.documentStoreDocuments = (data as DocumentStoresExportData).documents.length;
+      counts.documentStoreBlobs = (data as DocumentStoresExportData).blobs.length;
     }
 
     const manifest = createManifest(options.type, options, counts);
@@ -824,6 +923,23 @@ export async function previewExport(
           const project = await repos.projects.findById(id);
           if (project) {
             entities.push({ id: project.id, name: project.name });
+          }
+        }
+        break;
+      }
+
+      case 'document-stores': {
+        const globalReposDS = getRepositories();
+        const allStores = options.scope === 'all'
+          ? await globalReposDS.docMountPoints.findAll()
+          : [];
+        const ids = options.scope === 'all'
+          ? allStores.map(s => s.id)
+          : entityIds;
+        for (const id of ids) {
+          const store = await globalReposDS.docMountPoints.findById(id);
+          if (store) {
+            entities.push({ id: store.id, name: store.name });
           }
         }
         break;

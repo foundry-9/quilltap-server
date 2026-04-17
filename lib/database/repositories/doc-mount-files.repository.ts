@@ -52,6 +52,17 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
         for (const sql of ddlStatements) {
           db.exec(sql);
         }
+
+        // In-repo migration: add `source` column for legacy mount-index DBs that
+        // predate database-backed document stores. Default 'filesystem' leaves
+        // all existing indexed files pointing at on-disk content; new rows from
+        // database-backed stores set it to 'database'.
+        const columns = db.pragma(`table_info(${this.collectionName})`) as Array<{ name: string }>;
+        if (!columns.some(c => c.name === 'source')) {
+          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "source" TEXT NOT NULL DEFAULT 'filesystem'`);
+          logger.info('Migrated doc_mount_files: added source column');
+        }
+
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
         logger.error('Failed to ensure doc_mount_files table in mount index database', {

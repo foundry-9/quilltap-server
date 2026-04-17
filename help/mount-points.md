@@ -10,18 +10,42 @@ Consider, if you will, the predicament of the well-read conversationalist who po
 
 A mount point is simply a filesystem path — a directory on your machine (or perhaps an Obsidian vault, if you are the sort of person who maintains such things) that contains documents you wish your AI collaborators to be able to reference. When you create a mount point, Quilltap scans the directory, converts each supported document to plain text, divides that text into semantically coherent chunks, and generates embeddings for each chunk using your configured embedding profile.
 
+### Store Backends
+
+- **Filesystem** — A directory on your own drive, scanned and watched in the traditional manner
+- **Obsidian Vault** — A filesystem store with sensible defaults for the Obsidian sort of person (hidden `.obsidian` folders are politely ignored)
+- **Database-backed** — An entirely self-contained store that lives inside Quilltap's own encrypted `quilltap-mount-index.db` rather than on disk. Choose this when you want a portable, tamper-resistant reference shelf that travels with your data directory and needs no filesystem path at all. The usual SQLCipher encryption and the 24-hour physical backup sweep apply automatically.
+
 ### Supported Formats
+
+For filesystem and Obsidian stores:
 
 - **Markdown** (`.md`) — Syntax is stripped; the text beneath remains
 - **Plain text** (`.txt`) — Used as-is, because sometimes simplicity is its own reward
 - **PDF** (`.pdf`) — Text is extracted; images and formatting are, regrettably, left behind
 - **Word documents** (`.docx`) — The raw text is pulled from the elaborate XML machinery within
 
+Database-backed stores accept Markdown and plain text for v1, and host images (and any MIME type, eventually) via the blob layer described below.
+
+### Images and Other Attachments (Blobs)
+
+Every document store — regardless of backend — may now hold binary assets. Upload images through the **Blobs** panel on a store's detail page, and Quilltap will transcode them to WebP via the `sharp` library before tucking them away in the encrypted mount-index database. Each blob keeps a record of its original filename and MIME type, and you may supply a description (or, if you prefer the grand phrase, an *embedding transcript*) that travels with the blob and feeds the semantic search pipeline.
+
+Reference a blob from any Markdown document in the same store with a relative path:
+
+```markdown
+![A portrait of the distinguished Dr Aubergine](images/aubergine.webp)
+```
+
+When the document is rendered in a chat with Document Mode open, the image loads from the mount point's blob API endpoint — no public URLs, no off-machine hosting.
+
 ### Change Detection
 
-Quilltap keeps your document stores current through two complementary mechanisms. On each startup, a full sweep reconciles every file against its SHA-256 checksum — new files are ingested, modified files are re-chunked, and files that have vanished from the directory have their records quietly removed. While the server is running, a filesystem watcher stands quietly at attention behind each enabled store: the moment a file is saved, moved, or deleted by any program on your machine, the watcher notices, updates the index, and enqueues a fresh embedding job — generally within a second or two of the change. You need not lift a finger, and you need not restart the server.
+Quilltap keeps your document stores current through two complementary mechanisms. On each startup, a full sweep reconciles every file against its SHA-256 checksum — new files are ingested, modified files are re-chunked, and files that have vanished from the directory have their records quietly removed. While the server is running, a filesystem watcher stands quietly at attention behind each enabled filesystem store: the moment a file is saved, moved, or deleted by any program on your machine, the watcher notices, updates the index, and enqueues a fresh embedding job — generally within a second or two of the change. You need not lift a finger, and you need not restart the server.
 
 Should you prefer to disable the live watcher — or should you find yourself storing documents on a network share where the usual filesystem events are unreliable — set the environment variable `QUILLTAP_WATCHER_POLLING=1` to switch the watcher into a polite polling mode that works universally at the cost of a little extra CPU.
+
+Database-backed stores, having no filesystem to watch, rely instead on an in-process event bridge: every write performed through the `doc_*` tools or the mount-point API is captured at the moment of its arrival and the embedding scheduler is nudged accordingly. The "Scan Now" button on a database-backed store re-emits a write event for each document, which has the practical effect of re-chunking and re-embedding the entire store — useful when you have changed your embedding profile and wish to rebuild the index.
 
 ### Chunking
 

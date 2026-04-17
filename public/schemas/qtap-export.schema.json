@@ -140,6 +140,24 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": { "manifest": { "properties": { "exportType": { "const": "document-stores" } } } }
+      },
+      "then": {
+        "properties": {
+          "data": {
+            "required": ["mountPoints", "documents", "blobs"],
+            "properties": {
+              "mountPoints": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStore" } },
+              "documents": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreDocument" } },
+              "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      }
     }
   ],
 
@@ -183,7 +201,8 @@
             "image-profiles",
             "embedding-profiles",
             "tags",
-            "projects"
+            "projects",
+            "document-stores"
           ],
           "description": "Type of entity contained in this export"
         },
@@ -230,7 +249,10 @@
         "embeddingProfiles": { "type": "integer", "minimum": 0 },
         "tags": { "type": "integer", "minimum": 0 },
         "memories": { "type": "integer", "minimum": 0 },
-        "projects": { "type": "integer", "minimum": 0 }
+        "projects": { "type": "integer", "minimum": 0 },
+        "documentStores": { "type": "integer", "minimum": 0 },
+        "documentStoreDocuments": { "type": "integer", "minimum": 0 },
+        "documentStoreBlobs": { "type": "integer", "minimum": 0 }
       }
     },
 
@@ -667,6 +689,57 @@
           "minimum": 0,
           "description": "Informational: number of files in this project at export time"
         }
+      }
+    },
+
+    "ExportedDocumentStore": {
+      "type": "object",
+      "description": "Scriptorium document store (mount point) configuration. basePath is empty for database-backed stores.",
+      "required": ["id", "name", "basePath", "mountType", "includePatterns", "excludePatterns", "enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "name": { "type": "string", "minLength": 1 },
+        "basePath": { "type": "string" },
+        "mountType": { "enum": ["filesystem", "obsidian", "database"] },
+        "includePatterns": { "type": "array", "items": { "type": "string" } },
+        "excludePatterns": { "type": "array", "items": { "type": "string" } },
+        "enabled": { "type": "boolean" }
+      }
+    },
+
+    "ExportedDocumentStoreDocument": {
+      "type": "object",
+      "description": "Text document inside a database-backed document store.",
+      "required": ["mountPointId", "relativePath", "fileName", "fileType", "content", "contentSha256", "plainTextLength", "lastModified"],
+      "additionalProperties": false,
+      "properties": {
+        "mountPointId": { "$ref": "#/$defs/UUID" },
+        "relativePath": { "type": "string", "minLength": 1 },
+        "fileName": { "type": "string", "minLength": 1 },
+        "fileType": { "enum": ["markdown", "txt"] },
+        "content": { "type": "string" },
+        "contentSha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "plainTextLength": { "type": "integer", "minimum": 0 },
+        "lastModified": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ExportedDocumentStoreBlob": {
+      "type": "object",
+      "description": "Binary asset (image etc.) attached to a document store. Raw bytes are base64-encoded.",
+      "required": ["mountPointId", "relativePath", "originalFileName", "originalMimeType", "storedMimeType", "sizeBytes", "sha256", "description", "dataBase64"],
+      "additionalProperties": false,
+      "properties": {
+        "mountPointId": { "$ref": "#/$defs/UUID" },
+        "relativePath": { "type": "string", "minLength": 1 },
+        "originalFileName": { "type": "string", "minLength": 1 },
+        "originalMimeType": { "type": "string", "minLength": 1 },
+        "storedMimeType": { "type": "string", "minLength": 1 },
+        "sizeBytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "description": { "type": "string" },
+        "dataBase64": { "type": "string", "contentEncoding": "base64" }
       }
     }
   }

@@ -48,8 +48,19 @@ import type { DocDeleteFolderInput, DocDeleteFolderOutput } from '../doc-delete-
 import type { DocOpenDocumentInput, DocOpenDocumentOutput } from '../doc-open-document-tool';
 import type { DocCloseDocumentInput, DocCloseDocumentOutput } from '../doc-close-document-tool';
 import type { DocFocusInput, DocFocusOutput } from '../doc-focus-tool';
+import type { DocWriteBlobInput, DocWriteBlobOutput } from '../doc-write-blob-tool';
+import type { DocReadBlobInput, DocReadBlobOutput } from '../doc-read-blob-tool';
+import type { DocListBlobsInput, DocListBlobsOutput } from '../doc-list-blobs-tool';
+import type { DocDeleteBlobInput, DocDeleteBlobOutput } from '../doc-delete-blob-tool';
+import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
 import { getRepositories } from '@/lib/database/repositories';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import {
+  databaseDocumentExists,
+  databaseFolderHasContents,
+  deleteDatabaseDocument,
+  moveDatabaseDocument,
+} from '@/lib/mount-index/database-store';
 
 const logger = createServiceLogger('DocEdit:Handler');
 
@@ -75,6 +86,10 @@ export const DOC_EDIT_TOOL_NAMES = new Set([
   'doc_open_document',
   'doc_close_document',
   'doc_focus',
+  'doc_write_blob',
+  'doc_read_blob',
+  'doc_list_blobs',
+  'doc_delete_blob',
 ]);
 
 /**
@@ -139,6 +154,14 @@ export async function executeDocEditTool(
         return await handleCloseDocument(input as unknown as DocCloseDocumentInput, context);
       case 'doc_focus':
         return await handleDocFocus(input as unknown as DocFocusInput, context);
+      case 'doc_write_blob':
+        return await handleWriteBlob(input as unknown as DocWriteBlobInput, context);
+      case 'doc_read_blob':
+        return await handleReadBlob(input as unknown as DocReadBlobInput, context);
+      case 'doc_list_blobs':
+        return await handleListBlobs(input as unknown as DocListBlobsInput, context);
+      case 'doc_delete_blob':
+        return await handleDeleteBlob(input as unknown as DocDeleteBlobInput, context);
       default:
         return { success: false, error: `Unknown doc-edit tool: ${toolName}` };
     }
@@ -241,11 +264,11 @@ async function handleReadFile(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
-  if (!isTextFile(resolved.absolutePath)) {
+  if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content, mtime, size } = await readFileWithMtime(resolved.absolutePath);
+  const { content, mtime, size } = await readFileWithMtime(resolved);
   const lines = content.split('\n');
   const totalLines = lines.length;
 
@@ -290,12 +313,12 @@ async function handleWriteFile(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
-  if (!isTextFile(resolved.absolutePath)) {
+  if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
   const { mtime } = await writeFileWithMtimeCheck(
-    resolved.absolutePath,
+    resolved,
     input.content,
     input.expected_mtime
   );
@@ -324,11 +347,11 @@ async function handleStrReplace(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
-  if (!isTextFile(resolved.absolutePath)) {
+  if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content } = await readFileWithMtime(resolved.absolutePath);
+  const { content } = await readFileWithMtime(resolved);
 
   const matchResult = findUniqueMatch(content, input.find, {
     caseSensitive: input.case_sensitive !== false,
@@ -356,7 +379,7 @@ async function handleStrReplace(
     input.replace +
     content.substring(matchResult.index + matchResult.length);
 
-  const { mtime } = await writeFileWithMtimeCheck(resolved.absolutePath, newContent);
+  const { mtime } = await writeFileWithMtimeCheck(resolved, newContent);
 
   await triggerReindexIfNeeded(resolved);
 
@@ -385,11 +408,11 @@ async function handleInsertText(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
-  if (!isTextFile(resolved.absolutePath)) {
+  if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content } = await readFileWithMtime(resolved.absolutePath);
+  const { content } = await readFileWithMtime(resolved);
 
   let insertOffset: number;
   let description: string;
@@ -439,7 +462,7 @@ async function handleInsertText(
     input.content +
     content.substring(insertOffset);
 
-  const { mtime } = await writeFileWithMtimeCheck(resolved.absolutePath, newContent);
+  const { mtime } = await writeFileWithMtimeCheck(resolved, newContent);
 
   await triggerReindexIfNeeded(resolved);
 
@@ -594,12 +617,74 @@ async function handleGrep(
     }
   };
 
+  // Helper to search a blob of in-memory content (used for DB-backed stores
+  // where bytes come from doc_mount_documents rather than the filesystem).
+  const searchContent = (
+    content: string,
+    displayPath: string,
+    mountPointName?: string
+  ): void => {
+    if (matches.length >= maxResults) return;
+    if (input.normalize_diacritics !== false && !input.is_regex) {
+      const normalizedMatches = findAllMatches(content, input.query, {
+        caseSensitive: input.case_sensitive ?? false,
+        normalizeDiacritics: true,
+      });
+      const lines = content.split('\n');
+      for (const match of normalizedMatches) {
+        if (matches.length >= maxResults) break;
+        const lineNum = getLineNumber(content, match.index);
+        const lineIdx = lineNum - 1;
+        const grepMatch: DocGrepMatch = {
+          path: displayPath,
+          mount_point: mountPointName,
+          line_number: lineNum,
+          match: lines[lineIdx] || '',
+        };
+        if (contextLines > 0) {
+          grepMatch.context_before = lines.slice(Math.max(0, lineIdx - contextLines), lineIdx);
+          grepMatch.context_after = lines.slice(lineIdx + 1, lineIdx + 1 + contextLines);
+        }
+        matches.push(grepMatch);
+      }
+    } else {
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length && matches.length < maxResults; i++) {
+        if (searchPattern.test(lines[i])) {
+          searchPattern.lastIndex = 0;
+          const grepMatch: DocGrepMatch = {
+            path: displayPath,
+            mount_point: mountPointName,
+            line_number: i + 1,
+            match: lines[i],
+          };
+          if (contextLines > 0) {
+            grepMatch.context_before = lines.slice(Math.max(0, i - contextLines), i);
+            grepMatch.context_after = lines.slice(i + 1, i + 1 + contextLines);
+          }
+          matches.push(grepMatch);
+        }
+        searchPattern.lastIndex = 0;
+      }
+    }
+  };
+
   // Search document store mount points
   if (!input.mount_point || input.mount_point) {
     const mountPoints = await getAccessibleMountPoints(context.projectId);
 
     for (const mp of mountPoints) {
       if (input.mount_point && mp.name.toLowerCase() !== input.mount_point.toLowerCase() && mp.id !== input.mount_point) {
+        continue;
+      }
+      if (mp.mountType === 'database') {
+        const repos = getRepositories();
+        const documents = await repos.docMountDocuments.findByMountPointId(mp.id);
+        for (const doc of documents) {
+          if (matches.length >= maxResults) break;
+          if (input.path && !doc.relativePath.startsWith(input.path)) continue;
+          searchContent(doc.content, doc.relativePath, mp.name);
+        }
         continue;
       }
       await walkAndSearch(mp.basePath, '', mp.name);
@@ -731,6 +816,22 @@ async function handleListFiles(
       if (input.mount_point && mp.name.toLowerCase() !== input.mount_point.toLowerCase() && mp.id !== input.mount_point) {
         continue;
       }
+      if (mp.mountType === 'database') {
+        // Bytes live in doc_mount_documents; list from the mirror doc_mount_files rows.
+        const { listDatabaseFiles } = await import('@/lib/mount-index/database-store');
+        const dbFiles = await listDatabaseFiles(mp.id, input.folder ? { folder: input.folder } : {});
+        for (const f of dbFiles) {
+          if (input.pattern && !matchesGlob(f.fileName, input.pattern)) continue;
+          files.push({
+            path: f.relativePath,
+            mount_point: mp.name,
+            scope: 'document_store',
+            size: f.fileSizeBytes,
+            modified: new Date(f.lastModified).getTime(),
+          });
+        }
+        continue;
+      }
       await collectFiles(mp.basePath, 'document_store', mp.name, input.folder);
     }
   }
@@ -789,11 +890,11 @@ async function handleReadFrontmatter(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
-  if (!isTextFile(resolved.absolutePath)) {
+  if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content } = await readFileWithMtime(resolved.absolutePath);
+  const { content } = await readFileWithMtime(resolved);
   const parsed = parseFrontmatter(content);
 
   if (parsed.data === null) {
@@ -837,11 +938,11 @@ async function handleUpdateFrontmatter(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
-  if (!isTextFile(resolved.absolutePath)) {
+  if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content } = await readFileWithMtime(resolved.absolutePath);
+  const { content } = await readFileWithMtime(resolved);
 
   const newContent = updateFrontmatterInContent(
     content,
@@ -849,7 +950,7 @@ async function handleUpdateFrontmatter(
     input.replace_all ?? false
   );
 
-  const { mtime } = await writeFileWithMtimeCheck(resolved.absolutePath, newContent);
+  const { mtime } = await writeFileWithMtimeCheck(resolved, newContent);
 
   await triggerReindexIfNeeded(resolved);
 
@@ -878,11 +979,11 @@ async function handleReadHeading(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
-  if (!isTextFile(resolved.absolutePath)) {
+  if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content } = await readFileWithMtime(resolved.absolutePath);
+  const { content } = await readFileWithMtime(resolved);
 
   try {
     const heading = findHeadingSection(content, input.heading, input.level);
@@ -917,11 +1018,11 @@ async function handleUpdateHeading(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
-  if (!isTextFile(resolved.absolutePath)) {
+  if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content } = await readFileWithMtime(resolved.absolutePath);
+  const { content } = await readFileWithMtime(resolved);
 
   try {
     const heading = findHeadingSection(content, input.heading, input.level);
@@ -932,7 +1033,7 @@ async function handleUpdateHeading(
       input.preserve_subheadings !== false
     );
 
-    const { mtime } = await writeFileWithMtimeCheck(resolved.absolutePath, newContent);
+    const { mtime } = await writeFileWithMtimeCheck(resolved, newContent);
 
     await triggerReindexIfNeeded(resolved);
 
@@ -969,6 +1070,32 @@ async function handleMoveFile(
 
   // Resolve source path
   const resolvedSource = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolvedDest = await resolveDocEditPath(scope, input.new_path, buildResolutionContext(input, context));
+
+  // Database-backed mount: route move through the database-store module.
+  if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
+    if (!await databaseDocumentExists(resolvedSource.mountPointId, resolvedSource.relativePath)) {
+      return { success: false, error: `Source file not found: ${input.path}` };
+    }
+    if (await databaseDocumentExists(resolvedSource.mountPointId, resolvedDest.relativePath)) {
+      return { success: false, error: `Destination already exists: ${input.new_path}. Move will not overwrite existing files.` };
+    }
+    await moveDatabaseDocument(
+      resolvedSource.mountPointId,
+      resolvedSource.relativePath,
+      resolvedDest.relativePath
+    );
+    logger.info('Moved database document', {
+      from: input.path,
+      to: input.new_path,
+      scope,
+    });
+    return {
+      success: true,
+      result: { success: true, old_path: input.path, new_path: input.new_path },
+      formattedText: `Moved: ${input.path} → ${input.new_path}`,
+    };
+  }
 
   // Verify source exists and is a file
   try {
@@ -979,9 +1106,6 @@ async function handleMoveFile(
   } catch {
     return { success: false, error: `Source file not found: ${input.path}` };
   }
-
-  // Resolve destination path (same scope and mount point)
-  const resolvedDest = await resolveDocEditPath(scope, input.new_path, buildResolutionContext(input, context));
 
   // Check destination doesn't already exist
   try {
@@ -1037,6 +1161,20 @@ async function handleDeleteFile(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
+  // Database-backed mount: route delete through the database-store module.
+  if (resolved.mountType === 'database' && resolved.mountPointId) {
+    const deleted = await deleteDatabaseDocument(resolved.mountPointId, resolved.relativePath);
+    if (!deleted) {
+      return { success: false, error: `File not found: ${input.path}` };
+    }
+    logger.info('Deleted database document', { path: input.path, scope });
+    return {
+      success: true,
+      result: { success: true, path: input.path },
+      formattedText: `Deleted file: ${input.path}`,
+    };
+  }
+
   // Verify the file exists and is a file
   try {
     const stat = await fs.stat(resolved.absolutePath);
@@ -1076,6 +1214,16 @@ async function handleCreateFolder(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
+  // Database-backed mounts: folders are implicit — created on first write.
+  if (resolved.mountType === 'database') {
+    logger.info('Created folder (no-op for database-backed store)', { path: input.path, scope });
+    return {
+      success: true,
+      result: { success: true, path: input.path },
+      formattedText: `Created folder: ${input.path}`,
+    };
+  }
+
   // Create the directory (recursive, idempotent)
   await fs.mkdir(resolved.absolutePath, { recursive: true });
 
@@ -1104,6 +1252,24 @@ async function handleDeleteFolder(
 ): Promise<{ success: boolean; result?: DocDeleteFolderOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+
+  // Database-backed mount: folders are implicit. Deletion succeeds only when
+  // no document or blob currently lives under the prefix.
+  if (resolved.mountType === 'database' && resolved.mountPointId) {
+    if (await databaseFolderHasContents(resolved.mountPointId, resolved.relativePath)) {
+      return {
+        success: false,
+        error: `Folder is not empty: ${input.path}. Only empty folders can be deleted. Use doc_list_files to see the contents.`,
+        formattedText: `Error: Folder "${input.path}" is not empty. Only empty folders can be deleted.`,
+      };
+    }
+    logger.info('Deleted folder (no-op for database-backed store)', { path: input.path, scope });
+    return {
+      success: true,
+      result: { success: true, path: input.path },
+      formattedText: `Deleted folder: ${input.path}`,
+    };
+  }
 
   // Verify the path exists and is a directory
   try {
@@ -1170,8 +1336,14 @@ async function handleOpenDocument(
     // Opening an existing file — resolve the path to verify it exists
     try {
       const resolved = await resolveDocEditPath(scope, filePath, { projectId: context.projectId, mountPoint: input.mount_point });
-      const stat = await fs.stat(resolved.absolutePath);
-      mtime = stat.mtimeMs;
+      if (resolved.mountType === 'database' && resolved.mountPointId) {
+        const exists = await databaseDocumentExists(resolved.mountPointId, resolved.relativePath);
+        if (!exists) throw new Error(`File not found: ${filePath}`);
+        mtime = Date.now();
+      } else {
+        const stat = await fs.stat(resolved.absolutePath);
+        mtime = stat.mtimeMs;
+      }
       // Use filename as display title if not provided
       if (!input.title) {
         displayTitle = path.basename(filePath);
@@ -1343,4 +1515,169 @@ async function handleDocFocus(
       line: input.line,
     },
   };
+}
+
+// ============================================================================
+// Blob Tools (database-backed + universal blob layer)
+// ============================================================================
+
+async function resolveBlobMountPoint(
+  mountPointRef: string,
+  projectId: string | undefined
+): Promise<{ id: string; name: string } | null> {
+  if (!projectId) return null;
+  const mountPoints = await getAccessibleMountPoints(projectId);
+  const needle = mountPointRef.toLowerCase();
+  const found = mountPoints.find(
+    mp => mp.name.toLowerCase() === needle || mp.id === mountPointRef
+  );
+  return found ? { id: found.id, name: found.name } : null;
+}
+
+async function handleWriteBlob(
+  input: DocWriteBlobInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: DocWriteBlobOutput; error?: string; formattedText?: string }> {
+  const mp = await resolveBlobMountPoint(input.mount_point, context.projectId);
+  if (!mp) {
+    return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
+  }
+  let rawBytes: Buffer;
+  try {
+    rawBytes = Buffer.from(input.data_base64, 'base64');
+  } catch (err) {
+    return { success: false, error: `Invalid base64 payload: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  if (rawBytes.length === 0) {
+    return { success: false, error: 'Empty blob payload' };
+  }
+
+  const transcoded = await transcodeToWebP(rawBytes, input.mime_type);
+  const finalPath = normaliseBlobRelativePath(input.path, transcoded.storedMimeType);
+
+  const repos = getRepositories();
+  const stored = await repos.docMountBlobs.create({
+    mountPointId: mp.id,
+    relativePath: finalPath,
+    originalFileName: input.original_filename,
+    originalMimeType: input.mime_type,
+    storedMimeType: transcoded.storedMimeType,
+    sha256: transcoded.sha256,
+    description: input.description ?? '',
+    data: transcoded.data,
+  });
+
+  logger.info('Stored blob', {
+    mountPointId: mp.id,
+    relativePath: stored.relativePath,
+    storedMimeType: stored.storedMimeType,
+    sizeBytes: stored.sizeBytes,
+  });
+
+  const result: DocWriteBlobOutput = {
+    success: true,
+    mount_point: mp.name,
+    relative_path: stored.relativePath,
+    size_bytes: stored.sizeBytes,
+    stored_mime_type: stored.storedMimeType,
+    sha256: stored.sha256,
+  };
+  return {
+    success: true,
+    result,
+    formattedText: `Uploaded blob to [${mp.name}] ${stored.relativePath} (${stored.sizeBytes} bytes, ${stored.storedMimeType})`,
+  };
+}
+
+async function handleReadBlob(
+  input: DocReadBlobInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: DocReadBlobOutput; error?: string; formattedText?: string }> {
+  const mp = await resolveBlobMountPoint(input.mount_point, context.projectId);
+  if (!mp) {
+    return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
+  }
+  const repos = getRepositories();
+  const meta = await repos.docMountBlobs.findByMountPointAndPath(mp.id, input.path);
+  if (!meta) {
+    return { success: false, error: `Blob not found: ${input.path}` };
+  }
+
+  const result: DocReadBlobOutput = {
+    mount_point: mp.name,
+    relative_path: meta.relativePath,
+    original_filename: meta.originalFileName,
+    original_mime_type: meta.originalMimeType,
+    stored_mime_type: meta.storedMimeType,
+    size_bytes: meta.sizeBytes,
+    sha256: meta.sha256,
+    description: meta.description,
+  };
+
+  if (input.include_bytes) {
+    const data = await repos.docMountBlobs.readData(meta.id);
+    if (data) {
+      result.data_base64 = data.toString('base64');
+    }
+  }
+
+  return {
+    success: true,
+    result,
+    formattedText: `Blob [${mp.name}] ${meta.relativePath} — ${meta.storedMimeType}, ${meta.sizeBytes} bytes${meta.description ? `\nDescription: ${meta.description}` : ''}`,
+  };
+}
+
+async function handleListBlobs(
+  input: DocListBlobsInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: DocListBlobsOutput; error?: string; formattedText?: string }> {
+  const mp = await resolveBlobMountPoint(input.mount_point, context.projectId);
+  if (!mp) {
+    return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
+  }
+  const repos = getRepositories();
+  const metas = await repos.docMountBlobs.listByMountPoint(
+    mp.id,
+    input.folder ? { folder: input.folder } : {}
+  );
+  const result: DocListBlobsOutput = {
+    mount_point: mp.name,
+    blobs: metas.map(m => ({
+      relative_path: m.relativePath,
+      original_filename: m.originalFileName,
+      original_mime_type: m.originalMimeType,
+      stored_mime_type: m.storedMimeType,
+      size_bytes: m.sizeBytes,
+      description: m.description,
+    })),
+    total: metas.length,
+  };
+  const formatted = metas.length === 0
+    ? `No blobs in [${mp.name}]${input.folder ? ` under ${input.folder}` : ''}.`
+    : `${metas.length} blobs in [${mp.name}]:\n` +
+      metas.map(m => `  ${m.relativePath}  (${m.storedMimeType}, ${m.sizeBytes} bytes)${m.description ? `  — ${m.description}` : ''}`).join('\n');
+  return { success: true, result, formattedText: formatted };
+}
+
+async function handleDeleteBlob(
+  input: DocDeleteBlobInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: DocDeleteBlobOutput; error?: string; formattedText?: string }> {
+  const mp = await resolveBlobMountPoint(input.mount_point, context.projectId);
+  if (!mp) {
+    return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
+  }
+  const repos = getRepositories();
+  const deleted = await repos.docMountBlobs.deleteByMountPointAndPath(mp.id, input.path);
+  if (!deleted) {
+    return { success: false, error: `Blob not found: ${input.path}` };
+  }
+  logger.info('Deleted blob', { mountPointId: mp.id, relativePath: input.path });
+  const result: DocDeleteBlobOutput = {
+    success: true,
+    mount_point: mp.name,
+    relative_path: input.path,
+  };
+  return { success: true, result, formattedText: `Deleted blob [${mp.name}] ${input.path}` };
 }

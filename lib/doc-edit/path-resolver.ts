@@ -16,6 +16,12 @@ import fs from 'fs/promises';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getFilesDir } from '@/lib/paths';
 import { getRepositories } from '@/lib/repositories/factory';
+import type { DocMountPointType } from '@/lib/schemas/mount-index.types';
+import {
+  readDatabaseDocument,
+  writeDatabaseDocument,
+  DatabaseStoreError,
+} from '@/lib/mount-index/database-store';
 
 const logger = createServiceLogger('DocEdit:PathResolver');
 
@@ -29,7 +35,10 @@ export interface PathResolutionContext {
 }
 
 export interface ResolvedPath {
-  /** Absolute filesystem path */
+  /**
+   * Absolute filesystem path. For database-backed document stores this is
+   * an empty string — callers must dispatch on `mountType` instead.
+   */
   absolutePath: string;
   /** The scope that was resolved */
   scope: DocEditScope;
@@ -37,6 +46,8 @@ export interface ResolvedPath {
   mountPointId?: string;
   /** Mount point name (only for document_store scope) */
   mountPointName?: string;
+  /** Mount point backend type (only for document_store scope) */
+  mountType?: DocMountPointType;
   /** The base directory that this path is relative to */
   basePath: string;
   /** The relative path within the base */
@@ -213,6 +224,22 @@ async function resolveDocumentStorePath(
     );
   }
 
+  // Database-backed stores have no filesystem path. Everything the doc-edit
+  // helpers need comes from (mountPointId, relativePath); callers dispatch
+  // on `mountType` to decide whether to read from disk or from the DB.
+  if (mountPoint.mountType === 'database') {
+    logger.debug(`Resolved database-backed document_store path: ${relativePath}`);
+    return {
+      absolutePath: '',
+      scope: 'document_store',
+      mountPointId: mountPoint.id,
+      mountPointName: mountPoint.name,
+      mountType: 'database',
+      basePath: '',
+      relativePath,
+    };
+  }
+
   const baseDir = mountPoint.basePath;
   const joinedPath = path.join(baseDir, relativePath);
   const realPath = await safeRealpath(joinedPath);
@@ -235,6 +262,7 @@ async function resolveDocumentStorePath(
     scope: 'document_store',
     mountPointId: mountPoint.id,
     mountPointName: mountPoint.name,
+    mountType: mountPoint.mountType,
     basePath: baseDir,
     relativePath,
   };
@@ -315,16 +343,53 @@ async function resolveGeneralPath(
 }
 
 /**
+ * Input to the dispatching read/write helpers. Either a bare absolute path
+ * (legacy, filesystem-only) or a ResolvedPath — the latter lets us route
+ * database-backed mount points through the database-store module.
+ */
+export type ReadWriteTarget = string | ResolvedPath;
+
+function isResolvedPath(target: ReadWriteTarget): target is ResolvedPath {
+  return typeof target !== 'string';
+}
+
+function isDatabaseBacked(resolved: ResolvedPath): boolean {
+  return resolved.mountType === 'database';
+}
+
+/**
  * Read a file and return its content with modification time.
- * Used for the read-then-replace workflow.
+ * Used for the read-then-replace workflow. For database-backed document
+ * stores, the bytes are fetched from doc_mount_documents instead of disk.
  */
 export async function readFileWithMtime(
-  absolutePath: string
+  target: ReadWriteTarget
 ): Promise<{
   content: string;
   mtime: number;
   size: number;
 }> {
+  if (isResolvedPath(target) && isDatabaseBacked(target)) {
+    if (!target.mountPointId) {
+      throw new Error('Database-backed ResolvedPath is missing mountPointId');
+    }
+    try {
+      return await readDatabaseDocument(target.mountPointId, target.relativePath);
+    } catch (error) {
+      if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') {
+        // Align with fs.readFile's ENOENT so callers can detect "file
+        // doesn't exist" uniformly.
+        const notFound: NodeJS.ErrnoException = Object.assign(
+          new Error(`ENOENT: database document not found at ${target.relativePath}`),
+          { code: 'ENOENT' }
+        );
+        throw notFound;
+      }
+      throw error;
+    }
+  }
+
+  const absolutePath = isResolvedPath(target) ? target.absolutePath : target;
   try {
     const [content, stats] = await Promise.all([
       fs.readFile(absolutePath, 'utf-8'),
@@ -350,13 +415,28 @@ export async function readFileWithMtime(
 /**
  * Write a file with optional mtime-based concurrency check.
  * If expectedMtime is provided and the file's current mtime doesn't match,
- * the write is rejected (file was modified by another process).
+ * the write is rejected (file was modified by another process). For
+ * database-backed document stores the same check runs against the stored
+ * lastModified timestamp.
  */
 export async function writeFileWithMtimeCheck(
-  absolutePath: string,
+  target: ReadWriteTarget,
   content: string,
   expectedMtime?: number
 ): Promise<{ mtime: number }> {
+  if (isResolvedPath(target) && isDatabaseBacked(target)) {
+    if (!target.mountPointId) {
+      throw new Error('Database-backed ResolvedPath is missing mountPointId');
+    }
+    return await writeDatabaseDocument(
+      target.mountPointId,
+      target.relativePath,
+      content,
+      expectedMtime
+    );
+  }
+
+  const absolutePath = isResolvedPath(target) ? target.absolutePath : target;
   try {
     // If expectedMtime is provided, verify the file hasn't changed
     if (expectedMtime !== undefined) {
@@ -405,13 +485,20 @@ export async function writeFileWithMtimeCheck(
   }
 }
 
+export interface AccessibleMountPoint {
+  id: string;
+  name: string;
+  basePath: string;
+  mountType: DocMountPointType;
+}
+
 /**
  * List all accessible mount points for a project.
  * Used by doc_list_files and doc_grep to enumerate available sources.
  */
 export async function getAccessibleMountPoints(
   projectId: string
-): Promise<Array<{ id: string; name: string; basePath: string }>> {
+): Promise<AccessibleMountPoint[]> {
   try {
     const repos = getRepositories();
 
@@ -423,7 +510,7 @@ export async function getAccessibleMountPoints(
     }
 
     // Fetch mount point records and filter to enabled ones
-    const mountPoints = [];
+    const mountPoints: AccessibleMountPoint[] = [];
     for (const link of projectLinks) {
       const mountPoint = await repos.docMountPoints.findById(link.mountPointId);
       if (mountPoint && mountPoint.enabled) {
@@ -431,6 +518,7 @@ export async function getAccessibleMountPoints(
           id: mountPoint.id,
           name: mountPoint.name,
           basePath: mountPoint.basePath,
+          mountType: mountPoint.mountType,
         });
       }
     }
