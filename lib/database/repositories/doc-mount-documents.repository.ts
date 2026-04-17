@@ -49,6 +49,14 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
           `ON "${this.collectionName}" ("mountPointId", "relativePath")`
         );
 
+        // In-repo migration: add `folderId` column for explicit folder tracking.
+        // Nullable, defaults to null.
+        const columns = db.pragma(`table_info(${this.collectionName})`) as Array<{ name: string }>;
+        if (!columns.some(c => c.name === 'folderId')) {
+          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "folderId" TEXT DEFAULT NULL`);
+          logger.info('Migrated doc_mount_documents: added folderId column');
+        }
+
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
         logger.error('Failed to ensure doc_mount_documents table in mount index database', {

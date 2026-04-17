@@ -14,7 +14,7 @@ A mount point is simply a filesystem path — a directory on your machine (or pe
 
 - **Filesystem** — A directory on your own drive, scanned and watched in the traditional manner
 - **Obsidian Vault** — A filesystem store with sensible defaults for the Obsidian sort of person (hidden `.obsidian` folders are politely ignored)
-- **Database-backed** — An entirely self-contained store that lives inside Quilltap's own encrypted `quilltap-mount-index.db` rather than on disk. Choose this when you want a portable, tamper-resistant reference shelf that travels with your data directory and needs no filesystem path at all. The usual SQLCipher encryption and the 24-hour physical backup sweep apply automatically.
+- **Database-backed** — An entirely self-contained store that lives inside Quilltap's own encrypted `quilltap-mount-index.db` rather than on disk. Choose this when you want a portable, tamper-resistant reference shelf that travels with your data directory and needs no filesystem path at all. The usual SQLCipher encryption and the 24-hour physical backup sweep apply automatically. Folders are tracked as first-class entities within the store, enabling reliable path resolution and hierarchy management.
 
 ### Supported Formats
 

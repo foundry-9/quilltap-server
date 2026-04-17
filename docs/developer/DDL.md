@@ -1070,6 +1070,26 @@ CREATE TABLE IF NOT EXISTS "doc_mount_points" (
 
 `conversionStatus` is one of `'idle'`, `'converting'`, `'deconverting'`, or `'error'`, and tracks the Convert / Deconvert action that moves a store between filesystem- and database-backed storage (see `POST /api/v1/mount-points/:id?action=convert` / `?action=deconvert`). Distinct from the file-level `doc_mount_files.conversionStatus`, which tracks pdf/docx→text extraction. `conversionError` holds the failure message when `conversionStatus = 'error'`. Both columns are added by in-repo `ALTER TABLE` on first access for legacy databases that predate this feature.
 
+### doc_mount_folders
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_folders" (
+  "id" TEXT PRIMARY KEY,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "parentId" TEXT,
+  "name" TEXT NOT NULL,
+  "path" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_folders_mp_parent_name"
+  ON "doc_mount_folders" ("mountPointId", COALESCE("parentId", ''), "name");
+CREATE INDEX IF NOT EXISTS "idx_doc_mount_folders_mp_path"
+  ON "doc_mount_folders" ("mountPointId", "path");
+```
+
+Folder rows are populated only for `database`-backed mount points. Filesystem-backed mounts continue to derive folder structure from the OS; their `folderId` columns on `doc_mount_files`/`doc_mount_documents` are always NULL. The unique index on (mountPointId, COALESCE(parentId, ''), name) enforces one folder per parent per name; the COALESCE is required because SQLite treats each NULL as distinct in UNIQUE constraints.
+
 ### doc_mount_files
 
 ```sql
@@ -1083,6 +1103,7 @@ CREATE TABLE IF NOT EXISTS "doc_mount_files" (
   "fileSizeBytes" INTEGER NOT NULL,
   "lastModified" TEXT NOT NULL,
   "source" TEXT NOT NULL DEFAULT 'filesystem',
+  "folderId" TEXT,
   "conversionStatus" TEXT NOT NULL DEFAULT 'pending',
   "conversionError" TEXT,
   "plainTextLength" INTEGER,
@@ -1092,7 +1113,7 @@ CREATE TABLE IF NOT EXISTS "doc_mount_files" (
 );
 ```
 
-`source` is `'filesystem'` when the bytes live on disk (filesystem/obsidian mounts) or `'database'` when they live in `doc_mount_documents`. The column is added by `DocMountFilesRepository` on first access for legacy mount-index databases that predate database-backed stores.
+`source` is `'filesystem'` when the bytes live on disk (filesystem/obsidian mounts) or `'database'` when they live in `doc_mount_documents`. The column is added by `DocMountFilesRepository` on first access for legacy mount-index databases that predate database-backed stores. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores; filesystem-backed stores always leave it NULL. The column is added by in-repo `ALTER TABLE` on first access.
 
 ### doc_mount_chunks
 
@@ -1139,6 +1160,7 @@ CREATE TABLE IF NOT EXISTS "doc_mount_documents" (
   "content" TEXT NOT NULL,
   "contentSha256" TEXT NOT NULL,
   "plainTextLength" INTEGER NOT NULL,
+  "folderId" TEXT,
   "lastModified" TEXT NOT NULL,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
@@ -1147,7 +1169,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_documents_mp_path"
   ON "doc_mount_documents" ("mountPointId", "relativePath");
 ```
 
-Text content for database-backed mount points. Every row is mirrored in `doc_mount_files` (with `source='database'`) so existing scanning, search, and embedding paths treat it identically to on-disk files.
+Text content for database-backed mount points. Every row is mirrored in `doc_mount_files` (with `source='database'`) so existing scanning, search, and embedding paths treat it identically to on-disk files. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores. The column is added by in-repo `ALTER TABLE` on first access.
 
 ### doc_mount_blobs
 

@@ -45,6 +45,22 @@ export type DocMountPoint = z.infer<typeof DocMountPointSchema>;
 export type DocMountPointType = DocMountPoint['mountType'];
 
 // ============================================================================
+// DOCUMENT MOUNT FOLDER (database-backed stores only)
+// ============================================================================
+
+export const DocMountFolderSchema = z.object({
+  id: UUIDSchema,
+  mountPointId: UUIDSchema,
+  parentId: UUIDSchema.nullable(),    // null = mount-point root
+  name: z.string().min(1),             // Folder segment only (no slashes)
+  path: z.string(),                    // Full relative path; '' for root; denormalised for fast lookup
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type DocMountFolder = z.infer<typeof DocMountFolderSchema>;
+
+// ============================================================================
 // DOCUMENT MOUNT FILE
 // ============================================================================
 
@@ -59,6 +75,7 @@ export const DocMountFileSchema = z.object({
   lastModified: TimestampSchema,     // File's mtime (or DB write time for database source)
   // Where the file content lives: on-disk ('filesystem') or inside doc_mount_documents ('database').
   source: z.enum(['filesystem', 'database']).default('filesystem'),
+  folderId: UUIDSchema.nullable().optional(),  // Folder reference (database-backed stores only; null for filesystem)
   conversionStatus: z.enum(['pending', 'converted', 'failed', 'skipped']).default('pending'),
   conversionError: z.string().nullable().optional(),
   plainTextLength: z.number().int().nullable().optional(),
@@ -119,6 +136,7 @@ export const DocMountDocumentSchema = z.object({
   content: z.string(),
   contentSha256: z.string().length(64),
   plainTextLength: z.number().int().min(0),
+  folderId: UUIDSchema.nullable().optional(),  // Folder reference (database-backed stores only)
   lastModified: TimestampSchema,
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

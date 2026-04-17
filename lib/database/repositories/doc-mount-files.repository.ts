@@ -63,6 +63,13 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
           logger.info('Migrated doc_mount_files: added source column');
         }
 
+        // In-repo migration: add `folderId` column for database-backed stores
+        // with explicit folder tracking. Nullable, defaults to null for filesystem-backed stores.
+        if (!columns.some(c => c.name === 'folderId')) {
+          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "folderId" TEXT DEFAULT NULL`);
+          logger.info('Migrated doc_mount_files: added folderId column');
+        }
+
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
         logger.error('Failed to ensure doc_mount_files table in mount index database', {

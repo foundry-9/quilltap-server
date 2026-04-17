@@ -43,6 +43,7 @@ export { ConversationChunksRepository } from './conversation-chunks.repository';
 export { HelpDocsRepository } from './help-docs.repository';
 export { DocMountPointsRepository } from './doc-mount-points.repository';
 export { DocMountFilesRepository } from './doc-mount-files.repository';
+export { DocMountFoldersRepository } from './doc-mount-folders.repository';
 export { DocMountChunksRepository } from './doc-mount-chunks.repository';
 export { DocMountDocumentsRepository } from './doc-mount-documents.repository';
 export { DocMountBlobsRepository } from './doc-mount-blobs.repository';
@@ -80,6 +81,7 @@ import { ConversationChunksRepository } from './conversation-chunks.repository';
 import { HelpDocsRepository } from './help-docs.repository';
 import { DocMountPointsRepository } from './doc-mount-points.repository';
 import { DocMountFilesRepository } from './doc-mount-files.repository';
+import { DocMountFoldersRepository } from './doc-mount-folders.repository';
 import { DocMountChunksRepository } from './doc-mount-chunks.repository';
 import { DocMountDocumentsRepository } from './doc-mount-documents.repository';
 import { DocMountBlobsRepository } from './doc-mount-blobs.repository';
@@ -122,6 +124,7 @@ export interface RepositoryContainer {
   helpDocs: HelpDocsRepository;
   docMountPoints: DocMountPointsRepository;
   docMountFiles: DocMountFilesRepository;
+  docMountFolders: DocMountFoldersRepository;
   docMountChunks: DocMountChunksRepository;
   docMountDocuments: DocMountDocumentsRepository;
   docMountBlobs: DocMountBlobsRepository;
@@ -176,6 +179,7 @@ export function createRepositories(): RepositoryContainer {
       helpDocs: new HelpDocsRepository(),
       docMountPoints: new DocMountPointsRepository(),
       docMountFiles: new DocMountFilesRepository(),
+      docMountFolders: new DocMountFoldersRepository(),
       docMountChunks: new DocMountChunksRepository(),
       docMountDocuments: new DocMountDocumentsRepository(),
       docMountBlobs: new DocMountBlobsRepository(),

@@ -16,6 +16,7 @@
 
 #### Features
 
+- **Scriptorium — Explicit folder entity schema for database-backed document stores (Phase 4.0 Deliverable 3 — Phase A)**: Added `DocMountFolder` schema, `doc_mount_folders` repository and table, and `folderId` columns to `doc_mount_files` and `doc_mount_documents`. New `folder-paths.ts` utilities provide path resolution, folder hierarchy creation, and content checking. Filesystem-backed stores continue to derive folder structure from the OS. Schema and utilities are foundation for Phase B folder-aware operations.
 - **Scriptorium — Convert and Deconvert document stores between backends**
   - Each document-store card on the Scriptorium page now sports a **Convert** button (on filesystem and Obsidian stores) and a **Deconvert** button (on database-backed stores) alongside the familiar Scan/Edit/Delete controls.
   - **Convert** reads every indexed file from the store's `basePath` and moves its bytes inside the encrypted mount-index database: text files land in `doc_mount_documents`, binaries in `doc_mount_blobs`. The original files on disk are left untouched. The store's `mountType` flips to `'database'` and the filesystem watcher detaches.
