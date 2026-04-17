@@ -317,63 +317,53 @@ export async function listDatabaseFiles(
   // Build the result entries
   const entries: Array<DocMountFile & { kind?: 'file' | 'folder' }> = [];
 
-  if (!options.folder) {
-    // Return all files with kind='file'
+  // Normalise folder input. Stored paths don't carry leading or trailing
+  // slashes (see folder-paths.ts normalizePath + database-store
+  // normaliseRelativePath), so any '/' here must be stripped before we
+  // compare. Treat '', '/', '//' etc. the same as "no filter" → root.
+  const normalisedFolder = (options.folder ?? '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '');
+
+  const folderEntry = (folder: typeof folders[number]): DocMountFile & { kind: 'folder' } => ({
+    id: folder.id,
+    mountPointId: folder.mountPointId,
+    relativePath: folder.path,
+    fileName: path.basename(folder.path),
+    fileType: 'markdown' as const,
+    sha256: '',
+    fileSizeBytes: 0,
+    lastModified: folder.createdAt,
+    source: 'database' as const,
+    conversionStatus: 'converted' as const,
+    plainTextLength: 0,
+    chunkCount: 0,
+    folderId: folder.parentId,
+    kind: 'folder',
+  } as DocMountFile & { kind: 'folder' });
+
+  if (!normalisedFolder) {
     for (const f of files) {
       entries.push({ ...f, kind: 'file' });
     }
-    // Return all folders with kind='folder'
     for (const folder of folders) {
-      entries.push({
-        id: folder.id,
-        mountPointId: folder.mountPointId,
-        relativePath: folder.path,
-        fileName: path.basename(folder.path),
-        fileType: 'markdown' as const,
-        sha256: '',
-        fileSizeBytes: 0,
-        lastModified: folder.createdAt,
-        source: 'database' as const,
-        conversionStatus: 'converted' as const,
-        plainTextLength: 0,
-        chunkCount: 0,
-        folderId: folder.parentId,
-        kind: 'folder',
-      } as DocMountFile & { kind: 'folder' });
+      entries.push(folderEntry(folder));
     }
     return entries;
   }
 
-  // Filter to a specific folder
-  const folderPrefix = options.folder.endsWith('/') ? options.folder : `${options.folder}/`;
+  // Filter to a specific folder.
+  const folderPrefix = `${normalisedFolder}/`;
 
-  // Files that start with the folder prefix
   for (const f of files) {
     if (f.relativePath.startsWith(folderPrefix)) {
       entries.push({ ...f, kind: 'file' });
     }
   }
 
-  // Folders that have this as a parent
-  const folderPath = options.folder;
   for (const folder of folders) {
     if (folder.path.startsWith(folderPrefix)) {
-      entries.push({
-        id: folder.id,
-        mountPointId: folder.mountPointId,
-        relativePath: folder.path,
-        fileName: path.basename(folder.path),
-        fileType: 'markdown' as const,
-        sha256: '',
-        fileSizeBytes: 0,
-        lastModified: folder.createdAt,
-        source: 'database' as const,
-        conversionStatus: 'converted' as const,
-        plainTextLength: 0,
-        chunkCount: 0,
-        folderId: folder.parentId,
-        kind: 'folder',
-      } as DocMountFile & { kind: 'folder' });
+      entries.push(folderEntry(folder));
     }
   }
 
