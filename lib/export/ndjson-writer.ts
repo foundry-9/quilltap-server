@@ -1,0 +1,656 @@
+/**
+ * NDJSON export writer (qtap-ndjson v1).
+ *
+ * Streams `.qtap` exports one record per line so the pipeline never holds
+ * the whole payload in a single V8 string. Each entity is emitted as soon
+ * as it's loaded from its repository, and large blob bytes are split into
+ * ~4 MB base64 chunks so even a multi-gigabyte document store exports
+ * without hitting string-length ceilings.
+ */
+
+import { logger as baseLogger } from '@/lib/logger';
+import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
+import packageJson from '@/package.json';
+import type {
+  ExportOptions,
+  QuilltapExportManifest,
+  QuilltapExportCounts,
+  QtapRecord,
+  ExportedCharacter,
+  ExportedChat,
+  ExportedRoleplayTemplate,
+  ExportedProject,
+  SanitizedConnectionProfile,
+  SanitizedImageProfile,
+  SanitizedEmbeddingProfile,
+} from './types';
+import type { MessageEvent } from '@/lib/schemas/types';
+
+const logger = baseLogger.child({ module: 'export:ndjson-writer' });
+const APP_VERSION = packageJson.version;
+
+/**
+ * Raw bytes per blob chunk. 3 MB raw → ~4 MB base64 per line, comfortably
+ * below the 128 MB per-line safety cap on the reader side and well clear of
+ * V8's ~512 MB string ceiling.
+ */
+const BLOB_CHUNK_BYTES = 3 * 1024 * 1024;
+
+// ============================================================================
+// HELPERS (mirror of quilltap-export-service.ts — kept in sync on purpose)
+// ============================================================================
+
+async function resolveTagNames(
+  repos: ReturnType<typeof getUserRepositories>,
+  tagIds: string[] | undefined
+): Promise<string[]> {
+  if (!tagIds || tagIds.length === 0) return [];
+  const names: string[] = [];
+  for (const tagId of tagIds) {
+    try {
+      const tag = await repos.tags.findById(tagId);
+      if (tag) names.push(tag.name);
+    } catch {
+      // swallow — tag not found is non-fatal
+    }
+  }
+  return names;
+}
+
+async function resolveApiKeyLabel(
+  repos: ReturnType<typeof getUserRepositories>,
+  apiKeyId?: string | null
+): Promise<string | undefined> {
+  if (!apiKeyId) return undefined;
+  try {
+    const apiKey = await repos.connections.findApiKeyById(apiKeyId);
+    return apiKey?.label;
+  } catch {
+    return undefined;
+  }
+}
+
+function sanitizeProfile<T extends { apiKeyId?: string | null }>(
+  profile: T,
+  apiKeyLabel?: string
+): Omit<T, 'apiKeyId'> & { _apiKeyLabel?: string } {
+  const { apiKeyId: _omit, ...rest } = profile;
+  return {
+    ...rest,
+    ...(apiKeyLabel && { _apiKeyLabel: apiKeyLabel }),
+  } as Omit<T, 'apiKeyId'> & { _apiKeyLabel?: string };
+}
+
+function buildManifest(
+  options: ExportOptions,
+  counts: QuilltapExportCounts
+): QuilltapExportManifest {
+  return {
+    format: 'quilltap-export',
+    version: '1.0',
+    exportType: options.type,
+    createdAt: new Date().toISOString(),
+    appVersion: APP_VERSION,
+    settings: {
+      includeMemories: options.includeMemories ?? false,
+      scope: options.scope,
+      selectedIds: options.selectedIds ?? [],
+    },
+    counts,
+  };
+}
+
+/** Yield and bump the matching counter in one place. */
+function bump(counts: QuilltapExportCounts, key: keyof QuilltapExportCounts, delta = 1): void {
+  counts[key] = (counts[key] ?? 0) + delta;
+}
+
+// ============================================================================
+// PER-ENTITY ASYNC GENERATORS
+// ============================================================================
+
+async function* streamCharacters(
+  userId: string,
+  ids: string[],
+  includeMemories: boolean,
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const repos = getUserRepositories(userId);
+  const globalRepos = getRepositories();
+
+  for (const id of ids) {
+    const character = await repos.characters.findById(id);
+    if (!character) continue;
+
+    const tagNames = await resolveTagNames(repos, character.tags);
+    const record: ExportedCharacter = {
+      ...character,
+      ...(tagNames.length > 0 && { _tagNames: tagNames }),
+    };
+
+    // Emit the character row first (without wardrobe/pluginData nested).
+    const { wardrobeItems: _w, pluginData: _p, ...charOnly } = record;
+    yield { kind: 'character', data: charOnly };
+    bump(counts, 'characters');
+
+    // Wardrobe items — one record each.
+    try {
+      const wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id);
+      for (const item of wardrobeItems) {
+        yield { kind: 'wardrobe_item', characterId: id, data: item };
+      }
+      if (wardrobeItems.length > 0) {
+        logger.debug('Streamed wardrobe items for character export', {
+          characterId: id,
+          wardrobeItemCount: wardrobeItems.length,
+        });
+      }
+    } catch (error) {
+      logger.warn('Failed to load wardrobe items for character export', {
+        characterId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Plugin data — one record per plugin.
+    try {
+      const pluginData = await globalRepos.characterPluginData.getPluginDataMap(id);
+      const pluginNames = Object.keys(pluginData);
+      for (const pluginName of pluginNames) {
+        yield {
+          kind: 'character_plugin_data',
+          characterId: id,
+          pluginName,
+          data: pluginData[pluginName],
+        };
+      }
+      if (pluginNames.length > 0) {
+        logger.debug('Streamed plugin data for character export', {
+          characterId: id,
+          pluginCount: pluginNames.length,
+        });
+      }
+    } catch (error) {
+      logger.warn('Failed to load plugin data for character export', {
+        characterId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Memories for this character — emitted right after, so the importer
+    // can remap characterId from idMap without buffering.
+    if (includeMemories) {
+      try {
+        const memories = await repos.memories.findByCharacterId(id);
+        for (const memory of memories) {
+          yield { kind: 'memory', data: memory };
+          bump(counts, 'memories');
+        }
+      } catch (error) {
+        logger.warn('Failed to load memories for character export', {
+          characterId: id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+}
+
+async function* streamChats(
+  userId: string,
+  ids: string[],
+  includeMemories: boolean,
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const repos = getUserRepositories(userId);
+
+  // For chat-memory collection we filter all characters' memories by chatId.
+  // Load the character list once up front so we're not doing it per chat.
+  const allCharacters = includeMemories ? await repos.characters.findAll() : [];
+
+  for (const id of ids) {
+    const chat = await repos.chats.findById(id);
+    if (!chat) continue;
+
+    const tagNames = await resolveTagNames(repos, chat.tags);
+
+    const participantInfo = await Promise.all(
+      chat.participants.map(async (p) => {
+        let characterName: string | undefined;
+        if (p.type === 'CHARACTER' && p.characterId) {
+          const char = await repos.characters.findById(p.characterId);
+          characterName = char?.name;
+        }
+        return { participantId: p.id, characterName, type: p.type };
+      })
+    );
+
+    const chatRecord: Omit<ExportedChat, 'messages'> = {
+      ...chat,
+      ...(tagNames.length > 0 && { _tagNames: tagNames }),
+      ...(participantInfo.length > 0 && { _participantInfo: participantInfo }),
+    };
+    yield { kind: 'chat', data: chatRecord };
+    bump(counts, 'chats');
+
+    // Stream messages one at a time.
+    try {
+      const events = await repos.chats.getMessages(id);
+      for (const event of events) {
+        if (event.type !== 'message') continue;
+        yield { kind: 'chat_message', chatId: id, data: event as MessageEvent };
+        bump(counts, 'messages');
+      }
+    } catch (error) {
+      logger.warn('Failed to load chat messages for export', {
+        chatId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    // Memories scoped to this chat.
+    if (includeMemories) {
+      for (const char of allCharacters) {
+        try {
+          const memories = await repos.memories.findByCharacterId(char.id);
+          for (const memory of memories) {
+            if (memory.chatId !== id) continue;
+            yield { kind: 'memory', data: memory };
+            bump(counts, 'memories');
+          }
+        } catch {
+          // continue — non-fatal per character
+        }
+      }
+    }
+  }
+}
+
+async function* streamRoleplayTemplates(
+  userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const repos = getUserRepositories(userId);
+  const globalRepos = getRepositories();
+
+  for (const id of ids) {
+    const template = await globalRepos.roleplayTemplates.findById(id);
+    if (!template || template.isBuiltIn || template.userId !== userId) continue;
+    const tagNames = await resolveTagNames(repos, template.tags);
+    const data: ExportedRoleplayTemplate = {
+      ...template,
+      ...(tagNames.length > 0 && { _tagNames: tagNames }),
+    };
+    yield { kind: 'roleplay_template', data };
+    bump(counts, 'roleplayTemplates');
+  }
+}
+
+async function* streamConnectionProfiles(
+  userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const repos = getUserRepositories(userId);
+  for (const id of ids) {
+    const profile = await repos.connections.findById(id);
+    if (!profile) continue;
+    const label = await resolveApiKeyLabel(repos, profile.apiKeyId);
+    yield {
+      kind: 'connection_profile',
+      data: sanitizeProfile(profile, label) as SanitizedConnectionProfile,
+    };
+    bump(counts, 'connectionProfiles');
+  }
+}
+
+async function* streamImageProfiles(
+  userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const repos = getUserRepositories(userId);
+  for (const id of ids) {
+    const profile = await repos.imageProfiles.findById(id);
+    if (!profile) continue;
+    const label = await resolveApiKeyLabel(repos, profile.apiKeyId);
+    yield {
+      kind: 'image_profile',
+      data: sanitizeProfile(profile, label) as SanitizedImageProfile,
+    };
+    bump(counts, 'imageProfiles');
+  }
+}
+
+async function* streamEmbeddingProfiles(
+  userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const repos = getUserRepositories(userId);
+  for (const id of ids) {
+    const profile = await repos.embeddingProfiles.findById(id);
+    if (!profile) continue;
+    const label = await resolveApiKeyLabel(repos, profile.apiKeyId);
+    yield {
+      kind: 'embedding_profile',
+      data: sanitizeProfile(profile, label) as SanitizedEmbeddingProfile,
+    };
+    bump(counts, 'embeddingProfiles');
+  }
+}
+
+async function* streamTags(
+  userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const repos = getUserRepositories(userId);
+  for (const id of ids) {
+    const tag = await repos.tags.findById(id);
+    if (!tag) continue;
+    yield { kind: 'tag', data: tag };
+    bump(counts, 'tags');
+  }
+}
+
+async function* streamProjects(
+  userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  const repos = getUserRepositories(userId);
+  for (const id of ids) {
+    const project = await repos.projects.findById(id);
+    if (!project) continue;
+
+    const characterRosterNames: string[] = [];
+    for (const characterId of project.characterRoster ?? []) {
+      const character = await repos.characters.findById(characterId);
+      if (character) characterRosterNames.push(character.name);
+    }
+
+    const allChats = await repos.chats.findAll();
+    const chatCount = allChats.filter((c) => c.projectId === id).length;
+
+    const allFiles = await repos.files.findAll();
+    const fileCount = allFiles.filter((f) => f.linkedTo?.includes(id)).length;
+
+    const data: ExportedProject = {
+      ...project,
+      ...(characterRosterNames.length > 0 && { _characterRosterNames: characterRosterNames }),
+      _chatCount: chatCount,
+      _fileCount: fileCount,
+    };
+    yield { kind: 'project', data };
+    bump(counts, 'projects');
+  }
+}
+
+async function* streamDocumentStores(
+  _userId: string,
+  ids: string[],
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  // Document stores are instance-scoped — use global repos on purpose.
+  const repos = getRepositories();
+
+  for (const id of ids) {
+    const mp = await repos.docMountPoints.findById(id);
+    if (!mp) continue;
+
+    yield {
+      kind: 'doc_mount_point',
+      data: {
+        id: mp.id,
+        name: mp.name,
+        basePath: mp.basePath,
+        mountType: mp.mountType,
+        includePatterns: mp.includePatterns,
+        excludePatterns: mp.excludePatterns,
+        enabled: mp.enabled,
+      },
+    };
+    bump(counts, 'documentStores');
+
+    if (mp.mountType === 'database') {
+      const docs = await repos.docMountDocuments.findByMountPointId(mp.id);
+      for (const d of docs) {
+        yield {
+          kind: 'doc_mount_document',
+          data: {
+            mountPointId: d.mountPointId,
+            relativePath: d.relativePath,
+            fileName: d.fileName,
+            fileType: d.fileType,
+            content: d.content,
+            contentSha256: d.contentSha256,
+            plainTextLength: d.plainTextLength,
+            lastModified: d.lastModified,
+          },
+        };
+        bump(counts, 'documentStoreDocuments');
+      }
+    }
+
+    const blobMetas = await repos.docMountBlobs.listByMountPoint(mp.id);
+    for (const meta of blobMetas) {
+      const data = await repos.docMountBlobs.readData(meta.id);
+      if (!data) continue;
+
+      const chunkCount = Math.max(1, Math.ceil(data.length / BLOB_CHUNK_BYTES));
+
+      yield {
+        kind: 'doc_mount_blob',
+        data: {
+          mountPointId: meta.mountPointId,
+          relativePath: meta.relativePath,
+          originalFileName: meta.originalFileName,
+          originalMimeType: meta.originalMimeType,
+          storedMimeType: meta.storedMimeType,
+          sizeBytes: meta.sizeBytes,
+          sha256: meta.sha256,
+          description: meta.description,
+          chunkCount,
+        },
+      };
+      bump(counts, 'documentStoreBlobs');
+
+      for (let index = 0; index < chunkCount; index++) {
+        const start = index * BLOB_CHUNK_BYTES;
+        const end = Math.min(start + BLOB_CHUNK_BYTES, data.length);
+        const slice = data.subarray(start, end);
+        yield {
+          kind: 'doc_mount_blob_chunk',
+          mountPointId: meta.mountPointId,
+          sha256: meta.sha256,
+          index,
+          total: chunkCount,
+          dataBase64: slice.toString('base64'),
+        };
+      }
+    }
+
+    const links = await repos.projectDocMountLinks.findByMountPointId(mp.id);
+    for (const link of links) {
+      yield {
+        kind: 'project_doc_mount_link',
+        data: { projectId: link.projectId, mountPointId: link.mountPointId },
+      };
+      bump(counts, 'documentStoreProjectLinks');
+    }
+  }
+}
+
+// ============================================================================
+// TOP-LEVEL STREAMER
+// ============================================================================
+
+/**
+ * Resolve the list of entity IDs to export based on scope + type, without
+ * materializing any of the heavy payload. Returns an array of IDs only.
+ */
+async function resolveExportIds(
+  userId: string,
+  options: ExportOptions
+): Promise<string[]> {
+  if (options.scope === 'selected') return options.selectedIds ?? [];
+
+  const repos = getUserRepositories(userId);
+  const globalRepos = getRepositories();
+
+  switch (options.type) {
+    case 'characters':
+      return (await repos.characters.findAll()).map((c) => c.id);
+    case 'chats':
+      return (await repos.chats.findAll()).map((c) => c.id);
+    case 'roleplay-templates':
+      return (await globalRepos.roleplayTemplates.findAll())
+        .filter((t) => !t.isBuiltIn && t.userId === userId)
+        .map((t) => t.id);
+    case 'connection-profiles':
+      return (await repos.connections.findAll()).map((p) => p.id);
+    case 'image-profiles':
+      return (await repos.imageProfiles.findAll()).map((p) => p.id);
+    case 'embedding-profiles':
+      return (await repos.embeddingProfiles.findAll()).map((p) => p.id);
+    case 'tags':
+      return (await repos.tags.findAll()).map((t) => t.id);
+    case 'projects':
+      return (await repos.projects.findAll()).map((p) => p.id);
+    case 'document-stores':
+      return (await globalRepos.docMountPoints.findAll()).map((s) => s.id);
+    default:
+      throw new Error(`Unknown export type: ${options.type}`);
+  }
+}
+
+/**
+ * Async generator over every line of the streaming export, envelope first,
+ * footer last.
+ */
+export async function* streamExportRecords(
+  userId: string,
+  options: ExportOptions
+): AsyncGenerator<QtapRecord> {
+  logger.info('Creating NDJSON export', {
+    userId,
+    type: options.type,
+    scope: options.scope,
+  });
+
+  const counts: QuilltapExportCounts = {};
+  const ids = await resolveExportIds(userId, options);
+
+  // Envelope with an empty counts object — footer carries the authoritative
+  // counts once we've actually emitted every record.
+  yield {
+    kind: '__envelope__',
+    format: 'qtap-ndjson',
+    version: 1,
+    manifest: buildManifest(options, {}),
+  };
+
+  const includeMemories = options.includeMemories ?? false;
+
+  switch (options.type) {
+    case 'characters':
+      yield* streamCharacters(userId, ids, includeMemories, counts);
+      break;
+    case 'chats':
+      yield* streamChats(userId, ids, includeMemories, counts);
+      break;
+    case 'roleplay-templates':
+      yield* streamRoleplayTemplates(userId, ids, counts);
+      break;
+    case 'connection-profiles':
+      yield* streamConnectionProfiles(userId, ids, counts);
+      break;
+    case 'image-profiles':
+      yield* streamImageProfiles(userId, ids, counts);
+      break;
+    case 'embedding-profiles':
+      yield* streamEmbeddingProfiles(userId, ids, counts);
+      break;
+    case 'tags':
+      yield* streamTags(userId, ids, counts);
+      break;
+    case 'projects':
+      yield* streamProjects(userId, ids, counts);
+      break;
+    case 'document-stores':
+      yield* streamDocumentStores(userId, ids, counts);
+      break;
+    default:
+      throw new Error(`Unknown export type: ${options.type}`);
+  }
+
+  yield { kind: '__footer__', counts };
+
+  logger.info('NDJSON export stream complete', {
+    userId,
+    type: options.type,
+    counts,
+  });
+}
+
+/**
+ * Wrap {@link streamExportRecords} in a Web `ReadableStream<Uint8Array>`
+ * suitable for a `NextResponse` body. One newline-terminated JSON record per
+ * enqueue — we never build a string larger than a single record.
+ */
+export function createNdjsonStream(
+  userId: string,
+  options: ExportOptions
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  let iterator: AsyncGenerator<QtapRecord> | null = null;
+
+  return new ReadableStream<Uint8Array>({
+    async start() {
+      iterator = streamExportRecords(userId, options);
+    },
+    async pull(controller) {
+      if (!iterator) {
+        controller.close();
+        return;
+      }
+      try {
+        const { value, done } = await iterator.next();
+        if (done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoder.encode(JSON.stringify(value) + '\n'));
+      } catch (err) {
+        logger.error(
+          'NDJSON export stream failed',
+          { userId, type: options.type },
+          err instanceof Error ? err : undefined
+        );
+        controller.error(err);
+      }
+    },
+    async cancel(reason) {
+      logger.warn('NDJSON export stream cancelled', {
+        userId,
+        type: options.type,
+        reason: reason instanceof Error ? reason.message : String(reason),
+      });
+      if (iterator && typeof iterator.return === 'function') {
+        try {
+          await iterator.return(undefined);
+        } catch {
+          // best-effort cleanup
+        }
+      }
+    },
+  });
+}
+
+/**
+ * Content-Type for streaming `.qtap` responses. Matches the de facto NDJSON
+ * MIME type used by JSON-lines tooling.
+ */
+export const QTAP_NDJSON_CONTENT_TYPE = 'application/x-ndjson';

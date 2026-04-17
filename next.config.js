@@ -50,9 +50,12 @@ const nextConfig = {
       bodySizeLimit: '100mb',
     },
     // Proxy/middleware body size limit - allow large import/export and backup files
-    // Default is 10MB which truncates .qtap import files with memories
-    // Increased to 500MB to support large backup restores via streaming upload
-    proxyClientMaxBodySize: '500mb',
+    // Default is 10MB which truncates .qtap import files with memories.
+    // Bumped to 10GB so the streaming NDJSON .qtap imports (which can run
+    // multi-GB once full memory sets are included) aren't rejected at the
+    // proxy layer. The import path itself streams line-by-line; only one
+    // record's worth of bytes is held in a V8 string at a time.
+    proxyClientMaxBodySize: '10gb',
   },
 
   // Image optimization configuration

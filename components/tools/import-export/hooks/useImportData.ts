@@ -52,10 +52,41 @@ export function useImportData({
 
   const parseExportFile = useCallback(async (file: File): Promise<QuilltapExport> => {
     try {
+      // Peek the first 256 KB — enough to hold any envelope even with large
+      // selectedIds lists, and cheap to read. If we don't see an NDJSON
+      // marker in that prefix, fall through to the legacy monolithic path.
+      const PEEK_BYTES = 256 * 1024
+      const prefix = await file.slice(0, PEEK_BYTES).text()
+
+      if (/"format"\s*:\s*"qtap-ndjson"/.test(prefix)) {
+        // Streaming NDJSON — parse just the envelope line, never the whole
+        // file. The server re-reads the upload as a stream, so we don't need
+        // `data` populated client-side.
+        const firstNewline = prefix.indexOf('\n')
+        if (firstNewline < 0) {
+          throw new Error('Invalid export file format. NDJSON envelope line is missing a newline.')
+        }
+        const envelopeLine = prefix.slice(0, firstNewline)
+        const envelope = JSON.parse(envelopeLine) as {
+          format?: string
+          version?: number
+          manifest?: QuilltapExport['manifest']
+        }
+        if (envelope.format !== 'qtap-ndjson' || !envelope.manifest) {
+          throw new Error('Invalid NDJSON envelope in export file.')
+        }
+        return {
+          manifest: envelope.manifest,
+          data: {} as QuilltapExport['data'],
+        }
+      }
+
+      // Legacy monolithic JSON — only path that has to load the whole file
+      // into a single client-side string. Files that blow the browser's
+      // string ceiling here were already unusable in the pre-NDJSON version.
       const text = await file.text()
       const data = JSON.parse(text) as QuilltapExport
 
-      // Validate basic structure
       if (!data.manifest || data.manifest.format !== 'quilltap-export') {
         throw new Error('Invalid export file format. Please select a valid Quilltap export file (.qtap).')
       }
@@ -64,7 +95,7 @@ export function useImportData({
     } catch (error) {
       const message = getErrorMessage(error)
       throw new Error(
-        message.includes('Invalid export file format')
+        message.includes('Invalid') || message.includes('envelope')
           ? message
           : 'Failed to parse file. Please ensure it is a valid Quilltap export file.',
       )
