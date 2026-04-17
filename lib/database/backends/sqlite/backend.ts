@@ -24,7 +24,12 @@ import {
 import { SQLiteConfig, loadSQLiteConfig, loadLLMLogsConfig, loadMountIndexConfig } from '../../config';
 import { getSQLiteClient, closeSQLiteClient, isSQLiteConnected, setupSQLiteShutdownHandlers } from './client';
 import { runIntegrityCheck, startPeriodicCheckpoints } from './protection';
-import { createPhysicalBackup, createLLMLogsPhysicalBackup, applyRetentionPolicy } from './physical-backup';
+import {
+  createPhysicalBackup,
+  createLLMLogsPhysicalBackup,
+  createMountIndexPhysicalBackup,
+  applyRetentionPolicy,
+} from './physical-backup';
 import { getLLMLogsSQLiteClient, closeLLMLogsSQLiteClient } from './llm-logs-client';
 import { runLLMLogsIntegrityCheck, startLLMLogsPeriodicCheckpoints } from './llm-logs-protection';
 import { getMountIndexSQLiteClient } from './mount-index-client';
@@ -584,6 +589,15 @@ export class SQLiteBackend implements DatabaseBackend {
         if (mountIndexDb) {
           runMountIndexIntegrityCheck(mountIndexDb);
           startMountIndexPeriodicCheckpoints(mountIndexDb);
+
+          // Create a physical backup of the mount index DB (async,
+          // non-blocking). Database-backed document stores keep all of their
+          // bytes here, so this is user data and must be part of the sweep.
+          createMountIndexPhysicalBackup(mountIndexDb).catch((error) => {
+            logger.error('Mount index startup physical backup failed', {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
         }
       } catch (error) {
         logger.error('Failed to initialize mount index database — document mounts will be unavailable', {

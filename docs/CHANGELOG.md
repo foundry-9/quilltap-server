@@ -6,6 +6,7 @@
 
 #### Bug Fixes
 
+- **Mount-index database now included in the 24-hour physical backup sweep**: the automatic SQLCipher backup previously covered only `quilltap.db` and `quilltap-llm-logs.db` and silently skipped `quilltap-mount-index.db` — where the Scriptorium keeps every chunk, embedding, and (for database-backed stores) the actual document bodies and blobs. A new `createMountIndexPhysicalBackup()` runs alongside the existing two on startup, uses the same 24-hour interval and retention policy (7 days all, weekly for 4 weeks, monthly for 12 months, yearly forever), and writes to `quilltap-mount-index-YYYY-MM-DDTHHmmss.db` inside `data/backups/`. Restore instructions added to `help/database-protection.md`. (`lib/database/backends/sqlite/physical-backup.ts`, `lib/database/backends/sqlite/backend.ts`)
 - **Document Mode — fix open/read/write on database-backed stores**: `handleOpenDocument`, `handleReadDocument`, and `handleWriteDocument` were passing the bare `resolved.absolutePath` string to `readFileWithMtime` / `writeFileWithMtimeCheck`. For database-backed stores that string is empty, so the helpers took the filesystem branch and hit `ENOENT: no such file or directory, open ''`. They now pass the full `ResolvedPath` object, letting the helpers dispatch to `readDatabaseDocument` / `writeDatabaseDocument`. Fixes "Failed to open document" in Document Mode against a database-backed Scriptorium store. (`app/api/v1/chats/[id]/actions/documents.ts`)
 
 #### Features

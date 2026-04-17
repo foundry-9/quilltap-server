@@ -290,6 +290,85 @@ describe('SQLite Physical Backup Module', () => {
       expect(mockFs.unlinkSync).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('createMountIndexPhysicalBackup', () => {
+    it('should call VACUUM INTO with mount index filename pattern', async () => {
+      const db = createMockDb();
+
+      const result = await physicalBackup.createMountIndexPhysicalBackup(db as never);
+
+      expect(result).not.toBeNull();
+      expect(result).toMatch(/^\/mock\/data\/backups\/quilltap-mount-index-\d{4}-\d{2}-\d{2}T\d{6}\.db$/);
+      expect(db.exec).toHaveBeenCalledTimes(1);
+      expect(db.exec).toHaveBeenCalledWith(expect.stringContaining('VACUUM INTO'));
+    });
+
+    it('should skip if recent mount index backup exists', async () => {
+      const db = createMockDb();
+      const recentBackup = formatMountIndexBackupFilename(new Date(Date.now() - 2 * 60 * 60 * 1000));
+      (mockFs.readdirSync as jest.Mock).mockReturnValue([recentBackup]);
+
+      const result = await physicalBackup.createMountIndexPhysicalBackup(db as never);
+
+      expect(result).toBeNull();
+      expect(db.exec).not.toHaveBeenCalled();
+    });
+
+    it('should create backup if last mount index backup is old', async () => {
+      const db = createMockDb();
+      const oldBackup = formatMountIndexBackupFilename(new Date(Date.now() - 25 * 60 * 60 * 1000));
+      (mockFs.readdirSync as jest.Mock).mockReturnValue([oldBackup]);
+
+      const result = await physicalBackup.createMountIndexPhysicalBackup(db as never);
+
+      expect(result).not.toBeNull();
+      expect(db.exec).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not cross-delete: mount index backups survive retention alongside main backups', async () => {
+      const now = new Date();
+      const files = [
+        // Main DB backup old enough to be retention-pruned within its bucket
+        formatBackupFilename(new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000)),
+        // Mount index backup in the same time bucket — must be kept
+        formatMountIndexBackupFilename(new Date(now.getTime() - 9 * 24 * 60 * 60 * 1000)),
+      ];
+      (mockFs.readdirSync as jest.Mock).mockReturnValue(files);
+
+      await physicalBackup.applyRetentionPolicy();
+
+      // Nothing should be deleted: each bucket has exactly one item.
+      expect(mockFs.unlinkSync).not.toHaveBeenCalled();
+    });
+
+    it('should apply retention to mount index backups independently', async () => {
+      const now = new Date();
+      const files = [
+        // 3 mount index backups in week 1 (7-14 days) — keep newest, delete 2
+        formatMountIndexBackupFilename(new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000)),
+        formatMountIndexBackupFilename(new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000)),
+        formatMountIndexBackupFilename(new Date(now.getTime() - 13 * 24 * 60 * 60 * 1000)),
+      ];
+      (mockFs.readdirSync as jest.Mock).mockReturnValue(files);
+
+      await physicalBackup.applyRetentionPolicy();
+
+      expect(mockFs.unlinkSync).toHaveBeenCalledTimes(2);
+    });
+
+    it('should return null on failure and clean up partial file', async () => {
+      const db = createMockDb();
+      (db.exec as jest.Mock).mockImplementation(() => { throw new Error('disk full'); });
+      (mockFs.existsSync as jest.Mock)
+        .mockReturnValueOnce(true)
+        .mockReturnValueOnce(true);
+
+      const result = await physicalBackup.createMountIndexPhysicalBackup(db as never);
+
+      expect(result).toBeNull();
+      expect(mockFs.unlinkSync).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 /**
@@ -324,4 +403,21 @@ function formatLLMLogsBackupFilename(date: Date): string {
     pad(date.getSeconds()),
   ].join('');
   return `quilltap-llm-logs-${timestamp}.db`;
+}
+
+/**
+ * Helper to generate a mount index backup filename from a Date
+ */
+function formatMountIndexBackupFilename(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const timestamp = [
+    date.getFullYear(),
+    '-', pad(date.getMonth() + 1),
+    '-', pad(date.getDate()),
+    'T',
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds()),
+  ].join('');
+  return `quilltap-mount-index-${timestamp}.db`;
 }
