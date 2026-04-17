@@ -260,7 +260,7 @@ export interface ExportedDocumentStoreDocument {
   mountPointId: string;
   relativePath: string;
   fileName: string;
-  fileType: 'markdown' | 'txt';
+  fileType: 'markdown' | 'txt' | 'json' | 'jsonl';
   content: string;
   contentSha256: string;
   plainTextLength: number;

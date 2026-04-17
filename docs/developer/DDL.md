@@ -1113,6 +1113,8 @@ CREATE TABLE IF NOT EXISTS "doc_mount_files" (
 );
 ```
 
+`fileType` is one of `'pdf'`, `'docx'`, `'markdown'`, `'txt'`, `'json'`, or `'jsonl'`, indicating the original file format and conversion status.
+
 `source` is `'filesystem'` when the bytes live on disk (filesystem/obsidian mounts) or `'database'` when they live in `doc_mount_documents`. The column is added by `DocMountFilesRepository` on first access for legacy mount-index databases that predate database-backed stores. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores; filesystem-backed stores always leave it NULL. The column is added by in-repo `ALTER TABLE` on first access.
 
 ### doc_mount_chunks
@@ -1169,7 +1171,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_documents_mp_path"
   ON "doc_mount_documents" ("mountPointId", "relativePath");
 ```
 
-Text content for database-backed mount points. Every row is mirrored in `doc_mount_files` (with `source='database'`) so existing scanning, search, and embedding paths treat it identically to on-disk files. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores. The column is added by in-repo `ALTER TABLE` on first access.
+Text content for database-backed mount points. Every row is mirrored in `doc_mount_files` (with `source='database'`) so existing scanning, search, and embedding paths treat it identically to on-disk files. `fileType` is one of `'markdown'`, `'txt'`, `'json'`, or `'jsonl'`. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores. The column is added by in-repo `ALTER TABLE` on first access.
 
 ### doc_mount_blobs
 

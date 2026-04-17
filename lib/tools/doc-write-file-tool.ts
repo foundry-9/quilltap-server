@@ -29,8 +29,11 @@ export const docWriteFileTool = {
           description: 'Relative path to the file within the selected scope.',
         },
         content: {
+          description: 'The complete new contents for the file. For JSON/JSONL files, can be a string (validated) or a native object/array (serialized).',
+        },
+        mime_type: {
           type: 'string',
-          description: 'The complete new contents for the file.',
+          description: 'Optional MIME type hint; extension detection takes precedence if absent.',
         },
         expected_mtime: {
           type: 'number',
@@ -53,8 +56,8 @@ export function validateDocWriteFileInput(input: unknown): input is DocWriteFile
 
   const obj = input as Record<string, unknown>;
 
-  // path and content are required
-  if (typeof obj.path !== 'string' || typeof obj.content !== 'string') {
+  // path is required; content can be string or any other type
+  if (typeof obj.path !== 'string' || obj.content === undefined) {
     return false;
   }
 
@@ -70,6 +73,11 @@ export function validateDocWriteFileInput(input: unknown): input is DocWriteFile
     return false;
   }
 
+  // mime_type must be string if provided
+  if (obj.mime_type !== undefined && typeof obj.mime_type !== 'string') {
+    return false;
+  }
+
   // expected_mtime must be number if provided
   if (obj.expected_mtime !== undefined && typeof obj.expected_mtime !== 'number') {
     return false;
@@ -82,7 +90,8 @@ export interface DocWriteFileInput {
   scope?: 'document_store' | 'project' | 'general';
   mount_point?: string;
   path: string;
-  content: string;
+  content: string | unknown;
+  mime_type?: string;
   expected_mtime?: number;
 }
 

@@ -50,6 +50,10 @@ function mimeTypeForFileType(fileType: DocMountFile['fileType']): string {
       return 'text/markdown';
     case 'txt':
       return 'text/plain';
+    case 'json':
+      return 'application/json';
+    case 'jsonl':
+      return 'application/x-ndjson';
   }
 }
 

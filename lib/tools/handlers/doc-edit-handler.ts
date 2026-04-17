@@ -30,6 +30,16 @@ import {
   type DocEditScope,
   type ResolvedPath,
 } from '@/lib/doc-edit';
+import {
+  detectMimeFromExtension,
+  isJsonFamily,
+  isJsonMime,
+  isJsonlMime,
+  parseContent,
+  serializeContent,
+  validateJson,
+  type JsonlLineResult,
+} from '@/lib/doc-edit/mime-registry';
 
 import type { DocReadFileInput, DocReadFileOutput } from '../doc-read-file-tool';
 import type { DocWriteFileInput, DocWriteFileOutput } from '../doc-write-file-tool';
@@ -276,39 +286,81 @@ async function handleReadFile(
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
-  const { content, mtime, size } = await readFileWithMtime(resolved);
-  const lines = content.split('\n');
-  const totalLines = lines.length;
+  const { content: rawContent, mtime, size } = await readFileWithMtime(resolved);
+  const mime = detectMimeFromExtension(resolved.relativePath);
 
-  // Apply pagination
-  let outputLines = lines;
-  let truncated = false;
+  let content: string | unknown = rawContent;
+  let parsed = false;
+  let parseError: { message: string; line?: number } | undefined;
+  let formattedText: string;
 
-  if (input.offset || input.limit) {
-    const startLine = (input.offset || 1) - 1; // Convert to 0-based
-    const endLine = input.limit ? startLine + input.limit : lines.length;
-    outputLines = lines.slice(startLine, endLine);
-    truncated = endLine < lines.length;
+  // For JSON/JSONL, parse the content
+  if (isJsonFamily(mime)) {
+    const parseResult = parseContent(rawContent, mime!);
+    if (parseResult.ok) {
+      content = parseResult.value;
+      parsed = true;
+
+      if (isJsonlMime(mime)) {
+        const lines = parseResult.value as JsonlLineResult[];
+        parsed = lines.some(l => !l.error);
+
+        // Format JSONL for display
+        const lines_formatted = lines.map(
+          (l) => `[L${l.line}] ${l.error ? `PARSE ERROR: ${l.error}` : JSON.stringify(l.value)}`
+        );
+        formattedText = `File: ${input.path} (JSONL, ${lines.length} entries)\n\n${lines_formatted.join('\n')}`;
+      } else {
+        // Format JSON for display
+        const formatted = JSON.stringify(content, null, 2);
+        formattedText = `File: ${input.path} (JSON)\n\n${formatted}`;
+      }
+    } else {
+      content = rawContent;
+      parsed = false;
+      parseError = { message: parseResult.error, line: parseResult.line };
+      formattedText = `File: ${input.path} — Parse Error: ${parseResult.error}`;
+    }
+  } else {
+    // Non-JSON: format with line numbers as before
+    const lines = rawContent.split('\n');
+    const totalLines = lines.length;
+
+    let outputLines = lines;
+    let truncated = false;
+
+    if (input.offset || input.limit) {
+      const startLine = (input.offset || 1) - 1;
+      const endLine = input.limit ? startLine + input.limit : lines.length;
+      outputLines = lines.slice(startLine, endLine);
+      truncated = endLine < lines.length;
+    }
+
+    content = outputLines.join('\n');
+    const lineStart = input.offset || 1;
+    const numberedLines = outputLines.map((line, i) => `[L${lineStart + i}] ${line}`).join('\n');
+    const header = `File: ${input.path} (${totalLines} lines, ${size} bytes)`;
+    const truncMsg = truncated ? `\n[Truncated — showing lines ${lineStart}-${lineStart + outputLines.length - 1} of ${totalLines}]` : '';
+    formattedText = `${header}${truncMsg}\n\n${numberedLines}`;
   }
 
+  const lines = rawContent.split('\n');
   const result: DocReadFileOutput = {
-    content: outputLines.join('\n'),
+    content,
+    rawContent: isJsonFamily(mime) ? rawContent : undefined,
+    parsed: isJsonFamily(mime) ? parsed : undefined,
+    parseError: isJsonFamily(mime) ? parseError : undefined,
+    mimeType: mime || undefined,
     path: input.path,
     mtime,
-    totalLines,
-    truncated,
+    totalLines: lines.length,
+    truncated: false,
   };
-
-  // Format with line numbers for LLM clarity
-  const lineStart = input.offset || 1;
-  const numberedLines = outputLines.map((line, i) => `${lineStart + i}: ${line}`).join('\n');
-  const header = `File: ${input.path} (${totalLines} lines, ${size} bytes, mtime: ${mtime})`;
-  const truncMsg = truncated ? `\n[Truncated — showing lines ${lineStart}-${lineStart + outputLines.length - 1} of ${totalLines}]` : '';
 
   return {
     success: true,
     result,
-    formattedText: `${header}${truncMsg}\n\n${numberedLines}`,
+    formattedText,
   };
 }
 
@@ -325,9 +377,43 @@ async function handleWriteFile(
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 
+  const mime = detectMimeFromExtension(resolved.relativePath);
+  let contentToWrite: string;
+
+  // Handle JSON/JSONL inputs
+  if (isJsonFamily(mime)) {
+    if (typeof input.content === 'string') {
+      // String input: validate it as JSON
+      const validation = validateJson(input.content, mime!);
+      if (!validation.ok) {
+        const errorMsg = isJsonlMime(mime)
+          ? `Invalid JSONL: ${validation.error}`
+          : `Invalid JSON: ${validation.error}`;
+        logger.info('JSON validation failed on write', { path: input.path, error: validation.error });
+        return { success: false, error: errorMsg };
+      }
+      contentToWrite = input.content;
+    } else {
+      // Native value input: serialize it
+      const serialization = serializeContent(input.content, mime!, { pretty: true });
+      if (!serialization.ok) {
+        const errorMsg = `Cannot serialize content: ${serialization.error}`;
+        logger.info('JSON serialization failed on write', { path: input.path, error: serialization.error });
+        return { success: false, error: errorMsg };
+      }
+      contentToWrite = serialization.value;
+    }
+  } else {
+    // Non-JSON: content must be string
+    if (typeof input.content !== 'string') {
+      return { success: false, error: `Non-JSON files require string content; got ${typeof input.content}` };
+    }
+    contentToWrite = input.content;
+  }
+
   const { mtime } = await writeFileWithMtimeCheck(
     resolved,
-    input.content,
+    contentToWrite,
     input.expected_mtime
   );
 
@@ -342,7 +428,7 @@ async function handleWriteFile(
   return {
     success: true,
     result,
-    formattedText: `File written: ${input.path} (${input.content.length} bytes, mtime: ${mtime})`,
+    formattedText: `File written: ${input.path} (${contentToWrite.length} bytes, mtime: ${mtime})`,
   };
 }
 

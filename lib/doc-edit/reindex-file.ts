@@ -24,13 +24,15 @@ const logger = createServiceLogger('DocEdit:ReindexFile');
 /**
  * Detect file type from extension (matches scanner.ts logic).
  */
-function detectFileType(filePath: string): 'pdf' | 'docx' | 'markdown' | 'txt' | null {
+function detectFileType(filePath: string): 'pdf' | 'docx' | 'markdown' | 'txt' | 'json' | 'jsonl' | null {
   const ext = path.extname(filePath).toLowerCase();
   switch (ext) {
     case '.pdf': return 'pdf';
     case '.docx': return 'docx';
     case '.md': case '.markdown': return 'markdown';
     case '.txt': return 'txt';
+    case '.json': return 'json';
+    case '.jsonl': case '.ndjson': return 'jsonl';
     default: return null;
   }
 }

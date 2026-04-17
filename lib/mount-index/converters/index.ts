@@ -6,7 +6,7 @@ import { convertTxtToText } from './txt-converter';
 
 const logger = createServiceLogger('MountIndex:Converters');
 
-export type SupportedFileType = 'pdf' | 'docx' | 'markdown' | 'txt';
+export type SupportedFileType = 'pdf' | 'docx' | 'markdown' | 'txt' | 'json' | 'jsonl';
 
 /**
  * Convert a file to plain text using the appropriate converter for its type.
@@ -34,6 +34,11 @@ export async function convertToPlainText(
       text = await convertMarkdownToText(absolutePath);
       break;
     case 'txt':
+      text = await convertTxtToText(absolutePath);
+      break;
+    case 'json':
+    case 'jsonl':
+      // JSON files are already plain text; just read as-is (pretty-printed if possible)
       text = await convertTxtToText(absolutePath);
       break;
     default: {

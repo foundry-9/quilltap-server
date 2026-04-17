@@ -69,7 +69,7 @@ export const DocMountFileSchema = z.object({
   mountPointId: UUIDSchema,
   relativePath: z.string().min(1),   // Relative to basePath (or virtual path for database-backed stores)
   fileName: z.string().min(1),       // Just the filename
-  fileType: z.enum(['pdf', 'docx', 'markdown', 'txt']),
+  fileType: z.enum(['pdf', 'docx', 'markdown', 'txt', 'json', 'jsonl']),
   sha256: z.string().length(64),     // Hex digest
   fileSizeBytes: z.number().int().min(0),
   lastModified: TimestampSchema,     // File's mtime (or DB write time for database source)
@@ -132,7 +132,7 @@ export const DocMountDocumentSchema = z.object({
   mountPointId: UUIDSchema,
   relativePath: z.string().min(1),
   fileName: z.string().min(1),
-  fileType: z.enum(['markdown', 'txt']),
+  fileType: z.enum(['markdown', 'txt', 'json', 'jsonl']),
   content: z.string(),
   contentSha256: z.string().length(64),
   plainTextLength: z.number().int().min(0),

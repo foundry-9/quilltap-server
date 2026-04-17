@@ -33,10 +33,22 @@ Every `doc_*` tool accepts a `scope` parameter that determines where it operates
 - **`doc_read_frontmatter`** — Read YAML frontmatter from a markdown file
 - **`doc_read_heading`** — Read all content under a specific heading in a markdown file
 
+## Working with JSON and JSONL
+
+Quilltap treats JSON and JSONL files as first-class document types alongside Markdown and plain text:
+
+- **`.json` files**: `doc_read_file` returns the parsed object or array in the response's `content` field, with `parsed: true` and the original string in `rawContent`. `doc_write_file` accepts either a JSON string (validated) or a native JavaScript object or array (serialized canonically with indentation). Write failures include a clear error message if the JSON is invalid.
+
+- **`.jsonl` and `.ndjson` files**: These newline-delimited JSON formats are supported. Reads return an array of per-line parse results — each entry is `{ line, value?, error? }` — so one malformed line does not corrupt the rest of the file. Writes require an array value (for `doc_write_file`), with each element serialized as one JSON line.
+
+- **`doc_str_replace` on JSON files**: This tool operates on the raw serialized string rather than the parsed structure. For structural edits (adding/removing/modifying keys), prefer `doc_write_file` with a native object — it avoids string-based fragility and returns canonical, well-formatted output.
+
+- **Validation on write**: Invalid JSON is rejected immediately with a descriptive error, preventing corruption of your structured data.
+
 ### Editing
 
-- **`doc_write_file`** — Write or create a file (replaces entire contents). Supports optimistic concurrency via `expected_mtime`
-- **`doc_str_replace`** — Find and replace exact text (requires a unique match for safety)
+- **`doc_write_file`** — Write or create a file (replaces entire contents). For JSON/JSONL files, accepts either a string (validated) or a native object/array (serialized). Supports optimistic concurrency via `expected_mtime`
+- **`doc_str_replace`** — Find and replace exact text (requires a unique match for safety). For JSON/JSONL files, operates on the raw string; prefer `doc_write_file` with a native value for structural edits.
 - **`doc_insert_text`** — Insert text at a specific position (start, end, before/after an anchor string)
 - **`doc_update_frontmatter`** — Update individual YAML frontmatter properties
 - **`doc_update_heading`** — Replace content under a specific heading

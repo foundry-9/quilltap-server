@@ -9,7 +9,7 @@ export const docStrReplaceTool = {
   function: {
     name: 'doc_str_replace',
     description:
-      'Find and replace exact text in a file. The find text MUST be unique within the file — if it appears zero times or more than once, the operation fails with an error. Include enough surrounding context in the find text to make it unique. This is the primary editing tool: read the file first, identify what to change, then call this tool with enough context for a unique match.',
+      'Find and replace exact text in a file. The find text MUST be unique within the file — if it appears zero times or more than once, the operation fails with an error. Include enough surrounding context in the find text to make it unique. This is the primary editing tool: read the file first, identify what to change, then call this tool with enough context for a unique match. For .json / .jsonl / .ndjson files this operates on the raw serialized string; prefer doc_write_file with a native object or array for structural edits.',
     parameters: {
       type: 'object',
       properties: {

@@ -97,7 +97,11 @@ export interface DocReadFileInput {
 }
 
 export interface DocReadFileOutput {
-  content: string;
+  content: string | unknown;  // raw string for text/*; parsed value for JSON/JSONL (string on parse failure)
+  rawContent?: string;        // always populated for JSON/JSONL reads
+  parsed?: boolean;           // true iff JSON/JSONL and parse succeeded (JSONL: true if at least one line parsed)
+  parseError?: { message: string; line?: number };
+  mimeType?: string;
   path: string;
   mtime: number;
   totalLines: number;

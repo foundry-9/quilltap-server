@@ -544,6 +544,8 @@ export function isTextFile(filePath: string): boolean {
     '.markdown',
     '.txt',
     '.json',
+    '.jsonl',
+    '.ndjson',
     '.yaml',
     '.yml',
     '.xml',

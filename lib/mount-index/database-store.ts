@@ -28,7 +28,7 @@ import {
 
 const logger = createServiceLogger('MountIndex:DatabaseStore');
 
-type SupportedFileType = 'markdown' | 'txt';
+type SupportedFileType = 'markdown' | 'txt' | 'json' | 'jsonl';
 
 function detectDatabaseFileType(relativePath: string): SupportedFileType | null {
   const ext = path.extname(relativePath).toLowerCase();
@@ -38,6 +38,11 @@ function detectDatabaseFileType(relativePath: string): SupportedFileType | null 
       return 'markdown';
     case '.txt':
       return 'txt';
+    case '.json':
+      return 'json';
+    case '.jsonl':
+    case '.ndjson':
+      return 'jsonl';
     default:
       return null;
   }
@@ -111,7 +116,7 @@ export async function writeDatabaseDocument(
   const fileType = detectDatabaseFileType(rel);
   if (!fileType) {
     throw new DatabaseStoreError(
-      `Database-backed stores only accept text documents (.md, .markdown, .txt). Got: ${path.extname(rel)}`,
+      `Database-backed stores only accept text documents (.md, .markdown, .txt, .json, .jsonl, .ndjson). Got: ${path.extname(rel)}`,
       'UNSUPPORTED'
     );
   }
