@@ -55,10 +55,13 @@ function sha256OfString(content: string): string {
 function normaliseRelativePath(relativePath: string): string {
   // Collapse ./ and redundant separators, reject traversal. Path-resolver
   // already blocks '..' segments before we get here; keep a second guard.
+  // Trailing slashes are stripped so folder paths match the form that
+  // folder-paths.ts writes into doc_mount_folders.path (no trailing slash).
   const normalised = path
     .normalize(relativePath)
     .replace(/\\/g, '/')
-    .replace(/^\/+/, '');
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '');
   if (normalised.split('/').includes('..')) {
     throw new Error(`Invalid relative path: ${relativePath}`);
   }
