@@ -13,6 +13,8 @@ import {
   CreateDocumentStoreDialog,
   EditDocumentStoreDialog,
   DeleteDocumentStoreDialog,
+  ConvertToDatabaseDialog,
+  DeconvertToFilesystemDialog,
 } from './components'
 import type { DocumentStore, CreateDocumentStoreData, UpdateDocumentStoreData } from './types'
 
@@ -26,11 +28,15 @@ export default function DocumentStoresPage() {
     updateStore,
     deleteStore,
     scanStore,
+    convertStore,
+    deconvertStore,
   } = useDocumentStores()
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editStore, setEditStore] = useState<DocumentStore | null>(null)
   const [deleteStoreId, setDeleteStoreId] = useState<string | null>(null)
+  const [convertStoreTarget, setConvertStoreTarget] = useState<DocumentStore | null>(null)
+  const [deconvertStoreTarget, setDeconvertStoreTarget] = useState<DocumentStore | null>(null)
   const [scanningIds, setScanningIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -68,6 +74,20 @@ export default function DocumentStoresPage() {
       next.delete(storeId)
       return next
     })
+  }
+
+  const handleConvertConfirm = async () => {
+    if (!convertStoreTarget) return
+    const targetId = convertStoreTarget.id
+    setConvertStoreTarget(null)
+    await convertStore(targetId)
+  }
+
+  const handleDeconvertConfirm = async (targetPath: string) => {
+    if (!deconvertStoreTarget) return
+    const targetId = deconvertStoreTarget.id
+    setDeconvertStoreTarget(null)
+    await deconvertStore(targetId, targetPath)
   }
 
   if (loading) {
@@ -108,6 +128,8 @@ export default function DocumentStoresPage() {
         onEditClick={setEditStore}
         onDeleteClick={setDeleteStoreId}
         onScanClick={handleScan}
+        onConvertClick={setConvertStoreTarget}
+        onDeconvertClick={setDeconvertStoreTarget}
       />
 
       <CreateDocumentStoreDialog
@@ -126,6 +148,18 @@ export default function DocumentStoresPage() {
         open={deleteStoreId !== null}
         onClose={() => setDeleteStoreId(null)}
         onConfirm={handleDelete}
+      />
+
+      <ConvertToDatabaseDialog
+        store={convertStoreTarget}
+        onClose={() => setConvertStoreTarget(null)}
+        onConfirm={handleConvertConfirm}
+      />
+
+      <DeconvertToFilesystemDialog
+        store={deconvertStoreTarget}
+        onClose={() => setDeconvertStoreTarget(null)}
+        onConfirm={handleDeconvertConfirm}
       />
     </div>
   )

@@ -1433,6 +1433,8 @@ async function importDocumentStores(
         lastScannedAt: null,
         scanStatus: 'idle',
         lastScanError: null,
+        conversionStatus: 'idle',
+        conversionError: null,
         fileCount: 0,
         chunkCount: 0,
         totalSizeBytes: 0,

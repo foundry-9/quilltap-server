@@ -1056,6 +1056,8 @@ CREATE TABLE IF NOT EXISTS "doc_mount_points" (
   "lastScannedAt" TEXT,
   "scanStatus" TEXT NOT NULL DEFAULT 'idle',
   "lastScanError" TEXT,
+  "conversionStatus" TEXT NOT NULL DEFAULT 'idle',
+  "conversionError" TEXT,
   "fileCount" INTEGER NOT NULL DEFAULT 0,
   "chunkCount" INTEGER NOT NULL DEFAULT 0,
   "totalSizeBytes" INTEGER NOT NULL DEFAULT 0,
@@ -1065,6 +1067,8 @@ CREATE TABLE IF NOT EXISTS "doc_mount_points" (
 ```
 
 `mountType` is one of `'filesystem'`, `'obsidian'`, or `'database'`. For `'database'` stores the `basePath` column is empty — all document bytes live in `doc_mount_documents` and attached blobs in `doc_mount_blobs` within this same SQLCipher-encrypted database.
+
+`conversionStatus` is one of `'idle'`, `'converting'`, `'deconverting'`, or `'error'`, and tracks the Convert / Deconvert action that moves a store between filesystem- and database-backed storage (see `POST /api/v1/mount-points/:id?action=convert` / `?action=deconvert`). Distinct from the file-level `doc_mount_files.conversionStatus`, which tracks pdf/docx→text extraction. `conversionError` holds the failure message when `conversionStatus = 'error'`. Both columns are added by in-repo `ALTER TABLE` on first access for legacy databases that predate this feature.
 
 ### doc_mount_files
 

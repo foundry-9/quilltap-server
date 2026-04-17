@@ -4,8 +4,19 @@
 
 ### 4.3-dev
 
+#### Bug Fixes
+
+- **Document Mode — fix open/read/write on database-backed stores**: `handleOpenDocument`, `handleReadDocument`, and `handleWriteDocument` were passing the bare `resolved.absolutePath` string to `readFileWithMtime` / `writeFileWithMtimeCheck`. For database-backed stores that string is empty, so the helpers took the filesystem branch and hit `ENOENT: no such file or directory, open ''`. They now pass the full `ResolvedPath` object, letting the helpers dispatch to `readDatabaseDocument` / `writeDatabaseDocument`. Fixes "Failed to open document" in Document Mode against a database-backed Scriptorium store. (`app/api/v1/chats/[id]/actions/documents.ts`)
+
 #### Features
 
+- **Scriptorium — Convert and Deconvert document stores between backends**
+  - Each document-store card on the Scriptorium page now sports a **Convert** button (on filesystem and Obsidian stores) and a **Deconvert** button (on database-backed stores) alongside the familiar Scan/Edit/Delete controls.
+  - **Convert** reads every indexed file from the store's `basePath` and moves its bytes inside the encrypted mount-index database: text files land in `doc_mount_documents`, binaries in `doc_mount_blobs`. The original files on disk are left untouched. The store's `mountType` flips to `'database'` and the filesystem watcher detaches.
+  - **Deconvert** prompts for a target directory (which must be empty or nonexistent), writes every document and blob out to disk at its relative path, flips `mountType` back to `'filesystem'`, and attaches a fresh filesystem watcher against the new `basePath`.
+  - **Embeddings are preserved** across either direction. The `doc_mount_files` row and its `doc_mount_chunks` children (including the `embedding` BLOB) stay in place throughout; only the `source` column flips. No re-embedding is necessary.
+  - New `POST /api/v1/mount-points/:id?action=convert` and `?action=deconvert` endpoints for programmatic access; the deconvert body accepts `{ targetPath }` and validates emptiness server-side.
+  - New `conversionStatus` / `conversionError` columns on `doc_mount_points` drive the in-flight "Converting…" / "Deconverting…" badges on each card; an in-repo ALTER-TABLE migration adds them automatically on first access after upgrade.
 - **Scriptorium — Database-backed document stores and universal blob layer**
   - New `mountType: 'database'` option for Scriptorium document stores. Documents and binary assets live entirely inside the SQLCipher-encrypted `quilltap-mount-index.db` — no filesystem path required. DB-backed stores are automatically covered by the existing 24-hour physical-backup sweep.
   - New universal blob table (`doc_mount_blobs`) available to every mount type. Uploaded images are transcoded to WebP server-side via `sharp`; original filename, original MIME type, user-supplied description, and SHA256 are preserved as metadata.

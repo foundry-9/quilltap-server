@@ -28,6 +28,12 @@ export const DocMountPointSchema = z.object({
   lastScannedAt: TimestampSchema.nullable().optional(),
   scanStatus: z.enum(['idle', 'scanning', 'error']).default('idle'),
   lastScanError: z.string().nullable().optional(),
+  // Backend-storage conversion state (filesystem ↔ database). 'converting' means
+  // filesystem→database in flight; 'deconverting' means database→filesystem in
+  // flight. Distinct from the file-level doc_mount_files.conversionStatus,
+  // which tracks pdf/docx→text extraction.
+  conversionStatus: z.enum(['idle', 'converting', 'deconverting', 'error']).default('idle'),
+  conversionError: z.string().nullable().optional(),
   fileCount: z.number().int().default(0),   // Cached count of active files
   chunkCount: z.number().int().default(0),  // Cached count of chunks
   totalSizeBytes: z.number().int().default(0),  // Cached total size of all files in bytes

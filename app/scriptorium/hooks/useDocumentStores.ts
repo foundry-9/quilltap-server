@@ -16,6 +16,8 @@ import type {
   CreateDocumentStoreData,
   UpdateDocumentStoreData,
   ScanResult,
+  ConvertResult,
+  DeconvertResult,
   UseDocumentStoresReturn,
 } from '../types'
 
@@ -152,6 +154,105 @@ export function useDocumentStores(): UseDocumentStoresReturn {
     }
   }, [])
 
+  const convertStore = useCallback(async (id: string): Promise<ConvertResult | null> => {
+    try {
+      // Optimistically mark the store as converting so the card disables
+      // its other action buttons while the request is in flight.
+      setStores(prev => prev.map(s => s.id === id
+        ? { ...s, conversionStatus: 'converting' as const, conversionError: null }
+        : s
+      ))
+
+      const res = await fetch(`/api/v1/mount-points/${id}?action=convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.error || errBody.message || 'Failed to convert document store')
+      }
+
+      const result = await res.json()
+
+      const storeRes = await fetch(`/api/v1/mount-points/${id}`)
+      if (storeRes.ok) {
+        const storeData = await storeRes.json()
+        setStores(prev => prev.map(s => s.id === id ? storeData.mountPoint : s))
+      }
+
+      const cr = result.convertResult as ConvertResult
+      const previousBasePath = result.previousBasePath as string | undefined
+      const partsA = [
+        `${cr.filesMigrated} file${cr.filesMigrated === 1 ? '' : 's'} migrated`,
+      ]
+      if (cr.blobsWritten > 0) partsA.push(`${cr.blobsWritten} binary blob${cr.blobsWritten === 1 ? '' : 's'}`)
+      if (cr.filesSkipped > 0) partsA.push(`${cr.filesSkipped} skipped`)
+      if (cr.errors.length > 0) partsA.push(`${cr.errors.length} error${cr.errors.length === 1 ? '' : 's'}`)
+      const suffix = previousBasePath
+        ? `. Your original files at ${previousBasePath} remain on disk and are yours to keep or delete.`
+        : '. Your original files remain on disk.'
+      showSuccessToast(`Converted to database: ${partsA.join(', ')}${suffix}`)
+
+      return cr
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to convert document store'
+      console.error('useDocumentStores: convert error', { error: errorMsg, storeId: id })
+      showErrorToast(errorMsg)
+      setStores(prev => prev.map(s => s.id === id
+        ? { ...s, conversionStatus: 'error' as const, conversionError: errorMsg }
+        : s
+      ))
+      return null
+    }
+  }, [])
+
+  const deconvertStore = useCallback(async (id: string, targetPath: string): Promise<DeconvertResult | null> => {
+    try {
+      setStores(prev => prev.map(s => s.id === id
+        ? { ...s, conversionStatus: 'deconverting' as const, conversionError: null }
+        : s
+      ))
+
+      const res = await fetch(`/api/v1/mount-points/${id}?action=deconvert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetPath }),
+      })
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error(errBody.error || errBody.message || 'Failed to deconvert document store')
+      }
+
+      const result = await res.json()
+
+      const storeRes = await fetch(`/api/v1/mount-points/${id}`)
+      if (storeRes.ok) {
+        const storeData = await storeRes.json()
+        setStores(prev => prev.map(s => s.id === id ? storeData.mountPoint : s))
+      }
+
+      const dr = result.deconvertResult as DeconvertResult
+      const parts = [`${dr.filesWritten} document${dr.filesWritten === 1 ? '' : 's'}`]
+      if (dr.blobsWritten > 0) parts.push(`${dr.blobsWritten} blob${dr.blobsWritten === 1 ? '' : 's'}`)
+      if (dr.errors.length > 0) parts.push(`${dr.errors.length} error${dr.errors.length === 1 ? '' : 's'}`)
+      showSuccessToast(`Deconverted to filesystem: ${parts.join(', ')} written to ${targetPath}`)
+
+      return dr
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to deconvert document store'
+      console.error('useDocumentStores: deconvert error', { error: errorMsg, storeId: id })
+      showErrorToast(errorMsg)
+      setStores(prev => prev.map(s => s.id === id
+        ? { ...s, conversionStatus: 'error' as const, conversionError: errorMsg }
+        : s
+      ))
+      return null
+    }
+  }, [])
+
   return {
     stores,
     loading,
@@ -161,5 +262,7 @@ export function useDocumentStores(): UseDocumentStoresReturn {
     updateStore,
     deleteStore,
     scanStore,
+    convertStore,
+    deconvertStore,
   }
 }

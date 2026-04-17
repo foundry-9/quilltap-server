@@ -190,7 +190,11 @@ describe('chats [id] document actions', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(writeFileWithMtimeCheck).toHaveBeenCalledWith('/tmp/project/doc.md', '# Updated', 111)
+    expect(writeFileWithMtimeCheck).toHaveBeenCalledWith(
+      expect.objectContaining({ absolutePath: '/tmp/project/doc.md', scope: 'project', relativePath: 'doc.md' }),
+      '# Updated',
+      111
+    )
     expect(body).toMatchObject({ success: true, mtime: 123456789 })
   })
 

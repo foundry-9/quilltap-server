@@ -196,7 +196,7 @@ export async function handleOpenDocument(
         projectId: chatContext.projectId,
         mountPoint: data.mountPoint,
       });
-      const fileData = await readFileWithMtime(resolved.absolutePath);
+      const fileData = await readFileWithMtime(resolved);
       content = fileData.content;
       mtime = fileData.mtime;
       if (!data.title) {
@@ -213,7 +213,7 @@ export async function handleOpenDocument(
         projectId: chatContext.projectId,
         mountPoint: data.mountPoint,
       });
-      const writeResult = await writeFileWithMtimeCheck(resolved.absolutePath, '');
+      const writeResult = await writeFileWithMtimeCheck(resolved, '');
       mtime = writeResult.mtime;
     } catch (error) {
       return serverError(`Failed to create blank document: ${error instanceof Error ? error.message : String(error)}`);
@@ -318,7 +318,7 @@ export async function handleReadDocument(
   }
 
   try {
-    const fileData = await readFileWithMtime(chatContext.resolved.absolutePath);
+    const fileData = await readFileWithMtime(chatContext.resolved);
 
     logger.debug('Read document for document mode', {
       chatId,
@@ -375,7 +375,7 @@ export async function handleWriteDocument(
     const { repos } = context;
     const { resolved } = chatContext;
     const { mtime } = await writeFileWithMtimeCheck(
-      resolved.absolutePath,
+      resolved,
       data.content,
       data.mtime,
     );

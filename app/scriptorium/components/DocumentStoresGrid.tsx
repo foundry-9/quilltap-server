@@ -17,6 +17,8 @@ interface DocumentStoresGridProps {
   onEditClick: (store: DocumentStore) => void
   onDeleteClick: (storeId: string) => void
   onScanClick: (storeId: string) => void
+  onConvertClick: (store: DocumentStore) => void
+  onDeconvertClick: (store: DocumentStore) => void
 }
 
 export function DocumentStoresGrid({
@@ -26,6 +28,8 @@ export function DocumentStoresGrid({
   onEditClick,
   onDeleteClick,
   onScanClick,
+  onConvertClick,
+  onDeconvertClick,
 }: DocumentStoresGridProps) {
   const router = useRouter()
 
@@ -66,6 +70,8 @@ export function DocumentStoresGrid({
           onEdit={() => onEditClick(store)}
           onDelete={() => onDeleteClick(store.id)}
           onScan={() => onScanClick(store.id)}
+          onConvert={() => onConvertClick(store)}
+          onDeconvert={() => onDeconvertClick(store)}
         />
       ))}
     </div>

@@ -15,10 +15,15 @@ import { withActionDispatch } from '@/lib/api/middleware/actions';
 import type { RequestContext } from '@/lib/api/middleware/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { scanMountPoint } from '@/lib/mount-index/scanner';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import { detachMountPoint, refreshMountPoint } from '@/lib/mount-index/watcher';
+import {
+  convertMountPointToDatabase,
+  deconvertMountPointToFilesystem,
+  validateDeconvertTarget,
+} from '@/lib/mount-index/conversion';
 
 // ============================================================================
 // Schemas
@@ -254,10 +259,196 @@ async function handleScan(
   }
 }
 
+// ============================================================================
+// Convert (filesystem/obsidian → database) Action
+// ============================================================================
+
+async function handleConvert(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  try {
+    logger.debug('[Mount Points v1] Convert action triggered', {
+      mountPointId: id,
+      userId: user.id,
+    });
+
+    const mountPoint = await repos.docMountPoints.findById(id);
+    if (!mountPoint) {
+      return notFound('Mount point');
+    }
+    if (mountPoint.mountType !== 'filesystem' && mountPoint.mountType !== 'obsidian') {
+      return badRequest(
+        `Mount point is already database-backed (mountType=${mountPoint.mountType})`
+      );
+    }
+    if (mountPoint.conversionStatus === 'converting' || mountPoint.conversionStatus === 'deconverting') {
+      return badRequest('A conversion is already in progress for this mount point');
+    }
+
+    await repos.docMountPoints.updateConversionStatus(id, 'converting');
+
+    // Stop the watcher so chokidar doesn't react to files disappearing as the
+    // mount-type changes; database-backed stores have no filesystem to watch.
+    await detachMountPoint(id).catch((err) => {
+      logger.warn('[Mount Points v1] Failed to detach watcher before convert', {
+        mountPointId: id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+
+    try {
+      const convertResult = await convertMountPointToDatabase(mountPoint);
+
+      await repos.docMountPoints.update(id, {
+        mountType: 'database',
+        basePath: '',
+      });
+      await repos.docMountPoints.updateConversionStatus(id, 'idle');
+
+      logger.info('[Mount Points v1] Convert completed', {
+        mountPointId: id,
+        name: mountPoint.name,
+        filesMigrated: convertResult.filesMigrated,
+        documentsWritten: convertResult.documentsWritten,
+        blobsWritten: convertResult.blobsWritten,
+        filesSkipped: convertResult.filesSkipped,
+        errors: convertResult.errors.length,
+        userId: user.id,
+      });
+
+      const updated = await repos.docMountPoints.findById(id);
+      return successResponse({
+        mountPoint: updated,
+        convertResult,
+        previousBasePath: mountPoint.basePath,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await repos.docMountPoints.updateConversionStatus(id, 'error', msg);
+      // Best-effort: re-attach the watcher so a partially-converted store still
+      // picks up on-disk changes until the user retries.
+      refreshMountPoint(mountPoint).catch(() => {});
+      throw err;
+    }
+  } catch (error) {
+    logger.error(
+      '[Mount Points v1] Error converting mount point',
+      { mountPointId: id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError(
+      `Failed to convert mount point: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+// ============================================================================
+// Deconvert (database → filesystem) Action
+// ============================================================================
+
+const deconvertSchema = z.object({
+  targetPath: z.string().min(1),
+});
+
+async function handleDeconvert(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  try {
+    logger.debug('[Mount Points v1] Deconvert action triggered', {
+      mountPointId: id,
+      userId: user.id,
+    });
+
+    const body = await req.json().catch(() => ({}));
+    const parsed = deconvertSchema.safeParse(body);
+    if (!parsed.success) {
+      return badRequest('Deconvert requires a non-empty targetPath');
+    }
+    const { targetPath } = parsed.data;
+
+    const mountPoint = await repos.docMountPoints.findById(id);
+    if (!mountPoint) {
+      return notFound('Mount point');
+    }
+    if (mountPoint.mountType !== 'database') {
+      return badRequest(
+        `Mount point is not database-backed (mountType=${mountPoint.mountType}); nothing to deconvert`
+      );
+    }
+    if (mountPoint.conversionStatus === 'converting' || mountPoint.conversionStatus === 'deconverting') {
+      return badRequest('A conversion is already in progress for this mount point');
+    }
+
+    try {
+      await validateDeconvertTarget(targetPath);
+    } catch (err) {
+      return badRequest(err instanceof Error ? err.message : String(err));
+    }
+
+    await repos.docMountPoints.updateConversionStatus(id, 'deconverting');
+
+    try {
+      const deconvertResult = await deconvertMountPointToFilesystem(mountPoint, targetPath);
+
+      const updated = await repos.docMountPoints.update(id, {
+        mountType: 'filesystem',
+        basePath: targetPath,
+      });
+      await repos.docMountPoints.updateConversionStatus(id, 'idle');
+
+      // Reattach the watcher against the new basePath so live edits on disk
+      // start flowing back into the mount index.
+      if (updated) {
+        refreshMountPoint(updated).catch((watcherErr) => {
+          logger.warn('[Mount Points v1] Failed to attach watcher after deconvert', {
+            mountPointId: id,
+            error: watcherErr instanceof Error ? watcherErr.message : String(watcherErr),
+          });
+        });
+      }
+
+      logger.info('[Mount Points v1] Deconvert completed', {
+        mountPointId: id,
+        name: mountPoint.name,
+        targetPath,
+        filesWritten: deconvertResult.filesWritten,
+        blobsWritten: deconvertResult.blobsWritten,
+        bytesWritten: deconvertResult.bytesWritten,
+        errors: deconvertResult.errors.length,
+        userId: user.id,
+      });
+
+      return successResponse({
+        mountPoint: updated,
+        deconvertResult,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await repos.docMountPoints.updateConversionStatus(id, 'error', msg);
+      throw err;
+    }
+  } catch (error) {
+    logger.error(
+      '[Mount Points v1] Error deconverting mount point',
+      { mountPointId: id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError(
+      `Failed to deconvert mount point: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
 export const POST = createAuthenticatedParamsHandler<{ id: string }>(
   (req, ctx, { id }) => {
     const dispatch = withActionDispatch<{ id: string }>({
       scan: handleScan,
+      convert: handleConvert,
+      deconvert: handleDeconvert,
     });
     return dispatch(req, ctx, { id });
   }

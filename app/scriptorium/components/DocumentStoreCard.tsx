@@ -14,6 +14,8 @@ interface DocumentStoreCardProps {
   onEdit: () => void
   onDelete: () => void
   onScan: () => void
+  onConvert: () => void
+  onDeconvert: () => void
   scanning: boolean
 }
 
@@ -47,6 +49,22 @@ function RefreshIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+  )
+}
+
+function DownloadIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+    </svg>
+  )
+}
+
+function UploadIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5 5 5M12 5v12" />
     </svg>
   )
 }
@@ -100,8 +118,15 @@ function EmbeddingStatusBadge({ embedded, total }: { embedded: number; total: nu
 }
 
 function MountTypeBadge({ type }: { type: string }) {
-  const badgeClass = type === 'obsidian' ? 'qt-badge-related' : 'qt-badge-info'
-  const label = type === 'obsidian' ? 'Obsidian' : 'Filesystem'
+  let badgeClass = 'qt-badge-info'
+  let label = 'Filesystem'
+  if (type === 'obsidian') {
+    badgeClass = 'qt-badge-related'
+    label = 'Obsidian'
+  } else if (type === 'database') {
+    badgeClass = 'qt-badge-success'
+    label = 'Database'
+  }
   return (
     <span className={`${badgeClass} inline-flex items-center`}>
       {label}
@@ -109,10 +134,42 @@ function MountTypeBadge({ type }: { type: string }) {
   )
 }
 
-export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, scanning }: DocumentStoreCardProps) {
+function ConversionStatusBadge({ status, error }: { status: string; error: string | null }) {
+  if (status === 'converting') {
+    return (
+      <span className="qt-badge-warning inline-flex items-center gap-1">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full qt-dot-warning" />
+        Converting
+      </span>
+    )
+  }
+  if (status === 'deconverting') {
+    return (
+      <span className="qt-badge-warning inline-flex items-center gap-1">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full qt-dot-warning" />
+        Deconverting
+      </span>
+    )
+  }
+  if (status === 'error') {
+    return (
+      <span className="qt-badge-destructive inline-flex items-center gap-1" title={error || 'Conversion error'}>
+        Conversion error
+      </span>
+    )
+  }
+  return null
+}
+
+export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, onConvert, onDeconvert, scanning }: DocumentStoreCardProps) {
   const lastScanned = store.lastScannedAt
     ? new Date(store.lastScannedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : 'Never'
+
+  const isDatabaseBacked = store.mountType === 'database'
+  const conversionInFlight =
+    store.conversionStatus === 'converting' || store.conversionStatus === 'deconverting'
+  const actionsDisabled = scanning || store.scanStatus === 'scanning' || conversionInFlight
 
   return (
     <div
@@ -126,7 +183,9 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, sc
           </div>
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-foreground truncate">{store.name}</h2>
-            <p className="qt-text-small truncate" title={store.basePath}>{store.basePath}</p>
+            <p className="qt-text-small truncate" title={store.basePath || 'Database-backed — no path'}>
+              {store.basePath || <em className="qt-text-secondary">Database-backed — no path</em>}
+            </p>
           </div>
         </div>
       </div>
@@ -134,6 +193,7 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, sc
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <MountTypeBadge type={store.mountType} />
         <ScanStatusBadge status={store.scanStatus} error={store.lastScanError} />
+        <ConversionStatusBadge status={store.conversionStatus} error={store.conversionError} />
         <EmbeddingStatusBadge embedded={store.embeddedChunkCount} total={store.chunkCount} />
         {!store.enabled && (
           <span className="qt-badge-disabled inline-flex items-center">
@@ -157,26 +217,49 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, sc
         </div>
       </div>
 
-      <div className="qt-entity-card-actions flex gap-2">
+      <div className="qt-entity-card-actions flex gap-2 flex-wrap">
         <button
           onClick={(e) => { e.stopPropagation(); onScan() }}
-          disabled={scanning || store.scanStatus === 'scanning'}
-          className={`qt-button-secondary flex-1 inline-flex items-center justify-center gap-1.5 ${scanning || store.scanStatus === 'scanning' ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={actionsDisabled}
+          className={`qt-button-secondary flex-1 inline-flex items-center justify-center gap-1.5 ${actionsDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
           title="Scan for changes"
         >
           <RefreshIcon className={`w-4 h-4 ${scanning || store.scanStatus === 'scanning' ? 'animate-spin' : ''}`} />
           {scanning || store.scanStatus === 'scanning' ? 'Scanning...' : 'Scan'}
         </button>
+        {isDatabaseBacked ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDeconvert() }}
+            disabled={actionsDisabled}
+            className={`qt-button-secondary inline-flex items-center justify-center gap-1.5 ${actionsDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title="Export everything out to a filesystem directory and switch to filesystem-backed"
+          >
+            <DownloadIcon className={`w-4 h-4 ${store.conversionStatus === 'deconverting' ? 'animate-pulse' : ''}`} />
+            {store.conversionStatus === 'deconverting' ? 'Deconverting...' : 'Deconvert'}
+          </button>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); onConvert() }}
+            disabled={actionsDisabled}
+            className={`qt-button-secondary inline-flex items-center justify-center gap-1.5 ${actionsDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title="Move every file into the encrypted database and switch to database-backed"
+          >
+            <UploadIcon className={`w-4 h-4 ${store.conversionStatus === 'converting' ? 'animate-pulse' : ''}`} />
+            {store.conversionStatus === 'converting' ? 'Converting...' : 'Convert'}
+          </button>
+        )}
         <button
           onClick={(e) => { e.stopPropagation(); onEdit() }}
-          className="qt-button-secondary"
+          disabled={conversionInFlight}
+          className={`qt-button-secondary ${conversionInFlight ? 'opacity-50 cursor-not-allowed' : ''}`}
           title="Edit document store"
         >
           <PencilIcon className="w-4 h-4" />
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete() }}
-          className="qt-button-destructive qt-shadow-sm"
+          disabled={conversionInFlight}
+          className={`qt-button-destructive qt-shadow-sm ${conversionInFlight ? 'opacity-50 cursor-not-allowed' : ''}`}
           title="Delete document store"
         >
           <TrashIcon className="w-4 h-4" />

@@ -59,10 +59,22 @@ Document stores are managed from the **Scriptorium** page, accessible via the da
 - **Edit** settings including name, path, mount type, include/exclude patterns, and enabled status
 - **View** file counts, total size, chunk counts, and scan status at a glance on each store's card
 - **Scan** a store to discover new, modified, or deleted files — click the Scan button on any store's card or detail page
+- **Convert** a filesystem or Obsidian store *to* database-backed, or **Deconvert** a database-backed store *back* to filesystem — more on this most civilized piece of magic below
 - **Delete** a store, which removes all indexed data (the original files on disk are never touched)
 - **Inspect** individual files by clicking through to a store's detail page, where you can see each file's type, size, conversion status, embedding chunk count, and last-modified date
 
 You may also manage document stores through the API at `/api/v1/mount-points` if you prefer the programmatic approach.
+
+### Converting Between Backends
+
+Every store card sports a small button for changing its mind about where it keeps its things. Should you decide, mid-career, that your sprawling vault of research notes deserves the encrypted sanctuary of the mount-index database — or, on the contrary, that your database-backed store ought to be let out for a walk on the filesystem — the Scriptorium will oblige without losing so much as a single embedding.
+
+- **Convert** (on filesystem or Obsidian stores) reads every indexed file from disk and tucks its contents inside the encrypted `quilltap-mount-index.db`. Markdown and plain-text files land in the `doc_mount_documents` table, while PDFs, Word documents, and images become blobs in the universal blob layer. Your original files are never deleted — they stay on disk as you left them, and you may dispose of them at your leisure afterwards.
+- **Deconvert** (on database-backed stores) asks you for a fresh target directory — one that either doesn't exist or is entirely empty — and writes every document and blob out to disk at the same relative paths they occupied inside the database. The store then switches to filesystem-backed and the live watcher begins its polite surveillance of the new home.
+
+In both directions, the existing chunks and their embeddings are **preserved exactly as they are**, so there is no tedious re-embedding to endure, no degradation of the semantic index, and no sudden surge in your embedding-provider bill. Because the underlying `doc_mount_files` rows and their chunk children are kept in place and only the `source` column flips, a store that has been indexed once stays indexed forever — even as its bytes slide back and forth between disk and database.
+
+A small caveat attends the image transcoding pipeline: blobs uploaded as PNG, JPEG, and similar formats are stored as WebP, so a later Deconvert will round-trip those images as `.webp` rather than the format they originally arrived in. This is by design, and the conversion dialog will remind you of it.
 
 ### Project Links
 

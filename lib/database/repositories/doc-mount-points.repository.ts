@@ -60,6 +60,18 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
           logger.info('Migrated doc_mount_points: added totalSizeBytes column');
         }
 
+        // Migration: add conversionStatus / conversionError for storage-backend
+        // conversion tracking (filesystem ↔ database). Default 'idle' preserves
+        // existing behaviour for rows created before this feature shipped.
+        if (!columns.some(c => c.name === 'conversionStatus')) {
+          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "conversionStatus" TEXT NOT NULL DEFAULT 'idle'`);
+          logger.info('Migrated doc_mount_points: added conversionStatus column');
+        }
+        if (!columns.some(c => c.name === 'conversionError')) {
+          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "conversionError" TEXT DEFAULT NULL`);
+          logger.info('Migrated doc_mount_points: added conversionError column');
+        }
+
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
         logger.error('Failed to ensure doc_mount_points table in mount index database', {
@@ -216,6 +228,51 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
       },
       'Error refreshing mount point stats',
       { id }
+    );
+  }
+
+  /**
+   * Update the backend-storage conversion status of a mount point
+   * (filesystem ↔ database). Use this to drive UI badges during Convert /
+   * Deconvert operations and to record failure messages on error.
+   */
+  async updateConversionStatus(
+    id: string,
+    status: 'idle' | 'converting' | 'deconverting' | 'error',
+    error?: string
+  ): Promise<void> {
+    await this.safeQuery(
+      async () => {
+        logger.debug('Updating conversion status for mount point', {
+          context: 'DocMountPointsRepository.updateConversionStatus',
+          id,
+          status,
+          error,
+        });
+
+        const updateData: Partial<DocMountPoint> = {
+          conversionStatus: status,
+        };
+        if (status === 'error' && error) {
+          updateData.conversionError = error;
+        } else if (status !== 'error') {
+          updateData.conversionError = null;
+        }
+
+        const updated = await this._update(id, updateData);
+
+        if (!updated) {
+          throw new Error(`Mount point not found for conversion status update: ${id}`);
+        }
+
+        logger.debug('Updated conversion status for mount point', {
+          context: 'DocMountPointsRepository.updateConversionStatus',
+          id,
+          status,
+        });
+      },
+      'Error updating conversion status for mount point',
+      { id, status }
     );
   }
 

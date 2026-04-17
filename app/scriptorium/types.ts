@@ -15,12 +15,31 @@ export interface DocumentStore {
   lastScannedAt: string | null
   scanStatus: 'idle' | 'scanning' | 'error'
   lastScanError: string | null
+  conversionStatus: 'idle' | 'converting' | 'deconverting' | 'error'
+  conversionError: string | null
   fileCount: number
   chunkCount: number
   totalSizeBytes: number
   embeddedChunkCount: number
   createdAt: string
   updatedAt: string
+}
+
+export interface ConvertResult {
+  mountPointId: string
+  filesMigrated: number
+  documentsWritten: number
+  blobsWritten: number
+  filesSkipped: number
+  errors: Array<{ relativePath: string; error: string }>
+}
+
+export interface DeconvertResult {
+  mountPointId: string
+  filesWritten: number
+  blobsWritten: number
+  bytesWritten: number
+  errors: Array<{ relativePath: string; error: string }>
 }
 
 export interface DocumentStoreFile {
@@ -58,6 +77,8 @@ export interface UseDocumentStoresReturn {
   updateStore: (id: string, data: UpdateDocumentStoreData) => Promise<DocumentStore | null>
   deleteStore: (id: string) => Promise<boolean>
   scanStore: (id: string) => Promise<{ scanResult: ScanResult; embeddingJobsEnqueued: number } | null>
+  convertStore: (id: string) => Promise<ConvertResult | null>
+  deconvertStore: (id: string, targetPath: string) => Promise<DeconvertResult | null>
 }
 
 export interface CreateDocumentStoreData {
