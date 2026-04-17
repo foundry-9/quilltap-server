@@ -71,6 +71,7 @@ export interface QuilltapExportCounts {
   documentStores?: number;
   documentStoreDocuments?: number;
   documentStoreBlobs?: number;
+  documentStoreProjectLinks?: number;
 }
 
 /**
@@ -271,10 +272,20 @@ export interface ExportedDocumentStoreBlob {
   dataBase64: string;
 }
 
+export interface ExportedProjectDocMountLink {
+  projectId: string;
+  mountPointId: string;
+}
+
 export interface DocumentStoresExportData {
   mountPoints: ExportedDocumentStore[];
   documents: ExportedDocumentStoreDocument[];
   blobs: ExportedDocumentStoreBlob[];
+  /**
+   * Project ↔ mount-point associations. Optional for backward
+   * compatibility with older .qtap files that predated this field.
+   */
+  projectLinks?: ExportedProjectDocMountLink[];
 }
 
 /**

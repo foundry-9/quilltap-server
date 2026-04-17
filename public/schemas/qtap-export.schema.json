@@ -152,7 +152,8 @@
             "properties": {
               "mountPoints": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStore" } },
               "documents": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreDocument" } },
-              "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } }
+              "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } },
+              "projectLinks": { "type": "array", "items": { "$ref": "#/$defs/ExportedProjectDocMountLink" } }
             },
             "additionalProperties": false
           }
@@ -252,7 +253,8 @@
         "projects": { "type": "integer", "minimum": 0 },
         "documentStores": { "type": "integer", "minimum": 0 },
         "documentStoreDocuments": { "type": "integer", "minimum": 0 },
-        "documentStoreBlobs": { "type": "integer", "minimum": 0 }
+        "documentStoreBlobs": { "type": "integer", "minimum": 0 },
+        "documentStoreProjectLinks": { "type": "integer", "minimum": 0 }
       }
     },
 
@@ -740,6 +742,17 @@
         "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
         "description": { "type": "string" },
         "dataBase64": { "type": "string", "contentEncoding": "base64" }
+      }
+    },
+
+    "ExportedProjectDocMountLink": {
+      "type": "object",
+      "description": "Association between a project and a document store (mount point). Both IDs are remapped through the import's project and mount-point ID maps.",
+      "required": ["projectId", "mountPointId"],
+      "additionalProperties": false,
+      "properties": {
+        "projectId": { "$ref": "#/$defs/UUID" },
+        "mountPointId": { "$ref": "#/$defs/UUID" }
       }
     }
   }

@@ -35,6 +35,7 @@ import type {
   ExportedDocumentStore,
   ExportedDocumentStoreDocument,
   ExportedDocumentStoreBlob,
+  ExportedProjectDocMountLink,
 } from './types';
 import type {
   Character,
@@ -527,10 +528,13 @@ export async function exportDocumentStores(
   const mountPoints: ExportedDocumentStore[] = [];
   const documents: ExportedDocumentStoreDocument[] = [];
   const blobs: ExportedDocumentStoreBlob[] = [];
+  const projectLinks: ExportedProjectDocMountLink[] = [];
+  const mountIdSet = new Set<string>();
 
   for (const id of mountPointIds) {
     const mp = await repos.docMountPoints.findById(id);
     if (!mp) continue;
+    mountIdSet.add(mp.id);
     mountPoints.push({
       id: mp.id,
       name: mp.name,
@@ -574,9 +578,20 @@ export async function exportDocumentStores(
         dataBase64: data.toString('base64'),
       });
     }
+
+    // Project ↔ mount-point links. Import side remaps both IDs through the
+    // project and mount-point ID maps so the associations survive even when
+    // the target instance rewrites IDs under a 'duplicate' conflict strategy.
+    const links = await repos.projectDocMountLinks.findByMountPointId(mp.id);
+    for (const link of links) {
+      projectLinks.push({
+        projectId: link.projectId,
+        mountPointId: link.mountPointId,
+      });
+    }
   }
 
-  return { mountPoints, documents, blobs };
+  return { mountPoints, documents, blobs, projectLinks };
 }
 
 // ============================================================================
@@ -738,12 +753,14 @@ export async function createExport(
     if (memoryCount > 0) {
       counts.memories = memoryCount;
     }
-    // Document stores carry two extra counts for document bodies and blobs —
-    // surface them in the manifest so importers know what they're about to load.
+    // Document stores carry several extra counts for document bodies, blobs,
+    // and project-link associations — surface them in the manifest so
+    // importers know what they're about to load.
     if (options.type === 'document-stores' && data && 'documents' in data && 'blobs' in data) {
       counts.documentStores = entityCount;
       counts.documentStoreDocuments = (data as DocumentStoresExportData).documents.length;
       counts.documentStoreBlobs = (data as DocumentStoresExportData).blobs.length;
+      counts.documentStoreProjectLinks = (data as DocumentStoresExportData).projectLinks?.length ?? 0;
     }
 
     const manifest = createManifest(options.type, options, counts);

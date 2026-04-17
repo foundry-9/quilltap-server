@@ -39,6 +39,7 @@ import type {
   ExportedDocumentStore,
   ExportedDocumentStoreDocument,
   ExportedDocumentStoreBlob,
+  ExportedProjectDocMountLink,
 } from '@/lib/export/types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
@@ -61,6 +62,7 @@ interface AnyExportData {
   mountPoints?: ExportedDocumentStore[];
   documents?: ExportedDocumentStoreDocument[];
   blobs?: ExportedDocumentStoreBlob[];
+  projectLinks?: ExportedProjectDocMountLink[];
 }
 
 /**
@@ -543,13 +545,16 @@ export async function executeImport(
         data.mountPoints,
         data.documents ?? [],
         data.blobs ?? [],
+        data.projectLinks ?? [],
         options,
         repos,
+        idMaps,
         warnings
       );
       imported.documentStores = counts.mountPoints;
       imported.documentStoreDocuments = counts.documents;
       imported.documentStoreBlobs = counts.blobs;
+      imported.documentStoreProjectLinks = counts.projectLinks;
     }
 
     // Post-import reconciliation
@@ -1368,17 +1373,20 @@ interface DocumentStoreImportCounts {
   mountPoints: number;
   documents: number;
   blobs: number;
+  projectLinks: number;
 }
 
 async function importDocumentStores(
   mountPoints: ExportedDocumentStore[],
   documents: ExportedDocumentStoreDocument[],
   blobs: ExportedDocumentStoreBlob[],
+  projectLinks: ExportedProjectDocMountLink[],
   options: ImportOptions,
   _userRepos: ReturnType<typeof getUserRepositories>,
+  idMaps: IdMappingState,
   warnings: string[]
 ): Promise<DocumentStoreImportCounts> {
-  const counts: DocumentStoreImportCounts = { mountPoints: 0, documents: 0, blobs: 0 };
+  const counts: DocumentStoreImportCounts = { mountPoints: 0, documents: 0, blobs: 0, projectLinks: 0 };
 
   // Document stores are instance-scoped, not user-scoped — use the global
   // repository container.
@@ -1506,6 +1514,42 @@ async function importDocumentStores(
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       warnings.push(`Failed to import blob "${blob.relativePath}": ${msg}`);
+    }
+  }
+
+  // Project ↔ mount-point links — remap both IDs through the respective
+  // maps. Projects are imported earlier in the pipeline so idMaps.projects
+  // is already populated by the time we get here. Skip any link whose
+  // project or mount point didn't survive the import.
+  const existingLinks = projectLinks.length > 0
+    ? await globalRepos.projectDocMountLinks.findAll()
+    : [];
+  const existingLinkKeys = new Set(
+    existingLinks.map(l => `${l.projectId}::${l.mountPointId}`)
+  );
+  for (const link of projectLinks) {
+    const targetMountId = idMap.get(link.mountPointId);
+    const targetProjectId = idMaps.projects.get(link.projectId);
+    if (!targetMountId || !targetProjectId) {
+      continue;
+    }
+    const key = `${targetProjectId}::${targetMountId}`;
+    if (existingLinkKeys.has(key)) {
+      // Already linked after an overwrite/skip on an existing mount point.
+      continue;
+    }
+    try {
+      await globalRepos.projectDocMountLinks.create({
+        projectId: targetProjectId,
+        mountPointId: targetMountId,
+      });
+      existingLinkKeys.add(key);
+      counts.projectLinks++;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      warnings.push(
+        `Failed to link project ${targetProjectId} to mount point ${targetMountId}: ${msg}`
+      );
     }
   }
 

@@ -327,21 +327,55 @@ export async function databaseFolderHasContents(
 /**
  * Rehydrate (rechunk) all documents in a database-backed mount point.
  * Used by the scan endpoint for DB-backed stores — the filesystem scanner
- * has nothing to walk, so the equivalent operation is "emit a write event
- * for every document so the embedding scheduler picks it up."
+ * has nothing to walk, so the equivalent operation is to re-chunk every
+ * document whose content sha has drifted from its file-record sha (or for
+ * which chunks simply don't exist yet, as happens after a fresh import),
+ * then emit write events so the embedding scheduler picks up the new
+ * null-embedding chunks.
  */
 export async function rescanDatabaseMountPoint(mountPoint: DocMountPoint): Promise<number> {
   if (mountPoint.mountType !== 'database') {
     throw new Error('rescanDatabaseMountPoint called on non-database mount point');
   }
   const repos = getRepositories();
+  // Lazy import to avoid a circular dep with the doc-edit module.
+  const { reindexSingleFile } = await import('@/lib/doc-edit/reindex-file');
+
   const documents = await repos.docMountDocuments.findByMountPointId(mountPoint.id);
+  let rechunked = 0;
+
   for (const doc of documents) {
+    const file = await repos.docMountFiles.findByMountPointAndPath(
+      mountPoint.id,
+      doc.relativePath
+    );
+    const needsRechunk =
+      !file ||
+      file.chunkCount === 0 ||
+      file.sha256 !== doc.contentSha256;
+
+    if (needsRechunk) {
+      try {
+        await reindexSingleFile(mountPoint.id, doc.relativePath, '');
+        rechunked++;
+      } catch (err) {
+        logger.warn('Failed to re-chunk database document during rescan', {
+          mountPointId: mountPoint.id,
+          relativePath: doc.relativePath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // Still emit the write event — drives the existing embedding-scheduler
+    // debouncer so any chunks (old or freshly rechunked) whose embeddings
+    // are null get picked up by the background job queue.
     emitDocumentWritten({ mountPointId: mountPoint.id, relativePath: doc.relativePath });
   }
   logger.info('Rescanned database mount point', {
     mountPointId: mountPoint.id,
     documents: documents.length,
+    rechunked,
   });
   return documents.length;
 }
