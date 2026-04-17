@@ -71,6 +71,7 @@ export async function assembleExportFromStream(
   const chatOrder: string[] = [];
 
   const mountPoints: ExportedDocumentStore[] = [];
+  const folders: any[] = [];
   const documents: ExportedDocumentStoreDocument[] = [];
   const blobs: ExportedDocumentStoreBlob[] = [];
   const projectLinks: ExportedProjectDocMountLink[] = [];
@@ -205,6 +206,10 @@ export async function assembleExportFromStream(
         mountPoints.push((record as { data: ExportedDocumentStore }).data);
         break;
 
+      case 'doc_mount_folder':
+        folders.push((record as { data: any }).data);
+        break;
+
       case 'doc_mount_document':
         documents.push((record as { data: ExportedDocumentStoreDocument }).data);
         break;
@@ -323,6 +328,7 @@ export async function assembleExportFromStream(
     chats,
     memories,
     mountPoints,
+    folders,
     documents,
     blobs,
     projectLinks,
@@ -351,6 +357,7 @@ interface CollectedArrays {
   chats: ExportedChat[];
   memories: Memory[];
   mountPoints: ExportedDocumentStore[];
+  folders: any[];
   documents: ExportedDocumentStoreDocument[];
   blobs: ExportedDocumentStoreBlob[];
   projectLinks: ExportedProjectDocMountLink[];
@@ -386,6 +393,7 @@ function buildExportDataForType(
     case 'document-stores':
       return {
         mountPoints: c.mountPoints,
+        folders: c.folders,
         documents: c.documents,
         blobs: c.blobs,
         projectLinks: c.projectLinks,

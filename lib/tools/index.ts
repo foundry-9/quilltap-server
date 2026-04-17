@@ -370,6 +370,9 @@ export { docDeleteFileTool, validateDocDeleteFileInput, type DocDeleteFileInput,
 export { docCreateFolderTool, validateDocCreateFolderInput, type DocCreateFolderInput, type DocCreateFolderOutput } from './doc-create-folder-tool';
 export { docDeleteFolderTool, validateDocDeleteFolderInput, type DocDeleteFolderInput, type DocDeleteFolderOutput } from './doc-delete-folder-tool';
 
+// Document Folder Management Tool (Scriptorium Phase 4.0 Deliverable 3 - Phase B)
+export { docMoveFolderTool, validateDocMoveFolderInput, type DocMoveFolderInput, type DocMoveFolderOutput } from './doc-move-folder-tool';
+
 // Document Blob Tools (database-backed stores + universal blob layer)
 export { docWriteBlobTool, validateDocWriteBlobInput, type DocWriteBlobInput, type DocWriteBlobOutput } from './doc-write-blob-tool';
 export { docReadBlobTool, validateDocReadBlobInput, type DocReadBlobInput, type DocReadBlobOutput } from './doc-read-blob-tool';

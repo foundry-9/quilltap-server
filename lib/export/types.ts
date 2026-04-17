@@ -69,6 +69,7 @@ export interface QuilltapExportCounts {
   memories?: number;
   projects?: number;
   documentStores?: number;
+  documentStoreFolders?: number;
   documentStoreDocuments?: number;
   documentStoreBlobs?: number;
   documentStoreProjectLinks?: number;
@@ -248,6 +249,13 @@ export interface ExportedDocumentStore {
   enabled: boolean;
 }
 
+export interface ExportedDocumentStoreFolder {
+  mountPointId: string;
+  parentId?: string | null;
+  name: string;
+  path: string;
+}
+
 export interface ExportedDocumentStoreDocument {
   mountPointId: string;
   relativePath: string;
@@ -257,6 +265,7 @@ export interface ExportedDocumentStoreDocument {
   contentSha256: string;
   plainTextLength: number;
   lastModified: string;
+  folderId?: string | null;
 }
 
 export interface ExportedDocumentStoreBlob {
@@ -279,6 +288,7 @@ export interface ExportedProjectDocMountLink {
 
 export interface DocumentStoresExportData {
   mountPoints: ExportedDocumentStore[];
+  folders?: ExportedDocumentStoreFolder[];
   documents: ExportedDocumentStoreDocument[];
   blobs: ExportedDocumentStoreBlob[];
   /**
@@ -424,6 +434,11 @@ export interface QtapDocMountPointRecord {
   data: ExportedDocumentStore;
 }
 
+export interface QtapDocMountFolderRecord {
+  kind: 'doc_mount_folder';
+  data: any;
+}
+
 export interface QtapDocMountDocumentRecord {
   kind: 'doc_mount_document';
   data: ExportedDocumentStoreDocument;
@@ -486,6 +501,7 @@ export type QtapRecord =
   | QtapChatMessageRecord
   | QtapMemoryRecord
   | QtapDocMountPointRecord
+  | QtapDocMountFolderRecord
   | QtapDocMountDocumentRecord
   | QtapDocMountBlobRecord
   | QtapDocMountBlobChunkRecord

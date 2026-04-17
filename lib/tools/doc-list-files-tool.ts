@@ -99,6 +99,7 @@ export interface DocFileInfo {
   scope: 'document_store' | 'project' | 'general';
   size: number;
   modified: number;
+  kind?: 'file' | 'folder';
 }
 
 export interface DocListFilesOutput {

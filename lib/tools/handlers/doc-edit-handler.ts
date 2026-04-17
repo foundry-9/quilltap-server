@@ -45,6 +45,7 @@ import type { DocMoveFileInput, DocMoveFileOutput } from '../doc-move-file-tool'
 import type { DocDeleteFileInput, DocDeleteFileOutput } from '../doc-delete-file-tool';
 import type { DocCreateFolderInput, DocCreateFolderOutput } from '../doc-create-folder-tool';
 import type { DocDeleteFolderInput, DocDeleteFolderOutput } from '../doc-delete-folder-tool';
+import type { DocMoveFolderInput, DocMoveFolderOutput } from '../doc-move-folder-tool';
 import type { DocOpenDocumentInput, DocOpenDocumentOutput } from '../doc-open-document-tool';
 import type { DocCloseDocumentInput, DocCloseDocumentOutput } from '../doc-close-document-tool';
 import type { DocFocusInput, DocFocusOutput } from '../doc-focus-tool';
@@ -60,6 +61,10 @@ import {
   databaseFolderHasContents,
   deleteDatabaseDocument,
   moveDatabaseDocument,
+  createDatabaseFolder,
+  deleteDatabaseFolder,
+  moveDatabaseFolder,
+  listDatabaseFiles,
 } from '@/lib/mount-index/database-store';
 
 const logger = createServiceLogger('DocEdit:Handler');
@@ -83,6 +88,7 @@ export const DOC_EDIT_TOOL_NAMES = new Set([
   'doc_delete_file',
   'doc_create_folder',
   'doc_delete_folder',
+  'doc_move_folder',
   'doc_open_document',
   'doc_close_document',
   'doc_focus',
@@ -148,6 +154,8 @@ export async function executeDocEditTool(
         return await handleCreateFolder(input as unknown as DocCreateFolderInput, context);
       case 'doc_delete_folder':
         return await handleDeleteFolder(input as unknown as DocDeleteFolderInput, context);
+      case 'doc_move_folder':
+        return await handleMoveFolder(input as unknown as DocMoveFolderInput, context);
       case 'doc_open_document':
         return await handleOpenDocument(input as unknown as DocOpenDocumentInput, context);
       case 'doc_close_document':
@@ -778,6 +786,15 @@ async function handleListFiles(
 
           if (entry.isDirectory()) {
             if (entry.name.startsWith('.')) continue; // Skip hidden dirs
+            // Add folder entry
+            files.push({
+              path: relativePath,
+              mount_point: mountPointName,
+              scope,
+              size: 0,
+              modified: 0,
+              kind: 'folder',
+            });
             if (recursive) await walkRecursive(fullPath);
           } else if (entry.isFile()) {
             if (input.pattern && !matchesGlob(entry.name, input.pattern)) continue;
@@ -790,6 +807,7 @@ async function handleListFiles(
                 scope,
                 size: stat.size,
                 modified: stat.mtime.getTime(),
+                kind: 'file',
               });
             } catch {
               // Skip files we can't stat
@@ -818,16 +836,16 @@ async function handleListFiles(
       }
       if (mp.mountType === 'database') {
         // Bytes live in doc_mount_documents; list from the mirror doc_mount_files rows.
-        const { listDatabaseFiles } = await import('@/lib/mount-index/database-store');
-        const dbFiles = await listDatabaseFiles(mp.id, input.folder ? { folder: input.folder } : {});
-        for (const f of dbFiles) {
-          if (input.pattern && !matchesGlob(f.fileName, input.pattern)) continue;
+        const dbEntries = await listDatabaseFiles(mp.id, input.folder ? { folder: input.folder } : {});
+        for (const entry of dbEntries) {
+          if (input.pattern && !matchesGlob(entry.fileName, input.pattern)) continue;
           files.push({
-            path: f.relativePath,
+            path: entry.relativePath,
             mount_point: mp.name,
             scope: 'document_store',
-            size: f.fileSizeBytes,
-            modified: new Date(f.lastModified).getTime(),
+            size: entry.fileSizeBytes,
+            modified: new Date(entry.lastModified).getTime(),
+            kind: entry.kind as 'file' | 'folder' | undefined,
           });
         }
         continue;
@@ -866,6 +884,9 @@ async function handleListFiles(
 
   const formatted = files.map(f => {
     const prefix = f.mount_point ? `[${f.mount_point}] ` : `[${f.scope}] `;
+    if (f.kind === 'folder') {
+      return `${prefix}[folder] ${f.path}`;
+    }
     const sizeStr = f.size < 1024 ? `${f.size}B` : f.size < 1048576 ? `${(f.size / 1024).toFixed(1)}KB` : `${(f.size / 1048576).toFixed(1)}MB`;
     return `${prefix}${f.path}  (${sizeStr})`;
   }).join('\n');
@@ -1214,14 +1235,20 @@ async function handleCreateFolder(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
-  // Database-backed mounts: folders are implicit — created on first write.
-  if (resolved.mountType === 'database') {
-    logger.info('Created folder (no-op for database-backed store)', { path: input.path, scope });
-    return {
-      success: true,
-      result: { success: true, path: input.path },
-      formattedText: `Created folder: ${input.path}`,
-    };
+  // Database-backed mounts: create explicit folder rows
+  if (resolved.mountType === 'database' && resolved.mountPointId) {
+    try {
+      await createDatabaseFolder(resolved.mountPointId, resolved.relativePath);
+      logger.info('Created database folder', { path: input.path, scope });
+      return {
+        success: true,
+        result: { success: true, path: input.path },
+        formattedText: `Created folder: ${input.path}`,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { success: false, error: errorMsg };
+    }
   }
 
   // Create the directory (recursive, idempotent)
@@ -1253,22 +1280,27 @@ async function handleDeleteFolder(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
-  // Database-backed mount: folders are implicit. Deletion succeeds only when
-  // no document or blob currently lives under the prefix.
+  // Database-backed mount: delete explicit folder rows
   if (resolved.mountType === 'database' && resolved.mountPointId) {
-    if (await databaseFolderHasContents(resolved.mountPointId, resolved.relativePath)) {
+    try {
+      await deleteDatabaseFolder(resolved.mountPointId, resolved.relativePath);
+      logger.info('Deleted database folder', { path: input.path, scope });
       return {
-        success: false,
-        error: `Folder is not empty: ${input.path}. Only empty folders can be deleted. Use doc_list_files to see the contents.`,
-        formattedText: `Error: Folder "${input.path}" is not empty. Only empty folders can be deleted.`,
+        success: true,
+        result: { success: true, path: input.path },
+        formattedText: `Deleted folder: ${input.path}`,
       };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes('not empty')) {
+        return {
+          success: false,
+          error: `Folder is not empty: ${input.path}. Only empty folders can be deleted. Use doc_list_files to see the contents.`,
+          formattedText: `Error: Folder "${input.path}" is not empty. Only empty folders can be deleted.`,
+        };
+      }
+      return { success: false, error: errorMsg };
     }
-    logger.info('Deleted folder (no-op for database-backed store)', { path: input.path, scope });
-    return {
-      success: true,
-      result: { success: true, path: input.path },
-      formattedText: `Deleted folder: ${input.path}`,
-    };
   }
 
   // Verify the path exists and is a directory
@@ -1308,6 +1340,86 @@ async function handleDeleteFolder(
     success: true,
     result,
     formattedText: `Deleted folder: ${input.path}`,
+  };
+}
+
+// --- doc_move_folder ---
+
+async function handleMoveFolder(
+  input: DocMoveFolderInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: DocMoveFolderOutput; error?: string; formattedText?: string }> {
+  const scope = (input.scope || 'document_store') as DocEditScope;
+
+  // Resolve source path
+  const resolvedSource = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolvedDest = await resolveDocEditPath(scope, input.new_path, buildResolutionContext(input, context));
+
+  // Database-backed mount: route move through the database-store module
+  if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
+    try {
+      await moveDatabaseFolder(
+        resolvedSource.mountPointId,
+        resolvedSource.relativePath,
+        resolvedDest.relativePath
+      );
+      logger.info('Moved database folder', {
+        from: input.path,
+        to: input.new_path,
+        scope,
+      });
+      return {
+        success: true,
+        result: { success: true, old_path: input.path, new_path: input.new_path },
+        formattedText: `Moved folder: ${input.path} → ${input.new_path}`,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      return { success: false, error: errorMsg };
+    }
+  }
+
+  // Filesystem mount: use fs.rename
+  try {
+    const sourceStat = await fs.stat(resolvedSource.absolutePath);
+    if (!sourceStat.isDirectory()) {
+      return { success: false, error: `Source path is not a folder: ${input.path}` };
+    }
+  } catch {
+    return { success: false, error: `Source folder not found: ${input.path}` };
+  }
+
+  // Check destination doesn't already exist
+  try {
+    await fs.access(resolvedDest.absolutePath);
+    return { success: false, error: `Destination already exists: ${input.new_path}. Move will not overwrite existing folders.` };
+  } catch {
+    // Good — destination doesn't exist
+  }
+
+  // Ensure parent directory of destination exists
+  const destParent = path.dirname(resolvedDest.absolutePath);
+  await fs.mkdir(destParent, { recursive: true });
+
+  // Perform the move
+  await fs.rename(resolvedSource.absolutePath, resolvedDest.absolutePath);
+
+  logger.info('Moved folder', {
+    from: input.path,
+    to: input.new_path,
+    scope,
+  });
+
+  const result: DocMoveFolderOutput = {
+    success: true,
+    old_path: input.path,
+    new_path: input.new_path,
+  };
+
+  return {
+    success: true,
+    result,
+    formattedText: `Moved folder: ${input.path} → ${input.new_path}`,
   };
 }
 

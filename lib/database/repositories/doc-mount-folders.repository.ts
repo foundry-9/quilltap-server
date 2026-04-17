@@ -64,6 +64,38 @@ export class DocMountFoldersRepository extends AbstractBaseRepository<DocMountFo
           `ON "${this.collectionName}" ("mountPointId", "path")`
         );
 
+        // Check PRAGMA user_version to determine if backfill is needed
+        const versionResult = db.prepare('PRAGMA user_version').get() as { user_version: number } | undefined;
+        const currentVersion = versionResult?.user_version ?? 0;
+
+        // Backfill folder rows from existing documents/blobs for all database-backed mounts
+        if (currentVersion < 1) {
+          try {
+            const repos = await import('@/lib/repositories/factory').then(m => m.getRepositories());
+            const mounts = await repos.docMountPoints.findAll();
+            const dbBackedMounts = mounts.filter(m => m.mountType === 'database');
+
+            for (const mount of dbBackedMounts) {
+              try {
+                const { backfillFolderRowsForMountPoint } = await import('@/lib/mount-index/database-store');
+                await backfillFolderRowsForMountPoint(mount.id);
+              } catch (err) {
+                logger.warn('Failed to backfill folder rows for mount point', {
+                  mountPointId: mount.id,
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              }
+            }
+
+            // Set PRAGMA user_version to 1 after backfill completes
+            db.exec('PRAGMA user_version = 1');
+          } catch (err) {
+            logger.warn('Failed to run folder backfill', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
         logger.error('Failed to ensure doc_mount_folders table in mount index database', {

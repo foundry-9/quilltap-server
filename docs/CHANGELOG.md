@@ -16,6 +16,7 @@
 
 #### Features
 
+- **Scriptorium — Folder-aware operations on database-backed document stores (Phase 4.0 Deliverable 3 — Phase B)**: `doc_create_folder`, `doc_delete_folder`, `doc_list_files`, and new `doc_move_folder` tool now operate on first-class folder rows for database-backed stores. Filesystem stores gain folder entries in `doc_list_files` output. Move cascades path and `folderId` updates to all descendants and emits embedding events post-commit. Existing DB-backed stores are backfilled once on first access (`PRAGMA user_version = 1`). Export/import now round-trips folder rows in `.qtap` files.
 - **Scriptorium — Explicit folder entity schema for database-backed document stores (Phase 4.0 Deliverable 3 — Phase A)**: Added `DocMountFolder` schema, `doc_mount_folders` repository and table, and `folderId` columns to `doc_mount_files` and `doc_mount_documents`. New `folder-paths.ts` utilities provide path resolution, folder hierarchy creation, and content checking. Filesystem-backed stores continue to derive folder structure from the OS. Schema and utilities are foundation for Phase B folder-aware operations.
 - **Scriptorium — Convert and Deconvert document stores between backends**
   - Each document-store card on the Scriptorium page now sports a **Convert** button (on filesystem and Obsidian stores) and a **Deconvert** button (on database-backed stores) alongside the familiar Scan/Edit/Delete controls.

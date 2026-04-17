@@ -45,8 +45,9 @@ Every `doc_*` tool accepts a `scope` parameter that determines where it operates
 
 - **`doc_move_file`** — Move or rename a file. If the destination is in a different directory, the file is moved; if in the same directory, it is renamed. The destination must not already exist.
 - **`doc_delete_file`** — Permanently delete a file. This cannot be undone, so your characters should confirm intent before calling.
-- **`doc_create_folder`** — Create a new folder, including any necessary parent folders. Idempotent — succeeds silently if the folder already exists.
-- **`doc_delete_folder`** — Delete an empty folder. Non-empty folders are rejected for safety; no recursive deletion is permitted.
+- **`doc_create_folder`** — Create a new folder, including any necessary parent folders. Idempotent — succeeds silently if the folder already exists. For database-backed stores, explicit folder rows are created; for filesystem stores, directories are created on disk.
+- **`doc_delete_folder`** — Delete an empty folder. Non-empty folders are rejected for safety; no recursive deletion is permitted. For database-backed stores, the folder row is deleted; for filesystem stores, the directory is removed from disk.
+- **`doc_move_folder`** — Move or rename a folder (and all its descendants). Works on both filesystem and database-backed stores. For database-backed stores, the destination parent directory is created automatically if needed (like `mkdir -p`), and all descendant paths and embeddings are cascaded in a transactional batch. For filesystem stores, parent directories are created on demand. The destination must not already exist.
 
 ## Enabling and Disabling
 

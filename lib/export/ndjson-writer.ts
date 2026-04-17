@@ -415,6 +415,23 @@ async function* streamDocumentStores(
     bump(counts, 'documentStores');
 
     if (mp.mountType === 'database') {
+      // Emit folder rows before documents so import can resolve folderId FKs
+      const folders = await repos.docMountFolders.findByMountPointId(mp.id);
+      // Sort by path length to ensure parents before children
+      const sortedFolders = folders.sort((a, b) => a.path.length - b.path.length);
+      for (const folder of sortedFolders) {
+        yield {
+          kind: 'doc_mount_folder',
+          data: {
+            mountPointId: folder.mountPointId,
+            parentId: folder.parentId,
+            name: folder.name,
+            path: folder.path,
+          },
+        };
+        bump(counts, 'documentStoreFolders');
+      }
+
       const docs = await repos.docMountDocuments.findByMountPointId(mp.id);
       for (const d of docs) {
         yield {
@@ -428,6 +445,7 @@ async function* streamDocumentStores(
             contentSha256: d.contentSha256,
             plainTextLength: d.plainTextLength,
             lastModified: d.lastModified,
+            folderId: d.folderId,
           },
         };
         bump(counts, 'documentStoreDocuments');

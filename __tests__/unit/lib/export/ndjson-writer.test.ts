@@ -72,6 +72,7 @@ interface WriterGlobalRepos {
   characterPluginData: { getPluginDataMap: jest.Mock };
   roleplayTemplates: { findById: jest.Mock; findAll: jest.Mock };
   docMountPoints: { findById: jest.Mock; findAll: jest.Mock };
+  docMountFolders: { findByMountPointId: jest.Mock };
   docMountDocuments: { findByMountPointId: jest.Mock };
   docMountBlobs: { listByMountPoint: jest.Mock; readData: jest.Mock };
   projectDocMountLinks: { findByMountPointId: jest.Mock };
@@ -141,6 +142,11 @@ function makeGlobalRepos(): WriterGlobalRepos {
     docMountPoints: {
       findById: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
       findAll: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+    },
+    docMountFolders: {
+      findByMountPointId: jest
+        .fn<() => Promise<unknown[]>>()
+        .mockResolvedValue([]),
     },
     docMountDocuments: {
       findByMountPointId: jest

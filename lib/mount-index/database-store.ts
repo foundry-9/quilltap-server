@@ -61,7 +61,7 @@ function normaliseRelativePath(relativePath: string): string {
 }
 
 export class DatabaseStoreError extends Error {
-  constructor(message: string, public code: 'NOT_FOUND' | 'UNSUPPORTED' | 'CONFLICT' | 'INVALID') {
+  constructor(message: string, public code: 'NOT_FOUND' | 'UNSUPPORTED' | 'CONFLICT' | 'INVALID' | 'NOT_EMPTY') {
     super(message);
     this.name = 'DatabaseStoreError';
   }
@@ -127,6 +127,11 @@ export async function writeDatabaseDocument(
     }
   }
 
+  // Ensure folder exists and get its ID
+  const { ensureFolderPath } = await import('@/lib/mount-index/folder-paths');
+  const folderPath = path.dirname(rel);
+  const folderId = folderPath !== '.' ? await ensureFolderPath(mountPointId, folderPath) : null;
+
   const contentSha256 = sha256OfString(content);
   const now = new Date().toISOString();
   const fileName = path.basename(rel);
@@ -139,6 +144,7 @@ export async function writeDatabaseDocument(
       lastModified: now,
       fileType,
       fileName,
+      folderId,
     });
   } else {
     await repos.docMountDocuments.create({
@@ -150,6 +156,7 @@ export async function writeDatabaseDocument(
       contentSha256,
       plainTextLength: content.length,
       lastModified: now,
+      folderId,
     });
   }
 
@@ -165,6 +172,7 @@ export async function writeDatabaseDocument(
       conversionStatus: 'converted',
       conversionError: null,
       plainTextLength: content.length,
+      folderId,
     });
   } else {
     await repos.docMountFiles.create({
@@ -179,6 +187,7 @@ export async function writeDatabaseDocument(
       conversionStatus: 'converted',
       plainTextLength: content.length,
       chunkCount: 0,
+      folderId,
     });
   }
 
@@ -254,10 +263,16 @@ export async function moveDatabaseDocument(
     );
   }
 
+  // Ensure destination folder exists and get its ID
+  const { ensureFolderPath } = await import('@/lib/mount-index/folder-paths');
+  const destFolderPath = path.dirname(toRel);
+  const destFolderId = destFolderPath !== '.' ? await ensureFolderPath(mountPointId, destFolderPath) : null;
+
   await repos.docMountDocuments.update(existing.id, {
     relativePath: toRel,
     fileName: path.basename(toRel),
     fileType,
+    folderId: destFolderId,
   });
 
   const existingFile = await repos.docMountFiles.findByMountPointAndPath(mountPointId, fromRel);
@@ -265,6 +280,7 @@ export async function moveDatabaseDocument(
     await repos.docMountFiles.update(existingFile.id, {
       relativePath: toRel,
       fileName: path.basename(toRel),
+      folderId: destFolderId,
     });
   }
 
@@ -283,23 +299,353 @@ export async function moveDatabaseDocument(
 export async function listDatabaseFiles(
   mountPointId: string,
   options: { folder?: string } = {}
-): Promise<DocMountFile[]> {
+): Promise<Array<DocMountFile & { kind?: 'file' | 'folder' }>> {
   const repos = getRepositories();
   const files = await repos.docMountFiles.findByMountPointId(mountPointId);
 
-  if (!options.folder) return files;
-  const folder = options.folder.endsWith('/') ? options.folder : `${options.folder}/`;
-  return files.filter(f => f.relativePath.startsWith(folder));
+  // Get folders for this mount point
+  const folders = await repos.docMountFolders.findByMountPointId(mountPointId);
+
+  // Build the result entries
+  const entries: Array<DocMountFile & { kind?: 'file' | 'folder' }> = [];
+
+  if (!options.folder) {
+    // Return all files with kind='file'
+    for (const f of files) {
+      entries.push({ ...f, kind: 'file' });
+    }
+    // Return all folders with kind='folder'
+    for (const folder of folders) {
+      entries.push({
+        id: folder.id,
+        mountPointId: folder.mountPointId,
+        relativePath: folder.path,
+        fileName: path.basename(folder.path),
+        fileType: 'markdown' as const,
+        sha256: '',
+        fileSizeBytes: 0,
+        lastModified: folder.createdAt,
+        source: 'database' as const,
+        conversionStatus: 'converted' as const,
+        plainTextLength: 0,
+        chunkCount: 0,
+        folderId: folder.parentId,
+        kind: 'folder',
+      } as DocMountFile & { kind: 'folder' });
+    }
+    return entries;
+  }
+
+  // Filter to a specific folder
+  const folderPrefix = options.folder.endsWith('/') ? options.folder : `${options.folder}/`;
+
+  // Files that start with the folder prefix
+  for (const f of files) {
+    if (f.relativePath.startsWith(folderPrefix)) {
+      entries.push({ ...f, kind: 'file' });
+    }
+  }
+
+  // Folders that have this as a parent
+  const folderPath = options.folder;
+  for (const folder of folders) {
+    if (folder.path.startsWith(folderPrefix)) {
+      entries.push({
+        id: folder.id,
+        mountPointId: folder.mountPointId,
+        relativePath: folder.path,
+        fileName: path.basename(folder.path),
+        fileType: 'markdown' as const,
+        sha256: '',
+        fileSizeBytes: 0,
+        lastModified: folder.createdAt,
+        source: 'database' as const,
+        conversionStatus: 'converted' as const,
+        plainTextLength: 0,
+        chunkCount: 0,
+        folderId: folder.parentId,
+        kind: 'folder',
+      } as DocMountFile & { kind: 'folder' });
+    }
+  }
+
+  return entries;
+}
+
+// ============================================================================
+// FOLDER OPERATIONS
+// ============================================================================
+
+export async function createDatabaseFolder(
+  mountPointId: string,
+  folderPath: string
+): Promise<{ folderId: string; path: string }> {
+  const rel = normaliseRelativePath(folderPath);
+  const { ensureFolderPath } = await import('@/lib/mount-index/folder-paths');
+
+  const folderId = await ensureFolderPath(mountPointId, rel);
+  const resultPath = rel || '';
+
+  logger.debug('Created database folder', {
+    mountPointId,
+    folderPath: resultPath,
+    folderId,
+  });
+
+  return { folderId: folderId || '', path: resultPath };
+}
+
+export async function deleteDatabaseFolder(
+  mountPointId: string,
+  folderPath: string
+): Promise<{ deleted: boolean }> {
+  const rel = normaliseRelativePath(folderPath);
+  const repos = getRepositories();
+
+  // Find the folder
+  const folder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, rel);
+  if (!folder) {
+    throw new DatabaseStoreError(
+      `Folder not found: ${folderPath}`,
+      'NOT_FOUND'
+    );
+  }
+
+  // Check if it has contents
+  const { folderHasContents } = await import('@/lib/mount-index/folder-paths');
+  const hasContents = await folderHasContents(mountPointId, folder.id);
+  if (hasContents) {
+    throw new DatabaseStoreError(
+      `Folder is not empty: ${folderPath}. Only empty folders can be deleted.`,
+      'NOT_EMPTY'
+    );
+  }
+
+  // Delete the folder row
+  await repos.docMountFolders.delete(folder.id);
+
+  logger.debug('Deleted database folder', {
+    mountPointId,
+    folderPath: rel,
+  });
+
+  return { deleted: true };
+}
+
+export async function moveDatabaseFolder(
+  mountPointId: string,
+  fromPath: string,
+  toPath: string
+): Promise<void> {
+  const repos = getRepositories();
+  const fromRel = normaliseRelativePath(fromPath);
+  const toRel = normaliseRelativePath(toPath);
+
+  // Resolve the source folder
+  const sourceFolder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, fromRel);
+  if (!sourceFolder) {
+    throw new DatabaseStoreError(
+      `Source folder not found: ${fromPath}`,
+      'NOT_FOUND'
+    );
+  }
+
+  // Check destination doesn't exist
+  const destFolder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, toRel);
+  if (destFolder) {
+    throw new DatabaseStoreError(
+      `Destination folder already exists: ${toPath}`,
+      'CONFLICT'
+    );
+  }
+
+  // Ensure parent of destination exists
+  const { ensureFolderPath } = await import('@/lib/mount-index/folder-paths');
+  const destDir = path.dirname(toRel);
+  if (destDir !== '.') {
+    await ensureFolderPath(mountPointId, destDir);
+  }
+
+  // Get destination parent folder ID
+  let destParentId: string | null = null;
+  if (destDir !== '.') {
+    const parentFolder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, destDir);
+    if (parentFolder) {
+      destParentId = parentFolder.id;
+    }
+  }
+
+  const oldPrefix = fromRel ? `${fromRel}/` : '';
+  const newPrefix = toRel ? `${toRel}/` : '';
+
+  const movedDocuments: Array<{ oldPath: string; newPath: string }> = [];
+
+  // Update the source folder row itself
+  const newName = path.basename(toRel);
+  await repos.docMountFolders.update(sourceFolder.id, {
+    parentId: destParentId,
+    name: newName,
+    path: toRel,
+  });
+
+  // Update all descendant folder paths
+  const allFolders = await repos.docMountFolders.findByMountPointId(mountPointId);
+  for (const folder of allFolders) {
+    if (folder.id === sourceFolder.id) continue;
+    if (oldPrefix && folder.path.startsWith(oldPrefix)) {
+      const newPath = newPrefix + folder.path.substring(oldPrefix.length);
+      await repos.docMountFolders.update(folder.id, {
+        path: newPath,
+      });
+    }
+  }
+
+  // Update document paths and folderId
+  const documents = await repos.docMountDocuments.findByMountPointId(mountPointId);
+  for (const doc of documents) {
+    if (oldPrefix && doc.relativePath.startsWith(oldPrefix)) {
+      const newPath = newPrefix + doc.relativePath.substring(oldPrefix.length);
+      const newFolderPath = path.dirname(newPath);
+      let newFolderId: string | null = null;
+      if (newFolderPath !== '.') {
+        const newFolder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, newFolderPath);
+        if (newFolder) newFolderId = newFolder.id;
+      }
+      await repos.docMountDocuments.update(doc.id, {
+        relativePath: newPath,
+        fileName: path.basename(newPath),
+        folderId: newFolderId,
+      });
+      movedDocuments.push({
+        oldPath: doc.relativePath,
+        newPath,
+      });
+    }
+  }
+
+  // Update file mirror paths and folderId
+  const files = await repos.docMountFiles.findByMountPointId(mountPointId);
+  for (const file of files) {
+    if (oldPrefix && file.relativePath.startsWith(oldPrefix)) {
+      const newPath = newPrefix + file.relativePath.substring(oldPrefix.length);
+      const newFolderPath = path.dirname(newPath);
+      let newFolderId: string | null = null;
+      if (newFolderPath !== '.') {
+        const newFolder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, newFolderPath);
+        if (newFolder) newFolderId = newFolder.id;
+      }
+      await repos.docMountFiles.update(file.id, {
+        relativePath: newPath,
+        fileName: path.basename(newPath),
+        folderId: newFolderId,
+      });
+    }
+  }
+
+  // Update blob paths (blobs do not have folderId, only relativePath is updated)
+  const blobs = await repos.docMountBlobs.listByMountPoint(mountPointId);
+  for (const blob of blobs) {
+    if (oldPrefix && blob.relativePath.startsWith(oldPrefix)) {
+      const newPath = newPrefix + blob.relativePath.substring(oldPrefix.length);
+      // Blob metadata update path — may not be exposed yet in the API
+      // For now, skip blob path updates as blobs aren't structured in folders
+    }
+  }
+
+  logger.debug('Moved database folder', {
+    mountPointId,
+    fromPath: fromRel,
+    toPath: toRel,
+    movedDocuments: movedDocuments.length,
+  });
+
+  // Emit events after all updates (don't hold locks)
+  for (const doc of movedDocuments) {
+    emitDocumentMoved({
+      mountPointId,
+      fromRelativePath: doc.oldPath,
+      toRelativePath: doc.newPath,
+    });
+  }
+}
+
+export async function backfillFolderRowsForMountPoint(
+  mountPointId: string
+): Promise<{ foldersCreated: number; filesUpdated: number }> {
+  const repos = getRepositories();
+  const { ensureFolderPath } = await import('@/lib/mount-index/folder-paths');
+
+  let foldersCreated = 0;
+  let filesUpdated = 0;
+  const createdPaths = new Set<string>();
+
+  try {
+    // Backfill from documents
+    const documents = await repos.docMountDocuments.findByMountPointId(mountPointId);
+    for (const doc of documents) {
+      const folderPath = path.dirname(doc.relativePath);
+      if (folderPath !== '.') {
+        const folderId = await ensureFolderPath(mountPointId, folderPath);
+        if (!createdPaths.has(folderPath)) {
+          foldersCreated++;
+          createdPaths.add(folderPath);
+        }
+        if (doc.folderId !== folderId) {
+          await repos.docMountDocuments.update(doc.id, { folderId });
+          filesUpdated++;
+        }
+      }
+    }
+
+    // Backfill from blobs (blobs don't have folderId, just ensure parent folders exist)
+    const blobs = await repos.docMountBlobs.listByMountPoint(mountPointId);
+    for (const blob of blobs) {
+      const folderPath = path.dirname(blob.relativePath);
+      if (folderPath !== '.') {
+        await ensureFolderPath(mountPointId, folderPath);
+        if (!createdPaths.has(folderPath)) {
+          foldersCreated++;
+          createdPaths.add(folderPath);
+        }
+      }
+    }
+
+    // Backfill from files
+    const files = await repos.docMountFiles.findByMountPointId(mountPointId);
+    for (const file of files) {
+      const folderPath = path.dirname(file.relativePath);
+      if (folderPath !== '.') {
+        const folderId = await ensureFolderPath(mountPointId, folderPath);
+        if (!createdPaths.has(folderPath)) {
+          foldersCreated++;
+          createdPaths.add(folderPath);
+        }
+        if (file.folderId !== folderId) {
+          await repos.docMountFiles.update(file.id, { folderId });
+          filesUpdated++;
+        }
+      }
+    }
+
+    logger.info('Backfilled folder rows for mount point', {
+      mountPointId,
+      foldersCreated,
+      filesUpdated,
+    });
+
+    return { foldersCreated, filesUpdated };
+  } catch (error) {
+    logger.error('Failed to backfill folder rows for mount point', {
+      mountPointId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 // ============================================================================
 // EXISTENCE / FOLDER SEMANTICS
 // ============================================================================
-
-// Folders are implicit in a database-backed store: they exist if any
-// document's relativePath starts with `<folder>/`. doc_create_folder is
-// therefore a no-op, and doc_delete_folder simply verifies that no document
-// lives under the given prefix.
 
 export async function databaseDocumentExists(
   mountPointId: string,
@@ -317,6 +663,15 @@ export async function databaseFolderHasContents(
 ): Promise<boolean> {
   const repos = getRepositories();
   const folder = normaliseRelativePath(relativePath);
+
+  // Try to find the folder row first
+  const folderRow = await repos.docMountFolders.findByMountPointAndPath(mountPointId, folder);
+  if (folderRow) {
+    const { folderHasContents } = await import('@/lib/mount-index/folder-paths');
+    return folderHasContents(mountPointId, folderRow.id);
+  }
+
+  // Fallback to prefix match for legacy data without folder rows
   const prefix = folder.endsWith('/') ? folder : `${folder}/`;
   const documents = await repos.docMountDocuments.findByMountPointId(mountPointId);
   if (documents.some(d => d.relativePath.startsWith(prefix))) return true;
