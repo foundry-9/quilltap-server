@@ -77,6 +77,7 @@ import {
   executeDocEditTool,
   formatDocEditResults,
   isDocEditTool,
+  DOC_EDIT_TOOL_NAMES,
   type DocEditToolContext,
 } from '@/lib/tools/handlers/doc-edit-handler';
 import {
@@ -194,8 +195,9 @@ export async function executeToolCall(
  * Execute a tool call with full context
  */
 // Built-in tool names that are handled directly by this module
-// These should NOT be routed to the plugin registry
-const BUILT_IN_TOOLS = new Set([
+// These should NOT be routed to the plugin registry.
+// Doc-edit tools are sourced from DOC_EDIT_TOOL_NAMES (single source of truth).
+const BUILT_IN_TOOLS = new Set<string>([
   'generate_image',
   'search_web',
   'project_info',
@@ -224,21 +226,8 @@ const BUILT_IN_TOOLS = new Set([
   'async_result',
   'sudo_sync',
   'cp_host',
-  // Document editing tools (Scriptorium Phase 3.3)
-  'doc_read_file',
-  'doc_write_file',
-  'doc_str_replace',
-  'doc_insert_text',
-  'doc_grep',
-  'doc_list_files',
-  'doc_read_frontmatter',
-  'doc_update_frontmatter',
-  'doc_read_heading',
-  'doc_update_heading',
-  // Document UI tools (Scriptorium Phase 3.5)
-  'doc_open_document',
-  'doc_close_document',
-  'doc_focus',
+  // Document editing / management / UI tools — Scriptorium Phase 3.3+
+  ...DOC_EDIT_TOOL_NAMES,
 ]);
 
 export async function executeToolCallWithContext(

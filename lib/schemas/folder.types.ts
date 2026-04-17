@@ -28,7 +28,7 @@ export const FolderSchema = z.object({
 
   // Hierarchy
   // parentFolderId: null means root level (path = "/")
-  parentFolderId: UUIDSchema.nullable(),
+  parentFolderId: UUIDSchema.nullable().optional(),
 
   // Scope
   // projectId: null means general files (not associated with a project)
