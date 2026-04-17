@@ -54,10 +54,18 @@ function getProjectId(chat: unknown): string | undefined {
   return (chat as Record<string, unknown>).projectId as string | undefined;
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+interface ChatDocumentContext {
+  projectId?: string;
+}
+
 async function getChatContext(
   chatId: string,
   { repos }: AuthenticatedContext
-): Promise<{ projectId?: string } | null> {
+): Promise<ChatDocumentContext | null> {
   const chat = await repos.chats.findById(chatId);
   if (!chat) {
     return null;
@@ -68,33 +76,43 @@ async function getChatContext(
   };
 }
 
-async function resolveChatDocumentPath(
-  chatId: string,
-  context: AuthenticatedContext,
-  {
-    scope,
-    filePath,
-    mountPoint,
-  }: {
+async function resolveDocumentRequest(
+  chatContext: ChatDocumentContext,
+  params: {
     scope: DocEditScope;
     filePath: string;
     mountPoint?: string;
   }
-) {
-  const chatContext = await getChatContext(chatId, context);
-  if (!chatContext) {
-    return null;
-  }
-
-  const resolved = await resolveDocEditPath(scope, filePath, {
+): Promise<{ projectId?: string; resolved: Awaited<ReturnType<typeof resolveDocEditPath>> }> {
+  const resolved = await resolveDocEditPath(params.scope, params.filePath, {
     projectId: chatContext.projectId,
-    mountPoint,
+    mountPoint: params.mountPoint,
   });
 
   return {
     ...chatContext,
     resolved,
   };
+}
+
+function scheduleDocumentStoreRefresh(
+  mountPointId: string,
+  relativePath: string,
+  absolutePath: string,
+  repos: AuthenticatedContext['repos'],
+  filePath: string,
+): void {
+  reindexSingleFile(mountPointId, relativePath, absolutePath)
+    .then(() => Promise.all([
+      enqueueEmbeddingJobsForMountPoint(mountPointId),
+      repos.docMountPoints.refreshStats(mountPointId),
+    ]))
+    .catch(err => {
+      logger.warn('Background re-index, embedding, or stats refresh failed after document save', {
+        path: filePath,
+        error: getErrorMessage(err),
+      });
+    });
 }
 
 // ============================================================================
@@ -192,11 +210,13 @@ export async function handleOpenDocument(
 
   if (filePath) {
     try {
-      const resolved = await resolveDocEditPath(effectiveScope, filePath, {
-        projectId: chatContext.projectId,
+      const resolvedRequest = await resolveDocumentRequest(chatContext, {
+        scope: effectiveScope,
+        filePath,
         mountPoint: data.mountPoint,
       });
-      const fileData = await readFileWithMtime(resolved);
+
+      const fileData = await readFileWithMtime(resolvedRequest.resolved);
       content = fileData.content;
       mtime = fileData.mtime;
       if (!data.title) {
@@ -209,11 +229,13 @@ export async function handleOpenDocument(
     filePath = `${crypto.randomUUID()}.md`;
 
     try {
-      const resolved = await resolveDocEditPath(effectiveScope, filePath, {
-        projectId: chatContext.projectId,
+      const resolvedRequest = await resolveDocumentRequest(chatContext, {
+        scope: effectiveScope,
+        filePath,
         mountPoint: data.mountPoint,
       });
-      const writeResult = await writeFileWithMtimeCheck(resolved, '');
+
+      const writeResult = await writeFileWithMtimeCheck(resolvedRequest.resolved, '');
       mtime = writeResult.mtime;
     } catch (error) {
       return serverError(`Failed to create blank document: ${error instanceof Error ? error.message : String(error)}`);
@@ -294,15 +316,20 @@ export async function handleReadDocument(
   const body = await req.json();
   const data = readDocumentSchema.parse(body);
 
-  let chatContext;
+  const chatContext = await getChatContext(chatId, context);
+  if (!chatContext) {
+    return badRequest('Chat not found');
+  }
+
+  let resolvedRequest;
   try {
-    chatContext = await resolveChatDocumentPath(chatId, context, {
+    resolvedRequest = await resolveDocumentRequest(chatContext, {
       scope: data.scope as DocEditScope,
       filePath: data.filePath,
       mountPoint: data.mountPoint,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
     logger.warn('Failed to resolve document path for read', {
       chatId,
       filePath: data.filePath,
@@ -313,12 +340,8 @@ export async function handleReadDocument(
     return badRequest(`Could not resolve ${data.filePath}: ${message}`);
   }
 
-  if (!chatContext) {
-    return badRequest('Chat not found');
-  }
-
   try {
-    const fileData = await readFileWithMtime(chatContext.resolved);
+    const fileData = await readFileWithMtime(resolvedRequest.resolved);
 
     logger.debug('Read document for document mode', {
       chatId,
@@ -332,7 +355,7 @@ export async function handleReadDocument(
     });
   } catch (error) {
     const code = error instanceof Error && 'code' in error ? (error as NodeJS.ErrnoException).code : undefined;
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getErrorMessage(error);
 
     if (code === 'ENOENT') {
       logger.debug('Document not found on disk', { chatId, filePath: data.filePath, scope: data.scope });
@@ -361,19 +384,20 @@ export async function handleWriteDocument(
   const body = await req.json();
   const data = writeDocumentSchema.parse(body);
 
+  const chatContext = await getChatContext(chatId, context);
+  if (!chatContext) {
+    return badRequest('Chat not found');
+  }
+
   try {
-    const chatContext = await resolveChatDocumentPath(chatId, context, {
+    const resolvedRequest = await resolveDocumentRequest(chatContext, {
       scope: data.scope as DocEditScope,
       filePath: data.filePath,
       mountPoint: data.mountPoint,
     });
 
-    if (!chatContext) {
-      return badRequest('Chat not found');
-    }
-
     const { repos } = context;
-    const { resolved } = chatContext;
+    const { resolved } = resolvedRequest;
     const { mtime } = await writeFileWithMtimeCheck(
       resolved,
       data.content,
@@ -381,18 +405,13 @@ export async function handleWriteDocument(
     );
 
     if (data.scope === 'document_store' && resolved.mountPointId) {
-      const mountPointId = resolved.mountPointId;
-      reindexSingleFile(mountPointId, resolved.relativePath, resolved.absolutePath)
-        .then(() => Promise.all([
-          enqueueEmbeddingJobsForMountPoint(mountPointId),
-          repos.docMountPoints.refreshStats(mountPointId),
-        ]))
-        .catch(err => {
-          logger.warn('Background re-index, embedding, or stats refresh failed after document save', {
-            path: data.filePath,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
+      scheduleDocumentStoreRefresh(
+        resolved.mountPointId,
+        resolved.relativePath,
+        resolved.absolutePath,
+        repos,
+        data.filePath,
+      );
     }
 
     logger.debug('Saved document from document mode', {

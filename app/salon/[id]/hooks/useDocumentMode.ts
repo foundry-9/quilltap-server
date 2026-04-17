@@ -10,7 +10,18 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { formatAutosaveNotification } from '@/lib/doc-edit'
 import type { Chat } from '../types'
+import {
+  closeDocumentForChat,
+  fetchActiveDocumentRecord,
+  fetchChatDocumentState,
+  openDocumentForChat,
+  persistChatDocumentState,
+  readDocumentContentForChat,
+  requestDocumentWrite,
+  toActiveDocument,
+} from './documentModeApi'
 
 export interface ActiveDocument {
   id: string
@@ -81,90 +92,13 @@ interface OpenDocumentParams {
 
 const AUTOSAVE_DEBOUNCE_MS = 30000
 
-/**
- * Generate a simple unified diff between two strings.
- * Produces output similar to `git diff` with @@ line markers.
- */
-function generateUnifiedDiff(oldText: string, newText: string, filename: string): string {
-  const oldLines = oldText.split('\n')
-  const newLines = newText.split('\n')
-  const hunks: string[] = []
-
-  // Simple LCS-based diff: walk both arrays and find changed regions
-  let i = 0
-  let j = 0
-  while (i < oldLines.length || j < newLines.length) {
-    // Skip matching lines
-    if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
-      i++
-      j++
-      continue
-    }
-
-    // Found a difference — collect the hunk
-    const hunkStartOld = i + 1
-    const hunkStartNew = j + 1
-    const removedLines: string[] = []
-    const addedLines: string[] = []
-
-    // Collect divergent lines until we find a match again
-    const lookAhead = 3 // lines to look ahead for re-sync
-    let synced = false
-    while (i < oldLines.length || j < newLines.length) {
-      // Check if we can re-sync
-      if (i < oldLines.length && j < newLines.length) {
-        // Look for the current old line in upcoming new lines
-        let foundInNew = -1
-        for (let k = j; k < Math.min(j + lookAhead, newLines.length); k++) {
-          if (oldLines[i] === newLines[k]) { foundInNew = k; break }
-        }
-        // Look for the current new line in upcoming old lines
-        let foundInOld = -1
-        for (let k = i; k < Math.min(i + lookAhead, oldLines.length); k++) {
-          if (newLines[j] === oldLines[k]) { foundInOld = k; break }
-        }
-
-        if (foundInNew === j && foundInOld === i) {
-          // Lines match — we've re-synced
-          synced = true
-          break
-        }
-        if (foundInNew >= 0 && (foundInOld < 0 || foundInNew - j <= foundInOld - i)) {
-          // Old line was removed, new lines were added before it
-          while (j < foundInNew) { addedLines.push(newLines[j]); j++ }
-          removedLines.push(oldLines[i]); i++
-          // Continue to see if more changes follow
-          continue
-        }
-        if (foundInOld >= 0) {
-          // New line was added, old lines were removed before it
-          while (i < foundInOld) { removedLines.push(oldLines[i]); i++ }
-          addedLines.push(newLines[j]); j++
-          continue
-        }
-      }
-
-      // No re-sync found — consume both sides
-      if (i < oldLines.length) { removedLines.push(oldLines[i]); i++ }
-      if (j < newLines.length) { addedLines.push(newLines[j]); j++ }
-
-      // Check if next lines match
-      if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
-        synced = true
-        break
-      }
-    }
-
-    if (removedLines.length > 0 || addedLines.length > 0) {
-      hunks.push(`@@ -${hunkStartOld},${removedLines.length} +${hunkStartNew},${addedLines.length} @@`)
-      for (const line of removedLines) hunks.push(`-${line}`)
-      for (const line of addedLines) hunks.push(`+${line}`)
-    }
+function getDocumentModeState(
+  source: Partial<{ documentMode: DocumentMode; dividerPosition: number }> | null | undefined,
+): { mode: DocumentMode; dividerPosition: number } {
+  return {
+    mode: (source?.documentMode as DocumentMode) || 'normal',
+    dividerPosition: source?.dividerPosition ?? 45,
   }
-
-  if (hunks.length === 0) return ''
-
-  return `--- a/${filename}\n+++ b/${filename}\n${hunks.join('\n')}`
 }
 
 export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentModeParams): UseDocumentModeReturn {
@@ -201,6 +135,13 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     }
   }, [])
 
+  const applyChatState = useCallback((source: Partial<{ documentMode: DocumentMode; dividerPosition: number }> | null | undefined) => {
+    const { mode, dividerPosition } = getDocumentModeState(source)
+    setDocumentMode(mode)
+    setDividerPositionState(dividerPosition)
+    return mode
+  }, [])
+
   const applyDocumentState = useCallback((document: ActiveDocument | null, incrementVersion = true) => {
     setActiveDocument(document)
 
@@ -221,11 +162,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
 
   const persistChatState = useCallback(async (updates: Partial<{ documentMode: DocumentMode; dividerPosition: number }>) => {
     try {
-      await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: updates }),
-      })
+      await persistChatDocumentState(chatId, updates)
     } catch (error) {
       console.error('[DocumentMode] Failed to persist chat document state', error)
     }
@@ -236,21 +173,11 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     scope: ActiveDocument['scope'],
     mountPoint?: string | null,
   ) => {
-    const response = await fetch(`/api/v1/chats/${chatId}?action=read-document`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        filePath,
-        scope,
-        mountPoint,
-      }),
+    return readDocumentContentForChat(chatId, {
+      filePath,
+      scope,
+      mountPoint,
     })
-
-    if (!response.ok) {
-      throw new Error('Failed to read document content')
-    }
-
-    return response.json() as Promise<{ content?: string; mtime?: number }>
   }, [chatId])
 
   useEffect(() => {
@@ -260,9 +187,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
   // Initialize from chat data when it loads
   useEffect(() => {
     if (chat) {
-      const mode = (chat.documentMode as DocumentMode) || 'normal'
-      setDocumentMode(mode)
-      setDividerPositionState(chat.dividerPosition || 45)
+      const mode = applyChatState(chat)
 
       // If the chat has an active document association, load it
       if (mode !== 'normal') {
@@ -270,18 +195,12 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat?.documentMode, chat?.dividerPosition])
+  }, [applyChatState, chat?.documentMode, chat?.dividerPosition])
 
   // Load the active document for this chat from the API
   const loadActiveDocument = useCallback(async () => {
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=active-document`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      if (!res.ok) return
-
-      const data = await res.json()
+      const data = await fetchActiveDocumentRecord(chatId)
       if (!data.document) {
         setDocumentMode('normal')
         applyDocumentState(null, false)
@@ -294,15 +213,13 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
         data.document.mountPoint,
       )
 
-      applyDocumentState({
-        id: data.document.id,
-        filePath: data.document.filePath,
-        scope: data.document.scope,
-        mountPoint: data.document.mountPoint,
-        displayTitle: data.document.displayTitle || data.document.filePath,
-        content: contentData.content || '',
-        mtime: contentData.mtime,
-      })
+      applyDocumentState(
+        toActiveDocument(
+          data.document,
+          contentData.content || '',
+          contentData.mtime,
+        ),
+      )
     } catch (error) {
       console.error('[DocumentMode] Failed to load active document', error)
     }
@@ -322,16 +239,12 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
 
     setIsSaving(true)
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=write-document`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filePath: activeDocument.filePath,
-          scope: activeDocument.scope,
-          mountPoint: activeDocument.mountPoint,
-          content: contentRef.current,
-          mtime: activeDocument.mtime,
-        }),
+      const res = await requestDocumentWrite(chatId, {
+        filePath: activeDocument.filePath,
+        scope: activeDocument.scope,
+        mountPoint: activeDocument.mountPoint,
+        content: contentRef.current,
+        mtime: activeDocument.mtime,
       })
 
       if (res.status === 409) {
@@ -381,11 +294,13 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
 
       const notifyAutosave = onAutosaveNotifyRef.current
       if (notifyAutosave && oldContent !== newContent && activeDocument) {
-        const diff = generateUnifiedDiff(oldContent, newContent, activeDocument.displayTitle || activeDocument.filePath)
-        if (diff) {
-          notifyAutosave(
-            `I've made changes to "${activeDocument.displayTitle || activeDocument.filePath}":\n\n\`\`\`diff\n${diff}\n\`\`\``
-          )
+        const message = formatAutosaveNotification(
+          oldContent,
+          newContent,
+          activeDocument.displayTitle || activeDocument.filePath,
+        )
+        if (message) {
+          notifyAutosave(message)
         }
       }
     } catch (error) {
@@ -453,34 +368,19 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     const targetMode = params.mode || 'split'
 
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=open-document`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filePath: params.filePath,
-          title: params.title,
-          scope: params.scope || 'project',
-          mountPoint: params.mountPoint,
-          mode: targetMode,
-        }),
+      const data = await openDocumentForChat(chatId, {
+        filePath: params.filePath,
+        title: params.title,
+        scope: params.scope || 'project',
+        mountPoint: params.mountPoint,
+        mode: targetMode,
       })
 
-      if (!res.ok) {
-        console.error('[DocumentMode] Failed to open document')
-        return null
-      }
-
-      const data = await res.json()
-
-      const doc: ActiveDocument = {
-        id: data.document.id,
-        filePath: data.document.filePath,
-        scope: data.document.scope,
-        mountPoint: data.document.mountPoint,
-        displayTitle: data.document.displayTitle || data.document.filePath,
-        content: data.content || '',
-        mtime: data.mtime,
-      }
+      const doc: ActiveDocument = toActiveDocument(
+        data.document,
+        data.content || '',
+        data.mtime,
+      )
 
       applyDocumentState(doc)
       setDocumentMode(targetMode)
@@ -500,10 +400,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     }
 
     try {
-      await fetch(`/api/v1/chats/${chatId}?action=close-document`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
+      await closeDocumentForChat(chatId)
     } catch (error) {
       console.error('[DocumentMode] Failed to close document', error)
     }
@@ -561,13 +458,8 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
   // Reload document state from server — used when LLM opens/closes a document via tools
   const reloadFromServer = useCallback(async () => {
     try {
-      // Fetch the chat to get current documentMode
-      const chatRes = await fetch(`/api/v1/chats/${chatId}`)
-      if (!chatRes.ok) return
-      const chatData = await chatRes.json()
-      const mode = (chatData.chat?.documentMode as DocumentMode) || 'normal'
-      setDocumentMode(mode)
-      setDividerPositionState(chatData.chat?.dividerPosition || 45)
+      const chatData = await fetchChatDocumentState(chatId)
+      const mode = applyChatState(chatData.chat)
 
       if (mode !== 'normal') {
         await loadActiveDocument()
@@ -577,7 +469,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     } catch (error) {
       console.error('[DocumentMode] Failed to reload from server', error)
     }
-  }, [applyDocumentState, chatId, loadActiveDocument])
+  }, [applyChatState, applyDocumentState, chatId, loadActiveDocument])
 
   // Scroll position helpers
   const getScrollPosition = useCallback((filePath: string): number => {

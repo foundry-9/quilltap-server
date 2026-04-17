@@ -41,5 +41,10 @@ export {
 } from './markdown-parser';
 
 export {
+  generateUnifiedDiff,
+  formatAutosaveNotification,
+} from './unified-diff';
+
+export {
   reindexSingleFile,
 } from './reindex-file';
