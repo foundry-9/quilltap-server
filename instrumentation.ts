@@ -552,7 +552,16 @@ export async function register() {
         const { startWatcher } = await import('./lib/file-storage/watcher');
         startWatcher();
 
-        logger.info('Background schedulers and filesystem watcher started', {
+        // Start mount point watchers for real-time Scriptorium re-indexing
+        const { startMountWatchers } = await import('./lib/mount-index/watcher');
+        startMountWatchers().catch((watcherError) => {
+          logger.warn('Mount point watchers failed to start', {
+            context: 'instrumentation.register',
+            error: watcherError instanceof Error ? watcherError.message : String(watcherError),
+          });
+        });
+
+        logger.info('Background schedulers and filesystem watchers started', {
           context: 'instrumentation.register',
         });
       } catch (schedulerError) {

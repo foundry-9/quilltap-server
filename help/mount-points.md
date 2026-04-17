@@ -19,7 +19,9 @@ A mount point is simply a filesystem path — a directory on your machine (or pe
 
 ### Change Detection
 
-Rather than watching your files with the anxious vigilance of a night porter, Quilltap takes the more measured approach of checking for changes on each startup. Every file receives a SHA-256 checksum, and on the next startup, only files whose checksums have changed are re-processed. New files are ingested, modified files are re-chunked, and files that have vanished from the directory have their chunks quietly removed — a tidy three-state reconciliation that requires no background watchers, no file system events, and no nervous energy whatsoever.
+Quilltap keeps your document stores current through two complementary mechanisms. On each startup, a full sweep reconciles every file against its SHA-256 checksum — new files are ingested, modified files are re-chunked, and files that have vanished from the directory have their records quietly removed. While the server is running, a filesystem watcher stands quietly at attention behind each enabled store: the moment a file is saved, moved, or deleted by any program on your machine, the watcher notices, updates the index, and enqueues a fresh embedding job — generally within a second or two of the change. You need not lift a finger, and you need not restart the server.
+
+Should you prefer to disable the live watcher — or should you find yourself storing documents on a network share where the usual filesystem events are unreliable — set the environment variable `QUILLTAP_WATCHER_POLLING=1` to switch the watcher into a polite polling mode that works universally at the cost of a little extra CPU.
 
 ### Chunking
 

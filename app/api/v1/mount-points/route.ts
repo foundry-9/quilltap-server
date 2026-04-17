@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { created, serverError } from '@/lib/api/responses';
 import * as fs from 'fs/promises';
+import { attachMountPoint } from '@/lib/mount-index/watcher';
 
 // ============================================================================
 // Schemas
@@ -119,6 +120,14 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     name: mountPoint.name,
     basePath: mountPoint.basePath,
     userId: user.id,
+  });
+
+  // Attach a real-time watcher if the mount point is enabled and accessible
+  attachMountPoint(mountPoint).catch((err) => {
+    logger.warn('[Mount Points v1] Failed to attach watcher for new mount point', {
+      mountPointId: mountPoint.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
   });
 
   if (warning) {

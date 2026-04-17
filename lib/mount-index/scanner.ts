@@ -33,13 +33,20 @@ export interface ScanResult {
   errors: string[];
 }
 
+export type ProcessFileOutcome =
+  | { status: 'unchanged' }
+  | { status: 'unsupported' }
+  | { status: 'empty' }
+  | { status: 'new'; chunksCreated: number }
+  | { status: 'modified'; chunksCreated: number };
+
 /**
  * Detect file type from extension.
  *
  * @param filePath - File path (relative or absolute)
  * @returns The logical file type, or null if not supported
  */
-function detectFileType(filePath: string): 'pdf' | 'docx' | 'markdown' | 'txt' | null {
+export function detectFileType(filePath: string): 'pdf' | 'docx' | 'markdown' | 'txt' | null {
   const ext = path.extname(filePath).toLowerCase();
   switch (ext) {
     case '.pdf': return 'pdf';
@@ -60,7 +67,7 @@ function detectFileType(filePath: string): 'pdf' | 'docx' | 'markdown' | 'txt' |
  * @param pattern      - The include/exclude pattern
  * @returns True if the path matches the pattern
  */
-function matchesPattern(relativePath: string, pattern: string): boolean {
+export function matchesPattern(relativePath: string, pattern: string): boolean {
   if (pattern.startsWith('*.')) {
     // File extension match — compare the suffix after the '*'
     return relativePath.endsWith(pattern.substring(1));
@@ -138,6 +145,146 @@ async function walkDirectory(
 }
 
 /**
+ * Process a single file under a mount point — hash, compare, convert, chunk,
+ * and persist if changed. Does NOT enqueue embedding jobs; callers are
+ * responsible for that.
+ *
+ * Idempotent: if the on-disk sha256 matches the stored record, returns
+ * { status: 'unchanged' } without touching the database.
+ *
+ * @param mountPoint   - The mount point this file belongs to
+ * @param absolutePath - Full path to the file on disk
+ * @param relativePath - Path relative to the mount point's basePath
+ */
+export async function processMountFile(
+  mountPoint: DocMountPoint,
+  absolutePath: string,
+  relativePath: string
+): Promise<ProcessFileOutcome> {
+  const repos = getRepositories();
+
+  const fileType = detectFileType(relativePath);
+  if (!fileType) return { status: 'unsupported' };
+
+  const sha256 = await computeSha256(absolutePath);
+  const existing = await repos.docMountFiles.findByMountPointAndPath(
+    mountPoint.id,
+    relativePath
+  );
+
+  if (existing && existing.sha256 === sha256) {
+    return { status: 'unchanged' };
+  }
+
+  const stat = await fs.stat(absolutePath);
+
+  const plainText = await convertToPlainText(absolutePath, fileType);
+  if (!plainText || plainText.trim().length === 0) {
+    return { status: 'empty' };
+  }
+
+  const chunks = chunkDocument(plainText);
+
+  let fileId: string;
+  let outcome: 'new' | 'modified';
+
+  if (existing) {
+    await repos.docMountChunks.deleteByFileId(existing.id);
+    await repos.docMountFiles.update(existing.id, {
+      sha256,
+      fileSizeBytes: stat.size,
+      lastModified: stat.mtime.toISOString(),
+      conversionStatus: 'converted',
+      conversionError: null,
+      plainTextLength: plainText.length,
+      chunkCount: chunks.length,
+    });
+    fileId = existing.id;
+    outcome = 'modified';
+  } else {
+    await repos.docMountFiles.create({
+      mountPointId: mountPoint.id,
+      relativePath,
+      fileName: path.basename(relativePath),
+      fileType,
+      sha256,
+      fileSizeBytes: stat.size,
+      lastModified: stat.mtime.toISOString(),
+      conversionStatus: 'converted',
+      plainTextLength: plainText.length,
+      chunkCount: chunks.length,
+    });
+    const created = await repos.docMountFiles.findByMountPointAndPath(
+      mountPoint.id,
+      relativePath
+    );
+    if (!created) {
+      throw new Error(`Could not retrieve file record after create: ${relativePath}`);
+    }
+    fileId = created.id;
+    outcome = 'new';
+  }
+
+  if (chunks.length > 0) {
+    await repos.docMountChunks.bulkInsert(
+      chunks.map(chunk => ({
+        fileId,
+        mountPointId: mountPoint.id,
+        chunkIndex: chunk.chunkIndex,
+        content: chunk.content,
+        tokenCount: chunk.tokenCount,
+        headingContext: chunk.headingContext,
+        embedding: null,
+      }))
+    );
+  }
+
+  return { status: outcome, chunksCreated: chunks.length };
+}
+
+/**
+ * Remove a file and its chunks from the mount index.
+ *
+ * @param mountPointId - The mount point containing the file
+ * @param relativePath - Path relative to the mount point's basePath
+ * @returns true if a record was removed, false if none existed
+ */
+export async function removeMountFile(
+  mountPointId: string,
+  relativePath: string
+): Promise<boolean> {
+  const repos = getRepositories();
+
+  const existing = await repos.docMountFiles.findByMountPointAndPath(
+    mountPointId,
+    relativePath
+  );
+  if (!existing) return false;
+
+  await repos.docMountChunks.deleteByFileId(existing.id);
+  await repos.docMountFiles.delete(existing.id);
+  return true;
+}
+
+/**
+ * Recompute and persist a mount point's aggregate totals (file count,
+ * chunk count, total bytes). Called after any mutation that could
+ * affect the rollups.
+ */
+export async function updateMountPointTotals(mountPointId: string): Promise<void> {
+  const repos = getRepositories();
+  const files = await repos.docMountFiles.findByMountPointId(mountPointId);
+  const totalChunks = files.reduce((sum, f) => sum + (f.chunkCount || 0), 0);
+  const totalSize = files.reduce((sum, f) => sum + (f.fileSizeBytes || 0), 0);
+  await repos.docMountPoints.updateLastScanned(
+    mountPointId,
+    files.length,
+    totalChunks,
+    totalSize
+  );
+}
+
+/**
  * Scan a single mount point: walk the filesystem, detect changes,
  * convert files to plain text, chunk, and persist to the database.
  *
@@ -189,93 +336,29 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
     // 5. Process each file on disk
     for (const { relativePath, absolutePath } of filesOnDisk) {
       seenPaths.add(relativePath);
-      const fileType = detectFileType(relativePath);
-      if (!fileType) continue;
 
       try {
-        const sha256 = await computeSha256(absolutePath);
-        const existing = existingByPath.get(relativePath);
-
-        if (existing && existing.sha256 === sha256) {
-          // File unchanged — skip
-          logger.debug('File unchanged, skipping', { relativePath, sha256 });
-          continue;
+        const outcome = await processMountFile(mountPoint, absolutePath, relativePath);
+        switch (outcome.status) {
+          case 'unsupported':
+            continue;
+          case 'unchanged':
+            logger.debug('File unchanged, skipping', { relativePath });
+            continue;
+          case 'empty':
+            logger.debug('File conversion produced no text, skipping', { relativePath });
+            continue;
+          case 'new':
+            result.filesNew++;
+            result.chunksCreated += outcome.chunksCreated;
+            logger.debug('New file indexed', { relativePath, chunkCount: outcome.chunksCreated });
+            break;
+          case 'modified':
+            result.filesModified++;
+            result.chunksCreated += outcome.chunksCreated;
+            logger.debug('File modified, updated record', { relativePath, chunkCount: outcome.chunksCreated });
+            break;
         }
-
-        // File is new or modified
-        const stat = await fs.stat(absolutePath);
-
-        // Convert to plain text
-        const plainText = await convertToPlainText(absolutePath, fileType);
-        if (!plainText || plainText.trim().length === 0) {
-          logger.debug('File conversion produced no text, skipping', { relativePath });
-          continue;
-        }
-
-        // Chunk the text
-        const chunks = chunkDocument(plainText);
-
-        if (existing) {
-          // File is modified — delete old chunks first, then update file record
-          await repos.docMountChunks.deleteByFileId(existing.id);
-          await repos.docMountFiles.update(existing.id, {
-            sha256,
-            fileSizeBytes: stat.size,
-            lastModified: stat.mtime.toISOString(),
-            conversionStatus: 'converted',
-            conversionError: null,
-            plainTextLength: plainText.length,
-            chunkCount: chunks.length,
-          });
-          result.filesModified++;
-          logger.debug('File modified, updated record', { relativePath, chunkCount: chunks.length });
-        } else {
-          // File is new — create file record
-          await repos.docMountFiles.create({
-            mountPointId: mountPoint.id,
-            relativePath,
-            fileName: path.basename(relativePath),
-            fileType,
-            sha256,
-            fileSizeBytes: stat.size,
-            lastModified: stat.mtime.toISOString(),
-            conversionStatus: 'converted',
-            plainTextLength: plainText.length,
-            chunkCount: chunks.length,
-          });
-          result.filesNew++;
-          logger.debug('New file indexed', { relativePath, chunkCount: chunks.length });
-        }
-
-        // Get the file record (either just created or updated)
-        const fileRecord = await repos.docMountFiles.findByMountPointAndPath(
-          mountPoint.id,
-          relativePath
-        );
-        if (!fileRecord) {
-          logger.warn('Could not retrieve file record after create/update', { relativePath });
-          continue;
-        }
-
-        // Insert chunks
-        const chunkData = chunks.map(chunk => ({
-          fileId: fileRecord.id,
-          mountPointId: mountPoint.id,
-          chunkIndex: chunk.chunkIndex,
-          content: chunk.content,
-          tokenCount: chunk.tokenCount,
-          headingContext: chunk.headingContext,
-          embedding: null,
-        }));
-
-        if (chunkData.length > 0) {
-          await repos.docMountChunks.bulkInsert(chunkData);
-          result.chunksCreated += chunkData.length;
-        }
-
-        // NOTE: Embedding jobs will be enqueued by the scan runner after scanning
-        // completes to avoid overwhelming the job queue during large scans
-
       } catch (fileError) {
         const errorMsg = fileError instanceof Error ? fileError.message : String(fileError);
         logger.warn('Error processing file during mount scan', {
@@ -296,20 +379,17 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
     }
 
     // 6. Detect deleted files (in DB but not on disk)
-    for (const [existingPath, existingFile] of existingByPath) {
+    for (const [existingPath] of existingByPath) {
       if (!seenPaths.has(existingPath)) {
-        await repos.docMountChunks.deleteByFileId(existingFile.id);
-        await repos.docMountFiles.delete(existingFile.id);
-        result.filesDeleted++;
-        logger.debug('File deleted from index (no longer on disk)', { relativePath: existingPath });
+        if (await removeMountFile(mountPoint.id, existingPath)) {
+          result.filesDeleted++;
+          logger.debug('File deleted from index (no longer on disk)', { relativePath: existingPath });
+        }
       }
     }
 
     // 7. Update mount point with scan results
-    const totalFiles = await repos.docMountFiles.findByMountPointId(mountPoint.id);
-    const totalChunks = totalFiles.reduce((sum, f) => sum + (f.chunkCount || 0), 0);
-    const totalSizeBytes = totalFiles.reduce((sum, f) => sum + (f.fileSizeBytes || 0), 0);
-    await repos.docMountPoints.updateLastScanned(mountPoint.id, totalFiles.length, totalChunks, totalSizeBytes);
+    await updateMountPointTotals(mountPoint.id);
 
     logger.info('Mount point scan completed', {
       mountPointId: mountPoint.id,

@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { scanMountPoint } from '@/lib/mount-index/scanner';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import { detachMountPoint, refreshMountPoint } from '@/lib/mount-index/watcher';
 
 // ============================================================================
 // Schemas
@@ -108,6 +109,14 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         userId: user.id,
       });
 
+      // Refresh the watcher so basePath / pattern / enabled changes take effect
+      refreshMountPoint(updated).catch((err) => {
+        logger.warn('[Mount Points v1] Failed to refresh watcher after update', {
+          mountPointId: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+
       return NextResponse.json({ mountPoint: updated });
     } catch (error) {
       logger.error('[Mount Points v1] Error updating mount point', { mountPointId: id }, error instanceof Error ? error : undefined);
@@ -133,6 +142,14 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         logger.debug('[Mount Points v1] Mount point not found for deletion', { mountPointId: id });
         return notFound('Mount point');
       }
+
+      // Stop the watcher before tearing down the database records
+      await detachMountPoint(id).catch((err) => {
+        logger.warn('[Mount Points v1] Failed to detach watcher before delete', {
+          mountPointId: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
 
       // Delete associated chunks first
       const chunksDeleted = await repos.docMountChunks.deleteByMountPointId(id);
