@@ -1113,7 +1113,7 @@ CREATE TABLE IF NOT EXISTS "doc_mount_files" (
 );
 ```
 
-`fileType` is one of `'pdf'`, `'docx'`, `'markdown'`, `'txt'`, `'json'`, or `'jsonl'`, indicating the original file format and conversion status.
+`fileType` is one of `'pdf'`, `'docx'`, `'markdown'`, `'txt'`, `'json'`, `'jsonl'`, or `'blob'`. `'blob'` is the catch-all for arbitrary binaries stored via the upload endpoint that have no extracted text representation (images, audio, archives, etc.) — their bytes live in `doc_mount_blobs` and the mirror row exists so the tree, listing, and delete paths treat them uniformly. `'pdf'` and `'docx'` blob-backed rows carry a non-null `plainTextLength` once their `doc_mount_blobs.extractedText` is populated.
 
 `source` is `'filesystem'` when the bytes live on disk (filesystem/obsidian mounts) or `'database'` when they live in `doc_mount_documents`. The column is added by `DocMountFilesRepository` on first access for legacy mount-index databases that predate database-backed stores. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores; filesystem-backed stores always leave it NULL. The column is added by in-repo `ALTER TABLE` on first access.
 
@@ -1187,6 +1187,10 @@ CREATE TABLE IF NOT EXISTS "doc_mount_blobs" (
   "sha256" TEXT NOT NULL,
   "description" TEXT NOT NULL DEFAULT '',
   "descriptionUpdatedAt" TEXT,
+  "extractedText" TEXT,
+  "extractedTextSha256" TEXT,
+  "extractionStatus" TEXT NOT NULL DEFAULT 'none',
+  "extractionError" TEXT,
   "data" BLOB NOT NULL,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
@@ -1195,7 +1199,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_blobs_mp_path"
   ON "doc_mount_blobs" ("mountPointId", "relativePath");
 ```
 
-Binary assets (images first; any MIME type later) for **any** mount point type. Images are transcoded to WebP on upload using the `sharp` dependency; `originalMimeType` preserves the uploaded format while `storedMimeType` is what `data` actually contains. `description` is user-supplied alt-text / transcript consumed by the embedding pipeline.
+Binary assets for **any** mount point type. Bitmap images are transcoded to WebP on upload using the `sharp` dependency; already-WebP uploads, SVG, and all other MIME types are stored as-is. `originalMimeType` preserves the uploaded format while `storedMimeType` is what `data` actually contains. `description` is user-supplied alt-text / transcript consumed by the embedding pipeline.
+
+`extractedText` is the plain-text representation of the blob's bytes, populated for PDF and DOCX uploads via the buffer-native converters. `extractedTextSha256` tracks drift between the text and what has been chunked. `extractionStatus` is one of `'none'` (no converter applies — images, arbitrary binaries), `'pending'` (conversion in progress), `'converted'` (text extracted successfully), `'failed'` (converter raised or returned empty), or `'skipped'` (conversion explicitly bypassed). `extractionError` stores the failure reason when `extractionStatus='failed'`. The four extraction columns are added by in-repo `ALTER TABLE` on first access, so upgrading instances pick them up transparently.
+
+Every database-backed blob is mirrored into `doc_mount_files` with `source='database'` and `fileType` set to `'pdf'` / `'docx'` (when `extractedText` is populated) or `'blob'` (arbitrary binary with no text). This keeps the tree, search, chunking, and embedding pipelines uniform across native-text documents and blobs. The mirror row's `sha256` and `fileSizeBytes` track the blob's original bytes; `plainTextLength` tracks the extracted text.
 
 ---
 

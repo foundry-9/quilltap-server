@@ -283,7 +283,53 @@ async function handleReadFile(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
 
+  // For database-backed stores, a non-text file (pdf/docx/arbitrary binary)
+  // may still be readable if the blob has an extractedText representation.
+  // Return that derived text with derivedFromBlob=true so callers know the
+  // original bytes aren't what they're seeing.
   if (!isTextFile(resolved.relativePath)) {
+    if (resolved.mountType === 'database' && resolved.mountPointId) {
+      const repos = getRepositories();
+      const blob = await repos.docMountBlobs.findByMountPointAndPath(
+        resolved.mountPointId,
+        resolved.relativePath
+      );
+      if (blob?.extractedText && blob.extractionStatus === 'converted') {
+        const text = blob.extractedText;
+        const lines = text.split('\n');
+        const totalLines = lines.length;
+
+        let outputLines = lines;
+        let truncated = false;
+        if (input.offset || input.limit) {
+          const startLine = (input.offset || 1) - 1;
+          const endLine = input.limit ? startLine + input.limit : lines.length;
+          outputLines = lines.slice(startLine, endLine);
+          truncated = endLine < lines.length;
+        }
+
+        const lineStart = input.offset || 1;
+        const numberedLines = outputLines
+          .map((line, i) => `[L${lineStart + i}] ${line}`)
+          .join('\n');
+        const header = `File: ${input.path} (extracted text from ${blob.storedMimeType}, ${totalLines} lines, ${blob.sizeBytes} original bytes)`;
+        const truncMsg = truncated
+          ? `\n[Truncated — showing lines ${lineStart}-${lineStart + outputLines.length - 1} of ${totalLines}]`
+          : '';
+        const formattedText = `${header}${truncMsg}\n\n${numberedLines}`;
+
+        const result: DocReadFileOutput = {
+          content: outputLines.join('\n'),
+          mimeType: blob.storedMimeType,
+          path: input.path,
+          mtime: new Date(blob.updatedAt).getTime(),
+          totalLines,
+          truncated,
+          derivedFromBlob: true,
+        };
+        return { success: true, result, formattedText };
+      }
+    }
     return { success: false, error: `File is not a supported text format: ${input.path}` };
   }
 

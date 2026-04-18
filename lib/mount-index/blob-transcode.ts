@@ -1,11 +1,13 @@
 /**
  * Blob Transcoding Helpers
  *
- * Centralised WebP transcoding logic for Scriptorium blob uploads. WebP is
- * the standard on-disk format for image blobs; users may upload PNG, JPEG,
- * HEIC, GIF, etc. and we transcode to WebP before storing. Non-image MIME
- * types are passed through untouched — callers are expected to block them
- * at the boundary for v1 (images only).
+ * Centralised WebP transcoding logic for Scriptorium blob uploads. Users may
+ * upload PNG, JPEG, HEIC, GIF, TIFF, AVIF, etc. and we transcode those to
+ * WebP before storing — this is lossy, but Scriptorium's database-backed
+ * store isn't meant as a full-fidelity image repository (use a filesystem
+ * store if that matters). Already-WebP uploads are stored as-is without
+ * re-encoding. Non-image MIME types are passed through untouched so arbitrary
+ * binaries can live alongside images in the same store.
  */
 
 import { createHash } from 'crypto';
@@ -15,6 +17,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 const logger = createServiceLogger('MountIndex:BlobTranscode');
 
 // MIME types that sharp can reliably decode and we want to transcode to WebP.
+// image/webp is deliberately absent: already-WebP uploads are stored as-is.
 const TRANSCODABLE_MIME_TYPES = new Set([
   'image/png',
   'image/jpeg',
@@ -24,7 +27,6 @@ const TRANSCODABLE_MIME_TYPES = new Set([
   'image/heif',
   'image/tiff',
   'image/avif',
-  'image/webp', // Already WebP — re-encode at configured quality for consistency
 ]);
 
 export interface TranscodeResult {

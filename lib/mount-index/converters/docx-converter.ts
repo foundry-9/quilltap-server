@@ -5,39 +5,41 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 const logger = createServiceLogger('MountIndex:DocxConverter');
 
 /**
- * Extract plain text from a DOCX file.
- *
- * Returns an empty string (with a warning log) if the file is missing,
- * unreadable, or corrupted.
+ * Extract plain text from an in-memory DOCX buffer.
  */
-export async function convertDocxToText(absolutePath: string): Promise<string> {
-  logger.debug('Converting DOCX to text', { path: absolutePath });
+export async function convertDocxBufferToText(buffer: Buffer): Promise<string> {
+  if (buffer.length === 0) {
+    logger.warn('DOCX buffer is empty');
+    return '';
+  }
 
   try {
-    const buffer = await fs.readFile(absolutePath);
-
-    if (buffer.length === 0) {
-      logger.warn('DOCX file is empty', { path: absolutePath });
-      return '';
-    }
-
     const result = await mammoth.extractRawText({ buffer });
-
     if (result.messages.length > 0) {
       logger.debug('Mammoth conversion messages', {
-        path: absolutePath,
         messages: result.messages.map((m) => m.message),
       });
     }
-
-    logger.debug('DOCX conversion complete', {
-      path: absolutePath,
-      textLength: result.value.length,
-    });
-
+    logger.debug('DOCX conversion complete', { textLength: result.value.length });
     return result.value;
   } catch (error) {
-    logger.warn('Failed to extract text from DOCX', {
+    logger.warn('Failed to extract text from DOCX buffer', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return '';
+  }
+}
+
+/**
+ * Extract plain text from a DOCX file on disk.
+ */
+export async function convertDocxToText(absolutePath: string): Promise<string> {
+  logger.debug('Converting DOCX to text', { path: absolutePath });
+  try {
+    const buffer = await fs.readFile(absolutePath);
+    return await convertDocxBufferToText(buffer);
+  } catch (error) {
+    logger.warn('Failed to read DOCX from disk', {
       path: absolutePath,
       error: error instanceof Error ? error.message : String(error),
     });

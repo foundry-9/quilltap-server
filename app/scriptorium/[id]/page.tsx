@@ -11,7 +11,6 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useDocumentStoreDetail } from './hooks/useDocumentStoreDetail'
 import { FileTable } from './components'
-import { BlobManager } from './components/BlobManager'
 import { EditDocumentStoreDialog } from '../components/EditDocumentStoreDialog'
 import type { UpdateDocumentStoreData } from '../types'
 
@@ -231,14 +230,20 @@ export default function DocumentStoreDetailPage() {
         </div>
       )}
 
-      {/* Files section */}
+      {/* Files section — unified tree: text documents, pdf/docx extracts, and
+          arbitrary binary blobs all show here. Database-backed stores expose
+          an Upload button in this table; filesystem stores get populated by
+          scans. */}
       <div className="border-t qt-border-default/60 pt-6">
         <h2 className="text-xl font-semibold mb-4">Indexed Files</h2>
-        <FileTable files={files} loading={filesLoading} />
+        <FileTable
+          files={files}
+          loading={filesLoading}
+          mountPointId={store.id}
+          mountType={store.mountType}
+          onRefresh={fetchFiles}
+        />
       </div>
-
-      {/* Blob manager — available on every store type */}
-      <BlobManager mountPointId={store.id} mountPointName={store.name} />
 
       {/* Edit dialog */}
       {editDialogOpen && (

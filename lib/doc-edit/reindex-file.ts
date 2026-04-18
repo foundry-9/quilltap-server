@@ -82,15 +82,29 @@ export async function reindexSingleFile(
     let lastModifiedIso: string;
 
     if (isDatabaseBacked) {
+      // Two possible text sources for database-backed stores:
+      //   1. doc_mount_documents.content — native text formats (.md/.txt/.json/...)
+      //   2. doc_mount_blobs.extractedText — derived plain text for pdf/docx
+      // sha + size reflect the source-of-truth bytes (the blob for blob-backed
+      // files, the text content for native text) so file-mirror drift detection
+      // stays meaningful.
       const doc = await repos.docMountDocuments.findByMountPointAndPath(mountPointId, relativePath);
-      if (!doc) {
-        logger.debug('Database document not found for reindex, skipping', { relativePath });
-        return;
+      if (doc) {
+        plainText = doc.content;
+        sha256 = doc.contentSha256;
+        fileSizeBytes = Buffer.byteLength(doc.content, 'utf-8');
+        lastModifiedIso = doc.lastModified;
+      } else {
+        const blob = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, relativePath);
+        if (!blob || !blob.extractedText || blob.extractedText.trim().length === 0) {
+          logger.debug('No DB-backed text source for reindex, skipping', { relativePath });
+          return;
+        }
+        plainText = blob.extractedText;
+        sha256 = blob.sha256;
+        fileSizeBytes = blob.sizeBytes;
+        lastModifiedIso = blob.updatedAt;
       }
-      plainText = doc.content;
-      sha256 = doc.contentSha256;
-      fileSizeBytes = Buffer.byteLength(doc.content, 'utf-8');
-      lastModifiedIso = doc.lastModified;
     } else {
       const [stat, computedSha] = await Promise.all([
         fs.stat(absolutePath),

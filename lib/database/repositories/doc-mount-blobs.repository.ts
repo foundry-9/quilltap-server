@@ -33,6 +33,15 @@ export interface CreateBlobInput {
   data: Buffer;
 }
 
+export type ExtractionStatus = 'none' | 'pending' | 'converted' | 'failed' | 'skipped';
+
+export interface UpdateExtractedTextInput {
+  extractedText: string | null;
+  extractedTextSha256: string | null;
+  extractionStatus: ExtractionStatus;
+  extractionError?: string | null;
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -69,6 +78,10 @@ export class DocMountBlobsRepository {
           "sha256" TEXT NOT NULL,
           "description" TEXT NOT NULL DEFAULT '',
           "descriptionUpdatedAt" TEXT,
+          "extractedText" TEXT,
+          "extractedTextSha256" TEXT,
+          "extractionStatus" TEXT NOT NULL DEFAULT 'none',
+          "extractionError" TEXT,
           "data" BLOB NOT NULL,
           "createdAt" TEXT NOT NULL,
           "updatedAt" TEXT NOT NULL
@@ -79,6 +92,23 @@ export class DocMountBlobsRepository {
         `ON "${TABLE}" ("mountPointId", "relativePath")`
       );
       db.exec(`CREATE INDEX IF NOT EXISTS "idx_${TABLE}_mp" ON "${TABLE}" ("mountPointId")`);
+
+      // Backfill for instances that predate the extractedText sidecar. ADD
+      // COLUMN is idempotent via the PRAGMA check so re-runs are safe.
+      const existingCols = db.prepare(`PRAGMA table_info("${TABLE}")`).all() as Array<{ name: string }>;
+      const colNames = new Set(existingCols.map(c => c.name));
+      if (!colNames.has('extractedText')) {
+        db.exec(`ALTER TABLE "${TABLE}" ADD COLUMN "extractedText" TEXT`);
+      }
+      if (!colNames.has('extractedTextSha256')) {
+        db.exec(`ALTER TABLE "${TABLE}" ADD COLUMN "extractedTextSha256" TEXT`);
+      }
+      if (!colNames.has('extractionStatus')) {
+        db.exec(`ALTER TABLE "${TABLE}" ADD COLUMN "extractionStatus" TEXT NOT NULL DEFAULT 'none'`);
+      }
+      if (!colNames.has('extractionError')) {
+        db.exec(`ALTER TABLE "${TABLE}" ADD COLUMN "extractionError" TEXT`);
+      }
       this.tableInitialized = true;
     }
 
@@ -90,6 +120,7 @@ export class DocMountBlobsRepository {
       const row = this.db().prepare(
         `SELECT id, mountPointId, relativePath, originalFileName, originalMimeType,
                 storedMimeType, sizeBytes, sha256, description, descriptionUpdatedAt,
+                extractedText, extractedTextSha256, extractionStatus, extractionError,
                 createdAt, updatedAt
          FROM "${TABLE}" WHERE id = ?`
       ).get(id) as Record<string, unknown> | undefined;
@@ -108,6 +139,7 @@ export class DocMountBlobsRepository {
       const row = this.db().prepare(
         `SELECT id, mountPointId, relativePath, originalFileName, originalMimeType,
                 storedMimeType, sizeBytes, sha256, description, descriptionUpdatedAt,
+                extractedText, extractedTextSha256, extractionStatus, extractionError,
                 createdAt, updatedAt
          FROM "${TABLE}" WHERE mountPointId = ? AND relativePath = ?`
       ).get(mountPointId, relativePath) as Record<string, unknown> | undefined;
@@ -132,6 +164,7 @@ export class DocMountBlobsRepository {
       const baseSelect =
         `SELECT id, mountPointId, relativePath, originalFileName, originalMimeType,
                 storedMimeType, sizeBytes, sha256, description, descriptionUpdatedAt,
+                extractedText, extractedTextSha256, extractionStatus, extractionError,
                 createdAt, updatedAt
          FROM "${TABLE}" WHERE mountPointId = ?`;
 
@@ -229,6 +262,52 @@ export class DocMountBlobsRepository {
       throw new Error(`Blob disappeared immediately after creation: ${id}`);
     }
     return created;
+  }
+
+  async updateExtractedText(
+    id: string,
+    input: UpdateExtractedTextInput
+  ): Promise<DocMountBlobMetadata | null> {
+    try {
+      const now = nowIso();
+      this.db().prepare(
+        `UPDATE "${TABLE}" SET
+           extractedText = ?, extractedTextSha256 = ?,
+           extractionStatus = ?, extractionError = ?, updatedAt = ?
+         WHERE id = ?`
+      ).run(
+        input.extractedText,
+        input.extractedTextSha256,
+        input.extractionStatus,
+        input.extractionError ?? null,
+        now,
+        id
+      );
+      return await this.findById(id);
+    } catch (error) {
+      logger.warn('Failed to update blob extracted text', {
+        id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  async updatePath(id: string, newRelativePath: string): Promise<boolean> {
+    try {
+      const now = nowIso();
+      const result = this.db().prepare(
+        `UPDATE "${TABLE}" SET relativePath = ?, updatedAt = ? WHERE id = ?`
+      ).run(newRelativePath, now, id);
+      return result.changes > 0;
+    } catch (error) {
+      logger.warn('Failed to update blob path', {
+        id,
+        newRelativePath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
   }
 
   async updateDescription(id: string, description: string): Promise<DocMountBlobMetadata | null> {

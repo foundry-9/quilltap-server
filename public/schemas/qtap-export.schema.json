@@ -729,7 +729,7 @@
 
     "ExportedDocumentStoreBlob": {
       "type": "object",
-      "description": "Binary asset (image etc.) attached to a document store. Raw bytes are base64-encoded.",
+      "description": "Binary asset attached to a document store — images (transcoded to WebP where applicable), pdf/docx uploads with an extracted-text sidecar, and arbitrary binaries. Raw bytes are base64-encoded.",
       "required": ["mountPointId", "relativePath", "originalFileName", "originalMimeType", "storedMimeType", "sizeBytes", "sha256", "description", "dataBase64"],
       "additionalProperties": false,
       "properties": {
@@ -741,6 +741,17 @@
         "sizeBytes": { "type": "integer", "minimum": 0 },
         "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
         "description": { "type": "string" },
+        "descriptionUpdatedAt": { "type": ["string", "null"] },
+        "extractedText": {
+          "type": ["string", "null"],
+          "description": "Plain-text representation of the blob, populated for pdf/docx uploads and chunked for embedding. Null for images and arbitrary binaries with no converter."
+        },
+        "extractedTextSha256": { "type": ["string", "null"] },
+        "extractionStatus": {
+          "type": "string",
+          "enum": ["none", "pending", "converted", "failed", "skipped"]
+        },
+        "extractionError": { "type": ["string", "null"] },
         "dataBase64": { "type": "string", "contentEncoding": "base64" }
       }
     },

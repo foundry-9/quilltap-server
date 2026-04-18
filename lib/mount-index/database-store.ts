@@ -540,13 +540,15 @@ export async function moveDatabaseFolder(
     }
   }
 
-  // Update blob paths (blobs do not have folderId, only relativePath is updated)
+  // Update blob paths. Blobs don't carry a folderId — their location is
+  // implicit in relativePath — so only the path string needs to follow the
+  // folder rename. The file-mirror loop above already moves the
+  // doc_mount_files row for each blob.
   const blobs = await repos.docMountBlobs.listByMountPoint(mountPointId);
   for (const blob of blobs) {
     if (oldPrefix && blob.relativePath.startsWith(oldPrefix)) {
       const newPath = newPrefix + blob.relativePath.substring(oldPrefix.length);
-      // Blob metadata update path — may not be exposed yet in the API
-      // For now, skip blob path updates as blobs aren't structured in folders
+      await repos.docMountBlobs.updatePath(blob.id, newPath);
     }
   }
 

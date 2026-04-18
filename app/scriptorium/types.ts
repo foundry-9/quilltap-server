@@ -47,7 +47,7 @@ export interface DocumentStoreFile {
   mountPointId: string
   relativePath: string
   fileName: string
-  fileType: 'pdf' | 'docx' | 'markdown' | 'txt'
+  fileType: 'pdf' | 'docx' | 'markdown' | 'txt' | 'json' | 'jsonl' | 'blob'
   sha256: string
   fileSizeBytes: number
   lastModified: string
@@ -111,6 +111,10 @@ export interface DocumentStoreBlob {
   sha256: string
   description: string
   descriptionUpdatedAt: string | null
+  extractedText: string | null
+  extractedTextSha256: string | null
+  extractionStatus: 'none' | 'pending' | 'converted' | 'failed' | 'skipped'
+  extractionError: string | null
   createdAt: string
   updatedAt: string
 }

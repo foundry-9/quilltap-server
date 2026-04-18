@@ -69,7 +69,9 @@ export const DocMountFileSchema = z.object({
   mountPointId: UUIDSchema,
   relativePath: z.string().min(1),   // Relative to basePath (or virtual path for database-backed stores)
   fileName: z.string().min(1),       // Just the filename
-  fileType: z.enum(['pdf', 'docx', 'markdown', 'txt', 'json', 'jsonl']),
+  // 'blob' is the catch-all for arbitrary binaries with no extracted text
+  // representation — the bytes live in doc_mount_blobs and there are no chunks.
+  fileType: z.enum(['pdf', 'docx', 'markdown', 'txt', 'json', 'jsonl', 'blob']),
   sha256: z.string().length(64),     // Hex digest
   fileSizeBytes: z.number().int().min(0),
   lastModified: TimestampSchema,     // File's mtime (or DB write time for database source)
@@ -164,6 +166,16 @@ export const DocMountBlobMetadataSchema = z.object({
   sha256: z.string().length(64),
   description: z.string().default(''),  // User-supplied description / embedding transcript
   descriptionUpdatedAt: TimestampSchema.nullable().optional(),
+  // Extracted text representation for embedding + LLM reads. Populated for
+  // pdf/docx today; null for images and arbitrary binaries until we add a
+  // converter. extractionStatus tracks the extract lifecycle separately from
+  // the chunking lifecycle on doc_mount_files.
+  extractedText: z.string().nullable().optional(),
+  extractedTextSha256: z.string().length(64).nullable().optional(),
+  extractionStatus: z
+    .enum(['none', 'pending', 'converted', 'failed', 'skipped'])
+    .default('none'),
+  extractionError: z.string().nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

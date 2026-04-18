@@ -470,6 +470,11 @@ async function* streamDocumentStores(
           sizeBytes: meta.sizeBytes,
           sha256: meta.sha256,
           description: meta.description,
+          descriptionUpdatedAt: meta.descriptionUpdatedAt ?? null,
+          extractedText: meta.extractedText ?? null,
+          extractedTextSha256: meta.extractedTextSha256 ?? null,
+          extractionStatus: meta.extractionStatus ?? 'none',
+          extractionError: meta.extractionError ?? null,
           chunkCount,
         },
       };

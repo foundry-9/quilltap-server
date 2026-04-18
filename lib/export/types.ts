@@ -277,6 +277,12 @@ export interface ExportedDocumentStoreBlob {
   sizeBytes: number;
   sha256: string;
   description: string;
+  descriptionUpdatedAt?: string | null;
+  /** Plain-text representation for pdf/docx uploads. Omitted for blobs with no converter. */
+  extractedText?: string | null;
+  extractedTextSha256?: string | null;
+  extractionStatus?: 'none' | 'pending' | 'converted' | 'failed' | 'skipped';
+  extractionError?: string | null;
   /** Raw bytes, base64-encoded for JSON safety. */
   dataBase64: string;
 }

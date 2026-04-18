@@ -54,6 +54,10 @@ function mimeTypeForFileType(fileType: DocMountFile['fileType']): string {
       return 'application/json';
     case 'jsonl':
       return 'application/x-ndjson';
+    case 'blob':
+      // Arbitrary binary with no canonical MIME — callers that care about
+      // the true type should consult doc_mount_blobs.storedMimeType instead.
+      return 'application/octet-stream';
   }
 }
 

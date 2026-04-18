@@ -106,4 +106,8 @@ export interface DocReadFileOutput {
   mtime: number;
   totalLines: number;
   truncated: boolean;
+  // True when content is plain text derived from a binary blob (e.g. pdf/docx
+  // extraction) rather than the file's original bytes. The blob's raw bytes
+  // remain accessible via the blob read endpoint but are not returned here.
+  derivedFromBlob?: boolean;
 }

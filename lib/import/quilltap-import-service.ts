@@ -1534,7 +1534,7 @@ async function importDocumentStores(
     if (!targetMountId) continue;
     try {
       const data = Buffer.from(blob.dataBase64, 'base64');
-      await globalRepos.docMountBlobs.create({
+      const created = await globalRepos.docMountBlobs.create({
         mountPointId: targetMountId,
         relativePath: blob.relativePath,
         originalFileName: blob.originalFileName,
@@ -1544,6 +1544,21 @@ async function importDocumentStores(
         description: blob.description,
         data,
       });
+      // Restore the extractedText sidecar on imports from 4.3-dev+ exports.
+      // Older exports omit these fields; keep the blob in the default 'none'
+      // state so on-upload extraction has nothing to re-run.
+      const hasExtractionMetadata =
+        blob.extractedText !== undefined ||
+        blob.extractionStatus !== undefined ||
+        blob.extractionError !== undefined;
+      if (hasExtractionMetadata) {
+        await globalRepos.docMountBlobs.updateExtractedText(created.id, {
+          extractedText: blob.extractedText ?? null,
+          extractedTextSha256: blob.extractedTextSha256 ?? null,
+          extractionStatus: blob.extractionStatus ?? 'none',
+          extractionError: blob.extractionError ?? null,
+        });
+      }
       counts.blobs++;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);

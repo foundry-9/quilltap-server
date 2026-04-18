@@ -1,6 +1,6 @@
 import { createServiceLogger } from '@/lib/logging/create-logger';
-import { convertPdfToText } from './pdf-converter';
-import { convertDocxToText } from './docx-converter';
+import { convertPdfToText, convertPdfBufferToText } from './pdf-converter';
+import { convertDocxToText, convertDocxBufferToText } from './docx-converter';
 import { convertMarkdownToText } from './markdown-converter';
 import { convertTxtToText } from './txt-converter';
 
@@ -57,7 +57,40 @@ export async function convertToPlainText(
   return text;
 }
 
-export { convertPdfToText } from './pdf-converter';
-export { convertDocxToText } from './docx-converter';
+/**
+ * Convert an in-memory buffer to plain text. Used by the Scriptorium blob
+ * pipeline: we never write uploaded PDFs/DOCX to disk, so the converters
+ * that need them must accept a Buffer directly.
+ *
+ * Returns an empty string if the file type has no extractable text (images,
+ * arbitrary binaries). Callers should treat an empty result as "no text
+ * representation available" rather than a failure.
+ */
+export async function convertBufferToPlainText(
+  buffer: Buffer,
+  fileType: SupportedFileType,
+): Promise<string> {
+  switch (fileType) {
+    case 'pdf':
+      return convertPdfBufferToText(buffer);
+    case 'docx':
+      return convertDocxBufferToText(buffer);
+    case 'markdown':
+    case 'txt':
+    case 'json':
+    case 'jsonl':
+      // Text formats: assume UTF-8. Matches the txt-converter's read-and-return
+      // behaviour for the filesystem path.
+      return buffer.toString('utf-8');
+    default: {
+      const exhaustive: never = fileType;
+      logger.warn('Unsupported file type for buffer conversion', { fileType: exhaustive });
+      return '';
+    }
+  }
+}
+
+export { convertPdfToText, convertPdfBufferToText } from './pdf-converter';
+export { convertDocxToText, convertDocxBufferToText } from './docx-converter';
 export { convertMarkdownToText } from './markdown-converter';
 export { convertTxtToText } from './txt-converter';

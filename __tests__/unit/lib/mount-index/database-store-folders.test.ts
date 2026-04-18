@@ -92,6 +92,7 @@ interface MockRepos {
   };
   docMountBlobs: {
     listByMountPoint: jest.Mock;
+    updatePath: jest.Mock;
   };
 }
 
@@ -123,6 +124,7 @@ function createMockRepos(): MockRepos {
     },
     docMountBlobs: {
       listByMountPoint: jest.fn().mockResolvedValue([]),
+      updatePath: jest.fn().mockResolvedValue(true),
     },
   };
 }
@@ -419,6 +421,57 @@ describe('database-store folder operations', () => {
           fromRelativePath: 'old/note.md',
           toRelativePath: 'new/note.md',
         })
+      );
+    });
+
+    it('renames contained blob paths when folder is moved', async () => {
+      const sourceFolder = {
+        id: 'folder-src',
+        path: 'uploads',
+        mountPointId: MOUNT_ID,
+        parentId: null,
+        name: 'uploads',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const blob = {
+        id: 'blob-001',
+        mountPointId: MOUNT_ID,
+        relativePath: 'uploads/portrait.webp',
+        originalFileName: 'portrait.png',
+        originalMimeType: 'image/png',
+        storedMimeType: 'image/webp',
+        sizeBytes: 1024,
+        sha256: 'a'.repeat(64),
+        description: '',
+        descriptionUpdatedAt: null,
+        extractedText: null,
+        extractedTextSha256: null,
+        extractionStatus: 'none' as const,
+        extractionError: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      repos.docMountFolders.findByMountPointAndPath.mockImplementation(
+        async (_mpId, folderPath) => {
+          if (folderPath === 'uploads') return sourceFolder;
+          if (folderPath === 'archive') return null;
+          return null;
+        }
+      );
+
+      repos.docMountFolders.findByMountPointId.mockResolvedValue([sourceFolder]);
+      repos.docMountDocuments.findByMountPointId.mockResolvedValue([]);
+      repos.docMountFiles.findByMountPointId.mockResolvedValue([]);
+      repos.docMountBlobs.listByMountPoint.mockResolvedValue([blob]);
+
+      await moveDatabaseFolder(MOUNT_ID, 'uploads', 'archive');
+
+      expect(repos.docMountBlobs.updatePath).toHaveBeenCalledWith(
+        'blob-001',
+        'archive/portrait.webp'
       );
     });
 
