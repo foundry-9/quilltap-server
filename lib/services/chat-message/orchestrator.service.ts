@@ -1119,6 +1119,64 @@ async function processMessage(
   // Pre-generate assistant message ID so logs can reference it
   const preGeneratedAssistantMessageId = crypto.randomUUID()
 
+  // Shared helper: when any of the six streamMessage callsites in this function
+  // fails mid-stream, preserve whatever accumulated in streamingState.fullResponse
+  // to the DB with an OOC marker before re-throwing. Idempotent: the first call
+  // that finds content writes it; subsequent calls (if the same id was already
+  // written) are swallowed so the original error still propagates.
+  let partialPreserved = false
+  const preservePartialOnError = async (error: unknown): Promise<void> => {
+    if (partialPreserved) return
+    if (!streamingState.hasStartedStreaming || streamingState.fullResponse.length === 0) {
+      logger.debug('No partial content to preserve after upstream error', {
+        chatId,
+        hasStartedStreaming: streamingState.hasStartedStreaming,
+        fullResponseLength: streamingState.fullResponse.length,
+      })
+      return
+    }
+    partialPreserved = true
+    const errorReason = error instanceof Error ? error.message : String(error)
+    const normalizedPartial = normalizeContentBlockFormat(streamingState.fullResponse)
+    const cleanedPartial = stripCharacterNamePrefix(normalizedPartial, character.name, character.aliases)
+    const preservedContent = `${cleanedPartial.trimEnd()}\n\n{{OOC: stream ended abruptly (${errorReason})}}`
+
+    try {
+      const preservedMessageId = await saveAssistantMessage(
+        repos,
+        chatId,
+        character,
+        characterParticipant,
+        preservedContent,
+        streamingState.usage,
+        streamingState.rawResponse,
+        streamingState.thoughtSignature,
+        [],
+        [],
+        preGeneratedAssistantMessageId,
+        streamingState.effectiveProfile.provider,
+        streamingState.effectiveProfile.modelName
+      )
+      logger.info('Preserved partial streamed response after upstream error', {
+        chatId,
+        messageId: preservedMessageId,
+        characterId: character.id,
+        characterName: character.name,
+        provider: streamingState.effectiveProfile.provider,
+        model: streamingState.effectiveProfile.modelName,
+        partialLength: streamingState.fullResponse.length,
+        error: errorReason,
+      })
+    } catch (persistError) {
+      logger.error('Failed to persist partial streamed response', {
+        chatId,
+        characterId: character.id,
+        error: persistError instanceof Error ? persistError.message : String(persistError),
+        originalError: errorReason,
+      })
+    }
+  }
+
   // Extract previous response ID for conversation chaining (OpenAI Responses API)
   // This allows OpenAI to use its internal cache, reducing input token costs
   let previousResponseId: string | undefined
@@ -1255,6 +1313,7 @@ async function processMessage(
           model: streamingState.effectiveProfile.modelName,
           error: retryError instanceof Error ? retryError.message : String(retryError),
         })
+        await preservePartialOnError(retryError)
         throw retryError
       }
     }
@@ -1303,59 +1362,9 @@ async function processMessage(
       logger.warn('Request limit recovery failed, propagating error', { chatId })
     }
 
-    // Not a recoverable error or recovery failed.
-    // If we already streamed partial content to the client, preserve it to the
-    // database with an OOC marker so the user keeps what Sunny (or whoever)
-    // actually said before the upstream connection dropped. Nothing streamed
-    // means nothing to preserve.
-    if (streamingState.hasStartedStreaming && streamingState.fullResponse.length > 0) {
-      const errorReason = streamingError instanceof Error ? streamingError.message : String(streamingError)
-      const normalizedPartial = normalizeContentBlockFormat(streamingState.fullResponse)
-      const cleanedPartial = stripCharacterNamePrefix(normalizedPartial, character.name, character.aliases)
-      const preservedContent = `${cleanedPartial.trimEnd()}\n\n{{OOC: stream ended abruptly (${errorReason})}}`
-
-      try {
-        const preservedMessageId = await saveAssistantMessage(
-          repos,
-          chatId,
-          character,
-          characterParticipant,
-          preservedContent,
-          streamingState.usage,
-          streamingState.rawResponse,
-          streamingState.thoughtSignature,
-          [],
-          [],
-          preGeneratedAssistantMessageId,
-          streamingState.effectiveProfile.provider,
-          streamingState.effectiveProfile.modelName
-        )
-        logger.info('Preserved partial streamed response after upstream error', {
-          chatId,
-          messageId: preservedMessageId,
-          characterId: character.id,
-          characterName: character.name,
-          provider: streamingState.effectiveProfile.provider,
-          model: streamingState.effectiveProfile.modelName,
-          partialLength: streamingState.fullResponse.length,
-          error: errorReason,
-        })
-      } catch (persistError) {
-        logger.error('Failed to persist partial streamed response', {
-          chatId,
-          characterId: character.id,
-          error: persistError instanceof Error ? persistError.message : String(persistError),
-          originalError: errorReason,
-        })
-      }
-    } else {
-      logger.debug('No partial content to preserve after upstream error', {
-        chatId,
-        hasStartedStreaming: streamingState.hasStartedStreaming,
-        fullResponseLength: streamingState.fullResponse.length,
-      })
-    }
-
+    // Not a recoverable error or recovery failed. Preserve any partial content
+    // streamed before the upstream connection dropped.
+    await preservePartialOnError(streamingError)
     throw streamingError
   }
 
@@ -1484,44 +1493,49 @@ async function processMessage(
     currentRawResponse = null
 
     let emittedStreamingStatus = false
-    for await (const chunk of streamMessage({
-      messages: currentMessages,
-      connectionProfile: streamingState.effectiveProfile,
-      apiKey: streamingState.effectiveApiKey,
-      modelParams,
-      tools: actualTools,
-      useNativeWebSearch,
-      userId,
-      messageId: preGeneratedAssistantMessageId,
-      chatId,
-      characterId: character.id,
-    })) {
-      if (chunk.content) {
-        // Emit streaming status on first content in this tool iteration
-        if (!emittedStreamingStatus) {
-          emittedStreamingStatus = true
-          safeEnqueue(controller, encodeStatusEvent(encoder, {
-            stage: 'streaming',
-            message: `${character.name} is responding...`,
-            characterName: character.name,
-            characterId: character.id,
-          }))
+    try {
+      for await (const chunk of streamMessage({
+        messages: currentMessages,
+        connectionProfile: streamingState.effectiveProfile,
+        apiKey: streamingState.effectiveApiKey,
+        modelParams,
+        tools: actualTools,
+        useNativeWebSearch,
+        userId,
+        messageId: preGeneratedAssistantMessageId,
+        chatId,
+        characterId: character.id,
+      })) {
+        if (chunk.content) {
+          // Emit streaming status on first content in this tool iteration
+          if (!emittedStreamingStatus) {
+            emittedStreamingStatus = true
+            safeEnqueue(controller, encodeStatusEvent(encoder, {
+              stage: 'streaming',
+              message: `${character.name} is responding...`,
+              characterName: character.name,
+              characterId: character.id,
+            }))
+          }
+          currentResponse += chunk.content
+          streamingState.fullResponse += chunk.content
+          controller.enqueue(encodeContentChunk(encoder, chunk.content))
         }
-        currentResponse += chunk.content
-        streamingState.fullResponse += chunk.content
-        controller.enqueue(encodeContentChunk(encoder, chunk.content))
-      }
 
-      if (chunk.done) {
-        streamingState.usage = chunk.usage || null
-        streamingState.cacheUsage = chunk.cacheUsage || null
-        streamingState.attachmentResults = chunk.attachmentResults || null
-        currentRawResponse = chunk.rawResponse
-        streamingState.rawResponse = chunk.rawResponse
-        if (chunk.thoughtSignature) {
-          streamingState.thoughtSignature = chunk.thoughtSignature
+        if (chunk.done) {
+          streamingState.usage = chunk.usage || null
+          streamingState.cacheUsage = chunk.cacheUsage || null
+          streamingState.attachmentResults = chunk.attachmentResults || null
+          currentRawResponse = chunk.rawResponse
+          streamingState.rawResponse = chunk.rawResponse
+          if (chunk.thoughtSignature) {
+            streamingState.thoughtSignature = chunk.thoughtSignature
+          }
         }
       }
+    } catch (toolLoopStreamError) {
+      await preservePartialOnError(toolLoopStreamError)
+      throw toolLoopStreamError
     }
 
     // If the LLM returned tool calls without any content (silent tool use),
@@ -1563,43 +1577,48 @@ async function processMessage(
       ]
 
       // Make one final call with force message
-      for await (const chunk of streamMessage({
-        messages: currentMessages,
-        connectionProfile: streamingState.effectiveProfile,
-        apiKey: streamingState.effectiveApiKey,
-        modelParams,
-        tools: actualTools,
-        useNativeWebSearch,
-        userId,
-        messageId: preGeneratedAssistantMessageId,
-        chatId,
-      })) {
-        if (chunk.content) {
-          streamingState.fullResponse += chunk.content
-          controller.enqueue(encodeContentChunk(encoder, chunk.content))
-        }
-
-        if (chunk.done) {
-          streamingState.usage = chunk.usage || null
-          streamingState.cacheUsage = chunk.cacheUsage || null
-          streamingState.attachmentResults = chunk.attachmentResults || null
-          streamingState.rawResponse = chunk.rawResponse
-          if (chunk.thoughtSignature) {
-            streamingState.thoughtSignature = chunk.thoughtSignature
+      try {
+        for await (const chunk of streamMessage({
+          messages: currentMessages,
+          connectionProfile: streamingState.effectiveProfile,
+          apiKey: streamingState.effectiveApiKey,
+          modelParams,
+          tools: actualTools,
+          useNativeWebSearch,
+          userId,
+          messageId: preGeneratedAssistantMessageId,
+          chatId,
+        })) {
+          if (chunk.content) {
+            streamingState.fullResponse += chunk.content
+            controller.enqueue(encodeContentChunk(encoder, chunk.content))
           }
 
-          // Check if the final call includes submit_final_response
-          if (chunk.rawResponse) {
-            const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, streamingState.effectiveProfile.provider)
-            const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
-            if (submitCall) {
-              const args = submitCall.arguments as { response?: string }
-              if (args.response) {
-                streamingState.fullResponse = args.response
+          if (chunk.done) {
+            streamingState.usage = chunk.usage || null
+            streamingState.cacheUsage = chunk.cacheUsage || null
+            streamingState.attachmentResults = chunk.attachmentResults || null
+            streamingState.rawResponse = chunk.rawResponse
+            if (chunk.thoughtSignature) {
+              streamingState.thoughtSignature = chunk.thoughtSignature
+            }
+
+            // Check if the final call includes submit_final_response
+            if (chunk.rawResponse) {
+              const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, streamingState.effectiveProfile.provider)
+              const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
+              if (submitCall) {
+                const args = submitCall.arguments as { response?: string }
+                if (args.response) {
+                  streamingState.fullResponse = args.response
+                }
               }
             }
           }
         }
+      } catch (forceFinalStreamError) {
+        await preservePartialOnError(forceFinalStreamError)
+        throw forceFinalStreamError
       }
     } else {
       logger.warn('Max tool iterations reached', { iterations: toolIterations, chatId })
@@ -1656,30 +1675,38 @@ async function processMessage(
 
       // Continue conversation with tool results
       let continuationResponse = ''
-      for await (const chunk of streamMessage({
-        messages: currentMessages,
-        connectionProfile: streamingState.effectiveProfile,
-        apiKey: streamingState.effectiveApiKey,
-        modelParams,
-        tools: actualTools,
-        useNativeWebSearch,
-        userId,
-        messageId: preGeneratedAssistantMessageId,
-        chatId,
-      })) {
-        if (chunk.content) {
-          continuationResponse += chunk.content
-          controller.enqueue(encodeContentChunk(encoder, chunk.content))
-        }
+      try {
+        for await (const chunk of streamMessage({
+          messages: currentMessages,
+          connectionProfile: streamingState.effectiveProfile,
+          apiKey: streamingState.effectiveApiKey,
+          modelParams,
+          tools: actualTools,
+          useNativeWebSearch,
+          userId,
+          messageId: preGeneratedAssistantMessageId,
+          chatId,
+        })) {
+          if (chunk.content) {
+            continuationResponse += chunk.content
+            controller.enqueue(encodeContentChunk(encoder, chunk.content))
+          }
 
-        if (chunk.done) {
-          streamingState.usage = chunk.usage || null
-          streamingState.cacheUsage = chunk.cacheUsage || null
-          streamingState.rawResponse = chunk.rawResponse
-          if (chunk.thoughtSignature) {
-            streamingState.thoughtSignature = chunk.thoughtSignature
+          if (chunk.done) {
+            streamingState.usage = chunk.usage || null
+            streamingState.cacheUsage = chunk.cacheUsage || null
+            streamingState.rawResponse = chunk.rawResponse
+            if (chunk.thoughtSignature) {
+              streamingState.thoughtSignature = chunk.thoughtSignature
+            }
           }
         }
+      } catch (textToolContinuationError) {
+        // Reconstruct combined response so the preserved message reflects what
+        // the user actually saw streamed (stripped initial + partial continuation).
+        streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
+        await preservePartialOnError(textToolContinuationError)
+        throw textToolContinuationError
       }
 
       streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
@@ -1738,30 +1765,37 @@ async function processMessage(
 
       // Continue conversation with tool results
       let continuationResponse = ''
-      for await (const chunk of streamMessage({
-        messages: currentMessages,
-        connectionProfile: streamingState.effectiveProfile,
-        apiKey: streamingState.effectiveApiKey,
-        modelParams,
-        tools: useTextBlockTools ? [] : actualTools,
-        useNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
-        userId,
-        messageId: preGeneratedAssistantMessageId,
-        chatId,
-      })) {
-        if (chunk.content) {
-          continuationResponse += chunk.content
-          controller.enqueue(encodeContentChunk(encoder, chunk.content))
-        }
+      try {
+        for await (const chunk of streamMessage({
+          messages: currentMessages,
+          connectionProfile: streamingState.effectiveProfile,
+          apiKey: streamingState.effectiveApiKey,
+          modelParams,
+          tools: useTextBlockTools ? [] : actualTools,
+          useNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
+          userId,
+          messageId: preGeneratedAssistantMessageId,
+          chatId,
+        })) {
+          if (chunk.content) {
+            continuationResponse += chunk.content
+            controller.enqueue(encodeContentChunk(encoder, chunk.content))
+          }
 
-        if (chunk.done) {
-          streamingState.usage = chunk.usage || null
-          streamingState.cacheUsage = chunk.cacheUsage || null
-          streamingState.rawResponse = chunk.rawResponse
-          if (chunk.thoughtSignature) {
-            streamingState.thoughtSignature = chunk.thoughtSignature
+          if (chunk.done) {
+            streamingState.usage = chunk.usage || null
+            streamingState.cacheUsage = chunk.cacheUsage || null
+            streamingState.rawResponse = chunk.rawResponse
+            if (chunk.thoughtSignature) {
+              streamingState.thoughtSignature = chunk.thoughtSignature
+            }
           }
         }
+      } catch (textBlockContinuationError) {
+        streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
+        streamingState.fullResponse = stripTextBlockMarkersFromResponse(streamingState.fullResponse)
+        await preservePartialOnError(textBlockContinuationError)
+        throw textBlockContinuationError
       }
 
       streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
