@@ -54,12 +54,23 @@ function getProjectId(chat: unknown): string | undefined {
   return (chat as Record<string, unknown>).projectId as string | undefined;
 }
 
+function getParticipantCharacterIds(chat: unknown): string[] {
+  const participants = (chat as { participants?: Array<{ characterId?: string | null }> }).participants;
+  if (!Array.isArray(participants)) return [];
+  const ids = new Set<string>();
+  for (const p of participants) {
+    if (p?.characterId) ids.add(p.characterId);
+  }
+  return Array.from(ids);
+}
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
 interface ChatDocumentContext {
   projectId?: string;
+  characterIds: string[];
 }
 
 async function getChatContext(
@@ -73,6 +84,7 @@ async function getChatContext(
 
   return {
     projectId: getProjectId(chat),
+    characterIds: getParticipantCharacterIds(chat),
   };
 }
 
@@ -86,6 +98,7 @@ async function resolveDocumentRequest(
 ): Promise<{ projectId?: string; resolved: Awaited<ReturnType<typeof resolveDocEditPath>> }> {
   const resolved = await resolveDocEditPath(params.scope, params.filePath, {
     projectId: chatContext.projectId,
+    characterIds: chatContext.characterIds,
     mountPoint: params.mountPoint,
   });
 

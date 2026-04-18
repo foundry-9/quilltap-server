@@ -198,6 +198,52 @@ describe('chats [id] document actions', () => {
     expect(body).toMatchObject({ success: true, mtime: 123456789 })
   })
 
+  it('passes participant character IDs into path resolution so character vaults are reachable', async () => {
+    const chatId = 'chat-vault'
+    ctx.repos.chats.findById.mockResolvedValueOnce({
+      id: chatId,
+      projectId: 'project-1',
+      participants: [
+        { characterId: 'char-friday', type: 'CHARACTER', status: 'active' },
+        { characterId: 'char-user', type: 'CHARACTER', status: 'active' },
+      ],
+    })
+    resolveDocEditPath.mockResolvedValueOnce({
+      absolutePath: '',
+      scope: 'document_store',
+      mountPointId: 'mount-1',
+      mountPointName: 'Friday Character Vault',
+      mountType: 'database',
+      basePath: '',
+      relativePath: 'properties.json',
+    })
+    readFileWithMtime.mockResolvedValueOnce({ content: '{}', mtime: 42, size: 2 })
+    ctx.repos.chatDocuments.openDocument.mockImplementationOnce(async (_chatId: string, data: any) => ({
+      id: 'doc-vault',
+      ...data,
+    }))
+
+    const request = {
+      json: jest.fn().mockResolvedValue({
+        filePath: 'properties.json',
+        scope: 'document_store',
+        mountPoint: 'Friday Character Vault',
+      }),
+    } as any
+
+    const response = await handleOpenDocument(request, chatId, ctx)
+    expect(response.status).toBe(200)
+    expect(resolveDocEditPath).toHaveBeenCalledWith(
+      'document_store',
+      'properties.json',
+      expect.objectContaining({
+        projectId: 'project-1',
+        characterIds: ['char-friday', 'char-user'],
+        mountPoint: 'Friday Character Vault',
+      })
+    )
+  })
+
   it('returns a conflict when the document changed on disk before saving', async () => {
     const chatId = 'chat-conflict'
     ctx.repos.chats.findById.mockResolvedValueOnce({ id: chatId, projectId: 'project-1' })

@@ -34,6 +34,10 @@ export interface PathResolutionContext {
    * implicit access to its own character document vault, regardless of
    * whether that vault is linked to the active project. */
   characterId?: string;
+  /** Additional character IDs whose vaults should be accessible. Used by
+   * the Salon's document-mode handlers to admit every chat participant's
+   * vault, not just the single character the LLM is currently speaking as. */
+  characterIds?: string[];
   /** Mount point name or ID (required for document_store scope) */
   mountPoint?: string;
 }
@@ -152,6 +156,15 @@ export async function resolveDocEditPath(
   );
 }
 
+function describeCharacters(context: PathResolutionContext): string {
+  const ids = new Set<string>();
+  if (context.characterId) ids.add(context.characterId);
+  if (context.characterIds) {
+    for (const id of context.characterIds) ids.add(id);
+  }
+  return ids.size === 0 ? 'none' : Array.from(ids).join(',');
+}
+
 /**
  * Collect the unique set of mount point IDs that the current chat context
  * can reach: every store linked to the active project, plus the active
@@ -172,8 +185,14 @@ async function collectAccessibleMountPointIds(
     }
   }
 
-  if (context.characterId) {
-    const character = await repos.characters.findById(context.characterId);
+  const characterIds = new Set<string>();
+  if (context.characterId) characterIds.add(context.characterId);
+  if (context.characterIds) {
+    for (const id of context.characterIds) characterIds.add(id);
+  }
+
+  for (const characterId of characterIds) {
+    const character = await repos.characters.findById(characterId);
     if (character?.characterDocumentMountPointId) {
       ids.add(character.characterDocumentMountPointId);
     }
@@ -197,7 +216,8 @@ async function resolveDocumentStorePath(
     );
   }
 
-  if (!context.projectId && !context.characterId) {
+  const hasCharacterContext = Boolean(context.characterId) || (context.characterIds?.length ?? 0) > 0;
+  if (!context.projectId && !hasCharacterContext) {
     logger.warn('document_store scope requires projectId or characterId in context');
     throw new PathResolutionError(
       'Project ID or character ID is required for document_store scope',
@@ -210,7 +230,7 @@ async function resolveDocumentStorePath(
 
   if (accessibleIds.length === 0) {
     logger.debug(
-      `No mount points accessible for project=${context.projectId ?? 'none'} character=${context.characterId ?? 'none'}`,
+      `No mount points accessible for project=${context.projectId ?? 'none'} characters=${describeCharacters(context)}`,
     );
     throw new PathResolutionError(
       `No document stores accessible in this context`,
@@ -243,7 +263,7 @@ async function resolveDocumentStorePath(
 
   if (!mountPoint) {
     logger.warn(
-      `Mount point not found or not accessible: ${context.mountPoint} (project: ${context.projectId ?? 'none'}, character: ${context.characterId ?? 'none'})`
+      `Mount point not found or not accessible: ${context.mountPoint} (project: ${context.projectId ?? 'none'}, characters: ${describeCharacters(context)})`
     );
     throw new PathResolutionError(
       `Mount point not found or not accessible in this context`,

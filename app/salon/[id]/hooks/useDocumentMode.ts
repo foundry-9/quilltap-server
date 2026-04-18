@@ -92,6 +92,13 @@ interface OpenDocumentParams {
 
 const AUTOSAVE_DEBOUNCE_MS = 30000
 
+function isMarkdownDocument(document: Pick<ActiveDocument, 'filePath'>): boolean {
+  const dot = document.filePath.lastIndexOf('.')
+  if (dot < 0) return false
+  const ext = document.filePath.slice(dot).toLowerCase()
+  return ext === '.md' || ext === '.markdown'
+}
+
 function getDocumentModeState(
   source: Partial<{ documentMode: DocumentMode; dividerPosition: number }> | null | undefined,
 ): { mode: DocumentMode; dividerPosition: number } {
@@ -154,8 +161,10 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
       // Lexical will remount (key={contentVersion}) and re-serialize the loaded
       // markdown. Its normalized output may differ from the disk content in
       // trivial ways (whitespace, list spacing), so absorb that first change as
-      // the new baseline instead of flagging the doc as dirty.
-      absorbNextContentChangeRef.current = true
+      // the new baseline instead of flagging the doc as dirty. Non-markdown
+      // files render in a plain textarea that has no re-serialization step,
+      // so there is nothing to absorb — the user's first keystroke is real.
+      absorbNextContentChangeRef.current = document ? isMarkdownDocument(document) : false
       setContentVersion(v => v + 1)
     }
   }, [])

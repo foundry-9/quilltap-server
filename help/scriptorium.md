@@ -24,7 +24,7 @@ Each interchange is embedded as a searchable chunk through the existing embeddin
 
 ### Editing Beside the Conversation
 
-When Document Mode is open in the Salon, the Scriptorium also serves as your in-chat writing desk. You may work in rich text or flip over to raw Markdown source, and the formatting controls remain close at hand for either style of composition. The split view remembers its layout for each chat, and the divider may be adjusted with the mouse or the keyboard — a small courtesy, perhaps, but a civilized one.
+When Document Mode is open in the Salon, the Scriptorium also serves as your in-chat writing desk. For Markdown manuscripts you may work in rich text or flip over to raw source, and the formatting controls remain close at hand for either style of composition. Files that are not Markdown — JSON configurations, YAML recipes, plain text correspondence, and so forth — open in a monospaced textarea with no rich-text scaffolding whatsoever, which spares them the indignity of being quietly reformatted by a Markdown serializer. The split view remembers its layout for each chat, and the divider may be adjusted with the mouse or the keyboard — a small courtesy, perhaps, but a civilized one.
 
 ## The Tools
 

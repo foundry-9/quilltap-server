@@ -73,6 +73,18 @@ function countWords(text: string): number {
 }
 
 /**
+ * True for files we want to edit as Markdown with Lexical. Everything else
+ * (JSON, YAML, plain text, source code, etc.) renders in a plain textarea
+ * so its bytes are not round-tripped through a Markdown serializer.
+ */
+function isMarkdownFile(filePath: string): boolean {
+  const dot = filePath.lastIndexOf('.')
+  if (dot < 0) return false
+  const ext = filePath.slice(dot).toLowerCase()
+  return ext === '.md' || ext === '.markdown'
+}
+
+/**
  * Inner editor plugins that need Lexical context
  */
 function DocumentEditorPlugins({
@@ -218,6 +230,7 @@ export default function DocumentPane({
   const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const wordCount = useMemo(() => countWords(document.content), [document.content])
+  const isMarkdown = useMemo(() => isMarkdownFile(document.filePath), [document.filePath])
 
   // Stable callbacks for DocumentChangeTracker — avoid re-registering the update listener
   const handleChangedLines = useCallback((lines: Set<number>) => {
@@ -392,59 +405,79 @@ export default function DocumentPane({
         </div>
       </div>
 
-      {/* Shared editor shell — key forces remount on external content changes */}
-      <LexicalComposer key={contentVersion} initialConfig={initialConfig}>
-        <DocumentToolbarWrapper
-          roleplayTemplateId={roleplayTemplateId}
-          disabled={isLLMEditing}
-          showSource={showSource}
-          sourceTextareaRef={sourceTextareaRef}
-          onContentChange={onContentChange}
-          onToggleSource={toggleSourceMode}
-        />
+      {isMarkdown ? (
+        /* Shared editor shell — key forces remount on external content changes */
+        <LexicalComposer key={contentVersion} initialConfig={initialConfig}>
+          <DocumentToolbarWrapper
+            roleplayTemplateId={roleplayTemplateId}
+            disabled={isLLMEditing}
+            showSource={showSource}
+            sourceTextareaRef={sourceTextareaRef}
+            onContentChange={onContentChange}
+            onToggleSource={toggleSourceMode}
+          />
 
-        {showSource ? (
-          <div ref={scrollContainerRef} className="flex-1 overflow-y-auto" onBlur={onBlur} onScroll={handleScroll}>
-            <textarea
-              ref={sourceTextareaRef}
-              className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
-              value={document.content}
-              onChange={(e) => onContentChange(e.target.value)}
-              disabled={isLLMEditing}
-              spellCheck={false}
-              style={{ lineHeight: '1.6', minHeight: '100%' }}
-            />
-          </div>
-        ) : (
-          <div ref={scrollContainerRef} className="qt-doc-editor-with-gutter" onBlur={onBlur} onScroll={handleScroll}>
-            <DocumentGutter
-              changedLines={changedLines}
-              attentionTop={attentionTop}
-              linePositions={linePositions}
-              totalHeight={totalHeight}
-            />
-            <div className="flex-1">
-              <DocumentEditorPlugins
-                content={document.content}
-                onContentChange={onContentChange}
+          {showSource ? (
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto" onBlur={onBlur} onScroll={handleScroll}>
+              <textarea
+                ref={sourceTextareaRef}
+                className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
+                value={document.content}
+                onChange={(e) => onContentChange(e.target.value)}
                 disabled={isLLMEditing}
-                baselineContent={baselineContent}
-                onChangedLines={handleChangedLines}
-                onLinePositions={handleLinePositions}
-                scrollContainerRef={scrollContainerRef}
-                focusRequest={focusRequest}
-                onFocusResolved={onFocusResolved}
-                onFocusCleared={onFocusCleared}
-                onFocusProcessed={onFocusProcessed}
+                spellCheck={false}
+                style={{ lineHeight: '1.6', minHeight: '100%' }}
               />
             </div>
-          </div>
-        )}
-      </LexicalComposer>
+          ) : (
+            <div ref={scrollContainerRef} className="qt-doc-editor-with-gutter" onBlur={onBlur} onScroll={handleScroll}>
+              <DocumentGutter
+                changedLines={changedLines}
+                attentionTop={attentionTop}
+                linePositions={linePositions}
+                totalHeight={totalHeight}
+              />
+              <div className="flex-1">
+                <DocumentEditorPlugins
+                  content={document.content}
+                  onContentChange={onContentChange}
+                  disabled={isLLMEditing}
+                  baselineContent={baselineContent}
+                  onChangedLines={handleChangedLines}
+                  onLinePositions={handleLinePositions}
+                  scrollContainerRef={scrollContainerRef}
+                  focusRequest={focusRequest}
+                  onFocusResolved={onFocusResolved}
+                  onFocusCleared={onFocusCleared}
+                  onFocusProcessed={onFocusProcessed}
+                />
+              </div>
+            </div>
+          )}
+        </LexicalComposer>
+      ) : (
+        /* Plain-text editor for non-Markdown files — no Lexical, no markdown
+         * bridge, no formatting toolbar. Bytes go straight to/from disk. */
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto"
+          onBlur={onBlur}
+          onScroll={handleScroll}
+        >
+          <textarea
+            className="w-full h-full p-4 qt-bg-input qt-text-primary font-mono text-sm resize-none outline-none"
+            value={document.content}
+            onChange={(e) => onContentChange(e.target.value)}
+            disabled={isLLMEditing}
+            spellCheck={false}
+            style={{ lineHeight: '1.6', minHeight: '100%' }}
+          />
+        </div>
+      )}
 
       {/* Status Bar */}
       <div className="qt-doc-status-bar">
-        <span className="qt-doc-status-item">Markdown</span>
+        <span className="qt-doc-status-item">{isMarkdown ? 'Markdown' : 'Plain text'}</span>
         <span className="qt-doc-status-item">{wordCount.toLocaleString()} word{wordCount !== 1 ? 's' : ''}</span>
         <span className="qt-doc-status-item">
           <span className={saveStatus.dot} />
