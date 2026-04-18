@@ -518,6 +518,25 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.2: Character Vault Backfill (before mount point scan)
+      // ================================================================
+      // For every Character that isn't already linked to a character
+      // document store, create a database-backed vault, scaffold the
+      // preset structure, and populate it with the character's current
+      // data. Idempotent — linked characters are skipped. Runs before
+      // the mount point scan so new vaults are included in the first
+      // scan pass.
+      try {
+        const { backfillCharacterVaults } = await import('./lib/startup/backfill-character-vaults');
+        await backfillCharacterVaults();
+      } catch (backfillError) {
+        logger.warn('Error during character vault backfill, continuing startup', {
+          context: 'instrumentation.register',
+          error: backfillError instanceof Error ? backfillError.message : String(backfillError),
+        });
+      }
+
+      // ================================================================
       // PHASE 3.3: Document Mount Point Scan (after filesystem ready)
       // ================================================================
       // Fire-and-forget: scan runs asynchronously so large vaults don't

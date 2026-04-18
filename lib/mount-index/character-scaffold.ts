@@ -25,6 +25,7 @@ const BLANK_MARKDOWN_FILES = [
   'description.md',
   'personality.md',
   'physical-description.md',
+  'example-dialogues.md',
 ] as const;
 
 const TOP_LEVEL_FOLDERS = [
@@ -36,9 +37,11 @@ const TOP_LEVEL_FOLDERS = [
 ] as const;
 
 const PROPERTIES_JSON = {
-  pronouns: '',
+  pronouns: null,
   aliases: [],
   title: '',
+  firstMessage: '',
+  talkativeness: 0.5,
 };
 
 const WARDROBE_JSON = {
