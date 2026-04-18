@@ -140,6 +140,9 @@ export const CharacterSchema = z.object({
   /** Default system prompt ID for chats with this character (null = use first/isDefault prompt) */
   defaultSystemPromptId: UUIDSchema.nullable().optional(),
 
+  /** Linked character document store (mountType='database', storeType='character'); null = not linked */
+  characterDocumentMountPointId: UUIDSchema.nullable().optional(),
+
   /** Whether this character can change their own outfit using wardrobe tools (null = enabled by default) */
   canDressThemselves: z.boolean().nullable().optional(),
 

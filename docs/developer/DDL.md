@@ -180,7 +180,8 @@ CREATE TABLE "characters" (
   "defaultScenarioId" TEXT DEFAULT NULL,
   "defaultSystemPromptId" TEXT DEFAULT NULL,
   "canDressThemselves" INTEGER DEFAULT NULL,
-  "canCreateOutfits" INTEGER DEFAULT NULL
+  "canCreateOutfits" INTEGER DEFAULT NULL,
+  "characterDocumentMountPointId" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_characters_createdAt" ON "characters" ("createdAt" DESC);

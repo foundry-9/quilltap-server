@@ -89,6 +89,10 @@ const createCharacterSchema = z.object({
       })
     )
     .optional(),
+  characterDocumentMountPointId: z.uuid()
+    .optional()
+    .or(z.literal('').transform(() => undefined))
+    .nullable(),
 });
 
 const quickCreateSchema = z.object({

@@ -126,6 +126,7 @@ interface IdMappingState {
   embeddingProfiles: Map<string, string>;
   roleplayTemplates: Map<string, string>;
   projects: Map<string, string>;
+  mountPoints: Map<string, string>;
 }
 
 // ============================================================================
@@ -385,6 +386,7 @@ export async function executeImport(
     embeddingProfiles: new Map(),
     roleplayTemplates: new Map(),
     projects: new Map(),
+    mountPoints: new Map(),
   };
 
   // Initialize counts
@@ -1399,7 +1401,9 @@ async function importDocumentStores(
 
   // Map source mountPointId → target mountPointId so we can rewrite
   // documents/blobs to the mount points we end up creating or reusing.
-  const idMap = new Map<string, string>();
+  // Also promoted onto idMaps.mountPoints for cross-entity reconciliation
+  // (e.g. characterDocumentMountPointId).
+  const idMap = idMaps.mountPoints;
 
   const existingStores = await globalRepos.docMountPoints.findAll();
   const byName = new Map(existingStores.map(s => [s.name.toLowerCase(), s]));
@@ -1684,6 +1688,20 @@ async function reconcileRelationships(
         const newTemplateId = remapId(character.defaultRoleplayTemplateId, idMaps.roleplayTemplates);
         if (newTemplateId) {
           updates.defaultRoleplayTemplateId = newTemplateId;
+          hasUpdates = true;
+        }
+      }
+
+      // Remap characterDocumentMountPointId
+      if (character.characterDocumentMountPointId) {
+        const newMountId = remapId(character.characterDocumentMountPointId, idMaps.mountPoints);
+        if (newMountId) {
+          updates.characterDocumentMountPointId = newMountId;
+          hasUpdates = true;
+        } else {
+          // Referenced mount point was not part of the import — null the link
+          // rather than leave a dangling reference.
+          updates.characterDocumentMountPointId = null;
           hasUpdates = true;
         }
       }

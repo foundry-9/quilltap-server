@@ -175,6 +175,8 @@ import { createConversationTablesMigration } from './create-conversation-tables'
 import { createHelpDocsTableMigration } from './create-help-docs-table';
 // Add document mode fields for Scriptorium Phase 3.5
 import { addDocumentModeFieldsMigration } from './add-document-mode-fields';
+// Add characterDocumentMountPointId field to characters
+import { addCharacterDocumentMountPointFieldMigration } from './add-character-document-mount-point-field';
 
 /**
  * All available migrations.
@@ -345,6 +347,8 @@ export const migrations: Migration[] = [
   createHelpDocsTableMigration,
   // Add document mode fields for Scriptorium Phase 3.5
   addDocumentModeFieldsMigration,
+  // Add characterDocumentMountPointId field to characters
+  addCharacterDocumentMountPointFieldMigration,
 ];
 
 export {
@@ -500,5 +504,7 @@ export {
   createHelpDocsTableMigration,
   // Add document mode fields for Scriptorium Phase 3.5
   addDocumentModeFieldsMigration,
+  // Add characterDocumentMountPointId field to characters
+  addCharacterDocumentMountPointFieldMigration,
 };
 

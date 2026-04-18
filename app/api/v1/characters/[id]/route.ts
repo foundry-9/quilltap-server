@@ -86,6 +86,10 @@ const updateCharacterSchema = z.object({
   defaultTimestampConfig: TimestampConfigSchema.nullable().optional(),
   defaultScenarioId: z.uuid().nullable().optional(),
   defaultSystemPromptId: z.uuid().nullable().optional(),
+  characterDocumentMountPointId: z.uuid()
+    .optional()
+    .or(z.literal('').transform(() => null))
+    .nullable(),
 });
 
 const avatarSchema = z.object({
