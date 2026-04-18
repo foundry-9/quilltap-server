@@ -20,6 +20,15 @@ import {
 // Cache TTL: 24 hours
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
+// Fail-fast timeout for the public pricing fetch. Cost estimation sits on the
+// critical path of message finalization, so we can't afford to wait on Node's
+// default socket behavior when openrouter.ai is slow or unreachable.
+const OPENROUTER_FETCH_TIMEOUT_MS = 3000
+
+// Negative-cache TTL: skip retries for 5 minutes after a failure so repeated
+// cost estimates don't each pay the timeout when openrouter.ai is down.
+const OPENROUTER_NEGATIVE_CACHE_TTL_MS = 5 * 60 * 1000
+
 // In-memory cache
 let pricingCache: PricingCache | null = null
 
@@ -28,6 +37,9 @@ let openRouterPublicCache: {
   models: ModelPricing[]
   fetchedAt: number
 } | null = null
+
+// Timestamp of the last failed public-pricing fetch (for negative caching)
+let openRouterPublicFetchFailureAt: number | null = null
 
 /**
  * Mapping from Quilltap provider names to OpenRouter provider slugs
@@ -55,6 +67,7 @@ async function fetchOpenRouterPublicPricing(): Promise<ModelPricing[]> {
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(OPENROUTER_FETCH_TIMEOUT_MS),
     })
 
     if (!response.ok) {
@@ -87,8 +100,10 @@ async function fetchOpenRouterPublicPricing(): Promise<ModelPricing[]> {
       })
     }
 
+    openRouterPublicFetchFailureAt = null
     return models
   } catch (error) {
+    openRouterPublicFetchFailureAt = Date.now()
     logger.error('Failed to fetch OpenRouter public pricing',
       { context: 'fetchOpenRouterPublicPricing' },
       error instanceof Error ? error : undefined
@@ -106,6 +121,16 @@ async function getOpenRouterPublicPricing(): Promise<ModelPricing[]> {
     const cacheAge = Date.now() - openRouterPublicCache.fetchedAt
     if (cacheAge < CACHE_TTL_MS) {
       return openRouterPublicCache.models
+    }
+  }
+
+  // Negative cache: after a recent failure, skip the fetch entirely so we
+  // don't pay the timeout again on every cost estimate while openrouter.ai
+  // is down.
+  if (openRouterPublicFetchFailureAt !== null) {
+    const failureAge = Date.now() - openRouterPublicFetchFailureAt
+    if (failureAge < OPENROUTER_NEGATIVE_CACHE_TTL_MS) {
+      return []
     }
   }
 
