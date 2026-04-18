@@ -21,6 +21,23 @@ import { executeCascadeDelete } from '@/lib/cascade-delete';
 import { getSeedImports } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
 import { reseedAvatarsForCharacters } from '@/lib/startup/seed-initial-data';
+import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
+import type { Character } from '@/lib/schemas/character.types';
+
+/**
+ * Fire-and-forget vault provisioning for a just-created character.
+ * The API response returns immediately; vault creation runs in the
+ * background. If it fails, the next server startup backfill will
+ * retry the same character (the helper is idempotent).
+ */
+function provisionVaultInBackground(character: Character): void {
+  ensureCharacterVault(character).catch((err) => {
+    logger.warn('[Characters v1] Background vault provisioning failed', {
+      characterId: character.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+}
 
 const CHARACTERS_POST_ACTIONS = ['ai-wizard', 'ai-wizard-stream', 'import', 'quick-create', 'reset-builtins'] as const;
 type CharactersPostAction = typeof CHARACTERS_POST_ACTIONS[number];
@@ -439,6 +456,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     npc: character.npc,
   });
 
+  provisionVaultInBackground(character);
+
   return NextResponse.json({ character }, { status: 201 });
 }
 
@@ -477,6 +496,8 @@ async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext
     characterId: character.id,
     name: character.name,
   });
+
+  provisionVaultInBackground(character);
 
   return NextResponse.json({ character }, { status: 201 });
 }
@@ -546,6 +567,8 @@ async function handleImport(req: NextRequest, context: AuthenticatedContext) {
       characterId: character.id,
       name: character.name,
     });
+
+    provisionVaultInBackground(character);
 
     return NextResponse.json(
       {

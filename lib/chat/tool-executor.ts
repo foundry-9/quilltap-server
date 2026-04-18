@@ -947,6 +947,7 @@ export async function executeToolCallWithContext(
         userId,
         chatId,
         projectId: context.projectId,
+        characterId,
       };
 
       const result = await executeDocEditTool(toolCall.name, toolCall.arguments, docEditContext);

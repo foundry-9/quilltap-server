@@ -123,6 +123,7 @@ export interface DocEditToolContext {
   chatId: string;
   userId: string;
   projectId?: string;
+  characterId?: string;
 }
 
 /**
@@ -237,6 +238,7 @@ function buildResolutionContext(
 ) {
   return {
     projectId: context.projectId,
+    characterId: context.characterId,
     mountPoint: input.mount_point,
   };
 }
@@ -812,7 +814,7 @@ async function handleGrep(
 
   // Search document store mount points
   if (!input.mount_point || input.mount_point) {
-    const mountPoints = await getAccessibleMountPoints(context.projectId);
+    const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId);
 
     for (const mp of mountPoints) {
       if (input.mount_point && mp.name.toLowerCase() !== input.mount_point.toLowerCase() && mp.id !== input.mount_point) {
@@ -962,7 +964,7 @@ async function handleListFiles(
 
   // List document store files
   if (shouldIncludeDocStore) {
-    const mountPoints = await getAccessibleMountPoints(context.projectId);
+    const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId);
     for (const mp of mountPoints) {
       if (input.mount_point && mp.name.toLowerCase() !== input.mount_point.toLowerCase() && mp.id !== input.mount_point) {
         continue;
@@ -1596,7 +1598,7 @@ async function handleOpenDocument(
   if (filePath) {
     // Opening an existing file — resolve the path to verify it exists
     try {
-      const resolved = await resolveDocEditPath(scope, filePath, { projectId: context.projectId, mountPoint: input.mount_point });
+      const resolved = await resolveDocEditPath(scope, filePath, { projectId: context.projectId, characterId: context.characterId, mountPoint: input.mount_point });
       if (resolved.mountType === 'database' && resolved.mountPointId) {
         const exists = await databaseDocumentExists(resolved.mountPointId, resolved.relativePath);
         if (!exists) throw new Error(`File not found: ${filePath}`);
@@ -1784,10 +1786,10 @@ async function handleDocFocus(
 
 async function resolveBlobMountPoint(
   mountPointRef: string,
-  projectId: string | undefined
+  context: DocEditToolContext
 ): Promise<{ id: string; name: string } | null> {
-  if (!projectId) return null;
-  const mountPoints = await getAccessibleMountPoints(projectId);
+  if (!context.projectId && !context.characterId) return null;
+  const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId);
   const needle = mountPointRef.toLowerCase();
   const found = mountPoints.find(
     mp => mp.name.toLowerCase() === needle || mp.id === mountPointRef
@@ -1799,7 +1801,7 @@ async function handleWriteBlob(
   input: DocWriteBlobInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocWriteBlobOutput; error?: string; formattedText?: string }> {
-  const mp = await resolveBlobMountPoint(input.mount_point, context.projectId);
+  const mp = await resolveBlobMountPoint(input.mount_point, context);
   if (!mp) {
     return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
   }
@@ -1854,7 +1856,7 @@ async function handleReadBlob(
   input: DocReadBlobInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocReadBlobOutput; error?: string; formattedText?: string }> {
-  const mp = await resolveBlobMountPoint(input.mount_point, context.projectId);
+  const mp = await resolveBlobMountPoint(input.mount_point, context);
   if (!mp) {
     return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
   }
@@ -1893,7 +1895,7 @@ async function handleListBlobs(
   input: DocListBlobsInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocListBlobsOutput; error?: string; formattedText?: string }> {
-  const mp = await resolveBlobMountPoint(input.mount_point, context.projectId);
+  const mp = await resolveBlobMountPoint(input.mount_point, context);
   if (!mp) {
     return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
   }
@@ -1925,7 +1927,7 @@ async function handleDeleteBlob(
   input: DocDeleteBlobInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocDeleteBlobOutput; error?: string; formattedText?: string }> {
-  const mp = await resolveBlobMountPoint(input.mount_point, context.projectId);
+  const mp = await resolveBlobMountPoint(input.mount_point, context);
   if (!mp) {
     return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
   }

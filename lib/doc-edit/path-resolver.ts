@@ -30,6 +30,10 @@ export type DocEditScope = 'document_store' | 'project' | 'general';
 export interface PathResolutionContext {
   /** Current project ID (from chat context) */
   projectId?: string;
+  /** Current character ID (from chat context). Used to grant the LLM
+   * implicit access to its own character document vault, regardless of
+   * whether that vault is linked to the active project. */
+  characterId?: string;
   /** Mount point name or ID (required for document_store scope) */
   mountPoint?: string;
 }
@@ -149,6 +153,36 @@ export async function resolveDocEditPath(
 }
 
 /**
+ * Collect the unique set of mount point IDs that the current chat context
+ * can reach: every store linked to the active project, plus the active
+ * character's own vault (if any). The character vault is always accessible
+ * to the LLM acting as that character, even when the vault is not linked
+ * to the active project.
+ */
+async function collectAccessibleMountPointIds(
+  context: PathResolutionContext
+): Promise<string[]> {
+  const repos = getRepositories();
+  const ids = new Set<string>();
+
+  if (context.projectId) {
+    const projectLinks = await repos.projectDocMountLinks.findByProjectId(context.projectId);
+    for (const link of projectLinks) {
+      ids.add(link.mountPointId);
+    }
+  }
+
+  if (context.characterId) {
+    const character = await repos.characters.findById(context.characterId);
+    if (character?.characterDocumentMountPointId) {
+      ids.add(character.characterDocumentMountPointId);
+    }
+  }
+
+  return Array.from(ids);
+}
+
+/**
  * Resolve a path within a mounted document store
  */
 async function resolveDocumentStorePath(
@@ -163,41 +197,42 @@ async function resolveDocumentStorePath(
     );
   }
 
-  if (!context.projectId) {
-    logger.warn('document_store scope requires projectId in context');
+  if (!context.projectId && !context.characterId) {
+    logger.warn('document_store scope requires projectId or characterId in context');
     throw new PathResolutionError(
-      'Project ID is required for document_store scope',
+      'Project ID or character ID is required for document_store scope',
       'MISSING_CONTEXT'
     );
   }
 
   const repos = getRepositories();
+  const accessibleIds = await collectAccessibleMountPointIds(context);
 
-  // Get project's linked mount points
-  const projectLinks = await repos.projectDocMountLinks.findByProjectId(context.projectId);
-  if (projectLinks.length === 0) {
-    logger.debug(`No mount points linked to project ${context.projectId}`);
+  if (accessibleIds.length === 0) {
+    logger.debug(
+      `No mount points accessible for project=${context.projectId ?? 'none'} character=${context.characterId ?? 'none'}`,
+    );
     throw new PathResolutionError(
-      `No document stores linked to this project`,
+      `No document stores accessible in this context`,
       'ACCESS_DENIED'
     );
   }
 
-  // Try to find mount point by name first (case-insensitive)
+  // Try to find mount point by name first (case-insensitive), then by ID
   let mountPoint = null;
-  for (const link of projectLinks) {
-    const mp = await repos.docMountPoints.findById(link.mountPointId);
-    if (mp && mp.name.toLowerCase() === context.mountPoint.toLowerCase()) {
+  const needle = context.mountPoint.toLowerCase();
+  for (const id of accessibleIds) {
+    const mp = await repos.docMountPoints.findById(id);
+    if (mp && mp.name.toLowerCase() === needle) {
       mountPoint = mp;
       break;
     }
   }
 
-  // If not found by name, try by ID
   if (!mountPoint) {
-    for (const link of projectLinks) {
-      if (link.mountPointId === context.mountPoint) {
-        const mp = await repos.docMountPoints.findById(link.mountPointId);
+    for (const id of accessibleIds) {
+      if (id === context.mountPoint) {
+        const mp = await repos.docMountPoints.findById(id);
         if (mp) {
           mountPoint = mp;
           break;
@@ -208,10 +243,10 @@ async function resolveDocumentStorePath(
 
   if (!mountPoint) {
     logger.warn(
-      `Mount point not found or not linked to project: ${context.mountPoint} (project: ${context.projectId})`
+      `Mount point not found or not accessible: ${context.mountPoint} (project: ${context.projectId ?? 'none'}, character: ${context.characterId ?? 'none'})`
     );
     throw new PathResolutionError(
-      `Mount point not found or not accessible to this project`,
+      `Mount point not found or not accessible in this context`,
       'NOT_FOUND'
     );
   }
@@ -493,26 +528,29 @@ export interface AccessibleMountPoint {
 }
 
 /**
- * List all accessible mount points for a project.
- * Used by doc_list_files and doc_grep to enumerate available sources.
+ * List all accessible mount points for the current chat context:
+ * every store linked to the project, plus the active character's own
+ * vault (if any), deduped. Used by doc_list_files, doc_grep, and the
+ * blob helpers to enumerate available sources.
  */
 export async function getAccessibleMountPoints(
-  projectId: string
+  projectId: string | undefined,
+  characterId?: string,
 ): Promise<AccessibleMountPoint[]> {
   try {
     const repos = getRepositories();
+    const ids = await collectAccessibleMountPointIds({ projectId, characterId });
 
-    // Get project's linked mount points
-    const projectLinks = await repos.projectDocMountLinks.findByProjectId(projectId);
-    if (projectLinks.length === 0) {
-      logger.debug(`No mount points linked to project ${projectId}`);
+    if (ids.length === 0) {
+      logger.debug(
+        `No mount points accessible for project=${projectId ?? 'none'} character=${characterId ?? 'none'}`,
+      );
       return [];
     }
 
-    // Fetch mount point records and filter to enabled ones
     const mountPoints: AccessibleMountPoint[] = [];
-    for (const link of projectLinks) {
-      const mountPoint = await repos.docMountPoints.findById(link.mountPointId);
+    for (const id of ids) {
+      const mountPoint = await repos.docMountPoints.findById(id);
       if (mountPoint && mountPoint.enabled) {
         mountPoints.push({
           id: mountPoint.id,
@@ -523,7 +561,9 @@ export async function getAccessibleMountPoints(
       }
     }
 
-    logger.debug(`Found ${mountPoints.length} accessible mount points for project ${projectId}`);
+    logger.debug(
+      `Found ${mountPoints.length} accessible mount points for project=${projectId ?? 'none'} character=${characterId ?? 'none'}`,
+    );
 
     return mountPoints;
   } catch (error) {
