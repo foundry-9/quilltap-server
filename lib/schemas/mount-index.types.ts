@@ -22,6 +22,10 @@ export const DocMountPointSchema = z.object({
   // Absolute filesystem path. Required for filesystem/obsidian; empty string for database-backed stores.
   basePath: z.string().default(''),
   mountType: z.enum(['filesystem', 'obsidian', 'database']).default('filesystem'),
+  // Content classification orthogonal to mountType. 'documents' is the default
+  // generic store; 'character' flags stores holding character sheets / Aurora
+  // material, which downstream features may treat specially.
+  storeType: z.enum(['documents', 'character']).default('documents'),
   includePatterns: z.array(z.string()).default(['*.md', '*.txt', '*.pdf', '*.docx']),
   excludePatterns: z.array(z.string()).default(['.git', 'node_modules', '.obsidian', '.trash']),
   enabled: z.boolean().default(true),

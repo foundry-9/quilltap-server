@@ -72,6 +72,13 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
           logger.info('Migrated doc_mount_points: added conversionError column');
         }
 
+        // Migration: add storeType to classify stores by content kind
+        // ('documents' | 'character'). Default 'documents' preserves existing rows.
+        if (!columns.some(c => c.name === 'storeType')) {
+          db.exec(`ALTER TABLE "${this.collectionName}" ADD COLUMN "storeType" TEXT NOT NULL DEFAULT 'documents'`);
+          logger.info('Migrated doc_mount_points: added storeType column');
+        }
+
         this.mountIndexCollectionInitialized = true;
       } catch (error) {
         logger.error('Failed to ensure doc_mount_points table in mount index database', {

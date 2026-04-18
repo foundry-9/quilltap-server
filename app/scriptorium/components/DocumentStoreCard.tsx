@@ -134,6 +134,21 @@ function MountTypeBadge({ type }: { type: string }) {
   )
 }
 
+function StoreTypeBadge({ type }: { type: string }) {
+  if (type === 'character') {
+    return (
+      <span className="qt-badge-related inline-flex items-center" title="Character store">
+        Character
+      </span>
+    )
+  }
+  return (
+    <span className="qt-badge-info inline-flex items-center" title="Documents store">
+      Documents
+    </span>
+  )
+}
+
 function ConversionStatusBadge({ status, error }: { status: string; error: string | null }) {
   if (status === 'converting') {
     return (
@@ -191,6 +206,7 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, on
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
+        <StoreTypeBadge type={store.storeType} />
         <MountTypeBadge type={store.mountType} />
         <ScanStatusBadge status={store.scanStatus} error={store.lastScanError} />
         <ConversionStatusBadge status={store.conversionStatus} error={store.conversionError} />

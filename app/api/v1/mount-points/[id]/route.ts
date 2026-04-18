@@ -34,6 +34,7 @@ const updateMountPointSchema = z.object({
   // basePath may be empty when switching to (or already is) a database-backed store.
   basePath: z.string().optional(),
   mountType: z.enum(['filesystem', 'obsidian', 'database']).optional(),
+  storeType: z.enum(['documents', 'character']).optional(),
   includePatterns: z.array(z.string()).optional(),
   excludePatterns: z.array(z.string()).optional(),
   enabled: z.boolean().optional(),

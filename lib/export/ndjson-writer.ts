@@ -407,6 +407,7 @@ async function* streamDocumentStores(
         name: mp.name,
         basePath: mp.basePath,
         mountType: mp.mountType,
+        storeType: mp.storeType,
         includePatterns: mp.includePatterns,
         excludePatterns: mp.excludePatterns,
         enabled: mp.enabled,

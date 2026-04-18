@@ -1050,6 +1050,7 @@ CREATE TABLE IF NOT EXISTS "doc_mount_points" (
   "name" TEXT NOT NULL,
   "basePath" TEXT NOT NULL DEFAULT '',
   "mountType" TEXT NOT NULL DEFAULT 'filesystem',
+  "storeType" TEXT NOT NULL DEFAULT 'documents',
   "includePatterns" TEXT NOT NULL DEFAULT '["*.md","*.txt","*.pdf","*.docx"]',
   "excludePatterns" TEXT NOT NULL DEFAULT '[".git","node_modules",".obsidian",".trash"]',
   "enabled" INTEGER NOT NULL DEFAULT 1,
@@ -1067,6 +1068,8 @@ CREATE TABLE IF NOT EXISTS "doc_mount_points" (
 ```
 
 `mountType` is one of `'filesystem'`, `'obsidian'`, or `'database'`. For `'database'` stores the `basePath` column is empty — all document bytes live in `doc_mount_documents` and attached blobs in `doc_mount_blobs` within this same SQLCipher-encrypted database.
+
+`storeType` is one of `'documents'` (default — general notes, references, research) or `'character'` (character sheets and related Aurora material). It classifies the store's content orthogonally to `mountType` so downstream features can treat character stores differently from general-purpose document stores. The column is added by in-repo `ALTER TABLE` on first access for legacy databases that predate this feature.
 
 `conversionStatus` is one of `'idle'`, `'converting'`, `'deconverting'`, or `'error'`, and tracks the Convert / Deconvert action that moves a store between filesystem- and database-backed storage (see `POST /api/v1/mount-points/:id?action=convert` / `?action=deconvert`). Distinct from the file-level `doc_mount_files.conversionStatus`, which tracks pdf/docx→text extraction. `conversionError` holds the failure message when `conversionStatus = 'error'`. Both columns are added by in-repo `ALTER TABLE` on first access for legacy databases that predate this feature.
 

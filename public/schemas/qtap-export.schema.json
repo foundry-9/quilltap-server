@@ -704,6 +704,7 @@
         "name": { "type": "string", "minLength": 1 },
         "basePath": { "type": "string" },
         "mountType": { "enum": ["filesystem", "obsidian", "database"] },
+        "storeType": { "enum": ["documents", "character"], "description": "Content classification orthogonal to mountType. Defaults to 'documents' when absent (older exports)." },
         "includePatterns": { "type": "array", "items": { "type": "string" } },
         "excludePatterns": { "type": "array", "items": { "type": "string" } },
         "enabled": { "type": "boolean" }

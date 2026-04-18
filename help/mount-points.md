@@ -58,7 +58,8 @@ Documents are divided into chunks of approximately 800 to 1,200 tokens each, wit
 Document stores are managed from the **Scriptorium** page, accessible via the database icon in the left sidebar. From there you can:
 
 - **Add** a document store by providing a name and filesystem path
-- **Edit** settings including name, path, mount type, include/exclude patterns, and enabled status
+- **Classify** each store with a *Contents* label — **Documents** (the default; notes, references, research) or **Character** (character sheets and allied Aurora material). This classification sits alongside the mount type and can be changed at any time from the edit dialog
+- **Edit** settings including name, path, mount type, contents classification, include/exclude patterns, and enabled status
 - **View** file counts, total size, chunk counts, and scan status at a glance on each store's card
 - **Scan** a store to discover new, modified, or deleted files — click the Scan button on any store's card or detail page
 - **Convert** a filesystem or Obsidian store *to* database-backed, or **Deconvert** a database-backed store *back* to filesystem — more on this most civilized piece of magic below

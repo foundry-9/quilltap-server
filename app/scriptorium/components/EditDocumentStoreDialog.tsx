@@ -19,6 +19,7 @@ interface EditDocumentStoreDialogProps {
 
 export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocumentStoreDialogProps) {
   const [mountType, setMountType] = useState<'filesystem' | 'obsidian' | 'database'>(store?.mountType || 'filesystem')
+  const [storeType, setStoreType] = useState<'documents' | 'character'>(store?.storeType || 'documents')
   const [basePath, setBasePath] = useState(store?.basePath || '')
   const [enabled, setEnabled] = useState(store?.enabled ?? true)
 
@@ -37,6 +38,7 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
       name,
       basePath: isDatabaseBacked ? '' : basePath,
       mountType,
+      storeType,
       enabled,
     }
 
@@ -67,6 +69,19 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
               defaultValue={store.name}
               className="qt-input"
             />
+          </div>
+
+          <div className="mb-4">
+            <label className="qt-label mb-2 block">Contents</label>
+            <select
+              name="storeType"
+              value={storeType}
+              onChange={(e) => setStoreType(e.target.value as 'documents' | 'character')}
+              className="qt-input"
+            >
+              <option value="documents">Documents — general notes, references, research</option>
+              <option value="character">Character — character sheets and related material</option>
+            </select>
           </div>
 
           {!isDatabaseBacked && (

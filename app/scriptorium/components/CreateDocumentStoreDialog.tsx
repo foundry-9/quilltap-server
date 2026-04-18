@@ -19,6 +19,7 @@ interface CreateDocumentStoreDialogProps {
 
 export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDocumentStoreDialogProps) {
   const [mountType, setMountType] = useState<'filesystem' | 'obsidian' | 'database'>('filesystem')
+  const [storeType, setStoreType] = useState<'documents' | 'character'>('documents')
   const [basePath, setBasePath] = useState('')
 
   if (!open) return null
@@ -36,6 +37,7 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
       name,
       basePath: isDatabaseBacked ? '' : basePath,
       mountType,
+      storeType,
     }
 
     if (!isDatabaseBacked) {
@@ -65,6 +67,19 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
               placeholder="My Obsidian Vault"
               className="qt-input"
             />
+          </div>
+
+          <div className="mb-4">
+            <label className="qt-label mb-2 block">Contents</label>
+            <select
+              name="storeType"
+              value={storeType}
+              onChange={(e) => setStoreType(e.target.value as 'documents' | 'character')}
+              className="qt-input"
+            >
+              <option value="documents">Documents — general notes, references, research</option>
+              <option value="character">Character — character sheets and related material</option>
+            </select>
           </div>
 
           <div className="mb-4">

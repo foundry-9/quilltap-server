@@ -244,6 +244,7 @@ export interface ExportedDocumentStore {
   name: string;
   basePath: string;
   mountType: 'filesystem' | 'obsidian' | 'database';
+  storeType?: 'documents' | 'character';
   includePatterns: string[];
   excludePatterns: string[];
   enabled: boolean;
