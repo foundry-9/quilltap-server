@@ -24,6 +24,7 @@ import {
   deconvertMountPointToFilesystem,
   validateDeconvertTarget,
 } from '@/lib/mount-index/conversion';
+import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
 
 // ============================================================================
 // Schemas
@@ -115,6 +116,19 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
         name: updated.name,
         userId: user.id,
       });
+
+      // Scaffold preset structure when storeType is flipped to 'character'
+      // on a database-backed store. Missing-only — existing files are not touched.
+      const flippedToCharacter =
+        existing.storeType !== 'character' && updated.storeType === 'character';
+      if (flippedToCharacter && updated.mountType === 'database') {
+        await scaffoldCharacterMount(id).catch((err) => {
+          logger.warn('[Mount Points v1] Character scaffold failed after flip', {
+            mountPointId: id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
 
       // Refresh the watcher so basePath / pattern / enabled changes take effect
       refreshMountPoint(updated).catch((err) => {

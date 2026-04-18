@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { created, serverError } from '@/lib/api/responses';
 import * as fs from 'fs/promises';
 import { attachMountPoint } from '@/lib/mount-index/watcher';
+import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
 
 // ============================================================================
 // Schemas
@@ -135,6 +136,16 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     basePath: mountPoint.basePath,
     userId: user.id,
   });
+
+  // Scaffold after creation so the mount ID exists.
+  if (mountPoint.storeType === 'character' && mountPoint.mountType === 'database') {
+    await scaffoldCharacterMount(mountPoint.id).catch((err) => {
+      logger.warn('[Mount Points v1] Character scaffold failed', {
+        mountPointId: mountPoint.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }
 
   // Attach a real-time watcher if the mount point is enabled and accessible
   attachMountPoint(mountPoint).catch((err) => {
