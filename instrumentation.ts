@@ -518,21 +518,29 @@ export async function register() {
       }
 
       // ================================================================
-      // PHASE 3.2: Character Vault Backfill (before mount point scan)
+      // PHASE 3.2: Character Vault Backfill (fire-and-forget)
       // ================================================================
       // For every Character that isn't already linked to a character
       // document store, create a database-backed vault, scaffold the
       // preset structure, and populate it with the character's current
-      // data. Idempotent — linked characters are skipped. Runs before
-      // the mount point scan so new vaults are included in the first
-      // scan pass.
+      // data. Idempotent — linked characters are skipped.
+      //
+      // Runs asynchronously so the sync SQLCipher writes (hundreds to
+      // thousands, depending on character count and prompt/scenario
+      // density) don't stall the event loop during startup. New vaults
+      // will be picked up on the next mount-point scan pass.
       try {
         const { backfillCharacterVaults } = await import('./lib/startup/backfill-character-vaults');
-        await backfillCharacterVaults();
-      } catch (backfillError) {
-        logger.warn('Error during character vault backfill, continuing startup', {
+        backfillCharacterVaults().catch((backfillError) => {
+          logger.warn('Error during character vault backfill', {
+            context: 'instrumentation.register',
+            error: backfillError instanceof Error ? backfillError.message : String(backfillError),
+          });
+        });
+      } catch (backfillImportError) {
+        logger.warn('Failed to import character vault backfill module', {
           context: 'instrumentation.register',
-          error: backfillError instanceof Error ? backfillError.message : String(backfillError),
+          error: backfillImportError instanceof Error ? backfillImportError.message : String(backfillImportError),
         });
       }
 

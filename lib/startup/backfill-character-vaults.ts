@@ -79,6 +79,10 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
         stack: err instanceof Error ? err.stack : undefined,
       });
     }
+
+    // Yield to the event loop between characters so backfilling a large roster
+    // doesn't hog the main thread (each character is ~20-30 sync SQLCipher writes).
+    await new Promise<void>(resolve => setImmediate(resolve));
   }
 
   logger.info('Character vault backfill complete', result);
