@@ -187,6 +187,25 @@ describe('scanAllMountPoints', () => {
     expect(results.find(r => r.mountPointId === 'mp-2')?.errors).toHaveLength(0)
   })
 
+  it('skips basePath accessibility check for database-backed mount points', async () => {
+    const mps = [{ ...makeMountPoint('mp-db', ''), mountType: 'database' as const }]
+    const repos = makeRepos(mps)
+    mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+    mockFsAccess.mockRejectedValue(new Error('ENOENT'))
+    mockScanMountPoint.mockResolvedValue(makeOkScanResult('mp-db'))
+
+    const results = await scanAllMountPoints()
+
+    expect(mockFsAccess).not.toHaveBeenCalled()
+    expect(mockScanMountPoint).toHaveBeenCalledTimes(1)
+    expect(results[0].errors).toHaveLength(0)
+    expect(repos.docMountPoints.updateScanStatus).not.toHaveBeenCalledWith(
+      'mp-db',
+      'error',
+      expect.any(String)
+    )
+  })
+
   it('gracefully handles embedding enqueue failures without propagating error', async () => {
     const mps = [makeMountPoint('mp-1')]
     mockGetRepositories.mockReturnValue(makeRepos(mps) as ReturnType<typeof getRepositories>)

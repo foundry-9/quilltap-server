@@ -47,29 +47,33 @@ export async function scanAllMountPoints(): Promise<ScanResult[]> {
   // Scan each mount point sequentially to avoid disk I/O contention
   for (const mountPoint of mountPoints) {
     try {
-      // Verify the basePath still exists and is accessible
-      try {
-        await fs.access(mountPoint.basePath);
-      } catch {
-        logger.warn('Mount point base path is not accessible, skipping', {
-          mountPointId: mountPoint.id,
-          basePath: mountPoint.basePath,
-        });
-        await repos.docMountPoints.updateScanStatus(
-          mountPoint.id,
-          'error',
-          `Base path not accessible: ${mountPoint.basePath}`
-        );
-        results.push({
-          mountPointId: mountPoint.id,
-          filesScanned: 0,
-          filesNew: 0,
-          filesModified: 0,
-          filesDeleted: 0,
-          chunksCreated: 0,
-          errors: [`Base path not accessible: ${mountPoint.basePath}`],
-        });
-        continue;
+      // Database-backed stores have no filesystem basePath to validate;
+      // scanMountPoint delegates to the database rescan path directly.
+      if (mountPoint.mountType !== 'database') {
+        // Verify the basePath still exists and is accessible
+        try {
+          await fs.access(mountPoint.basePath);
+        } catch {
+          logger.warn('Mount point base path is not accessible, skipping', {
+            mountPointId: mountPoint.id,
+            basePath: mountPoint.basePath,
+          });
+          await repos.docMountPoints.updateScanStatus(
+            mountPoint.id,
+            'error',
+            `Base path not accessible: ${mountPoint.basePath}`
+          );
+          results.push({
+            mountPointId: mountPoint.id,
+            filesScanned: 0,
+            filesNew: 0,
+            filesModified: 0,
+            filesDeleted: 0,
+            chunksCreated: 0,
+            errors: [`Base path not accessible: ${mountPoint.basePath}`],
+          });
+          continue;
+        }
       }
 
       const result = await scanMountPoint(mountPoint);
