@@ -85,7 +85,9 @@ import {
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 import {
   finalizeMessageResponse,
+  saveAssistantMessage,
 } from './message-finalizer.service'
+import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import {
   resolveAgentModeSetting,
   buildAgentModeInstructions,
@@ -1301,7 +1303,59 @@ async function processMessage(
       logger.warn('Request limit recovery failed, propagating error', { chatId })
     }
 
-    // Not a recoverable error or recovery failed - re-throw
+    // Not a recoverable error or recovery failed.
+    // If we already streamed partial content to the client, preserve it to the
+    // database with an OOC marker so the user keeps what Sunny (or whoever)
+    // actually said before the upstream connection dropped. Nothing streamed
+    // means nothing to preserve.
+    if (streamingState.hasStartedStreaming && streamingState.fullResponse.length > 0) {
+      const errorReason = streamingError instanceof Error ? streamingError.message : String(streamingError)
+      const normalizedPartial = normalizeContentBlockFormat(streamingState.fullResponse)
+      const cleanedPartial = stripCharacterNamePrefix(normalizedPartial, character.name, character.aliases)
+      const preservedContent = `${cleanedPartial.trimEnd()}\n\n{{OOC: stream ended abruptly (${errorReason})}}`
+
+      try {
+        const preservedMessageId = await saveAssistantMessage(
+          repos,
+          chatId,
+          character,
+          characterParticipant,
+          preservedContent,
+          streamingState.usage,
+          streamingState.rawResponse,
+          streamingState.thoughtSignature,
+          [],
+          [],
+          preGeneratedAssistantMessageId,
+          streamingState.effectiveProfile.provider,
+          streamingState.effectiveProfile.modelName
+        )
+        logger.info('Preserved partial streamed response after upstream error', {
+          chatId,
+          messageId: preservedMessageId,
+          characterId: character.id,
+          characterName: character.name,
+          provider: streamingState.effectiveProfile.provider,
+          model: streamingState.effectiveProfile.modelName,
+          partialLength: streamingState.fullResponse.length,
+          error: errorReason,
+        })
+      } catch (persistError) {
+        logger.error('Failed to persist partial streamed response', {
+          chatId,
+          characterId: character.id,
+          error: persistError instanceof Error ? persistError.message : String(persistError),
+          originalError: errorReason,
+        })
+      }
+    } else {
+      logger.debug('No partial content to preserve after upstream error', {
+        chatId,
+        hasStartedStreaming: streamingState.hasStartedStreaming,
+        fullResponseLength: streamingState.fullResponse.length,
+      })
+    }
+
     throw streamingError
   }
 
