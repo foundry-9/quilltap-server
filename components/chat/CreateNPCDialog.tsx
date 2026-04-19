@@ -58,6 +58,7 @@ export default function CreateNPCDialog({
       // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream connectionProfiles changes (parent renders unconditionally)
       setSelectedConnectionProfileId(connectionProfiles[0].id)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only initialize once; don't re-run when selectedConnectionProfileId is set
   }, [connectionProfiles])
 
   // Load connection profiles when dialog opens and focus name input

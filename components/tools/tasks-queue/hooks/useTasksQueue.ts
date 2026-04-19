@@ -137,36 +137,33 @@ export function useTasksQueue() {
     [mutateQueue]
   )
 
-  const deleteJob = useCallback(
-    async (jobId: string) => {
-      try {
-        setJobActionLoading(jobId)
+  const deleteJob = async (jobId: string) => {
+    try {
+      setJobActionLoading(jobId)
 
-        const res = await fetch(`/api/v1/system/jobs/${jobId}`, {
-          method: 'DELETE',
-        })
+      const res = await fetch(`/api/v1/system/jobs/${jobId}`, {
+        method: 'DELETE',
+      })
 
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to delete job')
-        }
-
-        // Close dialog if we deleted the selected job
-        if (selectedJob?.id === jobId) {
-          setShowJobDialog(false)
-          setSelectedJob(null)
-        }
-
-        await mutateQueue()
-      } catch (err) {
-        const errorMessage = getErrorMessage(err)
-        console.error('Failed to delete job', { error: errorMessage })
-      } finally {
-        setJobActionLoading(null)
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete job')
       }
-    },
-    [mutateQueue, selectedJob?.id]
-  )
+
+      // Close dialog if we deleted the selected job
+      if (selectedJob?.id === jobId) {
+        setShowJobDialog(false)
+        setSelectedJob(null)
+      }
+
+      await mutateQueue()
+    } catch (err) {
+      const errorMessage = getErrorMessage(err)
+      console.error('Failed to delete job', { error: errorMessage })
+    } finally {
+      setJobActionLoading(null)
+    }
+  }
 
   return {
     data,

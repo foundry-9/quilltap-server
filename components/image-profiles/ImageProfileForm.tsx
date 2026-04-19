@@ -116,7 +116,6 @@ export function ImageProfileForm({
   }, [])
 
   // Normalize legacy provider names after providers are loaded
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: normalizing after fetch, dependencies managed by logic check
   useEffect(() => {
     if (!isFetchingProviders && formData.provider) {
       const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
@@ -125,7 +124,7 @@ export function ImageProfileForm({
         setFormData(prev => ({ ...prev, provider: normalizedProvider }))
       }
     }
-  }, [isFetchingProviders, imageProviders])
+  }, [isFetchingProviders, imageProviders, formData.provider])
 
   // Fetch available models when provider or API key changes
   useEffect(() => {

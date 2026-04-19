@@ -9,7 +9,7 @@
  * @module components/wardrobe/outfit-selector
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useMemo } from 'react'
 import useSWR from 'swr'
 import type {
   OutfitSelectionMode,
@@ -97,8 +97,8 @@ function CharacterOutfitSection({
     internalMode === 'preset' ? `/api/v1/characters/${character.id}/wardrobe/presets` : null
   )
 
-  const wardrobeItems = wardrobeData?.wardrobeItems ?? []
-  const presets = presetsData?.presets ?? []
+  const wardrobeItems = useMemo(() => wardrobeData?.wardrobeItems ?? [], [wardrobeData])
+  const presets = useMemo(() => presetsData?.presets ?? [], [presetsData])
   const wardrobeFetched = wardrobeData !== undefined
   const presetsFetched = presetsData !== undefined
 

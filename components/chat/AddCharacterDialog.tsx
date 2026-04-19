@@ -12,7 +12,7 @@
  * - Optional join scenario text
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import useSWR from 'swr'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
@@ -81,8 +81,8 @@ export default function AddCharacterDialog({
     isOpen ? '/api/v1/connection-profiles' : null
   )
 
-  const characters = charactersData?.characters || []
-  const connectionProfiles = profilesData?.profiles || []
+  const characters = useMemo(() => charactersData?.characters ?? [], [charactersData])
+  const connectionProfiles = useMemo(() => profilesData?.profiles ?? [], [profilesData])
 
   // Load characters and connection profiles when dialog opens and focus search input
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function AddCharacterDialog({
       setSearchTerm('')
       setIsCreateNPCOpen(false)
     }
-  }, [isOpen])
+  }, [isOpen, isLoading])
 
   // Set default connection profile when character is selected
   useEffect(() => {

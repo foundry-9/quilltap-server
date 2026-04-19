@@ -77,7 +77,6 @@ export function ExternalPromptDialog({
         if (profilesRes.ok) {
           const data = await profilesRes.json()
           const fetchedProfiles = data.profiles || []
-          // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on mount with selection logic
           setProfiles(fetchedProfiles)
           const defaultProfile = fetchedProfiles.find((p: ConnectionProfile) => p.isDefault)
           if (defaultProfile) {

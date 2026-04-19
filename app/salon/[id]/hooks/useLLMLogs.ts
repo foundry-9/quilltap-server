@@ -24,7 +24,7 @@ export function useLLMLogs({
     messages.length > 0 ? `/api/v1/llm-logs?chatId=${chatId}&includeMessages=true` : null
   )
 
-  const allChatLogs = logsData?.logs || []
+  const allChatLogs = useMemo(() => logsData?.logs || [], [logsData])
 
   // Derive which messages have logs from the full dataset
   const messagesWithLogs = useMemo(() => {

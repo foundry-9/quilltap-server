@@ -229,7 +229,7 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
     }
   }, [selectedCharacters, project?.defaultImageProfileId])
 
-  const handleCreateChat = useCallback(async (): Promise<{ chatId: string } | null> => {
+  const handleCreateChat = async (): Promise<{ chatId: string } | null> => {
     if (selectedCharacters.length === 0) {
       showErrorToast('Please select at least one character')
       return null
@@ -336,7 +336,7 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
     } finally {
       setCreating(false)
     }
-  }, [selectedCharacters, state, project?.id, router])
+  }
 
   return {
     loading,

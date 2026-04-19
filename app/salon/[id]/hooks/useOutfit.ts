@@ -163,8 +163,8 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
     } finally {
       setLoading(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- characterIds identity changes; content is stable after chat load
-  }, [chatId, characterIds.join(','), fetchWardrobeForCharacter, resolveItemDetails])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- characterIds content is stable after chat load; using array identity would cause unnecessary re-runs
+  }, [chatId, characterIds.length, fetchWardrobeForCharacter, resolveItemDetails])
 
   /**
    * Equip or unequip an item in a specific slot for a character.
