@@ -572,11 +572,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // --- Sync storyBackgroundsEnabled ---
   const storyBackgroundsSettingsEnabled = chatSettings?.storyBackgroundsSettings?.enabled
+  const { setStoryBackgroundsEnabled } = chatControls
   useEffect(() => {
     if (chatSettings) {
-      chatControls.setStoryBackgroundsEnabled(storyBackgroundsSettingsEnabled ?? false)
+      setStoryBackgroundsEnabled(storyBackgroundsSettingsEnabled ?? false)
     }
-  }, [chatSettings, storyBackgroundsSettingsEnabled, chatControls])
+  }, [chatSettings, storyBackgroundsSettingsEnabled, setStoryBackgroundsEnabled])
 
   // --- Calculate turn state when messages change ---
   useEffect(() => {
