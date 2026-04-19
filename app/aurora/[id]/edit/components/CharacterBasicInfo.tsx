@@ -97,13 +97,17 @@ export function CharacterBasicInfo({
             </label>
             <p className="text-xs qt-text-secondary mt-1">
               When on, the character&rsquo;s basic properties (aliases, pronouns, title, first
-              message, talkativeness), description, personality, and first physical description
-              plus its prompts are read live from files inside the linked Scriptorium vault
+              message, talkativeness), description, personality, example dialogues, first physical
+              description plus its prompts, named system prompt variants, and named scenarios are
+              all read live from files inside the linked Scriptorium vault
               (<code className="mx-1">properties.json</code>,
               <code className="mx-1">description.md</code>,
               <code className="mx-1">personality.md</code>,
+              <code className="mx-1">example-dialogues.md</code>,
               <code className="mx-1">physical-description.md</code>,
-              <code className="mx-1">physical-prompts.json</code>).
+              <code className="mx-1">physical-prompts.json</code>,
+              <code className="mx-1">Prompts/*.md</code>,
+              <code className="mx-1">Scenarios/*.md</code>).
               Edits to those fields here are locked until the switch is off. Use
               &ldquo;Sync from vault&rdquo; to copy the vault values back into the database record.
             </p>
@@ -319,32 +323,7 @@ export function CharacterBasicInfo({
           <label className="block text-sm font-medium text-foreground">
             Scenarios (Optional)
           </label>
-          <button
-            type="button"
-            onClick={() => {
-              const now = new Date().toISOString()
-              const newScenario: CharacterScenario = {
-                id: crypto.randomUUID(),
-                title: '',
-                content: '',
-                createdAt: now,
-                updatedAt: now,
-              }
-              onScenariosChange([...formData.scenarios, newScenario])
-            }}
-            className="qt-button-secondary qt-button-sm"
-          >
-            + Add Scenario
-          </button>
-        </div>
-        <p className="text-xs qt-text-secondary mb-3">
-          Named settings and contexts for conversations. Each scenario can be selected when starting a chat.
-        </p>
-        {formData.scenarios.length === 0 ? (
-          <div className="qt-card text-center py-6">
-            <p className="qt-text-small mb-3">
-              No scenarios yet. Add one to give this character distinct roleplay contexts.
-            </p>
+          {!overlayManagedDisabled && (
             <button
               type="button"
               onClick={() => {
@@ -356,12 +335,45 @@ export function CharacterBasicInfo({
                   createdAt: now,
                   updatedAt: now,
                 }
-                onScenariosChange([newScenario])
+                onScenariosChange([...formData.scenarios, newScenario])
               }}
-              className="qt-button-primary"
+              className="qt-button-secondary qt-button-sm"
             >
-              Add First Scenario
+              + Add Scenario
             </button>
+          )}
+        </div>
+        <p className="text-xs qt-text-secondary mb-3">
+          {overlayManagedDisabled
+            ? 'Scenarios are read live from the vault\u2019s Scenarios/ folder. Edit the files there instead.'
+            : 'Named settings and contexts for conversations. Each scenario can be selected when starting a chat.'}
+        </p>
+        {formData.scenarios.length === 0 ? (
+          <div className="qt-card text-center py-6">
+            <p className="qt-text-small mb-3">
+              {overlayManagedDisabled
+                ? 'No scenario files found in the vault\u2019s Scenarios/ folder.'
+                : 'No scenarios yet. Add one to give this character distinct roleplay contexts.'}
+            </p>
+            {!overlayManagedDisabled && (
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date().toISOString()
+                  const newScenario: CharacterScenario = {
+                    id: crypto.randomUUID(),
+                    title: '',
+                    content: '',
+                    createdAt: now,
+                    updatedAt: now,
+                  }
+                  onScenariosChange([newScenario])
+                }}
+                className="qt-button-primary"
+              >
+                Add First Scenario
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
@@ -371,6 +383,7 @@ export function CharacterBasicInfo({
                   <input
                     type="text"
                     value={scenario.title}
+                    disabled={overlayManagedDisabled}
                     onChange={(e) => {
                       const updated = formData.scenarios.map((s, i) =>
                         i === index
@@ -380,21 +393,24 @@ export function CharacterBasicInfo({
                       onScenariosChange(updated)
                     }}
                     placeholder="Scenario title"
-                    className="flex-1 rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="flex-1 rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                   />
-                  <button
-                    type="button"
-                    onClick={() => onScenariosChange(formData.scenarios.filter((_, i) => i !== index))}
-                    className="qt-button-icon qt-button-ghost hover:qt-text-destructive"
-                    title="Remove scenario"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  {!overlayManagedDisabled && (
+                    <button
+                      type="button"
+                      onClick={() => onScenariosChange(formData.scenarios.filter((_, i) => i !== index))}
+                      className="qt-button-icon qt-button-ghost hover:qt-text-destructive"
+                      title="Remove scenario"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
                 <textarea
                   value={scenario.content}
+                  disabled={overlayManagedDisabled}
                   onChange={(e) => {
                     const updated = formData.scenarios.map((s, i) =>
                       i === index
@@ -405,7 +421,7 @@ export function CharacterBasicInfo({
                   }}
                   rows={3}
                   placeholder="Describe the setting and context for this scenario"
-                  className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </div>
             ))}
@@ -439,9 +455,10 @@ export function CharacterBasicInfo({
           id="exampleDialogues"
           name="exampleDialogues"
           value={formData.exampleDialogues}
+          disabled={overlayManagedDisabled}
           onChange={onChange}
           rows={6}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           placeholder="Example conversations to guide the AI's responses"
         />
       </div>

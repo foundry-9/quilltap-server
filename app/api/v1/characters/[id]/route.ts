@@ -44,8 +44,11 @@ import {
   readCharacterVaultProperties,
   readCharacterVaultDescription,
   readCharacterVaultPersonality,
+  readCharacterVaultExampleDialogues,
   readCharacterVaultPhysicalDescription,
   readCharacterVaultPhysicalPrompts,
+  readCharacterVaultSystemPrompts,
+  readCharacterVaultScenarios,
 } from '@/lib/database/repositories/character-properties-overlay';
 
 // ============================================================================
@@ -732,12 +735,24 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         }
 
         const mountId = rawCharacter.characterDocumentMountPointId;
-        const [props, descMd, persMd, physDescMd, physPromptsJson] = await Promise.all([
+        const [
+          props,
+          descMd,
+          persMd,
+          dialoguesMd,
+          physDescMd,
+          physPromptsJson,
+          vaultPrompts,
+          vaultScenarios,
+        ] = await Promise.all([
           readCharacterVaultProperties(mountId, rawCharacter.id),
           readCharacterVaultDescription(mountId, rawCharacter.id),
           readCharacterVaultPersonality(mountId, rawCharacter.id),
+          readCharacterVaultExampleDialogues(mountId, rawCharacter.id),
           readCharacterVaultPhysicalDescription(mountId, rawCharacter.id),
           readCharacterVaultPhysicalPrompts(mountId, rawCharacter.id),
+          readCharacterVaultSystemPrompts(mountId, rawCharacter.id),
+          readCharacterVaultScenarios(mountId, rawCharacter.id),
         ]);
 
         const patch: Record<string, unknown> = {};
@@ -755,6 +770,16 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         }
         if (persMd !== null) {
           patch.personality = persMd === '' ? null : persMd;
+        }
+        if (dialoguesMd !== null) {
+          patch.exampleDialogues = dialoguesMd === '' ? null : dialoguesMd;
+        }
+
+        if (vaultPrompts.length > 0) {
+          patch.systemPrompts = vaultPrompts;
+        }
+        if (vaultScenarios.length > 0) {
+          patch.scenarios = vaultScenarios;
         }
 
         const existingPhysical = rawCharacter.physicalDescriptions ?? [];
@@ -795,9 +820,12 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           syncedProperties: !!props,
           syncedDescription: descMd !== null,
           syncedPersonality: persMd !== null,
+          syncedExampleDialogues: dialoguesMd !== null,
           syncedPhysicalDescription: physDescMd !== null && !physicalSkippedNoPrimary,
           syncedPhysicalPrompts: physPromptsJson !== null && !physicalSkippedNoPrimary,
           physicalSkippedNoPrimary,
+          syncedSystemPromptCount: vaultPrompts.length,
+          syncedScenarioCount: vaultScenarios.length,
         });
 
         return NextResponse.json({ character: updatedCharacter });

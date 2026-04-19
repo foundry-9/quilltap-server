@@ -108,8 +108,11 @@ Each character carries a private vault in the Scriptorium — a small database-b
 | `properties.json` | **pronouns**, **aliases**, **title**, **first message**, **talkativeness** |
 | `description.md` | **Description** (the general prose field) |
 | `personality.md` | **Personality** (the behavioral prose field) |
+| `example-dialogues.md` | **Example Dialogues** (style samples for the LLM) |
 | `physical-description.md` | The **Full Description** of the character's first (default) physical description |
 | `physical-prompts.json` | The **short / medium / long / complete** prompts of the first (default) physical description (JSON with `short`, `medium`, `long`, `complete` keys) |
+| `Prompts/*.md` | The character's **System Prompts** — one file per named variant, with YAML frontmatter carrying `name` (required) and an optional `isDefault: true` |
+| `Scenarios/*.md` | The character's **Scenarios** — one file per scene, with the first `# heading` as the title and the body beneath as the context |
 
 By default, every one of these is read from the character's database row — the ordinary state of affairs, in which the editor is the single source of truth. Flip the switch marked **Read this character's core fields from the Scriptorium vault** at the top of the Aurora edit page, however, and henceforth Quilltap will consult the vault for all of the above every time any part of the application reads your character — the roster on the home page, the system prompt for a chat, the image-generation pipeline's appearance prompts, the scene state tracker, the turn manager's talkativeness roll, all of it.
 
@@ -122,6 +125,10 @@ By default, every one of these is read from the character's database row — the
 **Sync from vault.** When the switch is on, a **Sync from vault** button appears beneath it. Pressing it copies the current vault values back into the character's database row — the reconciliation step for when you have been editing the vault directly and would like the database to catch up. Fields whose vault files are missing or invalid are left alone; the rest are written to the DB. You can then turn the switch off with no change in observed behavior, should you wish to resume database-canonical operation.
 
 **A note on physical descriptions.** The `physical-description.md` and `physical-prompts.json` overlays target the **first** physical description (the one at index 0 — typically your character's default). Subsequent descriptions remain database-canonical. The overlay requires at least one physical description already present in the database; if your character has none, populate the first description the usual way in the Descriptions tab before filling in the vault files.
+
+**A note on `Prompts/` and `Scenarios/`.** Each directory is read as a whole set — when the overlay is on and the folder holds at least one parseable file, the vault listing entirely replaces the character's database-backed array. An empty or malformed folder falls back to the database. Prompt files require YAML frontmatter naming them; a file that lacks frontmatter (or a `name` field) is quietly skipped while its siblings carry on. Scenario files want a `# Scenario Title` at the top, though if one is missing Quilltap will use the filename (without the `.md`) rather than drop the file entirely. Identifiers for synthesized prompts and scenarios are derived deterministically from the mount point and the file's relative path, so a chat's selected prompt or default scenario keeps its reference across reads as long as the filename doesn't change.
+
+**A note on example dialogues.** An *empty* `example-dialogues.md` is a perfectly valid state — it means "no examples," and Quilltap treats it accordingly rather than falling back to the database. If you genuinely want the database value to show through, delete the file entirely; presence of the file (even at zero bytes) is what tells the overlay to take over.
 
 **When to use it.** Reach for this switch when you would rather author your character's prose fields as plain Markdown — version-controlled in your own tooling, perhaps, or edited alongside the character's narrative notes — and have the rest of Quilltap treat those files as the current truth. Leave the switch off for the conventional editor-as-source-of-truth workflow, which remains the default and entirely sensible choice.
 

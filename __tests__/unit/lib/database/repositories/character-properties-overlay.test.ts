@@ -2,22 +2,24 @@
  * Unit tests for lib/database/repositories/character-properties-overlay.ts
  *
  * Strategy: Mock getRepositories, readDatabaseDocument, and the logger.
- * No real database. Tests cover per-file overlay behavior across all five
- * vault files (properties.json, description.md, personality.md,
- * physical-description.md, physical-prompts.json), per-file fallback semantics,
- * and batching.
+ * No real database. Tests cover per-file overlay behavior across all eight
+ * vault targets (properties.json, description.md, personality.md,
+ * example-dialogues.md, physical-description.md, physical-prompts.json,
+ * Prompts/*.md, Scenarios/*.md), per-file fallback semantics, and batching.
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 
-jest.mock('@/lib/logger', () => ({
-  logger: {
+jest.mock('@/lib/logger', () => {
+  const makeLogger = (): any => ({
     debug: jest.fn(),
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
-  },
-}));
+    child: jest.fn(() => makeLogger()),
+  });
+  return { logger: makeLogger() };
+});
 
 jest.mock('@/lib/repositories/factory');
 
@@ -36,15 +38,21 @@ import {
   readCharacterVaultProperties,
   readCharacterVaultDescription,
   readCharacterVaultPersonality,
+  readCharacterVaultExampleDialogues,
   readCharacterVaultPhysicalDescription,
   readCharacterVaultPhysicalPrompts,
+  readCharacterVaultSystemPrompts,
+  readCharacterVaultScenarios,
   CharacterVaultPropertiesSchema,
   CharacterVaultPhysicalPromptsSchema,
   CHARACTER_PROPERTIES_JSON_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_PERSONALITY_MD_PATH,
+  CHARACTER_EXAMPLE_DIALOGUES_MD_PATH,
   CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
   CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
+  CHARACTER_PROMPTS_FOLDER,
+  CHARACTER_SCENARIOS_FOLDER,
 } from '@/lib/database/repositories/character-properties-overlay';
 import type { Character, PhysicalDescription } from '@/lib/schemas/types';
 import { readDatabaseDocument, DatabaseStoreError } from '@/lib/mount-index/database-store';
@@ -60,6 +68,7 @@ function makeCharacter(overrides: Partial<Character>): Character {
     title: 'db-title',
     description: 'db-description',
     personality: 'db-personality',
+    exampleDialogues: 'db-dialogues',
     firstMessage: 'db-first',
     talkativeness: 0.5,
     aliases: ['db-alias'],
@@ -113,23 +122,56 @@ const VALID_VAULT_PHYSICAL_PROMPTS = {
   complete: 'vault-complete',
 };
 
-type Doc = { mountPointId: string; content: string };
+type SingleFileDoc = { mountPointId: string; content: string };
+type FolderDoc = {
+  mountPointId: string;
+  relativePath: string;
+  fileName: string;
+  content: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
 
 /**
- * Mock repos with per-path documents. Keys map a vault path to the docs that
- * findManyByMountPointsAndPath should return for that path. Paths not present
- * resolve to [].
+ * Mock repos with per-path documents plus per-folder documents. `docsByPath`
+ * maps a single-file vault path (e.g. 'properties.json') to the docs that
+ * findManyByMountPointsAndPath should return. `docsByFolder` maps a folder
+ * name (e.g. 'Prompts') to the docs that findManyByMountPointsInFolder
+ * should return. Unset keys resolve to [].
  */
-function mockRepoPaths(docsByPath: Record<string, Doc[]>) {
+function mockRepoPaths(
+  docsByPath: Record<string, SingleFileDoc[]> = {},
+  docsByFolder: Record<string, FolderDoc[]> = {},
+) {
   const findManyByMountPointsAndPath = jest
     .fn()
     .mockImplementation((_ids: string[], path: string) =>
       Promise.resolve(docsByPath[path] ?? []),
     );
+  const findManyByMountPointsInFolder = jest
+    .fn()
+    .mockImplementation((_ids: string[], folder: string) =>
+      Promise.resolve(
+        (docsByFolder[folder] ?? []).map((d) => ({
+          id: 'doc-' + d.relativePath,
+          fileType: 'markdown' as const,
+          contentSha256: 'x'.repeat(64),
+          plainTextLength: d.content.length,
+          folderId: null,
+          lastModified: 0,
+          createdAt: d.createdAt ?? '2026-01-01T00:00:00.000Z',
+          updatedAt: d.updatedAt ?? '2026-01-01T00:00:00.000Z',
+          ...d,
+        })),
+      ),
+    );
   getRepositoriesMock.mockReturnValue({
-    docMountDocuments: { findManyByMountPointsAndPath },
+    docMountDocuments: {
+      findManyByMountPointsAndPath,
+      findManyByMountPointsInFolder,
+    },
   });
-  return findManyByMountPointsAndPath;
+  return { findManyByMountPointsAndPath, findManyByMountPointsInFolder };
 }
 
 describe('applyDocumentStoreOverlay — basic candidate filtering', () => {
@@ -323,6 +365,56 @@ describe('applyDocumentStoreOverlay — description.md and personality.md overla
   });
 });
 
+describe('applyDocumentStoreOverlay — example-dialogues.md overlay', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('overrides example-dialogues.md content', async () => {
+    mockRepoPaths({
+      [CHARACTER_EXAMPLE_DIALOGUES_MD_PATH]: [
+        { mountPointId: 'mp-1', content: 'vault-dialogues' },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+      exampleDialogues: 'db-dialogues',
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.exampleDialogues).toBe('vault-dialogues');
+  });
+
+  it('maps an empty example-dialogues.md to null (the valid "no examples" state)', async () => {
+    mockRepoPaths({
+      [CHARACTER_EXAMPLE_DIALOGUES_MD_PATH]: [
+        { mountPointId: 'mp-1', content: '' },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+      exampleDialogues: 'db-dialogues',
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.exampleDialogues).toBeNull();
+  });
+
+  it('falls back to DB when example-dialogues.md is missing', async () => {
+    mockRepoPaths({});
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+      exampleDialogues: 'db-dialogues',
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.exampleDialogues).toBe('db-dialogues');
+  });
+});
+
 describe('applyDocumentStoreOverlay — physical-description.md / physical-prompts.json', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -459,6 +551,342 @@ describe('applyDocumentStoreOverlay — physical-description.md / physical-promp
   });
 });
 
+describe('applyDocumentStoreOverlay — Prompts/*.md overlay', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const promptFileContent = (name: string, body: string, isDefault = false) =>
+    `---\nname: ${name}\n${isDefault ? 'isDefault: true\n' : ''}---\n\n${body}`;
+
+  it('synthesizes systemPrompts from vault files with YAML frontmatter', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_PROMPTS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/Alpha.md',
+          fileName: 'Alpha.md',
+          content: promptFileContent('Alpha', 'Alpha body prose.', true),
+        },
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/Beta.md',
+          fileName: 'Beta.md',
+          content: promptFileContent('Beta', 'Beta body prose.'),
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+      systemPrompts: [
+        {
+          id: '00000000-0000-4000-8000-000000000001',
+          name: 'db-prompt',
+          content: 'db content',
+          isDefault: true,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.systemPrompts).toHaveLength(2);
+    expect(result.systemPrompts.map(p => p.name)).toEqual(['Alpha', 'Beta']);
+    expect(result.systemPrompts[0].content).toBe('Alpha body prose.');
+    expect(result.systemPrompts[0].isDefault).toBe(true);
+    expect(result.systemPrompts[1].isDefault).toBe(false);
+  });
+
+  it('promotes first alphabetically when no file is marked isDefault', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_PROMPTS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/Beta.md',
+          fileName: 'Beta.md',
+          content: promptFileContent('Beta', 'Beta body.'),
+        },
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/Alpha.md',
+          fileName: 'Alpha.md',
+          content: promptFileContent('Alpha', 'Alpha body.'),
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    // Alphabetic sort puts Alpha first; Alpha is promoted to default
+    expect(result.systemPrompts[0].name).toBe('Alpha');
+    expect(result.systemPrompts[0].isDefault).toBe(true);
+    expect(result.systemPrompts[1].isDefault).toBe(false);
+  });
+
+  it('keeps only the first isDefault when multiple are marked', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_PROMPTS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/Alpha.md',
+          fileName: 'Alpha.md',
+          content: promptFileContent('Alpha', 'Alpha body.', true),
+        },
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/Beta.md',
+          fileName: 'Beta.md',
+          content: promptFileContent('Beta', 'Beta body.', true),
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.systemPrompts[0].isDefault).toBe(true);
+    expect(result.systemPrompts[1].isDefault).toBe(false);
+  });
+
+  it('skips files without YAML frontmatter, keeps others', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_PROMPTS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/NoFrontmatter.md',
+          fileName: 'NoFrontmatter.md',
+          content: 'Just body, no frontmatter at all.',
+        },
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/Good.md',
+          fileName: 'Good.md',
+          content: promptFileContent('Good', 'Good body.', true),
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.systemPrompts).toHaveLength(1);
+    expect(result.systemPrompts[0].name).toBe('Good');
+  });
+
+  it('skips files whose frontmatter lacks a name', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_PROMPTS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/NoName.md',
+          fileName: 'NoName.md',
+          content: `---\nisDefault: true\n---\n\nBody text here.`,
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+      systemPrompts: [
+        {
+          id: '00000000-0000-4000-8000-000000000002',
+          name: 'db-prompt',
+          content: 'db body',
+          isDefault: true,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    // All files invalid; no overlay applied, DB passes through
+    expect(result.systemPrompts).toHaveLength(1);
+    expect(result.systemPrompts[0].name).toBe('db-prompt');
+  });
+
+  it('falls back to DB when Prompts/ folder is empty', async () => {
+    mockRepoPaths({}, {});
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+      systemPrompts: [
+        {
+          id: '00000000-0000-4000-8000-000000000003',
+          name: 'db-only',
+          content: 'db body',
+          isDefault: true,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.systemPrompts[0].name).toBe('db-only');
+  });
+
+  it('synthesizes stable IDs across repeated reads', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_PROMPTS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/Stable.md',
+          fileName: 'Stable.md',
+          content: promptFileContent('Stable', 'body', true),
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+    });
+    const [first] = await applyDocumentStoreOverlay([char]);
+    const [second] = await applyDocumentStoreOverlay([char]);
+    expect(first.systemPrompts[0].id).toBe(second.systemPrompts[0].id);
+    // Valid UUID format
+    expect(first.systemPrompts[0].id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+  });
+});
+
+describe('applyDocumentStoreOverlay — Scenarios/*.md overlay', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('synthesizes scenarios from vault files using # heading as title', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_SCENARIOS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Scenarios/Morning.md',
+          fileName: 'Morning.md',
+          content: '# Good Morning\n\nBody of the morning scenario.',
+        },
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Scenarios/Evening.md',
+          fileName: 'Evening.md',
+          content: '# Evening\n\nEvening scenario body.',
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    // Alphabetic sort by relativePath: Evening before Morning
+    expect(result.scenarios).toHaveLength(2);
+    expect(result.scenarios[0].title).toBe('Evening');
+    expect(result.scenarios[0].content).toBe('Evening scenario body.');
+    expect(result.scenarios[1].title).toBe('Good Morning');
+  });
+
+  it('falls back to filename when the file has no # heading', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_SCENARIOS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Scenarios/MissingHeading.md',
+          fileName: 'MissingHeading.md',
+          content: 'Body text without a heading line.',
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.scenarios).toHaveLength(1);
+    expect(result.scenarios[0].title).toBe('MissingHeading');
+    expect(result.scenarios[0].content).toBe('Body text without a heading line.');
+  });
+
+  it('falls back to DB when the Scenarios/ folder is empty', async () => {
+    mockRepoPaths({}, {});
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+      scenarios: [
+        {
+          id: '00000000-0000-4000-8000-000000000004',
+          title: 'db-scenario',
+          content: 'db body',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.scenarios[0].title).toBe('db-scenario');
+  });
+
+  it('skips files with no body content', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_SCENARIOS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Scenarios/Empty.md',
+          fileName: 'Empty.md',
+          content: '# Empty\n\n',
+        },
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Scenarios/Full.md',
+          fileName: 'Full.md',
+          content: '# Full\n\nHas body.',
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+    });
+    const [result] = await applyDocumentStoreOverlay([char]);
+    expect(result.scenarios).toHaveLength(1);
+    expect(result.scenarios[0].title).toBe('Full');
+  });
+
+  it('synthesizes stable IDs across repeated reads', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_SCENARIOS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Scenarios/One.md',
+          fileName: 'One.md',
+          content: '# One\n\nBody.',
+        },
+      ],
+    });
+    const char = makeCharacter({
+      id: 'a',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mp-1',
+    });
+    const [first] = await applyDocumentStoreOverlay([char]);
+    const [second] = await applyDocumentStoreOverlay([char]);
+    expect(first.scenarios[0].id).toBe(second.scenarios[0].id);
+  });
+});
+
 describe('applyDocumentStoreOverlay — per-file independence', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -510,8 +938,8 @@ describe('applyDocumentStoreOverlay — batching', () => {
     jest.clearAllMocks();
   });
 
-  it('makes one query per overlay path, regardless of candidate count', async () => {
-    const findMany = mockRepoPaths({
+  it('issues one query per single-file path and one per folder, regardless of candidate count', async () => {
+    const { findManyByMountPointsAndPath, findManyByMountPointsInFolder } = mockRepoPaths({
       [CHARACTER_PROPERTIES_JSON_PATH]: [
         { mountPointId: 'mp-1', content: JSON.stringify({ ...VALID_VAULT_PROPS, title: 'vault-a' }) },
         { mountPointId: 'mp-2', content: JSON.stringify({ ...VALID_VAULT_PROPS, title: 'vault-b' }) },
@@ -525,16 +953,18 @@ describe('applyDocumentStoreOverlay — batching', () => {
     ];
 
     const result = await applyDocumentStoreOverlay(chars);
-    // 5 overlay paths: properties.json, description.md, personality.md,
-    // physical-description.md, physical-prompts.json
-    expect(findMany).toHaveBeenCalledTimes(5);
+    // 6 single-file overlay paths: properties.json, description.md, personality.md,
+    // example-dialogues.md, physical-description.md, physical-prompts.json
+    expect(findManyByMountPointsAndPath).toHaveBeenCalledTimes(6);
+    // 2 directory overlays: Prompts, Scenarios
+    expect(findManyByMountPointsInFolder).toHaveBeenCalledTimes(2);
     expect(result[0].title).toBe('vault-a');
     expect(result[1].title).toBe('vault-b');
     expect(result[2].title).toBe('db-title');
   });
 
   it('deduplicates mount point ids in each query', async () => {
-    const findMany = mockRepoPaths({
+    const { findManyByMountPointsAndPath } = mockRepoPaths({
       [CHARACTER_PROPERTIES_JSON_PATH]: [
         { mountPointId: 'mp-shared', content: JSON.stringify(VALID_VAULT_PROPS) },
       ],
@@ -544,15 +974,18 @@ describe('applyDocumentStoreOverlay — batching', () => {
       makeCharacter({ id: 'b', readPropertiesFromDocumentStore: true, characterDocumentMountPointId: 'mp-shared' }),
     ];
     await applyDocumentStoreOverlay(chars);
-    const propsCall = findMany.mock.calls.find(([, path]) => path === CHARACTER_PROPERTIES_JSON_PATH);
+    const propsCall = findManyByMountPointsAndPath.mock.calls.find(
+      ([, path]) => path === CHARACTER_PROPERTIES_JSON_PATH,
+    );
     expect(propsCall).toBeDefined();
     expect(propsCall![0]).toEqual(['mp-shared']);
   });
 
   it('falls back gracefully when the repository throws', async () => {
-    const findMany = jest.fn().mockRejectedValue(new Error('db exploded'));
+    const findManyByMountPointsAndPath = jest.fn().mockRejectedValue(new Error('db exploded'));
+    const findManyByMountPointsInFolder = jest.fn().mockResolvedValue([]);
     getRepositoriesMock.mockReturnValue({
-      docMountDocuments: { findManyByMountPointsAndPath: findMany },
+      docMountDocuments: { findManyByMountPointsAndPath, findManyByMountPointsInFolder },
     });
     const chars = [
       makeCharacter({
@@ -639,7 +1072,7 @@ describe('readCharacterVaultProperties', () => {
   });
 });
 
-describe('readCharacterVaultDescription / readCharacterVaultPersonality / readCharacterVaultPhysicalDescription', () => {
+describe('readCharacterVaultDescription / readCharacterVaultPersonality / readCharacterVaultExampleDialogues / readCharacterVaultPhysicalDescription', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -672,6 +1105,16 @@ describe('readCharacterVaultDescription / readCharacterVaultPersonality / readCh
     readDatabaseDocumentMock.mockRejectedValue(new Error('io error'));
     const result = await readCharacterVaultDescription('mp-1', 'char-a');
     expect(result).toBeNull();
+  });
+
+  it('readCharacterVaultExampleDialogues returns raw text when the file exists', async () => {
+    readDatabaseDocumentMock.mockResolvedValue({
+      content: '{{user}}: Hi\n{{char}}: Hello.',
+      mtime: 0,
+      size: 20,
+    });
+    const result = await readCharacterVaultExampleDialogues('mp-1', 'char-a');
+    expect(result).toBe('{{user}}: Hi\n{{char}}: Hello.');
   });
 });
 
@@ -722,6 +1165,57 @@ describe('readCharacterVaultPhysicalPrompts', () => {
     );
     const result = await readCharacterVaultPhysicalPrompts('mp-1', 'char-a');
     expect(result).toBeNull();
+  });
+});
+
+describe('readCharacterVaultSystemPrompts / readCharacterVaultScenarios', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('enumerates Prompts/*.md and returns parsed entries', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_PROMPTS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Prompts/Alpha.md',
+          fileName: 'Alpha.md',
+          content: `---\nname: Alpha\nisDefault: true\n---\n\nAlpha body.`,
+        },
+      ],
+    });
+    const result = await readCharacterVaultSystemPrompts('mp-1', 'char-a');
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('Alpha');
+    expect(result[0].isDefault).toBe(true);
+  });
+
+  it('returns [] when the Prompts/ folder is empty', async () => {
+    mockRepoPaths({}, {});
+    const result = await readCharacterVaultSystemPrompts('mp-1', 'char-a');
+    expect(result).toEqual([]);
+  });
+
+  it('enumerates Scenarios/*.md and returns parsed entries', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_SCENARIOS_FOLDER]: [
+        {
+          mountPointId: 'mp-1',
+          relativePath: 'Scenarios/Wakeup.md',
+          fileName: 'Wakeup.md',
+          content: '# Wakeup\n\nBody.',
+        },
+      ],
+    });
+    const result = await readCharacterVaultScenarios('mp-1', 'char-a');
+    expect(result).toHaveLength(1);
+    expect(result[0].title).toBe('Wakeup');
+  });
+
+  it('returns [] when the Scenarios/ folder is empty', async () => {
+    mockRepoPaths({}, {});
+    const result = await readCharacterVaultScenarios('mp-1', 'char-a');
+    expect(result).toEqual([]);
   });
 });
 

@@ -152,6 +152,40 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
     );
   }
 
+  /**
+   * Find all top-level documents (no nested folders) with a specific extension
+   * inside a named folder, across many mount points. Used by overlay loaders
+   * that enumerate directories (e.g. Prompts/*.md, Scenarios/*.md) to avoid
+   * N+1 reads when hydrating bulk character lists.
+   *
+   * - `folder` is a relative folder name without trailing slash (e.g. "Prompts").
+   * - `extension` is the file extension with leading dot (e.g. ".md").
+   * Only top-level files inside the folder are returned; nested files are
+   * excluded.
+   */
+  async findManyByMountPointsInFolder(
+    mountPointIds: string[],
+    folder: string,
+    extension: string = '.md'
+  ): Promise<DocMountDocument[]> {
+    if (mountPointIds.length === 0) {
+      return [];
+    }
+    const escapedFolder = folder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedExt = extension.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = `^${escapedFolder}/[^/]+${escapedExt}$`;
+    return this.safeQuery(
+      async () =>
+        this.findByFilter({
+          mountPointId: { $in: mountPointIds },
+          relativePath: { $regex: regex },
+        } as TypedQueryFilter<DocMountDocument>),
+      'Error finding documents by mount point IDs and folder',
+      { mountPointIdCount: mountPointIds.length, folder, extension },
+      []
+    );
+  }
+
   async findByMountPointId(mountPointId: string): Promise<DocMountDocument[]> {
     return this.safeQuery(
       async () => this.findByFilter({ mountPointId } as TypedQueryFilter<DocMountDocument>),

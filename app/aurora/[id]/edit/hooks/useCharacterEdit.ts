@@ -34,9 +34,11 @@ const INITIAL_FORM_DATA: CharacterFormData = {
  * values back into the DB.
  *
  * Covers properties.json (aliases/pronouns/title/firstMessage), description.md,
- * and personality.md. Physical-description.md and physical-prompts.json are
- * edited from the Descriptions tab, which surfaces its own overlay warning
- * rather than going through this form.
+ * personality.md, example-dialogues.md, and the Scenarios/ folder. Physical-
+ * description.md and physical-prompts.json are edited from the Descriptions
+ * tab, which surfaces its own overlay warning rather than going through this
+ * form. The Prompts/ folder is not represented in this form (system prompts
+ * are managed via dedicated /prompts API routes).
  */
 const OVERLAY_MANAGED_FIELDS = [
   'aliases',
@@ -45,6 +47,8 @@ const OVERLAY_MANAGED_FIELDS = [
   'firstMessage',
   'description',
   'personality',
+  'exampleDialogues',
+  'scenarios',
 ] as const satisfies readonly (keyof CharacterFormData)[]
 
 /**

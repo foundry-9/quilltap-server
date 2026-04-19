@@ -5,18 +5,33 @@
  * character has the flag on and a linked vault, selected fields are read from
  * the vault's files instead of the DB row.
  *
- * Five vault files participate, each independently:
+ * Eight vault targets participate, each independently:
  *
  *   - properties.json          — pronouns, aliases, title, firstMessage, talkativeness
  *   - description.md           — character.description
  *   - personality.md           — character.personality
+ *   - example-dialogues.md     — character.exampleDialogues
  *   - physical-description.md  — physicalDescriptions[0].fullDescription
  *   - physical-prompts.json    — physicalDescriptions[0].{short,medium,long,complete}Prompt
+ *   - Prompts/*.md             — character.systemPrompts (one file per variant,
+ *                                 YAML frontmatter carries {name, isDefault})
+ *   - Scenarios/*.md           — character.scenarios (one file per scenario,
+ *                                 first `# heading` is the title)
  *
  * Each file's overlay is all-or-nothing for the fields it owns. If the file is
  * missing, malformed, or fails schema validation, that file's fields fall back
  * to the DB (other files are unaffected). Empty markdown files map `''` → null
  * so nullable fields retain their "unset" semantics.
+ *
+ * Prompts/ and Scenarios/ overlays enumerate top-level `.md` files only; nested
+ * paths are ignored. When either directory exists and contains at least one
+ * valid file, the vault listing fully replaces the DB array (all-or-nothing
+ * per directory). An empty directory falls back to the DB.
+ *
+ * IDs for synthesized systemPrompts/scenarios entries are derived deterministically
+ * from (mountPointId, relativePath) via SHA-256 so the chat's stored
+ * `selectedSystemPromptId` / `defaultScenarioId` survives across overlay reads
+ * as long as the filename doesn't change.
  *
  * The physical-description.md and physical-prompts.json overlays only apply when
  * the character already has at least one physicalDescription in the DB; they
@@ -29,12 +44,20 @@
  * repository's `Raw` helpers.
  */
 
+import crypto from 'node:crypto';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import type { Character, PhysicalDescription } from '@/lib/schemas/types';
+import type {
+  Character,
+  PhysicalDescription,
+  CharacterSystemPrompt,
+  CharacterScenario,
+} from '@/lib/schemas/types';
 import { PronounsSchema } from '@/lib/schemas/character.types';
 import { readDatabaseDocument, DatabaseStoreError } from '@/lib/mount-index/database-store';
+import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
+import type { DocMountDocument } from '@/lib/schemas/mount-index.types';
 
 // Mirrors the nullability of the underlying Character schema so that a vault
 // whose properties.json carries null `title` / `firstMessage` (the normal
@@ -66,13 +89,18 @@ export type CharacterVaultPhysicalPrompts = z.infer<typeof CharacterVaultPhysica
 export const CHARACTER_PROPERTIES_JSON_PATH = 'properties.json';
 export const CHARACTER_DESCRIPTION_MD_PATH = 'description.md';
 export const CHARACTER_PERSONALITY_MD_PATH = 'personality.md';
+export const CHARACTER_EXAMPLE_DIALOGUES_MD_PATH = 'example-dialogues.md';
 export const CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH = 'physical-description.md';
 export const CHARACTER_PHYSICAL_PROMPTS_JSON_PATH = 'physical-prompts.json';
 
-const OVERLAY_PATHS = [
+export const CHARACTER_PROMPTS_FOLDER = 'Prompts';
+export const CHARACTER_SCENARIOS_FOLDER = 'Scenarios';
+
+const SINGLE_FILE_OVERLAY_PATHS = [
   CHARACTER_PROPERTIES_JSON_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_PERSONALITY_MD_PATH,
+  CHARACTER_EXAMPLE_DIALOGUES_MD_PATH,
   CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
   CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
 ] as const;
@@ -149,9 +177,143 @@ function markdownToNullable(content: string): string | null {
 }
 
 /**
+ * Build a stable, RFC 4122 v8-style UUID from a SHA-256 digest of the source
+ * string. v8 is the "custom" version reserved for implementation-specific
+ * content; we use it so the `z.uuid()` schema accepts the string without us
+ * having to implement true v5 (which requires SHA-1). The exact version byte
+ * is not load-bearing — we just need a stable string that parses as a UUID
+ * and will always round-trip to itself for the same input.
+ */
+function stableUuidFromString(source: string): string {
+  const hash = crypto.createHash('sha256').update(source).digest();
+  const bytes = Buffer.alloc(16);
+  hash.copy(bytes, 0, 0, 16);
+  // Set version to 8 (custom) in byte 6
+  bytes[6] = (bytes[6] & 0x0f) | 0x80;
+  // Set variant to RFC 4122 in byte 8
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+/**
+ * Parse a prompt-variant file. The YAML frontmatter carries the display name
+ * and isDefault flag; the body (after the closing ---) becomes the prompt
+ * content. Files without frontmatter or without a `name` field are skipped.
+ */
+function parsePromptFile(
+  doc: DocMountDocument,
+  characterId: string,
+): CharacterSystemPrompt | null {
+  const parsed = parseFrontmatter(doc.content);
+  if (!parsed.data) {
+    logger.warn('Prompts/*.md file has no parseable frontmatter; skipping', {
+      characterId,
+      mountPointId: doc.mountPointId,
+      relativePath: doc.relativePath,
+    });
+    return null;
+  }
+  const name = parsed.data.name;
+  if (typeof name !== 'string' || name.trim().length === 0) {
+    logger.warn('Prompts/*.md file missing `name` in frontmatter; skipping', {
+      characterId,
+      mountPointId: doc.mountPointId,
+      relativePath: doc.relativePath,
+    });
+    return null;
+  }
+  const isDefault = parsed.data.isDefault === true;
+  const body = doc.content.slice(parsed.bodyStartOffset).trimStart();
+  if (body.length === 0) {
+    logger.warn('Prompts/*.md body is empty; skipping', {
+      characterId,
+      mountPointId: doc.mountPointId,
+      relativePath: doc.relativePath,
+    });
+    return null;
+  }
+  return {
+    id: stableUuidFromString(`prompt:${doc.mountPointId}:${doc.relativePath}`),
+    name: name.trim().slice(0, 100),
+    content: body,
+    isDefault,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+}
+
+/**
+ * Parse a scenario file. The first `# heading` is the title; everything after
+ * it (trimmed) is the body. Files without a `# heading` fall back to the
+ * filename-without-extension as the title so nothing is dropped silently.
+ */
+function parseScenarioFile(
+  doc: DocMountDocument,
+  characterId: string,
+): CharacterScenario | null {
+  const content = doc.content;
+  const lines = content.split('\n');
+  let titleLineIndex = -1;
+  let title: string | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^#\s+(.+)$/);
+    if (match) {
+      titleLineIndex = i;
+      title = match[1].trim();
+      break;
+    }
+  }
+  if (title === null) {
+    // Fall back to filename-without-extension so malformed scenario files are
+    // still visible rather than silently dropped.
+    const fileName = doc.fileName.replace(/\.md$/i, '');
+    title = fileName.trim().slice(0, 200);
+    if (title.length === 0) {
+      logger.warn('Scenarios/*.md file has no title; skipping', {
+        characterId,
+        mountPointId: doc.mountPointId,
+        relativePath: doc.relativePath,
+      });
+      return null;
+    }
+    logger.debug('Scenario file had no # heading; using filename as title', {
+      characterId,
+      mountPointId: doc.mountPointId,
+      relativePath: doc.relativePath,
+      title,
+    });
+  }
+
+  // Body: everything after the title line (if any), trimmed to a reasonable
+  // shape. If no heading was found, use the whole content as body.
+  let body: string;
+  if (titleLineIndex >= 0) {
+    body = lines.slice(titleLineIndex + 1).join('\n').trim();
+  } else {
+    body = content.trim();
+  }
+  if (body.length === 0) {
+    logger.warn('Scenarios/*.md body is empty; skipping', {
+      characterId,
+      mountPointId: doc.mountPointId,
+      relativePath: doc.relativePath,
+    });
+    return null;
+  }
+  return {
+    id: stableUuidFromString(`scenario:${doc.mountPointId}:${doc.relativePath}`),
+    title: title.slice(0, 200),
+    content: body,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+}
+
+/**
  * Apply the vault file overlay to a list of characters. Characters not flagged
  * for overlay (switch off OR no linked vault) are returned unchanged. Batched:
- * performs one IN(...) query per vault path.
+ * performs one IN(...) query per vault path plus two directory listings.
  */
 export async function applyDocumentStoreOverlay(
   characters: Character[],
@@ -172,22 +334,53 @@ export async function applyDocumentStoreOverlay(
   const repos = getRepositories();
 
   const contentByMountByPath = new Map<string, Map<string, string>>();
-  for (const path of OVERLAY_PATHS) {
+  for (const path of SINGLE_FILE_OVERLAY_PATHS) {
     contentByMountByPath.set(path, new Map<string, string>());
   }
+  const promptsByMount = new Map<string, DocMountDocument[]>();
+  const scenariosByMount = new Map<string, DocMountDocument[]>();
 
   try {
-    const results = await Promise.all(
-      OVERLAY_PATHS.map((path) =>
+    const singleFileResults = await Promise.all(
+      SINGLE_FILE_OVERLAY_PATHS.map((path) =>
         repos.docMountDocuments.findManyByMountPointsAndPath(mountPointIds, path),
       ),
     );
-    for (let i = 0; i < OVERLAY_PATHS.length; i++) {
-      const path = OVERLAY_PATHS[i];
+    for (let i = 0; i < SINGLE_FILE_OVERLAY_PATHS.length; i++) {
+      const path = SINGLE_FILE_OVERLAY_PATHS[i];
       const byMount = contentByMountByPath.get(path)!;
-      for (const doc of results[i]) {
+      for (const doc of singleFileResults[i]) {
         byMount.set(doc.mountPointId, doc.content);
       }
+    }
+
+    const [promptDocs, scenarioDocs] = await Promise.all([
+      repos.docMountDocuments.findManyByMountPointsInFolder(
+        mountPointIds,
+        CHARACTER_PROMPTS_FOLDER,
+        '.md',
+      ),
+      repos.docMountDocuments.findManyByMountPointsInFolder(
+        mountPointIds,
+        CHARACTER_SCENARIOS_FOLDER,
+        '.md',
+      ),
+    ]);
+    for (const doc of promptDocs) {
+      let list = promptsByMount.get(doc.mountPointId);
+      if (!list) {
+        list = [];
+        promptsByMount.set(doc.mountPointId, list);
+      }
+      list.push(doc);
+    }
+    for (const doc of scenarioDocs) {
+      let list = scenariosByMount.get(doc.mountPointId);
+      if (!list) {
+        list = [];
+        scenariosByMount.set(doc.mountPointId, list);
+      }
+      list.push(doc);
     }
   } catch (error) {
     logger.warn('Failed to load vault files for character overlay; falling back to DB values', {
@@ -200,6 +393,7 @@ export async function applyDocumentStoreOverlay(
   const propsByMount = contentByMountByPath.get(CHARACTER_PROPERTIES_JSON_PATH)!;
   const descByMount = contentByMountByPath.get(CHARACTER_DESCRIPTION_MD_PATH)!;
   const persByMount = contentByMountByPath.get(CHARACTER_PERSONALITY_MD_PATH)!;
+  const dialoguesByMount = contentByMountByPath.get(CHARACTER_EXAMPLE_DIALOGUES_MD_PATH)!;
   const physDescByMount = contentByMountByPath.get(CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH)!;
   const physPromptsByMount = contentByMountByPath.get(CHARACTER_PHYSICAL_PROMPTS_JSON_PATH)!;
 
@@ -210,8 +404,11 @@ export async function applyDocumentStoreOverlay(
     propertiesJsonFoundCount: propsByMount.size,
     descriptionMdFoundCount: descByMount.size,
     personalityMdFoundCount: persByMount.size,
+    exampleDialoguesMdFoundCount: dialoguesByMount.size,
     physicalDescriptionMdFoundCount: physDescByMount.size,
     physicalPromptsMdFoundCount: physPromptsByMount.size,
+    promptsFolderMountCount: promptsByMount.size,
+    scenariosFolderMountCount: scenariosByMount.size,
   });
 
   return characters.map((character) => {
@@ -249,6 +446,12 @@ export async function applyDocumentStoreOverlay(
       out = { ...out, personality: markdownToNullable(persRaw) };
     }
 
+    // example-dialogues.md
+    const dialoguesRaw = dialoguesByMount.get(mountId);
+    if (dialoguesRaw !== undefined) {
+      out = { ...out, exampleDialogues: markdownToNullable(dialoguesRaw) };
+    }
+
     // physical-description.md + physical-prompts.json target physicalDescriptions[0]
     const physDescRaw = physDescByMount.get(mountId);
     const physPromptsRaw = physPromptsByMount.get(mountId);
@@ -282,6 +485,50 @@ export async function applyDocumentStoreOverlay(
           ...out,
           physicalDescriptions: [patched, ...out.physicalDescriptions.slice(1)],
         };
+      }
+    }
+
+    // Prompts/*.md → systemPrompts
+    const promptDocs = promptsByMount.get(mountId);
+    if (promptDocs && promptDocs.length > 0) {
+      const parsedPrompts = promptDocs
+        .slice()
+        .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+        .map((doc) => parsePromptFile(doc, character.id))
+        .filter((p): p is CharacterSystemPrompt => p !== null);
+      if (parsedPrompts.length > 0) {
+        // Ensure exactly one isDefault. If the frontmatter declares multiple
+        // defaults, keep only the first; if none are marked default, promote
+        // the first alphabetically so downstream consumers can always pick a
+        // default without falling through to the empty-array branch.
+        let seenDefault = false;
+        const normalized: CharacterSystemPrompt[] = parsedPrompts.map((p) => {
+          if (p.isDefault) {
+            if (seenDefault) {
+              return { ...p, isDefault: false };
+            }
+            seenDefault = true;
+            return p;
+          }
+          return p;
+        });
+        if (!seenDefault) {
+          normalized[0] = { ...normalized[0], isDefault: true };
+        }
+        out = { ...out, systemPrompts: normalized };
+      }
+    }
+
+    // Scenarios/*.md → scenarios
+    const scenarioDocs = scenariosByMount.get(mountId);
+    if (scenarioDocs && scenarioDocs.length > 0) {
+      const parsedScenarios = scenarioDocs
+        .slice()
+        .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+        .map((doc) => parseScenarioFile(doc, character.id))
+        .filter((s): s is CharacterScenario => s !== null);
+      if (parsedScenarios.length > 0) {
+        out = { ...out, scenarios: parsedScenarios };
       }
     }
 
@@ -335,6 +582,13 @@ export async function readCharacterVaultPersonality(
   return readVaultTextFile(mountPointId, CHARACTER_PERSONALITY_MD_PATH, characterId);
 }
 
+export async function readCharacterVaultExampleDialogues(
+  mountPointId: string,
+  characterId?: string,
+): Promise<string | null> {
+  return readVaultTextFile(mountPointId, CHARACTER_EXAMPLE_DIALOGUES_MD_PATH, characterId);
+}
+
 export async function readCharacterVaultPhysicalDescription(
   mountPointId: string,
   characterId?: string,
@@ -353,6 +607,64 @@ export async function readCharacterVaultPhysicalPrompts(
   );
   if (content === null) return null;
   return parseVaultPhysicalPrompts(content, characterId ?? mountPointId);
+}
+
+/**
+ * Enumerate Prompts/*.md inside a vault and return the parsed prompt array.
+ * Returns an empty array if the folder is missing or empty. Invalid files are
+ * skipped with a warning. Used by the sync-back action.
+ */
+export async function readCharacterVaultSystemPrompts(
+  mountPointId: string,
+  characterId?: string,
+): Promise<CharacterSystemPrompt[]> {
+  const repos = getRepositories();
+  const docs = await repos.docMountDocuments.findManyByMountPointsInFolder(
+    [mountPointId],
+    CHARACTER_PROMPTS_FOLDER,
+    '.md',
+  );
+  const parsed = docs
+    .slice()
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+    .map((doc) => parsePromptFile(doc, characterId ?? mountPointId))
+    .filter((p): p is CharacterSystemPrompt => p !== null);
+  if (parsed.length === 0) return [];
+  let seenDefault = false;
+  const normalized: CharacterSystemPrompt[] = parsed.map((p) => {
+    if (p.isDefault) {
+      if (seenDefault) return { ...p, isDefault: false };
+      seenDefault = true;
+      return p;
+    }
+    return p;
+  });
+  if (!seenDefault) {
+    normalized[0] = { ...normalized[0], isDefault: true };
+  }
+  return normalized;
+}
+
+/**
+ * Enumerate Scenarios/*.md inside a vault and return the parsed scenario array.
+ * Returns an empty array if the folder is missing or empty. Used by the
+ * sync-back action.
+ */
+export async function readCharacterVaultScenarios(
+  mountPointId: string,
+  characterId?: string,
+): Promise<CharacterScenario[]> {
+  const repos = getRepositories();
+  const docs = await repos.docMountDocuments.findManyByMountPointsInFolder(
+    [mountPointId],
+    CHARACTER_SCENARIOS_FOLDER,
+    '.md',
+  );
+  return docs
+    .slice()
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+    .map((doc) => parseScenarioFile(doc, characterId ?? mountPointId))
+    .filter((s): s is CharacterScenario => s !== null);
 }
 
 async function readVaultTextFile(
