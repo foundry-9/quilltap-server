@@ -28,7 +28,7 @@ export async function enqueueEmbeddingJobsForMountPoint(mountPointId: string): P
   // Find chunks without embeddings for this mount point
   const allChunks = await repos.docMountChunks.findByMountPointId(mountPointId);
   const unembeddedChunks = allChunks.filter(
-    chunk => !chunk.embedding || !Array.isArray(chunk.embedding) || chunk.embedding.length === 0
+    chunk => !chunk.embedding || chunk.embedding.length === 0
   );
 
   if (unembeddedChunks.length === 0) {

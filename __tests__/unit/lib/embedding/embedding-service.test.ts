@@ -105,7 +105,9 @@ describe('embedding service', () => {
       key_value: 'sk-test',
     })
 
-    const mockProvider = createMockEmbeddingProvider([0.1, 0.2, 0.3])
+    // Use a unit-length fixture so the service's L2 normalisation is a no-op
+    // and we can assert exact output.
+    const mockProvider = createMockEmbeddingProvider([1, 0, 0])
     mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)
     mockGetProvider.mockReturnValue({ config: { requiresApiKey: true } } as any)
 
@@ -118,7 +120,8 @@ describe('embedding service', () => {
       'sk-test',
       { dimensions: profile.dimensions }
     )
-    expect(embedding.embedding).toEqual([0.1, 0.2, 0.3])
+    expect(embedding.embedding).toBeInstanceOf(Float32Array)
+    expect(Array.from(embedding.embedding)).toEqual([1, 0, 0])
     expect(embedding.provider).toBe('OPENAI')
   })
 
@@ -154,12 +157,13 @@ describe('embedding service', () => {
     const profile = makeProfile({ id: 'profile-abc', provider: 'OLLAMA', baseUrl: 'http://localhost:11434', apiKeyId: null })
     mockRepos.embeddingProfiles.findById.mockResolvedValue(profile)
 
-    const mockProvider = createMockEmbeddingProvider([0.3, 0.4])
+    // [0.6, 0.8] is already unit length — normalisation is a no-op.
+    const mockProvider = createMockEmbeddingProvider([0.6, 0.8])
     mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)
     mockGetProvider.mockReturnValue({ config: { requiresApiKey: false } } as any)
 
     const result = await generateEmbeddingForUser('text', userId, profile.id)
-    expect(result.embedding).toEqual([0.3, 0.4])
+    expect(Array.from(result.embedding)).toEqual([expect.closeTo(0.6, 5), expect.closeTo(0.8, 5)])
     expect(mockRepos.embeddingProfiles.findDefault).not.toHaveBeenCalled()
   })
 
@@ -171,13 +175,14 @@ describe('embedding service', () => {
       key_value: 'sk-test',
     })
 
-    const mockProvider = createMockEmbeddingProvider([0.2, 0.1])
+    // Unit-length fixture so normalisation leaves it unchanged.
+    const mockProvider = createMockEmbeddingProvider([1, 0])
     mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)
     mockGetProvider.mockReturnValue({ config: { requiresApiKey: true } } as any)
 
     const result = await generateEmbeddingForUser('fallback text', userId)
     expect(mockCreateEmbeddingProvider).toHaveBeenCalledWith('OPENAI', profile.baseUrl)
-    expect(result.embedding).toEqual([0.2, 0.1])
+    expect(Array.from(result.embedding)).toEqual([1, 0])
   })
 
   it('extracts keywords and phrases for fallback search', () => {
@@ -191,14 +196,14 @@ describe('embedding service', () => {
     const profile = makeProfile({ provider: 'OLLAMA', baseUrl: 'http://localhost:11434', apiKeyId: null })
     mockRepos.embeddingProfiles.findDefault.mockResolvedValue(profile)
 
-    const mockProvider = createMockEmbeddingProvider([0.1, 0.2])
+    const mockProvider = createMockEmbeddingProvider([0, 1])
     mockCreateEmbeddingProvider.mockReturnValue(mockProvider as any)
     mockGetProvider.mockReturnValue({ config: { requiresApiKey: false } } as any)
 
     const result = await prepareForSearch('embed me', userId)
     expect(result.usedEmbedding).toBe(true)
     if (result.usedEmbedding) {
-      expect(result.embedding.embedding).toEqual([0.1, 0.2])
+      expect(Array.from(result.embedding.embedding)).toEqual([0, 1])
     }
   })
 

@@ -49,17 +49,12 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     // Sort by createdAt descending
     mountPoints.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    // Compute embedded chunk counts for each mount point
+    // Compute embedded chunk counts per mount point via a cheap GROUP BY —
+    // no BLOBs hydrated.
     const mountPointIds = mountPoints.map(mp => mp.id);
-    const embeddedChunks = mountPointIds.length > 0
-      ? await repos.docMountChunks.findAllWithEmbeddingsByMountPointIds(mountPointIds)
-      : [];
-
-    // Build a map of mountPointId -> embedded count
-    const embeddedCountMap = new Map<string, number>();
-    for (const chunk of embeddedChunks) {
-      embeddedCountMap.set(chunk.mountPointId, (embeddedCountMap.get(chunk.mountPointId) || 0) + 1);
-    }
+    const embeddedCountMap = mountPointIds.length > 0
+      ? await repos.docMountChunks.countEmbeddedByMountPointIds(mountPointIds)
+      : new Map<string, number>();
 
     // Enrich mount points with embedded chunk count
     const enriched = mountPoints.map(mp => ({

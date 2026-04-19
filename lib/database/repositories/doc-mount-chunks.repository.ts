@@ -24,6 +24,7 @@ import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 
 /**
  * Document Mount Chunks Repository
@@ -180,6 +181,41 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   }
 
   /**
+   * Count embedded chunks per mount point without hydrating the embeddings.
+   * Uses a single GROUP BY query, avoiding the multi-megabyte BLOB decode
+   * that `findAllWithEmbeddingsByMountPointIds` incurs when the caller only
+   * wants counts (e.g. the Scriptorium settings UI).
+   */
+  async countEmbeddedByMountPointIds(mountPointIds: string[]): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    if (mountPointIds.length === 0) return result;
+
+    return this.safeQuery(
+      async () => {
+        if (isMountIndexDegraded()) return result;
+        const db = getRawMountIndexDatabase();
+        if (!db) return result;
+
+        const placeholders = mountPointIds.map(() => '?').join(',');
+        const rows = db.prepare(
+          `SELECT mountPointId, COUNT(*) AS count
+           FROM doc_mount_chunks
+           WHERE mountPointId IN (${placeholders}) AND embedding IS NOT NULL
+           GROUP BY mountPointId`
+        ).all(...mountPointIds) as { mountPointId: string; count: number }[];
+
+        for (const row of rows) {
+          result.set(row.mountPointId, row.count);
+        }
+        return result;
+      },
+      'Error counting embedded chunks by mount point IDs',
+      { mountPointIdCount: mountPointIds.length },
+      result
+    );
+  }
+
+  /**
    * Find all chunks with non-null embeddings for a set of mount point IDs.
    * Loads chunks per mount point and filters for non-null embeddings.
    *
@@ -208,7 +244,7 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
 
         // Filter for non-null embeddings
         const withEmbeddings = allChunks.filter(
-          chunk => chunk.embedding != null && Array.isArray(chunk.embedding) && chunk.embedding.length > 0
+          chunk => chunk.embedding != null && chunk.embedding.length > 0
         );
 
         logger.debug('Found chunks with embeddings for mount point IDs', {
@@ -237,9 +273,20 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
           context: 'DocMountChunksRepository.deleteByFileId',
           fileId,
         });
+        // Peek one chunk to learn the mount point so we can invalidate the
+        // in-memory cache after the delete (chunks for one file all share
+        // a mount point).
+        const sample = await this.findByFilter(
+          { fileId } as TypedQueryFilter<DocMountChunk>,
+          { limit: 1 }
+        );
+        const mountPointId = sample[0]?.mountPointId;
         const count = await this.deleteMany(
           { fileId } as TypedQueryFilter<DocMountChunk>
         );
+        if (mountPointId) {
+          invalidateMountPoint(mountPointId);
+        }
         logger.debug('Deleted chunks by file ID', {
           context: 'DocMountChunksRepository.deleteByFileId',
           fileId,
@@ -267,6 +314,7 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
         const count = await this.deleteMany(
           { mountPointId } as TypedQueryFilter<DocMountChunk>
         );
+        invalidateMountPoint(mountPointId);
         logger.debug('Deleted chunks by mount point ID', {
           context: 'DocMountChunksRepository.deleteByMountPointId',
           mountPointId,
@@ -284,7 +332,7 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
    * @param id The chunk ID
    * @param embedding The new embedding vector (Float32 array)
    */
-  async updateEmbedding(id: string, embedding: number[]): Promise<void> {
+  async updateEmbedding(id: string, embedding: Float32Array): Promise<void> {
     await this.safeQuery(
       async () => {
         const updated = await this._update(id, {

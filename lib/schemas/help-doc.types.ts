@@ -24,7 +24,14 @@ export const HelpDocSchema = z.object({
   url: z.string(),                                    // URL route the doc is associated with
   content: z.string(),                                // Full markdown content, frontmatter stripped
   contentHash: z.string(),                            // SHA-256 hash of content for change detection
-  embedding: z.array(z.number()).nullable().optional(), // Embedding vector, Float32 BLOB in DB
+  embedding: z.union([
+    z.instanceof(Float32Array),
+    z.array(z.number()).transform((arr): Float32Array => new Float32Array(arr)),
+    z.instanceof(Buffer).transform((buf): Float32Array => {
+      const view = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / Float32Array.BYTES_PER_ELEMENT);
+      return new Float32Array(view);
+    }),
+  ]).nullable().optional(), // Unit-length Float32 BLOB in DB
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

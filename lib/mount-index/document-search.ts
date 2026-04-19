@@ -11,6 +11,7 @@
 import { cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { getRepositories } from '@/lib/repositories/factory'
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { getChunksForMountPoints } from './mount-chunk-cache'
 
 const logger = createServiceLogger('DocumentSearch')
 
@@ -46,7 +47,7 @@ export interface DocumentSearchOptions {
  * and returns ranked results with file metadata.
  */
 export async function searchDocumentChunks(
-  queryEmbedding: number[],
+  queryEmbedding: Float32Array,
   options: DocumentSearchOptions = {}
 ): Promise<DocumentSearchResult[]> {
   const repos = getRepositories()
@@ -85,8 +86,9 @@ export async function searchDocumentChunks(
     return []
   }
 
-  // Load all embedded chunks for the target mount points
-  const allChunks = await repos.docMountChunks.findAllWithEmbeddingsByMountPointIds(mountPointIds)
+  // Load all embedded chunks for the target mount points (served from the
+  // in-memory cache on repeat queries).
+  const allChunks = await getChunksForMountPoints(mountPointIds)
 
   if (allChunks.length === 0) {
     logger.debug('No embedded document chunks found', { mountPointIds })
@@ -95,11 +97,11 @@ export async function searchDocumentChunks(
 
   logger.debug('Loaded embedded document chunks for search', { chunkCount: allChunks.length })
 
-  // Compute cosine similarity for each chunk
+  // Compute cosine similarity (dot product — vectors are unit-length) for each chunk
   const scored = allChunks
     .map(chunk => ({
       chunk,
-      score: cosineSimilarity(queryEmbedding, chunk.embedding!),
+      score: cosineSimilarity(queryEmbedding, chunk.embedding),
     }))
     .filter(item => item.score >= minScore)
     .sort((a, b) => b.score - a.score)
@@ -140,7 +142,7 @@ export async function searchDocumentChunks(
       fileName: fileInfo?.fileName || 'Unknown',
       relativePath: fileInfo?.relativePath || '',
       chunkIndex: chunk.chunkIndex,
-      headingContext: chunk.headingContext ?? null,
+      headingContext: chunk.headingContext,
       content: chunk.content,
       score,
     }

@@ -244,7 +244,7 @@ export async function extractMemoryFromMessage(
   characterPronouns?: Pronouns | null,
   resolvedMaxTokens?: number
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
-  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 4000)
+  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 8000)
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = userCharacterName ? `${userCharacterName} (the user)` : 'The user'
   const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
@@ -308,7 +308,7 @@ export async function extractCharacterMemoryFromMessage(
   characterPronouns?: Pronouns | null,
   resolvedMaxTokens?: number
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
-  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 4000)
+  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 8000)
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = userCharacterName ? `${userCharacterName} (the user)` : 'The user'
   const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
@@ -373,7 +373,7 @@ export async function extractInterCharacterMemoryFromMessage(
   characterBPronouns?: Pronouns | null,
   resolvedMaxTokens?: number
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
-  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 4000)
+  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 8000)
   const characterALabel = formatNameWithPronouns(characterAName, characterAPronouns)
   const characterBLabel = formatNameWithPronouns(characterBName, characterBPronouns)
 

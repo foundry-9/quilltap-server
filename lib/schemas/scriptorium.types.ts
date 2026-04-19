@@ -47,7 +47,14 @@ export const ConversationChunkSchema = z.object({
   content: z.string(),
   participantNames: z.array(z.string()).default([]),
   messageIds: z.array(z.string()).default([]),
-  embedding: z.array(z.number()).nullable().optional(),
+  embedding: z.union([
+    z.instanceof(Float32Array),
+    z.array(z.number()).transform((arr): Float32Array => new Float32Array(arr)),
+    z.instanceof(Buffer).transform((buf): Float32Array => {
+      const view = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / Float32Array.BYTES_PER_ELEMENT);
+      return new Float32Array(view);
+    }),
+  ]).nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

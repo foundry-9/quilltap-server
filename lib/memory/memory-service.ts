@@ -242,7 +242,7 @@ async function createMemoryDirect(
 async function createMemoryDirectWithEmbedding(
   data: CreateMemoryOptions,
   options: MemoryServiceOptions,
-  embedding: number[] | null
+  embedding: Float32Array | null
 ): Promise<Memory> {
   const repos = getRepositories()
   const importance = data.importance ?? 0.5
@@ -655,7 +655,7 @@ export async function findSimilarMemories(
  */
 export async function findSimilarMemoriesWithEmbedding(
   characterId: string,
-  embedding: number[],
+  embedding: Float32Array,
   options: {
     threshold?: number
     limit?: number

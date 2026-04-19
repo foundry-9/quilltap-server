@@ -40,7 +40,7 @@ export type GateDecision =
 
 export interface GateResult {
   decision: GateDecision
-  embedding: number[] | null
+  embedding: Float32Array | null
   debugInfo: string[]
 }
 

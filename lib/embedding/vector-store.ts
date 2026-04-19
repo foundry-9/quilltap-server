@@ -35,8 +35,8 @@ export interface VectorMetadata {
 export interface VectorEntry {
   /** Unique identifier (typically the memory ID) */
   id: string
-  /** The embedding vector */
-  embedding: number[]
+  /** The embedding vector (unit-length Float32Array) */
+  embedding: Float32Array
   /** Associated metadata */
   metadata: VectorMetadata
   /** When this entry was created */
@@ -61,13 +61,13 @@ export interface VectorSearchResult {
 export interface ICharacterVectorStore {
   load(): Promise<void>
   save(): Promise<void>
-  addVector(id: string, embedding: number[], metadata: VectorMetadata): Promise<void>
+  addVector(id: string, embedding: Float32Array, metadata: VectorMetadata): Promise<void>
   removeVector(id: string): Promise<boolean>
-  updateVector(id: string, embedding: number[]): Promise<boolean>
+  updateVector(id: string, embedding: Float32Array): Promise<boolean>
   hasVector(id: string): boolean
   readonly size: number
   getDimensions(): number | null
-  search(queryEmbedding: number[], limit?: number, filter?: (metadata: VectorMetadata) => boolean): VectorSearchResult[]
+  search(queryEmbedding: Float32Array, limit?: number, filter?: (metadata: VectorMetadata) => boolean): VectorSearchResult[]
   getAllEntries(): VectorEntry[]
   clear(): void
 }
@@ -209,7 +209,7 @@ export class CharacterVectorStore implements ICharacterVectorStore {
    */
   async addVector(
     id: string,
-    embedding: number[],
+    embedding: Float32Array,
     metadata: VectorMetadata
   ): Promise<void> {
     // Validate dimensions
@@ -256,7 +256,7 @@ export class CharacterVectorStore implements ICharacterVectorStore {
   /**
    * Update a vector's embedding
    */
-  async updateVector(id: string, embedding: number[]): Promise<boolean> {
+  async updateVector(id: string, embedding: Float32Array): Promise<boolean> {
     const entry = this.entries.get(id)
     if (!entry) {
       return false
@@ -301,7 +301,7 @@ export class CharacterVectorStore implements ICharacterVectorStore {
    * Search for similar vectors using cosine similarity
    */
   search(
-    queryEmbedding: number[],
+    queryEmbedding: Float32Array,
     limit: number = 10,
     filter?: (metadata: VectorMetadata) => boolean
   ): VectorSearchResult[] {

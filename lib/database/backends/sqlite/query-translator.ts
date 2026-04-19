@@ -457,6 +457,9 @@ export function translateUpdate(
         if (value === undefined) {
           setClauses.push(`"${field}" = ?`);
           params.push(null);
+        } else if (blobColumns.has(field) && value instanceof Float32Array) {
+          setClauses.push(`"${field}" = ?`);
+          params.push(value.length === 0 ? null : embeddingToBlob(value));
         } else if (blobColumns.has(field) && Array.isArray(value)) {
           // BLOB columns: convert number[] to Float32 BLOB
           setClauses.push(`"${field}" = ?`);
@@ -533,11 +536,14 @@ export function translateUpdate(
       if (value === undefined) {
         setClauses.push(`"${field}" = ?`);
         params.push(null);
+      } else if (blobColumns.has(field) && value instanceof Float32Array) {
+        setClauses.push(`"${field}" = ?`);
+        params.push(value.length === 0 ? null : embeddingToBlob(value));
       } else if (blobColumns.has(field) && Array.isArray(value)) {
         // BLOB columns: convert number[] to Float32 BLOB
         setClauses.push(`"${field}" = ?`);
         params.push(embeddingToBlob(value as number[]));
-      } else if (jsonColumns.has(field) || (typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date))) {
+      } else if (jsonColumns.has(field) || (typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date) && !(value instanceof Float32Array))) {
         setClauses.push(`"${field}" = ?`);
         params.push(toJson(value));
       } else if (Array.isArray(value)) {

@@ -10,6 +10,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { getVectorStoreManager } from '@/lib/embedding/vector-store';
 import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-indices.repository';
+import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { logger } from '@/lib/logger';
 import type { EmbeddingGeneratePayload } from '../queue-service';
 
@@ -299,6 +300,10 @@ async function handleMountChunkEmbedding(
     );
 
     await repos.docMountChunks.updateEmbedding(chunk.id, embeddingResult.embedding);
+
+    // Invalidate the in-memory cache for this mount point so the next
+    // document search reloads fresh chunks.
+    invalidateMountPoint(chunk.mountPointId);
 
     await repos.embeddingStatus.markAsEmbedded(
       'MOUNT_CHUNK',

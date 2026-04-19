@@ -26,8 +26,8 @@ export interface HelpDocument {
  * A help document with its embedding vector (for search operations)
  */
 export interface HelpDocumentWithEmbedding extends HelpDocument {
-  /** Embedding vector (Float32 array from DB) */
-  embedding: number[]
+  /** Unit-length embedding vector (Float32Array hydrated from BLOB) */
+  embedding: Float32Array
 }
 
 /**

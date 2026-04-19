@@ -140,7 +140,7 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
    * @param id The document ID
    * @param embedding The new embedding vector
    */
-  async updateEmbedding(id: string, embedding: number[]): Promise<void> {
+  async updateEmbedding(id: string, embedding: Float32Array): Promise<void> {
     await this.safeQuery(
       async () => {
         const updated = await this._update(id, {
@@ -218,7 +218,7 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
       async () => {
         const allDocs = await this._findAll();
         return allDocs.filter(
-          doc => doc.embedding != null && Array.isArray(doc.embedding) && doc.embedding.length > 0
+          doc => doc.embedding != null && doc.embedding.length > 0
         );
       },
       'Error finding help docs with embeddings',

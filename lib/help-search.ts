@@ -82,7 +82,7 @@ export class HelpSearch {
    * @param limit - Maximum number of results to return (default: 5)
    * @returns Array of search results sorted by similarity score (highest first)
    */
-  async search(queryEmbedding: number[], limit: number = 5): Promise<HelpSearchResult[]> {
+  async search(queryEmbedding: Float32Array, limit: number = 5): Promise<HelpSearchResult[]> {
     const repos = getRepositories()
     const embeddedDocs = await repos.helpDocs.findAllWithEmbeddings()
 
@@ -95,7 +95,7 @@ export class HelpSearch {
     const results: HelpSearchResult[] = []
 
     for (const doc of embeddedDocs) {
-      if (!doc.embedding || !Array.isArray(doc.embedding) || doc.embedding.length === 0) {
+      if (!doc.embedding || doc.embedding.length === 0) {
         continue
       }
 

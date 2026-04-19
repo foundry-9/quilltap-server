@@ -36,6 +36,7 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
 
 import { searchDocumentChunks } from '@/lib/mount-index/document-search'
 import { getRepositories } from '@/lib/repositories/factory'
+import { invalidateAll as invalidateMountChunkCache } from '@/lib/mount-index/mount-chunk-cache'
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
 
@@ -92,6 +93,9 @@ function makeRepos(overrides: Record<string, unknown> = {}) {
 describe('searchDocumentChunks', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    // Cache persists across tests in the same process — reset so each test
+    // starts with an empty mount-chunk map.
+    invalidateMountChunkCache()
   })
 
   it('returns empty array when there are no enabled mount points', async () => {

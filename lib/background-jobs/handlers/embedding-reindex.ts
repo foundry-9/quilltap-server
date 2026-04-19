@@ -66,6 +66,11 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     throw new Error(`Embedding profile not found: ${payload.profileId}`);
   }
 
+  // Drop the document mount chunk cache — every stored embedding is about
+  // to be regenerated.
+  const { invalidateAll } = await import('@/lib/mount-index/mount-chunk-cache');
+  invalidateAll();
+
   // Cancel any stale EMBEDDING_GENERATE jobs from a previous run so they
   // don't compete with the fresh ones we're about to enqueue.
   const cancelledCount = await repos.backgroundJobs.cancelByType('EMBEDDING_GENERATE');

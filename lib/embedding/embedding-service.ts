@@ -14,11 +14,15 @@ import { isLocalEmbeddingProvider } from '@quilltap/plugin-types'
 import type { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/schemas/types'
 
 /**
- * Result of an embedding operation
+ * Result of an embedding operation.
+ *
+ * The embedding is always a unit vector (L2-normalised) so downstream cosine
+ * similarity reduces to a single dot product. Stored as Float32Array for
+ * compact memory and fast iteration.
  */
 export interface EmbeddingResult {
-  /** The embedding vector */
-  embedding: number[]
+  /** The embedding vector — unit-length Float32Array */
+  embedding: Float32Array
   /** The model used */
   model: string
   /** Number of dimensions */
@@ -134,7 +138,7 @@ async function generateApiEmbedding(
   )
 
   return {
-    embedding: result.embedding,
+    embedding: toUnitVector(result.embedding),
     model: result.model,
     dimensions: result.dimensions,
     provider: providerName,
@@ -188,7 +192,7 @@ async function generateBuiltinEmbedding(
 
 
     return {
-      embedding: result.embedding,
+      embedding: toUnitVector(result.embedding),
       model: result.model,
       dimensions: result.dimensions,
       provider: 'BUILTIN',
@@ -347,26 +351,55 @@ export async function prepareForSearch(
 }
 
 /**
- * Calculate cosine similarity between two embedding vectors
+ * Normalise a vector in place to unit length (L2). If the vector is all zeros,
+ * it is returned unchanged. Accepts either Float32Array or number[] input;
+ * always returns Float32Array.
+ *
+ * All embeddings produced by `generateEmbeddingForUser` and stored by the
+ * `normalize-embeddings-unit-vectors-v1` migration are unit vectors, which
+ * lets `cosineSimilarity` skip norm computation.
  */
-export function cosineSimilarity(a: number[], b: number[]): number {
+export function normalizeVector(v: Float32Array): Float32Array {
+  let norm = 0
+  for (let i = 0; i < v.length; i++) {
+    norm += v[i] * v[i]
+  }
+  if (norm === 0) return v
+  const inv = 1 / Math.sqrt(norm)
+  for (let i = 0; i < v.length; i++) {
+    v[i] = v[i] * inv
+  }
+  return v
+}
+
+/**
+ * Convert an arbitrary embedding (number[] or Float32Array) to a fresh
+ * unit-length Float32Array. Does not mutate the input.
+ */
+function toUnitVector(v: ArrayLike<number>): Float32Array {
+  const out = v instanceof Float32Array ? new Float32Array(v) : new Float32Array(Array.from(v))
+  return normalizeVector(out)
+}
+
+/**
+ * Calculate cosine similarity between two embedding vectors.
+ *
+ * Assumes both inputs are unit-length (guaranteed by `generateEmbeddingForUser`
+ * and the `normalize-embeddings-unit-vectors-v1` migration), so the result is
+ * just the dot product. Accepts any ArrayLike<number>; Float32Array is
+ * preferred for speed and memory.
+ */
+export function cosineSimilarity(a: ArrayLike<number>, b: ArrayLike<number>): number {
   if (a.length !== b.length) {
     throw new Error('Vectors must have the same length')
   }
 
   let dotProduct = 0
-  let normA = 0
-  let normB = 0
-
   for (let i = 0; i < a.length; i++) {
     dotProduct += a[i] * b[i]
-    normA += a[i] * a[i]
-    normB += b[i] * b[i]
   }
 
-  if (normA === 0 || normB === 0) return 0
-
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
+  return dotProduct
 }
 
 /**

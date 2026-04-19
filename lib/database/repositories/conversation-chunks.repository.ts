@@ -186,7 +186,7 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
       async () => {
         const allChunks = await this._findAll();
         return allChunks.filter(
-          chunk => chunk.embedding != null && Array.isArray(chunk.embedding) && chunk.embedding.length > 0
+          chunk => chunk.embedding != null && chunk.embedding.length > 0
         );
       },
       'Error finding chunks with embeddings',
@@ -219,7 +219,7 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
    * @param id The chunk ID
    * @param embedding The new embedding vector
    */
-  async updateEmbedding(id: string, embedding: number[]): Promise<void> {
+  async updateEmbedding(id: string, embedding: Float32Array): Promise<void> {
     await this.safeQuery(
       async () => {
         const updated = await this._update(id, {

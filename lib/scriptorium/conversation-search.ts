@@ -37,7 +37,7 @@ export interface ConversationSearchOptions {
  * against the query embedding, and returns ranked results with conversation titles.
  */
 export async function searchConversationChunks(
-  queryEmbedding: number[],
+  queryEmbedding: Float32Array,
   options: ConversationSearchOptions
 ): Promise<ConversationSearchResult[]> {
   const repos = getRepositories()

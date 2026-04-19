@@ -10,6 +10,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { extractInterCharacterMemoryFromMessage } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveMaxTokens } from '@/lib/llm/model-context-data';
+import type { Pronouns } from '@/lib/schemas/character.types';
 import { logger } from '@/lib/logger';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import type { InterCharacterMemoryPayload } from '../queue-service';
@@ -85,8 +86,8 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
     job.userId,
     uncensoredFallback,
     payload.chatId,
-    undefined, // observerPronouns
-    undefined, // subjectPronouns
+    (payload.observerCharacterPronouns as Pronouns | null | undefined) ?? undefined,
+    (payload.subjectCharacterPronouns as Pronouns | null | undefined) ?? undefined,
     resolvedMaxTokens
   );
 

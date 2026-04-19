@@ -30,12 +30,20 @@ export interface MemoryExtractionPayload {
   chatId: string;
   characterId: string;
   characterName: string;
+  /** Character pronouns (JSON-serialised structure or null). */
+  characterPronouns?: unknown;
   userMessage: string;
   assistantMessage: string;
   sourceMessageId: string;
   connectionProfileId: string;
+  /** User character name (for "X says:" labelling in extraction prompts) */
+  userCharacterName?: string;
   /** User character ID - who the memory is about (the user-controlled character) */
   userCharacterId?: string;
+  /** All character names in a multi-character chat (for clear identity context) */
+  allCharacterNames?: string[];
+  /** Map of character name -> pronouns for multi-character chats */
+  allCharacterPronouns?: Record<string, unknown>;
 }
 
 /**
@@ -45,9 +53,11 @@ export interface InterCharacterMemoryPayload {
   chatId: string;
   observerCharacterId: string;
   observerCharacterName: string;
+  observerCharacterPronouns?: unknown;
   observerMessage: string;
   subjectCharacterId: string;
   subjectCharacterName: string;
+  subjectCharacterPronouns?: unknown;
   subjectMessage: string;
   sourceMessageId: string;
   connectionProfileId: string;

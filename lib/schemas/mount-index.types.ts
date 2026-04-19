@@ -104,7 +104,14 @@ export const DocMountChunkSchema = z.object({
   content: z.string(),
   tokenCount: z.number().int().min(0),
   headingContext: z.string().nullable().optional(),  // What section heading this chunk is under
-  embedding: z.array(z.number()).nullable().optional(),  // Float32 BLOB
+  embedding: z.union([
+    z.instanceof(Float32Array),
+    z.array(z.number()).transform((arr): Float32Array => new Float32Array(arr)),
+    z.instanceof(Buffer).transform((buf): Float32Array => {
+      const view = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / Float32Array.BYTES_PER_ELEMENT);
+      return new Float32Array(view);
+    }),
+  ]).nullable().optional(),  // Unit-length Float32 BLOB on disk
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

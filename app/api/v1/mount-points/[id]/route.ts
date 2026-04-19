@@ -63,7 +63,7 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Compute embedded chunk count
       const allChunks = await repos.docMountChunks.findByMountPointId(id);
       const embeddedChunkCount = allChunks.filter(
-        c => c.embedding != null && Array.isArray(c.embedding) && c.embedding.length > 0
+        c => c.embedding != null && c.embedding.length > 0
       ).length;
 
       logger.debug('[Mount Points v1] Found mount point', {
