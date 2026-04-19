@@ -71,9 +71,9 @@ function serverURLFromOptions(options) {
 var SDK_METADATA = {
   language: "typescript",
   openapiDocVersion: "1.0.0",
-  sdkVersion: "0.12.8",
+  sdkVersion: "0.12.15",
   genVersion: "2.879.1",
-  userAgent: "speakeasy-sdk/typescript 0.12.8 2.879.1 1.0.0 @openrouter/sdk"
+  userAgent: "speakeasy-sdk/typescript 0.12.15 2.879.1 1.0.0 @openrouter/sdk"
 };
 
 // node_modules/@openrouter/sdk/esm/lib/http.js
@@ -5461,7 +5461,8 @@ var OutputModality = {
   Embeddings: "embeddings",
   Audio: "audio",
   Video: "video",
-  Rerank: "rerank"
+  Rerank: "rerank",
+  Tts: "tts"
 };
 var OutputModality$inboundSchema = inboundSchema(OutputModality);
 
@@ -6165,13 +6166,13 @@ var OpenAIResponsesTruncation = {
 var OpenAIResponsesTruncation$outboundSchema = outboundSchema(OpenAIResponsesTruncation);
 
 // node_modules/@openrouter/sdk/esm/models/openresponsescreatedevent.js
-var z208 = __toESM(require("zod/v4"), 1);
+var z209 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/openresponsesresult.js
-var z207 = __toESM(require("zod/v4"), 1);
+var z208 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/outputitems.js
-var z197 = __toESM(require("zod/v4"), 1);
+var z198 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/outputapplypatchservertoolitem.js
 var z182 = __toESM(require("zod/v4"), 1);
@@ -6290,6 +6291,7 @@ var OutputImageGenerationServerToolItem$inboundSchema = z189.object({
   id: z189.string().optional(),
   imageB64: z189.string().optional(),
   imageUrl: z189.string().optional(),
+  result: z189.nullable(z189.string()).optional(),
   revisedPrompt: z189.string().optional(),
   status: ToolCallStatus$inboundSchema,
   type: z189.literal("openrouter:image_generation")
@@ -6420,8 +6422,18 @@ var OutputReasoningItem$inboundSchema = z193.object({
   });
 });
 
-// node_modules/@openrouter/sdk/esm/models/outputtexteditorservertoolitem.js
+// node_modules/@openrouter/sdk/esm/models/outputsearchmodelsservertoolitem.js
 var z194 = __toESM(require("zod/v4"), 1);
+var OutputSearchModelsServerToolItem$inboundSchema = z194.object({
+  arguments: z194.string().optional(),
+  id: z194.string().optional(),
+  query: z194.string().optional(),
+  status: ToolCallStatus$inboundSchema,
+  type: z194.literal("openrouter:experimental__search_models")
+});
+
+// node_modules/@openrouter/sdk/esm/models/outputtexteditorservertoolitem.js
+var z195 = __toESM(require("zod/v4"), 1);
 var Command = {
   View: "view",
   Create: "create",
@@ -6429,47 +6441,48 @@ var Command = {
   Insert: "insert"
 };
 var Command$inboundSchema = inboundSchema(Command);
-var OutputTextEditorServerToolItem$inboundSchema = z194.object({
+var OutputTextEditorServerToolItem$inboundSchema = z195.object({
   command: Command$inboundSchema.optional(),
-  filePath: z194.string().optional(),
-  id: z194.string().optional(),
+  filePath: z195.string().optional(),
+  id: z195.string().optional(),
   status: ToolCallStatus$inboundSchema,
-  type: z194.literal("openrouter:text_editor")
+  type: z195.literal("openrouter:text_editor")
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputtoolsearchservertoolitem.js
-var z195 = __toESM(require("zod/v4"), 1);
-var OutputToolSearchServerToolItem$inboundSchema = z195.object({
-  id: z195.string().optional(),
-  query: z195.string().optional(),
+var z196 = __toESM(require("zod/v4"), 1);
+var OutputToolSearchServerToolItem$inboundSchema = z196.object({
+  id: z196.string().optional(),
+  query: z196.string().optional(),
   status: ToolCallStatus$inboundSchema,
-  type: z195.literal("openrouter:tool_search")
+  type: z196.literal("openrouter:tool_search")
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputwebfetchservertoolitem.js
-var z196 = __toESM(require("zod/v4"), 1);
-var OutputWebFetchServerToolItem$inboundSchema = z196.object({
-  content: z196.string().optional(),
-  id: z196.string().optional(),
+var z197 = __toESM(require("zod/v4"), 1);
+var OutputWebFetchServerToolItem$inboundSchema = z197.object({
+  content: z197.string().optional(),
+  id: z197.string().optional(),
   status: ToolCallStatus$inboundSchema,
-  title: z196.string().optional(),
-  type: z196.literal("openrouter:web_fetch"),
-  url: z196.string().optional()
+  title: z197.string().optional(),
+  type: z197.literal("openrouter:web_fetch"),
+  url: z197.string().optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/outputitems.js
 var OutputItems$inboundSchema = discriminatedUnion("type", {
   code_interpreter_call: OutputCodeInterpreterCallItem$inboundSchema,
   computer_call: OutputComputerCallItem$inboundSchema,
-  file_search_call: OutputFileSearchCallItem$inboundSchema.and(z197.object({ type: z197.literal("file_search_call") })),
-  function_call: OutputFunctionCallItem$inboundSchema.and(z197.object({ type: z197.literal("function_call") })),
-  image_generation_call: OutputImageGenerationCallItem$inboundSchema.and(z197.object({ type: z197.literal("image_generation_call") })),
+  file_search_call: OutputFileSearchCallItem$inboundSchema.and(z198.object({ type: z198.literal("file_search_call") })),
+  function_call: OutputFunctionCallItem$inboundSchema.and(z198.object({ type: z198.literal("function_call") })),
+  image_generation_call: OutputImageGenerationCallItem$inboundSchema.and(z198.object({ type: z198.literal("image_generation_call") })),
   message: OutputMessageItem$inboundSchema,
   ["openrouter:apply_patch"]: OutputApplyPatchServerToolItem$inboundSchema,
   ["openrouter:bash"]: OutputBashServerToolItem$inboundSchema,
   ["openrouter:browser_use"]: OutputBrowserUseServerToolItem$inboundSchema,
   ["openrouter:code_interpreter"]: OutputCodeInterpreterServerToolItem$inboundSchema,
-  ["openrouter:datetime"]: OutputDatetimeItem$inboundSchema.and(z197.object({ type: z197.literal("openrouter:datetime") })),
+  ["openrouter:datetime"]: OutputDatetimeItem$inboundSchema.and(z198.object({ type: z198.literal("openrouter:datetime") })),
+  ["openrouter:experimental__search_models"]: OutputSearchModelsServerToolItem$inboundSchema,
   ["openrouter:file_search"]: OutputFileSearchServerToolItem$inboundSchema,
   ["openrouter:image_generation"]: OutputImageGenerationServerToolItem$inboundSchema,
   ["openrouter:mcp"]: OutputMcpServerToolItem$inboundSchema,
@@ -6477,74 +6490,43 @@ var OutputItems$inboundSchema = discriminatedUnion("type", {
   ["openrouter:text_editor"]: OutputTextEditorServerToolItem$inboundSchema,
   ["openrouter:tool_search"]: OutputToolSearchServerToolItem$inboundSchema,
   ["openrouter:web_fetch"]: OutputWebFetchServerToolItem$inboundSchema,
-  ["openrouter:web_search"]: OutputWebSearchServerToolItem$inboundSchema.and(z197.object({ type: z197.literal("openrouter:web_search") })),
+  ["openrouter:web_search"]: OutputWebSearchServerToolItem$inboundSchema.and(z198.object({ type: z198.literal("openrouter:web_search") })),
   reasoning: OutputReasoningItem$inboundSchema,
-  web_search_call: OutputWebSearchCallItem$inboundSchema.and(z197.object({ type: z197.literal("web_search_call") }))
+  web_search_call: OutputWebSearchCallItem$inboundSchema.and(z198.object({ type: z198.literal("web_search_call") }))
 });
 
 // node_modules/@openrouter/sdk/esm/models/preview20250311websearchservertool.js
-var z199 = __toESM(require("zod/v4"), 1);
+var z200 = __toESM(require("zod/v4"), 1);
 
 // node_modules/@openrouter/sdk/esm/models/previewwebsearchuserlocation.js
-var z198 = __toESM(require("zod/v4"), 1);
+var z199 = __toESM(require("zod/v4"), 1);
 var PreviewWebSearchUserLocationType = {
   Approximate: "approximate"
 };
-var PreviewWebSearchUserLocationType$inboundSchema = z198.enum(PreviewWebSearchUserLocationType);
+var PreviewWebSearchUserLocationType$inboundSchema = z199.enum(PreviewWebSearchUserLocationType);
 var PreviewWebSearchUserLocationType$outboundSchema = PreviewWebSearchUserLocationType$inboundSchema;
-var PreviewWebSearchUserLocation$inboundSchema = z198.object({
-  city: z198.nullable(z198.string()).optional(),
-  country: z198.nullable(z198.string()).optional(),
-  region: z198.nullable(z198.string()).optional(),
-  timezone: z198.nullable(z198.string()).optional(),
+var PreviewWebSearchUserLocation$inboundSchema = z199.object({
+  city: z199.nullable(z199.string()).optional(),
+  country: z199.nullable(z199.string()).optional(),
+  region: z199.nullable(z199.string()).optional(),
+  timezone: z199.nullable(z199.string()).optional(),
   type: PreviewWebSearchUserLocationType$inboundSchema
 });
-var PreviewWebSearchUserLocation$outboundSchema = z198.object({
-  city: z198.nullable(z198.string()).optional(),
-  country: z198.nullable(z198.string()).optional(),
-  region: z198.nullable(z198.string()).optional(),
-  timezone: z198.nullable(z198.string()).optional(),
+var PreviewWebSearchUserLocation$outboundSchema = z199.object({
+  city: z199.nullable(z199.string()).optional(),
+  country: z199.nullable(z199.string()).optional(),
+  region: z199.nullable(z199.string()).optional(),
+  timezone: z199.nullable(z199.string()).optional(),
   type: PreviewWebSearchUserLocationType$outboundSchema
 });
 
 // node_modules/@openrouter/sdk/esm/models/preview20250311websearchservertool.js
-var Preview20250311WebSearchServerTool$inboundSchema = z199.object({
-  engine: WebSearchEngineEnum$inboundSchema.optional(),
-  filters: z199.nullable(WebSearchDomainFilter$inboundSchema).optional(),
-  max_results: z199.int().optional(),
-  search_context_size: SearchContextSizeEnum$inboundSchema.optional(),
-  type: z199.literal("web_search_preview_2025_03_11"),
-  user_location: z199.nullable(PreviewWebSearchUserLocation$inboundSchema).optional()
-}).transform((v) => {
-  return remap(v, {
-    "max_results": "maxResults",
-    "search_context_size": "searchContextSize",
-    "user_location": "userLocation"
-  });
-});
-var Preview20250311WebSearchServerTool$outboundSchema = z199.object({
-  engine: WebSearchEngineEnum$outboundSchema.optional(),
-  filters: z199.nullable(WebSearchDomainFilter$outboundSchema).optional(),
-  maxResults: z199.int().optional(),
-  searchContextSize: SearchContextSizeEnum$outboundSchema.optional(),
-  type: z199.literal("web_search_preview_2025_03_11"),
-  userLocation: z199.nullable(PreviewWebSearchUserLocation$outboundSchema).optional()
-}).transform((v) => {
-  return remap(v, {
-    maxResults: "max_results",
-    searchContextSize: "search_context_size",
-    userLocation: "user_location"
-  });
-});
-
-// node_modules/@openrouter/sdk/esm/models/previewwebsearchservertool.js
-var z200 = __toESM(require("zod/v4"), 1);
-var PreviewWebSearchServerTool$inboundSchema = z200.object({
+var Preview20250311WebSearchServerTool$inboundSchema = z200.object({
   engine: WebSearchEngineEnum$inboundSchema.optional(),
   filters: z200.nullable(WebSearchDomainFilter$inboundSchema).optional(),
   max_results: z200.int().optional(),
   search_context_size: SearchContextSizeEnum$inboundSchema.optional(),
-  type: z200.literal("web_search_preview"),
+  type: z200.literal("web_search_preview_2025_03_11"),
   user_location: z200.nullable(PreviewWebSearchUserLocation$inboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
@@ -6553,12 +6535,12 @@ var PreviewWebSearchServerTool$inboundSchema = z200.object({
     "user_location": "userLocation"
   });
 });
-var PreviewWebSearchServerTool$outboundSchema = z200.object({
+var Preview20250311WebSearchServerTool$outboundSchema = z200.object({
   engine: WebSearchEngineEnum$outboundSchema.optional(),
   filters: z200.nullable(WebSearchDomainFilter$outboundSchema).optional(),
   maxResults: z200.int().optional(),
   searchContextSize: SearchContextSizeEnum$outboundSchema.optional(),
-  type: z200.literal("web_search_preview"),
+  type: z200.literal("web_search_preview_2025_03_11"),
   userLocation: z200.nullable(PreviewWebSearchUserLocation$outboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
@@ -6568,8 +6550,39 @@ var PreviewWebSearchServerTool$outboundSchema = z200.object({
   });
 });
 
-// node_modules/@openrouter/sdk/esm/models/responseserrorfield.js
+// node_modules/@openrouter/sdk/esm/models/previewwebsearchservertool.js
 var z201 = __toESM(require("zod/v4"), 1);
+var PreviewWebSearchServerTool$inboundSchema = z201.object({
+  engine: WebSearchEngineEnum$inboundSchema.optional(),
+  filters: z201.nullable(WebSearchDomainFilter$inboundSchema).optional(),
+  max_results: z201.int().optional(),
+  search_context_size: SearchContextSizeEnum$inboundSchema.optional(),
+  type: z201.literal("web_search_preview"),
+  user_location: z201.nullable(PreviewWebSearchUserLocation$inboundSchema).optional()
+}).transform((v) => {
+  return remap(v, {
+    "max_results": "maxResults",
+    "search_context_size": "searchContextSize",
+    "user_location": "userLocation"
+  });
+});
+var PreviewWebSearchServerTool$outboundSchema = z201.object({
+  engine: WebSearchEngineEnum$outboundSchema.optional(),
+  filters: z201.nullable(WebSearchDomainFilter$outboundSchema).optional(),
+  maxResults: z201.int().optional(),
+  searchContextSize: SearchContextSizeEnum$outboundSchema.optional(),
+  type: z201.literal("web_search_preview"),
+  userLocation: z201.nullable(PreviewWebSearchUserLocation$outboundSchema).optional()
+}).transform((v) => {
+  return remap(v, {
+    maxResults: "max_results",
+    searchContextSize: "search_context_size",
+    userLocation: "user_location"
+  });
+});
+
+// node_modules/@openrouter/sdk/esm/models/responseserrorfield.js
+var z202 = __toESM(require("zod/v4"), 1);
 var Code = {
   ServerError: "server_error",
   RateLimitExceeded: "rate_limit_exceeded",
@@ -6591,64 +6604,71 @@ var Code = {
   ImageFileNotFound: "image_file_not_found"
 };
 var Code$inboundSchema = inboundSchema(Code);
-var ResponsesErrorField$inboundSchema = z201.object({
+var ResponsesErrorField$inboundSchema = z202.object({
   code: Code$inboundSchema,
-  message: z201.string()
+  message: z202.string()
 });
 
 // node_modules/@openrouter/sdk/esm/models/shellservertool.js
-var z202 = __toESM(require("zod/v4"), 1);
-var ShellServerTool$inboundSchema = z202.object({
-  type: z202.literal("shell")
+var z203 = __toESM(require("zod/v4"), 1);
+var ShellServerTool$inboundSchema = z203.object({
+  type: z203.literal("shell")
 });
-var ShellServerTool$outboundSchema = z202.object({
-  type: z202.literal("shell")
+var ShellServerTool$outboundSchema = z203.object({
+  type: z203.literal("shell")
 });
 
 // node_modules/@openrouter/sdk/esm/models/storedprompttemplate.js
-var z203 = __toESM(require("zod/v4"), 1);
-var Variables$inboundSchema = z203.union([
+var z204 = __toESM(require("zod/v4"), 1);
+var Variables$inboundSchema = z204.union([
   InputText$inboundSchema,
   InputImage$inboundSchema,
   InputFile$inboundSchema,
-  z203.string()
+  z204.string()
 ]);
-var Variables$outboundSchema = z203.union([
+var Variables$outboundSchema = z204.union([
   InputText$outboundSchema,
   InputImage$outboundSchema,
   InputFile$outboundSchema,
-  z203.string()
+  z204.string()
 ]);
-var StoredPromptTemplate$inboundSchema = z203.object({
-  id: z203.string(),
-  variables: z203.nullable(z203.record(z203.string(), z203.union([
+var StoredPromptTemplate$inboundSchema = z204.object({
+  id: z204.string(),
+  variables: z204.nullable(z204.record(z204.string(), z204.union([
     InputText$inboundSchema,
     InputImage$inboundSchema,
     InputFile$inboundSchema,
-    z203.string()
+    z204.string()
   ]))).optional()
 });
-var StoredPromptTemplate$outboundSchema = z203.object({
-  id: z203.string(),
-  variables: z203.nullable(z203.record(z203.string(), z203.union([
+var StoredPromptTemplate$outboundSchema = z204.object({
+  id: z204.string(),
+  variables: z204.nullable(z204.record(z204.string(), z204.union([
     InputText$outboundSchema,
     InputImage$outboundSchema,
     InputFile$outboundSchema,
-    z203.string()
+    z204.string()
   ]))).optional()
 });
 
-// node_modules/@openrouter/sdk/esm/models/textconfig.js
-var z204 = __toESM(require("zod/v4"), 1);
-var TextConfigVerbosity = {
-  High: "high",
+// node_modules/@openrouter/sdk/esm/models/textextendedconfig.js
+var z205 = __toESM(require("zod/v4"), 1);
+var Verbosity = {
   Low: "low",
-  Medium: "medium"
+  Medium: "medium",
+  High: "high",
+  Xhigh: "xhigh",
+  Max: "max"
 };
-var TextConfigVerbosity$inboundSchema = inboundSchema(TextConfigVerbosity);
-var TextConfig$inboundSchema = z204.object({
+var Verbosity$inboundSchema = inboundSchema(Verbosity);
+var Verbosity$outboundSchema = outboundSchema(Verbosity);
+var TextExtendedConfig$inboundSchema = z205.object({
   format: Formats$inboundSchema.optional(),
-  verbosity: z204.nullable(TextConfigVerbosity$inboundSchema).optional()
+  verbosity: z205.nullable(Verbosity$inboundSchema).optional()
+});
+var TextExtendedConfig$outboundSchema = z205.object({
+  format: Formats$outboundSchema.optional(),
+  verbosity: z205.nullable(Verbosity$outboundSchema).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/truncation.js
@@ -6659,25 +6679,25 @@ var Truncation = {
 var Truncation$inboundSchema = inboundSchema(Truncation);
 
 // node_modules/@openrouter/sdk/esm/models/usage.js
-var z205 = __toESM(require("zod/v4"), 1);
-var InputTokensDetails$inboundSchema = z205.object({
-  cached_tokens: z205.int()
+var z206 = __toESM(require("zod/v4"), 1);
+var InputTokensDetails$inboundSchema = z206.object({
+  cached_tokens: z206.int()
 }).transform((v) => {
   return remap(v, {
     "cached_tokens": "cachedTokens"
   });
 });
-var OutputTokensDetails$inboundSchema = z205.object({
-  reasoning_tokens: z205.int()
+var OutputTokensDetails$inboundSchema = z206.object({
+  reasoning_tokens: z206.int()
 }).transform((v) => {
   return remap(v, {
     "reasoning_tokens": "reasoningTokens"
   });
 });
-var CostDetails$inboundSchema = z205.object({
-  upstream_inference_cost: z205.nullable(z205.number()).optional(),
-  upstream_inference_input_cost: z205.number(),
-  upstream_inference_output_cost: z205.number()
+var CostDetails$inboundSchema = z206.object({
+  upstream_inference_cost: z206.nullable(z206.number()).optional(),
+  upstream_inference_input_cost: z206.number(),
+  upstream_inference_output_cost: z206.number()
 }).transform((v) => {
   return remap(v, {
     "upstream_inference_cost": "upstreamInferenceCost",
@@ -6685,15 +6705,15 @@ var CostDetails$inboundSchema = z205.object({
     "upstream_inference_output_cost": "upstreamInferenceOutputCost"
   });
 });
-var Usage$inboundSchema = z205.object({
-  input_tokens: z205.int(),
-  input_tokens_details: z205.lazy(() => InputTokensDetails$inboundSchema),
-  output_tokens: z205.int(),
-  output_tokens_details: z205.lazy(() => OutputTokensDetails$inboundSchema),
-  total_tokens: z205.int(),
-  cost: z205.nullable(z205.number()).optional(),
-  cost_details: z205.lazy(() => CostDetails$inboundSchema).optional(),
-  is_byok: z205.boolean().optional()
+var Usage$inboundSchema = z206.object({
+  input_tokens: z206.int(),
+  input_tokens_details: z206.lazy(() => InputTokensDetails$inboundSchema),
+  output_tokens: z206.int(),
+  output_tokens_details: z206.lazy(() => OutputTokensDetails$inboundSchema),
+  total_tokens: z206.int(),
+  cost: z206.nullable(z206.number()).optional(),
+  cost_details: z206.lazy(() => CostDetails$inboundSchema).optional(),
+  is_byok: z206.boolean().optional()
 }).transform((v) => {
   return remap(v, {
     "input_tokens": "inputTokens",
@@ -6707,14 +6727,14 @@ var Usage$inboundSchema = z205.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/websearchservertool.js
-var z206 = __toESM(require("zod/v4"), 1);
-var WebSearchServerTool$inboundSchema = z206.object({
+var z207 = __toESM(require("zod/v4"), 1);
+var WebSearchServerTool$inboundSchema = z207.object({
   engine: WebSearchEngineEnum$inboundSchema.optional(),
-  filters: z206.nullable(WebSearchDomainFilter$inboundSchema).optional(),
-  max_results: z206.int().optional(),
+  filters: z207.nullable(WebSearchDomainFilter$inboundSchema).optional(),
+  max_results: z207.int().optional(),
   search_context_size: SearchContextSizeEnum$inboundSchema.optional(),
-  type: z206.literal("web_search_2025_08_26"),
-  user_location: z206.nullable(WebSearchUserLocation$inboundSchema).optional()
+  type: z207.literal("web_search_2025_08_26"),
+  user_location: z207.nullable(WebSearchUserLocation$inboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     "max_results": "maxResults",
@@ -6722,13 +6742,13 @@ var WebSearchServerTool$inboundSchema = z206.object({
     "user_location": "userLocation"
   });
 });
-var WebSearchServerTool$outboundSchema = z206.object({
+var WebSearchServerTool$outboundSchema = z207.object({
   engine: WebSearchEngineEnum$outboundSchema.optional(),
-  filters: z206.nullable(WebSearchDomainFilter$outboundSchema).optional(),
-  maxResults: z206.int().optional(),
+  filters: z207.nullable(WebSearchDomainFilter$outboundSchema).optional(),
+  maxResults: z207.int().optional(),
   searchContextSize: SearchContextSizeEnum$outboundSchema.optional(),
-  type: z206.literal("web_search_2025_08_26"),
-  userLocation: z206.nullable(WebSearchUserLocation$outboundSchema).optional()
+  type: z207.literal("web_search_2025_08_26"),
+  userLocation: z207.nullable(WebSearchUserLocation$outboundSchema).optional()
 }).transform((v) => {
   return remap(v, {
     maxResults: "max_results",
@@ -6741,16 +6761,16 @@ var WebSearchServerTool$outboundSchema = z206.object({
 var OpenResponsesResultObject = {
   Response: "response"
 };
-var OpenResponsesResultObject$inboundSchema = z207.enum(OpenResponsesResultObject);
-var OpenResponsesResultToolFunction$inboundSchema = z207.object({
-  description: z207.nullable(z207.string()).optional(),
-  name: z207.string(),
-  parameters: z207.nullable(z207.record(z207.string(), z207.nullable(z207.any()))),
-  strict: z207.nullable(z207.boolean()).optional(),
-  type: z207.literal("function")
+var OpenResponsesResultObject$inboundSchema = z208.enum(OpenResponsesResultObject);
+var OpenResponsesResultToolFunction$inboundSchema = z208.object({
+  description: z208.nullable(z208.string()).optional(),
+  name: z208.string(),
+  parameters: z208.nullable(z208.record(z208.string(), z208.nullable(z208.any()))),
+  strict: z208.nullable(z208.boolean()).optional(),
+  type: z208.literal("function")
 });
 var OpenResponsesResultToolUnion$inboundSchema = discriminatedUnion("type", {
-  function: z207.lazy(() => OpenResponsesResultToolFunction$inboundSchema),
+  function: z208.lazy(() => OpenResponsesResultToolFunction$inboundSchema),
   web_search_preview: PreviewWebSearchServerTool$inboundSchema,
   web_search_preview_2025_03_11: Preview20250311WebSearchServerTool$inboundSchema,
   web_search: LegacyWebSearchServerTool$inboundSchema,
@@ -6765,37 +6785,37 @@ var OpenResponsesResultToolUnion$inboundSchema = discriminatedUnion("type", {
   apply_patch: ApplyPatchServerTool$inboundSchema,
   custom: CustomTool$inboundSchema
 });
-var OpenResponsesResult$inboundSchema = z207.object({
-  background: z207.nullable(z207.boolean()).optional(),
-  completed_at: z207.nullable(z207.int()),
-  created_at: z207.int(),
-  error: z207.nullable(ResponsesErrorField$inboundSchema),
-  frequency_penalty: z207.nullable(z207.number()),
-  id: z207.string(),
-  incomplete_details: z207.nullable(IncompleteDetails$inboundSchema),
-  instructions: z207.nullable(BaseInputsUnion$inboundSchema),
-  max_output_tokens: z207.nullable(z207.int()).optional(),
-  max_tool_calls: z207.nullable(z207.int()).optional(),
-  metadata: z207.nullable(z207.record(z207.string(), z207.string())),
-  model: z207.string(),
+var OpenResponsesResult$inboundSchema = z208.object({
+  background: z208.nullable(z208.boolean()).optional(),
+  completed_at: z208.nullable(z208.int()),
+  created_at: z208.int(),
+  error: z208.nullable(ResponsesErrorField$inboundSchema),
+  frequency_penalty: z208.nullable(z208.number()),
+  id: z208.string(),
+  incomplete_details: z208.nullable(IncompleteDetails$inboundSchema),
+  instructions: z208.nullable(BaseInputsUnion$inboundSchema),
+  max_output_tokens: z208.nullable(z208.int()).optional(),
+  max_tool_calls: z208.nullable(z208.int()).optional(),
+  metadata: z208.nullable(z208.record(z208.string(), z208.string())),
+  model: z208.string(),
   object: OpenResponsesResultObject$inboundSchema,
-  output: z207.array(OutputItems$inboundSchema),
-  output_text: z207.string().optional(),
-  parallel_tool_calls: z207.boolean(),
-  presence_penalty: z207.nullable(z207.number()),
-  previous_response_id: z207.nullable(z207.string()).optional(),
-  prompt: z207.nullable(StoredPromptTemplate$inboundSchema).optional(),
-  prompt_cache_key: z207.nullable(z207.string()).optional(),
-  reasoning: z207.nullable(BaseReasoningConfig$inboundSchema).optional(),
-  safety_identifier: z207.nullable(z207.string()).optional(),
-  service_tier: z207.nullable(z207.string()).optional(),
+  output: z208.array(OutputItems$inboundSchema),
+  output_text: z208.string().optional(),
+  parallel_tool_calls: z208.boolean(),
+  presence_penalty: z208.nullable(z208.number()),
+  previous_response_id: z208.nullable(z208.string()).optional(),
+  prompt: z208.nullable(StoredPromptTemplate$inboundSchema).optional(),
+  prompt_cache_key: z208.nullable(z208.string()).optional(),
+  reasoning: z208.nullable(BaseReasoningConfig$inboundSchema).optional(),
+  safety_identifier: z208.nullable(z208.string()).optional(),
+  service_tier: z208.nullable(z208.string()).optional(),
   status: OpenAIResponsesResponseStatus$inboundSchema,
-  store: z207.boolean().optional(),
-  temperature: z207.nullable(z207.number()),
-  text: TextConfig$inboundSchema.optional(),
+  store: z208.boolean().optional(),
+  temperature: z208.nullable(z208.number()),
+  text: TextExtendedConfig$inboundSchema.optional(),
   tool_choice: OpenAIResponsesToolChoiceUnion$inboundSchema,
-  tools: z207.array(discriminatedUnion("type", {
-    function: z207.lazy(() => OpenResponsesResultToolFunction$inboundSchema),
+  tools: z208.array(discriminatedUnion("type", {
+    function: z208.lazy(() => OpenResponsesResultToolFunction$inboundSchema),
     web_search_preview: PreviewWebSearchServerTool$inboundSchema,
     web_search_preview_2025_03_11: Preview20250311WebSearchServerTool$inboundSchema,
     web_search: LegacyWebSearchServerTool$inboundSchema,
@@ -6810,11 +6830,11 @@ var OpenResponsesResult$inboundSchema = z207.object({
     apply_patch: ApplyPatchServerTool$inboundSchema,
     custom: CustomTool$inboundSchema
   })),
-  top_logprobs: z207.nullable(z207.int()).optional(),
-  top_p: z207.nullable(z207.number()),
-  truncation: z207.nullable(Truncation$inboundSchema).optional(),
-  usage: z207.nullable(Usage$inboundSchema).optional(),
-  user: z207.nullable(z207.string()).optional()
+  top_logprobs: z208.nullable(z208.int()).optional(),
+  top_p: z208.nullable(z208.number()),
+  truncation: z208.nullable(Truncation$inboundSchema).optional(),
+  usage: z208.nullable(Usage$inboundSchema).optional(),
+  user: z208.nullable(z208.string()).optional()
 }).transform((v) => {
   return remap(v, {
     "completed_at": "completedAt",
@@ -6837,10 +6857,10 @@ var OpenResponsesResult$inboundSchema = z207.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/openresponsescreatedevent.js
-var OpenResponsesCreatedEvent$inboundSchema = z208.object({
+var OpenResponsesCreatedEvent$inboundSchema = z209.object({
   response: OpenResponsesResult$inboundSchema,
-  sequence_number: z208.int(),
-  type: z208.literal("response.created")
+  sequence_number: z209.int(),
+  type: z209.literal("response.created")
 }).transform((v) => {
   return remap(v, {
     "sequence_number": "sequenceNumber"
@@ -6848,11 +6868,11 @@ var OpenResponsesCreatedEvent$inboundSchema = z208.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/openresponsesinprogressevent.js
-var z209 = __toESM(require("zod/v4"), 1);
-var OpenResponsesInProgressEvent$inboundSchema = z209.object({
+var z210 = __toESM(require("zod/v4"), 1);
+var OpenResponsesInProgressEvent$inboundSchema = z210.object({
   response: OpenResponsesResult$inboundSchema,
-  sequence_number: z209.int(),
-  type: z209.literal("response.in_progress")
+  sequence_number: z210.int(),
+  type: z210.literal("response.in_progress")
 }).transform((v) => {
   return remap(v, {
     "sequence_number": "sequenceNumber"
@@ -6867,31 +6887,31 @@ var OutputModalityEnum = {
 var OutputModalityEnum$outboundSchema = outboundSchema(OutputModalityEnum);
 
 // node_modules/@openrouter/sdk/esm/models/payloadtoolargeresponseerrordata.js
-var z210 = __toESM(require("zod/v4"), 1);
-var PayloadTooLargeResponseErrorData$inboundSchema = z210.object({
-  code: z210.int(),
-  message: z210.string(),
-  metadata: z210.nullable(z210.record(z210.string(), z210.nullable(z210.any()))).optional()
-});
-
-// node_modules/@openrouter/sdk/esm/models/paymentrequiredresponseerrordata.js
 var z211 = __toESM(require("zod/v4"), 1);
-var PaymentRequiredResponseErrorData$inboundSchema = z211.object({
+var PayloadTooLargeResponseErrorData$inboundSchema = z211.object({
   code: z211.int(),
   message: z211.string(),
   metadata: z211.nullable(z211.record(z211.string(), z211.nullable(z211.any()))).optional()
 });
 
-// node_modules/@openrouter/sdk/esm/models/provideroverloadedresponseerrordata.js
+// node_modules/@openrouter/sdk/esm/models/paymentrequiredresponseerrordata.js
 var z212 = __toESM(require("zod/v4"), 1);
-var ProviderOverloadedResponseErrorData$inboundSchema = z212.object({
+var PaymentRequiredResponseErrorData$inboundSchema = z212.object({
   code: z212.int(),
   message: z212.string(),
   metadata: z212.nullable(z212.record(z212.string(), z212.nullable(z212.any()))).optional()
 });
 
-// node_modules/@openrouter/sdk/esm/models/providerresponse.js
+// node_modules/@openrouter/sdk/esm/models/provideroverloadedresponseerrordata.js
 var z213 = __toESM(require("zod/v4"), 1);
+var ProviderOverloadedResponseErrorData$inboundSchema = z213.object({
+  code: z213.int(),
+  message: z213.string(),
+  metadata: z213.nullable(z213.record(z213.string(), z213.nullable(z213.any()))).optional()
+});
+
+// node_modules/@openrouter/sdk/esm/models/providerresponse.js
+var z214 = __toESM(require("zod/v4"), 1);
 var ProviderResponseProviderName = {
   AnyScale: "AnyScale",
   Atoma: "Atoma",
@@ -7002,14 +7022,14 @@ var ProviderResponseProviderName = {
   FakeProvider: "FakeProvider"
 };
 var ProviderResponseProviderName$inboundSchema = inboundSchema(ProviderResponseProviderName);
-var ProviderResponse$inboundSchema = z213.object({
-  endpoint_id: z213.string().optional(),
-  id: z213.string().optional(),
-  is_byok: z213.boolean().optional(),
-  latency: z213.number().optional(),
-  model_permaslug: z213.string().optional(),
+var ProviderResponse$inboundSchema = z214.object({
+  endpoint_id: z214.string().optional(),
+  id: z214.string().optional(),
+  is_byok: z214.boolean().optional(),
+  latency: z214.number().optional(),
+  model_permaslug: z214.string().optional(),
   provider_name: ProviderResponseProviderName$inboundSchema.optional(),
-  status: z213.nullable(z213.number())
+  status: z214.nullable(z214.number())
 }).transform((v) => {
   return remap(v, {
     "endpoint_id": "endpointId",
@@ -7020,12 +7040,12 @@ var ProviderResponse$inboundSchema = z213.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningconfig.js
-var z214 = __toESM(require("zod/v4"), 1);
-var ReasoningConfig$outboundSchema = z214.object({
-  effort: z214.nullable(ReasoningEffort$outboundSchema).optional(),
-  summary: z214.nullable(ReasoningSummaryVerbosity$outboundSchema).optional(),
-  enabled: z214.nullable(z214.boolean()).optional(),
-  maxTokens: z214.nullable(z214.int()).optional()
+var z215 = __toESM(require("zod/v4"), 1);
+var ReasoningConfig$outboundSchema = z215.object({
+  effort: z215.nullable(ReasoningEffort$outboundSchema).optional(),
+  summary: z215.nullable(ReasoningSummaryVerbosity$outboundSchema).optional(),
+  enabled: z215.nullable(z215.boolean()).optional(),
+  maxTokens: z215.nullable(z215.int()).optional()
 }).transform((v) => {
   return remap(v, {
     maxTokens: "max_tokens"
@@ -7033,14 +7053,14 @@ var ReasoningConfig$outboundSchema = z214.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningdeltaevent.js
-var z215 = __toESM(require("zod/v4"), 1);
-var ReasoningDeltaEvent$inboundSchema = z215.object({
-  content_index: z215.int(),
-  delta: z215.string(),
-  item_id: z215.string(),
-  output_index: z215.int(),
-  sequence_number: z215.int(),
-  type: z215.literal("response.reasoning_text.delta")
+var z216 = __toESM(require("zod/v4"), 1);
+var ReasoningDeltaEvent$inboundSchema = z216.object({
+  content_index: z216.int(),
+  delta: z216.string(),
+  item_id: z216.string(),
+  output_index: z216.int(),
+  sequence_number: z216.int(),
+  type: z216.literal("response.reasoning_text.delta")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -7051,14 +7071,14 @@ var ReasoningDeltaEvent$inboundSchema = z215.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningdoneevent.js
-var z216 = __toESM(require("zod/v4"), 1);
-var ReasoningDoneEvent$inboundSchema = z216.object({
-  content_index: z216.int(),
-  item_id: z216.string(),
-  output_index: z216.int(),
-  sequence_number: z216.int(),
-  text: z216.string(),
-  type: z216.literal("response.reasoning_text.done")
+var z217 = __toESM(require("zod/v4"), 1);
+var ReasoningDoneEvent$inboundSchema = z217.object({
+  content_index: z217.int(),
+  item_id: z217.string(),
+  output_index: z217.int(),
+  sequence_number: z217.int(),
+  text: z217.string(),
+  type: z217.literal("response.reasoning_text.done")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -7069,14 +7089,14 @@ var ReasoningDoneEvent$inboundSchema = z216.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningsummarypartaddedevent.js
-var z217 = __toESM(require("zod/v4"), 1);
-var ReasoningSummaryPartAddedEvent$inboundSchema = z217.object({
-  item_id: z217.string(),
-  output_index: z217.int(),
+var z218 = __toESM(require("zod/v4"), 1);
+var ReasoningSummaryPartAddedEvent$inboundSchema = z218.object({
+  item_id: z218.string(),
+  output_index: z218.int(),
   part: ReasoningSummaryText$inboundSchema,
-  sequence_number: z217.int(),
-  summary_index: z217.int(),
-  type: z217.literal("response.reasoning_summary_part.added")
+  sequence_number: z218.int(),
+  summary_index: z218.int(),
+  type: z218.literal("response.reasoning_summary_part.added")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -7087,14 +7107,14 @@ var ReasoningSummaryPartAddedEvent$inboundSchema = z217.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningsummarypartdoneevent.js
-var z218 = __toESM(require("zod/v4"), 1);
-var ReasoningSummaryPartDoneEvent$inboundSchema = z218.object({
-  item_id: z218.string(),
-  output_index: z218.int(),
+var z219 = __toESM(require("zod/v4"), 1);
+var ReasoningSummaryPartDoneEvent$inboundSchema = z219.object({
+  item_id: z219.string(),
+  output_index: z219.int(),
   part: ReasoningSummaryText$inboundSchema,
-  sequence_number: z218.int(),
-  summary_index: z218.int(),
-  type: z218.literal("response.reasoning_summary_part.done")
+  sequence_number: z219.int(),
+  summary_index: z219.int(),
+  type: z219.literal("response.reasoning_summary_part.done")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -7105,14 +7125,14 @@ var ReasoningSummaryPartDoneEvent$inboundSchema = z218.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningsummarytextdeltaevent.js
-var z219 = __toESM(require("zod/v4"), 1);
-var ReasoningSummaryTextDeltaEvent$inboundSchema = z219.object({
-  delta: z219.string(),
-  item_id: z219.string(),
-  output_index: z219.int(),
-  sequence_number: z219.int(),
-  summary_index: z219.int(),
-  type: z219.literal("response.reasoning_summary_text.delta")
+var z220 = __toESM(require("zod/v4"), 1);
+var ReasoningSummaryTextDeltaEvent$inboundSchema = z220.object({
+  delta: z220.string(),
+  item_id: z220.string(),
+  output_index: z220.int(),
+  sequence_number: z220.int(),
+  summary_index: z220.int(),
+  type: z220.literal("response.reasoning_summary_text.delta")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -7123,14 +7143,14 @@ var ReasoningSummaryTextDeltaEvent$inboundSchema = z219.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/reasoningsummarytextdoneevent.js
-var z220 = __toESM(require("zod/v4"), 1);
-var ReasoningSummaryTextDoneEvent$inboundSchema = z220.object({
-  item_id: z220.string(),
-  output_index: z220.int(),
-  sequence_number: z220.int(),
-  summary_index: z220.int(),
-  text: z220.string(),
-  type: z220.literal("response.reasoning_summary_text.done")
+var z221 = __toESM(require("zod/v4"), 1);
+var ReasoningSummaryTextDoneEvent$inboundSchema = z221.object({
+  item_id: z221.string(),
+  output_index: z221.int(),
+  sequence_number: z221.int(),
+  summary_index: z221.int(),
+  text: z221.string(),
+  type: z221.literal("response.reasoning_summary_text.done")
 }).transform((v) => {
   return remap(v, {
     "item_id": "itemId",
@@ -7141,14 +7161,14 @@ var ReasoningSummaryTextDoneEvent$inboundSchema = z220.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/refusaldeltaevent.js
-var z221 = __toESM(require("zod/v4"), 1);
-var RefusalDeltaEvent$inboundSchema = z221.object({
-  content_index: z221.int(),
-  delta: z221.string(),
-  item_id: z221.string(),
-  output_index: z221.int(),
-  sequence_number: z221.int(),
-  type: z221.literal("response.refusal.delta")
+var z222 = __toESM(require("zod/v4"), 1);
+var RefusalDeltaEvent$inboundSchema = z222.object({
+  content_index: z222.int(),
+  delta: z222.string(),
+  item_id: z222.string(),
+  output_index: z222.int(),
+  sequence_number: z222.int(),
+  type: z222.literal("response.refusal.delta")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -7159,14 +7179,14 @@ var RefusalDeltaEvent$inboundSchema = z221.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/refusaldoneevent.js
-var z222 = __toESM(require("zod/v4"), 1);
-var RefusalDoneEvent$inboundSchema = z222.object({
-  content_index: z222.int(),
-  item_id: z222.string(),
-  output_index: z222.int(),
-  refusal: z222.string(),
-  sequence_number: z222.int(),
-  type: z222.literal("response.refusal.done")
+var z223 = __toESM(require("zod/v4"), 1);
+var RefusalDoneEvent$inboundSchema = z223.object({
+  content_index: z223.int(),
+  item_id: z223.string(),
+  output_index: z223.int(),
+  refusal: z223.string(),
+  sequence_number: z223.int(),
+  type: z223.literal("response.refusal.done")
 }).transform((v) => {
   return remap(v, {
     "content_index": "contentIndex",
@@ -7177,11 +7197,11 @@ var RefusalDoneEvent$inboundSchema = z222.object({
 });
 
 // node_modules/@openrouter/sdk/esm/models/requesttimeoutresponseerrordata.js
-var z223 = __toESM(require("zod/v4"), 1);
-var RequestTimeoutResponseErrorData$inboundSchema = z223.object({
-  code: z223.int(),
-  message: z223.string(),
-  metadata: z223.nullable(z223.record(z223.string(), z223.nullable(z223.any()))).optional()
+var z224 = __toESM(require("zod/v4"), 1);
+var RequestTimeoutResponseErrorData$inboundSchema = z224.object({
+  code: z224.int(),
+  message: z224.string(),
+  metadata: z224.nullable(z224.record(z224.string(), z224.nullable(z224.any()))).optional()
 });
 
 // node_modules/@openrouter/sdk/esm/models/responseincludesenum.js
@@ -7196,19 +7216,6 @@ var ResponseIncludesEnum$outboundSchema = outboundSchema(ResponseIncludesEnum);
 
 // node_modules/@openrouter/sdk/esm/models/responsesrequest.js
 var z226 = __toESM(require("zod/v4"), 1);
-
-// node_modules/@openrouter/sdk/esm/models/textextendedconfig.js
-var z224 = __toESM(require("zod/v4"), 1);
-var TextExtendedConfigVerbosity = {
-  High: "high",
-  Low: "low",
-  Medium: "medium"
-};
-var TextExtendedConfigVerbosity$outboundSchema = outboundSchema(TextExtendedConfigVerbosity);
-var TextExtendedConfig$outboundSchema = z224.object({
-  format: Formats$outboundSchema.optional(),
-  verbosity: z224.nullable(TextExtendedConfigVerbosity$outboundSchema).optional()
-});
 
 // node_modules/@openrouter/sdk/esm/models/websearchservertoolopenrouter.js
 var z225 = __toESM(require("zod/v4"), 1);
@@ -8583,13 +8590,28 @@ var CreateEmbeddingsData$inboundSchema = z270.object({
   object: ObjectEmbedding$inboundSchema
 });
 var ObjectT$inboundSchema = z270.enum(ObjectT);
+var PromptTokensDetails$inboundSchema2 = z270.object({
+  audio_tokens: z270.int().optional(),
+  image_tokens: z270.int().optional(),
+  text_tokens: z270.int().optional(),
+  video_tokens: z270.int().optional()
+}).transform((v) => {
+  return remap(v, {
+    "audio_tokens": "audioTokens",
+    "image_tokens": "imageTokens",
+    "text_tokens": "textTokens",
+    "video_tokens": "videoTokens"
+  });
+});
 var CreateEmbeddingsUsage$inboundSchema = z270.object({
   cost: z270.number().optional(),
   prompt_tokens: z270.int(),
+  prompt_tokens_details: z270.lazy(() => PromptTokensDetails$inboundSchema2).optional(),
   total_tokens: z270.int()
 }).transform((v) => {
   return remap(v, {
     "prompt_tokens": "promptTokens",
+    "prompt_tokens_details": "promptTokensDetails",
     "total_tokens": "totalTokens"
   });
 });
@@ -8673,7 +8695,8 @@ var CreateKeysData$inboundSchema = z272.object({
   usage: z272.number(),
   usage_daily: z272.number(),
   usage_monthly: z272.number(),
-  usage_weekly: z272.number()
+  usage_weekly: z272.number(),
+  workspace_id: z272.string()
 }).transform((v) => {
   return remap(v, {
     "byok_usage": "byokUsage",
@@ -8689,7 +8712,8 @@ var CreateKeysData$inboundSchema = z272.object({
     "updated_at": "updatedAt",
     "usage_daily": "usageDaily",
     "usage_monthly": "usageMonthly",
-    "usage_weekly": "usageWeekly"
+    "usage_weekly": "usageWeekly",
+    "workspace_id": "workspaceId"
   });
 });
 var CreateKeysResponse$inboundSchema = z272.object({
@@ -9117,6 +9141,7 @@ var ApiType = {
   Completions: "completions",
   Embeddings: "embeddings",
   Rerank: "rerank",
+  Tts: "tts",
   Video: "video"
 };
 var GetGenerationRequest$outboundSchema = z281.object({
@@ -9168,7 +9193,8 @@ var GetGenerationData$inboundSchema = z281.object({
   upstream_id: z281.nullable(z281.string()),
   upstream_inference_cost: z281.nullable(z281.number()),
   usage: z281.number(),
-  user_agent: z281.nullable(z281.string())
+  user_agent: z281.nullable(z281.string()),
+  web_search_engine: z281.nullable(z281.string())
 }).transform((v) => {
   return remap(v, {
     "api_type": "apiType",
@@ -9200,7 +9226,8 @@ var GetGenerationData$inboundSchema = z281.object({
     "total_cost": "totalCost",
     "upstream_id": "upstreamId",
     "upstream_inference_cost": "upstreamInferenceCost",
-    "user_agent": "userAgent"
+    "user_agent": "userAgent",
+    "web_search_engine": "webSearchEngine"
   });
 });
 var GetGenerationResponse$inboundSchema = z281.object({
@@ -9252,7 +9279,8 @@ var GetKeyData$inboundSchema = z283.object({
   usage: z283.number(),
   usage_daily: z283.number(),
   usage_monthly: z283.number(),
-  usage_weekly: z283.number()
+  usage_weekly: z283.number(),
+  workspace_id: z283.string()
 }).transform((v) => {
   return remap(v, {
     "byok_usage": "byokUsage",
@@ -9268,7 +9296,8 @@ var GetKeyData$inboundSchema = z283.object({
     "updated_at": "updatedAt",
     "usage_daily": "usageDaily",
     "usage_monthly": "usageMonthly",
-    "usage_weekly": "usageWeekly"
+    "usage_weekly": "usageWeekly",
+    "workspace_id": "workspaceId"
   });
 });
 var GetKeyResponse$inboundSchema = z283.object({
@@ -9344,11 +9373,13 @@ var ListRequest$outboundSchema = z287.object({
   appTitle: z287.string().optional(),
   appCategories: z287.string().optional(),
   includeDisabled: z287.boolean().optional(),
-  offset: z287.nullable(z287.int()).optional()
+  offset: z287.nullable(z287.int()).optional(),
+  workspaceId: z287.string().optional()
 }).transform((v) => {
   return remap(v, {
     httpReferer: "HTTP-Referer",
-    includeDisabled: "include_disabled"
+    includeDisabled: "include_disabled",
+    workspaceId: "workspace_id"
   });
 });
 var ListData$inboundSchema = z287.object({
@@ -9371,7 +9402,8 @@ var ListData$inboundSchema = z287.object({
   usage: z287.number(),
   usage_daily: z287.number(),
   usage_monthly: z287.number(),
-  usage_weekly: z287.number()
+  usage_weekly: z287.number(),
+  workspace_id: z287.string()
 }).transform((v) => {
   return remap(v, {
     "byok_usage": "byokUsage",
@@ -9387,7 +9419,8 @@ var ListData$inboundSchema = z287.object({
     "updated_at": "updatedAt",
     "usage_daily": "usageDaily",
     "usage_monthly": "usageMonthly",
-    "usage_weekly": "usageWeekly"
+    "usage_weekly": "usageWeekly",
+    "workspace_id": "workspaceId"
   });
 });
 var ListResponse$inboundSchema = z287.object({
@@ -10288,7 +10321,8 @@ var UpdateKeysData$inboundSchema = z304.object({
   usage: z304.number(),
   usage_daily: z304.number(),
   usage_monthly: z304.number(),
-  usage_weekly: z304.number()
+  usage_weekly: z304.number(),
+  workspace_id: z304.string()
 }).transform((v) => {
   return remap(v, {
     "byok_usage": "byokUsage",
@@ -10304,7 +10338,8 @@ var UpdateKeysData$inboundSchema = z304.object({
     "updated_at": "updatedAt",
     "usage_daily": "usageDaily",
     "usage_monthly": "usageMonthly",
-    "usage_weekly": "usageWeekly"
+    "usage_weekly": "usageWeekly",
+    "workspace_id": "workspaceId"
   });
 });
 var UpdateKeysResponse$inboundSchema = z304.object({
@@ -10765,7 +10800,8 @@ async function $do6(client, request, options) {
   const path2 = pathToFunc("/keys")();
   const query = encodeFormQuery({
     "include_disabled": payload?.include_disabled,
-    "offset": payload?.offset
+    "offset": payload?.offset,
+    "workspace_id": payload?.workspace_id
   });
   const headers = new Headers(compactMap({
     Accept: "application/json",
@@ -17555,20 +17591,20 @@ var encode = (str2, _defaultEncoder, charset, _kind, format) => {
   if (str2.length === 0) {
     return str2;
   }
-  let string220 = str2;
+  let string221 = str2;
   if (typeof str2 === "symbol") {
-    string220 = Symbol.prototype.toString.call(str2);
+    string221 = Symbol.prototype.toString.call(str2);
   } else if (typeof str2 !== "string") {
-    string220 = String(str2);
+    string221 = String(str2);
   }
   if (charset === "iso-8859-1") {
-    return escape(string220).replace(/%u[0-9a-f]{4}/gi, function($0) {
+    return escape(string221).replace(/%u[0-9a-f]{4}/gi, function($0) {
       return "%26%23" + parseInt($0.slice(2), 16) + "%3B";
     });
   }
   let out = "";
-  for (let j = 0; j < string220.length; j += limit) {
-    const segment = string220.length >= limit ? string220.slice(j, j + limit) : string220;
+  for (let j = 0; j < string221.length; j += limit) {
+    const segment = string221.length >= limit ? string221.slice(j, j + limit) : string221;
     const arr = [];
     for (let i = 0; i < segment.length; ++i) {
       let c = segment.charCodeAt(i);

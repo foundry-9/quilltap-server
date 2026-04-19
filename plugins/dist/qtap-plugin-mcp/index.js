@@ -14020,7 +14020,23 @@ var BUILTIN_TOOL_NAMES = /* @__PURE__ */ new Set([
   "file_management",
   "request_full_context",
   "help_search",
-  "help_settings"
+  "help_settings",
+  // Document editing tools (Scriptorium Phase 3.3)
+  "doc_read_file",
+  "doc_write_file",
+  "doc_str_replace",
+  "doc_insert_text",
+  "doc_grep",
+  "doc_list_files",
+  "doc_read_frontmatter",
+  "doc_update_frontmatter",
+  "doc_read_heading",
+  "doc_update_heading",
+  // Document file management tools (Scriptorium Phase 3.4)
+  "doc_move_file",
+  "doc_delete_file",
+  "doc_create_folder",
+  "doc_delete_folder"
 ]);
 function getBuiltinToolNames() {
   return new Set(BUILTIN_TOOL_NAMES);
@@ -18390,6 +18406,9 @@ var ParseError = class extends Error {
     super(message), this.name = "ParseError", this.type = options.type, this.field = options.field, this.value = options.value, this.line = options.line;
   }
 };
+var LF = 10;
+var CR = 13;
+var SPACE = 32;
 function noop2(_arg) {
 }
 function createParser(callbacks) {
@@ -18398,38 +18417,104 @@ function createParser(callbacks) {
       "`callbacks` must be an object, got a function instead. Did you mean `{onEvent: fn}`?"
     );
   const { onEvent = noop2, onError = noop2, onRetry = noop2, onComment } = callbacks;
-  let incompleteLine = "", isFirstChunk = true, id, data = "", eventType = "";
-  function feed(newChunk) {
-    const chunk = isFirstChunk ? newChunk.replace(/^\xEF\xBB\xBF/, "") : newChunk, [complete, incomplete] = splitLines(`${incompleteLine}${chunk}`);
-    for (const line of complete)
-      parseLine(line);
-    incompleteLine = incomplete, isFirstChunk = false;
+  let incompleteLine = "", isFirstChunk = true, id, data = "", dataLines = 0, eventType;
+  function feed(chunk) {
+    if (isFirstChunk) {
+      isFirstChunk = false, feedFirst(chunk);
+      return;
+    }
+    const input = incompleteLine === "" ? chunk : incompleteLine + chunk;
+    incompleteLine = processLines(input);
   }
-  function parseLine(line) {
-    if (line === "") {
+  function feedFirst(chunk) {
+    chunk.charCodeAt(0) === 239 && chunk.charCodeAt(1) === 187 && chunk.charCodeAt(2) === 191 && (chunk = chunk.slice(3));
+    const input = incompleteLine === "" ? chunk : incompleteLine + chunk;
+    incompleteLine = processLines(input);
+  }
+  function processLines(chunk) {
+    let searchIndex = 0;
+    if (chunk.indexOf("\r") === -1) {
+      let lfIndex = chunk.indexOf(`
+`, searchIndex);
+      for (; lfIndex !== -1; ) {
+        if (searchIndex === lfIndex) {
+          dataLines > 0 && onEvent({ id, event: eventType, data }), id = void 0, data = "", dataLines = 0, eventType = void 0, searchIndex = lfIndex + 1, lfIndex = chunk.indexOf(`
+`, searchIndex);
+          continue;
+        }
+        const firstCharCode = chunk.charCodeAt(searchIndex);
+        if (isDataPrefix(chunk, searchIndex, firstCharCode)) {
+          const valueStart = chunk.charCodeAt(searchIndex + 5) === SPACE ? searchIndex + 6 : searchIndex + 5, value = chunk.slice(valueStart, lfIndex);
+          if (dataLines === 0 && chunk.charCodeAt(lfIndex + 1) === LF) {
+            onEvent({ id, event: eventType, data: value }), id = void 0, data = "", eventType = void 0, searchIndex = lfIndex + 2, lfIndex = chunk.indexOf(`
+`, searchIndex);
+            continue;
+          }
+          data = dataLines === 0 ? value : `${data}
+${value}`, dataLines++;
+        } else isEventPrefix(chunk, searchIndex, firstCharCode) ? eventType = chunk.slice(
+          chunk.charCodeAt(searchIndex + 6) === SPACE ? searchIndex + 7 : searchIndex + 6,
+          lfIndex
+        ) || void 0 : parseLine(chunk, searchIndex, lfIndex);
+        searchIndex = lfIndex + 1, lfIndex = chunk.indexOf(`
+`, searchIndex);
+      }
+      return chunk.slice(searchIndex);
+    }
+    for (; searchIndex < chunk.length; ) {
+      const crIndex = chunk.indexOf("\r", searchIndex), lfIndex = chunk.indexOf(`
+`, searchIndex);
+      let lineEnd = -1;
+      if (crIndex !== -1 && lfIndex !== -1 ? lineEnd = crIndex < lfIndex ? crIndex : lfIndex : crIndex !== -1 ? crIndex === chunk.length - 1 ? lineEnd = -1 : lineEnd = crIndex : lfIndex !== -1 && (lineEnd = lfIndex), lineEnd === -1)
+        break;
+      parseLine(chunk, searchIndex, lineEnd), searchIndex = lineEnd + 1, chunk.charCodeAt(searchIndex - 1) === CR && chunk.charCodeAt(searchIndex) === LF && searchIndex++;
+    }
+    return chunk.slice(searchIndex);
+  }
+  function parseLine(chunk, start, end) {
+    if (start === end) {
       dispatchEvent();
       return;
     }
-    if (line.startsWith(":")) {
-      onComment && onComment(line.slice(line.startsWith(": ") ? 2 : 1));
+    const firstCharCode = chunk.charCodeAt(start);
+    if (isDataPrefix(chunk, start, firstCharCode)) {
+      const valueStart = chunk.charCodeAt(start + 5) === SPACE ? start + 6 : start + 5, value2 = chunk.slice(valueStart, end);
+      data = dataLines === 0 ? value2 : `${data}
+${value2}`, dataLines++;
       return;
     }
-    const fieldSeparatorIndex = line.indexOf(":");
-    if (fieldSeparatorIndex !== -1) {
-      const field = line.slice(0, fieldSeparatorIndex), offset = line[fieldSeparatorIndex + 1] === " " ? 2 : 1, value = line.slice(fieldSeparatorIndex + offset);
-      processField(field, value, line);
+    if (isEventPrefix(chunk, start, firstCharCode)) {
+      eventType = chunk.slice(chunk.charCodeAt(start + 6) === SPACE ? start + 7 : start + 6, end) || void 0;
       return;
     }
-    processField(line, "", line);
+    if (firstCharCode === 105 && chunk.charCodeAt(start + 1) === 100 && chunk.charCodeAt(start + 2) === 58) {
+      const value2 = chunk.slice(chunk.charCodeAt(start + 3) === SPACE ? start + 4 : start + 3, end);
+      id = value2.includes("\0") ? void 0 : value2;
+      return;
+    }
+    if (firstCharCode === 58) {
+      if (onComment) {
+        const line2 = chunk.slice(start, end);
+        onComment(line2.slice(chunk.charCodeAt(start + 1) === SPACE ? 2 : 1));
+      }
+      return;
+    }
+    const line = chunk.slice(start, end), fieldSeparatorIndex = line.indexOf(":");
+    if (fieldSeparatorIndex === -1) {
+      processField(line, "", line);
+      return;
+    }
+    const field = line.slice(0, fieldSeparatorIndex), offset = line.charCodeAt(fieldSeparatorIndex + 1) === SPACE ? 2 : 1, value = line.slice(fieldSeparatorIndex + offset);
+    processField(field, value, line);
   }
   function processField(field, value, line) {
     switch (field) {
       case "event":
-        eventType = value;
+        eventType = value || void 0;
         break;
       case "data":
-        data = `${data}${value}
-`;
+        data = dataLines === 0 ? value : `${data}
+${value}`, dataLines++;
         break;
       case "id":
         id = value.includes("\0") ? void 0 : value;
@@ -18454,37 +18539,22 @@ function createParser(callbacks) {
     }
   }
   function dispatchEvent() {
-    data.length > 0 && onEvent({
+    dataLines > 0 && onEvent({
       id,
-      event: eventType || void 0,
-      // If the data buffer's last character is a U+000A LINE FEED (LF) character,
-      // then remove the last character from the data buffer.
-      data: data.endsWith(`
-`) ? data.slice(0, -1) : data
-    }), id = void 0, data = "", eventType = "";
+      event: eventType,
+      data
+    }), id = void 0, data = "", dataLines = 0, eventType = void 0;
   }
   function reset(options = {}) {
-    incompleteLine && options.consume && parseLine(incompleteLine), isFirstChunk = true, id = void 0, data = "", eventType = "", incompleteLine = "";
+    incompleteLine && options.consume && parseLine(incompleteLine, 0, incompleteLine.length), isFirstChunk = true, id = void 0, data = "", dataLines = 0, eventType = void 0, incompleteLine = "";
   }
   return { feed, reset };
 }
-function splitLines(chunk) {
-  const lines = [];
-  let incompleteLine = "", searchIndex = 0;
-  for (; searchIndex < chunk.length; ) {
-    const crIndex = chunk.indexOf("\r", searchIndex), lfIndex = chunk.indexOf(`
-`, searchIndex);
-    let lineEnd = -1;
-    if (crIndex !== -1 && lfIndex !== -1 ? lineEnd = Math.min(crIndex, lfIndex) : crIndex !== -1 ? crIndex === chunk.length - 1 ? lineEnd = -1 : lineEnd = crIndex : lfIndex !== -1 && (lineEnd = lfIndex), lineEnd === -1) {
-      incompleteLine = chunk.slice(searchIndex);
-      break;
-    } else {
-      const line = chunk.slice(searchIndex, lineEnd);
-      lines.push(line), searchIndex = lineEnd + 1, chunk[searchIndex - 1] === "\r" && chunk[searchIndex] === `
-` && searchIndex++;
-    }
-  }
-  return [lines, incompleteLine];
+function isDataPrefix(chunk, i, firstCharCode) {
+  return firstCharCode === 100 && chunk.charCodeAt(i + 1) === 97 && chunk.charCodeAt(i + 2) === 116 && chunk.charCodeAt(i + 3) === 97 && chunk.charCodeAt(i + 4) === 58;
+}
+function isEventPrefix(chunk, i, firstCharCode) {
+  return firstCharCode === 101 && chunk.charCodeAt(i + 1) === 118 && chunk.charCodeAt(i + 2) === 101 && chunk.charCodeAt(i + 3) === 110 && chunk.charCodeAt(i + 4) === 116 && chunk.charCodeAt(i + 5) === 58;
 }
 
 // node_modules/eventsource-parser/dist/stream.js

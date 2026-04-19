@@ -266,6 +266,10 @@
 - Updated `@google/genai` ^1.49.0 → ^1.50.1 (google plugin)
 - Updated `autoprefixer` ^10.4.27 → ^10.5.0
 - Updated `postcss` ^8.5.9 → ^8.5.10
+- Updated `next` ^16.2.3 → ^16.2.4
+- Updated `@tanstack/react-virtual` ^3.13.23 → ^3.13.24
+- Updated `@openrouter/sdk` ^0.12.8 → ^0.12.15 (root + openrouter plugin)
+- Bumped `@quilltap/plugin-utils` 2.2.2 → 2.2.3 to pull in `@quilltap/plugin-types@^2.3.0`; the five plugins that depend on plugin-utils (curl, default-system-prompts, mcp, openrouter, search-serper) now track `^2.2.3`. Patch-bumped every plugin whose dependencies moved: qtap-plugin-builtin-embeddings 1.0.8 → 1.0.9, qtap-plugin-curl 1.0.12 → 1.0.13, qtap-plugin-default-system-prompts 1.1.4 → 1.1.5, qtap-plugin-mcp 1.1.22 → 1.1.23, qtap-plugin-openrouter 1.0.31 → 1.0.32, qtap-plugin-search-serper 1.0.7 → 1.0.8.
 
 ### 4.2.2
 
