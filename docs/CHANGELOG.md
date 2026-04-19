@@ -270,6 +270,7 @@
 - Updated `@tanstack/react-virtual` ^3.13.23 → ^3.13.24
 - Updated `@openrouter/sdk` ^0.12.8 → ^0.12.15 (root + openrouter plugin)
 - Bumped `@quilltap/plugin-utils` 2.2.2 → 2.2.3 to pull in `@quilltap/plugin-types@^2.3.0`; the five plugins that depend on plugin-utils (curl, default-system-prompts, mcp, openrouter, search-serper) now track `^2.2.3`. Patch-bumped every plugin whose dependencies moved: qtap-plugin-builtin-embeddings 1.0.8 → 1.0.9, qtap-plugin-curl 1.0.12 → 1.0.13, qtap-plugin-default-system-prompts 1.1.4 → 1.1.5, qtap-plugin-mcp 1.1.22 → 1.1.23, qtap-plugin-openrouter 1.0.31 → 1.0.32, qtap-plugin-search-serper 1.0.7 → 1.0.8.
+- **React 19 / Next 16 lint compliance — hoist function declarations (commit 1 of 5)**: The Next 16 + React 19 toolchain added strict `react-hooks/immutability` and `react-hooks/set-state-in-effect` rules that together surfaced 98 pre-existing errors. This commit knocks out the 19 `immutability` violations by moving `const fetchX = async () => {...}` declarations above the `useEffect` hooks that call them — purely mechanical, no semantic changes. 16 files touched (aurora/salon/generate-image pages plus chat/search/tools components). Net lint delta: 98 → 87 errors.
 
 ### 4.2.2
 

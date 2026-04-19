@@ -73,26 +73,6 @@ export default function DocumentPickerModal({
   // Current folder path for mount point tree navigation (empty string = root)
   const [currentFolder, setCurrentFolder] = useState('')
 
-  // Fetch mount points and recent documents when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      fetchMountPoints()
-      fetchRecentDocuments()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch functions are stable
-  }, [isOpen])
-
-  // Reset state when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      setStep('source')
-      setSelectedScope('project')
-      setSelectedMountPoint(null)
-      setMountPointFiles([])
-      setCurrentFolder('')
-    }
-  }, [isOpen])
-
   const fetchMountPoints = async () => {
     try {
       setLoading(true)
@@ -122,6 +102,26 @@ export default function DocumentPickerModal({
       console.error('[DocumentPickerModal] Failed to fetch recent documents', error)
     }
   }
+
+  // Fetch mount points and recent documents when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchMountPoints()
+      fetchRecentDocuments()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch functions are stable
+  }, [isOpen])
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setStep('source')
+      setSelectedScope('project')
+      setSelectedMountPoint(null)
+      setMountPointFiles([])
+      setCurrentFolder('')
+    }
+  }, [isOpen])
 
   const fetchMountPointFiles = async (mp: MountPoint) => {
     try {

@@ -48,24 +48,6 @@ export default function LibraryFilePickerModal({
   const [loading, setLoading] = useState(false)
   const [linking, setLinking] = useState(false)
 
-  // Fetch projects when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      fetchProjects()
-    }
-  }, [isOpen])
-
-  // Reset state when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      setStep('scope')
-      setSelectedProjectId(null)
-      setSelectedProjectName('General')
-      setProjects([])
-      setLinking(false)
-    }
-  }, [isOpen])
-
   const fetchProjects = async () => {
     try {
       setLoading(true)
@@ -83,6 +65,24 @@ export default function LibraryFilePickerModal({
       setLoading(false)
     }
   }
+
+  // Fetch projects when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchProjects()
+    }
+  }, [isOpen])
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setStep('scope')
+      setSelectedProjectId(null)
+      setSelectedProjectName('General')
+      setProjects([])
+      setLinking(false)
+    }
+  }, [isOpen])
 
   const handleScopeSelect = useCallback(
     (projectId: string | null, name: string) => {

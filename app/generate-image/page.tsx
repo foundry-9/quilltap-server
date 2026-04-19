@@ -42,11 +42,6 @@ export default function GenerateImagePage() {
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Load all characters for placeholder insertion
-  useEffect(() => {
-    loadAllEntities()
-  }, [])
-
   const loadAllEntities = async () => {
     try {
       const charactersRes = await fetch('/api/v1/characters')
@@ -72,6 +67,11 @@ export default function GenerateImagePage() {
       console.error('Error loading entities', { error: error instanceof Error ? error.message : String(error) })
     }
   }
+
+  // Load all characters for placeholder insertion
+  useEffect(() => {
+    loadAllEntities()
+  }, [])
 
   const insertPlaceholder = (text: string) => {
     const textarea = promptRef.current

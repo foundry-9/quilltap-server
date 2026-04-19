@@ -53,16 +53,6 @@ export default function ChatSettingsModal({
     setAvatarGenEnabled(initialAvatarGenerationEnabled ?? false)
   }, [initialAvatarGenerationEnabled])
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchProfiles()
-    }
-  }, [isOpen])
-
-  // Disable click-outside detection while saving to prevent native select dropdown clicks
-  // from closing the modal (browser renders select options in a separate layer)
-  const isSaving = dataLoading || imageProfileSaving || avatarGenSaving
-
   const fetchProfiles = async () => {
     try {
       setDataLoading(true)
@@ -87,6 +77,16 @@ export default function ChatSettingsModal({
       setDataLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchProfiles()
+    }
+  }, [isOpen])
+
+  // Disable click-outside detection while saving to prevent native select dropdown clicks
+  // from closing the modal (browser renders select options in a separate layer)
+  const isSaving = dataLoading || imageProfileSaving || avatarGenSaving
 
   const handleImageProfileChange = async (profileId: string | null) => {
     try {

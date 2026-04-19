@@ -123,26 +123,6 @@ export default function ChatsPage() {
     [chats, shouldHideByIds, hideDangerousChats]
   )
 
-  useEffect(() => {
-    fetchChats()
-    fetchCharacters()
-    fetchProfiles()
-  }, [])
-
-  // Auto-scroll and highlight imported chat
-  useEffect(() => {
-    if (highlightedChatId && importedChatRef.current) {
-      importedChatRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
-
-      // Clear the highlight after animation completes (2.5 seconds)
-      const timer = setTimeout(() => {
-        setHighlightedChatId(null)
-      }, 2500)
-
-      return () => clearTimeout(timer)
-    }
-  }, [highlightedChatId])
-
   const fetchChats = async () => {
     try {
       const res = await fetch('/api/v1/chats')
@@ -179,6 +159,26 @@ export default function ChatsPage() {
       console.error('Failed to fetch profiles:', { error: err instanceof Error ? err.message : String(err) })
     }
   }
+
+  useEffect(() => {
+    fetchChats()
+    fetchCharacters()
+    fetchProfiles()
+  }, [])
+
+  // Auto-scroll and highlight imported chat
+  useEffect(() => {
+    if (highlightedChatId && importedChatRef.current) {
+      importedChatRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+      // Clear the highlight after animation completes (2.5 seconds)
+      const timer = setTimeout(() => {
+        setHighlightedChatId(null)
+      }, 2500)
+
+      return () => clearTimeout(timer)
+    }
+  }, [highlightedChatId])
 
   const deleteChat = async (id: string) => {
     const confirmed = await showConfirmation('Are you sure you want to delete this chat?')

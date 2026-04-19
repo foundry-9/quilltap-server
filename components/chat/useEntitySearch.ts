@@ -16,12 +16,6 @@ export function useEntitySearch(isOpen: boolean) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (isOpen) {
-      loadAllEntities()
-    }
-  }, [isOpen])
-
   const loadAllEntities = async () => {
     try {
       const charactersRes = await fetch('/api/v1/characters')
@@ -48,6 +42,12 @@ export function useEntitySearch(isOpen: boolean) {
       showErrorToast('Failed to load characters')
     }
   }
+
+  useEffect(() => {
+    if (isOpen) {
+      loadAllEntities()
+    }
+  }, [isOpen])
 
   const filteredEntities = allEntities.filter(e =>
     e.name.toLowerCase().includes(searchTerm.toLowerCase())

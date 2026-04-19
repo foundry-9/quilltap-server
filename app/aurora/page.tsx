@@ -79,19 +79,6 @@ export default function CharactersPage() {
     [characters, shouldHideByIds]
   )
 
-  useEffect(() => {
-    fetchCharacters()
-  }, [])
-
-  const getAvatarSrc = (character: Character): string | null => {
-    if (character.defaultImage) {
-      // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
-      const filepath = character.defaultImage.filepath
-      return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
-    }
-    return character.avatarUrl || null
-  }
-
   const fetchCharacters = async () => {
     try {
       const res = await fetch('/api/v1/characters')
@@ -103,6 +90,19 @@ export default function CharactersPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  useEffect(() => {
+    fetchCharacters()
+  }, [])
+
+  const getAvatarSrc = (character: Character): string | null => {
+    if (character.defaultImage) {
+      // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
+      const filepath = character.defaultImage.filepath
+      return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
+    }
+    return character.avatarUrl || null
   }
 
   const openDeleteDialog = (character: Character) => {

@@ -52,16 +52,6 @@ export default function MoveToProjectModal({
   // Filter out current project from the list
   const availableProjects = projects.filter(p => p.id !== currentProjectId)
 
-  // Fetch projects when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      fetchProjects()
-      // Reset selections
-      setSelectedValue('')
-      setSelectedFolderPath('/')
-    }
-  }, [isOpen, fileId, fileName, currentProjectId])
-
   const fetchProjects = async () => {
     try {
       setLoading(true)
@@ -78,6 +68,16 @@ export default function MoveToProjectModal({
       setLoading(false)
     }
   }
+
+  // Fetch projects when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchProjects()
+      // Reset selections
+      setSelectedValue('')
+      setSelectedFolderPath('/')
+    }
+  }, [isOpen, fileId, fileName, currentProjectId])
 
   const handleMove = async () => {
     // Must have a selection (either a project or general files)

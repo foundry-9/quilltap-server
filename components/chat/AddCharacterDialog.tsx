@@ -76,6 +76,37 @@ export default function AddCharacterDialog({
   // intercepts console calls and triggers setState. Logging should only happen
   // inside useEffect, event handlers, or other non-render contexts.
 
+  const loadData = async () => {
+    setIsLoading(true)
+
+    try {
+      const [charactersRes, profilesRes] = await Promise.all([
+        fetch('/api/v1/characters'),
+        fetch('/api/v1/connection-profiles'),
+      ])
+
+      if (!charactersRes.ok || !profilesRes.ok) {
+        throw new Error('Failed to load data')
+      }
+
+      const charactersData = await charactersRes.json()
+      const profilesData = await profilesRes.json()
+
+      const loadedCharacters = charactersData.characters || []
+      const loadedProfiles = profilesData.profiles || []
+
+      setCharacters(loadedCharacters)
+      setConnectionProfiles(loadedProfiles)
+    } catch (error) {
+      console.error('[AddCharacterDialog] Error loading data', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      showErrorToast('Failed to load characters')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Load characters and connection profiles when dialog opens
   useEffect(() => {
     if (isOpen) {
@@ -109,37 +140,6 @@ export default function AddCharacterDialog({
       }
     }
   }, [selectedCharacterId, characters, connectionProfiles])
-
-  const loadData = async () => {
-    setIsLoading(true)
-
-    try {
-      const [charactersRes, profilesRes] = await Promise.all([
-        fetch('/api/v1/characters'),
-        fetch('/api/v1/connection-profiles'),
-      ])
-
-      if (!charactersRes.ok || !profilesRes.ok) {
-        throw new Error('Failed to load data')
-      }
-
-      const charactersData = await charactersRes.json()
-      const profilesData = await profilesRes.json()
-
-      const loadedCharacters = charactersData.characters || []
-      const loadedProfiles = profilesData.profiles || []
-
-      setCharacters(loadedCharacters)
-      setConnectionProfiles(loadedProfiles)
-    } catch (error) {
-      console.error('[AddCharacterDialog] Error loading data', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      showErrorToast('Failed to load characters')
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // Filter out characters already in the chat and apply search
   const { regularCharacters, npcCharacters } = useMemo(() => {

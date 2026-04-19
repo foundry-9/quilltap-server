@@ -46,13 +46,6 @@ export default function ChatProjectModal({
     setSelectedProjectId(initialProjectId ?? null)
   }, [initialProjectId])
 
-  // Fetch projects when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      fetchProjects()
-    }
-  }, [isOpen, chatId, initialProjectId, initialProjectName])
-
   const fetchProjects = async () => {
     try {
       setLoading(true)
@@ -70,6 +63,13 @@ export default function ChatProjectModal({
       setLoading(false)
     }
   }
+
+  // Fetch projects when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchProjects()
+    }
+  }, [isOpen, chatId, initialProjectId, initialProjectName])
 
   const handleProjectChange = async (projectId: string | null) => {
     // If same as current, just close

@@ -35,58 +35,6 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
   const hasInitializedRef = useRef(false)
   const currentQueryRef = useRef('')
 
-  // Focus input when dialog opens and handle initial query/types
-  useEffect(() => {
-    if (isOpen) {
-      // Set initial query if provided and this is a fresh open
-      if (!hasInitializedRef.current) {
-        if (initialQuery) {
-          setQuery(initialQuery)
-        }
-        // Set initial types if provided, otherwise reset to all types
-        if (initialTypes && initialTypes.length > 0) {
-          setSelectedTypes(initialTypes)
-        } else {
-          setSelectedTypes(ALL_TYPES)
-        }
-        hasInitializedRef.current = true
-      }
-      setTimeout(() => inputRef.current?.focus(), 100)
-    } else {
-      // Reset state when closing
-      setQuery('')
-      setResults([])
-      setHasSearched(false)
-      setHasMore(false)
-      setTotalCount(0)
-      setCountsByType({})
-      setSelectedTypes(ALL_TYPES)
-      hasInitializedRef.current = false
-      currentQueryRef.current = ''
-    }
-  }, [isOpen, initialQuery, initialTypes])
-
-  // Trigger search when dialog opens with initial query
-  useEffect(() => {
-    if (isOpen && initialQuery && initialQuery.length >= 2 && hasInitializedRef.current && !hasSearched) {
-      // Use initialTypes if provided, otherwise use current selectedTypes
-      const typesToSearch = (initialTypes && initialTypes.length > 0) ? initialTypes : selectedTypes
-      performSearch(initialQuery, typesToSearch, 0, true)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, initialQuery, initialTypes, hasSearched])
-
-  // Handle escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [isOpen, onClose])
-
   // Search function with pagination support
   const performSearch = useCallback(async (
     searchQuery: string,
@@ -155,6 +103,58 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
       }
     }
   }, [])
+
+  // Focus input when dialog opens and handle initial query/types
+  useEffect(() => {
+    if (isOpen) {
+      // Set initial query if provided and this is a fresh open
+      if (!hasInitializedRef.current) {
+        if (initialQuery) {
+          setQuery(initialQuery)
+        }
+        // Set initial types if provided, otherwise reset to all types
+        if (initialTypes && initialTypes.length > 0) {
+          setSelectedTypes(initialTypes)
+        } else {
+          setSelectedTypes(ALL_TYPES)
+        }
+        hasInitializedRef.current = true
+      }
+      setTimeout(() => inputRef.current?.focus(), 100)
+    } else {
+      // Reset state when closing
+      setQuery('')
+      setResults([])
+      setHasSearched(false)
+      setHasMore(false)
+      setTotalCount(0)
+      setCountsByType({})
+      setSelectedTypes(ALL_TYPES)
+      hasInitializedRef.current = false
+      currentQueryRef.current = ''
+    }
+  }, [isOpen, initialQuery, initialTypes])
+
+  // Trigger search when dialog opens with initial query
+  useEffect(() => {
+    if (isOpen && initialQuery && initialQuery.length >= 2 && hasInitializedRef.current && !hasSearched) {
+      // Use initialTypes if provided, otherwise use current selectedTypes
+      const typesToSearch = (initialTypes && initialTypes.length > 0) ? initialTypes : selectedTypes
+      performSearch(initialQuery, typesToSearch, 0, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialQuery, initialTypes, hasSearched])
+
+  // Handle escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [isOpen, onClose])
 
   // Handle input change with debounce
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

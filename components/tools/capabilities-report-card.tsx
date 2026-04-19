@@ -28,10 +28,6 @@ export function CapabilitiesReportCard() {
     content: string
   } | null>(null)
 
-  useEffect(() => {
-    fetchReports()
-  }, [])
-
   const fetchReports = async () => {
     try {
       setLoading(true)
@@ -52,6 +48,10 @@ export function CapabilitiesReportCard() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchReports()
+  }, [])
 
   const handleGenerateReport = async () => {
     try {

@@ -45,13 +45,6 @@ export default function GenerateImageDialog({
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Load all characters and personas for the dropdown
-  useEffect(() => {
-    if (isOpen) {
-      loadAllEntities()
-    }
-  }, [isOpen])
-
   const loadAllEntities = async () => {
     try {
       const charactersRes = await fetch('/api/v1/characters')
@@ -78,6 +71,13 @@ export default function GenerateImageDialog({
       showErrorToast('Failed to load characters')
     }
   }
+
+  // Load all characters and personas for the dropdown
+  useEffect(() => {
+    if (isOpen) {
+      loadAllEntities()
+    }
+  }, [isOpen])
 
   const insertPlaceholder = (text: string) => {
     const textarea = promptRef.current

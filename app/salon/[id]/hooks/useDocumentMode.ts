@@ -193,19 +193,6 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
     onAutosaveNotifyRef.current = onAutosaveNotify
   }, [onAutosaveNotify])
 
-  // Initialize from chat data when it loads
-  useEffect(() => {
-    if (chat) {
-      const mode = applyChatState(chat)
-
-      // If the chat has an active document association, load it
-      if (mode !== 'normal') {
-        loadActiveDocument()
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [applyChatState, chat?.documentMode, chat?.dividerPosition])
-
   // Load the active document for this chat from the API
   const loadActiveDocument = useCallback(async () => {
     try {
@@ -233,6 +220,19 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
       console.error('[DocumentMode] Failed to load active document', error)
     }
   }, [applyDocumentState, chatId, readDocumentContent])
+
+  // Initialize from chat data when it loads
+  useEffect(() => {
+    if (chat) {
+      const mode = applyChatState(chat)
+
+      // If the chat has an active document association, load it
+      if (mode !== 'normal') {
+        loadActiveDocument()
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyChatState, chat?.documentMode, chat?.dividerPosition])
 
   const persistMode = useCallback((mode: DocumentMode) => {
     void persistChatState({ documentMode: mode })
