@@ -24,7 +24,16 @@ const INITIAL_FORM_DATA: CharacterFormData = {
   systemPrompt: '',
   avatarUrl: '',
   defaultConnectionProfileId: '',
+  readPropertiesFromDocumentStore: false,
 }
+
+/**
+ * Fields that, when the Scriptorium overlay switch is on, are read from the
+ * character's vault properties.json instead of the DB. The edit form must
+ * strip these from PUT payloads so a save doesn't silently persist overlaid
+ * (vault-derived) values back into the DB.
+ */
+const OVERLAY_MANAGED_FIELDS = ['aliases', 'pronouns', 'title', 'firstMessage'] as const satisfies readonly (keyof CharacterFormData)[]
 
 /**
  * Hook for managing character edit state and operations
@@ -76,6 +85,7 @@ export function useCharacterEdit(id: string) {
           systemPrompt: char.systemPrompt || '',
           avatarUrl: char.avatarUrl || '',
           defaultConnectionProfileId: char.defaultConnectionProfileId || '',
+          readPropertiesFromDocumentStore: char.readPropertiesFromDocumentStore === true,
         }
 
         return {
@@ -152,6 +162,63 @@ export function useCharacterEdit(id: string) {
   }
 
   /**
+   * Toggle the Scriptorium-overlay switch. Persists immediately so subsequent
+   * reads reflect the choice even if the user navigates away without saving
+   * other form edits.
+   */
+  const handleReadFromDocStoreToggle = async (enabled: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      formData: { ...prev.formData, readPropertiesFromDocumentStore: enabled },
+    }))
+    try {
+      const res = await fetch(`/api/v1/characters/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ readPropertiesFromDocumentStore: enabled }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update switch')
+      }
+      showSuccessToast(enabled
+        ? 'Reading character properties from Scriptorium vault.'
+        : 'Reading character properties from the database.')
+      await fetchCharacter()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update switch'
+      showErrorToast(errorMsg)
+      // Revert local state on failure
+      setState((prev) => ({
+        ...prev,
+        formData: { ...prev.formData, readPropertiesFromDocumentStore: !enabled },
+      }))
+    }
+  }
+
+  /**
+   * Copy the character's vault properties.json values into the DB row.
+   * Only meaningful when the overlay switch is on and a vault is linked.
+   */
+  const handleSyncPropertiesFromVault = async () => {
+    try {
+      const res = await fetch(`/api/v1/characters/${id}?action=sync-properties-from-vault`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to sync properties from vault')
+      }
+      showSuccessToast('Synced properties from the vault into the character record.')
+      await fetchCharacter()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to sync properties from vault'
+      showErrorToast(errorMsg)
+    }
+  }
+
+  /**
    * Submit form and save character data
    */
   const handleSubmit = async (e: React.FormEvent): Promise<boolean> => {
@@ -159,11 +226,21 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({ ...prev, saving: true, error: null }))
 
     try {
+      // When the Scriptorium overlay is on, strip the overlay-managed fields
+      // from the PUT payload so the save doesn't silently persist overlaid
+      // (vault-derived) values back into the DB.
+      let payload: Partial<CharacterFormData> = { ...state.formData }
+      if (state.formData.readPropertiesFromDocumentStore) {
+        for (const field of OVERLAY_MANAGED_FIELDS) {
+          delete payload[field]
+        }
+      }
+
       // Update character fields
       const res = await fetch(`/api/v1/characters/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(state.formData),
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
@@ -324,6 +401,8 @@ export function useCharacterEdit(id: string) {
     handleScenariosChange,
     handleSubmit,
     handleCancel,
+    handleReadFromDocStoreToggle,
+    handleSyncPropertiesFromVault,
     setCharacterAvatar,
     getAvatarSrc,
     toggleUploadDialog,

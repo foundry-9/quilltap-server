@@ -177,6 +177,8 @@ import { createHelpDocsTableMigration } from './create-help-docs-table';
 import { addDocumentModeFieldsMigration } from './add-document-mode-fields';
 // Add characterDocumentMountPointId field to characters
 import { addCharacterDocumentMountPointFieldMigration } from './add-character-document-mount-point-field';
+// Add readPropertiesFromDocumentStore field to characters
+import { addReadPropertiesFromDocumentStoreFieldMigration } from './add-read-properties-from-document-store-field';
 // Normalise all stored embeddings to unit length for fast cosine similarity
 import { normalizeEmbeddingsUnitVectorsMigration } from './normalize-embeddings-unit-vectors';
 
@@ -351,6 +353,8 @@ export const migrations: Migration[] = [
   addDocumentModeFieldsMigration,
   // Add characterDocumentMountPointId field to characters
   addCharacterDocumentMountPointFieldMigration,
+  // Add readPropertiesFromDocumentStore field to characters
+  addReadPropertiesFromDocumentStoreFieldMigration,
   // Normalise all stored embeddings to unit length for fast cosine similarity
   normalizeEmbeddingsUnitVectorsMigration,
 ];
@@ -510,6 +514,8 @@ export {
   addDocumentModeFieldsMigration,
   // Add characterDocumentMountPointId field to characters
   addCharacterDocumentMountPointFieldMigration,
+  // Add readPropertiesFromDocumentStore field to characters
+  addReadPropertiesFromDocumentStoreFieldMigration,
   // Normalise all stored embeddings to unit length for fast cosine similarity
   normalizeEmbeddingsUnitVectorsMigration,
 };

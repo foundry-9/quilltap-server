@@ -40,6 +40,7 @@ import { runCharacterOptimizer } from '@/lib/services/character-optimizer.servic
 import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.service';
 import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
+import { readCharacterVaultProperties } from '@/lib/database/repositories/character-properties-overlay';
 
 // ============================================================================
 // Schemas
@@ -90,6 +91,7 @@ const updateCharacterSchema = z.object({
     .optional()
     .or(z.literal('').transform(() => null))
     .nullable(),
+  readPropertiesFromDocumentStore: z.boolean().nullable().optional(),
 });
 
 const avatarSchema = z.object({
@@ -129,7 +131,7 @@ const generateExternalPromptSchema = z.object({
   maxTokens: z.number().int().min(1000).max(20000),
 });
 
-const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive'] as const;
+const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive', 'sync-properties-from-vault'] as const;
 type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 // ============================================================================
@@ -710,6 +712,47 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       }
 
       return NextResponse.json({ prompt: result.prompt, tokensUsed: result.tokensUsed });
+    },
+
+    'sync-properties-from-vault': async () => {
+      try {
+        // Use the raw character so we see the canonical DB state, not the overlay.
+        const rawCharacter = await repos.characters.findByIdRaw(id);
+        if (!rawCharacter) {
+          return notFound('Character');
+        }
+        if (!rawCharacter.characterDocumentMountPointId) {
+          return badRequest('Character has no linked document-store vault to sync from');
+        }
+
+        const props = await readCharacterVaultProperties(
+          rawCharacter.characterDocumentMountPointId,
+          rawCharacter.id,
+        );
+        if (!props) {
+          return badRequest(
+            "This character's properties.json is missing or invalid; nothing to sync"
+          );
+        }
+
+        const updatedCharacter = await repos.characters.update(id, {
+          pronouns: props.pronouns,
+          aliases: props.aliases,
+          title: props.title,
+          firstMessage: props.firstMessage,
+          talkativeness: props.talkativeness,
+        });
+
+        logger.info('[Characters v1] Synced character properties from vault', {
+          characterId: id,
+          mountPointId: rawCharacter.characterDocumentMountPointId,
+        });
+
+        return NextResponse.json({ character: updatedCharacter });
+      } catch (error) {
+        logger.error('[Characters v1] Error syncing properties from vault', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to sync properties from vault');
+      }
     },
 
     'refresh-archive': async () => {

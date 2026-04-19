@@ -313,6 +313,10 @@
           "type": ["boolean", "null"],
           "description": "Whether this character can create new wardrobe items mid-conversation (null = enabled by default)"
         },
+        "readPropertiesFromDocumentStore": {
+          "type": ["boolean", "null"],
+          "description": "When true, pronouns/aliases/title/firstMessage/talkativeness are read live from the linked vault's properties.json instead of this row"
+        },
         "wardrobeItems": {
           "type": "array",
           "items": { "$ref": "#/$defs/WardrobeItem" },

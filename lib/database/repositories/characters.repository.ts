@@ -10,6 +10,10 @@ import { Character, CharacterInput, CharacterSchema, PhysicalDescription, Clothi
 import { TaggableBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
 import { TypedQueryFilter } from '../interfaces';
+import {
+  applyDocumentStoreOverlay,
+  applyDocumentStoreOverlayOne,
+} from './character-properties-overlay';
 
 /**
  * Characters Repository
@@ -26,6 +30,16 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<Character | null> The character if found, null otherwise
    */
   async findById(id: string): Promise<Character | null> {
+    const raw = await this._findById(id);
+    return applyDocumentStoreOverlayOne(raw);
+  }
+
+  /**
+   * Find a character by ID without applying the document-store properties overlay.
+   * Used by the export path and the sync-back action, where the canonical DB row
+   * is required regardless of the `readPropertiesFromDocumentStore` switch.
+   */
+  async findByIdRaw(id: string): Promise<Character | null> {
     return this._findById(id);
   }
 
@@ -34,6 +48,15 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<Character[]> Array of all characters
    */
   async findAll(): Promise<Character[]> {
+    const raw = await this._findAll();
+    return applyDocumentStoreOverlay(raw);
+  }
+
+  /**
+   * Find all characters without applying the document-store properties overlay.
+   * Used by the export path.
+   */
+  async findAllRaw(): Promise<Character[]> {
     return this._findAll();
   }
 
@@ -43,7 +66,8 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<Character[]> Array of characters belonging to the user
    */
   async findByUserId(userId: string): Promise<Character[]> {
-    return super.findByUserId(userId);
+    const raw = await super.findByUserId(userId);
+    return applyDocumentStoreOverlay(raw);
   }
 
   /**
@@ -58,7 +82,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
           userId,
           controlledBy: 'user',
         });
-        return results;
+        return applyDocumentStoreOverlay(results);
       },
       'Error finding user-controlled characters',
       { userId },
@@ -82,7 +106,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
             { controlledBy: { $exists: false } },
           ],
         } as TypedQueryFilter<Character>);
-        return results;
+        return applyDocumentStoreOverlay(results);
       },
       'Error finding LLM-controlled characters',
       { userId },
@@ -96,7 +120,8 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<Character[]> Array of found characters (may be shorter than input if some IDs don't exist)
    */
   async findByIds(ids: string[]): Promise<Character[]> {
-    return super.findByIds(ids);
+    const raw = await super.findByIds(ids);
+    return applyDocumentStoreOverlay(raw);
   }
 
   /**
@@ -110,7 +135,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         const results = await this.findByFilter({
           defaultImageId: imageId,
         });
-        return results;
+        return applyDocumentStoreOverlay(results);
       },
       'Error finding characters by default image ID',
       { imageId },
@@ -129,7 +154,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         const results = await this.findByFilter({
           'avatarOverrides.imageId': imageId,
         } as TypedQueryFilter<Character>);
-        return results;
+        return applyDocumentStoreOverlay(results);
       },
       'Error finding characters by avatar override image ID',
       { imageId },
@@ -143,7 +168,8 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<Character[]> Array of characters with the tag
    */
   async findByTag(tagId: string): Promise<Character[]> {
-    return super.findByTag(tagId);
+    const raw = await super.findByTag(tagId);
+    return applyDocumentStoreOverlay(raw);
   }
 
   /**

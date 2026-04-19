@@ -128,6 +128,30 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
     );
   }
 
+  /**
+   * Find documents at the same relativePath across many mount points in one
+   * query. Used by batched overlay loaders (e.g. character properties.json)
+   * to avoid N+1 reads when hydrating bulk character lists.
+   */
+  async findManyByMountPointsAndPath(
+    mountPointIds: string[],
+    relativePath: string
+  ): Promise<DocMountDocument[]> {
+    if (mountPointIds.length === 0) {
+      return [];
+    }
+    return this.safeQuery(
+      async () =>
+        this.findByFilter({
+          mountPointId: { $in: mountPointIds },
+          relativePath,
+        } as TypedQueryFilter<DocMountDocument>),
+      'Error finding documents by mount point IDs and path',
+      { mountPointIdCount: mountPointIds.length, relativePath },
+      []
+    );
+  }
+
   async findByMountPointId(mountPointId: string): Promise<DocMountDocument[]> {
     return this.safeQuery(
       async () => this.findByFilter({ mountPointId } as TypedQueryFilter<DocMountDocument>),

@@ -52,6 +52,8 @@ interface WriterUserRepos {
   characters: {
     findById: jest.Mock;
     findAll: jest.Mock;
+    findByIdRaw: jest.Mock;
+    findAllRaw: jest.Mock;
   };
   chats: { findById: jest.Mock; findAll: jest.Mock; getMessages: jest.Mock };
   tags: { findById: jest.Mock; findAll: jest.Mock };
@@ -80,10 +82,18 @@ interface WriterGlobalRepos {
 
 function makeUserRepos(): WriterUserRepos {
   return {
-    characters: {
-      findById: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
-      findAll: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
-    },
+    characters: (() => {
+      const findById = jest.fn<() => Promise<unknown>>().mockResolvedValue(null);
+      const findAll = jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]);
+      // Raw variants delegate to the non-raw mocks so existing test setups
+      // that configure findById / findAll automatically apply to findByIdRaw
+      // and findAllRaw as well.
+      const findByIdRaw = jest.fn<(id: string) => Promise<unknown>>()
+        .mockImplementation((id: string) => (findById as unknown as (id: string) => Promise<unknown>)(id));
+      const findAllRaw = jest.fn<() => Promise<unknown[]>>()
+        .mockImplementation(() => (findAll as unknown as () => Promise<unknown[]>)());
+      return { findById, findAll, findByIdRaw, findAllRaw };
+    })(),
     chats: {
       findById: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
       findAll: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),

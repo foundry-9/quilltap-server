@@ -130,7 +130,7 @@ async function collectChatMemories(
 ): Promise<Memory[]> {
   try {
     // Get all characters and collect their memories filtered by chatId
-    const characters = await repos.characters.findAll();
+    const characters = await repos.characters.findAllRaw();
     const memoriesArrays = await Promise.all(
       characters.map(char => repos.memories.findByCharacterId(char.id))
     );
@@ -207,7 +207,7 @@ export async function exportCharacters(
   // Fetch characters
   const characters: ExportedCharacter[] = [];
   for (const id of characterIds) {
-    const character = await repos.characters.findById(id);
+    const character = await repos.characters.findByIdRaw(id);
     if (character) {
       const tagNames = await resolveTagNames(repos, character.tags);
 
@@ -294,7 +294,7 @@ export async function exportChats(
           let characterName: string | undefined;
 
           if (p.type === 'CHARACTER' && p.characterId) {
-            const char = await repos.characters.findById(p.characterId);
+            const char = await repos.characters.findByIdRaw(p.characterId);
             characterName = char?.name;
           }
 
@@ -480,7 +480,7 @@ export async function exportProjects(
       // Resolve character roster names
       const characterRosterNames: string[] = [];
       for (const characterId of project.characterRoster ?? []) {
-        const character = await repos.characters.findById(characterId);
+        const character = await repos.characters.findByIdRaw(characterId);
         if (character) characterRosterNames.push(character.name);
       }
 
@@ -628,7 +628,7 @@ export async function createExport(
     switch (options.type) {
       case 'characters': {
         const allCharacters = options.scope === 'all'
-          ? await repos.characters.findAll()
+          ? await repos.characters.findAllRaw()
           : [];
         const ids = options.scope === 'all'
           ? allCharacters.map(c => c.id)
@@ -806,14 +806,14 @@ export async function previewExport(
     switch (options.type) {
       case 'characters': {
         const allCharacters = options.scope === 'all'
-          ? await repos.characters.findAll()
+          ? await repos.characters.findAllRaw()
           : [];
         const ids = options.scope === 'all'
           ? allCharacters.map(c => c.id)
           : entityIds;
 
         for (const id of ids) {
-          const char = await repos.characters.findById(id);
+          const char = await repos.characters.findByIdRaw(id);
           if (char) {
             entities.push({ id: char.id, name: char.name });
             if (options.includeMemories) {

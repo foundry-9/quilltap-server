@@ -143,6 +143,13 @@ export const CharacterSchema = z.object({
   /** Linked character document store (mountType='database', storeType='character'); null = not linked */
   characterDocumentMountPointId: UUIDSchema.nullable().optional(),
 
+  /**
+   * When true, pronouns/aliases/title/firstMessage/talkativeness are read from
+   * the linked vault's properties.json instead of this row. Requires
+   * characterDocumentMountPointId to be set; writes still go to the DB.
+   */
+  readPropertiesFromDocumentStore: z.boolean().nullable().optional(),
+
   /** Whether this character can change their own outfit using wardrobe tools (null = enabled by default) */
   canDressThemselves: z.boolean().nullable().optional(),
 

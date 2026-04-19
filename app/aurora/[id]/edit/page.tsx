@@ -80,6 +80,8 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     handleScenariosChange,
     handleSubmit,
     handleCancel,
+    handleReadFromDocStoreToggle,
+    handleSyncPropertiesFromVault,
     setCharacterAvatar,
     getAvatarSrc,
     toggleAvatarSelector,
@@ -299,7 +301,19 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           {(activeTab: string) => {
             switch (activeTab) {
               case 'details':
-                return <CharacterBasicInfo characterId={id} formData={formData} onChange={handleChange} onAliasesChange={handleAliasesChange} onPronounsChange={handlePronounsChange} onScenariosChange={handleScenariosChange} />
+                return (
+                  <CharacterBasicInfo
+                    characterId={id}
+                    formData={formData}
+                    hasLinkedVault={!!character?.characterDocumentMountPointId}
+                    onChange={handleChange}
+                    onAliasesChange={handleAliasesChange}
+                    onPronounsChange={handlePronounsChange}
+                    onScenariosChange={handleScenariosChange}
+                    onReadFromDocStoreToggle={handleReadFromDocStoreToggle}
+                    onSyncPropertiesFromVault={handleSyncPropertiesFromVault}
+                  />
+                )
 
               case 'system-prompts':
                 return (

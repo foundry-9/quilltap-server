@@ -74,6 +74,7 @@ export const SQLITE_TABLES = [
       "avatarOverrides" TEXT DEFAULT '[]',
       "physicalDescriptions" TEXT DEFAULT '[]',
       "clothingRecords" TEXT DEFAULT '[]',
+      "readPropertiesFromDocumentStore" INTEGER DEFAULT NULL,
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,

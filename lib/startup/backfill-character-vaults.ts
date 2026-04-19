@@ -35,7 +35,9 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
   };
 
   const repos = getRepositories();
-  const characters = await repos.characters.findAll();
+  // Raw reads so the vault populator writes DB values to properties.json,
+  // never the overlaid (vault-sourced) values it would otherwise see.
+  const characters = await repos.characters.findAllRaw();
   result.scanned = characters.length;
 
   logger.info('Character vault backfill scanning', { total: characters.length });

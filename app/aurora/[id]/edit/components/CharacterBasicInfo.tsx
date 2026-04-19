@@ -7,10 +7,13 @@ import { CharacterFormData, CharacterScenario } from '../types'
 interface CharacterBasicInfoProps {
   characterId: string
   formData: CharacterFormData
+  hasLinkedVault: boolean
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
   onAliasesChange: (aliases: string[]) => void
   onPronounsChange: (pronouns: { subject: string; object: string; possessive: string } | null) => void
   onScenariosChange: (scenarios: CharacterScenario[]) => void
+  onReadFromDocStoreToggle: (enabled: boolean) => void
+  onSyncPropertiesFromVault: () => void
 }
 
 /**
@@ -65,9 +68,74 @@ function getPronounPreset(pronouns: { subject: string; object: string; possessiv
   return 'Custom'
 }
 
-export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesChange, onPronounsChange, onScenariosChange }: CharacterBasicInfoProps) {
+export function CharacterBasicInfo({
+  characterId,
+  formData,
+  hasLinkedVault,
+  onChange,
+  onAliasesChange,
+  onPronounsChange,
+  onScenariosChange,
+  onReadFromDocStoreToggle,
+  onSyncPropertiesFromVault,
+}: CharacterBasicInfoProps) {
+  const overlayOn = formData.readPropertiesFromDocumentStore === true
+  const overlayManagedDisabled = overlayOn
+  const toggleDisabled = !hasLinkedVault && !overlayOn
+
   return (
     <div className="space-y-6">
+      {/* Scriptorium Overlay Switch */}
+      <div className="qt-card">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <label
+              htmlFor="readPropertiesFromDocumentStore"
+              className="block text-sm font-medium text-foreground"
+            >
+              Read aliases, pronouns, title, first message & talkativeness from Scriptorium
+            </label>
+            <p className="text-xs qt-text-secondary mt-1">
+              When on, these five fields are read live from this character&rsquo;s
+              <code className="mx-1">properties.json</code>
+              inside their linked Scriptorium vault instead of the database. Edits to those fields
+              here are locked until the switch is off. Use &ldquo;Sync from vault&rdquo; to copy the
+              vault values back into the database record.
+            </p>
+            {!hasLinkedVault && (
+              <p className="text-xs qt-text-destructive mt-2">
+                No Scriptorium vault is linked to this character, so the overlay cannot be enabled.
+              </p>
+            )}
+          </div>
+          <label className="inline-flex items-center cursor-pointer select-none">
+            <input
+              id="readPropertiesFromDocumentStore"
+              type="checkbox"
+              checked={overlayOn}
+              disabled={toggleDisabled}
+              onChange={(e) => onReadFromDocStoreToggle(e.target.checked)}
+              className="h-5 w-5 qt-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </label>
+        </div>
+        {overlayOn && (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-md qt-bg-muted px-3 py-2">
+            <p className="text-xs qt-text-secondary">
+              Values below are the current vault snapshot. Editing is disabled while the overlay is on.
+            </p>
+            <button
+              type="button"
+              onClick={onSyncPropertiesFromVault}
+              className="qt-button-secondary qt-button-sm whitespace-nowrap"
+              title="Copy the current properties.json values into the database record"
+            >
+              Sync from vault
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Name Field */}
       <div>
         <label htmlFor="name" className="block text-sm font-medium mb-2 text-foreground">
@@ -99,21 +167,25 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
               className="inline-flex items-center gap-1 rounded-full qt-bg-muted px-3 py-1 text-sm text-foreground"
             >
               {alias}
-              <button
-                type="button"
-                onClick={() => onAliasesChange(formData.aliases.filter((_, i) => i !== index))}
-                className="ml-1 qt-text-secondary hover:text-foreground"
-              >
-                &times;
-              </button>
+              {!overlayManagedDisabled && (
+                <button
+                  type="button"
+                  onClick={() => onAliasesChange(formData.aliases.filter((_, i) => i !== index))}
+                  className="ml-1 qt-text-secondary hover:text-foreground"
+                >
+                  &times;
+                </button>
+              )}
             </span>
           ))}
         </div>
-        <AliasInput onAdd={(alias) => {
-          if (alias && !formData.aliases.includes(alias)) {
-            onAliasesChange([...formData.aliases, alias])
-          }
-        }} />
+        {!overlayManagedDisabled && (
+          <AliasInput onAdd={(alias) => {
+            if (alias && !formData.aliases.includes(alias)) {
+              onAliasesChange([...formData.aliases, alias])
+            }
+          }} />
+        )}
       </div>
 
       {/* Pronouns Field */}
@@ -126,6 +198,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
         </p>
         <select
           value={getPronounPreset(formData.pronouns)}
+          disabled={overlayManagedDisabled}
           onChange={(e) => {
             const selected = PRONOUN_PRESETS.find((p) => p.label === e.target.value)
             if (!selected) return
@@ -137,7 +210,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
               onPronounsChange({ ...selected.value })
             }
           }}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
         >
           {PRONOUN_PRESETS.map((preset) => (
             <option key={preset.label} value={preset.label}>
@@ -152,9 +225,10 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
               <input
                 type="text"
                 value={formData.pronouns.subject}
+                disabled={overlayManagedDisabled}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, subject: e.target.value })}
                 placeholder="e.g., they"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
             <div>
@@ -162,9 +236,10 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
               <input
                 type="text"
                 value={formData.pronouns.object}
+                disabled={overlayManagedDisabled}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, object: e.target.value })}
                 placeholder="e.g., them"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
             <div>
@@ -172,9 +247,10 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
               <input
                 type="text"
                 value={formData.pronouns.possessive}
+                disabled={overlayManagedDisabled}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, possessive: e.target.value })}
                 placeholder="e.g., their"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
           </div>
@@ -191,8 +267,9 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           id="title"
           name="title"
           value={formData.title}
+          disabled={overlayManagedDisabled}
           onChange={onChange}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           placeholder="e.g., Student, Teacher, Narrator"
         />
       </div>
@@ -338,9 +415,10 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           id="firstMessage"
           name="firstMessage"
           value={formData.firstMessage}
+          disabled={overlayManagedDisabled}
           onChange={onChange}
           rows={3}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           placeholder="The character's opening message to start conversations"
         />
       </div>

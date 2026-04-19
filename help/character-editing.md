@@ -97,6 +97,24 @@ The Details tab contains all basic character information.
 
 Want to change multiple characters at once? Use Rename/Replace tab (see below).
 
+### Living Properties from the Scriptorium
+
+Each character carries a private vault in the Scriptorium — a small database-backed document store seeded at creation with your character's identity, personality, wardrobe, and, crucially for our purposes, a file called `properties.json`. This tidy JSON ledger contains five fields the Aurora editor knows by heart: **pronouns**, **aliases**, **title**, **first message**, and **talkativeness**.
+
+By default, the Aurora editor reads these five from the character's database row — the ordinary state of affairs, in which the editor is the single source of truth. But if you would rather treat `properties.json` as the living authority, flip the switch marked **Read aliases, pronouns, title, first message & talkativeness from Scriptorium** at the top of the Details tab, and henceforth Quilltap will consult the vault for those five fields every time any part of the application reads your character — the roster on the home page, the system prompt for a chat, the turn manager's talkativeness roll, all of it.
+
+**What the switch changes:**
+
+- **Reads:** the five fields come live from `properties.json`. Edit that file in the Scriptorium, save, reload the character, and the new values appear throughout the app without any further ceremony.
+- **Writes:** still head to the database as always. Updates from other paths — imports, API calls, the optimizer — continue to land in the character row. The Aurora editor, however, disables the five overlay-managed inputs while the switch is on, to spare you the indignity of silently overwriting database values with the vault values the form was showing you.
+- **Fallback:** should `properties.json` go missing or fail to parse cleanly, Quilltap does not panic. All five fields fall back to their database values (all-or-nothing), and a warning is written to the log so you may investigate at your leisure.
+
+**Sync from vault.** When the switch is on, a **Sync from vault** button appears beneath it. Pressing it copies the current `properties.json` values back into the character's database row — the reconciliation step for when you have been editing the vault directly and would like the database to catch up. You can then turn the switch off with no change in observed behavior, should you wish to resume database-canonical operation.
+
+**When to use it.** Reach for this switch when you would rather author your character's small-but-often-tweaked fields as a plain JSON file — version-controlled in your own tooling, perhaps, or edited alongside the character's narrative notes — and have the rest of Quilltap treat that file as the current truth. Leave the switch off for the conventional editor-as-source-of-truth workflow, which remains the default and entirely sensible choice.
+
+**Prerequisite.** The switch requires a linked Scriptorium vault. Quilltap creates one for each character automatically (on character creation, or by the startup backfill), so this is almost always already in place; if for some reason it isn't, the toggle will disable itself with a note explaining why.
+
 ## Editing System Prompts
 
 System Prompts tab contains detailed AI instructions.
