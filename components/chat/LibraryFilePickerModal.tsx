@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import useSWR from 'swr'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import FileBrowser, { type FileInfo } from '@/components/files/FileBrowser'
@@ -44,42 +45,19 @@ export default function LibraryFilePickerModal({
   const [step, setStep] = useState<'scope' | 'browse'>('scope')
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [selectedProjectName, setSelectedProjectName] = useState<string>('General')
-  const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(false)
   const [linking, setLinking] = useState(false)
 
-  const fetchProjects = async () => {
-    try {
-      setLoading(true)
-      const res = await fetch('/api/v1/projects')
-      if (res.ok) {
-        const data = await res.json()
-        setProjects(data.projects || [])
-      }
-    } catch (error) {
-      console.error('[LibraryFilePickerModal] Failed to fetch projects', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      showErrorToast('Failed to load projects')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { data: projectsData, isLoading } = useSWR<{ projects: Project[] }>(
+    isOpen ? '/api/v1/projects' : null
+  )
+  const projects = projectsData?.projects || []
 
-  // Fetch projects when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      fetchProjects()
-    }
-  }, [isOpen])
-
-  // Reset state when modal closes
+  // Reset state when modal closes (modal-reset pattern)
   useEffect(() => {
     if (!isOpen) {
       setStep('scope')
       setSelectedProjectId(null)
       setSelectedProjectName('General')
-      setProjects([])
       setLinking(false)
     }
   }, [isOpen])
@@ -194,7 +172,7 @@ export default function LibraryFilePickerModal({
     >
       {step === 'scope' && (
         <div className="space-y-2">
-          {loading ? (
+          {isLoading ? (
             <p className="qt-text-secondary py-4 text-center">
               Loading projects...
             </p>

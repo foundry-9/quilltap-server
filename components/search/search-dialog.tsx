@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import useSWR from 'swr'
 import { SearchResults } from './search-results'
 import type { SearchResult, SearchResponse, SearchType } from './types'
 

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import useSWR from 'swr'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
@@ -49,43 +50,30 @@ export function PluginConfigModal({
   pluginTitle,
   onSuccess,
 }: PluginConfigModalProps) {
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [configSchema, setConfigSchema] = useState<ConfigField[]>([])
   const [formData, setFormData] = useState<Record<string, unknown>>({})
 
-  // Load current configuration
-  const loadConfig = useCallback(async () => {
-    if (!isOpen || !pluginName) return
+  // Load current configuration via SWR (gated by isOpen && pluginName)
+  const { data, isLoading: loading, error: loadError } = useSWR<{ configSchema: ConfigField[]; config: Record<string, unknown> }>(
+    isOpen && pluginName ? `/api/v1/plugins/${encodeURIComponent(pluginName)}?action=get-config` : null
+  )
 
-    setLoading(true)
-    setError(null)
+  const configSchema = data?.configSchema ?? []
 
-    try {
-
-      const response = await fetch(`/api/v1/plugins/${encodeURIComponent(pluginName)}?action=get-config`)
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to load configuration')
-      }
-
-      setConfigSchema(data.configSchema || [])
-      setFormData(data.config || {})
-
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load configuration'
-      console.error('Failed to load plugin config', { pluginName, error: message })
-      setError(message)
-    } finally {
-      setLoading(false)
-    }
-  }, [isOpen, pluginName])
-
+  // Update error from SWR
   useEffect(() => {
-    loadConfig()
-  }, [loadConfig])
+    if (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load configuration')
+    }
+  }, [loadError])
+
+  // Sync formData with loaded config when data changes
+  useEffect(() => {
+    if (data?.config) {
+      setFormData(data.config)
+    }
+  }, [data?.config])
 
   // Handle form field changes
   const handleFieldChange = (key: string, value: unknown) => {

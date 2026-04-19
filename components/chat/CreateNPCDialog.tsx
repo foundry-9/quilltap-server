@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import useSWR from 'swr'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 
 interface ConnectionProfile {
@@ -42,51 +43,31 @@ export default function CreateNPCDialog({
   const [systemPrompt, setSystemPrompt] = useState('')
   const [selectedConnectionProfileId, setSelectedConnectionProfileId] = useState<string | null>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
-  const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
-  const [isLoading, setIsLoading] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const loadConnectionProfiles = async () => {
-    setIsLoading(true)
+  const { data: profilesData, isLoading } = useSWR<{ profiles: ConnectionProfile[] }>(
+    isOpen ? '/api/v1/connection-profiles' : null
+  )
+  const connectionProfiles = profilesData?.profiles || []
 
-    try {
-      const response = await fetch('/api/v1/connection-profiles')
-
-      if (!response.ok) {
-        throw new Error('Failed to load connection profiles')
-      }
-
-      const profilesData = await response.json()
-      const loadedProfiles = profilesData.profiles || []
-
-      setConnectionProfiles(loadedProfiles)
-
-      // Auto-select first profile if available
-      if (loadedProfiles.length > 0) {
-        setSelectedConnectionProfileId(loadedProfiles[0].id)
-      }
-    } catch (error) {
-      console.error('[CreateNPCDialog] Error loading connection profiles', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      showErrorToast('Failed to load connection profiles')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Load connection profiles when dialog opens
+  // Auto-select first profile when data loads
   useEffect(() => {
-    if (isOpen) {
-      loadConnectionProfiles()
+    if (connectionProfiles.length > 0 && !selectedConnectionProfileId) {
+      setSelectedConnectionProfileId(connectionProfiles[0].id)
+    }
+  }, [connectionProfiles])
+
+  // Load connection profiles when dialog opens and focus name input
+  useEffect(() => {
+    if (isOpen && !isLoading) {
       // Focus name input after loading
       setTimeout(() => {
         nameInputRef.current?.focus()
       }, 100)
-    } else {
-      // Reset state when dialog closes
+    } else if (!isOpen) {
+      // Reset state when dialog closes (modal-reset pattern)
       setName('')
       setDescription('')
       setPhysicalDescription('')
@@ -95,7 +76,7 @@ export default function CreateNPCDialog({
       setSelectedConnectionProfileId(null)
       setAvatarFile(null)
     }
-  }, [isOpen])
+  }, [isOpen, isLoading])
 
   // Handle escape key to close dialog
   useEffect(() => {

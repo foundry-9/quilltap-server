@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import useSWR from 'swr'
 // Using native img tag instead of next/image because /api/files/* routes
 // are dynamic API endpoints that can't go through Next.js image optimization
 import dynamic from 'next/dynamic'
@@ -44,9 +45,6 @@ interface Character {
 }
 
 export default function CharactersPage() {
-  const [characters, setCharacters] = useState<Character[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [aiImportDialogOpen, setAIImportDialogOpen] = useState(false)
   const [resetBuiltinsDialogOpen, setResetBuiltinsDialogOpen] = useState(false)
@@ -56,6 +54,10 @@ export default function CharactersPage() {
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
   const router = useRouter()
+
+  const { data, isLoading: loading, error: loadError, mutate: mutateCharacters } = useSWR<{ characters: Character[] }>('/api/v1/characters')
+  const characters = useMemo(() => data?.characters ?? [], [data])
+  const error = loadError ? (loadError instanceof Error ? loadError.message : 'An error occurred') : null
 
   const visibleCharacters = useMemo(
     () => characters
@@ -78,23 +80,6 @@ export default function CharactersPage() {
       }),
     [characters, shouldHideByIds]
   )
-
-  const fetchCharacters = async () => {
-    try {
-      const res = await fetch('/api/v1/characters')
-      if (!res.ok) throw new Error('Failed to fetch characters')
-      const data = await res.json()
-      setCharacters(data.characters)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchCharacters()
-  }, [])
 
   const getAvatarSrc = (character: Character): string | null => {
     if (character.defaultImage) {
@@ -123,7 +108,7 @@ export default function CharactersPage() {
       if (!res.ok) throw new Error('Failed to delete character')
 
       const result = await res.json()
-      setCharacters(characters.filter((c) => c.id !== id))
+      await mutateCharacters()
       setDeleteDialogCharacter(null)
 
       // Show success message with details
@@ -150,8 +135,10 @@ export default function CharactersPage() {
       const res = await fetch(`/api/v1/characters/${id}?action=favorite`, { method: 'POST' })
       if (!res.ok) throw new Error('Failed to toggle favorite')
       const data = await res.json()
-      setCharacters(characters.map((c) => (c.id === id ? { ...c, isFavorite: data.character.isFavorite } : c)))
-
+      await mutateCharacters(
+        (prev) => prev && { characters: prev.characters.map((c) => (c.id === id ? { ...c, isFavorite: data.character.isFavorite } : c)) },
+        { revalidate: false }
+      )
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle favorite')
     }
@@ -163,7 +150,10 @@ export default function CharactersPage() {
       const res = await fetch(`/api/v1/characters/${id}?action=toggle-controlled-by`, { method: 'POST' })
       if (!res.ok) throw new Error('Failed to toggle controlled-by')
       const data = await res.json()
-      setCharacters(characters.map((c) => (c.id === id ? { ...c, controlledBy: data.character.controlledBy } : c)))
+      await mutateCharacters(
+        (prev) => prev && { characters: prev.characters.map((c) => (c.id === id ? { ...c, controlledBy: data.character.controlledBy } : c)) },
+        { revalidate: false }
+      )
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle controlled-by')
     }
@@ -190,8 +180,8 @@ export default function CharactersPage() {
 
       if (!res.ok) throw new Error('Failed to import character')
 
-      const character = await res.json()
-      setCharacters([character, ...characters])
+      await res.json()
+      await mutateCharacters()
       setImportDialogOpen(false)
       showSuccessToast('Character imported successfully!')
     } catch (err) {
@@ -213,7 +203,7 @@ export default function CharactersPage() {
       }
 
       await res.json()
-      await fetchCharacters()
+      await mutateCharacters()
       setResetBuiltinsDialogOpen(false)
       showSuccessToast('Built-in characters reset successfully.')
     } catch (err) {
@@ -487,7 +477,7 @@ export default function CharactersPage() {
             <AIImportWizard
               onClose={() => setAIImportDialogOpen(false)}
               onImportSuccess={() => {
-                fetchCharacters()
+                mutateCharacters()
               }}
             />
           </div>

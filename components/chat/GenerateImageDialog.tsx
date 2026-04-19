@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import useSWR from 'swr'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
@@ -39,45 +40,24 @@ export default function GenerateImageDialog({
 }: GenerateImageDialogProps) {
   const [prompt, setPrompt] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
-  const [allEntities, setAllEntities] = useState<EntityOption[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const loadAllEntities = async () => {
-    try {
-      const charactersRes = await fetch('/api/v1/characters')
+  const { data: charactersData } = useSWR<{ characters: Array<{ id: string; name: string }> }>(
+    isOpen ? '/api/v1/characters' : null
+  )
 
-      if (!charactersRes.ok) {
-        throw new Error('Failed to load characters')
-      }
-
-      const charactersData = await charactersRes.json()
-      const characters = charactersData.characters || []
-
-      const entities: EntityOption[] = characters.map((c: any) => ({
+  const allEntities: EntityOption[] = charactersData?.characters
+    ? charactersData.characters
+      .map((c) => ({
         id: c.id,
         name: c.name,
         type: 'character' as const,
       }))
-
-      // Sort alphabetically
-      entities.sort((a, b) => a.name.localeCompare(b.name))
-
-      setAllEntities(entities)
-    } catch (error) {
-      console.error('Error loading entities', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast('Failed to load characters')
-    }
-  }
-
-  // Load all characters and personas for the dropdown
-  useEffect(() => {
-    if (isOpen) {
-      loadAllEntities()
-    }
-  }, [isOpen])
+      .sort((a, b) => a.name.localeCompare(b.name))
+    : []
 
   const insertPlaceholder = (text: string) => {
     const textarea = promptRef.current

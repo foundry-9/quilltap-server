@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import useSWR from 'swr'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
@@ -98,25 +99,20 @@ export function useChatControls({
   }, [chat?.isPaused, isAllLLM, allLLMTurnCount])
 
   // Fetch connection profiles for participant sidebar dropdowns
+  const { data: profilesData } = useSWR<{ profiles: Array<{ id: string; name: string; provider?: string; modelName?: string }> }>(
+    '/api/v1/connection-profiles'
+  )
+
   useEffect(() => {
-    const fetchConnectionProfiles = async () => {
-      try {
-        const res = await fetch('/api/v1/connection-profiles')
-        if (res.ok) {
-          const data = await res.json()
-          setConnectionProfiles((data.profiles || []).map((p: { id: string; name: string; provider?: string; modelName?: string }) => ({
-            id: p.id,
-            name: p.name,
-            provider: p.provider,
-            modelName: p.modelName,
-          })))
-        }
-      } catch (error) {
-        console.error('Failed to fetch connection profiles for sidebar', { error: error instanceof Error ? error.message : String(error) })
-      }
+    if (profilesData?.profiles) {
+      setConnectionProfiles(profilesData.profiles.map((p) => ({
+        id: p.id,
+        name: p.name,
+        provider: p.provider,
+        modelName: p.modelName,
+      })))
     }
-    fetchConnectionProfiles()
-  }, [])
+  }, [profilesData])
 
   // Function to set pause state and persist to database
   const setPauseState = useCallback(async (paused: boolean) => {

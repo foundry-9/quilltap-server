@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import useSWR from 'swr'
 import { showErrorToast } from '@/lib/toast'
 import type { LLMLog } from '@/lib/schemas/types'
 import type { Message } from '../types'
@@ -14,10 +15,6 @@ export function useLLMLogs({
   chatId,
   messages,
 }: UseLLMLogsParams) {
-  // All logs for this chat (both chatId-linked and messageId-linked)
-  const [allChatLogs, setAllChatLogs] = useState<LLMLog[]>([])
-  const [loading, setLoading] = useState(false)
-
   // Inspector panel state
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [inspectorScrollToMessageId, setInspectorScrollToMessageId] = useState<string | null>(null)
@@ -25,39 +22,22 @@ export function useLLMLogs({
   // Derive which messages have logs from the full dataset
   const [messagesWithLogs, setMessagesWithLogs] = useState<Set<string>>(new Set())
 
-  // Fetch all logs for this chat using the combined endpoint
-  const fetchLogs = useCallback(async () => {
-    if (!chatId) return
+  // Fetch all logs for this chat using the combined endpoint (only fetch when messages exist)
+  const { data: logsData, isLoading, mutate: mutateLogs } = useSWR<{ logs: LLMLog[] }>(
+    messages.length > 0 ? `/api/v1/llm-logs?chatId=${chatId}&includeMessages=true` : null
+  )
 
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/v1/llm-logs?chatId=${chatId}&includeMessages=true`)
-      if (res.ok) {
-        const data = await res.json()
-        const logs: LLMLog[] = data.logs || []
-        setAllChatLogs(logs)
+  const allChatLogs = logsData?.logs || []
 
-        // Derive messagesWithLogs from the full log set
-        const messageIdsWithLogs = new Set<string>(
-          logs
-            .filter((log: LLMLog) => log.messageId)
-            .map((log: LLMLog) => log.messageId!)
-        )
-        setMessagesWithLogs(messageIdsWithLogs)
-      }
-    } catch {
-      // Silent fail - logging is not critical
-    } finally {
-      setLoading(false)
-    }
-  }, [chatId])
-
-  // Fetch on mount and when messages change
+  // Derive messagesWithLogs whenever logs change
   useEffect(() => {
-    if (messages.length > 0) {
-      fetchLogs()
-    }
-  }, [fetchLogs, messages.length])
+    const messageIdsWithLogs = new Set<string>(
+      allChatLogs
+        .filter((log: LLMLog) => log.messageId)
+        .map((log: LLMLog) => log.messageId!)
+    )
+    setMessagesWithLogs(messageIdsWithLogs)
+  }, [allChatLogs])
 
   // Open inspector panel, optionally scrolled to a specific message's logs
   const handleViewLLMLogs = useCallback((messageId: string) => {
@@ -84,15 +64,15 @@ export function useLLMLogs({
 
   // Refresh logs (e.g., after streaming completes)
   const refreshLogs = useCallback(() => {
-    fetchLogs()
-  }, [fetchLogs])
+    mutateLogs()
+  }, [mutateLogs])
 
   return {
     messagesWithLogs,
     handleViewLLMLogs,
     // Inspector panel state
     allChatLogs,
-    loading,
+    loading: isLoading,
     inspectorOpen,
     inspectorScrollToMessageId,
     toggleInspector,

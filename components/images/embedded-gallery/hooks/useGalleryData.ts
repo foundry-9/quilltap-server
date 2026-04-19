@@ -1,33 +1,31 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
+import useSWR from 'swr'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import type { GalleryImage, EntityType } from '../types'
 
 export function useGalleryData(entityId: string, entityType: EntityType) {
-  const [allImages, setAllImages] = useState<GalleryImage[]>([])
-  const [loading, setLoading] = useState(true)
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
 
-  const fetchImages = useCallback(async () => {
-    setLoading(true)
-    try {
-      // Fetch ALL images for the user, not filtered by tag
-      const res = await fetch('/api/v1/images')
-      if (!res.ok) throw new Error('Failed to fetch images')
-      const json = await res.json()
-      setAllImages(json.data || [])
-    } catch (error) {
-      console.error('Error fetching images:', { error: error instanceof Error ? error.message : String(error) })
-      setAllImages([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // Fetch ALL images for the user via SWR
+  const { data: imagesData, isLoading: loading, mutate: mutateImages } = useSWR<{ data: GalleryImage[] }>(
+    '/api/v1/images'
+  )
 
-  useEffect(() => {
-    fetchImages()
-  }, [fetchImages])
+  const allImages = imagesData?.data ?? []
+
+  const fetchImages = useCallback(async () => {
+    await mutateImages()
+  }, [mutateImages])
+
+  const setAllImages = useCallback((update: ((prev: GalleryImage[]) => GalleryImage[]) | GalleryImage[]) => {
+    if (typeof update === 'function') {
+      mutateImages(prev => prev ? { ...prev, data: update(prev.data) } : prev, false)
+    } else {
+      mutateImages({ data: update }, false)
+    }
+  }, [mutateImages])
 
   const handleImageError = (imageId: string) => {
     setMissingImages(prev => new Set(prev).add(imageId))
@@ -76,17 +74,23 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
       }
 
       // Update local state
-      setAllImages(prev => prev.map(img => {
-        if (img.id !== image.id) return img
-        const currentTags = img.tags || []
-        const newTag = { tagId: entityId, tagType: 'CHARACTER' }
-        return {
-          ...img,
-          tags: isTagged
-            ? currentTags.filter(t => t.tagId !== entityId || t.tagType !== 'CHARACTER')
-            : [...currentTags, newTag]
-        }
-      }))
+      await mutateImages(
+        prev => prev ? {
+          ...prev,
+          data: prev.data.map(img => {
+            if (img.id !== image.id) return img
+            const currentTags = img.tags || []
+            const newTag = { tagId: entityId, tagType: 'CHARACTER' }
+            return {
+              ...img,
+              tags: isTagged
+                ? currentTags.filter(t => t.tagId !== entityId || t.tagType !== 'CHARACTER')
+                : [...currentTags, newTag]
+            }
+          })
+        } : prev,
+        false
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       showErrorToast(message || 'Failed to update tag')
@@ -177,7 +181,10 @@ export function useGalleryData(entityId: string, entityType: EntityType) {
       }
 
       // Remove from local state
-      setAllImages(prev => prev.filter(img => img.id !== image.id))
+      await mutateImages(
+        prev => prev ? { ...prev, data: prev.data.filter(img => img.id !== image.id) } : prev,
+        false
+      )
       showSuccessToast('Image deleted')
     } catch (error) {
       showErrorToast(error instanceof Error ? error.message : 'Failed to delete image')

@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import useSWR from 'swr'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 
@@ -34,11 +35,9 @@ export default function ChatProjectModal({
   projectName: initialProjectName,
   onSuccess,
 }: Readonly<ChatProjectModalProps>) {
-  const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     initialProjectId ?? null
   )
-  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
   // Update local state when prop changes
@@ -46,30 +45,10 @@ export default function ChatProjectModal({
     setSelectedProjectId(initialProjectId ?? null)
   }, [initialProjectId])
 
-  const fetchProjects = async () => {
-    try {
-      setLoading(true)
-      const res = await fetch('/api/v1/projects')
-      if (res.ok) {
-        const data = await res.json()
-        setProjects(data.projects || [])
-      }
-    } catch (error) {
-      console.error('[ChatProjectModal] Failed to fetch projects', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      showErrorToast('Failed to load projects')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Fetch projects when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      fetchProjects()
-    }
-  }, [isOpen, chatId, initialProjectId, initialProjectName])
+  const { data: projectsData, isLoading } = useSWR<{ projects: Project[] }>(
+    isOpen ? '/api/v1/projects' : null
+  )
+  const projects = projectsData?.projects || []
 
   const handleProjectChange = async (projectId: string | null) => {
     // If same as current, just close
@@ -140,7 +119,7 @@ export default function ChatProjectModal({
       </button>
       <button
         onClick={handleSubmit}
-        disabled={saving || loading}
+        disabled={saving || isLoading}
         className="qt-button qt-button-primary"
       >
         {saving ? 'Saving...' : 'Save'}
@@ -172,7 +151,7 @@ export default function ChatProjectModal({
             id="chat-project"
             value={selectedProjectId || ''}
             onChange={(e) => setSelectedProjectId(e.target.value || null)}
-            disabled={saving || loading}
+            disabled={saving || isLoading}
             className="qt-select w-full"
           >
             <option value="">No project</option>
@@ -182,7 +161,7 @@ export default function ChatProjectModal({
               </option>
             ))}
           </select>
-          {loading && (
+          {isLoading && (
             <p className="qt-text-xs mt-2">Loading projects...</p>
           )}
         </div>

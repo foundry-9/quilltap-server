@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import useSWR from 'swr'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import FolderPicker from '@/components/files/FolderPicker'
@@ -39,11 +40,14 @@ export default function MoveToProjectModal({
   currentProjectId,
   onSuccess,
 }: Readonly<MoveToProjectModalProps>) {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [selectedValue, setSelectedValue] = useState<string>('')
   const [selectedFolderPath, setSelectedFolderPath] = useState('/')
+
+  const { data: projectsData, isLoading } = useSWR<{ projects: Project[] }>(
+    isOpen ? '/api/v1/projects' : null
+  )
+  const projects = projectsData?.projects || []
 
   // Determine if a project is selected (vs general files)
   const isGeneralFilesSelected = selectedValue === GENERAL_FILES_VALUE
@@ -52,32 +56,14 @@ export default function MoveToProjectModal({
   // Filter out current project from the list
   const availableProjects = projects.filter(p => p.id !== currentProjectId)
 
-  const fetchProjects = async () => {
-    try {
-      setLoading(true)
-      const res = await fetch('/api/v1/projects')
-      if (res.ok) {
-        const data = await res.json()
-        setProjects(data.projects || [])
-      }
-    } catch (error) {
-      console.error('[MoveToProjectModal] Failed to fetch projects', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Fetch projects when modal opens
+  // Reset selections when modal opens (modal-reset pattern)
   useEffect(() => {
     if (isOpen) {
-      fetchProjects()
       // Reset selections
       setSelectedValue('')
       setSelectedFolderPath('/')
     }
-  }, [isOpen, fileId, fileName, currentProjectId])
+  }, [isOpen])
 
   const handleMove = async () => {
     // Must have a selection (either a project or general files)
@@ -136,7 +122,7 @@ export default function MoveToProjectModal({
       </button>
       <button
         onClick={handleMove}
-        disabled={saving || loading || !selectedValue}
+        disabled={saving || isLoading || !selectedValue}
         className="qt-button qt-button-primary"
       >
         {saving ? 'Moving...' : buttonText}
@@ -170,7 +156,7 @@ export default function MoveToProjectModal({
               setSelectedValue(e.target.value)
               setSelectedFolderPath('/') // Reset folder when selection changes
             }}
-            disabled={saving || loading}
+            disabled={saving || isLoading}
             className="qt-select w-full"
           >
             <option value="">Select a destination...</option>
@@ -184,10 +170,10 @@ export default function MoveToProjectModal({
               </option>
             ))}
           </select>
-          {loading && (
+          {isLoading && (
             <p className="qt-text-xs mt-1 qt-text-secondary">Loading projects...</p>
           )}
-          {!loading && availableProjects.length === 0 && !currentProjectId && (
+          {!isLoading && availableProjects.length === 0 && !currentProjectId && (
             <p className="qt-text-xs mt-1 qt-text-secondary">No projects found. Create a project first.</p>
           )}
         </div>

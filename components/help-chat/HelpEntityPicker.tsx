@@ -8,7 +8,8 @@
  * Once selected, the :id param is replaced with the real ID and navigation proceeds.
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
+import useSWR from 'swr'
 
 /** Maps URL param patterns to their entity type and API source */
 interface ParamRoute {
@@ -87,49 +88,28 @@ interface HelpEntityPickerProps {
 
 export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntityPickerProps) {
   const route = useMemo(() => findParamRoute(urlTemplate), [urlTemplate])
-  const [items, setItems] = useState<EntityItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
 
-  useEffect(() => {
-    if (!route) {
-      setError('Unknown entity type')
-      setLoading(false)
-      return
-    }
+  const { data: fetchedData, isLoading, error: loadError } = useSWR<Record<string, unknown>>(
+    route ? route.apiUrl : null
+  )
 
-    let cancelled = false
+  const items = useMemo(() => {
+    if (!route || !fetchedData) return []
+    const list = (fetchedData[route.responseKey] as Record<string, unknown>[]) || []
+    return list.map((item: Record<string, unknown>) => ({
+      id: route.getId(item),
+      label: route.getLabel(item),
+    }))
+  }, [route, fetchedData])
 
-    async function fetchItems() {
-      try {
-        const res = await fetch(route!.apiUrl)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        const list = data[route!.responseKey] || []
-        if (!cancelled) {
-          setItems(list.map((item: Record<string, unknown>) => ({
-            id: route!.getId(item),
-            label: route!.getLabel(item),
-          })))
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    fetchItems()
-    return () => { cancelled = true }
-  }, [route])
+  const error = !route ? 'Unknown entity type' : (loadError ? (loadError instanceof Error ? loadError.message : 'Failed to load') : null)
+  const loading = isLoading
 
   const filtered = useMemo(() => {
     if (!filter) return items
     const lower = filter.toLowerCase()
-    return items.filter(i => i.label.toLowerCase().includes(lower))
+    return items.filter((i: EntityItem) => i.label.toLowerCase().includes(lower))
   }, [items, filter])
 
   const handleSelect = (id: string) => {
@@ -185,7 +165,7 @@ export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntity
               {filter ? 'No matches' : `No ${route?.entityLabel?.toLowerCase() || 'item'}s found`}
             </div>
           )}
-          {filtered.map(item => (
+          {filtered.map((item: EntityItem) => (
             <button
               key={item.id}
               type="button"

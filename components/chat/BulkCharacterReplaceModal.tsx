@@ -74,14 +74,14 @@ export default function BulkCharacterReplaceModal({
   const sourceParticipantId = sourceSelection === UNASSIGNED_USER ? null : (sourceSelection || null)
   const targetParticipantId = targetSelection === UNASSIGNED_USER ? null : (targetSelection || null)
 
-  // Reset state when modal opens
+  // Reset state when modal opens (modal-reset pattern, do not touch per instructions)
   useEffect(() => {
     if (isOpen) {
       setSourceSelection('')
       setTargetSelection('')
       setRoleFilter('both')
     }
-  }, [isOpen, chatId, participants.length, messages.length, hasUnassignedMessages])
+  }, [isOpen])
 
   // Handle click outside to close
   useClickOutside(

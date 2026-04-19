@@ -9,6 +9,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import useSWR from 'swr'
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { useHelpChat } from '@/components/providers/help-chat-provider'
 import { HelpChatComposer } from './HelpChatComposer'
@@ -148,24 +149,15 @@ export function HelpChatDialog() {
     onMessageComplete: handleMessageComplete,
   })
 
-  const fetchPastChats = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/help-chats')
-      if (res.ok) {
-        const data = await res.json()
-        setPastChats(data.chats || [])
-      }
-    } catch (error) {
-      console.error('Failed to fetch past help chats:', error)
-    }
-  }, [])
+  const { data: pastChatsData, mutate: mutatePastChats } = useSWR<{ chats: PastChat[] }>(
+    isOpen && !currentChatId && activeTab === 'ask' ? '/api/v1/help-chats' : null
+  )
 
-  // Load past chats when dialog opens or when returning to launcher view
   useEffect(() => {
-    if (isOpen && !currentChatId && activeTab === 'ask') {
-      fetchPastChats()
+    if (pastChatsData?.chats) {
+      setPastChats(pastChatsData.chats)
     }
-  }, [isOpen, currentChatId, activeTab, fetchPastChats])
+  }, [pastChatsData])
 
   // Load messages when chat changes
   useEffect(() => {
@@ -252,6 +244,7 @@ export function HelpChatDialog() {
     try {
       await fetch(`/api/v1/help-chats/${chatId}`, { method: 'DELETE' })
       setPastChats(prev => prev.filter(c => c.id !== chatId))
+      await mutatePastChats()
       if (currentChatId === chatId) {
         setCurrentChatId(null)
         setMessages([])
@@ -259,7 +252,7 @@ export function HelpChatDialog() {
     } catch (error) {
       console.error('Failed to delete help chat:', error)
     }
-  }, [currentChatId, setCurrentChatId])
+  }, [currentChatId, setCurrentChatId, mutatePastChats])
 
   return (
     <FloatingDialog

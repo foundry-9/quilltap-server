@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import useSWR from 'swr'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 
@@ -28,54 +29,39 @@ export default function StateEditorModal({
   const [stateText, setStateText] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [jsonError, setJsonError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
 
-  const fetchState = useCallback(async () => {
-    try {
-      setLoading(true)
-      setJsonError(null)
+  // Fetch state via SWR (gated by isOpen)
+  const stateUrl = isOpen
+    ? entityType === 'chat'
+      ? `/api/v1/chats/${entityId}?action=get-state`
+      : `/api/v1/projects/${entityId}?action=get-state`
+    : null
 
-      const url = entityType === 'chat'
-        ? `/api/v1/chats/${entityId}?action=get-state`
-        : `/api/v1/projects/${entityId}?action=get-state`
+  const { data: stateData, isLoading: loading, mutate: mutateState } = useSWR<{
+    state: Record<string, unknown>
+    chatState?: Record<string, unknown>
+    projectState?: Record<string, unknown> | null
+    projectId?: string
+  }>(stateUrl)
 
-      const res = await fetch(url)
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || 'Failed to fetch state')
-      }
-
-      const data = await res.json()
-      setState(data.state || {})
-      setStateText(JSON.stringify(data.state || {}, null, 2))
-
-      // For chats, also store separate chat and project states
-      if (entityType === 'chat') {
-        setChatState(data.chatState || {})
-        setProjectState(data.projectState || null)
-        setProjectId(data.projectId)
-      }
-
-      setIsEditing(false)
-    } catch (error) {
-      console.error('[StateEditorModal] Failed to fetch state', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      showErrorToast(error instanceof Error ? error.message : 'Failed to fetch state')
-    } finally {
-      setLoading(false)
-    }
-  }, [entityType, entityId])
-
-  // Fetch state when modal opens
+  // Sync state data when fetched
   useEffect(() => {
-    if (isOpen) {
-      fetchState()
+    if (!stateData) return
+
+    setState(stateData.state || {})
+    setStateText(JSON.stringify(stateData.state || {}, null, 2))
+
+    if (entityType === 'chat') {
+      setChatState(stateData.chatState || {})
+      setProjectState(stateData.projectState || null)
+      setProjectId(stateData.projectId)
     }
-  }, [isOpen, fetchState])
+
+    setIsEditing(false)
+  }, [stateData, entityType])
 
   const handleTextChange = (value: string) => {
     setStateText(value)
@@ -115,6 +101,7 @@ export default function StateEditorModal({
         throw new Error(errorData.error || 'Failed to save state')
       }
 
+      await mutateState()
       setState(newState)
       setStateText(JSON.stringify(newState, null, 2))
       setIsEditing(false)
@@ -147,6 +134,7 @@ export default function StateEditorModal({
         throw new Error(errorData.error || 'Failed to reset state')
       }
 
+      await mutateState()
       setState({})
       setStateText(JSON.stringify({}, null, 2))
       setIsEditing(false)

@@ -96,7 +96,7 @@ function transformChatToCardData(chat: Chat): ChatCardData {
 
 export function CharacterConversationsTab({ characterId, characterName, refreshKey }: CharacterConversationsTabProps) {
   const [chats, setChats] = useState<Chat[]>([])
-  const [loading, setLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(true)
   const [refreshingArchive, setRefreshingArchive] = useState(false)
   const { shouldHideByIds, hideDangerousChats } = useQuickHide()
   const visibleChats = useMemo(
@@ -116,7 +116,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
 
   const fetchChats = useCallback(async (pageNum: number, search: string, append: boolean = false) => {
     if (pageNum === 0) {
-      setLoading(true)
+      setIsLoading(true)
     } else {
       setLoadingMore(true)
     }
@@ -147,7 +147,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load conversations')
     } finally {
-      setLoading(false)
+      setIsLoading(false)
       setLoadingMore(false)
     }
   }, [characterId])
@@ -166,7 +166,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
 
     observerRef.current = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+        if (entries[0].isIntersecting && hasMore && !isLoading && !loadingMore) {
           const nextPage = page + 1
           setPage(nextPage)
           fetchChats(nextPage, searchQuery, true)
@@ -184,7 +184,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
         observerRef.current.disconnect()
       }
     }
-  }, [hasMore, loading, loadingMore, page, searchQuery, fetchChats])
+  }, [hasMore, isLoading, loadingMore, page, searchQuery, fetchChats])
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
@@ -322,7 +322,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
     }
   }
 
-  if (loading && chats.length === 0) {
+  if (isLoading && chats.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="flex items-center gap-3 qt-text-secondary">

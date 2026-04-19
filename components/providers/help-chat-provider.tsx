@@ -19,6 +19,7 @@ import {
   type ReactNode,
 } from 'react'
 import { usePathname } from 'next/navigation'
+import useSWR from 'swr'
 
 // ============================================================================
 // TYPES
@@ -112,35 +113,27 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   )
   const previousPathname = useRef(pathname)
 
-  // Fetch eligibility on mount
-  const fetchEligibility = useCallback(async () => {
-    try {
-      setEligibilityLoading(true)
-      const res = await fetch('/api/v1/help-chats?action=eligibility')
-      if (res.ok) {
-        const data = await res.json()
-        setEligibleCharacters(data.characters || [])
+  const { data: eligibilityData, isLoading: eligibilityIsLoading, mutate: mutateEligibility } = useSWR<{ characters: HelpChatEligibleCharacter[] }>(
+    '/api/v1/help-chats?action=eligibility'
+  )
 
-        // Auto-select first eligible character if none selected
-        const eligible = (data.characters || []).filter(
-          (c: HelpChatEligibleCharacter) => c.hasToolCapableProfile
-        )
-        if (selectedCharacterIds.length === 0 && eligible.length > 0) {
-          const autoSelected = [eligible[0].id]
-          setSelectedCharacterIds(autoSelected)
-          saveStorageValue(STORAGE_KEY_SELECTED, autoSelected)
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch help chat eligibility:', error)
-    } finally {
-      setEligibilityLoading(false)
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
+  // Update state from SWR data
   useEffect(() => {
-    fetchEligibility()
-  }, [fetchEligibility])
+    if (eligibilityData?.characters) {
+      setEligibleCharacters(eligibilityData.characters)
+
+      // Auto-select first eligible character if none selected
+      const eligible = eligibilityData.characters.filter(
+        (c: HelpChatEligibleCharacter) => c.hasToolCapableProfile
+      )
+      if (selectedCharacterIds.length === 0 && eligible.length > 0) {
+        const autoSelected = [eligible[0].id]
+        setSelectedCharacterIds(autoSelected)
+        saveStorageValue(STORAGE_KEY_SELECTED, autoSelected)
+      }
+    }
+    setEligibilityLoading(eligibilityIsLoading)
+  }, [eligibilityData, eligibilityIsLoading, selectedCharacterIds.length])
 
   // Track pathname changes for context updates
   useEffect(() => {
@@ -204,7 +197,7 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     selectedCharacterIds,
     toggleCharacter,
     currentPageUrl: pathname,
-    refreshEligibility: fetchEligibility,
+    refreshEligibility: async () => { await mutateEligibility() },
   }
 
   return (

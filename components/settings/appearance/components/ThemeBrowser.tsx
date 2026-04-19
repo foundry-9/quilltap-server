@@ -11,6 +11,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
+import useSWR from 'swr'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -81,51 +82,41 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
 
   // ── Data fetching ──────────────────────────────────────────────────────
 
-  const fetchSources = useCallback(async () => {
-    setIsLoadingSources(true)
-    try {
-      const response = await fetch('/api/v1/themes?action=registry-sources')
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(result.error || 'Failed to fetch registry sources')
-      }
-      const result = await response.json()
-      setSources(result.sources ?? [])
-    } catch (err) {
-      setStatus({
-        message: err instanceof Error ? err.message : 'Failed to load registry sources',
-        type: 'error',
-      })
-    } finally {
-      setIsLoadingSources(false)
-    }
-  }, [])
+  const { data: sourcesData, isLoading: isLoadingSourcesData, mutate: mutateSources } = useSWR<{ sources: RegistrySource[] }>(
+    isExpanded ? '/api/v1/themes?action=registry-sources' : null
+  )
 
-  const fetchThemes = useCallback(async () => {
-    setIsLoadingThemes(true)
-    setThemesError(null)
-    try {
-      const response = await fetch('/api/v1/themes?action=registry')
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(result.error || 'Failed to fetch registry themes')
-      }
-      const result = await response.json()
-      setThemes(result.themes ?? [])
-    } catch (err) {
-      setThemesError(err instanceof Error ? err.message : 'Failed to load themes')
-    } finally {
-      setIsLoadingThemes(false)
-    }
-  }, [])
+  const { data: themesData, isLoading: isLoadingThemesData, error: themesLoadError, mutate: mutateThemes } = useSWR<{ themes: RegistryTheme[] }>(
+    isExpanded ? '/api/v1/themes?action=registry' : null
+  )
 
-  // Lazy load on expand
   useEffect(() => {
-    if (isExpanded) {
-      fetchSources()
-      fetchThemes()
+    setIsLoadingSources(isLoadingSourcesData)
+  }, [isLoadingSourcesData])
+
+  useEffect(() => {
+    setIsLoadingThemes(isLoadingThemesData)
+    if (themesLoadError) {
+      setThemesError(themesLoadError instanceof Error ? themesLoadError.message : 'Failed to load themes')
+    } else {
+      setThemesError(null)
     }
-  }, [isExpanded, fetchSources, fetchThemes])
+  }, [isLoadingThemesData, themesLoadError])
+
+  useEffect(() => {
+    if (sourcesData?.sources) {
+      setSources(sourcesData.sources)
+    }
+  }, [sourcesData])
+
+  useEffect(() => {
+    if (themesData?.themes) {
+      setThemes(themesData.themes)
+    }
+  }, [themesData])
+
+  const fetchSources = useCallback(() => mutateSources(), [mutateSources])
+  const fetchThemes = useCallback(() => mutateThemes(), [mutateThemes])
 
   // ── Actions ────────────────────────────────────────────────────────────
 

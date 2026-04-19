@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import useSWR from 'swr'
 
 interface StoryBackgroundState {
   backgroundUrl: string | null
@@ -10,9 +11,6 @@ interface StoryBackgroundState {
   error: string | null
   polling: boolean
 }
-
-// Slow poll interval for passive background checks (30 seconds)
-const PASSIVE_POLL_INTERVAL = 30000
 
 /**
  * Hook to fetch and manage story background for a chat or project
@@ -34,74 +32,41 @@ export function useStoryBackground(
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null)
   const [backgroundFileId, setBackgroundFileId] = useState<string | null>(null)
   const [backgroundFilename, setBackgroundFilename] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [polling, setPolling] = useState(false)
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const initialUrlRef = useRef<string | null>(null)
 
-  const fetchBackground = useCallback(async (silent = false): Promise<string | null> => {
-    if (!chatId && !projectId) {
+  // Determine which background endpoint to fetch
+  let backgroundUrl_toFetch: string | null = null
+  if (chatId) {
+    backgroundUrl_toFetch = `/api/v1/chats/${chatId}?action=get-background`
+  } else if (projectId) {
+    backgroundUrl_toFetch = `/api/v1/projects/${projectId}?action=get-background`
+  }
+
+  const { data, isLoading: loading, error, mutate: mutateBackground } = useSWR<{
+    backgroundUrl?: string
+    fileId?: string | null
+    filename?: string | null
+  }>(backgroundUrl_toFetch, {
+    refreshInterval: enablePassivePolling ? 30000 : 0,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+  })
+
+  // Update local state from SWR data
+  useEffect(() => {
+    if (data?.backgroundUrl) {
+      setBackgroundUrl(data.backgroundUrl)
+      setBackgroundFileId(data.fileId || null)
+      setBackgroundFilename(data.filename || null)
+    } else {
       setBackgroundUrl(null)
       setBackgroundFileId(null)
       setBackgroundFilename(null)
-      return null
     }
-
-    if (!silent) {
-      setLoading(true)
-      setError(null)
-    }
-
-    try {
-      // First try to get the chat's background
-      if (chatId) {
-        const res = await fetch(`/api/v1/chats/${chatId}?action=get-background`)
-        if (res.ok) {
-          const data = await res.json()
-          if (data.backgroundUrl) {
-            setBackgroundUrl(data.backgroundUrl)
-            setBackgroundFileId(data.fileId || null)
-            setBackgroundFilename(data.filename || null)
-            if (!silent) setLoading(false)
-            return data.backgroundUrl
-          }
-        }
-      }
-
-      // If no chat background, try project background
-      if (projectId) {
-        const res = await fetch(`/api/v1/projects/${projectId}?action=get-background`)
-        if (res.ok) {
-          const data = await res.json()
-          if (data.backgroundUrl) {
-            setBackgroundUrl(data.backgroundUrl)
-            setBackgroundFileId(data.fileId || null)
-            setBackgroundFilename(data.filename || null)
-            if (!silent) setLoading(false)
-            return data.backgroundUrl
-          }
-        }
-      }
-
-      // No background found
-      setBackgroundUrl(null)
-      setBackgroundFileId(null)
-      setBackgroundFilename(null)
-      return null
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to load background'
-      console.error('Error fetching story background:', errorMsg)
-      if (!silent) setError(errorMsg)
-      setBackgroundUrl(null)
-      setBackgroundFileId(null)
-      setBackgroundFilename(null)
-      return null
-    } finally {
-      if (!silent) setLoading(false)
-    }
-  }, [chatId, projectId])
+  }, [data])
 
   const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current) {
@@ -130,7 +95,8 @@ export function useStoryBackground(
     pollingIntervalRef.current = setInterval(async () => {
       pollCount++
 
-      const newUrl = await fetchBackground(true)
+      const result = await mutateBackground()
+      const newUrl = result?.backgroundUrl ?? null
 
       // Stop if we detect a change (new URL or URL appeared where there was none)
       if (newUrl !== initialUrlRef.current) {
@@ -143,30 +109,7 @@ export function useStoryBackground(
         stopPolling()
       }
     }, 5000)
-  }, [backgroundUrl, fetchBackground, stopPolling])
-
-  // Initial fetch
-  useEffect(() => {
-    fetchBackground()
-  }, [fetchBackground])
-
-  // Passive polling - checks every 30s for background changes when enabled
-  useEffect(() => {
-    if (!enablePassivePolling || !chatId) {
-      return
-    }
-
-    const passiveInterval = setInterval(() => {
-      // Don't passive poll while active polling is happening
-      if (!pollingIntervalRef.current) {
-        fetchBackground(true)
-      }
-    }, PASSIVE_POLL_INTERVAL)
-
-    return () => {
-      clearInterval(passiveInterval)
-    }
-  }, [enablePassivePolling, chatId, fetchBackground])
+  }, [backgroundUrl, mutateBackground, stopPolling])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -182,9 +125,9 @@ export function useStoryBackground(
     backgroundFileId,
     backgroundFilename,
     loading,
-    error,
+    error: error ? (error instanceof Error ? error.message : 'Failed to load background') : null,
     polling,
-    refetch: () => fetchBackground(false).then(() => {}),
+    refetch: () => mutateBackground().then(() => {}),
     startPolling,
     stopPolling,
   }

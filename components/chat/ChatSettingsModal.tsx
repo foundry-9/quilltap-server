@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import useSWR from 'swr'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 
@@ -35,15 +36,12 @@ export default function ChatSettingsModal({
   avatarGenerationEnabled: initialAvatarGenerationEnabled,
   onSuccess,
 }: Readonly<ChatSettingsModalProps>) {
-  const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(
     initialImageProfileId ?? null
   )
   const [avatarGenEnabled, setAvatarGenEnabled] = useState(initialAvatarGenerationEnabled ?? false)
   const [imageProfileSaving, setImageProfileSaving] = useState(false)
   const [avatarGenSaving, setAvatarGenSaving] = useState(false)
-  const [dataLoading, setDataLoading] = useState(false)
 
   useEffect(() => {
     setSelectedImageProfileId(initialImageProfileId ?? null)
@@ -53,36 +51,16 @@ export default function ChatSettingsModal({
     setAvatarGenEnabled(initialAvatarGenerationEnabled ?? false)
   }, [initialAvatarGenerationEnabled])
 
-  const fetchProfiles = async () => {
-    try {
-      setDataLoading(true)
-      const [imageProfilesRes, apiKeysRes] = await Promise.all([
-        fetch('/api/v1/image-profiles'),
-        fetch('/api/v1/api-keys'),
-      ])
+  const { data: imageProfilesData, isLoading: profilesLoading } = useSWR<{ profiles: ImageProfile[] }>(
+    isOpen ? '/api/v1/image-profiles' : null
+  )
+  const { data: apiKeysData } = useSWR<{ apiKeys: ApiKey[] }>(
+    isOpen ? '/api/v1/api-keys' : null
+  )
 
-      if (imageProfilesRes.ok) {
-        const data = await imageProfilesRes.json()
-        setImageProfiles(data.profiles || [])
-      }
-
-      if (apiKeysRes.ok) {
-        const data = await apiKeysRes.json()
-        setApiKeys(data.apiKeys || [])
-      }
-    } catch (error) {
-      console.error('Failed to fetch profiles', { error: error instanceof Error ? error.message : String(error) })
-      showErrorToast('Failed to load profiles')
-    } finally {
-      setDataLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchProfiles()
-    }
-  }, [isOpen])
+  const imageProfiles = imageProfilesData?.profiles || []
+  const apiKeys = apiKeysData?.apiKeys || []
+  const dataLoading = profilesLoading
 
   // Disable click-outside detection while saving to prevent native select dropdown clicks
   // from closing the modal (browser renders select options in a separate layer)

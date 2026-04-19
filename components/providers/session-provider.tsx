@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
+import { SWRConfig } from "swr";
+import { swrFetcher } from "@/lib/swr-fetcher";
 import { TagStyleProvider } from "./tag-style-provider";
 import { QuickHideProvider } from "./quick-hide-provider";
 
@@ -184,21 +186,23 @@ function CustomSessionProvider({
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <CustomSessionProvider
-      refetchInterval={5 * 60}
-      refetchOnWindowFocus={false}
-    >
-      <ThemeProvider>
-        <TagStyleProvider>
-          <QuickHideProvider>
-              <ContentWidthProvider>
-                <AvatarDisplayProvider>
-                  {children}
-                </AvatarDisplayProvider>
-              </ContentWidthProvider>
-          </QuickHideProvider>
-        </TagStyleProvider>
-      </ThemeProvider>
-    </CustomSessionProvider>
+    <SWRConfig value={{ fetcher: swrFetcher, revalidateOnFocus: false }}>
+      <CustomSessionProvider
+        refetchInterval={5 * 60}
+        refetchOnWindowFocus={false}
+      >
+        <ThemeProvider>
+          <TagStyleProvider>
+            <QuickHideProvider>
+                <ContentWidthProvider>
+                  <AvatarDisplayProvider>
+                    {children}
+                  </AvatarDisplayProvider>
+                </ContentWidthProvider>
+            </QuickHideProvider>
+          </TagStyleProvider>
+        </ThemeProvider>
+      </CustomSessionProvider>
+    </SWRConfig>
   );
 }

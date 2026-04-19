@@ -1,43 +1,38 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import useSWR from 'swr'
 import { getErrorMessage } from '@/lib/error-utils'
 import type { QueueData, FullJobDetail } from '../types'
 
 export function useTasksQueue() {
-  const [data, setData] = useState<QueueData | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [controlLoading, setControlLoading] = useState(false)
   const [selectedJob, setSelectedJob] = useState<FullJobDetail | null>(null)
   const [jobActionLoading, setJobActionLoading] = useState<string | null>(null)
   const [showJobDialog, setShowJobDialog] = useState(false)
 
-  const fetchQueueStatus = useCallback(async () => {
-    try {
-      setLoading(true)
+  // Fetch queue status via SWR with optional polling
+  const { data: swrData, isLoading: loading, error: loadError, mutate: mutateQueue } = useSWR<QueueData>(
+    '/api/v1/system/tools?action=tasks-queue',
+    { refreshInterval: autoRefresh ? 5000 : 0 }
+  )
+
+  const data = swrData ?? null
+
+  const [error, setError] = useState<string | null>(null)
+
+  // Sync error from SWR
+  useEffect(() => {
+    if (loadError) {
+      setError(getErrorMessage(loadError))
+    } else {
       setError(null)
-
-      const res = await fetch('/api/v1/system/tools?action=tasks-queue', {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
-      })
-
-      if (!res.ok) {
-        throw new Error('Failed to fetch queue status')
-      }
-
-      const queueData = await res.json()
-      setData(queueData)
-    } catch (err) {
-      const errorMessage = getErrorMessage(err)
-      setError(errorMessage)
-      console.error('Failed to fetch tasks queue status', { error: errorMessage })
-    } finally {
-      setLoading(false)
     }
-  }, [])
+  }, [loadError])
+  const fetchQueueStatus = useCallback(async () => {
+    await mutateQueue()
+  }, [mutateQueue])
 
   const controlQueue = useCallback(
     async (action: 'start' | 'stop') => {
@@ -55,10 +50,10 @@ export function useTasksQueue() {
           throw new Error(`Failed to ${action} queue`)
         }
 
-        const result = await res.json()
+        await res.json()
 
         // Refresh the queue status to get updated processor state
-        await fetchQueueStatus()
+        await mutateQueue()
       } catch (err) {
         const errorMessage = getErrorMessage(err)
         setError(errorMessage)
@@ -67,7 +62,7 @@ export function useTasksQueue() {
         setControlLoading(false)
       }
     },
-    [fetchQueueStatus]
+    [mutateQueue]
   )
 
   const viewJob = useCallback(async (jobId: string) => {
@@ -83,7 +78,6 @@ export function useTasksQueue() {
       setShowJobDialog(true)
     } catch (err) {
       const errorMessage = getErrorMessage(err)
-      setError(errorMessage)
       console.error('Failed to fetch job details', { error: errorMessage })
     } finally {
       setJobActionLoading(null)
@@ -105,16 +99,15 @@ export function useTasksQueue() {
           throw new Error(data.error || 'Failed to pause job')
         }
 
-        await fetchQueueStatus()
+        await mutateQueue()
       } catch (err) {
         const errorMessage = getErrorMessage(err)
-        setError(errorMessage)
         console.error('Failed to pause job', { error: errorMessage })
       } finally {
         setJobActionLoading(null)
       }
     },
-    [fetchQueueStatus]
+    [mutateQueue]
   )
 
   const resumeJob = useCallback(
@@ -132,16 +125,15 @@ export function useTasksQueue() {
           throw new Error(data.error || 'Failed to resume job')
         }
 
-        await fetchQueueStatus()
+        await mutateQueue()
       } catch (err) {
         const errorMessage = getErrorMessage(err)
-        setError(errorMessage)
         console.error('Failed to resume job', { error: errorMessage })
       } finally {
         setJobActionLoading(null)
       }
     },
-    [fetchQueueStatus]
+    [mutateQueue]
   )
 
   const deleteJob = useCallback(
@@ -164,33 +156,16 @@ export function useTasksQueue() {
           setSelectedJob(null)
         }
 
-        await fetchQueueStatus()
+        await mutateQueue()
       } catch (err) {
         const errorMessage = getErrorMessage(err)
-        setError(errorMessage)
         console.error('Failed to delete job', { error: errorMessage })
       } finally {
         setJobActionLoading(null)
       }
     },
-    [fetchQueueStatus, selectedJob?.id]
+    [mutateQueue, selectedJob?.id]
   )
-
-  // Initial fetch
-  useEffect(() => {
-    fetchQueueStatus()
-  }, [fetchQueueStatus])
-
-  // Auto-refresh when enabled
-  useEffect(() => {
-    if (!autoRefresh) return
-
-    const interval = setInterval(() => {
-      fetchQueueStatus()
-    }, 5000) // Refresh every 5 seconds
-
-    return () => clearInterval(interval)
-  }, [autoRefresh, fetchQueueStatus])
 
   return {
     data,

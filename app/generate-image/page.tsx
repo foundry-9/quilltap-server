@@ -9,6 +9,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import useSWR from 'swr'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useClickOutside } from '@/hooks/useClickOutside'
@@ -42,18 +43,12 @@ export default function GenerateImagePage() {
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const loadAllEntities = async () => {
-    try {
-      const charactersRes = await fetch('/api/v1/characters')
+  const { data: charactersData, isLoading } = useSWR<{ characters: Array<{ id: string; name: string }> }>('/api/v1/characters')
 
-      if (!charactersRes.ok) {
-        throw new Error('Failed to load characters')
-      }
-
-      const charactersData = await charactersRes.json()
-      const characters = charactersData.characters || []
-
-      const entities: EntityOption[] = characters.map((c: any) => ({
+  // Load all characters for placeholder insertion
+  useEffect(() => {
+    if (charactersData?.characters) {
+      const entities: EntityOption[] = charactersData.characters.map((c) => ({
         id: c.id,
         name: c.name,
         type: 'character' as const,
@@ -63,15 +58,8 @@ export default function GenerateImagePage() {
       entities.sort((a, b) => a.name.localeCompare(b.name))
 
       setAllEntities(entities)
-    } catch (error) {
-      console.error('Error loading entities', { error: error instanceof Error ? error.message : String(error) })
     }
-  }
-
-  // Load all characters for placeholder insertion
-  useEffect(() => {
-    loadAllEntities()
-  }, [])
+  }, [charactersData])
 
   const insertPlaceholder = (text: string) => {
     const textarea = promptRef.current

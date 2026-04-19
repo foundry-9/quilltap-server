@@ -1,36 +1,19 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
+import useSWR from 'swr'
 import type { LLMLog } from '@/lib/schemas/types'
+import { getErrorMessage } from '@/lib/error-utils'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
 
 export default function LLMLogsCard() {
-  const [logs, setLogs] = useState<LLMLog[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [selectedLog, setSelectedLog] = useState<LLMLog | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const fetchLogs = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      // Fetch recent logs (all types)
-      const res = await fetch('/api/v1/llm-logs?limit=20')
-      if (!res.ok) throw new Error('Failed to fetch LLM logs')
-      const data = await res.json()
-      setLogs(data.logs || [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch logs')
-      setLogs([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchLogs()
-  }, [fetchLogs])
+  const { data, isLoading, error: loadError, mutate: mutateLogs } = useSWR<{ logs: LLMLog[] }>(
+    '/api/v1/llm-logs?limit=20'
+  )
+  const logs = data?.logs ?? []
 
   const handleViewLog = (log: LLMLog) => {
     setSelectedLog(log)
@@ -90,20 +73,20 @@ export default function LLMLogsCard() {
       </div>
 
       {/* Error Message */}
-      {error && (
+      {loadError && (
         <div className="qt-bg-destructive/10 border qt-border-destructive qt-text-destructive px-4 py-3 rounded mb-4">
-          {error}
+          {getErrorMessage(loadError, 'Failed to fetch logs')}
         </div>
       )}
 
       {/* Refresh Button */}
       <div className="mb-4">
         <button
-          onClick={fetchLogs}
-          disabled={loading}
+          onClick={() => mutateLogs()}
+          disabled={isLoading}
           className="qt-button qt-button-secondary flex items-center gap-2"
         >
-          <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
           Refresh
@@ -111,7 +94,7 @@ export default function LLMLogsCard() {
       </div>
 
       {/* Logs List */}
-      {loading ? (
+      {isLoading ? (
         <div className="text-center py-6 qt-text-secondary">
           <svg className="animate-spin h-6 w-6 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
