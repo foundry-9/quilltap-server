@@ -14,7 +14,11 @@ export default function UnlockPage() {
   const [attempts, setAttempts] = useState(0);
   const [isAutoLockReturn, setIsAutoLockReturn] = useState(false);
 
+  // sessionStorage read must happen after hydration; a lazy useState initializer
+  // would cause an SSR mismatch (server renders with false, client with
+  // sessionStorage value).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see comment above
     setIsAutoLockReturn(!!sessionStorage.getItem('quilltap-autolock-return'));
   }, []);
 

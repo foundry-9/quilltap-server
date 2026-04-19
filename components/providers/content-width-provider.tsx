@@ -36,12 +36,15 @@ export function ContentWidthProvider({ children }: { children: React.ReactNode }
   const [storageReady, setStorageReady] = useState(false)
   const [canApplyWide, setCanApplyWide] = useState(false)
 
-  // Load from localStorage on mount
+  // Load from localStorage on mount. The localStorage read must happen after
+  // hydration; a lazy useState initializer would cause an SSR mismatch
+  // (server renders with default, client with localStorage value).
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY)
       if (raw === 'true') {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- see comment above
         setIsWide(true)
       }
     } catch (error) {
