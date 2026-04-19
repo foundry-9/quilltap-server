@@ -467,6 +467,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return visibleMessages[index]?.id ?? index
   }, [visibleMessages])
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- @tanstack/react-virtual exposes hooks the React Compiler can't analyse; safe to opt out of compiler optimisation here
   const virtualizer = useVirtualizer({
     count: visibleMessages.length,
     getScrollElement: () => messagesContainerRef.current,
