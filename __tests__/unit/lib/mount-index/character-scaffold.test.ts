@@ -78,13 +78,13 @@ describe('scaffoldCharacterMount', () => {
     writeDatabaseDocumentMock.mockResolvedValue({ mtime: 0 });
   });
 
-  it('scaffolds all seven files and five folders on a fresh database-backed character mount', async () => {
+  it('scaffolds all eight files and five folders on a fresh database-backed character mount', async () => {
     const repos = makeRepos();
     getRepositoriesMock.mockReturnValue(repos);
 
     const result = await scaffoldCharacterMount(MOUNT_ID);
 
-    expect(result).toEqual({ filesCreated: 7, filesSkipped: 0, foldersCreated: 5 });
+    expect(result).toEqual({ filesCreated: 8, filesSkipped: 0, foldersCreated: 5 });
     expect(ensureFolderPathMock).toHaveBeenCalledTimes(5);
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Prompts');
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Scenarios');
@@ -92,12 +92,24 @@ describe('scaffoldCharacterMount', () => {
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'images');
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'files');
 
-    expect(writeDatabaseDocumentMock).toHaveBeenCalledTimes(7);
+    expect(writeDatabaseDocumentMock).toHaveBeenCalledTimes(8);
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'identity.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'description.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'personality.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'physical-description.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'example-dialogues.md', '');
+  });
+
+  it('writes physical-prompts.json with null short/medium/long/complete for a fresh scaffold', async () => {
+    const repos = makeRepos();
+    getRepositoriesMock.mockReturnValue(repos);
+
+    await scaffoldCharacterMount(MOUNT_ID);
+
+    const call = writeDatabaseDocumentMock.mock.calls.find(c => c[1] === 'physical-prompts.json');
+    expect(call).toBeDefined();
+    const parsed = JSON.parse(call![2] as string);
+    expect(parsed).toEqual({ short: null, medium: null, long: null, complete: null });
   });
 
   it('writes properties.json with pronouns, aliases, title, firstMessage, talkativeness', async () => {
@@ -175,7 +187,7 @@ describe('scaffoldCharacterMount', () => {
 
     const result = await scaffoldCharacterMount(MOUNT_ID);
 
-    expect(result.filesCreated).toBe(5);
+    expect(result.filesCreated).toBe(6);
     expect(result.filesSkipped).toBe(2);
     expect(result.foldersCreated).toBe(3);
 

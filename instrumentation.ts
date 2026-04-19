@@ -531,12 +531,21 @@ export async function register() {
       // will be picked up on the next mount-point scan pass.
       try {
         const { backfillCharacterVaults } = await import('./lib/startup/backfill-character-vaults');
-        backfillCharacterVaults().catch((backfillError) => {
-          logger.warn('Error during character vault backfill', {
-            context: 'instrumentation.register',
-            error: backfillError instanceof Error ? backfillError.message : String(backfillError),
+        backfillCharacterVaults()
+          .then(async () => {
+            // Chained after backfill so newly created vaults (already in the
+            // new shape) aren't visited a second time for no reason.
+            const { migrateVaultPhysicalFiles } = await import(
+              './lib/startup/migrate-vault-physical-files'
+            );
+            await migrateVaultPhysicalFiles();
+          })
+          .catch((backfillError) => {
+            logger.warn('Error during character vault backfill or physical-file migration', {
+              context: 'instrumentation.register',
+              error: backfillError instanceof Error ? backfillError.message : String(backfillError),
+            });
           });
-        });
       } catch (backfillImportError) {
         logger.warn('Failed to import character vault backfill module', {
           context: 'instrumentation.register',

@@ -40,7 +40,13 @@ import { runCharacterOptimizer } from '@/lib/services/character-optimizer.servic
 import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.service';
 import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
-import { readCharacterVaultProperties } from '@/lib/database/repositories/character-properties-overlay';
+import {
+  readCharacterVaultProperties,
+  readCharacterVaultDescription,
+  readCharacterVaultPersonality,
+  readCharacterVaultPhysicalDescription,
+  readCharacterVaultPhysicalPrompts,
+} from '@/lib/database/repositories/character-properties-overlay';
 
 // ============================================================================
 // Schemas
@@ -725,27 +731,73 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           return badRequest('Character has no linked document-store vault to sync from');
         }
 
-        const props = await readCharacterVaultProperties(
-          rawCharacter.characterDocumentMountPointId,
-          rawCharacter.id,
-        );
-        if (!props) {
+        const mountId = rawCharacter.characterDocumentMountPointId;
+        const [props, descMd, persMd, physDescMd, physPromptsJson] = await Promise.all([
+          readCharacterVaultProperties(mountId, rawCharacter.id),
+          readCharacterVaultDescription(mountId, rawCharacter.id),
+          readCharacterVaultPersonality(mountId, rawCharacter.id),
+          readCharacterVaultPhysicalDescription(mountId, rawCharacter.id),
+          readCharacterVaultPhysicalPrompts(mountId, rawCharacter.id),
+        ]);
+
+        const patch: Record<string, unknown> = {};
+
+        if (props) {
+          patch.pronouns = props.pronouns;
+          patch.aliases = props.aliases;
+          patch.title = props.title;
+          patch.firstMessage = props.firstMessage;
+          patch.talkativeness = props.talkativeness;
+        }
+
+        if (descMd !== null) {
+          patch.description = descMd === '' ? null : descMd;
+        }
+        if (persMd !== null) {
+          patch.personality = persMd === '' ? null : persMd;
+        }
+
+        const existingPhysical = rawCharacter.physicalDescriptions ?? [];
+        const hasPhysicalInput = physDescMd !== null || physPromptsJson !== null;
+        let physicalSkippedNoPrimary = false;
+
+        if (hasPhysicalInput) {
+          if (existingPhysical.length === 0) {
+            physicalSkippedNoPrimary = true;
+          } else {
+            const first = existingPhysical[0];
+            const patched = { ...first };
+            if (physDescMd !== null) {
+              patched.fullDescription = physDescMd === '' ? null : physDescMd;
+            }
+            if (physPromptsJson !== null) {
+              patched.shortPrompt = physPromptsJson.short;
+              patched.mediumPrompt = physPromptsJson.medium;
+              patched.longPrompt = physPromptsJson.long;
+              patched.completePrompt = physPromptsJson.complete;
+            }
+            patched.updatedAt = new Date().toISOString();
+            patch.physicalDescriptions = [patched, ...existingPhysical.slice(1)];
+          }
+        }
+
+        if (Object.keys(patch).length === 0) {
           return badRequest(
-            "This character's properties.json is missing or invalid; nothing to sync"
+            "This character's vault has no valid overlay files to sync; nothing to do"
           );
         }
 
-        const updatedCharacter = await repos.characters.update(id, {
-          pronouns: props.pronouns,
-          aliases: props.aliases,
-          title: props.title,
-          firstMessage: props.firstMessage,
-          talkativeness: props.talkativeness,
-        });
+        const updatedCharacter = await repos.characters.update(id, patch);
 
         logger.info('[Characters v1] Synced character properties from vault', {
           characterId: id,
-          mountPointId: rawCharacter.characterDocumentMountPointId,
+          mountPointId: mountId,
+          syncedProperties: !!props,
+          syncedDescription: descMd !== null,
+          syncedPersonality: persMd !== null,
+          syncedPhysicalDescription: physDescMd !== null && !physicalSkippedNoPrimary,
+          syncedPhysicalPrompts: physPromptsJson !== null && !physicalSkippedNoPrimary,
+          physicalSkippedNoPrimary,
         });
 
         return NextResponse.json({ character: updatedCharacter });

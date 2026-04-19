@@ -29,11 +29,23 @@ const INITIAL_FORM_DATA: CharacterFormData = {
 
 /**
  * Fields that, when the Scriptorium overlay switch is on, are read from the
- * character's vault properties.json instead of the DB. The edit form must
- * strip these from PUT payloads so a save doesn't silently persist overlaid
- * (vault-derived) values back into the DB.
+ * character's vault files instead of the DB. The edit form must strip these
+ * from PUT payloads so a save doesn't silently persist overlaid (vault-derived)
+ * values back into the DB.
+ *
+ * Covers properties.json (aliases/pronouns/title/firstMessage), description.md,
+ * and personality.md. Physical-description.md and physical-prompts.json are
+ * edited from the Descriptions tab, which surfaces its own overlay warning
+ * rather than going through this form.
  */
-const OVERLAY_MANAGED_FIELDS = ['aliases', 'pronouns', 'title', 'firstMessage'] as const satisfies readonly (keyof CharacterFormData)[]
+const OVERLAY_MANAGED_FIELDS = [
+  'aliases',
+  'pronouns',
+  'title',
+  'firstMessage',
+  'description',
+  'personality',
+] as const satisfies readonly (keyof CharacterFormData)[]
 
 /**
  * Hook for managing character edit state and operations

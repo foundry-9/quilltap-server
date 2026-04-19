@@ -93,14 +93,19 @@ export function CharacterBasicInfo({
               htmlFor="readPropertiesFromDocumentStore"
               className="block text-sm font-medium text-foreground"
             >
-              Read aliases, pronouns, title, first message & talkativeness from Scriptorium
+              Read this character&rsquo;s core fields from the Scriptorium vault
             </label>
             <p className="text-xs qt-text-secondary mt-1">
-              When on, these five fields are read live from this character&rsquo;s
-              <code className="mx-1">properties.json</code>
-              inside their linked Scriptorium vault instead of the database. Edits to those fields
-              here are locked until the switch is off. Use &ldquo;Sync from vault&rdquo; to copy the
-              vault values back into the database record.
+              When on, the character&rsquo;s basic properties (aliases, pronouns, title, first
+              message, talkativeness), description, personality, and first physical description
+              plus its prompts are read live from files inside the linked Scriptorium vault
+              (<code className="mx-1">properties.json</code>,
+              <code className="mx-1">description.md</code>,
+              <code className="mx-1">personality.md</code>,
+              <code className="mx-1">physical-description.md</code>,
+              <code className="mx-1">physical-prompts.json</code>).
+              Edits to those fields here are locked until the switch is off. Use
+              &ldquo;Sync from vault&rdquo; to copy the vault values back into the database record.
             </p>
             {!hasLinkedVault && (
               <p className="text-xs qt-text-destructive mt-2">
@@ -283,9 +288,10 @@ export function CharacterBasicInfo({
           id="description"
           name="description"
           value={formData.description}
+          disabled={overlayManagedDisabled}
           onChange={onChange}
           rows={4}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           placeholder="Describe the character's appearance, background, and key traits"
         />
       </div>
@@ -299,9 +305,10 @@ export function CharacterBasicInfo({
           id="personality"
           name="personality"
           value={formData.personality}
+          disabled={overlayManagedDisabled}
           onChange={onChange}
           rows={4}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           placeholder="Describe the character's personality traits and behavioral patterns"
         />
       </div>

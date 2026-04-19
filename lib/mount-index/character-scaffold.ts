@@ -55,6 +55,13 @@ const WARDROBE_JSON = {
   },
 };
 
+const PHYSICAL_PROMPTS_JSON = {
+  short: null,
+  medium: null,
+  long: null,
+  complete: null,
+};
+
 export interface CharacterScaffoldResult {
   filesCreated: number;
   filesSkipped: number;
@@ -104,6 +111,7 @@ export async function scaffoldCharacterMount(
     ...BLANK_MARKDOWN_FILES.map(path => ({ path, content: '' })),
     { path: 'properties.json', content: JSON.stringify(PROPERTIES_JSON, null, 2) },
     { path: 'wardrobe.json', content: JSON.stringify(WARDROBE_JSON, null, 2) },
+    { path: 'physical-prompts.json', content: JSON.stringify(PHYSICAL_PROMPTS_JSON, null, 2) },
   ];
 
   for (const { path: relPath, content } of fileSpecs) {

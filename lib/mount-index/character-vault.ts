@@ -109,11 +109,19 @@ async function populateVaultWithCharacterData(
   await writeDatabaseDocument(mountPointId, 'identity.md', renderIdentityMarkdown(character));
   await writeDatabaseDocument(mountPointId, 'description.md', character.description ?? '');
   await writeDatabaseDocument(mountPointId, 'personality.md', character.personality ?? '');
+
+  const primaryPhysical = (character.physicalDescriptions ?? [])[0];
   await writeDatabaseDocument(
     mountPointId,
     'physical-description.md',
-    renderPhysicalDescriptionMarkdown(character.physicalDescriptions ?? []),
+    primaryPhysical?.fullDescription ?? '',
   );
+  await writeDatabaseDocument(
+    mountPointId,
+    'physical-prompts.json',
+    renderPhysicalPromptsJson(primaryPhysical),
+  );
+
   await writeDatabaseDocument(
     mountPointId,
     'example-dialogues.md',
@@ -202,49 +210,17 @@ function renderIdentityMarkdown(c: Character): string {
   return lines.join('\n');
 }
 
-function renderPhysicalDescriptionMarkdown(descs: PhysicalDescription[]): string {
-  if (!descs || descs.length === 0) return '';
-  const blocks: string[] = [];
-  for (const d of descs) {
-    const section: string[] = [];
-    section.push(`## ${d.name}`);
-    if (d.usageContext) {
-      section.push('');
-      section.push(`*Usage context:* ${d.usageContext}`);
-    }
-    if (d.shortPrompt) {
-      section.push('');
-      section.push('### Short prompt');
-      section.push('');
-      section.push(d.shortPrompt);
-    }
-    if (d.mediumPrompt) {
-      section.push('');
-      section.push('### Medium prompt');
-      section.push('');
-      section.push(d.mediumPrompt);
-    }
-    if (d.longPrompt) {
-      section.push('');
-      section.push('### Long prompt');
-      section.push('');
-      section.push(d.longPrompt);
-    }
-    if (d.completePrompt) {
-      section.push('');
-      section.push('### Complete prompt');
-      section.push('');
-      section.push(d.completePrompt);
-    }
-    if (d.fullDescription) {
-      section.push('');
-      section.push('### Full description');
-      section.push('');
-      section.push(d.fullDescription);
-    }
-    blocks.push(section.join('\n'));
-  }
-  return `${blocks.join('\n\n')}\n`;
+function renderPhysicalPromptsJson(primary: PhysicalDescription | undefined): string {
+  return JSON.stringify(
+    {
+      short: primary?.shortPrompt ?? null,
+      medium: primary?.mediumPrompt ?? null,
+      long: primary?.longPrompt ?? null,
+      complete: primary?.completePrompt ?? null,
+    },
+    null,
+    2,
+  );
 }
 
 function migrateClothingRecordsToItems(

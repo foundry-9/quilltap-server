@@ -227,7 +227,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         )
 
       case 'descriptions':
-        return <DescriptionsTab characterId={id} />
+        return (
+          <DescriptionsTab
+            characterId={id}
+            overlayActive={character?.readPropertiesFromDocumentStore === true}
+          />
+        )
 
       default:
         return null

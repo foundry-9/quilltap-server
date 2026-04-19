@@ -68,6 +68,7 @@ export interface Character {
   defaultSystemPromptId?: string | null
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
+  readPropertiesFromDocumentStore?: boolean | null
   defaultImage?: {
     id: string
     filepath: string
