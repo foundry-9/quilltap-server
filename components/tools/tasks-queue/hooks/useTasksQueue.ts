@@ -25,6 +25,7 @@ export function useTasksQueue() {
   // Sync error from SWR
   useEffect(() => {
     if (loadError) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync SWR error to local error state so handlers can also set errors
       setError(getErrorMessage(loadError))
     } else {
       setError(null)

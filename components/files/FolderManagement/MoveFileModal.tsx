@@ -33,12 +33,9 @@ export default function MoveFileModal({
 
   // Reset selection when file changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync local state with upstream prop; parent renders unconditionally
     setSelectedFolder(file.folderPath || '/')
   }, [file.folderPath])
-
-  useEffect(() => {
-    // Modal opened
-  }, [file.id, file.folderPath, folders.length])
 
   // Build a list of all folders including root
   const allFolders = useMemo(() => {

@@ -64,8 +64,9 @@ export default function ChatToolSettingsModal({
     fetchTools()
   }, [isOpen, chatId])
 
-  // Reset local state when props change
+  // Reset local state when props change (modal always mounted)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- form state must re-sync when parent updates (parent renders unconditionally)
     setLocalDisabledTools(new Set(disabledTools))
     setLocalDisabledGroups(new Set(disabledToolGroups))
   }, [disabledTools, disabledToolGroups])

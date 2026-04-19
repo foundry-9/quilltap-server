@@ -47,6 +47,7 @@ export default function TagsTab() {
   // Sync SWR data to local state for UI mutations
   useEffect(() => {
     if (data?.tags) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setTagOptions(data.tags)
     }
   }, [data?.tags])

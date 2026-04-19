@@ -102,6 +102,7 @@ export function useCharacterEdit(id: string) {
    * Initial data loading effect
    */
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount + form initialization with loaded data
     fetchCharacter()
   }, [id, fetchCharacter])
 

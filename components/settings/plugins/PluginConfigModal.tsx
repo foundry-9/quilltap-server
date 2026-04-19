@@ -64,6 +64,7 @@ export function PluginConfigModal({
   // Update error from SWR
   useEffect(() => {
     if (loadError) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync SWR error to local error state so handlers can also set errors
       setError(loadError instanceof Error ? loadError.message : 'Failed to load configuration')
     }
   }, [loadError])
@@ -71,6 +72,7 @@ export function PluginConfigModal({
   // Sync formData with loaded config when data changes
   useEffect(() => {
     if (data?.config) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream data changes (parent renders unconditionally)
       setFormData(data.config)
     }
   }, [data?.config])

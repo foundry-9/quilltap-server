@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import useSWR from 'swr'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
@@ -58,7 +58,6 @@ export function useChatControls({
   const [documentEditingMode, setDocumentEditingMode] = useState(false)
   const [agentModeEnabled, setAgentModeEnabled] = useState<boolean | null>(null)
   const [storyBackgroundsEnabled, setStoryBackgroundsEnabled] = useState(false)
-  const [connectionProfiles, setConnectionProfiles] = useState<Array<{ id: string; name: string; provider?: string; modelName?: string }>>([])
 
   // Refs
   const userStoppedStreamRef = useRef<boolean>(false)
@@ -68,6 +67,7 @@ export function useChatControls({
   const chatResolvedAgentModeEnabled = chat?.resolvedAgentModeEnabled
   useEffect(() => {
     if (chat) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setAgentModeEnabled(chatResolvedAgentModeEnabled ?? null)
     }
   }, [chat, chatResolvedAgentModeEnabled])
@@ -87,6 +87,7 @@ export function useChatControls({
   // Initialize documentEditingMode from chat data
   useEffect(() => {
     if (chat?.documentEditingMode !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setDocumentEditingMode(chat.documentEditingMode)
     }
   }, [chat?.documentEditingMode])
@@ -103,16 +104,15 @@ export function useChatControls({
     '/api/v1/connection-profiles'
   )
 
-  useEffect(() => {
-    if (profilesData?.profiles) {
-      setConnectionProfiles(profilesData.profiles.map((p) => ({
-        id: p.id,
-        name: p.name,
-        provider: p.provider,
-        modelName: p.modelName,
-      })))
-    }
-  }, [profilesData])
+  const connectionProfiles = useMemo(
+    () => profilesData?.profiles?.map((p) => ({
+      id: p.id,
+      name: p.name,
+      provider: p.provider,
+      modelName: p.modelName,
+    })) ?? [],
+    [profilesData]
+  )
 
   // Function to set pause state and persist to database
   const setPauseState = useCallback(async (paused: boolean) => {

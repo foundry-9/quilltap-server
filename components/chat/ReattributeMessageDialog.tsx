@@ -53,6 +53,7 @@ export default function ReattributeMessageDialog({
   // Reset selection when dialog opens
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on open; parent renders unconditionally
       setSelectedParticipantId(null)
     }
   }, [isOpen, messageId, currentParticipantId, participants.length])

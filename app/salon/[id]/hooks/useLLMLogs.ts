@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import useSWR from 'swr'
 import { showErrorToast } from '@/lib/toast'
 import type { LLMLog } from '@/lib/schemas/types'
@@ -19,9 +19,6 @@ export function useLLMLogs({
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [inspectorScrollToMessageId, setInspectorScrollToMessageId] = useState<string | null>(null)
 
-  // Derive which messages have logs from the full dataset
-  const [messagesWithLogs, setMessagesWithLogs] = useState<Set<string>>(new Set())
-
   // Fetch all logs for this chat using the combined endpoint (only fetch when messages exist)
   const { data: logsData, isLoading, mutate: mutateLogs } = useSWR<{ logs: LLMLog[] }>(
     messages.length > 0 ? `/api/v1/llm-logs?chatId=${chatId}&includeMessages=true` : null
@@ -29,14 +26,13 @@ export function useLLMLogs({
 
   const allChatLogs = logsData?.logs || []
 
-  // Derive messagesWithLogs whenever logs change
-  useEffect(() => {
-    const messageIdsWithLogs = new Set<string>(
+  // Derive which messages have logs from the full dataset
+  const messagesWithLogs = useMemo(() => {
+    return new Set<string>(
       allChatLogs
         .filter((log: LLMLog) => log.messageId)
         .map((log: LLMLog) => log.messageId!)
     )
-    setMessagesWithLogs(messageIdsWithLogs)
   }, [allChatLogs])
 
   // Open inspector panel, optionally scrolled to a specific message's logs

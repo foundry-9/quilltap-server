@@ -93,6 +93,7 @@ export default function AddCharacterDialog({
       }, 100)
     } else if (!isOpen) {
       // Reset state when dialog closes
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset fires only on open; parent renders unconditionally
       setSelectedCharacterId(null)
       setSelectedConnectionProfileId(null)
       setHasHistoryAccess(false)
@@ -107,6 +108,7 @@ export default function AddCharacterDialog({
     if (selectedCharacterId) {
       const character = characters.find(c => c.id === selectedCharacterId)
       if (character?.defaultConnectionProfileId) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream selectedCharacterId changes (parent renders unconditionally)
         setSelectedConnectionProfileId(character.defaultConnectionProfileId)
       } else {
         // Fall back to first available profile

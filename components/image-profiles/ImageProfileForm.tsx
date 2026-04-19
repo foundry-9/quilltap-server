@@ -116,14 +116,16 @@ export function ImageProfileForm({
   }, [])
 
   // Normalize legacy provider names after providers are loaded
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: normalizing after fetch, dependencies managed by logic check
   useEffect(() => {
     if (!isFetchingProviders && formData.provider) {
       const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
       if (normalizedProvider !== formData.provider) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream imageProviders changes (parent renders unconditionally)
         setFormData(prev => ({ ...prev, provider: normalizedProvider }))
       }
     }
-  }, [isFetchingProviders, imageProviders]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isFetchingProviders, imageProviders])
 
   // Fetch available models when provider or API key changes
   useEffect(() => {

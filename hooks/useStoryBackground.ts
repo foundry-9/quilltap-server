@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import useSWR from 'swr'
 
 interface StoryBackgroundState {
@@ -29,9 +29,6 @@ export function useStoryBackground(
   startPolling: () => void
   stopPolling: () => void
 } {
-  const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null)
-  const [backgroundFileId, setBackgroundFileId] = useState<string | null>(null)
-  const [backgroundFilename, setBackgroundFilename] = useState<string | null>(null)
   const [polling, setPolling] = useState(false)
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -55,18 +52,19 @@ export function useStoryBackground(
     revalidateOnReconnect: false,
   })
 
-  // Update local state from SWR data
-  useEffect(() => {
-    if (data?.backgroundUrl) {
-      setBackgroundUrl(data.backgroundUrl)
-      setBackgroundFileId(data.fileId || null)
-      setBackgroundFilename(data.filename || null)
-    } else {
-      setBackgroundUrl(null)
-      setBackgroundFileId(null)
-      setBackgroundFilename(null)
-    }
-  }, [data])
+  // Derive background state from SWR data
+  const backgroundUrl_derived = useMemo(
+    () => data?.backgroundUrl || null,
+    [data]
+  )
+  const backgroundFileId_derived = useMemo(
+    () => data?.fileId || null,
+    [data]
+  )
+  const backgroundFilename_derived = useMemo(
+    () => data?.filename || null,
+    [data]
+  )
 
   const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current) {
@@ -79,7 +77,7 @@ export function useStoryBackground(
 
   const startPolling = useCallback(() => {
     // Store current URL to detect changes
-    initialUrlRef.current = backgroundUrl
+    initialUrlRef.current = backgroundUrl_derived
 
     // Don't start if already polling
     if (pollingIntervalRef.current) {
@@ -109,7 +107,7 @@ export function useStoryBackground(
         stopPolling()
       }
     }, 5000)
-  }, [backgroundUrl, mutateBackground, stopPolling])
+  }, [backgroundUrl_derived, mutateBackground, stopPolling])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -121,9 +119,9 @@ export function useStoryBackground(
   }, [])
 
   return {
-    backgroundUrl,
-    backgroundFileId,
-    backgroundFilename,
+    backgroundUrl: backgroundUrl_derived,
+    backgroundFileId: backgroundFileId_derived,
+    backgroundFilename: backgroundFilename_derived,
     loading,
     error: error ? (error instanceof Error ? error.message : 'Failed to load background') : null,
     polling,

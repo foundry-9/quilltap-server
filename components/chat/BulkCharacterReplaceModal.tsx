@@ -74,9 +74,10 @@ export default function BulkCharacterReplaceModal({
   const sourceParticipantId = sourceSelection === UNASSIGNED_USER ? null : (sourceSelection || null)
   const targetParticipantId = targetSelection === UNASSIGNED_USER ? null : (targetSelection || null)
 
-  // Reset state when modal opens (modal-reset pattern, do not touch per instructions)
+  // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on open; parent renders unconditionally
       setSourceSelection('')
       setTargetSelection('')
       setRoleFilter('both')
@@ -126,6 +127,7 @@ export default function BulkCharacterReplaceModal({
   // Clear target when source changes (if target equals source)
   useEffect(() => {
     if (targetSelection && targetSelection === sourceSelection) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset fires only on open; parent renders unconditionally
       setTargetSelection('')
     }
   }, [sourceSelection, targetSelection])

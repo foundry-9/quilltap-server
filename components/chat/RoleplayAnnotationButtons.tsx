@@ -52,6 +52,7 @@ export default function RoleplayAnnotationButtons({
   // Fetch template info when roleplayTemplateId changes
   useEffect(() => {
     if (!roleplayTemplateId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch with dependency tracking
       setTemplate(null)
       return
     }

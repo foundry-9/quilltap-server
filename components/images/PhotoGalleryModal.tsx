@@ -137,8 +137,10 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     }
   }, [isOpen, mode, chatId, characterId, userCharacterId])
 
+  // Load gallery items when modal opens
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on open; parent renders unconditionally
       loadItems()
     }
   }, [isOpen, loadItems])
@@ -146,6 +148,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
   // Reset selected index when modal closes
   useEffect(() => {
     if (!isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on close; parent renders unconditionally
       setSelectedIndex(-1)
     }
   }, [isOpen])

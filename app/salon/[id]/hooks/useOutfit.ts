@@ -227,6 +227,7 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
 
   // Fetch outfit state on mount
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
     refreshOutfit()
   }, [refreshOutfit])
 

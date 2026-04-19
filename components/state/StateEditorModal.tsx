@@ -51,6 +51,7 @@ export default function StateEditorModal({
   useEffect(() => {
     if (!stateData) return
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset fires only on open; parent renders unconditionally
     setState(stateData.state || {})
     setStateText(JSON.stringify(stateData.state || {}, null, 2))
 

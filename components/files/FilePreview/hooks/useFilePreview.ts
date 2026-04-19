@@ -78,6 +78,7 @@ export function useFilePreview({
   // Handle size limit and SWR errors
   useEffect(() => {
     if (previewType !== 'text') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setTextError(null)
       return
     }

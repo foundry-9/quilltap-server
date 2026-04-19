@@ -155,6 +155,7 @@ export function HelpChatDialog() {
 
   useEffect(() => {
     if (pastChatsData?.chats) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setPastChats(pastChatsData.chats)
     }
   }, [pastChatsData])
@@ -162,8 +163,10 @@ export function HelpChatDialog() {
   // Load messages when chat changes
   useEffect(() => {
     if (currentChatId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       loadMessages(currentChatId)
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setMessages([])
     }
   }, [currentChatId, loadMessages])

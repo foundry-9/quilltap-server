@@ -57,6 +57,7 @@ export default function GenerateImagePage() {
       // Sort alphabetically
       entities.sort((a, b) => a.name.localeCompare(b.name))
 
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setAllEntities(entities)
     }
   }, [charactersData])

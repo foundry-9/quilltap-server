@@ -106,6 +106,7 @@ export default function DocumentPickerModal({
   // Fetch mount points and recent documents when modal opens
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch when modal opens; parent renders unconditionally
       fetchMountPoints()
       fetchRecentDocuments()
     }
@@ -115,6 +116,7 @@ export default function DocumentPickerModal({
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on close; parent renders unconditionally
       setStep('source')
       setSelectedScope('project')
       setSelectedMountPoint(null)

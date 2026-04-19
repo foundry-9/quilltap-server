@@ -43,11 +43,14 @@ export default function ChatSettingsModal({
   const [imageProfileSaving, setImageProfileSaving] = useState(false)
   const [avatarGenSaving, setAvatarGenSaving] = useState(false)
 
+  // Sync local state when upstream props change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream <prop> changes (parent renders unconditionally)
     setSelectedImageProfileId(initialImageProfileId ?? null)
   }, [initialImageProfileId])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream <prop> changes (parent renders unconditionally)
     setAvatarGenEnabled(initialAvatarGenerationEnabled ?? false)
   }, [initialAvatarGenerationEnabled])
 

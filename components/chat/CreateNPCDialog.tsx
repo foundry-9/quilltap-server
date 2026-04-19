@@ -55,6 +55,7 @@ export default function CreateNPCDialog({
   // Auto-select first profile when data loads
   useEffect(() => {
     if (connectionProfiles.length > 0 && !selectedConnectionProfileId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream connectionProfiles changes (parent renders unconditionally)
       setSelectedConnectionProfileId(connectionProfiles[0].id)
     }
   }, [connectionProfiles])
@@ -68,6 +69,7 @@ export default function CreateNPCDialog({
       }, 100)
     } else if (!isOpen) {
       // Reset state when dialog closes (modal-reset pattern)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset fires only on open; parent renders unconditionally
       setName('')
       setDescription('')
       setPhysicalDescription('')

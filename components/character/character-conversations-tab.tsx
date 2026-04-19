@@ -154,6 +154,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
 
   // Initial load and refresh when refreshKey changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- page resets to 0 whenever the paginated query key changes
     setPage(0)
     fetchChats(0, searchQuery, false)
   }, [fetchChats, searchQuery, refreshKey])

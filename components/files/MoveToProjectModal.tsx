@@ -60,6 +60,7 @@ export default function MoveToProjectModal({
   useEffect(() => {
     if (isOpen) {
       // Reset selections
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset fires only on open; parent renders unconditionally
       setSelectedValue('')
       setSelectedFolderPath('/')
     }

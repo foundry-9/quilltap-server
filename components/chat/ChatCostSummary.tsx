@@ -55,8 +55,10 @@ export function ChatCostSummary({
   const [costData, setCostData] = useState<CostData | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Fetch cost data when dependencies change
   useEffect(() => {
     if (!show) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch effect; setLoading is managed by loading lifecycle
       setLoading(false)
       return
     }

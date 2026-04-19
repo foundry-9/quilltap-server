@@ -40,8 +40,9 @@ export default function ChatProjectModal({
   )
   const [saving, setSaving] = useState(false)
 
-  // Update local state when prop changes
+  // Sync local state when upstream prop changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream <prop> changes (parent renders unconditionally)
     setSelectedProjectId(initialProjectId ?? null)
   }, [initialProjectId])
 

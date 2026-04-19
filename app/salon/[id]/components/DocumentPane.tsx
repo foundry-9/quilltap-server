@@ -256,8 +256,10 @@ export default function DocumentPane({
     [],
   )
 
+  // Sync editTitle with document prop when not actively editing
   useEffect(() => {
     if (!isEditingTitle) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when document changes
       setEditTitle(document.displayTitle)
     }
   }, [document.displayTitle, isEditingTitle])

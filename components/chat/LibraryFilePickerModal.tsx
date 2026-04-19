@@ -55,6 +55,7 @@ export default function LibraryFilePickerModal({
   // Reset state when modal closes (modal-reset pattern)
   useEffect(() => {
     if (!isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset fires only on open; parent renders unconditionally
       setStep('scope')
       setSelectedProjectId(null)
       setSelectedProjectName('General')

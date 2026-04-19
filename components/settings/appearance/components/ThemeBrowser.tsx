@@ -91,10 +91,12 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
   )
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
     setIsLoadingSources(isLoadingSourcesData)
   }, [isLoadingSourcesData])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
     setIsLoadingThemes(isLoadingThemesData)
     if (themesLoadError) {
       setThemesError(themesLoadError instanceof Error ? themesLoadError.message : 'Failed to load themes')
@@ -105,12 +107,14 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
 
   useEffect(() => {
     if (sourcesData?.sources) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setSources(sourcesData.sources)
     }
   }, [sourcesData])
 
   useEffect(() => {
     if (themesData?.themes) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setThemes(themesData.themes)
     }
   }, [themesData])

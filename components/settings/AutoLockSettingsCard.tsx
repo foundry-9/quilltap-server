@@ -29,6 +29,7 @@ export function AutoLockSettingsCard() {
 
   useEffect(() => {
     if (unlockData) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setHasPassphrase(unlockData.hasUserPassphrase ?? false)
       log.debug('Passphrase state fetched', { hasPassphrase: unlockData.hasUserPassphrase })
     }
@@ -36,6 +37,7 @@ export function AutoLockSettingsCard() {
 
   useEffect(() => {
     if (settingsData?.autoLockSettings) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setConfig({
         enabled: settingsData.autoLockSettings.enabled ?? false,
         idleMinutes: settingsData.autoLockSettings.idleMinutes ?? 15,

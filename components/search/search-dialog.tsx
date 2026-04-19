@@ -111,6 +111,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
       // Set initial query if provided and this is a fresh open
       if (!hasInitializedRef.current) {
         if (initialQuery) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
           setQuery(initialQuery)
         }
         // Set initial types if provided, otherwise reset to all types

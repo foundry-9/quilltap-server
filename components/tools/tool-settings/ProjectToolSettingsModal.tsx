@@ -44,6 +44,7 @@ export function ProjectToolSettingsModal({
 
   // Reset local state when props change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream disabledTools changes (parent renders unconditionally)
     setLocalDisabledTools(new Set(disabledTools))
     setLocalDisabledGroups(new Set(disabledToolGroups))
   }, [disabledTools, disabledToolGroups])

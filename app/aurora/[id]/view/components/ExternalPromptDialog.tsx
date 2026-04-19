@@ -77,6 +77,7 @@ export function ExternalPromptDialog({
         if (profilesRes.ok) {
           const data = await profilesRes.json()
           const fetchedProfiles = data.profiles || []
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on mount with selection logic
           setProfiles(fetchedProfiles)
           const defaultProfile = fetchedProfiles.find((p: ConnectionProfile) => p.isDefault)
           if (defaultProfile) {
@@ -109,6 +110,7 @@ export function ExternalPromptDialog({
   useEffect(() => {
     if (systemPrompts && systemPrompts.length > 0 && !systemPromptId) {
       const defaultPrompt = systemPrompts.find(sp => sp.isDefault)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream systemPrompts changes (parent renders unconditionally)
       setSystemPromptId(defaultPrompt?.id || systemPrompts[0].id)
     }
   }, [systemPrompts, systemPromptId])

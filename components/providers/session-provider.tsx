@@ -129,6 +129,7 @@ function CustomSessionProvider({
 
   // Initial fetch
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- session provider uses a bespoke 503-retry loop; not a simple fetch
     fetchSession();
   }, [fetchSession]);
 
