@@ -207,6 +207,31 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
   }
 
   /**
+   * Rewrite every chat_documents row whose filePath exactly matches `oldPath`
+   * to carry `newPath` instead. Used by startup migrations when an overlay or
+   * scaffold file is renamed, so split-panel editor state from old sessions
+   * does not 404 on next chat open. Returns the number of rows updated.
+   */
+  async renameFilePath(oldPath: string, newPath: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const stale = await this.findByFilter({
+          filePath: oldPath,
+        } as TypedQueryFilter<ChatDocument>);
+        let count = 0;
+        for (const row of stale) {
+          const updated = await this.update(row.id, { filePath: newPath });
+          if (updated) count++;
+        }
+        return count;
+      },
+      'Error renaming chat document filePath',
+      { oldPath, newPath },
+      0,
+    );
+  }
+
+  /**
    * Delete all document associations for a chat (cascade cleanup)
    */
   async deleteByChatId(chatId: string): Promise<number> {

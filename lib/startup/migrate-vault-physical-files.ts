@@ -19,7 +19,10 @@
  * `physical-prompts.md`. Any vault still carrying that legacy name is cleaned
  * up here as part of the same migration pass so the vault UI (and any eventual
  * search indexers) no longer show the stale `.md` file next to the correct
- * `.json` one.
+ * `.json` one. Any `chat_documents` rows that were left pointing at the old
+ * `physical-prompts.md` (because a Salon user opened the file in document mode
+ * during that window) are rewritten to `physical-prompts.json` so the chat
+ * loads without a 404 on next open.
  *
  * Vaults created fresh by the populator are already in the new shape and get
  * skipped here; vaults created before this feature shipped are migrated once.
@@ -45,6 +48,7 @@ export interface VaultPhysicalMigrationResult {
   migrated: number;
   alreadyCurrent: number;
   legacyCleaned: number;
+  chatDocumentsRenamed: number;
   skipped: number;
   errors: number;
 }
@@ -55,6 +59,7 @@ export async function migrateVaultPhysicalFiles(): Promise<VaultPhysicalMigratio
     migrated: 0,
     alreadyCurrent: 0,
     legacyCleaned: 0,
+    chatDocumentsRenamed: 0,
     skipped: 0,
     errors: 0,
   };
@@ -142,6 +147,23 @@ export async function migrateVaultPhysicalFiles(): Promise<VaultPhysicalMigratio
     // Yield to the event loop between vaults so the migration does not hog
     // the main thread on large rosters.
     await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  try {
+    const renamed = await repos.chatDocuments.renameFilePath(
+      LEGACY_PHYSICAL_PROMPTS_PATH,
+      PHYSICAL_PROMPTS_PATH,
+    );
+    result.chatDocumentsRenamed = renamed;
+    if (renamed > 0) {
+      logger.debug('Rewrote stale chat_documents filePaths', { renamed });
+    }
+  } catch (err) {
+    result.errors++;
+    logger.error('Failed to sweep stale chat_documents filePaths', {
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
   }
 
   logger.info('Vault physical-file migration complete', result);
