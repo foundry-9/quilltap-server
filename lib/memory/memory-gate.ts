@@ -106,10 +106,11 @@ export async function runMemoryGate(
       return { decision: { action: 'INSERT' }, embedding, debugInfo }
     }
 
-    // Get full memory data for matched IDs
+    // Get full memory data for matched IDs (only the top-K, not the entire corpus)
     const repos = getRepositories()
-    const allMemories = await repos.memories.findByCharacterId(characterId)
-    const memoryMap = new Map(allMemories.map(m => [m.id, m]))
+    const matchedIds = results.map(r => r.id)
+    const matchedMemories = await repos.memories.findByIds(matchedIds)
+    const memoryMap = new Map(matchedMemories.map(m => [m.id, m]))
 
     // Find best match
     const bestResult = results[0]

@@ -99,6 +99,28 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * Find memories by a list of IDs. Missing IDs are silently dropped.
+   * @param ids Array of memory IDs
+   * @returns Promise<Memory[]> Array of memories matching any of the given IDs
+   */
+  async findByIds(ids: string[]): Promise<Memory[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter({
+          id: { $in: ids },
+        } as TypedQueryFilter<Memory>);
+        return memories;
+      },
+      'Error finding memories by IDs',
+      { count: ids.length },
+      []
+    );
+  }
+
+  /**
    * Find memories for a character with pagination support.
    * Returns a page of memories and the total count matching the filter.
    *
