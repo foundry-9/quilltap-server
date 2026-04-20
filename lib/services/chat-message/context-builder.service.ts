@@ -356,8 +356,8 @@ export async function buildMessageContext(
     roleplayTemplate,
     embeddingProfileId: undefined, // always use default embedding profile
     skipMemories: false,
-    maxMemories: 10,
-    minMemoryImportance: 0.3,
+    maxMemories: 18,
+    minMemoryImportance: 0.5,
     // Multi-character context building options
     respondingParticipant: isMultiCharacter ? characterParticipant : undefined,
     allParticipants: isMultiCharacter ? chat.participants : undefined,

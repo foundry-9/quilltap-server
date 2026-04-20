@@ -430,7 +430,7 @@ export async function searchMemoriesSemantic(
     // Search vectors
     const vectorResults = vectorStore.search(
       embeddingResult.embedding,
-      limit * 2 // Get more results to filter
+      limit * 3 // Get more results to filter
     )
 
     if (vectorResults.length > 0) {
@@ -462,10 +462,10 @@ export async function searchMemoriesSemantic(
       }
 
       // Combine cosine similarity with effective weight for final ranking
-      // Similarity still dominates (60%), but weight influences ordering (40%)
+      // Weight dominates (60%), with similarity influencing ordering (40%)
       results.sort((a, b) => {
-        const finalScoreA = a.score * 0.6 + (a.effectiveWeight ?? 0) * 0.4
-        const finalScoreB = b.score * 0.6 + (b.effectiveWeight ?? 0) * 0.4
+        const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
+        const finalScoreB = b.score * 0.4 + (b.effectiveWeight ?? 0) * 0.6
         return finalScoreB - finalScoreA
       })
 
@@ -598,8 +598,8 @@ async function searchMemoriesText(
 
   // Combine text score with effective weight for final ranking
   scoredResults.sort((a, b) => {
-    const finalScoreA = a.score * 0.6 + (a.effectiveWeight ?? 0) * 0.4
-    const finalScoreB = b.score * 0.6 + (b.effectiveWeight ?? 0) * 0.4
+    const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
+    const finalScoreB = b.score * 0.4 + (b.effectiveWeight ?? 0) * 0.6
     return finalScoreB - finalScoreA
   })
 

@@ -339,8 +339,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     roleplayTemplate,
     embeddingProfileId,
     skipMemories = false,
-    maxMemories = 10,
-    minMemoryImportance = 0.3,
+    maxMemories = 18,
+    minMemoryImportance = 0.5,
     // Multi-character options (Phase 3)
     respondingParticipant,
     allParticipants,
