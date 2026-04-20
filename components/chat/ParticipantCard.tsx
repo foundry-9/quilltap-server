@@ -44,6 +44,11 @@ export interface ParticipantData {
       filepath: string
       url?: string
     } | null
+    systemPrompts?: Array<{
+      id: string
+      name: string
+      isDefault?: boolean
+    }>
   } | null
   connectionProfile?: {
     id: string
@@ -51,6 +56,8 @@ export interface ParticipantData {
     provider?: string
     modelName?: string
   } | null
+  /** Selected named system prompt from the character's systemPrompts[] array */
+  selectedSystemPromptId?: string | null
 }
 
 export interface ConnectionProfileOption {
@@ -86,6 +93,8 @@ interface ParticipantCardProps {
   // Connection profile controls
   connectionProfiles?: ConnectionProfileOption[]
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
+  // System prompt selection (from character's named systemPrompts[])
+  onSystemPromptChange?: (participantId: string, promptId: string | null) => void
   // Inline settings controls
   onActiveChange?: (participantId: string, isActive: boolean) => void
   onStatusChange?: (participantId: string, status: 'active' | 'silent' | 'absent' | 'removed') => void
@@ -128,6 +137,7 @@ export function ParticipantCard({
   onStopImpersonate,
   connectionProfiles,
   onConnectionProfileChange,
+  onSystemPromptChange,
   onActiveChange,
   onStatusChange,
   onWhisper,
@@ -195,6 +205,12 @@ export function ParticipantCard({
     } else {
       onConnectionProfileChange(participant.id, value || null, 'llm')
     }
+  }
+
+  // Handle system prompt change
+  const handleSystemPromptChangeEvent = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (!onSystemPromptChange) return
+    onSystemPromptChange(participant.id, e.target.value || null)
   }
 
   // Handle active toggle via the eye icon button (legacy compat)
@@ -394,6 +410,28 @@ export function ParticipantCard({
                 />
               </div>
             )
+          )}
+
+          {/* System prompt dropdown — shown for LLM-controlled characters whose
+              character has one or more named system prompts. Changing this
+              takes effect immediately on the next generation. */}
+          {isCharacter && !isUserParticipant && !isUserControlledCharacter && onSystemPromptChange && entity && (participant.character?.systemPrompts?.length ?? 0) > 0 && (
+            <div className="mt-1">
+              <select
+                value={participant.selectedSystemPromptId || ''}
+                onChange={handleSystemPromptChangeEvent}
+                className="qt-select qt-select-sm w-full"
+                title="System prompt"
+                aria-label={`System prompt for ${name}`}
+              >
+                <option value="">Use default prompt</option>
+                {participant.character!.systemPrompts!.map((prompt) => (
+                  <option key={prompt.id} value={prompt.id}>
+                    {prompt.name}{prompt.isDefault ? ' (Default)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
 
           {/* Outfit indicator for all characters with wardrobe data */}

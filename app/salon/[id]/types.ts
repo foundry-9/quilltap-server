@@ -58,6 +58,11 @@ export interface CharacterData {
     url?: string
   } | null
   talkativeness?: number
+  systemPrompts?: Array<{
+    id: string
+    name: string
+    isDefault?: boolean
+  }>
 }
 
 export interface ConnectionProfileData {
@@ -90,6 +95,8 @@ export interface Participant {
     provider: string
     modelName: string
   } | null
+  /** Selected named system prompt from the character's systemPrompts[] array */
+  selectedSystemPromptId?: string | null
   removedAt?: string | null
   // Multi-character chat fields
   hasHistoryAccess?: boolean

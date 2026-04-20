@@ -155,6 +155,7 @@ describe('chat-enrichment.service', () => {
         avatarUrl: null,
         defaultImageId: null,
         defaultImage: null,
+        systemPrompts: [],
       })
       expect(result).not.toHaveProperty('tags')
     })
@@ -330,6 +331,7 @@ describe('chat-enrichment.service', () => {
         character: expect.objectContaining({ id: 'char-1', name: 'Alice' }),
         connectionProfile: expect.objectContaining({ id: 'conn-1' }),
         imageProfile: expect.objectContaining({ id: 'img-1' }),
+        selectedSystemPromptId: null,
         createdAt: expect.any(String),
         updatedAt: expect.any(String),
       })

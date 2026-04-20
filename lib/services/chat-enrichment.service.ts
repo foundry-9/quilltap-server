@@ -41,6 +41,15 @@ export interface EnrichedCharacterBase {
 }
 
 /**
+ * Named system prompt summary for detail view
+ */
+export interface EnrichedCharacterSystemPrompt {
+  id: string
+  name: string
+  isDefault: boolean
+}
+
+/**
  * Character info for list/summary view (includes tags)
  */
 export interface EnrichedCharacterSummary extends EnrichedCharacterBase {
@@ -48,9 +57,13 @@ export interface EnrichedCharacterSummary extends EnrichedCharacterBase {
 }
 
 /**
- * Character info for detail view (no tags, used with full participant)
+ * Character info for detail view (no tags, used with full participant).
+ * Includes the character's named system prompts so per-participant overrides
+ * can be chosen from the sidebar.
  */
-export type EnrichedCharacterDetail = EnrichedCharacterBase
+export interface EnrichedCharacterDetail extends EnrichedCharacterBase {
+  systemPrompts: EnrichedCharacterSystemPrompt[]
+}
 
 
 /**
@@ -105,6 +118,7 @@ export interface EnrichedParticipantDetail {
   character: EnrichedCharacterDetail | null
   connectionProfile: EnrichedConnectionProfile | null
   imageProfile: EnrichedImageProfile | null
+  selectedSystemPromptId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -212,6 +226,12 @@ export async function getCharacterDetail(
     return null
   }
 
+  const systemPrompts: EnrichedCharacterSystemPrompt[] = (character.systemPrompts || []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    isDefault: p.isDefault ?? false,
+  }))
+
   // Check for chat-specific avatar override (from wardrobe avatar generation)
   if (chatId && character.avatarOverrides?.length) {
     const override = character.avatarOverrides.find(o => o.chatId === chatId)
@@ -226,6 +246,7 @@ export async function getCharacterDetail(
           avatarUrl: `/api/v1/files/${overrideFile.id}`,
           defaultImageId: override.imageId,
           defaultImage: overrideImage,
+          systemPrompts,
         }
       }
     }
@@ -252,6 +273,7 @@ export async function getCharacterDetail(
     avatarUrl,
     defaultImageId: character.defaultImageId ?? null,
     defaultImage,
+    systemPrompts,
   }
 }
 
@@ -368,6 +390,7 @@ export async function enrichParticipantDetail(
     character,
     connectionProfile,
     imageProfile,
+    selectedSystemPromptId: participant.selectedSystemPromptId ?? null,
     createdAt: participant.createdAt,
     updatedAt: participant.updatedAt,
   }

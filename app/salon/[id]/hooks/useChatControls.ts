@@ -327,6 +327,35 @@ export function useChatControls({
     }
   }, [chatId, fetchChat])
 
+  // Handle system prompt change from participant sidebar
+  const handleSystemPromptChange = useCallback(async (
+    participantId: string,
+    promptId: string | null
+  ) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updateParticipant: {
+            participantId,
+            selectedSystemPromptId: promptId,
+          },
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to update system prompt')
+      }
+
+      showSuccessToast('System prompt updated')
+      await fetchChat()
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update system prompt')
+    }
+  }, [chatId, fetchChat])
+
   // Handle participant settings change
   const handleParticipantSettingsChange = useCallback(async (
     participantId: string,
@@ -380,6 +409,7 @@ export function useChatControls({
     handleOverrideDangerFlag,
     handleRemoveCharacter,
     handleConnectionProfileChange,
+    handleSystemPromptChange,
     handleParticipantSettingsChange,
     handleAllLLMContinue,
     handleAllLLMStop,

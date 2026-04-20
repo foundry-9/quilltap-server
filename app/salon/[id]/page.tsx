@@ -1419,6 +1419,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onStopImpersonate={impersonation.handleStopImpersonation}
           connectionProfiles={chatControls.connectionProfiles}
           onConnectionProfileChange={chatControls.handleConnectionProfileChange}
+          onSystemPromptChange={chatControls.handleSystemPromptChange}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}
           outfitState={outfit.outfitState}

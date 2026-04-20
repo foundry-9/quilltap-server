@@ -114,6 +114,17 @@ Each character card includes a **connection profile dropdown** that lets you cha
 
 This makes switching models the fastest possible action — no need to open a settings modal.
 
+### System Prompt Dropdown
+
+Immediately beneath the connection profile selector, each LLM-controlled character card also carries a **system prompt dropdown**. If the character has more than one named system prompt (defined on the character's edit page), this lets you pick which one the LLM should speak from — without leaving the chat:
+
+- **Use default prompt** — the entry marked as default on the character takes the stage
+- **Every named prompt** the character carries appears in the list, with the default marked
+- **Effect is immediate** — the next turn (nudge, auto-response, or swipe) uses the newly chosen prompt
+- Only shown for LLM-controlled characters that have at least one named prompt on file
+
+If you want a character to keep the same costume but change their register for an afternoon — swap them from their "Formal" variant to their "Casual" one here, and the switch takes effect with the very next line they speak.
+
 ### Status Indicators
 
 **Control Mode:**
