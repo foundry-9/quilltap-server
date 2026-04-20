@@ -117,19 +117,35 @@ export async function generateGreetingMessage({
     },
   ]
 
-  const response = await providerClient.sendMessage(
+  // Consume the provider's streaming endpoint so the greeting uses the same
+  // path as normal chat replies. The chunks are concatenated server-side;
+  // streaming them to the UI is a planned follow-up (see CHANGELOG v2.9.x).
+  let accumulated = ''
+  let finalUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
+  for await (const chunk of providerClient.streamMessage(
     {
       messages,
       model: modelName,
       temperature,
-      maxTokens: maxTokens ?? 160,
+      maxTokens,
       topP,
     },
     apiKey ?? ''
-  )
+  )) {
+    if (chunk.content) {
+      accumulated += chunk.content
+    }
+    if (chunk.usage) {
+      finalUsage = {
+        promptTokens: chunk.usage.promptTokens ?? 0,
+        completionTokens: chunk.usage.completionTokens ?? 0,
+        totalTokens: chunk.usage.totalTokens ?? 0,
+      }
+    }
+  }
 
-  const trimmedContent = (response.content || '').trim()
-  const contentFilterDetected = !trimmedContent && !!response.usage && response.usage.completionTokens > 0
+  const trimmedContent = accumulated.trim()
+  const contentFilterDetected = !trimmedContent && !!finalUsage && finalUsage.completionTokens > 0
 
   if (contentFilterDetected) {
     logger.warn('[Greeting Generation] LLM returned empty content despite consuming tokens - likely content filter hit', {
@@ -137,8 +153,8 @@ export async function generateGreetingMessage({
       provider,
       model: modelName,
       characterName,
-      promptTokens: response.usage!.promptTokens,
-      completionTokens: response.usage!.completionTokens,
+      promptTokens: finalUsage!.promptTokens,
+      completionTokens: finalUsage!.completionTokens,
       hadProjectContext: !!projectContext,
       memoryCount: participantMemories?.length || 0,
     })

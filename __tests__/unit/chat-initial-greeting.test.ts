@@ -7,6 +7,25 @@ jest.mock('@/lib/llm/plugin-factory')
 
 const mockCreateProvider = jest.mocked(createLLMProvider)
 
+type GreetingChunk = {
+  content?: string
+  done?: boolean
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number }
+}
+
+function mockStream(chunks: GreetingChunk[]): AsyncGenerator<any> {
+  async function* gen() {
+    for (const chunk of chunks) {
+      yield {
+        content: chunk.content ?? '',
+        done: chunk.done ?? false,
+        usage: chunk.usage,
+      }
+    }
+  }
+  return gen()
+}
+
 const mockProvider = {
   supportsFileAttachments: false,
   supportedMimeTypes: [],
@@ -21,16 +40,16 @@ const mockProvider = {
 describe('generateGreetingMessage', () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockProvider.sendMessage.mockResolvedValue({
-      content: ' Hi there! ',
-      finishReason: 'stop',
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      raw: {},
-    })
+    mockProvider.streamMessage.mockImplementation(() =>
+      mockStream([
+        { content: ' Hi ' },
+        { content: 'there! ', done: true, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } },
+      ])
+    )
     mockCreateProvider.mockReturnValue(mockProvider)
   })
 
-  it('requests a greeting from the provider and trims the response', async () => {
+  it('requests a greeting from the provider and trims the concatenated chunks', async () => {
     const result = await generateGreetingMessage({
       systemPrompt: 'System instructions',
       characterName: 'Avery',
@@ -46,7 +65,7 @@ describe('generateGreetingMessage', () => {
     expect(result.contentFilterDetected).toBe(false)
     expect(mockCreateProvider).toHaveBeenCalledWith('OPENAI', undefined)
 
-    const call = mockProvider.sendMessage.mock.calls[0] as [any, string]
+    const call = mockProvider.streamMessage.mock.calls[0] as [any, string]
     const payload = call[0] as {
       model: string
       temperature?: number
@@ -66,13 +85,12 @@ describe('generateGreetingMessage', () => {
     expect(call[1]).toBe('api-key')
   })
 
-  it('falls back to default maxTokens when optional params are omitted', async () => {
-    mockProvider.sendMessage.mockResolvedValueOnce({
-      content: 'Hello there',
-      finishReason: 'stop',
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      raw: {},
-    })
+  it('leaves maxTokens undefined when caller omits it', async () => {
+    mockProvider.streamMessage.mockImplementationOnce(() =>
+      mockStream([
+        { content: 'Hello there', done: true, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } },
+      ])
+    )
 
     const result = await generateGreetingMessage({
       systemPrompt: 'System instructions',
@@ -82,22 +100,21 @@ describe('generateGreetingMessage', () => {
       baseUrl: 'http://localhost:11434',
     })
 
-    const call = mockProvider.sendMessage.mock.calls[0] as [any, string]
+    const call = mockProvider.streamMessage.mock.calls[0] as [any, string]
     const payload = call[0] as { maxTokens?: number }
 
-    expect(payload.maxTokens).toBe(160)
+    expect(payload.maxTokens).toBeUndefined()
     expect(call[1]).toBe('')
     expect(result.content).toBe('Hello there')
     expect(result.contentFilterDetected).toBe(false)
   })
 
-  it('detects content filter when tokens consumed but content is empty', async () => {
-    mockProvider.sendMessage.mockResolvedValueOnce({
-      content: '',
-      finishReason: 'stop',
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-      raw: {},
-    })
+  it('detects content filter when tokens consumed but streamed content is empty', async () => {
+    mockProvider.streamMessage.mockImplementationOnce(() =>
+      mockStream([
+        { content: '', done: true, usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 } },
+      ])
+    )
 
     const result = await generateGreetingMessage({
       systemPrompt: 'System instructions',
@@ -111,13 +128,12 @@ describe('generateGreetingMessage', () => {
     expect(result.contentFilterDetected).toBe(true)
   })
 
-  it('does not flag content filter when no tokens consumed', async () => {
-    mockProvider.sendMessage.mockResolvedValueOnce({
-      content: '',
-      finishReason: 'stop',
-      usage: { promptTokens: 100, completionTokens: 0, totalTokens: 100 },
-      raw: {},
-    })
+  it('does not flag content filter when no completion tokens were consumed', async () => {
+    mockProvider.streamMessage.mockImplementationOnce(() =>
+      mockStream([
+        { content: '', done: true, usage: { promptTokens: 100, completionTokens: 0, totalTokens: 100 } },
+      ])
+    )
 
     const result = await generateGreetingMessage({
       systemPrompt: 'System instructions',
@@ -137,12 +153,11 @@ describe('generateGreetingMessage', () => {
 
   describe('content filter detection regression', () => {
     it('returns a result (does not throw) when content filter is detected', async () => {
-      mockProvider.sendMessage.mockResolvedValueOnce({
-        content: '',
-        finishReason: 'stop',
-        usage: { promptTokens: 200, completionTokens: 30, totalTokens: 230 },
-        raw: {},
-      })
+      mockProvider.streamMessage.mockImplementationOnce(() =>
+        mockStream([
+          { content: '', done: true, usage: { promptTokens: 200, completionTokens: 30, totalTokens: 230 } },
+        ])
+      )
 
       // Must not throw — the caller uses the flag to decide fallback behavior
       const result = await generateGreetingMessage({
@@ -158,13 +173,12 @@ describe('generateGreetingMessage', () => {
       expect(result.contentFilterDetected).toBe(true)
     })
 
-    it('detects content filter when content is whitespace-only but tokens were consumed', async () => {
-      mockProvider.sendMessage.mockResolvedValueOnce({
-        content: '   \n\t  ',
-        finishReason: 'stop',
-        usage: { promptTokens: 150, completionTokens: 10, totalTokens: 160 },
-        raw: {},
-      })
+    it('detects content filter when streamed content is whitespace-only but tokens were consumed', async () => {
+      mockProvider.streamMessage.mockImplementationOnce(() =>
+        mockStream([
+          { content: '   \n\t  ', done: true, usage: { promptTokens: 150, completionTokens: 10, totalTokens: 160 } },
+        ])
+      )
 
       const result = await generateGreetingMessage({
         systemPrompt: 'System instructions',
@@ -180,12 +194,11 @@ describe('generateGreetingMessage', () => {
     })
 
     it('allows caller to use contentFilterDetected to trigger fallback', async () => {
-      mockProvider.sendMessage.mockResolvedValueOnce({
-        content: '',
-        finishReason: 'stop',
-        usage: { promptTokens: 100, completionTokens: 42, totalTokens: 142 },
-        raw: {},
-      })
+      mockProvider.streamMessage.mockImplementationOnce(() =>
+        mockStream([
+          { content: '', done: true, usage: { promptTokens: 100, completionTokens: 42, totalTokens: 142 } },
+        ])
+      )
 
       const result = await generateGreetingMessage({
         systemPrompt: 'System instructions',
@@ -207,13 +220,13 @@ describe('generateGreetingMessage', () => {
       expect(greeting).toBe('*The character appears, ready to speak.*')
     })
 
-    it('does not flag content filter when response has actual content even with tokens consumed', async () => {
-      mockProvider.sendMessage.mockResolvedValueOnce({
-        content: 'Greetings, traveler.',
-        finishReason: 'stop',
-        usage: { promptTokens: 100, completionTokens: 5, totalTokens: 105 },
-        raw: {},
-      })
+    it('does not flag content filter when stream has actual content even with tokens consumed', async () => {
+      mockProvider.streamMessage.mockImplementationOnce(() =>
+        mockStream([
+          { content: 'Greetings, ' },
+          { content: 'traveler.', done: true, usage: { promptTokens: 100, completionTokens: 5, totalTokens: 105 } },
+        ])
+      )
 
       const result = await generateGreetingMessage({
         systemPrompt: 'System instructions',
@@ -228,12 +241,11 @@ describe('generateGreetingMessage', () => {
     })
 
     it('does not flag content filter when usage data is missing', async () => {
-      mockProvider.sendMessage.mockResolvedValueOnce({
-        content: '',
-        finishReason: 'stop',
-        usage: undefined,
-        raw: {},
-      })
+      mockProvider.streamMessage.mockImplementationOnce(() =>
+        mockStream([
+          { content: '', done: true },
+        ])
+      )
 
       const result = await generateGreetingMessage({
         systemPrompt: 'System instructions',
