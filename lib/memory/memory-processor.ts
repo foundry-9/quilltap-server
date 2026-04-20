@@ -332,19 +332,36 @@ export async function processMessageForMemory(
           const outcome = await createMemoryFromCandidate(ctx, candidate)
 
           switch (outcome.action) {
+            case 'SKIP_NEAR_DUPLICATE': {
+              debugLogs.push(
+                `[Memory] SKIPPED near-duplicate USER memory for ${ctx.characterName}:\n` +
+                `  Absorbed into existing memory: ${outcome.memory?.id ?? 'unknown'}\n` +
+                `  Similarity: ${outcome.similarity?.toFixed(3) ?? 'n/a'}\n` +
+                `  Summary: ${candidate.summary}`
+              )
+              break
+            }
+            case 'SKIP_EMBEDDING_FAILED': {
+              debugLogs.push(
+                `[Memory] SKIPPED USER memory for ${ctx.characterName} — embedding generation failed after retry:\n` +
+                `  Reason: ${outcome.reason ?? 'unknown'}\n` +
+                `  Summary: ${candidate.summary}`
+              )
+              break
+            }
             case 'REINFORCE': {
-              reinforcedMemoryIds.push(outcome.memory.id)
+              if (outcome.memory) reinforcedMemoryIds.push(outcome.memory.id)
               debugLogs.push(
                 `[Memory] REINFORCED USER memory for ${ctx.characterName}:\n` +
-                `  Memory ID: ${outcome.memory.id}\n` +
-                `  Count: ${outcome.memory.reinforcementCount ?? 1}\n` +
+                `  Memory ID: ${outcome.memory?.id ?? 'unknown'}\n` +
+                `  Count: ${outcome.memory?.reinforcementCount ?? 1}\n` +
                 `  Novel details: ${outcome.novelDetails?.join(', ') || 'none'}\n` +
                 `  Summary: ${candidate.summary}`
               )
               break
             }
             case 'INSERT_RELATED': {
-              memoryIds.push(outcome.memory.id)
+              if (outcome.memory) memoryIds.push(outcome.memory.id)
               if (outcome.relatedMemoryIds) allRelatedMemoryIds.push(...outcome.relatedMemoryIds)
               debugLogs.push(
                 `[Memory] Created USER memory (linked to ${outcome.relatedMemoryIds?.length || 0} related) for ${ctx.characterName}:\n` +
@@ -359,7 +376,7 @@ export async function processMessageForMemory(
             case 'INSERT':
             case 'SKIP_GATE':
             default: {
-              memoryIds.push(outcome.memory.id)
+              if (outcome.memory) memoryIds.push(outcome.memory.id)
               debugLogs.push(
                 `[Memory] Created USER memory for ${ctx.characterName}:\n` +
                 `  Content: ${candidate.content}\n` +
@@ -397,19 +414,36 @@ export async function processMessageForMemory(
           const outcome = await createMemoryFromCandidate(ctx, candidate)
 
           switch (outcome.action) {
+            case 'SKIP_NEAR_DUPLICATE': {
+              debugLogs.push(
+                `[Memory] SKIPPED near-duplicate CHARACTER memory for ${ctx.characterName}:\n` +
+                `  Absorbed into existing memory: ${outcome.memory?.id ?? 'unknown'}\n` +
+                `  Similarity: ${outcome.similarity?.toFixed(3) ?? 'n/a'}\n` +
+                `  Summary: ${candidate.summary}`
+              )
+              break
+            }
+            case 'SKIP_EMBEDDING_FAILED': {
+              debugLogs.push(
+                `[Memory] SKIPPED CHARACTER memory for ${ctx.characterName} — embedding generation failed after retry:\n` +
+                `  Reason: ${outcome.reason ?? 'unknown'}\n` +
+                `  Summary: ${candidate.summary}`
+              )
+              break
+            }
             case 'REINFORCE': {
-              reinforcedMemoryIds.push(outcome.memory.id)
+              if (outcome.memory) reinforcedMemoryIds.push(outcome.memory.id)
               debugLogs.push(
                 `[Memory] REINFORCED CHARACTER memory for ${ctx.characterName}:\n` +
-                `  Memory ID: ${outcome.memory.id}\n` +
-                `  Count: ${outcome.memory.reinforcementCount ?? 1}\n` +
+                `  Memory ID: ${outcome.memory?.id ?? 'unknown'}\n` +
+                `  Count: ${outcome.memory?.reinforcementCount ?? 1}\n` +
                 `  Novel details: ${outcome.novelDetails?.join(', ') || 'none'}\n` +
                 `  Summary: ${candidate.summary}`
               )
               break
             }
             case 'INSERT_RELATED': {
-              memoryIds.push(outcome.memory.id)
+              if (outcome.memory) memoryIds.push(outcome.memory.id)
               if (outcome.relatedMemoryIds) allRelatedMemoryIds.push(...outcome.relatedMemoryIds)
               debugLogs.push(
                 `[Memory] Created CHARACTER memory (linked to ${outcome.relatedMemoryIds?.length || 0} related) for ${ctx.characterName}:\n` +
@@ -424,7 +458,7 @@ export async function processMessageForMemory(
             case 'INSERT':
             case 'SKIP_GATE':
             default: {
-              memoryIds.push(outcome.memory.id)
+              if (outcome.memory) memoryIds.push(outcome.memory.id)
               debugLogs.push(
                 `[Memory] Created CHARACTER memory for ${ctx.characterName}:\n` +
                 `  Content: ${candidate.content}\n` +
@@ -712,19 +746,36 @@ export async function processInterCharacterMemory(
           const outcome = await createInterCharacterMemoryFromCandidate(ctx, candidate)
 
           switch (outcome.action) {
+            case 'SKIP_NEAR_DUPLICATE': {
+              debugLogs.push(
+                `[Memory] SKIPPED near-duplicate INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
+                `  Absorbed into existing memory: ${outcome.memory?.id ?? 'unknown'}\n` +
+                `  Similarity: ${outcome.similarity?.toFixed(3) ?? 'n/a'}\n` +
+                `  Summary: ${candidate.summary}`
+              )
+              break
+            }
+            case 'SKIP_EMBEDDING_FAILED': {
+              debugLogs.push(
+                `[Memory] SKIPPED INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName} — embedding generation failed after retry:\n` +
+                `  Reason: ${outcome.reason ?? 'unknown'}\n` +
+                `  Summary: ${candidate.summary}`
+              )
+              break
+            }
             case 'REINFORCE': {
-              reinforcedMemoryIds.push(outcome.memory.id)
+              if (outcome.memory) reinforcedMemoryIds.push(outcome.memory.id)
               debugLogs.push(
                 `[Memory] REINFORCED INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
-                `  Memory ID: ${outcome.memory.id}\n` +
-                `  Count: ${outcome.memory.reinforcementCount ?? 1}\n` +
+                `  Memory ID: ${outcome.memory?.id ?? 'unknown'}\n` +
+                `  Count: ${outcome.memory?.reinforcementCount ?? 1}\n` +
                 `  Novel details: ${outcome.novelDetails?.join(', ') || 'none'}\n` +
                 `  Summary: ${candidate.summary}`
               )
               break
             }
             case 'INSERT_RELATED': {
-              memoryIds.push(outcome.memory.id)
+              if (outcome.memory) memoryIds.push(outcome.memory.id)
               if (outcome.relatedMemoryIds) allRelatedMemoryIds.push(...outcome.relatedMemoryIds)
               debugLogs.push(
                 `[Memory] Created INTER-CHARACTER memory (linked to ${outcome.relatedMemoryIds?.length || 0} related): ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
@@ -739,7 +790,7 @@ export async function processInterCharacterMemory(
             case 'INSERT':
             case 'SKIP_GATE':
             default: {
-              memoryIds.push(outcome.memory.id)
+              if (outcome.memory) memoryIds.push(outcome.memory.id)
               debugLogs.push(
                 `[Memory] Created INTER-CHARACTER memory: ${ctx.observerCharacterName} about ${ctx.subjectCharacterName}:\n` +
                 `  Content: ${candidate.content}\n` +

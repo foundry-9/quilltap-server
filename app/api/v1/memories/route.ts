@@ -420,6 +420,13 @@ async function handleCreateMemory(
     { userId: user.id, skipGate: validatedData.skipGate }
   );
 
+  if (!memory) {
+    // Embedding generation failed after retry; no row was written because a
+    // memory without an embedding would be invisible to every future gate
+    // check. Surface this to the client so the UI can show the real reason.
+    return serverError('Failed to generate embedding for memory — no row was created. Check the configured embedding profile.');
+  }
+
   // Schedule vocabulary refit for BUILTIN profiles (debounced)
   // This runs in the background and doesn't block the response
   scheduleRefit(user.id).catch((error) => {

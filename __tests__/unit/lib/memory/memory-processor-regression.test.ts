@@ -191,4 +191,67 @@ describe('processMessageForMemory regressions', () => {
       { userId: 'user-1' }
     )
   })
+
+  it('SKIP_NEAR_DUPLICATE does not add an ID to memoryIds or reinforcedMemoryIds', async () => {
+    mockExtractMemoryFromMessage.mockResolvedValue({
+      success: true,
+      result: [
+        {
+          significant: true,
+          content: 'User carries the compass everywhere.',
+          summary: 'User carries compass',
+          keywords: ['compass'],
+          importance: 0.7,
+        },
+      ],
+      usage: { promptTokens: 4, completionTokens: 1, totalTokens: 5 },
+    } as any)
+    mockCreateMemoryWithGate.mockReset()
+    mockCreateMemoryWithGate
+      .mockResolvedValueOnce({
+        action: 'SKIP_NEAR_DUPLICATE',
+        memory: { id: 'mem-existing', reinforcementCount: 5 },
+        similarity: 0.95,
+      } as any)
+
+    const result = await processMessageForMemory(baseContext)
+
+    expect(result.success).toBe(true)
+    expect(result.memoryIds).toEqual([])
+    expect(result.reinforcedMemoryIds).toEqual([])
+    expect(result.memoryCreated).toBe(false)
+    expect(result.memoryReinforced).toBe(false)
+    expect(result.debugLogs?.join('\n')).toContain('SKIPPED near-duplicate')
+  })
+
+  it('SKIP_EMBEDDING_FAILED does not add an ID and surfaces the failure in debug logs', async () => {
+    mockExtractMemoryFromMessage.mockResolvedValue({
+      success: true,
+      result: [
+        {
+          significant: true,
+          content: 'User likes jazz.',
+          summary: 'User likes jazz',
+          keywords: ['jazz'],
+          importance: 0.6,
+        },
+      ],
+      usage: { promptTokens: 3, completionTokens: 1, totalTokens: 4 },
+    } as any)
+    mockCreateMemoryWithGate.mockReset()
+    mockCreateMemoryWithGate
+      .mockResolvedValueOnce({
+        action: 'SKIP_EMBEDDING_FAILED',
+        memory: null,
+        reason: 'Embedding failed after retry: ECONNREFUSED',
+      } as any)
+
+    const result = await processMessageForMemory(baseContext)
+
+    expect(result.success).toBe(true)
+    expect(result.memoryIds).toEqual([])
+    expect(result.reinforcedMemoryIds).toEqual([])
+    expect(result.memoryCreated).toBe(false)
+    expect(result.debugLogs?.join('\n')).toContain('embedding generation failed after retry')
+  })
 })

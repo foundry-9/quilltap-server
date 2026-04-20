@@ -82,15 +82,18 @@ export interface SemanticSearchResult {
  *
  * This is the primary function for creating memories. It:
  * 1. Runs the Memory Gate to check for duplicates/related memories (unless skipGate)
- * 2. Based on gate decision: REINFORCE, INSERT_RELATED, or INSERT
+ * 2. Based on gate decision: REINFORCE, INSERT_RELATED, INSERT, SKIP_NEAR_DUPLICATE,
+ *    or SKIP_EMBEDDING_FAILED
  * 3. Generates embedding and adds to vector store
  *
- * Return type unchanged for backward compatibility.
+ * Returns the resulting memory — for SKIP_NEAR_DUPLICATE this is the existing
+ * memory the candidate collapsed into. Returns null on SKIP_EMBEDDING_FAILED
+ * (no row was written because generating an embedding for dedup failed).
  */
 export async function createMemoryWithEmbedding(
   data: CreateMemoryOptions,
   options: MemoryServiceOptions
-): Promise<Memory> {
+): Promise<Memory | null> {
   const outcome = await createMemoryWithGate(data, options)
   return outcome.memory
 }
@@ -127,6 +130,26 @@ export async function createMemoryWithGate(
   const { decision, embedding } = gateResult
 
   switch (decision.action) {
+    case 'SKIP_NEAR_DUPLICATE': {
+      // Candidate is essentially identical to an existing memory; do not write
+      // a new row and do not reinforce — just absorb the observation silently.
+      return {
+        memory: decision.existingMemory,
+        action: 'SKIP_NEAR_DUPLICATE',
+        similarity: decision.similarity,
+      }
+    }
+
+    case 'SKIP_EMBEDDING_FAILED': {
+      // Embedding generation failed after retry; do not insert a row without
+      // an embedding (that would be invisible to every future gate check).
+      return {
+        memory: null,
+        action: 'SKIP_EMBEDDING_FAILED',
+        reason: decision.reason,
+      }
+    }
+
     case 'REINFORCE': {
       // Boost the existing memory instead of creating a new row
       const { memory: reinforced, novelDetails } = await reinforceMemory(
