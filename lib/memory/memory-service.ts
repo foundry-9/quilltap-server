@@ -511,8 +511,13 @@ export async function searchMemoriesSemantic(
     )
 
     if (vectorResults.length > 0) {
-      // Get full memory data for results
-      const memories = await repos.memories.findByCharacterId(characterId)
+      // Hydrate only the matched memories. The previous version called
+      // findByCharacterId here, which decrypted and Zod-validated the whole
+      // corpus (20k+ rows on heavy characters) just to pluck ~60 hits out of
+      // a Map. The Memory Gate read path already uses this shape — see
+      // lib/memory/memory-gate.ts findByIds(matchedIds).
+      const matchedIds = vectorResults.map(vr => vr.id)
+      const memories = await repos.memories.findByIds(matchedIds)
       const memoryMap = new Map(memories.map(m => [m.id, m]))
 
       let results: SemanticSearchResult[] = vectorResults
@@ -706,9 +711,10 @@ export async function findSimilarMemories(
     const vectorStore = await getCharacterVectorStore(characterId)
     const results = vectorStore.search(embeddingResult.embedding, 10)
 
-    // Get full memory data
+    // Hydrate only the matched memories, not the whole corpus.
     const repos = getRepositories()
-    const memories = await repos.memories.findByCharacterId(characterId)
+    const matchedIds = results.map(r => r.id)
+    const memories = await repos.memories.findByIds(matchedIds)
     const memoryMap = new Map(memories.map(m => [m.id, m]))
 
     return results
@@ -746,7 +752,8 @@ export async function findSimilarMemoriesWithEmbedding(
     const results = vectorStore.search(embedding, limit)
 
     const repos = getRepositories()
-    const memories = await repos.memories.findByCharacterId(characterId)
+    const matchedIds = results.map(r => r.id)
+    const memories = await repos.memories.findByIds(matchedIds)
     const memoryMap = new Map(memories.map(m => [m.id, m]))
 
     return results
