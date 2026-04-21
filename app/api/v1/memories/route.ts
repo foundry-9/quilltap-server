@@ -20,6 +20,7 @@
  * - GET ?action=housekeeping-config - Read current auto-housekeeping settings
  * - GET ?action=extraction-limits-config - Read current extraction rate limits
  * - GET ?action=backfill-embeddings - Report progress of the embedding backfill
+ * - GET ?action=character-memory-counts - List user's characters with memory counts (for housekeeping UI)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -140,6 +141,10 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'backfill-embeddings') {
     return handleBackfillProgress(req, { user, repos });
+  }
+
+  if (action === 'character-memory-counts') {
+    return handleCharacterMemoryCounts(req, { user, repos });
   }
 
   // Standard list operations - require a filter
@@ -756,6 +761,23 @@ async function handleWriteExtractionLimitsConfig(
   });
 
   return NextResponse.json({ success: true, settings: merged });
+}
+
+async function handleCharacterMemoryCounts(
+  _req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const characters = await repos.characters.findByUserId(user.id);
+  const results = await Promise.all(
+    characters.map(async (c: { id: string; name: string }) => ({
+      id: c.id,
+      name: c.name,
+      memoryCount: await repos.memories.countByCharacterId(c.id),
+    }))
+  );
+  // Sort by memory count descending so busy characters surface first
+  results.sort((a, b) => b.memoryCount - a.memoryCount);
+  return NextResponse.json({ success: true, characters: results });
 }
 
 async function handleBackfillProgress(
