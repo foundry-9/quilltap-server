@@ -177,8 +177,18 @@ export async function runHousekeeping(
     ...options,
   }
 
-  // Get all memories for this character
-  const memories = await repos.memories.findByCharacterId(characterId)
+  // Load memories in pages so a character with tens of thousands of entries
+  // doesn't block the event loop on a single synchronous Zod-validated read.
+  // Each page is ~1 encrypted SELECT + ~N row-validations; yielding between
+  // pages lets HTTP, heartbeats, and other jobs make progress. Batch size 250
+  // keeps each synchronous chunk small enough (~50–150 ms of Zod work) that
+  // Next.js dev-server request handling doesn't starve during a sweep.
+  const LOAD_BATCH_SIZE = 250
+  const memories: Memory[] = []
+  for await (const batch of repos.memories.findByCharacterIdInBatches(characterId, LOAD_BATCH_SIZE)) {
+    for (const memory of batch) memories.push(memory)
+    await new Promise<void>(resolve => setImmediate(resolve))
+  }
   const totalBefore = memories.length
 
   const result: HousekeepingResult = {
@@ -324,9 +334,17 @@ export async function runHousekeeping(
     }
   }
 
-  // Third pass: enforce hard cap if still over limit
+  // Third pass: enforce hard cap if still over limit.
+  //
+  // If every remaining memory is protected, the deletion loop below would
+  // skip every candidate and score + sort 19k entries for nothing. Do a
+  // cheap pre-check first: when no unprotected-and-undeleted memory exists,
+  // skip the entire scoring pass.
   const remainingAfterDeletion = memories.filter(m => !deleteSet.has(m.id))
-  if (remainingAfterDeletion.length > opts.maxMemories) {
+  const hasDeletionCandidate =
+    remainingAfterDeletion.length > opts.maxMemories &&
+    remainingAfterDeletion.some(m => !(protectedMap.get(m.id) ?? isProtectedMemory(m, now)))
+  if (hasDeletionCandidate) {
     const scoredMemories = remainingAfterDeletion.map(m => {
       const { effectiveWeight } = calculateEffectiveWeight(m, undefined, now)
       return { memory: m, score: effectiveWeight }

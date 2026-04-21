@@ -413,7 +413,17 @@ export async function enqueueMemoryHousekeeping(
     // Fall through to enqueue anyway — double work is better than none.
   }
 
-  return enqueueJob(userId, 'MEMORY_HOUSEKEEPING', payload as unknown as Record<string, unknown>, options);
+  // Housekeeping is retry-hostile: each retry re-runs the whole sweep from
+  // scratch, and a single sweep on a character with tens of thousands of
+  // memories can burn minutes of main-thread time. The daily scheduler
+  // re-enqueues anyway, so we cap attempts at 1 and let failures wait for
+  // the next natural pass rather than thrashing.
+  return enqueueJob(
+    userId,
+    'MEMORY_HOUSEKEEPING',
+    payload as unknown as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
 }
 
 /**

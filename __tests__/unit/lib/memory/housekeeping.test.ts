@@ -46,6 +46,7 @@ function makeMemory(overrides: Partial<Memory> = {}): Memory {
 describe('housekeeping', () => {
   let mockMemoriesRepo: {
     findByCharacterId: jest.Mock
+    findByCharacterIdInBatches: jest.Mock
     bulkDelete: jest.Mock
   }
 
@@ -63,8 +64,18 @@ describe('housekeeping', () => {
 
     mockMemoriesRepo = {
       findByCharacterId: jest.fn(),
+      findByCharacterIdInBatches: jest.fn(),
       bulkDelete: jest.fn(),
     }
+    // Bridge the legacy mock so tests can keep calling
+    // `findByCharacterId.mockResolvedValue(memories)` and have the batched
+    // loader yield the same result as a single page.
+    mockMemoriesRepo.findByCharacterIdInBatches.mockImplementation(
+      (async function* (this: unknown, _characterId: string) {
+        const memories = await mockMemoriesRepo.findByCharacterId()
+        if (memories && memories.length > 0) yield memories
+      }) as any,
+    )
     repositoriesMock.getRepositories.mockReturnValue({
       memories: mockMemoriesRepo,
     })

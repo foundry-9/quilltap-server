@@ -99,6 +99,39 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * Stream a character's memories in fixed-size batches, sorted by id for a
+   * stable page boundary. Housekeeping uses this so that a character with
+   * tens of thousands of memories can yield to the event loop between pages
+   * instead of doing one ~19k-row Zod-validated read in a single synchronous
+   * chunk.
+   */
+  async *findByCharacterIdInBatches(
+    characterId: string,
+    batchSize: number,
+  ): AsyncGenerator<Memory[], void, unknown> {
+    if (batchSize <= 0) {
+      throw new Error('batchSize must be positive');
+    }
+    let skip = 0;
+    while (true) {
+      const batch = await this.safeQuery(
+        async () =>
+          this.findByFilter(
+            { characterId },
+            { limit: batchSize, skip, sort: { id: 1 } },
+          ),
+        'Error loading memory batch',
+        { characterId, skip, batchSize },
+        [],
+      );
+      if (batch.length === 0) return;
+      yield batch;
+      if (batch.length < batchSize) return;
+      skip += batchSize;
+    }
+  }
+
+  /**
    * Find memories by a list of IDs. Missing IDs are silently dropped.
    * @param ids Array of memory IDs
    * @returns Promise<Memory[]> Array of memories matching any of the given IDs

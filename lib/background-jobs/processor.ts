@@ -31,6 +31,13 @@ const JOB_EXECUTION_TIMEOUT_MS = 3 * 60 * 1000;
  *  Local providers like Ollama can be slow under concurrent load. */
 const EMBEDDING_TIMEOUT_MS = 10 * 60 * 1000;
 
+/** Per-job execution timeout for memory housekeeping in ms (15 minutes).
+ *  A user-level sweep walks every character's memories, and a single
+ *  character with tens of thousands of entries can take well over the
+ *  3-minute default — tripping the timeout forces retries, which re-run
+ *  the whole sweep from scratch and thrash the main thread during startup. */
+const HOUSEKEEPING_TIMEOUT_MS = 15 * 60 * 1000;
+
 /** How often to check for stuck PROCESSING jobs (5 minutes) */
 const STUCK_JOB_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -121,7 +128,12 @@ export function isProcessorRunning(): boolean {
  */
 async function executeJob(job: BackgroundJob): Promise<boolean> {
   const repos = getRepositories();
-  const timeoutMs = CONCURRENT_JOB_TYPES.has(job.type) ? EMBEDDING_TIMEOUT_MS : JOB_EXECUTION_TIMEOUT_MS;
+  const timeoutMs =
+    CONCURRENT_JOB_TYPES.has(job.type)
+      ? EMBEDDING_TIMEOUT_MS
+      : job.type === 'MEMORY_HOUSEKEEPING'
+        ? HOUSEKEEPING_TIMEOUT_MS
+        : JOB_EXECUTION_TIMEOUT_MS;
 
   try {
     const handler = getHandler(job.type);

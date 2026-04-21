@@ -20,6 +20,16 @@ let housekeepingSchedulerRunning = false;
 /** Default interval: run daily (24 hours) */
 const DEFAULT_HOUSEKEEPING_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
+/** Startup grace: wait this long after boot before the first tick.
+ *  5 minutes, not 30 s, so the UI has time to finish compiling and the
+ *  first page load completes before the sweep pins the main thread. */
+const STARTUP_GRACE_MS = 5 * 60 * 1000;
+
+/** Skip the initial startup tick if a successful scheduled sweep ran within
+ *  this window. Prevents dev-restart thrashing from running a full sweep on
+ *  every boot. */
+const RECENT_RUN_WINDOW_MS = 20 * 60 * 60 * 1000;
+
 /**
  * Start the scheduled memory-housekeeping driver.
  * @param intervalMs - How often to run (default: 24 hours)
@@ -38,17 +48,56 @@ export function scheduleHousekeeping(intervalMs: number = DEFAULT_HOUSEKEEPING_I
     });
   }, intervalMs);
 
-  moduleLogger.info('Housekeeping scheduler started', { intervalMs });
+  moduleLogger.info('Housekeeping scheduler started', { intervalMs, startupGraceMs: STARTUP_GRACE_MS });
 
-  // Run immediately on startup, but wait a grace period so we don't race the
-  // app's own initialization. 30 s is fine — users don't need same-second sweep.
+  // Run once shortly after startup, unless a scheduled sweep already completed
+  // recently (dev-restart friendly). The recurring setInterval above still
+  // fires on its normal cadence either way.
   setTimeout(() => {
-    runScheduledHousekeeping().catch((error) => {
+    runStartupHousekeepingTick().catch((error) => {
       moduleLogger.error('Error in initial housekeeping run', {
         error: error instanceof Error ? error.message : String(error),
       });
     });
-  }, 30_000);
+  }, STARTUP_GRACE_MS);
+}
+
+/**
+ * Startup tick wrapper that short-circuits when a scheduled run completed
+ * within the recent-run window. Keeps development restarts from re-running
+ * a full sweep every time the server comes up.
+ */
+async function runStartupHousekeepingTick(): Promise<void> {
+  try {
+    const repos = getRepositories();
+    const cutoff = Date.now() - RECENT_RUN_WINDOW_MS;
+    // Peek at the most recent MEMORY_HOUSEKEEPING jobs across the instance.
+    // In single-user mode the userId is deterministic; we look across
+    // all users in case the caller changes that. 50 rows is plenty — one
+    // successful scheduled row in the window is enough to skip.
+    const recent = await repos.backgroundJobs.findRecentByType(
+      'MEMORY_HOUSEKEEPING',
+      50,
+    );
+    const recentlyCompleted = recent.find((job) => {
+      if (job.status !== 'COMPLETED') return false;
+      if ((job.payload as Record<string, unknown>).reason !== 'scheduled') return false;
+      const ts = new Date(job.updatedAt).getTime();
+      return ts >= cutoff;
+    });
+    if (recentlyCompleted) {
+      moduleLogger.info('Skipping startup housekeeping tick — recent scheduled run already completed', {
+        jobId: recentlyCompleted.id,
+        completedAt: recentlyCompleted.updatedAt,
+      });
+      return;
+    }
+  } catch (error) {
+    moduleLogger.warn('Recent-run check failed; running startup housekeeping tick anyway', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  await runScheduledHousekeeping();
 }
 
 /** Stop the scheduled housekeeping driver. */

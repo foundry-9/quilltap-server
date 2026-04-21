@@ -76,6 +76,29 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
+   * Find the N most-recently-updated jobs of a given type across all users.
+   * Used by the housekeeping scheduler to skip the startup tick when a
+   * recent scheduled sweep already completed.
+   */
+  async findRecentByType(type: BackgroundJobType, limit: number): Promise<BackgroundJob[]> {
+    return this.safeQuery(
+      async () => {
+        const results = await this.findByFilter(
+          { type } as TypedQueryFilter<BackgroundJob>,
+          {
+            sort: { updatedAt: -1 as any },
+            limit,
+          },
+        );
+        return results;
+      },
+      'Error finding recent background jobs by type',
+      { type, limit },
+      []
+    );
+  }
+
+  /**
    * Find jobs by user ID with optional status filter
    */
   async findByUserId(userId: string, status?: BackgroundJobStatus): Promise<BackgroundJob[]> {
