@@ -63,8 +63,8 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
   },
   {
     id: 'memory-search',
-    label: 'Memory & Search',
-    documents: ['embedding-profiles', 'search'],
+    label: 'Commonplace Book',
+    documents: ['embedding-profiles', 'memory-housekeeping', 'search'],
   },
   {
     id: 'ai-providers',

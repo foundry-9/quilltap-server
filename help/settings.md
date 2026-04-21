@@ -54,11 +54,12 @@ Where aesthetics meet functionality, and both are treated with the respect they 
 
 > See [Appearance Settings](appearance-settings.md) and [Tags Customization](tags-customization.md) for full details
 
-### Memory & Search
+### Commonplace Book
 
 The library wing --- quiet, orderly, and possessed of an uncanny ability to recall precisely the passage you need.
 
 - **Embedding Profiles** --- Configure text embedding services for semantic memory search
+- **Memory Housekeeping** --- Automatically prune stale, low-importance memories as each character approaches its cap (off by default)
 - **Memory Deduplication** --- Find and merge duplicate memories across characters
 
 > See [Embedding Provider Profiles](embedding-profiles.md) and [System Tools](system-tools.md) for full details
@@ -103,7 +104,7 @@ The engine room, the filing cabinet, and the emergency exits. Everything that ke
 1. **AI Providers tab** --- Run the Setup Wizard, or manually add API Keys and create Connection Profiles
 2. **Chat tab** --- Configure default chat behaviors and preferences
 3. **Images tab** (optional) --- Set up image generation if desired
-4. **Memory & Search tab** (optional) --- Configure embedding profiles for semantic memory
+4. **Commonplace Book tab** (optional) --- Configure embedding profiles for semantic memory and enable automatic housekeeping
 
 ### Installing new capabilities
 

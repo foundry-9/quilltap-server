@@ -21,6 +21,57 @@ import { calculateEffectiveWeight } from './memory-weighting'
 import type { MemoryGateOutcome } from './memory-gate'
 export type { MemoryGateOutcome } from './memory-gate'
 
+/** Fraction of the per-character cap at which auto-housekeeping engages. */
+const HOUSEKEEPING_WATERMARK = 0.9
+
+/**
+ * If auto-housekeeping is enabled for this user and the character has reached
+ * the watermark fraction of its cap, enqueue a housekeeping job for that
+ * character. The enqueue helper dedupes against in-flight jobs, so calling
+ * this after every insert is safe even during high-frequency extraction.
+ *
+ * Never throws — a failure here must not block the memory write that just
+ * succeeded.
+ */
+async function maybeEnqueueHousekeeping(characterId: string, userId: string): Promise<void> {
+  try {
+    const repos = getRepositories()
+    const chatSettings = await repos.chatSettings.findByUserId(userId)
+    const autoSettings = chatSettings?.autoHousekeepingSettings
+    if (!autoSettings?.enabled) {
+      return
+    }
+
+    const cap =
+      autoSettings.perCharacterCapOverrides?.[characterId] ??
+      autoSettings.perCharacterCap ??
+      2000
+
+    const count = await repos.memories.countByCharacterId(characterId)
+    if (count < Math.floor(cap * HOUSEKEEPING_WATERMARK)) {
+      return
+    }
+
+    const { enqueueMemoryHousekeeping } = await import('@/lib/background-jobs/queue-service')
+    await enqueueMemoryHousekeeping(userId, {
+      characterId,
+      reason: 'watermark',
+    })
+    logger.debug('[Housekeeping] Watermark reached; enqueued housekeeping job', {
+      userId,
+      characterId,
+      count,
+      cap,
+    })
+  } catch (error) {
+    logger.warn('[Housekeeping] Failed watermark check after insert (non-fatal)', {
+      userId,
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
 /**
  * Options for memory creation
  */
@@ -174,6 +225,8 @@ export async function createMemoryWithGate(
         data.characterId,
         decision.relatedMemories
       )
+      // Fire-and-forget watermark check. Never awaited — never blocks the write.
+      void maybeEnqueueHousekeeping(data.characterId, options.userId)
       return {
         memory,
         action: 'INSERT_RELATED',
@@ -185,6 +238,7 @@ export async function createMemoryWithGate(
     default: {
       // Straightforward insert with pre-computed embedding
       const memory = await createMemoryDirectWithEmbedding(data, options, embedding)
+      void maybeEnqueueHousekeeping(data.characterId, options.userId)
       return { memory, action: 'INSERT' }
     }
   }

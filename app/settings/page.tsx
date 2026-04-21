@@ -110,7 +110,7 @@ const SETTINGS_TABS: Tab[] = [
   { id: 'providers', label: 'AI Providers', icon: <ProvidersIcon /> },
   { id: 'chat', label: 'Chat', icon: <ChatIcon /> },
   { id: 'appearance', label: 'Appearance', icon: <AppearanceIcon /> },
-  { id: 'memory', label: 'Memory & Search', icon: <MemoryIcon /> },
+  { id: 'memory', label: 'Commonplace Book', icon: <MemoryIcon /> },
   { id: 'images', label: 'Images', icon: <ImagesIcon /> },
   { id: 'templates', label: 'Templates & Prompts', icon: <TemplatesIcon /> },
   { id: 'system', label: 'Data & System', icon: <SystemIcon /> },

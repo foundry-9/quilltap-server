@@ -181,6 +181,8 @@ import { addCharacterDocumentMountPointFieldMigration } from './add-character-do
 import { addReadPropertiesFromDocumentStoreFieldMigration } from './add-read-properties-from-document-store-field';
 // Normalise all stored embeddings to unit length for fast cosine similarity
 import { normalizeEmbeddingsUnitVectorsMigration } from './normalize-embeddings-unit-vectors';
+// Add autoHousekeepingSettings column to chat_settings
+import { addAutoHousekeepingSettingsFieldMigration } from './add-auto-housekeeping-settings-field';
 
 /**
  * All available migrations.
@@ -357,6 +359,8 @@ export const migrations: Migration[] = [
   addReadPropertiesFromDocumentStoreFieldMigration,
   // Normalise all stored embeddings to unit length for fast cosine similarity
   normalizeEmbeddingsUnitVectorsMigration,
+  // Add autoHousekeepingSettings column to chat_settings
+  addAutoHousekeepingSettingsFieldMigration,
 ];
 
 export {
@@ -518,5 +522,7 @@ export {
   addReadPropertiesFromDocumentStoreFieldMigration,
   // Normalise all stored embeddings to unit length for fast cosine similarity
   normalizeEmbeddingsUnitVectorsMigration,
+  // Add autoHousekeepingSettings column to chat_settings
+  addAutoHousekeepingSettingsFieldMigration,
 };
 

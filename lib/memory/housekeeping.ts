@@ -76,7 +76,7 @@ export interface HousekeepingDetail {
  * Default housekeeping options based on PLAN.md retention policy
  */
 const DEFAULT_OPTIONS: Required<Omit<HousekeepingOptions, 'userId' | 'embeddingProfileId'>> = {
-  maxMemories: 1000,
+  maxMemories: 2000,
   maxAgeMonths: 6,
   maxInactiveMonths: 6,
   minImportance: 0.3,
@@ -92,6 +92,9 @@ const DEFAULT_OPTIONS: Required<Omit<HousekeepingOptions, 'userId' | 'embeddingP
  * - Importance >= 0.7 (high importance)
  * - Manually created (source === 'MANUAL')
  * - Accessed within the last 3 months
+ * - Reinforced >= 5 times AND (reinforcedImportance >= 0.5 OR accessed in last 90 days).
+ *   The second half of the reinforcement clause prevents noisy phrase-variant dupes
+ *   from becoming permanently immortal just because they got re-extracted many times.
  */
 function isProtectedMemory(memory: Memory, now: Date): boolean {
   // Use reinforcedImportance (falling back to importance) for the threshold
@@ -99,11 +102,6 @@ function isProtectedMemory(memory: Memory, now: Date): boolean {
 
   // High importance memories are always protected
   if (effectiveImportance >= 0.7) {
-    return true
-  }
-
-  // Memories with high reinforcement count are stable knowledge — always protected
-  if ((memory.reinforcementCount ?? 1) >= 5) {
     return true
   }
 
@@ -118,6 +116,21 @@ function isProtectedMemory(memory: Memory, now: Date): boolean {
     const monthsInactive = (now.getTime() - lastAccessed.getTime()) / (1000 * 60 * 60 * 24 * 30)
     if (monthsInactive < 3) {
       return true
+    }
+  }
+
+  // High-reinforcement memories are protected only when they are ALSO useful:
+  // either meaningfully important after reinforcement, or still being recalled.
+  if ((memory.reinforcementCount ?? 1) >= 5) {
+    if (effectiveImportance >= 0.5) {
+      return true
+    }
+    if (memory.lastAccessedAt) {
+      const lastAccessedMs = new Date(memory.lastAccessedAt).getTime()
+      const daysInactive = (now.getTime() - lastAccessedMs) / (1000 * 60 * 60 * 24)
+      if (daysInactive < 90) {
+        return true
+      }
     }
   }
 

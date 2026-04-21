@@ -11,9 +11,11 @@
  * - POST ?action=search - Semantic/keyword search (characterId in body)
  * - POST ?action=housekeep - Run memory cleanup (characterId in body)
  * - POST ?action=embeddings - Generate missing embeddings (characterId in body)
+ * - POST ?action=housekeeping-config - Update auto-housekeeping settings
  * - PUT ?action=embeddings - Rebuild vector index (characterId in body)
  * - GET ?action=housekeep&characterId= - Get housekeeping preview
  * - GET ?action=embeddings&characterId= - Get embedding status
+ * - GET ?action=housekeeping-config - Read current auto-housekeeping settings
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -80,6 +82,14 @@ const rebuildIndexSchema = z.object({
   }),
 });
 
+const housekeepingConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  perCharacterCap: z.number().int().min(100).max(100000).optional(),
+  perCharacterCapOverrides: z.record(z.string(), z.number().int().positive()).optional(),
+  autoMergeSimilarThreshold: z.number().min(0).max(1).optional(),
+  mergeSimilar: z.boolean().optional(),
+});
+
 // =============================================================================
 // GET /api/v1/memories - List memories
 // =============================================================================
@@ -98,6 +108,10 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'embeddings') {
     return handleEmbeddingStatus(req, { user, repos }, characterId);
+  }
+
+  if (action === 'housekeeping-config') {
+    return handleReadHousekeepingConfig(req, { user, repos });
   }
 
   // Standard list operations - require a filter
@@ -146,6 +160,10 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'embeddings') {
     return handleGenerateEmbeddings(req, { user, repos });
+  }
+
+  if (action === 'housekeeping-config') {
+    return handleWriteHousekeepingConfig(req, { user, repos });
   }
 
   // Default: Create memory
@@ -595,6 +613,61 @@ async function handleHousekeepPreview(
       details: preview.details,
     },
   });
+}
+
+async function handleReadHousekeepingConfig(
+  _req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const settings = await repos.chatSettings.findByUserId(user.id);
+  const autoHousekeepingSettings = settings?.autoHousekeepingSettings ?? {
+    enabled: false,
+    perCharacterCap: 2000,
+    perCharacterCapOverrides: {},
+    autoMergeSimilarThreshold: 0.90,
+    mergeSimilar: false,
+  };
+  return NextResponse.json({ success: true, settings: autoHousekeepingSettings });
+}
+
+async function handleWriteHousekeepingConfig(
+  req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json();
+  const parsed = housekeepingConfigSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+
+  const existing = await repos.chatSettings.findByUserId(user.id);
+  const currentSettings = existing?.autoHousekeepingSettings ?? {
+    enabled: false,
+    perCharacterCap: 2000,
+    perCharacterCapOverrides: {},
+    autoMergeSimilarThreshold: 0.90,
+    mergeSimilar: false,
+  };
+
+  const merged = {
+    enabled: parsed.data.enabled ?? currentSettings.enabled,
+    perCharacterCap: parsed.data.perCharacterCap ?? currentSettings.perCharacterCap,
+    perCharacterCapOverrides: parsed.data.perCharacterCapOverrides ?? currentSettings.perCharacterCapOverrides,
+    autoMergeSimilarThreshold: parsed.data.autoMergeSimilarThreshold ?? currentSettings.autoMergeSimilarThreshold,
+    mergeSimilar: parsed.data.mergeSimilar ?? currentSettings.mergeSimilar,
+  };
+
+  await repos.chatSettings.updateForUser(user.id, {
+    autoHousekeepingSettings: merged,
+  });
+
+  logger.info('[Memories API] Auto-housekeeping settings updated', {
+    userId: user.id,
+    enabled: merged.enabled,
+    perCharacterCap: merged.perCharacterCap,
+  });
+
+  return NextResponse.json({ success: true, settings: merged });
 }
 
 async function handleGenerateEmbeddings(

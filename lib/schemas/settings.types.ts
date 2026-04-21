@@ -116,6 +116,32 @@ export const MemoryCascadePreferencesSchema = z.object({
 export type MemoryCascadePreferences = z.infer<typeof MemoryCascadePreferencesSchema>;
 
 // ============================================================================
+// AUTO-HOUSEKEEPING SETTINGS (Commonplace Book)
+// ============================================================================
+
+/**
+ * Per-character cap override. When a characterId appears in the map, its cap
+ * replaces the global `perCharacterCap` for that character only.
+ */
+export const AutoHousekeepingCapOverrideSchema = z.record(z.string(), z.number().int().positive());
+export type AutoHousekeepingCapOverride = z.infer<typeof AutoHousekeepingCapOverrideSchema>;
+
+export const AutoHousekeepingSettingsSchema = z.object({
+  /** When true, housekeeping runs automatically (post-write watermark + scheduled sweep). Default off. */
+  enabled: z.boolean().default(false),
+  /** Global per-character memory cap. Housekeeping engages when count >= 80% of this. */
+  perCharacterCap: z.number().int().positive().default(2000),
+  /** Per-character cap overrides keyed by characterId. */
+  perCharacterCapOverrides: AutoHousekeepingCapOverrideSchema.default({}),
+  /** Similarity threshold for the optional merge-similar pass during housekeeping. */
+  autoMergeSimilarThreshold: z.number().min(0).max(1).default(0.90),
+  /** When true, housekeeping also merges semantically similar memories (on top of retention-policy deletions). */
+  mergeSimilar: z.boolean().default(false),
+});
+
+export type AutoHousekeepingSettings = z.infer<typeof AutoHousekeepingSettingsSchema>;
+
+// ============================================================================
 // TOKEN DISPLAY SETTINGS
 // ============================================================================
 
@@ -260,6 +286,14 @@ export const ChatSettingsSchema = z.object({
   memoryCascadePreferences: MemoryCascadePreferencesSchema.default({
     onMessageDelete: 'ASK_EVERY_TIME',
     onSwipeRegenerate: 'DELETE_MEMORIES',
+  }),
+  /** Commonplace Book auto-housekeeping settings (off by default; user opts in from the Commonplace Book tab) */
+  autoHousekeepingSettings: AutoHousekeepingSettingsSchema.default({
+    enabled: false,
+    perCharacterCap: 2000,
+    perCharacterCapOverrides: {},
+    autoMergeSimilarThreshold: 0.90,
+    mergeSimilar: false,
   }),
   /** Token display settings for showing usage and costs */
   tokenDisplaySettings: TokenDisplaySettingsSchema.default({

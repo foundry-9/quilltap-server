@@ -18,6 +18,7 @@ import { handleChatDangerClassification } from './chat-danger-classification';
 import { handleSceneStateTracking } from './scene-state-tracking';
 import { handleCharacterAvatarGeneration } from './character-avatar';
 import { handleConversationRender } from './conversation-render';
+import { handleMemoryHousekeeping } from './memory-housekeeping';
 
 /**
  * Job handler function type
@@ -41,6 +42,7 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   SCENE_STATE_TRACKING: handleSceneStateTracking,
   CHARACTER_AVATAR_GENERATION: handleCharacterAvatarGeneration,
   CONVERSATION_RENDER: handleConversationRender,
+  MEMORY_HOUSEKEEPING: handleMemoryHousekeeping,
 };
 
 /**
@@ -68,3 +70,4 @@ export { handleChatDangerClassification };
 export { handleSceneStateTracking };
 export { handleCharacterAvatarGeneration };
 export { handleConversationRender };
+export { handleMemoryHousekeeping };

@@ -186,6 +186,25 @@ export interface ConversationRenderEnqueueResult {
 }
 
 /**
+ * Payload for memory-housekeeping job.
+ * Leave every field undefined to fall back to the per-user autoHousekeepingSettings.
+ */
+export interface MemoryHousekeepingPayload {
+  /** Character to housekeep. If omitted, handler sweeps every character owned by userId. */
+  characterId?: string;
+  /** Override the per-character cap (otherwise uses the user's autoHousekeepingSettings). */
+  maxMemories?: number;
+  /** Override the merge-similar threshold. */
+  mergeThreshold?: number;
+  /** Override whether to merge semantically similar memories. */
+  mergeSimilar?: boolean;
+  /** Dry run — preview deletions without applying. Default false. */
+  dryRun?: boolean;
+  /** Why the job was enqueued (for debug logs). */
+  reason?: 'watermark' | 'scheduled' | 'manual';
+}
+
+/**
  * Payload for scene state tracking job
  */
 export interface SceneStateTrackingPayload {
@@ -354,6 +373,47 @@ export async function enqueueMemoryExtraction(
   options?: EnqueueJobOptions
 ): Promise<string> {
   return enqueueJob(userId, 'MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
+}
+
+/**
+ * Enqueue a memory-housekeeping job for a character (or all characters of a user).
+ *
+ * Dedupes: if there's already a PENDING or PROCESSING MEMORY_HOUSEKEEPING job
+ * for the same (userId, characterId) pair, this is a no-op returning the
+ * existing job ID.
+ */
+export async function enqueueMemoryHousekeeping(
+  userId: string,
+  payload: MemoryHousekeepingPayload = {},
+  options?: EnqueueJobOptions
+): Promise<string> {
+  const repos = getRepositories();
+
+  // De-dupe against in-flight jobs for the same (userId, characterId)
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'MEMORY_HOUSEKEEPING') return false;
+      const existingCharId = (j.payload as Record<string, unknown>).characterId;
+      return existingCharId === payload.characterId;
+    });
+    if (existing) {
+      logger.debug('[Housekeeping] Skipping enqueue — job already in-flight', {
+        jobId: existing.id,
+        userId,
+        characterId: payload.characterId ?? '(all)',
+      });
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[Housekeeping] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through to enqueue anyway — double work is better than none.
+  }
+
+  return enqueueJob(userId, 'MEMORY_HOUSEKEEPING', payload as unknown as Record<string, unknown>, options);
 }
 
 /**

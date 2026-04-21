@@ -4,6 +4,7 @@ import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import EmbeddingProfilesTab from '@/components/settings/embedding-profiles-tab'
 import { MemoryDedupCard } from '@/components/tools/memory-dedup-card'
+import { MemoryHousekeepingCard } from '@/components/tools/memory-housekeeping-card'
 import { useSettingsSection } from './useSettingsSection'
 
 export function MemorySearchTabContent() {
@@ -17,6 +18,10 @@ export function MemorySearchTabContent() {
       <div className="space-y-4">
         <CollapsibleCard title="Embedding Profiles" description="Configure embedding models for semantic memory" sectionId="embedding-profiles" forceOpen={activeSection === 'embedding-profiles'}>
           <EmbeddingProfilesTab />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Memory Housekeeping" description="Automatically prune stale, low-importance memories as characters approach their cap" sectionId="memory-housekeeping" forceOpen={activeSection === 'memory-housekeeping'}>
+          <MemoryHousekeepingCard />
         </CollapsibleCard>
 
         <CollapsibleCard title="Memory Deduplication" description="Find and remove duplicate memories" sectionId="memory-deduplication" forceOpen={activeSection === 'memory-deduplication'}>

@@ -474,6 +474,7 @@ export const SQLITE_TABLES = [
       "sidebarWidth" INTEGER DEFAULT 256,
       "defaultTimestampConfig" TEXT DEFAULT '{}',
       "memoryCascadePreferences" TEXT DEFAULT '{}',
+      "autoHousekeepingSettings" TEXT DEFAULT '{"enabled":false,"perCharacterCap":2000,"perCharacterCapOverrides":{},"autoMergeSimilarThreshold":0.9,"mergeSimilar":false}',
       "tokenDisplaySettings" TEXT DEFAULT '{}',
       "contextCompressionSettings" TEXT DEFAULT '{}',
       "llmLoggingSettings" TEXT DEFAULT '{}',

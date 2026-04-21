@@ -357,6 +357,15 @@ jest.mock('@/lib/embedding/vector-store', () => ({
     deleteStore: jest.fn().mockResolvedValue(undefined),
     getStore: jest.fn().mockResolvedValue(null),
   }),
+  getCharacterVectorStore: jest.fn().mockResolvedValue({
+    getAllEntries: jest.fn().mockReturnValue([]),
+    search: jest.fn().mockReturnValue([]),
+    addVector: jest.fn(),
+    updateVector: jest.fn(),
+    removeVector: jest.fn(),
+    hasVector: jest.fn().mockReturnValue(false),
+    save: jest.fn(),
+  }),
   CharacterVectorStore: jest.fn().mockImplementation(() => ({
     addMemory: jest.fn().mockResolvedValue(undefined),
     searchSimilar: jest.fn().mockResolvedValue([]),

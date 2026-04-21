@@ -175,6 +175,13 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               onMessageDelete: 'ASK_EVERY_TIME',
               onSwipeRegenerate: 'DELETE_MEMORIES',
             },
+            autoHousekeepingSettings: {
+              enabled: false,
+              perCharacterCap: 2000,
+              perCharacterCapOverrides: {},
+              autoMergeSimilarThreshold: 0.90,
+              mergeSimilar: false,
+            },
             tokenDisplaySettings: {
               showPerMessageTokens: false,
               showPerMessageCost: false,
