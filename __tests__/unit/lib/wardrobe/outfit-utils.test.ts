@@ -42,6 +42,33 @@ describe('wardrobe outfit utilities', () => {
         '',
       ].join('\n'))
     })
+
+    it('collapses slots sharing the same value onto a single line', () => {
+      expect(
+        describeOutfit({
+          top: 'Working Outfit',
+          bottom: 'Working Outfit',
+          footwear: 'Working Outfit',
+          accessories: 'Working Outfit',
+        })
+      ).toBe('- **top, bottom, footwear, accessories:** Working Outfit\n')
+    })
+
+    it('groups multi-slot items but keeps distinct slots separate', () => {
+      expect(
+        describeOutfit({
+          top: 'silk dress',
+          bottom: 'silk dress',
+          footwear: 'leather boots',
+          accessories: 'pearl earrings',
+        })
+      ).toBe([
+        '- **top, bottom:** silk dress',
+        '- **footwear:** leather boots',
+        '- **accessories:** pearl earrings',
+        '',
+      ].join('\n'))
+    })
   })
 
   describe('computeDisplacedSlots', () => {
