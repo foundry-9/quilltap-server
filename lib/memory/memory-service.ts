@@ -477,6 +477,11 @@ export async function searchMemoriesSemantic(
   const limit = options.limit || 20
   const minScore = options.minScore || 0.0
 
+  // Timing markers — left in at debug level so we can see which stage of a
+  // semantic search is slow on big-corpus characters without having to
+  // re-instrument after every performance change.
+  const t0 = performance.now()
+
   // Try semantic search first
   try {
     const embeddingResult = await generateEmbeddingForUser(
@@ -484,6 +489,7 @@ export async function searchMemoriesSemantic(
       options.userId,
       options.embeddingProfileId
     )
+    const tEmbed = performance.now()
 
     const vectorStore = await getCharacterVectorStore(characterId)
     const storedDimensions = vectorStore.getDimensions()
@@ -509,6 +515,7 @@ export async function searchMemoriesSemantic(
       embeddingResult.embedding,
       limit * 3 // Get more results to filter
     )
+    const tVector = performance.now()
 
     if (vectorResults.length > 0) {
       // Hydrate only the matched memories. The previous version called
@@ -549,6 +556,18 @@ export async function searchMemoriesSemantic(
         const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
         const finalScoreB = b.score * 0.4 + (b.effectiveWeight ?? 0) * 0.6
         return finalScoreB - finalScoreA
+      })
+
+      const tDone = performance.now()
+      logger.debug('[Memory] Semantic search timings', {
+        characterId,
+        corpusSize: vectorStore.size,
+        vectorHits: vectorResults.length,
+        finalHits: Math.min(results.length, limit),
+        embedMs: Math.round(tEmbed - t0),
+        vectorSearchMs: Math.round(tVector - tEmbed),
+        hydrateAndRankMs: Math.round(tDone - tVector),
+        totalMs: Math.round(tDone - t0),
       })
 
       return results.slice(0, limit)

@@ -867,10 +867,18 @@ async function processMessage(
   }
 
   // Run compression check and proactive recall in parallel
+  const tParallelStart = performance.now()
   const [cachedCompressionResponse, preSearchedMemories] = await Promise.all([
     compressionTask(),
     proactiveRecallTask(),
   ])
+  const tParallelEnd = performance.now()
+  logger.debug('[Orchestrator] Parallel compression + proactive recall complete', {
+    chatId,
+    durationMs: Math.round(tParallelEnd - tParallelStart),
+    hadCachedCompression: !!cachedCompressionResponse,
+    preSearchedMemoriesCount: preSearchedMemories?.length ?? 0,
+  })
 
   // Start keep-alive pings during context building (especially important during compression)
   // This prevents proxy/load balancer timeouts during long compression operations
@@ -896,6 +904,7 @@ async function processMessage(
     characterId: character.id,
   }))
 
+  const tBuildContextStart = performance.now()
   const { builtContext, formattedMessages, isInitialMessage } = await buildMessageContext(
     {
       repos,
@@ -951,6 +960,12 @@ async function processMessage(
     existingMessages,
     fileProcessing.attachmentsToSend
   )
+  const tBuildContextEnd = performance.now()
+  logger.debug('[Orchestrator] buildMessageContext complete', {
+    chatId,
+    durationMs: Math.round(tBuildContextEnd - tBuildContextStart),
+    formattedMessageCount: formattedMessages.length,
+  })
 
   // Stop keep-alive pings after context building completes
   if (keepAliveInterval) {

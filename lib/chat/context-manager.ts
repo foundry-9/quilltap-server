@@ -425,6 +425,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
   }
 
+  const tSystemPromptStart = performance.now()
   const systemPrompt = buildSystemPrompt(
     character,
     userCharacter,
@@ -443,6 +444,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     options.outfitChangeNotifications
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
+  logger.debug('[ContextManager] buildSystemPrompt complete', {
+    chatId: chat.id,
+    durationMs: Math.round(performance.now() - tSystemPromptStart),
+    systemPromptChars: systemPrompt.length,
+    systemPromptTokens,
+  })
 
   // Log multi-character context info for debugging identity confusion
   if (isMultiCharacter && respondingParticipant) {
@@ -475,11 +482,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     : null
 
   // Estimate total conversation tokens for budget check
+  const tTokenCountStart = performance.now()
   const visibleConversation = extractVisibleConversation(existingMessages)
   const conversationTokens = countMessagesTokens(
     visibleConversation.map(m => ({ role: m.role, content: m.content })),
     provider
   )
+  logger.debug('[ContextManager] Conversation token count complete', {
+    chatId: chat.id,
+    durationMs: Math.round(performance.now() - tTokenCountStart),
+    visibleMessageCount: visibleConversation.length,
+    conversationTokens,
+  })
 
   // Total estimated prompt = system prompt + conversation + a rough memory estimate
   // (Memories haven't been retrieved yet, but we use the budget allocation as an estimate)
@@ -734,9 +748,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const memorySearchQuery = newUserMessage ||
     (existingMessages.length > 0 ? existingMessages[existingMessages.length - 1].content : '')
 
+  const tMemoryStart = performance.now()
+  let memoryPath: 'skipped' | 'pre-searched' | 'semantic-search' = 'skipped'
   if (!skipMemories && character.id) {
     if (options.preSearchedMemories && options.preSearchedMemories.length > 0) {
       // Use proactively recalled memories (skips internal search)
+      memoryPath = 'pre-searched'
       try {
         const formatted = formatMemoriesForContext(
           options.preSearchedMemories,
@@ -754,6 +771,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       }
     } else if (memorySearchQuery) {
       // Default: search using user message (or last message in continue mode)
+      memoryPath = 'semantic-search'
       try {
         const memoryResults = await searchMemoriesSemantic(
           character.id,
@@ -781,12 +799,21 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       }
     }
   }
+  logger.debug('[ContextManager] Memory retrieval + format complete', {
+    chatId: chat.id,
+    characterId: character.id,
+    durationMs: Math.round(performance.now() - tMemoryStart),
+    path: memoryPath,
+    memoriesIncluded,
+  })
 
   // 2b. Retrieve inter-character memories in multi-character chats
   let interCharacterMemoryContent = ''
   let interCharacterMemoryTokens = 0
   let interCharacterMemoriesIncluded = 0
 
+  const tInterStart = performance.now()
+  let interCharacterLoadedCount = 0
   if (!skipMemories && isMultiCharacter && character.id && participantCharacters && allParticipants) {
     try {
       const repos = getRepositories()
@@ -811,6 +838,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           character.id,
           otherCharacterIds
         )
+        interCharacterLoadedCount = interCharacterMemories.length
 
         // Use half the remaining memory budget for inter-character memories
         const interCharacterBudget = Math.floor((budget.memoryBudget - memoryTokens) / 2)
@@ -832,6 +860,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     } catch (error) {
       warnings.push(`Failed to retrieve inter-character memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
+  }
+  if (isMultiCharacter) {
+    logger.debug('[ContextManager] Inter-character memory retrieval complete', {
+      chatId: chat.id,
+      characterId: character.id,
+      durationMs: Math.round(performance.now() - tInterStart),
+      loadedCount: interCharacterLoadedCount,
+      includedCount: interCharacterMemoriesIncluded,
+    })
   }
 
   // ============================================================================
