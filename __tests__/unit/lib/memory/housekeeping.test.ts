@@ -1,7 +1,8 @@
 /**
  * Unit tests for lib/memory/housekeeping.ts focusing on:
  * - Default cap is 2000 (was 1000 in earlier versions)
- * - Tightened reinforcement-based immortality: count >= 5 alone no longer protects
+ * - Protection gate uses a blended score (content + reinforcement + links + recent access),
+ *   with MANUAL as the only hard override
  */
 
 import { describe, expect, it, jest, beforeEach } from '@jest/globals'
@@ -95,8 +96,8 @@ describe('housekeeping', () => {
     expect(result.totalBefore).toBe(50)
   })
 
-  describe('tightened reinforcement-based immortality', () => {
-    it('protects a heavily reinforced memory when reinforcedImportance >= 0.5', async () => {
+  describe('blended protection gate', () => {
+    it('protects a reinforced memory whose reinforcedImportance lands at 0.5', async () => {
       const ancient = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
       const memory = makeMemory({
         importance: 0.2,
@@ -112,7 +113,7 @@ describe('housekeeping', () => {
       expect(result.deleted).toBe(0)
     })
 
-    it('protects a heavily reinforced memory accessed within the last 90 days', async () => {
+    it('protects a reinforced memory still being accessed recently', async () => {
       const recent = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
       const memory = makeMemory({
         importance: 0.2,
@@ -129,16 +130,14 @@ describe('housekeeping', () => {
     })
 
     it('does NOT protect a reinforced-but-unimportant-and-stale memory', async () => {
-      // reinforcementCount >= 5 used to grant permanent immunity.
-      // Now it requires importance or recency — this memory has neither.
       const longAgo = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString()
       const ancient = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString()
       const memory = makeMemory({
         id: 'reinforced-but-stale',
         importance: 0.1,
-        reinforcedImportance: 0.2, // below the 0.3 minImportance floor AND below the 0.5 reinforcement-protection threshold
+        reinforcedImportance: 0.2,
         reinforcementCount: 8,
-        lastAccessedAt: longAgo, // 200 days ago — beyond 90 AND 6 months
+        lastAccessedAt: longAgo,
         createdAt: ancient,
       })
       mockMemoriesRepo.findByCharacterId.mockResolvedValue([memory])
@@ -148,15 +147,40 @@ describe('housekeeping', () => {
       expect(result.deleted).toBe(1)
       expect(result.deletedIds).toContain('reinforced-but-stale')
     })
+
+    it('lets the cap pass delete old high-importance memories without usage evidence', async () => {
+      // Under the previous gate, importance >= 0.7 was permanent immunity and
+      // the cap pass couldn't touch these rows. Under the blended score, a
+      // 400-day-old 0.8-importance memory with reinforcementCount=1 and no
+      // access has a protection score below 0.5, so the cap pass can delete
+      // it when over the limit.
+      const ancient = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString()
+      const staleHigh = Array.from({ length: 10 }, (_, i) =>
+        makeMemory({
+          id: `stale-high-${i}`,
+          importance: 0.8,
+          reinforcedImportance: 0.8,
+          reinforcementCount: 1,
+          lastAccessedAt: null,
+          createdAt: ancient,
+        })
+      )
+      mockMemoriesRepo.findByCharacterId.mockResolvedValue(staleHigh)
+
+      // Tight cap so the third pass kicks in
+      const result = await runHousekeeping('char-1', { maxMemories: 3 })
+
+      expect(result.deleted).toBeGreaterThan(0)
+    })
   })
 
-  it('still protects high-importance memories regardless of reinforcement count', async () => {
-    const ancient = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString()
+  it('protects a fresh high-importance memory', async () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const memory = makeMemory({
       importance: 0.8,
       reinforcedImportance: 0.8,
       reinforcementCount: 1,
-      createdAt: ancient,
+      createdAt: yesterday,
     })
     mockMemoriesRepo.findByCharacterId.mockResolvedValue([memory])
 

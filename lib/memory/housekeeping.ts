@@ -12,9 +12,15 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
-import { calculateEffectiveWeight } from './memory-weighting'
+import { calculateEffectiveWeight, calculateProtectionScore } from './memory-weighting'
 
 import { logger } from '@/lib/logger'
+
+/**
+ * Protection score below which a memory is a deletion candidate.
+ * Memories above this threshold are preserved by the housekeeping gate.
+ */
+const PROTECTION_THRESHOLD = 0.5
 
 /**
  * Housekeeping options for memory cleanup
@@ -86,55 +92,26 @@ const DEFAULT_OPTIONS: Required<Omit<HousekeepingOptions, 'userId' | 'embeddingP
 }
 
 /**
- * Check if a memory is protected from deletion
+ * Check if a memory is protected from deletion.
  *
- * Protected memories:
- * - Importance >= 0.7 (high importance)
- * - Manually created (source === 'MANUAL')
- * - Accessed within the last 3 months
- * - Reinforced >= 5 times AND (reinforcedImportance >= 0.5 OR accessed in last 90 days).
- *   The second half of the reinforcement clause prevents noisy phrase-variant dupes
- *   from becoming permanently immortal just because they got re-extracted many times.
+ * Protection is determined by a blended score that combines the LLM-derived
+ * content importance (time-decayed) with observed usage evidence — reinforcement
+ * count, graph degree (related-memory links), and recent access. This replaces
+ * the earlier four-rule gate, which relied on raw LLM importance as a bright
+ * line and effectively made 99% of memories immortal when the cheap-LLM scorer
+ * clustered all its outputs in the 0.7–0.9 band.
+ *
+ * `source === 'MANUAL'` remains a hard override — explicit user intent is
+ * treated as durable regardless of what the signals say.
+ *
+ * See `calculateProtectionScore` in memory-weighting.ts for the full formula.
  */
 function isProtectedMemory(memory: Memory, now: Date): boolean {
-  // Use reinforcedImportance (falling back to importance) for the threshold
-  const effectiveImportance = memory.reinforcedImportance ?? memory.importance
-
-  // High importance memories are always protected
-  if (effectiveImportance >= 0.7) {
-    return true
-  }
-
-  // Manually created memories are protected
   if (memory.source === 'MANUAL') {
     return true
   }
-
-  // Recently accessed memories are protected (3 months)
-  if (memory.lastAccessedAt) {
-    const lastAccessed = new Date(memory.lastAccessedAt)
-    const monthsInactive = (now.getTime() - lastAccessed.getTime()) / (1000 * 60 * 60 * 24 * 30)
-    if (monthsInactive < 3) {
-      return true
-    }
-  }
-
-  // High-reinforcement memories are protected only when they are ALSO useful:
-  // either meaningfully important after reinforcement, or still being recalled.
-  if ((memory.reinforcementCount ?? 1) >= 5) {
-    if (effectiveImportance >= 0.5) {
-      return true
-    }
-    if (memory.lastAccessedAt) {
-      const lastAccessedMs = new Date(memory.lastAccessedAt).getTime()
-      const daysInactive = (now.getTime() - lastAccessedMs) / (1000 * 60 * 60 * 24)
-      if (daysInactive < 90) {
-        return true
-      }
-    }
-  }
-
-  return false
+  const { score } = calculateProtectionScore(memory, undefined, now)
+  return score >= PROTECTION_THRESHOLD
 }
 
 /**

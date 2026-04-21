@@ -21,14 +21,13 @@ You can also run it on demand with the **Run housekeeping now** button — handy
 
 ## What Housekeeping Protects
 
-Housekeeping is conservative by design. A memory is **never** deleted if any of the following hold:
+Housekeeping is conservative by design. A memory you typed yourself — one whose source is **MANUAL** — is never deleted, no matter what. Everything else is protected by a **blended score** that combines four streams of evidence: the LLM's importance rating (content), the reinforcement count (how many times the memory has been re-observed), the graph degree (how many related memories link to it), and whether it has been accessed recently. A memory whose blended score sits above the protection threshold stays. A memory whose score falls below the threshold becomes eligible for deletion — but only the cap-enforcement sweep actually removes those, and only when the character is over the configured cap.
 
-- Its effective importance (reinforced importance, or raw importance if never reinforced) is at least **0.7**.
-- Its source is **MANUAL** — you typed it yourself.
-- It was last accessed by retrieval within the last **3 months**.
-- It has been reinforced **5 or more times** *and* either its effective importance is at least 0.5 *or* it was accessed within the last 90 days. (Without that second condition, noisy phrase-variant duplicates could become immortal just because they got re-extracted many times.)
+The scoring stream worth dwelling on is the content component. The LLM's importance rating is time-decayed with a **one-year half-life**, so a fact the LLM once rated 0.9 but which no chat has revisited in 18 months gradually loses its standing; a fact rated 0.9 that keeps getting reinforced or accessed keeps it. This replaces the earlier rule in which any memory rated 0.7 or higher was immortal regardless of age or usage, which — in practice — turned the housekeeper into a doorman who waved almost everyone through. The blended score treats the LLM's one-shot rating as one opinion among several rather than a final verdict.
 
-Everything else is eligible for pruning, but only when it is *also* old (more than 6 months) *and* low-importance (below 0.3) *and* has either never been accessed or has been inactive for more than 6 months. In practice, housekeeping targets the long tail: observations from chats you haven't visited in half a year, scored low at extraction, never retrieved. It leaves the shelves in the middle alone.
+Reinforcement and graph degree both saturate logarithmically: the first few reinforcements matter more than the next ten, and the first few related-memory links matter more than the next handful. Recent access is a flat bonus awarded to memories read within the last 90 days. All four signals combine into a single number used by the protection gate.
+
+The conservative first-pass retention rule still applies: a memory is *also* only eligible for the slow sweep when it is old (more than 6 months), low-importance (below 0.3 after reinforcement), and either never accessed or inactive for 6+ months. The blended score changes what the cap-enforcement sweep can touch; it does not change the first pass.
 
 Once the retention-policy sweep is complete, if the character is still over their cap, housekeeping prunes the lowest-weighted remaining memories until the count is back inside the cap. Weighting uses the same formula the chat prompt uses for retrieval, so the memories that survive are the ones your characters would have reached for anyway.
 

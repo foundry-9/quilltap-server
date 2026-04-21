@@ -13,9 +13,11 @@
 import { describe, it, expect } from '@jest/globals'
 import {
   calculateEffectiveWeight,
+  calculateProtectionScore,
   rankMemoriesByWeight,
   formatRelativeAge,
   DEFAULT_WEIGHTING_CONFIG,
+  DEFAULT_PROTECTION_CONFIG,
   type MemoryWeightingConfig,
 } from '@/lib/memory/memory-weighting'
 import type { Memory } from '@/lib/schemas/types'
@@ -381,5 +383,149 @@ describe('DEFAULT_WEIGHTING_CONFIG', () => {
     expect(DEFAULT_WEIGHTING_CONFIG.halfLifeDays).toBe(30)
     expect(DEFAULT_WEIGHTING_CONFIG.importanceFloor).toBe(0.70)
     expect(DEFAULT_WEIGHTING_CONFIG.minWeightThreshold).toBe(0.05)
+  })
+})
+
+// =============================================================================
+// calculateProtectionScore() — housekeeping gate scoring
+// =============================================================================
+
+describe('calculateProtectionScore()', () => {
+  it('returns near-base-importance for a fresh, minimally-reinforced memory', () => {
+    const memory = makeMemory({
+      importance: 0.8,
+      reinforcedImportance: 0.8,
+      createdAt: daysAgo(0),
+    })
+    const { score, contentComponent } = calculateProtectionScore(memory, undefined, NOW)
+
+    // contentComponent = 0.8 * 1.0 (no decay yet) = 0.8
+    expect(contentComponent).toBeCloseTo(0.8, 2)
+    // Plus a tiny reinforcement bonus from the default count of 1 → log2(2) * 0.08 = 0.08
+    expect(score).toBeGreaterThanOrEqual(0.8)
+  })
+
+  it('decays the content score over time with a 1-year half-life', () => {
+    const memory = makeMemory({
+      importance: 0.8,
+      reinforcedImportance: 0.8,
+      createdAt: daysAgo(365),
+    })
+    const { contentComponent } = calculateProtectionScore(memory, undefined, NOW)
+
+    // decay at 365 days = 0.5, times baseImportance 0.8 = 0.4
+    expect(contentComponent).toBeCloseTo(0.4, 2)
+  })
+
+  it('floors the content decay at 10% of base importance', () => {
+    const memory = makeMemory({
+      importance: 0.8,
+      reinforcedImportance: 0.8,
+      createdAt: daysAgo(3650), // 10 years
+    })
+    const { contentComponent } = calculateProtectionScore(memory, undefined, NOW)
+
+    // 10-year decay is ~1e-3 — floor kicks in at 0.10 * 0.8 = 0.08
+    expect(contentComponent).toBeCloseTo(0.08, 3)
+  })
+
+  it('awards a reinforcement bonus that saturates', () => {
+    const saturated = calculateProtectionScore(
+      makeMemory({ reinforcementCount: 1000 }),
+      undefined,
+      NOW
+    )
+    expect(saturated.reinforcementBonus).toBeCloseTo(
+      DEFAULT_PROTECTION_CONFIG.maxReinforcementBonus,
+      3
+    )
+  })
+
+  it('awards a graph-degree bonus that saturates at four links', () => {
+    const r = calculateProtectionScore(
+      makeMemory({ relatedMemoryIds: ['a', 'b', 'c', 'd', 'e', 'f'] }),
+      undefined,
+      NOW
+    )
+    expect(r.graphDegreeBonus).toBeCloseTo(DEFAULT_PROTECTION_CONFIG.maxGraphDegreeBonus, 3)
+  })
+
+  it('adds a recent-access bonus when accessed within the recency window', () => {
+    const recentlyAccessed = calculateProtectionScore(
+      makeMemory({ lastAccessedAt: daysAgo(30) }),
+      undefined,
+      NOW
+    )
+    expect(recentlyAccessed.recentAccessBonus).toBe(DEFAULT_PROTECTION_CONFIG.recentAccessBonus)
+
+    const staleAccess = calculateProtectionScore(
+      makeMemory({ lastAccessedAt: daysAgo(200) }),
+      undefined,
+      NOW
+    )
+    expect(staleAccess.recentAccessBonus).toBe(0)
+  })
+
+  it('clamps the final score at 1.0', () => {
+    const { score } = calculateProtectionScore(
+      makeMemory({
+        importance: 1.0,
+        reinforcedImportance: 1.0,
+        reinforcementCount: 1000,
+        relatedMemoryIds: ['a', 'b', 'c', 'd'],
+        lastAccessedAt: daysAgo(1),
+      }),
+      undefined,
+      NOW
+    )
+    expect(score).toBe(1.0)
+  })
+
+  it('uses max(createdAt, lastReinforcedAt) as the decay reference', () => {
+    // Created a year ago but reinforced today — decay should be near zero
+    const memory = makeMemory({
+      importance: 0.8,
+      reinforcedImportance: 0.8,
+      createdAt: daysAgo(365),
+      lastReinforcedAt: daysAgo(0),
+    })
+    const { contentComponent } = calculateProtectionScore(memory, undefined, NOW)
+    expect(contentComponent).toBeCloseTo(0.8, 2)
+  })
+
+  it('drops a stale, low-importance, unused memory below a reasonable protection threshold', () => {
+    const memory = makeMemory({
+      importance: 0.3,
+      reinforcedImportance: 0.3,
+      createdAt: daysAgo(365),
+      lastAccessedAt: null,
+      reinforcementCount: 1,
+      relatedMemoryIds: [],
+    })
+    const { score } = calculateProtectionScore(memory, undefined, NOW)
+    expect(score).toBeLessThan(0.5)
+  })
+
+  it('rescues a stale memory whose usage signals all fire', () => {
+    const memory = makeMemory({
+      importance: 0.2,
+      reinforcedImportance: 0.4,
+      createdAt: daysAgo(365),
+      lastReinforcedAt: daysAgo(15),
+      lastAccessedAt: daysAgo(10),
+      reinforcementCount: 12,
+      relatedMemoryIds: ['a', 'b', 'c', 'd'],
+    })
+    const { score } = calculateProtectionScore(memory, undefined, NOW)
+    expect(score).toBeGreaterThanOrEqual(0.5)
+  })
+})
+
+describe('DEFAULT_PROTECTION_CONFIG', () => {
+  it('has expected default values', () => {
+    expect(DEFAULT_PROTECTION_CONFIG.contentHalfLifeDays).toBe(365)
+    expect(DEFAULT_PROTECTION_CONFIG.contentFloor).toBe(0.10)
+    expect(DEFAULT_PROTECTION_CONFIG.maxReinforcementBonus).toBe(0.25)
+    expect(DEFAULT_PROTECTION_CONFIG.recentAccessWindowDays).toBe(90)
   })
 })
