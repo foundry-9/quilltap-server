@@ -12,10 +12,12 @@
  * - POST ?action=housekeep - Run memory cleanup (characterId in body)
  * - POST ?action=embeddings - Generate missing embeddings (characterId in body)
  * - POST ?action=housekeeping-config - Update auto-housekeeping settings
+ * - POST ?action=extraction-limits-config - Update per-hour extraction rate limits
  * - PUT ?action=embeddings - Rebuild vector index (characterId in body)
  * - GET ?action=housekeep&characterId= - Get housekeeping preview
  * - GET ?action=embeddings&characterId= - Get embedding status
  * - GET ?action=housekeeping-config - Read current auto-housekeeping settings
+ * - GET ?action=extraction-limits-config - Read current extraction rate limits
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -90,6 +92,13 @@ const housekeepingConfigSchema = z.object({
   mergeSimilar: z.boolean().optional(),
 });
 
+const extractionLimitsConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  maxPerHour: z.number().int().min(1).max(10000).optional(),
+  softStartFraction: z.number().min(0).max(1).optional(),
+  softFloor: z.number().min(0).max(1).optional(),
+});
+
 // =============================================================================
 // GET /api/v1/memories - List memories
 // =============================================================================
@@ -112,6 +121,10 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'housekeeping-config') {
     return handleReadHousekeepingConfig(req, { user, repos });
+  }
+
+  if (action === 'extraction-limits-config') {
+    return handleReadExtractionLimitsConfig(req, { user, repos });
   }
 
   // Standard list operations - require a filter
@@ -164,6 +177,10 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'housekeeping-config') {
     return handleWriteHousekeepingConfig(req, { user, repos });
+  }
+
+  if (action === 'extraction-limits-config') {
+    return handleWriteExtractionLimitsConfig(req, { user, repos });
   }
 
   // Default: Create memory
@@ -665,6 +682,58 @@ async function handleWriteHousekeepingConfig(
     userId: user.id,
     enabled: merged.enabled,
     perCharacterCap: merged.perCharacterCap,
+  });
+
+  return NextResponse.json({ success: true, settings: merged });
+}
+
+async function handleReadExtractionLimitsConfig(
+  _req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const settings = await repos.chatSettings.findByUserId(user.id);
+  const memoryExtractionLimits = settings?.memoryExtractionLimits ?? {
+    enabled: false,
+    maxPerHour: 20,
+    softStartFraction: 0.7,
+    softFloor: 0.7,
+  };
+  return NextResponse.json({ success: true, settings: memoryExtractionLimits });
+}
+
+async function handleWriteExtractionLimitsConfig(
+  req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json();
+  const parsed = extractionLimitsConfigSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+
+  const existing = await repos.chatSettings.findByUserId(user.id);
+  const currentSettings = existing?.memoryExtractionLimits ?? {
+    enabled: false,
+    maxPerHour: 20,
+    softStartFraction: 0.7,
+    softFloor: 0.7,
+  };
+
+  const merged = {
+    enabled: parsed.data.enabled ?? currentSettings.enabled,
+    maxPerHour: parsed.data.maxPerHour ?? currentSettings.maxPerHour,
+    softStartFraction: parsed.data.softStartFraction ?? currentSettings.softStartFraction,
+    softFloor: parsed.data.softFloor ?? currentSettings.softFloor,
+  };
+
+  await repos.chatSettings.updateForUser(user.id, {
+    memoryExtractionLimits: merged,
+  });
+
+  logger.info('[Memories API] Extraction rate limits updated', {
+    userId: user.id,
+    enabled: merged.enabled,
+    maxPerHour: merged.maxPerHour,
   });
 
   return NextResponse.json({ success: true, settings: merged });

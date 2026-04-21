@@ -473,6 +473,7 @@ CREATE TABLE "chat_settings" (
   "defaultTimestampConfig" TEXT DEFAULT '{}',
   "memoryCascadePreferences" TEXT DEFAULT '{}',
   "autoHousekeepingSettings" TEXT DEFAULT '{"enabled":false,"perCharacterCap":2000,"perCharacterCapOverrides":{},"autoMergeSimilarThreshold":0.9,"mergeSimilar":false}',
+  "memoryExtractionLimits" TEXT DEFAULT '{"enabled":false,"maxPerHour":20,"softStartFraction":0.7,"softFloor":0.7}',
   "tokenDisplaySettings" TEXT DEFAULT '{}',
   "contextCompressionSettings" TEXT DEFAULT '{}',
   "llmLoggingSettings" TEXT DEFAULT '{}',

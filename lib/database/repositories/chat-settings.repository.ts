@@ -182,6 +182,12 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               autoMergeSimilarThreshold: 0.90,
               mergeSimilar: false,
             },
+            memoryExtractionLimits: {
+              enabled: false,
+              maxPerHour: 20,
+              softStartFraction: 0.7,
+              softFloor: 0.7,
+            },
             tokenDisplaySettings: {
               showPerMessageTokens: false,
               showPerMessageCost: false,

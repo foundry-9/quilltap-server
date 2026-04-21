@@ -56,6 +56,14 @@ The **Run housekeeping now** button enqueues a MEMORY_HOUSEKEEPING background jo
 
 Housekeeping will never touch memories that are (a) manually created, (b) important, (c) recent, or (d) stably reinforced and still useful. That said — before you turn it on for the first time on an instance with a long chat history, it is worth running **Memory Deduplication** first to collapse the worst near-duplicates (the old, lax gate let more of them through). That tool is in the same tab, right below this one.
 
+## A Related Knob: Extraction Rate Limits
+
+There is a separate, complementary guard — the *per-hour extraction rate limit* — that applies pressure at the other end of the pipeline. Where housekeeping tidies the shelves after the fact, extraction limits slow down what enters them in the first place. When enabled, it counts how many memories a character has accrued in the trailing hour; once that count approaches the cap, it quietly raises the bar on what the extraction LLM is allowed to commit to memory. Once the cap is reached outright, it simply skips extraction for that exchange altogether.
+
+The rate limiter is **off by default** and is not yet exposed in the UI — it sits under an API-only setting (`memoryExtractionLimits`) for users and plugins that want it. Default values once enabled: 20 memories per character per hour, with the graduated floor kicking in at 70% of that cap (14 memories) and only admitting candidates rated 0.7 importance or higher from then on.
+
+The two features are complementary. Housekeeping is *retrospective*: it lets the Commonplace Book grow to a comfortable size and then keeps it pruned. Rate limits are *prospective*: they stop any one busy hour from producing an explosion of writes in the first place. If you find yourself running the *Run housekeeping now* button constantly, consider turning on extraction limits as well.
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

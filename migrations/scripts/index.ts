@@ -183,6 +183,8 @@ import { addReadPropertiesFromDocumentStoreFieldMigration } from './add-read-pro
 import { normalizeEmbeddingsUnitVectorsMigration } from './normalize-embeddings-unit-vectors';
 // Add autoHousekeepingSettings column to chat_settings
 import { addAutoHousekeepingSettingsFieldMigration } from './add-auto-housekeeping-settings-field';
+// Add memoryExtractionLimits column to chat_settings
+import { addMemoryExtractionLimitsFieldMigration } from './add-memory-extraction-limits-field';
 
 /**
  * All available migrations.
@@ -361,6 +363,8 @@ export const migrations: Migration[] = [
   normalizeEmbeddingsUnitVectorsMigration,
   // Add autoHousekeepingSettings column to chat_settings
   addAutoHousekeepingSettingsFieldMigration,
+  // Add memoryExtractionLimits column to chat_settings
+  addMemoryExtractionLimitsFieldMigration,
 ];
 
 export {
@@ -524,5 +528,7 @@ export {
   normalizeEmbeddingsUnitVectorsMigration,
   // Add autoHousekeepingSettings column to chat_settings
   addAutoHousekeepingSettingsFieldMigration,
+  // Add memoryExtractionLimits column to chat_settings
+  addMemoryExtractionLimitsFieldMigration,
 };
 

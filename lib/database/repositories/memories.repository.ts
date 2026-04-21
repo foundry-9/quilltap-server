@@ -587,6 +587,28 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * Count memories created for a character at or after the given ISO timestamp.
+   * Used by the extraction rate-limiter.
+   * @param characterId The character ID
+   * @param since ISO-8601 timestamp; memories with createdAt >= since are counted
+   * @returns Promise<number> Number of matching memories
+   */
+  async countCreatedSince(characterId: string, since: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const count = await this.count({
+          characterId,
+          createdAt: { $gte: since },
+        } as TypedQueryFilter<Memory>);
+        return count;
+      },
+      'Error counting memories created since timestamp',
+      { characterId, since },
+      0
+    );
+  }
+
+  /**
    * Find memories that a character has about another character
    * @param characterId The character who owns the memory
    * @param aboutCharacterId The character the memory is about

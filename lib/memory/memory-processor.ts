@@ -12,11 +12,66 @@ import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection, resolveUncensor
 import { resolveMaxTokens } from '@/lib/llm/model-context-data'
 import { ConnectionProfile, CheapLLMSettings, Memory } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { DangerousContentSettings, MemoryExtractionLimits } from '@/lib/schemas/settings.types'
 import { createMemoryWithGate } from './memory-service'
 import type { MemoryGateOutcome } from './memory-gate'
 import { logger } from '@/lib/logger'
 import { formatNameWithPronouns } from './format-utils'
+
+/**
+ * Resolve the per-extraction rate-limit state for a character.
+ *
+ * Returns `{ mode, floor }` where:
+ *  - `mode: 'allow'` — no limit engaged; candidates flow through unchanged
+ *  - `mode: 'throttle'` — volume is in the soft band; filter candidates below `floor`
+ *  - `mode: 'skip'` — volume is at or above the hard cap; skip this entire extraction
+ */
+type RateLimitDecision =
+  | { mode: 'allow' }
+  | { mode: 'throttle'; floor: number; recentCount: number; cap: number }
+  | { mode: 'skip'; recentCount: number; cap: number }
+
+async function resolveExtractionRateLimit(
+  characterId: string,
+  limits: MemoryExtractionLimits | undefined
+): Promise<RateLimitDecision> {
+  if (!limits?.enabled) {
+    return { mode: 'allow' }
+  }
+
+  try {
+    const repos = getRepositories()
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const recentCount = await repos.memories.countCreatedSince(characterId, oneHourAgo)
+
+    if (recentCount >= limits.maxPerHour) {
+      return { mode: 'skip', recentCount, cap: limits.maxPerHour }
+    }
+
+    const softStart = Math.floor(limits.maxPerHour * limits.softStartFraction)
+    if (recentCount >= softStart) {
+      return {
+        mode: 'throttle',
+        floor: limits.softFloor,
+        recentCount,
+        cap: limits.maxPerHour,
+      }
+    }
+  } catch (error) {
+    // Never block extraction on a rate-limit lookup failure
+    logger.warn('[Memory] Rate-limit lookup failed; allowing extraction', {
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
+  return { mode: 'allow' }
+}
+
+/** Filter candidates by an importance floor. Returns a new array. */
+function applyImportanceFloor(candidates: MemoryCandidate[], floor: number): MemoryCandidate[] {
+  return candidates.filter(c => (c.importance ?? 0.5) >= floor)
+}
 
 /**
  * Context for memory extraction
@@ -58,6 +113,8 @@ export interface MemoryExtractionContext {
   dangerSettings?: DangerousContentSettings
   /** Whether the chat is flagged as permanently dangerous */
   isDangerousChat?: boolean
+  /** Per-hour extraction rate limits; when enabled, applies a graduated importance floor as volume approaches the cap */
+  memoryExtractionLimits?: MemoryExtractionLimits
 }
 
 /**
@@ -98,6 +155,8 @@ export interface InterCharacterMemoryContext {
   dangerSettings?: DangerousContentSettings
   /** Whether the chat is flagged as permanently dangerous */
   isDangerousChat?: boolean
+  /** Per-hour extraction rate limits; when enabled, applies a graduated importance floor as volume approaches the cap */
+  memoryExtractionLimits?: MemoryExtractionLimits
 }
 
 /**
@@ -249,6 +308,29 @@ export async function processMessageForMemory(
   const debugLogs: string[] = []
 
   try {
+    // Rate limit check — bail early if the character is over cap
+    const rateLimit = await resolveExtractionRateLimit(ctx.characterId, ctx.memoryExtractionLimits)
+    if (rateLimit.mode === 'skip') {
+      debugLogs.push(
+        `[Memory] SKIPPED extraction for ${ctx.characterName} — rate limit reached ` +
+        `(${rateLimit.recentCount}/${rateLimit.cap} memories in last hour)`
+      )
+      return {
+        success: true,
+        memoryCreated: false,
+        memoryReinforced: false,
+        memoryIds: [],
+        reinforcedMemoryIds: [],
+        debugLogs,
+      }
+    }
+    if (rateLimit.mode === 'throttle') {
+      debugLogs.push(
+        `[Memory] THROTTLING extraction for ${ctx.characterName} — ${rateLimit.recentCount}/${rateLimit.cap} ` +
+        `in last hour; importance floor raised to ${rateLimit.floor}`
+      )
+    }
+
     // Get cheap LLM provider selection
     const config = toCheapLLMConfig(ctx.cheapLLMSettings)
     let selection: CheapLLMSelection = getCheapLLMProvider(
@@ -325,7 +407,16 @@ export async function processMessageForMemory(
     }
 
     if (userMemoryResult.success) {
-      const userCandidates = userMemoryResult.result || []
+      const rawUserCandidates = userMemoryResult.result || []
+      const userCandidates = rateLimit.mode === 'throttle'
+        ? applyImportanceFloor(rawUserCandidates, rateLimit.floor)
+        : rawUserCandidates
+      if (rateLimit.mode === 'throttle' && userCandidates.length < rawUserCandidates.length) {
+        debugLogs.push(
+          `[Memory] Throttle dropped ${rawUserCandidates.length - userCandidates.length} USER ` +
+          `candidate(s) below importance ${rateLimit.floor}`
+        )
+      }
 
       if (userCandidates.length > 0) {
         for (const candidate of userCandidates) {
@@ -407,7 +498,16 @@ export async function processMessageForMemory(
     }
 
     if (characterMemoryResult.success) {
-      const charCandidates = characterMemoryResult.result || []
+      const rawCharCandidates = characterMemoryResult.result || []
+      const charCandidates = rateLimit.mode === 'throttle'
+        ? applyImportanceFloor(rawCharCandidates, rateLimit.floor)
+        : rawCharCandidates
+      if (rateLimit.mode === 'throttle' && charCandidates.length < rawCharCandidates.length) {
+        debugLogs.push(
+          `[Memory] Throttle dropped ${rawCharCandidates.length - charCandidates.length} CHARACTER ` +
+          `candidate(s) below importance ${rateLimit.floor}`
+        )
+      }
 
       if (charCandidates.length > 0) {
         for (const candidate of charCandidates) {
@@ -682,6 +782,29 @@ export async function processInterCharacterMemory(
   const debugLogs: string[] = []
 
   try {
+    // Rate limit check — bail early if the observer is over cap
+    const rateLimit = await resolveExtractionRateLimit(ctx.observerCharacterId, ctx.memoryExtractionLimits)
+    if (rateLimit.mode === 'skip') {
+      debugLogs.push(
+        `[Memory] SKIPPED inter-character extraction for ${ctx.observerCharacterName} — rate limit reached ` +
+        `(${rateLimit.recentCount}/${rateLimit.cap} memories in last hour)`
+      )
+      return {
+        success: true,
+        memoryCreated: false,
+        memoryReinforced: false,
+        memoryIds: [],
+        reinforcedMemoryIds: [],
+        debugLogs,
+      }
+    }
+    if (rateLimit.mode === 'throttle') {
+      debugLogs.push(
+        `[Memory] THROTTLING inter-character extraction for ${ctx.observerCharacterName} — ` +
+        `${rateLimit.recentCount}/${rateLimit.cap} in last hour; importance floor raised to ${rateLimit.floor}`
+      )
+    }
+
     // Get cheap LLM provider selection
     const config = toCheapLLMConfig(ctx.cheapLLMSettings)
     let selection: CheapLLMSelection = getCheapLLMProvider(
@@ -739,7 +862,16 @@ export async function processInterCharacterMemory(
     }
 
     if (memoryResult.success) {
-      const candidates = memoryResult.result || []
+      const rawCandidates = memoryResult.result || []
+      const candidates = rateLimit.mode === 'throttle'
+        ? applyImportanceFloor(rawCandidates, rateLimit.floor)
+        : rawCandidates
+      if (rateLimit.mode === 'throttle' && candidates.length < rawCandidates.length) {
+        debugLogs.push(
+          `[Memory] Throttle dropped ${rawCandidates.length - candidates.length} INTER-CHARACTER ` +
+          `candidate(s) below importance ${rateLimit.floor}`
+        )
+      }
 
       if (candidates.length > 0) {
         for (const candidate of candidates) {

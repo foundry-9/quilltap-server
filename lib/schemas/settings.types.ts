@@ -142,6 +142,30 @@ export const AutoHousekeepingSettingsSchema = z.object({
 export type AutoHousekeepingSettings = z.infer<typeof AutoHousekeepingSettingsSchema>;
 
 // ============================================================================
+// MEMORY EXTRACTION RATE LIMITS (Commonplace Book)
+// ============================================================================
+
+/**
+ * Graduated importance floor is applied when a character's recent extraction
+ * volume approaches or exceeds the configured per-hour cap:
+ *   - Below `softStartFraction` of the cap: no filter (all significant candidates pass)
+ *   - Between `softStartFraction` and 1.0: only candidates with importance >= `softFloor` pass
+ *   - At or above 1.0: extraction is skipped entirely for this exchange
+ */
+export const MemoryExtractionLimitsSchema = z.object({
+  /** When true, the rate limiter is active. Off by default. */
+  enabled: z.boolean().default(false),
+  /** Maximum memories a single character may accrue per hour before the limiter engages. */
+  maxPerHour: z.number().int().positive().default(20),
+  /** Fraction of maxPerHour at which the graduated floor begins to apply (0–1). */
+  softStartFraction: z.number().min(0).max(1).default(0.7),
+  /** Importance floor applied to new candidates while in the graduated band. */
+  softFloor: z.number().min(0).max(1).default(0.7),
+});
+
+export type MemoryExtractionLimits = z.infer<typeof MemoryExtractionLimitsSchema>;
+
+// ============================================================================
 // TOKEN DISPLAY SETTINGS
 // ============================================================================
 
@@ -294,6 +318,13 @@ export const ChatSettingsSchema = z.object({
     perCharacterCapOverrides: {},
     autoMergeSimilarThreshold: 0.90,
     mergeSimilar: false,
+  }),
+  /** Per-hour extraction rate limit for the Commonplace Book (off by default) */
+  memoryExtractionLimits: MemoryExtractionLimitsSchema.default({
+    enabled: false,
+    maxPerHour: 20,
+    softStartFraction: 0.7,
+    softFloor: 0.7,
   }),
   /** Token display settings for showing usage and costs */
   tokenDisplaySettings: TokenDisplaySettingsSchema.default({

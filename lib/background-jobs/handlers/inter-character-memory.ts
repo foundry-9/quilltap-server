@@ -34,6 +34,40 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
     throw new Error(`Chat settings not found for user: ${job.userId}`);
   }
 
+  // Rate limit check on the observer character. When the limiter is enabled
+  // and the observer has accrued >= maxPerHour memories in the trailing hour,
+  // skip this extraction entirely. When volume is in the soft band we fall
+  // through and apply an importance floor to the returned candidates below.
+  const limits = chatSettings.memoryExtractionLimits;
+  let softFloor = 0;
+  if (limits?.enabled) {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const recentCount = await repos.memories.countCreatedSince(
+      payload.observerCharacterId,
+      oneHourAgo
+    );
+    if (recentCount >= limits.maxPerHour) {
+      logger.info('[InterCharacterMemory] Rate limit reached — skipping extraction', {
+        jobId: job.id,
+        observerCharacterId: payload.observerCharacterId,
+        recentCount,
+        cap: limits.maxPerHour,
+      });
+      return;
+    }
+    const softStart = Math.floor(limits.maxPerHour * limits.softStartFraction);
+    if (recentCount >= softStart) {
+      softFloor = limits.softFloor;
+      logger.info('[InterCharacterMemory] Rate limit in soft band — applying importance floor', {
+        jobId: job.id,
+        observerCharacterId: payload.observerCharacterId,
+        recentCount,
+        cap: limits.maxPerHour,
+        softFloor,
+      });
+    }
+  }
+
   // Get available profiles for cheap LLM selection
   const availableProfiles = await repos.connections.findByUserId(job.userId);
 
@@ -101,7 +135,18 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
   }
 
   // If nothing significant was found, we're done
-  const candidates = result.result || [];
+  const rawCandidates = result.result || [];
+  const candidates = softFloor > 0
+    ? rawCandidates.filter(c => (c.importance ?? 0.5) >= softFloor)
+    : rawCandidates;
+  if (softFloor > 0 && candidates.length < rawCandidates.length) {
+    logger.info('[InterCharacterMemory] Rate-limit floor dropped candidates', {
+      jobId: job.id,
+      dropped: rawCandidates.length - candidates.length,
+      kept: candidates.length,
+      softFloor,
+    });
+  }
   if (candidates.length === 0) {
     return;
   }

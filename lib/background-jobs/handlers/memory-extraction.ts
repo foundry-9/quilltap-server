@@ -63,6 +63,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
     availableProfiles,
     dangerSettings,
     isDangerousChat: chat?.isDangerousChat === true,
+    memoryExtractionLimits: chatSettings.memoryExtractionLimits,
   };
 
   // Process the message for memory extraction
