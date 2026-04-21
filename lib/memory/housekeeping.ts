@@ -120,10 +120,10 @@ function isProtectedMemory(memory: Memory, now: Date): boolean {
 function shouldDeleteMemory(
   memory: Memory,
   now: Date,
-  options: Required<Omit<HousekeepingOptions, 'userId' | 'embeddingProfileId'>>
+  options: Required<Omit<HousekeepingOptions, 'userId' | 'embeddingProfileId'>>,
+  isProtected: boolean
 ): { shouldDelete: boolean; reason: string } {
-  // Never delete protected memories
-  if (isProtectedMemory(memory, now)) {
+  if (isProtected) {
     return { shouldDelete: false, reason: 'protected' }
   }
 
@@ -205,15 +205,28 @@ export async function runHousekeeping(
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   })
 
-  const memoriesToDelete: string[] = []
+  const deleteSet = new Set<string>()
   const memoriesToMerge: { sourceId: string; targetId: string }[] = []
+  const mergeSourceSet = new Set<string>()
+  // Protection is expensive to compute (blended multi-signal score).
+  // Cache pass-1 results so the cap-enforcement pass can reuse them.
+  const protectedMap = new Map<string, boolean>()
+
+  // Yield to the event loop every YIELD_INTERVAL items in the two big loops so
+  // a 19k-memory character doesn't block HTTP and other jobs.
+  const YIELD_INTERVAL = 500
+  const yieldTick = () => new Promise<void>(resolve => setImmediate(resolve))
 
   // First pass: identify memories to delete based on retention policy
-  for (const memory of sortedMemories) {
-    const { shouldDelete, reason } = shouldDeleteMemory(memory, now, opts)
+  for (let i = 0; i < sortedMemories.length; i++) {
+    const memory = sortedMemories[i]
+    const isProtected = isProtectedMemory(memory, now)
+    protectedMap.set(memory.id, isProtected)
+
+    const { shouldDelete, reason } = shouldDeleteMemory(memory, now, opts, isProtected)
 
     if (shouldDelete) {
-      memoriesToDelete.push(memory.id)
+      deleteSet.add(memory.id)
       result.details.push({
         memoryId: memory.id,
         action: 'deleted',
@@ -228,45 +241,45 @@ export async function runHousekeeping(
         summary: memory.summary,
       })
     }
+
+    if ((i + 1) % YIELD_INTERVAL === 0) {
+      await yieldTick()
+    }
   }
 
   // Second pass: check for duplicates/similar memories if merge is enabled
   // Uses already-stored embeddings from the vector store — no API calls needed.
   if (opts.mergeSimilar) {
-    const remainingMemories = sortedMemories.filter(m => !memoriesToDelete.includes(m.id))
+    const remainingMemories = sortedMemories.filter(m => !deleteSet.has(m.id))
     const memoryMap = new Map(remainingMemories.map(m => [m.id, m]))
-    const deleteSet = new Set(memoriesToDelete)
 
     try {
       const vectorStore = await getCharacterVectorStore(characterId)
+      const entryById = new Map(vectorStore.getAllEntries().map(e => [e.id, e]))
 
       for (let i = 0; i < remainingMemories.length; i++) {
         const memory = remainingMemories[i]
 
-        // Skip if already marked for deletion/merge
         if (deleteSet.has(memory.id)) {
           continue
         }
 
-        // Use the stored embedding from the vector store (no API call)
-        const entry = vectorStore.getAllEntries().find(e => e.id === memory.id)
+        const entry = entryById.get(memory.id)
         if (!entry) {
           continue
         }
 
-        // Search for similar using the existing embedding
         const searchResults = vectorStore.search(entry.embedding, 10)
 
         for (const match of searchResults) {
           if (match.id === memory.id) continue
           if (match.score < opts.mergeThreshold) continue
           if (deleteSet.has(match.id)) continue
-          if (memoriesToMerge.some(m => m.sourceId === match.id)) continue
+          if (mergeSourceSet.has(match.id)) continue
 
           const matchMemory = memoryMap.get(match.id)
           if (!matchMemory) continue
 
-          // Determine which to keep (higher importance or newer if equal)
           const keepCurrent =
             memory.importance > matchMemory.importance ||
             (memory.importance === matchMemory.importance &&
@@ -277,7 +290,7 @@ export async function runHousekeeping(
               sourceId: matchMemory.id,
               targetId: memory.id,
             })
-            memoriesToDelete.push(matchMemory.id)
+            mergeSourceSet.add(matchMemory.id)
             deleteSet.add(matchMemory.id)
             result.details.push({
               memoryId: matchMemory.id,
@@ -290,7 +303,7 @@ export async function runHousekeeping(
               sourceId: memory.id,
               targetId: matchMemory.id,
             })
-            memoriesToDelete.push(memory.id)
+            mergeSourceSet.add(memory.id)
             deleteSet.add(memory.id)
             result.details.push({
               memoryId: memory.id,
@@ -298,8 +311,12 @@ export async function runHousekeeping(
               reason: `Similar to memory ${matchMemory.id} (${(match.score * 100).toFixed(0)}% similarity)`,
               summary: memory.summary,
             })
-            break // This memory is being merged, stop checking for its duplicates
+            break
           }
+        }
+
+        if ((i + 1) % YIELD_INTERVAL === 0) {
+          await yieldTick()
         }
       }
     } catch (error) {
@@ -308,9 +325,8 @@ export async function runHousekeeping(
   }
 
   // Third pass: enforce hard cap if still over limit
-  const remainingAfterDeletion = memories.filter(m => !memoriesToDelete.includes(m.id))
+  const remainingAfterDeletion = memories.filter(m => !deleteSet.has(m.id))
   if (remainingAfterDeletion.length > opts.maxMemories) {
-    // Use unified effective weight for retention scoring
     const scoredMemories = remainingAfterDeletion.map(m => {
       const { effectiveWeight } = calculateEffectiveWeight(m, undefined, now)
       return { memory: m, score: effectiveWeight }
@@ -318,18 +334,19 @@ export async function runHousekeeping(
 
     scoredMemories.sort((a, b) => b.score - a.score)
 
-    // Mark excess memories for deletion (keeping protected ones)
     const excessCount = remainingAfterDeletion.length - opts.maxMemories
     let deletedForLimit = 0
+    let iterations = 0
 
     for (let i = scoredMemories.length - 1; i >= 0 && deletedForLimit < excessCount; i--) {
       const { memory } = scoredMemories[i]
 
-      // Skip if already marked for deletion or protected
-      if (memoriesToDelete.includes(memory.id)) continue
-      if (isProtectedMemory(memory, now)) continue
+      if (deleteSet.has(memory.id)) continue
+      // Reuse protection result from pass 1 instead of recomputing.
+      const isProtected = protectedMap.get(memory.id) ?? isProtectedMemory(memory, now)
+      if (isProtected) continue
 
-      memoriesToDelete.push(memory.id)
+      deleteSet.add(memory.id)
       result.details.push({
         memoryId: memory.id,
         action: 'deleted',
@@ -337,18 +354,22 @@ export async function runHousekeeping(
         summary: memory.summary,
       })
       deletedForLimit++
+      iterations++
+
+      if (iterations % YIELD_INTERVAL === 0) {
+        await yieldTick()
+      }
     }
   }
 
-  // Apply changes if not a dry run
-  if (!opts.dryRun && memoriesToDelete.length > 0) {
-    // Delete memories from repository
-    const deletedCount = await repos.memories.bulkDelete(characterId, memoriesToDelete)
+  const deletedIds = Array.from(deleteSet)
 
-    // Remove from vector store
+  if (!opts.dryRun && deletedIds.length > 0) {
+    const deletedCount = await repos.memories.bulkDelete(characterId, deletedIds)
+
     try {
       const vectorStore = await getCharacterVectorStore(characterId)
-      for (const id of memoriesToDelete) {
+      for (const id of deletedIds) {
         await vectorStore.removeVector(id)
       }
       await vectorStore.save()
@@ -358,16 +379,16 @@ export async function runHousekeeping(
 
     result.deleted = deletedCount
     result.merged = memoriesToMerge.length
-    result.deletedIds = memoriesToDelete
+    result.deletedIds = deletedIds
     result.mergedIds = memoriesToMerge.map(m => m.sourceId)
   } else if (opts.dryRun) {
-    result.deleted = memoriesToDelete.length
+    result.deleted = deletedIds.length
     result.merged = memoriesToMerge.length
-    result.deletedIds = memoriesToDelete
+    result.deletedIds = deletedIds
     result.mergedIds = memoriesToMerge.map(m => m.sourceId)
   }
 
-  result.kept = totalBefore - memoriesToDelete.length
+  result.kept = totalBefore - deletedIds.length
   result.totalAfter = result.kept
 
   return result

@@ -76,17 +76,6 @@ export function calculateEffectiveWeight(
   const minWeight = baseImportance * config.importanceFloor
   const effectiveWeight = Math.max(rawWeight, minWeight)
 
-  logger.debug('[MemoryWeighting] Calculated effective weight', {
-    memoryId: memory.id,
-    baseImportance: baseImportance.toFixed(3),
-    daysOld: daysOld.toFixed(1),
-    timeDecayFactor: timeDecayFactor.toFixed(4),
-    rawWeight: rawWeight.toFixed(4),
-    minWeight: minWeight.toFixed(4),
-    effectiveWeight: effectiveWeight.toFixed(4),
-    floorApplied: rawWeight < minWeight,
-  })
-
   return {
     effectiveWeight,
     rawWeight,
