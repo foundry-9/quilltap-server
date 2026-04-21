@@ -565,7 +565,8 @@ async function handleAutoConfigure(req: NextRequest, context: AuthenticatedConte
     return successResponse({ suggestions: result });
   } catch (error) {
     logger.error('[Connection Profiles v1] Error auto-configuring profile', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to auto-configure profile');
+    const message = error instanceof Error ? error.message : 'Failed to auto-configure profile';
+    return serverError(message);
   }
 }
 
