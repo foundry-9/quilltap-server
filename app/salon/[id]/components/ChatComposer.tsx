@@ -227,21 +227,15 @@ export function ChatComposer({
     }
     const notificationText = parts.join('\n').trimEnd()
 
-    // Wrap in narration delimiters
-    let wrappedText: string
-    if (narrationDelimiters) {
-      if (Array.isArray(narrationDelimiters)) {
-        wrappedText = `${narrationDelimiters[0]}${notificationText}${narrationDelimiters[1]}`
-      } else {
-        wrappedText = `${narrationDelimiters}${notificationText}${narrationDelimiters}`
-      }
-    } else {
-      wrappedText = notificationText
-    }
-
-    // Prepend to editor
-    editorRef.current?.prependText(wrappedText)
-  }, [onConsumeOutfitNotifications, narrationDelimiters])
+    // Wrap in a ```wardrobe code block so the model sees the change as
+    // structured data rather than narration. Route through setMarkdown so the
+    // fence is parsed into a real code-block node — prependText would wrap the
+    // whole string in a text node and escape the backticks on serialization.
+    const wrappedText = `\`\`\`wardrobe\n${notificationText}\n\`\`\``
+    const existing = editorRef.current?.getMarkdown() ?? ''
+    const combined = existing.trim() ? `${wrappedText}\n\n${existing}` : wrappedText
+    editorRef.current?.setMarkdown(combined)
+  }, [onConsumeOutfitNotifications])
 
   // Capture the Lexical editor instance when the wrapper mounts
   const composerRefCallback = useCallback(
