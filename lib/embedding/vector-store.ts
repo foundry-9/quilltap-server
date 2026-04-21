@@ -298,7 +298,18 @@ export class CharacterVectorStore implements ICharacterVectorStore {
   }
 
   /**
-   * Search for similar vectors using cosine similarity
+   * Search for similar vectors using cosine similarity.
+   *
+   * For large stores (> ~1000 entries and a small limit), uses a bounded
+   * min-heap of size `limit` to avoid allocating + full-sorting one
+   * VectorSearchResult per entry on every call. V8's Array.prototype.sort
+   * with a JS comparator is ~O(n log n) with a very high per-comparison
+   * constant, and was pinning the main thread for minutes on characters
+   * with tens of thousands of memories.
+   *
+   * For small corpora the linear scan + sort is faster in practice (tight
+   * inner loop, no heap bookkeeping), so we fall back to it below the
+   * threshold.
    */
   search(
     queryEmbedding: Float32Array,
@@ -322,15 +333,32 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       return []
     }
 
+    // Small corpora or large limits relative to corpus size: the heap path
+    // is no faster than a straight sort and adds bookkeeping overhead.
+    if (this.entries.size < 1000 || limit * 4 >= this.entries.size) {
+      return this.searchLinear(queryEmbedding, limit, filter)
+    }
+
+    return this.searchHeap(queryEmbedding, limit, filter)
+  }
+
+  /**
+   * Linear path: score every candidate, full-sort, slice. Used for small
+   * corpora (< 1000 entries) or when `limit` is a large fraction of the
+   * corpus and the heap offers no advantage.
+   */
+  private searchLinear(
+    queryEmbedding: Float32Array,
+    limit: number,
+    filter?: (metadata: VectorMetadata) => boolean
+  ): VectorSearchResult[] {
     const results: VectorSearchResult[] = []
 
     for (const entry of this.entries.values()) {
-      // Apply filter if provided
       if (filter && !filter(entry.metadata)) {
         continue
       }
 
-      // Skip entries with mismatched dimensions instead of crashing
       if (entry.embedding.length !== queryEmbedding.length) {
         logger.debug('Skipping vector entry with mismatched dimensions during search', {
           context: 'CharacterVectorStore.search',
@@ -350,10 +378,96 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       })
     }
 
-    // Sort by score (descending) and limit
-    return results
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit)
+    return results.sort((a, b) => b.score - a.score).slice(0, limit)
+  }
+
+  /**
+   * Heap path: maintain a bounded min-heap of size `limit`. Skip entries
+   * whose score can't beat the current worst in the heap — that's the
+   * part that makes this actually faster than the linear path at scale.
+   * Drain the heap into a descending-sorted array at the end.
+   *
+   * The heap is stored as two parallel arrays (scores and results) so the
+   * hot comparison reads a primitive number rather than a property off a
+   * wrapped object — matters because `sift` runs O(log k) per candidate
+   * across n entries.
+   */
+  private searchHeap(
+    queryEmbedding: Float32Array,
+    limit: number,
+    filter?: (metadata: VectorMetadata) => boolean
+  ): VectorSearchResult[] {
+    const heapScores: number[] = new Array(limit)
+    const heapResults: VectorSearchResult[] = new Array(limit)
+    let heapSize = 0
+
+    const siftUp = (i: number) => {
+      while (i > 0) {
+        const parent = (i - 1) >> 1
+        if (heapScores[parent] <= heapScores[i]) break
+        const ts = heapScores[parent]; heapScores[parent] = heapScores[i]; heapScores[i] = ts
+        const tr = heapResults[parent]; heapResults[parent] = heapResults[i]; heapResults[i] = tr
+        i = parent
+      }
+    }
+
+    const siftDown = (i: number) => {
+      while (true) {
+        const l = i * 2 + 1
+        const r = i * 2 + 2
+        let min = i
+        if (l < heapSize && heapScores[l] < heapScores[min]) min = l
+        if (r < heapSize && heapScores[r] < heapScores[min]) min = r
+        if (min === i) break
+        const ts = heapScores[min]; heapScores[min] = heapScores[i]; heapScores[i] = ts
+        const tr = heapResults[min]; heapResults[min] = heapResults[i]; heapResults[i] = tr
+        i = min
+      }
+    }
+
+    for (const entry of this.entries.values()) {
+      if (filter && !filter(entry.metadata)) {
+        continue
+      }
+
+      if (entry.embedding.length !== queryEmbedding.length) {
+        logger.debug('Skipping vector entry with mismatched dimensions during search', {
+          context: 'CharacterVectorStore.search',
+          entryId: entry.id,
+          expectedDimensions: queryEmbedding.length,
+          actualDimensions: entry.embedding.length,
+          characterId: this.characterId,
+        })
+        continue
+      }
+
+      const score = cosineSimilarity(queryEmbedding, entry.embedding)
+
+      if (heapSize < limit) {
+        heapScores[heapSize] = score
+        heapResults[heapSize] = { id: entry.id, score, metadata: entry.metadata }
+        heapSize++
+        siftUp(heapSize - 1)
+      } else if (score > heapScores[0]) {
+        // Replace the worst entry with this one and sift down. This avoids
+        // allocating a VectorSearchResult for the majority of entries that
+        // can't make the top-K anyway (heapScores[0] is always the worst).
+        heapScores[0] = score
+        heapResults[0] = { id: entry.id, score, metadata: entry.metadata }
+        siftDown(0)
+      }
+    }
+
+    // Drain the heap into descending order.
+    const out: VectorSearchResult[] = new Array(heapSize)
+    for (let i = heapSize - 1; i >= 0; i--) {
+      out[i] = heapResults[0]
+      heapScores[0] = heapScores[heapSize - 1]
+      heapResults[0] = heapResults[heapSize - 1]
+      heapSize--
+      if (heapSize > 0) siftDown(0)
+    }
+    return out
   }
 
   /**
