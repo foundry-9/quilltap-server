@@ -13,11 +13,13 @@
  * - POST ?action=embeddings - Generate missing embeddings (characterId in body)
  * - POST ?action=housekeeping-config - Update auto-housekeeping settings
  * - POST ?action=extraction-limits-config - Update per-hour extraction rate limits
+ * - POST ?action=backfill-embeddings - Enqueue embedding-generate jobs for memories missing an embedding
  * - PUT ?action=embeddings - Rebuild vector index (characterId in body)
  * - GET ?action=housekeep&characterId= - Get housekeeping preview
  * - GET ?action=embeddings&characterId= - Get embedding status
  * - GET ?action=housekeeping-config - Read current auto-housekeeping settings
  * - GET ?action=extraction-limits-config - Read current extraction rate limits
+ * - GET ?action=backfill-embeddings - Report progress of the embedding backfill
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -29,6 +31,8 @@ import { createMemoryWithEmbedding, searchMemoriesSemantic, generateMissingEmbed
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
+import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
+import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -99,6 +103,13 @@ const extractionLimitsConfigSchema = z.object({
   softFloor: z.number().min(0).max(1).optional(),
 });
 
+const backfillStartSchema = z.object({
+  /** Restrict backfill to one character; omit to backfill all of user's characters. */
+  characterId: z.uuid().optional(),
+  /** Batch size per call (caller may poll repeatedly for large backlogs). */
+  batchSize: z.number().int().min(1).max(2000).prefault(500),
+});
+
 // =============================================================================
 // GET /api/v1/memories - List memories
 // =============================================================================
@@ -125,6 +136,10 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'extraction-limits-config') {
     return handleReadExtractionLimitsConfig(req, { user, repos });
+  }
+
+  if (action === 'backfill-embeddings') {
+    return handleBackfillProgress(req, { user, repos });
   }
 
   // Standard list operations - require a filter
@@ -181,6 +196,10 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'extraction-limits-config') {
     return handleWriteExtractionLimitsConfig(req, { user, repos });
+  }
+
+  if (action === 'backfill-embeddings') {
+    return handleBackfillStart(req, { user, repos });
   }
 
   // Default: Create memory
@@ -737,6 +756,111 @@ async function handleWriteExtractionLimitsConfig(
   });
 
   return NextResponse.json({ success: true, settings: merged });
+}
+
+async function handleBackfillProgress(
+  _req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  // Count memories still missing embeddings (across this user's characters)
+  const remaining = await repos.memories.countWithoutEmbedding();
+
+  // Count in-flight EMBEDDING_GENERATE jobs for this user
+  const [pending, processing] = await Promise.all([
+    repos.backgroundJobs.findByUserId(user.id, 'PENDING'),
+    repos.backgroundJobs.findByUserId(user.id, 'PROCESSING'),
+  ]);
+  const isEmbeddingMemory = (job: { type: string; payload: unknown }) => {
+    if (job.type !== 'EMBEDDING_GENERATE') return false;
+    const payload = job.payload as { entityType?: string } | undefined;
+    return payload?.entityType === 'MEMORY';
+  };
+  const inFlight = pending.filter(isEmbeddingMemory).length + processing.filter(isEmbeddingMemory).length;
+
+  return NextResponse.json({
+    success: true,
+    progress: {
+      remaining,
+      inFlight,
+    },
+  });
+}
+
+async function handleBackfillStart(
+  req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json().catch(() => ({}));
+  const parsed = backfillStartSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  const { characterId, batchSize } = parsed.data;
+
+  // Verify ownership if targeting a specific character
+  if (characterId) {
+    const character = await repos.characters.findById(characterId);
+    if (!character) {
+      return notFound('Character');
+    }
+  }
+
+  // Find memories missing embeddings (up to batchSize)
+  const missing = await repos.memories.findIdsWithoutEmbedding({ characterId, limit: batchSize });
+  if (missing.length === 0) {
+    return NextResponse.json({
+      success: true,
+      enqueued: 0,
+      remaining: 0,
+      message: 'No memories missing embeddings — nothing to backfill.',
+    });
+  }
+
+  // Resolve the user's active embedding profile — the plan assumes a single
+  // profile is in use per instance, so we just use the default.
+  const profile = await getDefaultEmbeddingProfile(user.id);
+  if (!profile) {
+    return badRequest(
+      'No default embedding profile is configured. Set one in the Commonplace Book tab before running the backfill.'
+    );
+  }
+
+  let enqueued = 0;
+  for (const memory of missing) {
+    try {
+      await enqueueEmbeddingGenerate(user.id, {
+        entityType: 'MEMORY',
+        entityId: memory.id,
+        characterId: memory.characterId,
+        profileId: profile.id,
+      });
+      enqueued++;
+    } catch (error) {
+      logger.warn('[Memories API] Failed to enqueue backfill embedding job', {
+        memoryId: memory.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const remaining = await repos.memories.countWithoutEmbedding(characterId);
+
+  logger.info('[Memories API] Embedding backfill batch enqueued', {
+    userId: user.id,
+    characterId: characterId ?? '(all)',
+    enqueued,
+    remaining,
+  });
+
+  return NextResponse.json({
+    success: true,
+    enqueued,
+    remaining,
+    message:
+      remaining > 0
+        ? `Enqueued ${enqueued} embedding jobs. ${remaining} memories still missing embeddings — run again to continue.`
+        : `Enqueued ${enqueued} embedding jobs. All memories are now accounted for.`,
+  });
 }
 
 async function handleGenerateEmbeddings(

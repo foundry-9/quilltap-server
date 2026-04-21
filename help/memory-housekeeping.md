@@ -56,6 +56,8 @@ The **Run housekeeping now** button enqueues a MEMORY_HOUSEKEEPING background jo
 
 Housekeeping will never touch memories that are (a) manually created, (b) important, (c) recent, or (d) stably reinforced and still useful. That said — before you turn it on for the first time on an instance with a long chat history, it is worth running **Memory Deduplication** first to collapse the worst near-duplicates (the old, lax gate let more of them through). That tool is in the same tab, right below this one.
 
+If your instance was created before Quilltap 4.3, it is also worth running **Repair Missing Embeddings** first. Older gate fallbacks were known to write memories without embeddings when the embedding provider was briefly unavailable; those memories are invisible to the deduplication gate and to semantic search, and the deduplication tool can't see them either. The repair card is the second entry in this tab.
+
 ## A Related Knob: Extraction Rate Limits
 
 There is a separate, complementary guard — the *per-hour extraction rate limit* — that applies pressure at the other end of the pipeline. Where housekeeping tidies the shelves after the fact, extraction limits slow down what enters them in the first place. When enabled, it counts how many memories a character has accrued in the trailing hour; once that count approaches the cap, it quietly raises the bar on what the extraction LLM is allowed to commit to memory. Once the cap is reached outright, it simply skips extraction for that exchange altogether.

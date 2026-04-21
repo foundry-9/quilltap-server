@@ -609,6 +609,49 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * Count memories that are missing an embedding, optionally filtered by character.
+   * A memory is "missing" if its embedding column is null (the BLOB either
+   * never landed because the pre-PR-2 keyword-fallback gate wrote the row
+   * without one, or a subsequent re-embed failed).
+   */
+  async countWithoutEmbedding(characterId?: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const filter: TypedQueryFilter<Memory> = characterId
+          ? { characterId, embedding: null } as TypedQueryFilter<Memory>
+          : { embedding: null } as TypedQueryFilter<Memory>;
+        return await this.count(filter);
+      },
+      'Error counting memories without embedding',
+      { characterId },
+      0
+    );
+  }
+
+  /**
+   * Find memory IDs that are missing an embedding, optionally filtered by
+   * character. Returns at most `limit` IDs per call so the caller can batch
+   * the backfill through the background-job queue without overwhelming it.
+   */
+  async findIdsWithoutEmbedding(options: { characterId?: string; limit?: number } = {}): Promise<Array<{ id: string; characterId: string }>> {
+    return this.safeQuery(
+      async () => {
+        const filter: TypedQueryFilter<Memory> = options.characterId
+          ? { characterId: options.characterId, embedding: null } as TypedQueryFilter<Memory>
+          : { embedding: null } as TypedQueryFilter<Memory>;
+        const memories = await this.findByFilter(filter, {
+          sort: { createdAt: -1 as any },
+          limit: options.limit ?? 500,
+        });
+        return memories.map(m => ({ id: m.id, characterId: m.characterId }));
+      },
+      'Error finding memories without embedding',
+      { characterId: options.characterId, limit: options.limit },
+      []
+    );
+  }
+
+  /**
    * Find memories that a character has about another character
    * @param characterId The character who owns the memory
    * @param aboutCharacterId The character the memory is about
