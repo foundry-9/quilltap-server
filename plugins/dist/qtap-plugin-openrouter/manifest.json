@@ -3,7 +3,7 @@
   "name": "qtap-plugin-openrouter",
   "title": "OpenRouter Provider",
   "description": "Provides access to 100+ models including GPT-4, Claude, Gemini, Llama and more via OpenRouter API",
-  "version": "1.0.32",
+  "version": "1.0.33",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -56,9 +56,14 @@
       "webSearch": true
     },
     "attachmentSupport": {
-      "supported": false,
-      "mimeTypes": [],
-      "description": "File attachment support depends on the underlying model"
+      "supported": true,
+      "mimeTypes": [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp"
+      ],
+      "description": "Image attachments are forwarded inline to vision-capable models. Set 'Supports image upload' on the connection profile to enable per-model."
     }
   },
   "permissions": {

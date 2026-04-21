@@ -24367,33 +24367,66 @@ var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
 var logger = createPluginLogger("qtap-plugin-openrouter");
+var SUPPORTED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 var OpenRouterProvider = class {
   constructor() {
-    this.supportsFileAttachments = false;
-    // Model-dependent, conservative default
-    this.supportedMimeTypes = [];
+    this.supportsFileAttachments = true;
+    this.supportedMimeTypes = SUPPORTED_IMAGE_MIME_TYPES;
     this.supportsWebSearch = true;
   }
   /**
-   * Helper to collect attachment failures
-   * OpenRouter proxies to many models, file support is model-dependent
+   * Build the OpenAI Chat Completions content field for a message.
+   * Returns a plain string when there are no image attachments, or a
+   * content-parts array (text + image_url) for vision-model requests.
    */
-  collectAttachmentFailures(params) {
+  buildMessageContent(m) {
+    const images = (m.attachments ?? []).filter(
+      (a) => SUPPORTED_IMAGE_MIME_TYPES.includes(a.mimeType) && (a.data || a.url)
+    );
+    if (images.length === 0) return m.content;
+    const parts = [];
+    if (m.content) parts.push({ type: "text", text: m.content });
+    for (const img of images) {
+      const url = img.url ?? `data:${img.mimeType};base64,${img.data}`;
+      parts.push({ type: "image_url", image_url: { url } });
+    }
+    return parts;
+  }
+  /**
+   * Categorize attachments into sent (image attachments now formatted
+   * inline as content parts) and failed (everything else — non-image
+   * MIME types and image rows missing both data and url).
+   */
+  collectAttachmentResults(params) {
+    const sent = [];
     const failed = [];
     for (const msg of params.messages) {
-      if (msg.attachments) {
-        for (const attachment of msg.attachments) {
+      for (const a of msg.attachments ?? []) {
+        if (SUPPORTED_IMAGE_MIME_TYPES.includes(a.mimeType)) {
+          if (a.data || a.url) {
+            sent.push(a.id);
+          } else {
+            failed.push({ id: a.id, error: "Image attachment missing data and url" });
+          }
+        } else {
           failed.push({
-            id: attachment.id,
-            error: "OpenRouter file attachment support depends on model (not yet implemented)"
+            id: a.id,
+            error: `OpenRouter ${a.mimeType} attachments are not yet implemented`
           });
         }
       }
     }
-    return { sent: [], failed };
+    return { sent, failed };
+  }
+  hasImageAttachments(params) {
+    return params.messages.some(
+      (m) => (m.attachments ?? []).some(
+        (a) => SUPPORTED_IMAGE_MIME_TYPES.includes(a.mimeType) && (a.data || a.url)
+      )
+    );
   }
   async sendMessage(params, apiKey) {
-    const attachmentResults = this.collectAttachmentFailures(params);
+    const attachmentResults = this.collectAttachmentResults(params);
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
@@ -24412,7 +24445,7 @@ var OpenRouterProvider = class {
       }
       return {
         role: m.role,
-        content: m.content
+        content: this.buildMessageContent(m)
       };
     });
     const requestParams = {
@@ -24488,7 +24521,13 @@ var OpenRouterProvider = class {
     };
   }
   async *streamMessage(params, apiKey) {
-    const attachmentResults = this.collectAttachmentFailures(params);
+    const attachmentResults = this.collectAttachmentResults(params);
+    const hasTools = params.tools && params.tools.length > 0;
+    const hasImages = this.hasImageAttachments(params);
+    if (hasTools || hasImages) {
+      yield* this.streamViaChatCompletions(params, apiKey, attachmentResults);
+      return;
+    }
     const client = new OpenRouter({
       apiKey,
       httpReferer: process.env.BASE_URL || "http://localhost:3000",
@@ -24518,11 +24557,6 @@ var OpenRouterProvider = class {
       maxOutputTokens: params.maxTokens ?? 4096,
       topP: params.topP ?? 1
     };
-    const hasTools = params.tools && params.tools.length > 0;
-    if (hasTools) {
-      yield* this.streamWithTools(params, apiKey, attachmentResults);
-      return;
-    }
     if (params.webSearchEnabled) {
       requestParams.tools = requestParams.tools || [];
       requestParams.tools.push({ type: "web_search_preview" });
@@ -24622,13 +24656,14 @@ var OpenRouterProvider = class {
     };
   }
   /**
-   * Stream with tools using direct API call
+   * Stream via the OpenAI Chat Completions endpoint using a direct fetch.
    *
-   * The OpenRouter SDK's callModel expects Zod schemas for tool inputSchema,
-   * but Quilltap provides tools with JSON Schema in parameters.
-   * This method bypasses the SDK and calls the OpenRouter API directly.
+   * The OpenRouter SDK's callModel expects Zod schemas for tool inputSchema
+   * (Quilltap provides JSON Schema) and the OpenResponses input format
+   * doesn't round-trip multimodal image_url parts reliably, so any request
+   * with tools or image attachments routes through here instead.
    */
-  async *streamWithTools(params, apiKey, attachmentResults) {
+  async *streamViaChatCompletions(params, apiKey, attachmentResults) {
     const messages = params.messages.filter((m) => !(m.role === "tool" && !m.toolCallId)).map((m) => {
       if (m.role === "tool" && m.toolCallId) {
         return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
@@ -24642,28 +24677,30 @@ var OpenRouterProvider = class {
       }
       return {
         role: m.role,
-        content: m.content
+        content: this.buildMessageContent(m)
       };
     });
-    const tools = params.tools.map((tool) => ({
-      type: "function",
-      function: {
-        name: tool.function?.name || tool.name,
-        description: tool.function?.description || tool.description,
-        parameters: tool.function?.parameters || tool.parameters
-      }
-    }));
     const body = {
       model: params.model,
       messages,
-      tools,
-      tool_choice: "auto",
       stream: true,
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 4096,
       top_p: params.topP ?? 1
     };
+    if (params.tools && params.tools.length > 0) {
+      body.tools = params.tools.map((tool) => ({
+        type: "function",
+        function: {
+          name: tool.function?.name || tool.name,
+          description: tool.function?.description || tool.description,
+          parameters: tool.function?.parameters || tool.parameters
+        }
+      }));
+      body.tool_choice = "auto";
+    }
     if (params.webSearchEnabled) {
+      body.tools = body.tools || [];
       body.tools.push({ type: "web_search_preview" });
     }
     const profileParams = params.profileParameters;
@@ -24685,7 +24722,7 @@ var OpenRouterProvider = class {
       if (!response.ok) {
         const errorText = await response.text();
         logger.error("OpenRouter API error", {
-          context: "OpenRouterProvider.streamWithTools",
+          context: "OpenRouterProvider.streamViaChatCompletions",
           status: response.status,
           error: errorText
         });
@@ -24761,8 +24798,8 @@ var OpenRouterProvider = class {
         rawResponse
       };
     } catch (error) {
-      logger.error("Error in streamWithTools", {
-        context: "OpenRouterProvider.streamWithTools"
+      logger.error("Error in streamViaChatCompletions", {
+        context: "OpenRouterProvider.streamViaChatCompletions"
       }, error instanceof Error ? error : void 0);
       throw error;
     }
