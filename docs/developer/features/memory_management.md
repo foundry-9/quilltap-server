@@ -137,9 +137,9 @@ finalScore = cosineSimilarity * 0.4 + effectiveWeight * 0.6
 Four additive components:
 
 ```text
-// 1. Content component — time-decayed, longer half-life than retrieval
+// 1. Content component — time-decayed, capped so LLM rating alone can't protect
 decay            = 0.5 ^ (daysSinceRefTime / 30)
-contentComponent = base * max(decay, 0.10)
+contentComponent = min(0.40, base * max(decay, 0.10))
 
 // 2. Reinforcement bonus — log-saturates
 reinforcementBonus = min(0.25, log2(count + 1) * 0.08)
@@ -155,7 +155,9 @@ score = min(1, contentComponent + reinforcementBonus + graphDegreeBonus + recent
 
 A memory is **protected** (not a deletion candidate) when `score >= 0.5` (`PROTECTION_THRESHOLD` in housekeeping.ts). `source === 'MANUAL'` short-circuits the calc and returns protected.
 
-> **Why distinct from effectiveWeight?** Retrieval decay and protection decay both use a 30-day half-life, but they have different floors: retrieval can't decay past 70% of base importance (we always want to surface *something*), while protection can decay all the way to 10% (we want unused memories to become deletable). The protection score also blends in usage evidence — reinforcement count, graph degree, recent access — that retrieval ranking ignores. Protection originally used a 365-day half-life to keep memories durable across long arcs, but on a 20k-memory character that made fresh high-importance memories effectively immortal: a 1-day-old memory at importance 0.7 scored ~0.70, well above the 0.5 threshold, and the cap-enforcement pass deleted zero rows while pinning the main thread for 15 minutes per run.
+The `0.40` content cap is deliberate: a fresh 0.8-importance memory with no usage signals scores `0.40 + 0.08 (default count=1) = 0.48`, just *under* the threshold. The memory has to earn the remaining 0.02+ from at least one usage signal (a single graph link, an extra reinforcement, or recent access) to become protected. This preserves the blended-score design goal that LLM-rated importance is one opinion among several, not a final verdict.
+
+> **Why distinct from effectiveWeight?** Retrieval decay and protection decay both use a 30-day half-life, but they play different roles. Retrieval has a 70% floor on weight so well-ranked memories always surface even when old. Protection has no floor on score — but it does cap each input component (content at 0.40, reinforcement at 0.25, graph at 0.10, access at 0.10) so the 0.5 threshold is a meaningful boundary regardless of which signals fire. Protection originally used a 365-day half-life and no content cap, which on a 20k-memory character made fresh high-importance memories effectively immortal: a 1-day-old memory at importance 0.7 scored ~0.70, well above the 0.5 threshold, and the cap-enforcement pass deleted zero rows while pinning the main thread for 15 minutes per run. The 30-day half-life helped older memories decay but left young-memory protection untouched — and on a corpus where 97% of memories are <30 days old, that mattered. The content cap addresses the young-memory half of the problem.
 
 ---
 

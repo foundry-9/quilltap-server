@@ -141,6 +141,16 @@ export interface ProtectionScoreConfig {
   recentAccessBonus: number
   /** Recent-access window in days. Default: 90 */
   recentAccessWindowDays: number
+  /** Maximum contribution the content component alone can make to the
+   * protection score. Default: 0.40. Without this cap, an LLM-rated 0.7+
+   * memory scores above the 0.5 protection threshold on content alone —
+   * which, on a heavy character where 97% of memories are under a month
+   * old, means the cap-enforcement pass protects essentially everything.
+   * Capping content forces a memory to earn the remaining headroom from
+   * usage evidence (reinforcement count, graph degree, or recent access)
+   * to cross the threshold. Honors the blended-score design goal of
+   * "LLM opinion is one input among several, not a final verdict." */
+  maxContentContribution: number
 }
 
 export const DEFAULT_PROTECTION_CONFIG: ProtectionScoreConfig = {
@@ -152,6 +162,7 @@ export const DEFAULT_PROTECTION_CONFIG: ProtectionScoreConfig = {
   graphDegreeCoeff: 0.025,
   recentAccessBonus: 0.10,
   recentAccessWindowDays: 90,
+  maxContentContribution: 0.40,
 }
 
 export interface ProtectionScoreResult {
@@ -191,7 +202,10 @@ export function calculateProtectionScore(
   const daysSinceRefTime = Math.max(0, (now.getTime() - referenceTime) / 86400000)
 
   const decay = Math.pow(0.5, daysSinceRefTime / config.contentHalfLifeDays)
-  const contentComponent = baseImportance * Math.max(decay, config.contentFloor)
+  const contentComponent = Math.min(
+    config.maxContentContribution,
+    baseImportance * Math.max(decay, config.contentFloor)
+  )
 
   const reinforcementCount = memory.reinforcementCount ?? 1
   const reinforcementBonus = Math.min(

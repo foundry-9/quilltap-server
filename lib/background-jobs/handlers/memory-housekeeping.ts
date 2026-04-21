@@ -82,11 +82,17 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
       totalDeleted += result.deleted;
       totalMerged += result.merged;
 
-      // Record outcome so watermark-triggered enqueues can back off from
-      // characters whose last sweep deleted nothing. Dry-runs don't count —
-      // they don't actually reduce the corpus.
+      // Record outcome so watermark-triggered enqueues can back off when
+      // the last sweep was practically ineffective (deleted 0 — or a
+      // single-digit number against a corpus many thousands over cap).
+      // Dry-runs don't count — they don't actually reduce the corpus.
       if (!payload.dryRun) {
-        recordHousekeepingOutcome(characterId, result.deleted);
+        recordHousekeepingOutcome(
+          characterId,
+          result.deleted,
+          result.totalBefore,
+          result.capUsed,
+        );
       }
 
       logger.info('[Housekeeping] Completed sweep for character', {

@@ -60,6 +60,11 @@ export interface HousekeepingResult {
   totalBefore: number
   /** Total memories after cleanup */
   totalAfter: number
+  /** The effective cap used for this sweep — either the per-character
+   * override, the user's global cap, or the housekeeping default. Returned
+   * so callers (e.g. the outcome cache) can evaluate effectiveness
+   * against a specific target size rather than re-resolving the cap. */
+  capUsed: number
   /** IDs of deleted memories */
   deletedIds: string[]
   /** IDs of merged memories (source memories that were merged into others) */
@@ -197,6 +202,7 @@ export async function runHousekeeping(
     kept: 0,
     totalBefore,
     totalAfter: totalBefore,
+    capUsed: opts.maxMemories,
     deletedIds: [],
     mergedIds: [],
     details: [],

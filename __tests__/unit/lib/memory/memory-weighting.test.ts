@@ -391,7 +391,12 @@ describe('DEFAULT_WEIGHTING_CONFIG', () => {
 // =============================================================================
 
 describe('calculateProtectionScore()', () => {
-  it('returns near-base-importance for a fresh, minimally-reinforced memory', () => {
+  it('caps the content contribution of a fresh high-importance memory', () => {
+    // A fresh 0.8-importance memory with no usage signals used to score
+    // ~0.88 (content 0.80 + default reinforcement bonus 0.08), putting it
+    // above the 0.5 protection threshold on content alone. The cap means
+    // content contributes at most 0.40 and the memory has to earn the
+    // rest from usage (reinforcement, graph, or access) to be protected.
     const memory = makeMemory({
       importance: 0.8,
       reinforcedImportance: 0.8,
@@ -399,10 +404,23 @@ describe('calculateProtectionScore()', () => {
     })
     const { score, contentComponent } = calculateProtectionScore(memory, undefined, NOW)
 
-    // contentComponent = 0.8 * 1.0 (no decay yet) = 0.8
-    expect(contentComponent).toBeCloseTo(0.8, 2)
-    // Plus a tiny reinforcement bonus from the default count of 1 → log2(2) * 0.08 = 0.08
-    expect(score).toBeGreaterThanOrEqual(0.8)
+    expect(contentComponent).toBeCloseTo(DEFAULT_PROTECTION_CONFIG.maxContentContribution, 3)
+    // content 0.40 + default reinforcement bonus 0.08 = 0.48 — below threshold
+    expect(score).toBeLessThan(0.5)
+  })
+
+  it('does not cap content when decay has brought it below the cap', () => {
+    // baseImportance * decay only crosses maxContentContribution for young,
+    // high-importance memories. Older or lower-importance ones score their
+    // actual decayed value.
+    const memory = makeMemory({
+      importance: 0.5,
+      reinforcedImportance: 0.5,
+      createdAt: daysAgo(30),
+    })
+    const { contentComponent } = calculateProtectionScore(memory, undefined, NOW)
+    // decay at 30 days = 0.5, times 0.5 baseImportance = 0.25, below the 0.40 cap
+    expect(contentComponent).toBeCloseTo(0.25, 2)
   })
 
   it('decays the content score over time with a 30-day half-life', () => {
@@ -413,7 +431,7 @@ describe('calculateProtectionScore()', () => {
     })
     const { contentComponent } = calculateProtectionScore(memory, undefined, NOW)
 
-    // decay at 30 days = 0.5, times baseImportance 0.8 = 0.4
+    // decay at 30 days = 0.5, times baseImportance 0.8 = 0.4, exactly at the cap
     expect(contentComponent).toBeCloseTo(0.4, 2)
   })
 
@@ -466,7 +484,12 @@ describe('calculateProtectionScore()', () => {
     expect(staleAccess.recentAccessBonus).toBe(0)
   })
 
-  it('clamps the final score at 1.0', () => {
+  it('sums capped components and never exceeds 1.0', () => {
+    // With the default config each component has its own ceiling — content
+    // 0.40, reinforcement 0.25, graph 0.10, access 0.10 — so the realistic
+    // max with a maximally-reinforced, heavily-linked, recently-accessed
+    // memory is 0.85. The Math.min(1, …) clamp at the end is a safety
+    // net for future configs whose contributions might sum above 1.
     const { score } = calculateProtectionScore(
       makeMemory({
         importance: 1.0,
@@ -478,11 +501,19 @@ describe('calculateProtectionScore()', () => {
       undefined,
       NOW
     )
-    expect(score).toBe(1.0)
+    expect(score).toBeLessThanOrEqual(1.0)
+    expect(score).toBeCloseTo(
+      DEFAULT_PROTECTION_CONFIG.maxContentContribution
+        + DEFAULT_PROTECTION_CONFIG.maxReinforcementBonus
+        + DEFAULT_PROTECTION_CONFIG.maxGraphDegreeBonus
+        + DEFAULT_PROTECTION_CONFIG.recentAccessBonus,
+      3,
+    )
   })
 
   it('uses max(createdAt, lastReinforcedAt) as the decay reference', () => {
-    // Created a year ago but reinforced today — decay should be near zero
+    // Created a year ago but reinforced today — decay should be near zero,
+    // giving a raw contentComponent of 0.8 that the cap then clips to 0.40.
     const memory = makeMemory({
       importance: 0.8,
       reinforcedImportance: 0.8,
@@ -490,7 +521,7 @@ describe('calculateProtectionScore()', () => {
       lastReinforcedAt: daysAgo(0),
     })
     const { contentComponent } = calculateProtectionScore(memory, undefined, NOW)
-    expect(contentComponent).toBeCloseTo(0.8, 2)
+    expect(contentComponent).toBeCloseTo(DEFAULT_PROTECTION_CONFIG.maxContentContribution, 3)
   })
 
   it('drops a stale, low-importance, unused memory below a reasonable protection threshold', () => {
@@ -527,5 +558,6 @@ describe('DEFAULT_PROTECTION_CONFIG', () => {
     expect(DEFAULT_PROTECTION_CONFIG.contentFloor).toBe(0.10)
     expect(DEFAULT_PROTECTION_CONFIG.maxReinforcementBonus).toBe(0.25)
     expect(DEFAULT_PROTECTION_CONFIG.recentAccessWindowDays).toBe(90)
+    expect(DEFAULT_PROTECTION_CONFIG.maxContentContribution).toBe(0.40)
   })
 })
