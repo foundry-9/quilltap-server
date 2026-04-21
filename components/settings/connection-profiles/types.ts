@@ -47,6 +47,7 @@ export interface ConnectionProfile {
   allowWebSearch?: boolean
   useNativeWebSearch?: boolean
   allowToolUse?: boolean
+  supportsImageUpload?: boolean
   modelClass?: string | null
   maxContext?: number | null
   sortIndex?: number
@@ -71,6 +72,7 @@ export interface ProfileFormData {
   isCheap: boolean
   isDangerousCompatible: boolean
   allowToolUse: boolean
+  supportsImageUpload: boolean
   allowWebSearch: boolean
   useNativeWebSearch: boolean
   modelClass: string
@@ -99,6 +101,7 @@ export const initialFormState: ProfileFormData = {
   isCheap: false,
   isDangerousCompatible: false,
   allowToolUse: true,
+  supportsImageUpload: false,
   allowWebSearch: false,
   useNativeWebSearch: false,
   modelClass: '',

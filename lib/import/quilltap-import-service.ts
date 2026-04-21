@@ -661,6 +661,8 @@ async function importTags(
   return { imported, skipped };
 }
 
+const LEGACY_IMAGE_CAPABLE_PROVIDERS = new Set(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK']);
+
 async function importConnectionProfiles(
   userId: string,
   profiles: ConnectionProfile[],
@@ -671,7 +673,14 @@ async function importConnectionProfiles(
   let imported = 0;
   let skipped = 0;
 
-  for (const profile of profiles) {
+  for (const rawProfile of profiles) {
+    // Older exports predate the per-profile supportsImageUpload flag; seed it
+    // from the historic provider capability map so image support round-trips.
+    const profile: ConnectionProfile =
+      (rawProfile as Partial<ConnectionProfile>).supportsImageUpload === undefined
+        ? { ...rawProfile, supportsImageUpload: LEGACY_IMAGE_CAPABLE_PROVIDERS.has(rawProfile.provider) }
+        : rawProfile;
+
     try {
       const existing = await repos.connections.findById(profile.id);
 

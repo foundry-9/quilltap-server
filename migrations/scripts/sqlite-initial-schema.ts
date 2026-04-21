@@ -315,6 +315,7 @@ export const SQLITE_TABLES = [
       "allowWebSearch" INTEGER DEFAULT 0,
       "useNativeWebSearch" INTEGER DEFAULT 0,
       "allowToolUse" INTEGER DEFAULT 1,
+      "supportsImageUpload" INTEGER DEFAULT 0,
       "tags" TEXT DEFAULT '[]',
       "totalTokens" INTEGER DEFAULT 0,
       "totalPromptTokens" INTEGER DEFAULT 0,

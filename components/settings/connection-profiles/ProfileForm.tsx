@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { ModelSelector, type ModelInfo } from '../model-selector'
-import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
+import { getAttachmentSupportDescription, supportsMimeType } from '@/lib/llm/attachment-support'
 import { MODEL_CLASSES, getModelClass } from '@/lib/llm/model-classes'
 import type { ApiKey, ProviderConfig, ProfileFormData } from './types'
 
@@ -74,12 +74,18 @@ export function ProfileForm({
     }
   }, [])
 
-  // Auto-default allowToolUse based on provider capability when creating new profiles
+  // Auto-default allowToolUse and supportsImageUpload based on provider capability
+  // when creating new profiles. Image support defaults from the historic provider
+  // map — users must toggle it on manually for OpenRouter/Ollama vision models.
   useEffect(() => {
     if (editingId) return // Don't override when editing existing profiles
     const requirements = getProviderRequirements(formData.provider)
     onFormSetField('allowToolUse', requirements.supportsToolUse)
-  }, [formData.provider, editingId]) // eslint-disable-line react-hooks/exhaustive-deps
+    onFormSetField(
+      'supportsImageUpload',
+      supportsMimeType(formData.provider as any, 'image/jpeg', formData.baseUrl || undefined)
+    )
+  }, [formData.provider, formData.baseUrl, editingId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div id="profile-form" className="qt-bg-card border qt-border-default rounded-lg p-6">
@@ -137,7 +143,7 @@ export function ProfileForm({
               )}
             </select>
             <p className="qt-text-xs mt-1">
-              File attachments: {getAttachmentSupportDescription(formData.provider as any, formData.baseUrl || undefined)}
+              Non-image attachments: {getAttachmentSupportDescription(formData.provider as any, formData.baseUrl || undefined)}
             </p>
           </div>
         </div>
@@ -444,6 +450,19 @@ export function ProfileForm({
             />
             <label htmlFor="allowToolUse" className="text-sm">
               Allow tool use (overrides chat and project tool settings when disabled)
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="supportsImageUpload"
+              name="supportsImageUpload"
+              checked={formData.supportsImageUpload}
+              onChange={(e) => onFormChange('supportsImageUpload', e.target.checked)}
+              className="w-4 h-4 rounded border-input"
+            />
+            <label htmlFor="supportsImageUpload" className="text-sm">
+              Supports image attachments (vision input)
             </label>
           </div>
           {/* Web Search Tool - available for all providers with tool support */}

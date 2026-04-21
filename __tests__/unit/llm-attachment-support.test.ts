@@ -222,7 +222,13 @@ describe('LLM Attachment Support', () => {
 })
 
 describe('Connection Profile Utilities', () => {
-  const createMockProfile = (provider: string, isDefault = false): ConnectionProfile => ({
+  const LEGACY_VISION_PROVIDERS = new Set(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK'])
+
+  const createMockProfile = (
+    provider: string,
+    isDefault = false,
+    overrides: Partial<ConnectionProfile> = {}
+  ): ConnectionProfile => ({
     id: `profile-${provider}`,
     userId: 'user-123',
     name: `${provider} Profile`,
@@ -233,9 +239,20 @@ describe('Connection Profile Utilities', () => {
     parameters: {},
     isDefault,
     isCheap: false,
+    isDangerousCompatible: false,
+    allowWebSearch: false,
+    useNativeWebSearch: false,
+    allowToolUse: true,
+    supportsImageUpload: LEGACY_VISION_PROVIDERS.has(provider),
     tags: [],
+    sortIndex: 0,
+    totalTokens: 0,
+    totalPromptTokens: 0,
+    totalCompletionTokens: 0,
+    messageCount: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    ...overrides,
   })
 
   describe('enrichConnectionProfileWithAttachmentSupport', () => {
@@ -267,6 +284,26 @@ describe('Connection Profile Utilities', () => {
       expect(profileSupportsMimeType(profile, 'image/png')).toBe(true)
       expect(profileSupportsMimeType(profile, 'application/pdf')).toBe(true)
       expect(profileSupportsMimeType(profile, 'video/mp4')).toBe(false)
+    })
+
+    it('should gate image support on the profile flag, not the provider', () => {
+      // OpenRouter profile with supportsImageUpload enabled (e.g., proxying a vision model)
+      const visionOpenRouter = createMockProfile('OPENROUTER', false, { supportsImageUpload: true })
+      expect(profileSupportsMimeType(visionOpenRouter, 'image/png')).toBe(true)
+
+      // OpenAI profile with the flag turned off (e.g., pointed at gpt-3.5-turbo)
+      const textOnlyOpenAI = createMockProfile('OPENAI', false, { supportsImageUpload: false })
+      expect(profileSupportsMimeType(textOnlyOpenAI, 'image/png')).toBe(false)
+    })
+
+    it('should still use the provider map for non-image types', () => {
+      // Flag doesn't affect PDF/text support — those still use provider capabilities.
+      const openrouterWithFlag = createMockProfile('OPENROUTER', false, { supportsImageUpload: true })
+      expect(profileSupportsMimeType(openrouterWithFlag, 'application/pdf')).toBe(false)
+
+      const anthropicNoImages = createMockProfile('ANTHROPIC', false, { supportsImageUpload: false })
+      expect(profileSupportsMimeType(anthropicNoImages, 'application/pdf')).toBe(true)
+      expect(profileSupportsMimeType(anthropicNoImages, 'text/plain')).toBe(true)
     })
   })
 

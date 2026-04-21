@@ -185,6 +185,8 @@ import { normalizeEmbeddingsUnitVectorsMigration } from './normalize-embeddings-
 import { addAutoHousekeepingSettingsFieldMigration } from './add-auto-housekeeping-settings-field';
 // Add memoryExtractionLimits column to chat_settings
 import { addMemoryExtractionLimitsFieldMigration } from './add-memory-extraction-limits-field';
+// Add supportsImageUpload column to connection_profiles (per-profile vision capability)
+import { addProfileSupportsImageUploadFieldMigration } from './add-profile-supports-image-upload-field';
 
 /**
  * All available migrations.
@@ -365,6 +367,8 @@ export const migrations: Migration[] = [
   addAutoHousekeepingSettingsFieldMigration,
   // Add memoryExtractionLimits column to chat_settings
   addMemoryExtractionLimitsFieldMigration,
+  // Add supportsImageUpload column to connection_profiles
+  addProfileSupportsImageUploadFieldMigration,
 ];
 
 export {
@@ -530,5 +534,7 @@ export {
   addAutoHousekeepingSettingsFieldMigration,
   // Add memoryExtractionLimits column to chat_settings
   addMemoryExtractionLimitsFieldMigration,
+  // Add supportsImageUpload column to connection_profiles
+  addProfileSupportsImageUploadFieldMigration,
 };
 

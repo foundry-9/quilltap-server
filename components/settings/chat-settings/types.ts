@@ -100,6 +100,7 @@ export interface ConnectionProfile {
   isDefault: boolean
   isCheap?: boolean
   isDangerousCompatible?: boolean
+  supportsImageUpload?: boolean
   apiKeyId?: string
   apiKey?: ApiKey | null
 }
@@ -165,12 +166,6 @@ export const AVATAR_STYLES = [
     preview: '▭',
   },
 ] as const
-
-/**
- * Vision-Capable Providers
- * List of providers that support vision/image analysis capabilities
- */
-export const VISION_PROVIDERS = ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK'] as const
 
 /**
  * Timestamp Injection Mode Options

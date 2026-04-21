@@ -65,6 +65,8 @@ export const ConnectionProfileSchema = z.object({
   maxTokens: z.number().int().positive().nullable().optional(),
   /** Whether this profile is suitable for uncensored/dangerous content (user must explicitly opt in) */
   isDangerousCompatible: z.boolean().default(false),
+  /** Whether this profile accepts image attachments (vision input). Set per-profile so users can enable it on OpenRouter/Ollama models that proxy vision-capable LLMs. */
+  supportsImageUpload: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
 
   /** Custom sort order for display (lower numbers appear first) */

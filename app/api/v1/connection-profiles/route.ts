@@ -16,6 +16,7 @@ import { supportsImageGeneration } from '@/lib/llm/image-capable';
 import { createLLMProvider } from '@/lib/llm';
 import { requiresBaseUrl, testProviderConnection, validateProviderConfig } from '@/lib/plugins/provider-validation';
 import { ProviderEnum } from '@/lib/schemas/types';
+import { supportsMimeType as providerSupportsMimeType } from '@/lib/llm/attachment-support';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { badRequest, serverError, notFound, successResponse, created } from '@/lib/api/responses';
@@ -158,7 +159,16 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       allowToolUse = true,
       modelClass = null,
       maxContext = null,
+      supportsImageUpload,
     } = body;
+
+    // Default supportsImageUpload from the historic per-provider capability map
+    // so clients that don't send the field keep their current behavior on providers
+    // that used to be hardcoded vision-capable.
+    const resolvedSupportsImageUpload =
+      typeof supportsImageUpload === 'boolean'
+        ? supportsImageUpload
+        : providerSupportsMimeType(provider, 'image/jpeg', baseUrl || undefined);
 
     // Validation
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -239,6 +249,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       allowToolUse,
       modelClass: modelClass || null,
       maxContext: maxContext ? (typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext) : null,
+      supportsImageUpload: resolvedSupportsImageUpload,
       tags: [],
       sortIndex: maxSortIndex + 1,
       totalTokens: 0,
