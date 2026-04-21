@@ -587,14 +587,41 @@ export async function searchMemoriesSemantic(
         totalMs: Math.round(tDone - t0),
       })
 
-      return results.slice(0, limit)
+      const finalResults = results.slice(0, limit)
+      bumpAccessTimes(characterId, finalResults.map(r => r.memory.id))
+      return finalResults
     }
   } catch (error) {
     logger.warn(`[Memory] Semantic search failed, falling back to text search`, { characterId, query: query.substring(0, 100), userId: options.userId, error: String(error) })
   }
 
   // Fallback to text-based search
-  return searchMemoriesText(characterId, query, options)
+  const textResults = await searchMemoriesText(characterId, query, options)
+  bumpAccessTimes(characterId, textResults.map(r => r.memory.id))
+  return textResults
+}
+
+/**
+ * Fire-and-forget bulk update of lastAccessedAt for memories returned from a
+ * retrieval path. The recent-access component of the blended protection score
+ * is otherwise starved of signal — on a 17k-memory corpus we were seeing 13
+ * rows with a non-null lastAccessedAt because only the Memories API route
+ * called updateAccessTime, and the chat context path never did.
+ *
+ * Character-scoped bulk update so a stale id list cannot affect other
+ * characters. Errors are swallowed at warn level — a missed access bump
+ * shouldn't fail a chat turn.
+ */
+function bumpAccessTimes(characterId: string, memoryIds: string[]): void {
+  if (memoryIds.length === 0) return
+  const repos = getRepositories()
+  repos.memories.updateAccessTimeBulk(characterId, memoryIds).catch(err => {
+    logger.warn('[Memory] Failed to bump lastAccessedAt for retrieved memories', {
+      characterId,
+      count: memoryIds.length,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  })
 }
 
 /**

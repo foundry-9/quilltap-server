@@ -535,15 +535,8 @@ async function handleSearch(
     tagDetails: result.memory.tags.map((tagId: string) => tagMap.get(tagId)).filter(Boolean),
   }));
 
-  // Update access times (fire and forget)
-  Promise.all(
-    searchResults.map((r: any) => repos.memories.updateAccessTime(characterId, r.memory.id))
-  ).catch((err) =>
-    logger.warn('[Memories API] Failed to update access times after search', {
-      characterId,
-      error: err instanceof Error ? err.message : String(err),
-    })
-  );
+  // Access times are bumped inside searchMemoriesSemantic (single source of
+  // truth for retrieval-time access updates).
 
   return NextResponse.json({
     memories: memoriesWithTags,

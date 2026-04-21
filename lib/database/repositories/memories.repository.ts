@@ -603,6 +603,31 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * Bulk-update lastAccessedAt for a set of memories.
+   * Used by the semantic search return path so the recent-access signal in the
+   * blended protection score reflects actual usage. Character-scoped so a
+   * compromised id list can only affect that character's rows.
+   * Returns the number of rows updated.
+   */
+  async updateAccessTimeBulk(characterId: string, memoryIds: string[]): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        if (memoryIds.length === 0) {
+          return 0;
+        }
+        const now = this.getCurrentTimestamp();
+        return await this.updateMany(
+          { characterId, id: { $in: memoryIds } },
+          { lastAccessedAt: now },
+        );
+      },
+      'Error bulk-updating memory access times',
+      { characterId, count: memoryIds.length },
+      0,
+    );
+  }
+
+  /**
    * Count the number of memories for a character
    * @param characterId The character ID
    * @returns Promise<number> Number of memories for the character
