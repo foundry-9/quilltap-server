@@ -152,7 +152,7 @@ export function MemoryHousekeepingCard() {
     setSaving(true)
     setError(null)
     try {
-      const response = await fetch('/api/v1/memories?action=housekeep', {
+      const response = await fetch('/api/v1/memories?action=housekeep-sweep', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),

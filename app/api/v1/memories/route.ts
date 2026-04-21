@@ -9,7 +9,8 @@
  *
  * Actions (via ?action= query parameter):
  * - POST ?action=search - Semantic/keyword search (characterId in body)
- * - POST ?action=housekeep - Run memory cleanup (characterId in body)
+ * - POST ?action=housekeep - Run memory cleanup synchronously (characterId in body)
+ * - POST ?action=housekeep-sweep - Enqueue a background sweep across every character owned by the user
  * - POST ?action=embeddings - Generate missing embeddings (characterId in body)
  * - POST ?action=housekeeping-config - Update auto-housekeeping settings
  * - POST ?action=extraction-limits-config - Update per-hour extraction rate limits
@@ -33,7 +34,7 @@ import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
-import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
+import { enqueueEmbeddingGenerate, enqueueMemoryHousekeeping } from '@/lib/background-jobs/queue-service';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -189,6 +190,10 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'housekeep') {
     return handleHousekeep(req, { user, repos });
+  }
+
+  if (action === 'housekeep-sweep') {
+    return handleHousekeepSweep(req, { user });
   }
 
   if (action === 'embeddings') {
@@ -593,6 +598,26 @@ async function handleHousekeep(
       details: options.dryRun ? result.details : undefined,
     },
   });
+}
+
+async function handleHousekeepSweep(
+  _req: NextRequest,
+  { user }: { user: { id: string } }
+) {
+  try {
+    const jobId = await enqueueMemoryHousekeeping(user.id, { reason: 'manual' });
+    logger.info('[Memories API] Enqueued manual housekeeping sweep', {
+      userId: user.id,
+      jobId,
+    });
+    return NextResponse.json({ success: true, jobId });
+  } catch (error) {
+    logger.error('[Memories API] Failed to enqueue housekeeping sweep', {
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serverError('Failed to enqueue housekeeping sweep');
+  }
 }
 
 async function handleHousekeepPreview(
