@@ -138,7 +138,7 @@ Four additive components:
 
 ```text
 // 1. Content component — time-decayed, longer half-life than retrieval
-decay            = 0.5 ^ (daysSinceRefTime / 365)
+decay            = 0.5 ^ (daysSinceRefTime / 30)
 contentComponent = base * max(decay, 0.10)
 
 // 2. Reinforcement bonus — log-saturates
@@ -155,7 +155,7 @@ score = min(1, contentComponent + reinforcementBonus + graphDegreeBonus + recent
 
 A memory is **protected** (not a deletion candidate) when `score >= 0.5` (`PROTECTION_THRESHOLD` in housekeeping.ts). `source === 'MANUAL'` short-circuits the calc and returns protected.
 
-> **Why distinct from effectiveWeight?** Retrieval decay is 30 days, protection decay is 365 days. We want old-but-reinforced memories to fade from context injection quickly (to make room for newer observations) while still surviving the housekeeping sweep for much longer.
+> **Why distinct from effectiveWeight?** Retrieval decay and protection decay both use a 30-day half-life, but they have different floors: retrieval can't decay past 70% of base importance (we always want to surface *something*), while protection can decay all the way to 10% (we want unused memories to become deletable). The protection score also blends in usage evidence — reinforcement count, graph degree, recent access — that retrieval ranking ignores. Protection originally used a 365-day half-life to keep memories durable across long arcs, but on a 20k-memory character that made fresh high-importance memories effectively immortal: a 1-day-old memory at importance 0.7 scored ~0.70, well above the 0.5 threshold, and the cap-enforcement pass deleted zero rows while pinning the main thread for 15 minutes per run.
 
 ---
 

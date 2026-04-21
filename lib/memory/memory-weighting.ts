@@ -117,7 +117,15 @@ export function formatRelativeAge(memory: Memory, now: Date = new Date()): strin
  * fate doesn't hinge on the LLM's one-shot importance guess.
  */
 export interface ProtectionScoreConfig {
-  /** Content-score half-life in days. Longer than retrieval decay. Default: 365 */
+  /** Content-score half-life in days. Default: 30. The original 365-day
+   * default protected fresh LLM-scored memories indefinitely on heavy
+   * characters (a 1-day-old memory at importance 0.7 scored ~0.70, well
+   * above the 0.5 threshold), so the cap-enforcement pass deleted zero
+   * rows on a 19.5k-memory character and pinned the main thread for
+   * 15 minutes per run. 30 days gives young memories ~40% content score
+   * after a month, letting the usage bonuses (reinforcement / graph / recent
+   * access) — not just the LLM's one-shot importance guess — decide what
+   * stays. */
   contentHalfLifeDays: number
   /** Minimum fraction of the content score that decay cannot erode past. Default: 0.10 */
   contentFloor: number
@@ -136,7 +144,7 @@ export interface ProtectionScoreConfig {
 }
 
 export const DEFAULT_PROTECTION_CONFIG: ProtectionScoreConfig = {
-  contentHalfLifeDays: 365,
+  contentHalfLifeDays: 30,
   contentFloor: 0.10,
   maxReinforcementBonus: 0.25,
   reinforcementCoeff: 0.08,

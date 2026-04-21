@@ -405,15 +405,15 @@ describe('calculateProtectionScore()', () => {
     expect(score).toBeGreaterThanOrEqual(0.8)
   })
 
-  it('decays the content score over time with a 1-year half-life', () => {
+  it('decays the content score over time with a 30-day half-life', () => {
     const memory = makeMemory({
       importance: 0.8,
       reinforcedImportance: 0.8,
-      createdAt: daysAgo(365),
+      createdAt: daysAgo(30),
     })
     const { contentComponent } = calculateProtectionScore(memory, undefined, NOW)
 
-    // decay at 365 days = 0.5, times baseImportance 0.8 = 0.4
+    // decay at 30 days = 0.5, times baseImportance 0.8 = 0.4
     expect(contentComponent).toBeCloseTo(0.4, 2)
   })
 
@@ -523,7 +523,7 @@ describe('calculateProtectionScore()', () => {
 
 describe('DEFAULT_PROTECTION_CONFIG', () => {
   it('has expected default values', () => {
-    expect(DEFAULT_PROTECTION_CONFIG.contentHalfLifeDays).toBe(365)
+    expect(DEFAULT_PROTECTION_CONFIG.contentHalfLifeDays).toBe(30)
     expect(DEFAULT_PROTECTION_CONFIG.contentFloor).toBe(0.10)
     expect(DEFAULT_PROTECTION_CONFIG.maxReinforcementBonus).toBe(0.25)
     expect(DEFAULT_PROTECTION_CONFIG.recentAccessWindowDays).toBe(90)

@@ -11,6 +11,7 @@
 import type { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { runHousekeeping } from '@/lib/memory/housekeeping';
+import { recordHousekeepingOutcome } from '@/lib/memory/housekeeping-outcome-cache';
 import { logger } from '@/lib/logger';
 import type { MemoryHousekeepingPayload } from '../queue-service';
 
@@ -80,6 +81,13 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
 
       totalDeleted += result.deleted;
       totalMerged += result.merged;
+
+      // Record outcome so watermark-triggered enqueues can back off from
+      // characters whose last sweep deleted nothing. Dry-runs don't count —
+      // they don't actually reduce the corpus.
+      if (!payload.dryRun) {
+        recordHousekeepingOutcome(characterId, result.deleted);
+      }
 
       logger.info('[Housekeeping] Completed sweep for character', {
         jobId: job.id,

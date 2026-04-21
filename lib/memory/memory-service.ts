@@ -18,6 +18,7 @@ import {
   calculateReinforcedImportance,
 } from './memory-gate'
 import { calculateEffectiveWeight } from './memory-weighting'
+import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 export type { MemoryGateOutcome } from './memory-gate'
 
@@ -49,6 +50,22 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
 
     const count = await repos.memories.countByCharacterId(characterId)
     if (count < Math.floor(cap * HOUSEKEEPING_WATERMARK)) {
+      return
+    }
+
+    // When the previous sweep for this character deleted nothing, it's very
+    // likely the next watermark-triggered sweep will also delete nothing —
+    // the protection score just said everything was worth keeping, and
+    // ~6 extra memories per chat turn won't flip that verdict. Running the
+    // sweep anyway burns 10–15 minutes of main-thread time for no benefit
+    // and blocks the next chat turn's context build. Back off for an hour.
+    if (shouldSkipWatermarkSweep(characterId)) {
+      logger.debug('[Housekeeping] Skipping watermark sweep — previous sweep deleted zero within backoff window', {
+        userId,
+        characterId,
+        count,
+        cap,
+      })
       return
     }
 
