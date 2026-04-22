@@ -20,6 +20,13 @@ export interface WardrobeUpdateOutfitToolContext {
   characterId: string;
 }
 
+const NO_ITEM_SENTINELS = new Set(['none', 'null', '']);
+
+function normalizeNoItemSentinel(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return NO_ITEM_SENTINELS.has(value.trim().toLowerCase()) ? undefined : value;
+}
+
 export class WardrobeUpdateOutfitError extends Error {
   constructor(message: string, public code: 'VALIDATION_ERROR' | 'EXECUTION_ERROR' | 'NOT_FOUND' | 'TYPE_MISMATCH') {
     super(message);
@@ -63,7 +70,22 @@ export async function executeWardrobeUpdateOutfitTool(
       };
     }
 
-    const { slot, item_id, item_title, preset_id } = input;
+    const { slot, preset_id } = input;
+    // Normalize "no item" sentinels ("none", "null", "") to undefined so they
+    // route through the unequip path instead of failing an item lookup. LLMs
+    // commonly fill required-looking string fields with these placeholders.
+    const item_id = normalizeNoItemSentinel(input.item_id);
+    const item_title = normalizeNoItemSentinel(input.item_title);
+    if (input.item_id !== item_id || input.item_title !== item_title) {
+      logger.debug('Normalized no-item sentinel on update_outfit_item input', {
+        context: 'wardrobe-update-outfit-handler',
+        chatId: context.chatId,
+        characterId: context.characterId,
+        slot,
+        originalItemId: input.item_id,
+        originalItemTitle: input.item_title,
+      });
+    }
 
     // --- Preset application flow ---
     if (preset_id) {
