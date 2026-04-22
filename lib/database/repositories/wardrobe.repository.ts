@@ -8,7 +8,7 @@
 import { logger } from '@/lib/logger';
 import { WardrobeItem, WardrobeItemSchema, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { getOverlaidWardrobeItems } from './character-properties-overlay';
+import { getOverlaidWardrobeItems, syncCharacterVaultWardrobe } from './character-properties-overlay';
 import { TypedQueryFilter } from '../interfaces';
 
 /**
@@ -160,6 +160,7 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
 
         if (item) {
           logger.info('Wardrobe item archived', { wardrobeItemId: id, archivedAt: now });
+          await syncCharacterVaultWardrobe(item.characterId);
         }
 
         return item;
@@ -180,6 +181,7 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
 
         if (item) {
           logger.info('Wardrobe item unarchived', { wardrobeItemId: id });
+          await syncCharacterVaultWardrobe(item.characterId);
         }
 
         return item;
@@ -208,6 +210,8 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
           title: data.title,
         });
 
+        await syncCharacterVaultWardrobe(item.characterId);
+
         return item;
       },
       'Error creating wardrobe item',
@@ -231,6 +235,7 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
 
         if (item) {
           logger.info('Wardrobe item updated successfully', { wardrobeItemId: id });
+          await syncCharacterVaultWardrobe(item.characterId);
         }
 
         return item;
@@ -246,10 +251,16 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   async delete(id: string): Promise<boolean> {
     return this.safeQuery(
       async () => {
+        // Fetch first so we know whose vault to sync — once the row is gone
+        // there's nothing to look up.
+        const existing = await this._findById(id);
         const result = await this._delete(id);
 
         if (result) {
           logger.info('Wardrobe item deleted successfully', { wardrobeItemId: id });
+          if (existing?.characterId) {
+            await syncCharacterVaultWardrobe(existing.characterId);
+          }
         }
 
         return result;

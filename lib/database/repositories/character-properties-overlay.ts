@@ -66,7 +66,7 @@ import {
   type WardrobeItem,
   type OutfitPreset,
 } from '@/lib/schemas/wardrobe.types';
-import { readDatabaseDocument, DatabaseStoreError } from '@/lib/mount-index/database-store';
+import { readDatabaseDocument, writeDatabaseDocument, DatabaseStoreError } from '@/lib/mount-index/database-store';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import type { DocMountDocument } from '@/lib/schemas/mount-index.types';
 
@@ -825,6 +825,88 @@ export async function getOverlaidOutfitPresets(
   });
 
   return presets;
+}
+
+/**
+ * Per-character write chain. The overlay treats vault wardrobe.json as
+ * authoritative on read, so each mutation of wardrobe items or outfit presets
+ * must project the new DB state into the vault file. Chaining per characterId
+ * prevents two concurrent sync calls from each reading a stale DB snapshot and
+ * writing a file that loses one of the changes.
+ */
+const wardrobeSyncChains = new Map<string, Promise<void>>();
+
+/**
+ * After a wardrobe-item or outfit-preset write, re-project the character's
+ * DB state into the vault's wardrobe.json. No-ops for archetype rows
+ * (characterId null), missing characters, and characters that aren't overlay
+ * candidates (flag off or no linked vault).
+ *
+ * Failures are logged but not propagated — the DB write is already committed,
+ * and the next successful sync (or the startup refresh) will reconcile. We'd
+ * rather report success and leave a warning in the log than throw and leave
+ * the caller to retry into a duplicate DB row.
+ */
+export async function syncCharacterVaultWardrobe(
+  characterId: string | null | undefined,
+): Promise<void> {
+  if (!characterId) return;
+
+  const prev = wardrobeSyncChains.get(characterId) ?? Promise.resolve();
+  const next = prev
+    .catch(() => {})
+    .then(() => performVaultWardrobeSync(characterId));
+  wardrobeSyncChains.set(characterId, next);
+  try {
+    await next;
+  } finally {
+    if (wardrobeSyncChains.get(characterId) === next) {
+      wardrobeSyncChains.delete(characterId);
+    }
+  }
+}
+
+async function performVaultWardrobeSync(characterId: string): Promise<void> {
+  const repos = getRepositories();
+  const character = await repos.characters.findByIdRaw(characterId);
+  if (!character || !isOverlayCandidate(character)) return;
+
+  const mountPointId = character.characterDocumentMountPointId as string;
+
+  try {
+    const [items, presets] = await Promise.all([
+      repos.wardrobe.findByCharacterIdRaw(characterId),
+      repos.outfitPresets.findByCharacterIdRaw(characterId),
+    ]);
+
+    await writeDatabaseDocument(
+      mountPointId,
+      CHARACTER_WARDROBE_JSON_PATH,
+      JSON.stringify(
+        {
+          items,
+          presets,
+          outfit: { top: null, bottom: null, footwear: null, accessories: null },
+        },
+        null,
+        2,
+      ),
+    );
+
+    logger.debug('Synced wardrobe.json from DB', {
+      characterId,
+      mountPointId,
+      itemCount: items.length,
+      presetCount: presets.length,
+    });
+  } catch (err) {
+    logger.error('Failed to sync wardrobe.json from DB; vault is now stale', {
+      characterId,
+      mountPointId,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+  }
 }
 
 async function readVaultTextFile(

@@ -65,7 +65,7 @@ export function NewChatForm({
   const selectedPreset = state.scenarioId
     ? singleCharacterScenarios?.find((s) => s.id === state.scenarioId)
     : null
-  const showCustomTextarea = !singleCharacterScenarios || state.scenarioId === null
+  const showCustomTextarea = !singleCharacterScenarios || !selectedPreset
 
   const handleScenarioSelectChange = (value: string) => {
     if (value === CUSTOM_SCENARIO_VALUE || value === '') {
@@ -243,7 +243,7 @@ export function NewChatForm({
           {singleCharacterScenarios && (
             <select
               id="new-chat-scenario-select"
-              value={state.scenarioId ?? CUSTOM_SCENARIO_VALUE}
+              value={selectedPreset?.id ?? CUSTOM_SCENARIO_VALUE}
               onChange={(e) => handleScenarioSelectChange(e.target.value)}
               disabled={creating}
               className="mb-2 w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"

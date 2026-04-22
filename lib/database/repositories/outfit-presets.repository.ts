@@ -8,7 +8,7 @@
 import { logger } from '@/lib/logger';
 import { OutfitPreset, OutfitPresetSchema, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { getOverlaidOutfitPresets } from './character-properties-overlay';
+import { getOverlaidOutfitPresets, syncCharacterVaultWardrobe } from './character-properties-overlay';
 import { TypedQueryFilter } from '../interfaces';
 
 /**
@@ -85,6 +85,8 @@ export class OutfitPresetsRepository extends AbstractBaseRepository<OutfitPreset
           context: 'wardrobe',
         });
 
+        await syncCharacterVaultWardrobe(preset.characterId);
+
         return preset;
       },
       'Error creating outfit preset',
@@ -111,6 +113,7 @@ export class OutfitPresetsRepository extends AbstractBaseRepository<OutfitPreset
             outfitPresetId: id,
             context: 'wardrobe',
           });
+          await syncCharacterVaultWardrobe(preset.characterId);
         }
 
         return preset;
@@ -126,6 +129,9 @@ export class OutfitPresetsRepository extends AbstractBaseRepository<OutfitPreset
   async delete(id: string): Promise<boolean> {
     return this.safeQuery(
       async () => {
+        // Fetch first so we know whose vault to sync — once the row is gone
+        // there's nothing to look up.
+        const existing = await this._findById(id);
         const result = await this._delete(id);
 
         if (result) {
@@ -133,6 +139,9 @@ export class OutfitPresetsRepository extends AbstractBaseRepository<OutfitPreset
             outfitPresetId: id,
             context: 'wardrobe',
           });
+          if (existing?.characterId) {
+            await syncCharacterVaultWardrobe(existing.characterId);
+          }
         }
 
         return result;
@@ -155,6 +164,7 @@ export class OutfitPresetsRepository extends AbstractBaseRepository<OutfitPreset
       async () => {
         const allPresets = await this._findAll();
         let modifiedCount = 0;
+        const affectedCharacterIds = new Set<string>();
 
         for (const preset of allPresets) {
           let modified = false;
@@ -170,6 +180,7 @@ export class OutfitPresetsRepository extends AbstractBaseRepository<OutfitPreset
           if (modified) {
             await this._update(preset.id, { slots: updatedSlots });
             modifiedCount++;
+            if (preset.characterId) affectedCharacterIds.add(preset.characterId);
             logger.debug('Removed deleted wardrobe item from outfit preset', {
               outfitPresetId: preset.id,
               removedItemId: itemId,
@@ -184,6 +195,9 @@ export class OutfitPresetsRepository extends AbstractBaseRepository<OutfitPreset
             presetsModified: modifiedCount,
             context: 'wardrobe',
           });
+          for (const characterId of affectedCharacterIds) {
+            await syncCharacterVaultWardrobe(characterId);
+          }
         }
 
         return modifiedCount;
