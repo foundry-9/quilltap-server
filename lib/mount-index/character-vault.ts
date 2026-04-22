@@ -144,8 +144,10 @@ async function populateVaultWithCharacterData(
     ),
   );
 
-  const wardrobeItems = await repos.wardrobe.findByCharacterId(character.id);
-  const outfitPresets = await repos.outfitPresets.findByCharacterId(character.id);
+  // Raw reads so the populator writes DB values to wardrobe.json, never the
+  // overlaid (vault-sourced) values it would otherwise see.
+  const wardrobeItems = await repos.wardrobe.findByCharacterIdRaw(character.id);
+  const outfitPresets = await repos.outfitPresets.findByCharacterIdRaw(character.id);
   const migratedClothingItems = migrateClothingRecordsToItems(
     character.id,
     character.clothingRecords ?? [],

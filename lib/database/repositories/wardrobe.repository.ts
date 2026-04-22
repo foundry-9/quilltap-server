@@ -8,6 +8,7 @@
 import { logger } from '@/lib/logger';
 import { WardrobeItem, WardrobeItemSchema, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
+import { getOverlaidWardrobeItems } from './character-properties-overlay';
 import { TypedQueryFilter } from '../interfaces';
 
 /**
@@ -52,11 +53,33 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Find all wardrobe items belonging to a specific character
+   * Find all wardrobe items belonging to a specific character. Honours the
+   * per-character document-store overlay: when the character's
+   * `readPropertiesFromDocumentStore` flag is on, items are sourced from the
+   * vault's wardrobe.json instead of the DB.
+   *
    * @param characterId The character ID
    * @param includeArchived When false (default), excludes items where archivedAt is not null
    */
   async findByCharacterId(characterId: string, includeArchived = false): Promise<WardrobeItem[]> {
+    return this.safeQuery(
+      () =>
+        getOverlaidWardrobeItems(
+          characterId,
+          () => this.findByCharacterIdRaw(characterId, includeArchived),
+          { includeArchived },
+        ),
+      'Error finding wardrobe items by character ID',
+      { characterId, includeArchived }
+    );
+  }
+
+  /**
+   * Raw DB-only variant of `findByCharacterId` that bypasses the document-store
+   * overlay. Used by the vault populator (to avoid reading the file it's about
+   * to write) and by export paths that need the canonical DB rows.
+   */
+  async findByCharacterIdRaw(characterId: string, includeArchived = false): Promise<WardrobeItem[]> {
     return this.safeQuery(
       async () => {
         const items = await this.findByFilter({ characterId } as TypedQueryFilter<WardrobeItem>);
@@ -65,7 +88,7 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
         }
         return items.filter((item) => !item.archivedAt);
       },
-      'Error finding wardrobe items by character ID',
+      'Error finding wardrobe items by character ID (raw)',
       { characterId, includeArchived }
     );
   }
@@ -73,11 +96,12 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   /**
    * Find wardrobe items for a character that include a specific type/slot.
    * Since types is stored as a JSON array, we fetch by characterId then filter in JS.
+   * Honours the document-store overlay via `findByCharacterId`.
    */
   async findByCharacterIdAndTypes(characterId: string, type: WardrobeItemType): Promise<WardrobeItem[]> {
     return this.safeQuery(
       async () => {
-        const items = await this.findByFilter({ characterId } as TypedQueryFilter<WardrobeItem>);
+        const items = await this.findByCharacterId(characterId);
         return items.filter((item) => item.types.includes(type));
       },
       'Error finding wardrobe items by character ID and type',
@@ -86,11 +110,21 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Find default wardrobe items for a character
+   * Find default wardrobe items for a character. Honours the document-store
+   * overlay.
    */
   async findDefaultsForCharacter(characterId: string): Promise<WardrobeItem[]> {
     return this.safeQuery(
-      () => this.findByFilter({ characterId, isDefault: true } as TypedQueryFilter<WardrobeItem>),
+      () =>
+        getOverlaidWardrobeItems(
+          characterId,
+          () =>
+            this.findByFilter({
+              characterId,
+              isDefault: true,
+            } as TypedQueryFilter<WardrobeItem>),
+          { defaultsOnly: true },
+        ),
       'Error finding default wardrobe items for character',
       { characterId }
     );

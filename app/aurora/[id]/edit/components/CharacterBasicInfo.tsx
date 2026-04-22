@@ -98,8 +98,9 @@ export function CharacterBasicInfo({
             <p className="text-xs qt-text-secondary mt-1">
               When on, the character&rsquo;s basic properties (aliases, pronouns, title, first
               message, talkativeness), description, personality, example dialogues, first physical
-              description plus its prompts, named system prompt variants, and named scenarios are
-              all read live from files inside the linked Scriptorium vault
+              description plus its prompts, named system prompt variants, named scenarios, and
+              wardrobe items plus outfit presets are all read live from files inside the linked
+              Scriptorium vault
               (<code className="mx-1">properties.json</code>,
               <code className="mx-1">description.md</code>,
               <code className="mx-1">personality.md</code>,
@@ -107,7 +108,8 @@ export function CharacterBasicInfo({
               <code className="mx-1">physical-description.md</code>,
               <code className="mx-1">physical-prompts.json</code>,
               <code className="mx-1">Prompts/*.md</code>,
-              <code className="mx-1">Scenarios/*.md</code>).
+              <code className="mx-1">Scenarios/*.md</code>,
+              <code className="mx-1">wardrobe.json</code>).
               Edits to those fields here are locked until the switch is off. Use
               &ldquo;Sync from vault&rdquo; to copy the vault values back into the database record.
             </p>

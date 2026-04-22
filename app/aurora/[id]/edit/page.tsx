@@ -94,6 +94,16 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   const [physicalDescriptionsRefreshKey, setPhysicalDescriptionsRefreshKey] = useState(0)
   const [wardrobeRefreshKey, setWardrobeRefreshKey] = useState(0)
 
+  // Wrap the sync-from-vault handler so the child lists that fetch their own
+  // data (physical descriptions, wardrobe items, outfit presets) re-query
+  // after the DB is updated. handleSyncPropertiesFromVault itself refetches
+  // the character row; these lists hang off refreshKey props instead.
+  const handleSyncPropertiesFromVaultAndRefreshLists = async () => {
+    await handleSyncPropertiesFromVault()
+    setPhysicalDescriptionsRefreshKey((prev) => prev + 1)
+    setWardrobeRefreshKey((prev) => prev + 1)
+  }
+
 
   // Handle applying wizard-generated data
   const handleWizardApply = async (data: GeneratedCharacterData) => {
@@ -311,7 +321,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                     onPronounsChange={handlePronounsChange}
                     onScenariosChange={handleScenariosChange}
                     onReadFromDocStoreToggle={handleReadFromDocStoreToggle}
-                    onSyncPropertiesFromVault={handleSyncPropertiesFromVault}
+                    onSyncPropertiesFromVault={handleSyncPropertiesFromVaultAndRefreshLists}
                   />
                 )
 

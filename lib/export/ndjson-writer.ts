@@ -133,9 +133,11 @@ async function* streamCharacters(
     yield { kind: 'character', data: charOnly };
     bump(counts, 'characters');
 
-    // Wardrobe items — one record each.
+    // Wardrobe items — one record each. Use the raw variant so exports always
+    // reflect the canonical DB rows, regardless of the character's
+    // readPropertiesFromDocumentStore overlay.
     try {
-      const wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id);
+      const wardrobeItems = await globalRepos.wardrobe.findByCharacterIdRaw(id);
       for (const item of wardrobeItems) {
         yield { kind: 'wardrobe_item', characterId: id, data: item };
       }

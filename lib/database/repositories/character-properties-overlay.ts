@@ -5,7 +5,7 @@
  * character has the flag on and a linked vault, selected fields are read from
  * the vault's files instead of the DB row.
  *
- * Eight vault targets participate, each independently:
+ * Nine vault targets participate, each independently:
  *
  *   - properties.json          — pronouns, aliases, title, firstMessage, talkativeness
  *   - description.md           — character.description
@@ -13,6 +13,10 @@
  *   - example-dialogues.md     — character.exampleDialogues
  *   - physical-description.md  — physicalDescriptions[0].fullDescription
  *   - physical-prompts.json    — physicalDescriptions[0].{short,medium,long,complete}Prompt
+ *   - wardrobe.json            — wardrobe items + outfit presets (applied by the
+ *                                 wardrobe / outfit-presets repositories rather
+ *                                 than the character hydrator, since neither
+ *                                 lives on the character row)
  *   - Prompts/*.md             — character.systemPrompts (one file per variant,
  *                                 YAML frontmatter carries {name, isDefault})
  *   - Scenarios/*.md           — character.scenarios (one file per scenario,
@@ -55,6 +59,13 @@ import type {
   CharacterScenario,
 } from '@/lib/schemas/types';
 import { PronounsSchema } from '@/lib/schemas/character.types';
+import {
+  WardrobeItemSchema,
+  OutfitPresetSchema,
+  EquippedSlotsSchema,
+  type WardrobeItem,
+  type OutfitPreset,
+} from '@/lib/schemas/wardrobe.types';
 import { readDatabaseDocument, DatabaseStoreError } from '@/lib/mount-index/database-store';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import type { DocMountDocument } from '@/lib/schemas/mount-index.types';
@@ -82,6 +93,18 @@ export const CharacterVaultPhysicalPromptsSchema = z.object({
 
 export type CharacterVaultPhysicalPrompts = z.infer<typeof CharacterVaultPhysicalPromptsSchema>;
 
+// Shape of the vault's wardrobe.json. `outfit` is the per-chat equipped state
+// placeholder the scaffold writes; it isn't consumed by the overlay (equipped
+// outfit state lives on the chat row) but we accept it on read so hand-edited
+// files don't fail validation just for keeping the scaffold's shape.
+export const CharacterVaultWardrobeSchema = z.object({
+  items: z.array(WardrobeItemSchema),
+  presets: z.array(OutfitPresetSchema),
+  outfit: EquippedSlotsSchema.optional(),
+});
+
+export type CharacterVaultWardrobe = z.infer<typeof CharacterVaultWardrobeSchema>;
+
 /**
  * The relative paths of the overlay documents inside a character vault.
  * Mirrors `populateVaultWithCharacterData()` in character-vault.ts.
@@ -92,6 +115,7 @@ export const CHARACTER_PERSONALITY_MD_PATH = 'personality.md';
 export const CHARACTER_EXAMPLE_DIALOGUES_MD_PATH = 'example-dialogues.md';
 export const CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH = 'physical-description.md';
 export const CHARACTER_PHYSICAL_PROMPTS_JSON_PATH = 'physical-prompts.json';
+export const CHARACTER_WARDROBE_JSON_PATH = 'wardrobe.json';
 
 export const CHARACTER_PROMPTS_FOLDER = 'Prompts';
 export const CHARACTER_SCENARIOS_FOLDER = 'Scenarios';
@@ -158,6 +182,33 @@ function parseVaultPhysicalPrompts(
   const parsed = CharacterVaultPhysicalPromptsSchema.safeParse(json);
   if (!parsed.success) {
     logger.warn('Vault physical-prompts.json failed schema validation; falling back to DB values', {
+      characterId,
+      issues: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
+    });
+    return null;
+  }
+
+  return parsed.data;
+}
+
+function parseVaultWardrobe(
+  raw: string,
+  characterId: string,
+): CharacterVaultWardrobe | null {
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch (error) {
+    logger.warn('Invalid JSON in vault wardrobe.json; falling back to DB values', {
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+
+  const parsed = CharacterVaultWardrobeSchema.safeParse(json);
+  if (!parsed.success) {
+    logger.warn('Vault wardrobe.json failed schema validation; falling back to DB values', {
       characterId,
       issues: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
     });
@@ -665,6 +716,115 @@ export async function readCharacterVaultScenarios(
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
     .map((doc) => parseScenarioFile(doc, characterId ?? mountPointId))
     .filter((s): s is CharacterScenario => s !== null);
+}
+
+/**
+ * Read a character's vault wardrobe.json and return a validated snapshot, or
+ * null if the file is missing/malformed/invalid. Consumed by the wardrobe /
+ * outfit-presets repositories to overlay list reads.
+ */
+export async function readCharacterVaultWardrobe(
+  mountPointId: string,
+  characterId?: string,
+): Promise<CharacterVaultWardrobe | null> {
+  const content = await readVaultTextFile(
+    mountPointId,
+    CHARACTER_WARDROBE_JSON_PATH,
+    characterId,
+  );
+  if (content === null) return null;
+  return parseVaultWardrobe(content, characterId ?? mountPointId);
+}
+
+export interface WardrobeOverlayOptions {
+  /** Include items whose archivedAt is non-null. Default false. */
+  includeArchived?: boolean;
+  /** Only return items with isDefault=true. */
+  defaultsOnly?: boolean;
+}
+
+/**
+ * Overlay a wardrobe-items list read. If the character has
+ * `readPropertiesFromDocumentStore` on and a linked vault, wardrobe.json is the
+ * source of truth; the caller's DB loader is skipped. Otherwise the DB loader
+ * runs and its result is returned.
+ *
+ * Items parsed from the vault have their `characterId` coerced to the lookup
+ * ID — a wardrobe file scoped to one character's vault always belongs to that
+ * character, and coercing keeps downstream consumers from tripping over a
+ * hand-edited characterId that doesn't match.
+ */
+export async function getOverlaidWardrobeItems(
+  characterId: string,
+  loadDbItems: () => Promise<WardrobeItem[]>,
+  options: WardrobeOverlayOptions = {},
+): Promise<WardrobeItem[]> {
+  const repos = getRepositories();
+  const character = await repos.characters.findByIdRaw(characterId);
+  if (!character || !isOverlayCandidate(character)) {
+    return loadDbItems();
+  }
+
+  const mountPointId = character.characterDocumentMountPointId as string;
+  const vault = await readCharacterVaultWardrobe(mountPointId, characterId);
+  if (!vault) {
+    return loadDbItems();
+  }
+
+  let items: WardrobeItem[] = vault.items.map((item) => ({
+    ...item,
+    characterId,
+  }));
+  if (!options.includeArchived) {
+    items = items.filter((item) => !item.archivedAt);
+  }
+  if (options.defaultsOnly) {
+    items = items.filter((item) => item.isDefault);
+  }
+
+  logger.debug('Wardrobe items read overlaid from vault wardrobe.json', {
+    characterId,
+    mountPointId,
+    itemCount: items.length,
+    includeArchived: options.includeArchived ?? false,
+    defaultsOnly: options.defaultsOnly ?? false,
+  });
+
+  return items;
+}
+
+/**
+ * Overlay an outfit-presets list read, symmetric with
+ * `getOverlaidWardrobeItems`.
+ */
+export async function getOverlaidOutfitPresets(
+  characterId: string,
+  loadDbPresets: () => Promise<OutfitPreset[]>,
+): Promise<OutfitPreset[]> {
+  const repos = getRepositories();
+  const character = await repos.characters.findByIdRaw(characterId);
+  if (!character || !isOverlayCandidate(character)) {
+    return loadDbPresets();
+  }
+
+  const mountPointId = character.characterDocumentMountPointId as string;
+  const vault = await readCharacterVaultWardrobe(mountPointId, characterId);
+  if (!vault) {
+    return loadDbPresets();
+  }
+
+  const presets: OutfitPreset[] = vault.presets.map((preset) => ({
+    ...preset,
+    characterId,
+  }));
+
+  logger.debug('Outfit presets read overlaid from vault wardrobe.json', {
+    characterId,
+    mountPointId,
+    presetCount: presets.length,
+  });
+
+  return presets;
 }
 
 async function readVaultTextFile(

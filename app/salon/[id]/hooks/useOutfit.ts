@@ -51,13 +51,18 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
 
   // Track which character wardrobes we've already fetched
   const fetchedWardrobesRef = useRef<Set<string>>(new Set())
+  // Mirror of wardrobeCache for reads inside callbacks. The state copy still
+  // drives renders; the ref keeps fetchWardrobeForCharacter's identity stable
+  // so effects depending on refreshOutfit don't cascade-refire every time a
+  // wardrobe fetch completes.
+  const wardrobeCacheRef = useRef<WardrobeCache>({})
 
   /**
    * Fetch wardrobe items for a single character and cache them.
    */
   const fetchWardrobeForCharacter = useCallback(async (characterId: string): Promise<WardrobeItemSummary[]> => {
     if (fetchedWardrobesRef.current.has(characterId)) {
-      return wardrobeCache[characterId] ?? []
+      return wardrobeCacheRef.current[characterId] ?? []
     }
 
     try {
@@ -88,13 +93,15 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
       }
 
       fetchedWardrobesRef.current.add(characterId)
-      setWardrobeCache(prev => ({ ...prev, [characterId]: personalItems }))
+      const next = { ...wardrobeCacheRef.current, [characterId]: personalItems }
+      wardrobeCacheRef.current = next
+      setWardrobeCache(next)
       return personalItems
     } catch (err) {
       console.error('[useOutfit] Error fetching wardrobe', { characterId, error: err })
       return []
     }
-  }, [wardrobeCache])
+  }, [])
 
   /**
    * Resolve item titles for equipped slots using the wardrobe cache.

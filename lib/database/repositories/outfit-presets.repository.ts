@@ -8,6 +8,7 @@
 import { logger } from '@/lib/logger';
 import { OutfitPreset, OutfitPresetSchema, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
+import { getOverlaidOutfitPresets } from './character-properties-overlay';
 import { TypedQueryFilter } from '../interfaces';
 
 /**
@@ -35,12 +36,31 @@ export class OutfitPresetsRepository extends AbstractBaseRepository<OutfitPreset
   }
 
   /**
-   * Find all outfit presets belonging to a specific character
+   * Find all outfit presets belonging to a specific character. Honours the
+   * per-character document-store overlay: when the character's
+   * `readPropertiesFromDocumentStore` flag is on, presets are sourced from the
+   * vault's wardrobe.json instead of the DB.
    */
   async findByCharacterId(characterId: string): Promise<OutfitPreset[]> {
     return this.safeQuery(
-      () => this.findByFilter({ characterId } as TypedQueryFilter<OutfitPreset>),
+      () =>
+        getOverlaidOutfitPresets(
+          characterId,
+          () => this.findByCharacterIdRaw(characterId),
+        ),
       'Error finding outfit presets by character ID',
+      { characterId }
+    );
+  }
+
+  /**
+   * Raw DB-only variant of `findByCharacterId` that bypasses the document-store
+   * overlay. Used by the vault populator and export paths.
+   */
+  async findByCharacterIdRaw(characterId: string): Promise<OutfitPreset[]> {
+    return this.safeQuery(
+      () => this.findByFilter({ characterId } as TypedQueryFilter<OutfitPreset>),
+      'Error finding outfit presets by character ID (raw)',
       { characterId }
     );
   }

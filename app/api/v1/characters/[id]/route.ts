@@ -49,6 +49,7 @@ import {
   readCharacterVaultPhysicalPrompts,
   readCharacterVaultSystemPrompts,
   readCharacterVaultScenarios,
+  readCharacterVaultWardrobe,
 } from '@/lib/database/repositories/character-properties-overlay';
 
 // ============================================================================
@@ -744,6 +745,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           physPromptsJson,
           vaultPrompts,
           vaultScenarios,
+          vaultWardrobe,
         ] = await Promise.all([
           readCharacterVaultProperties(mountId, rawCharacter.id),
           readCharacterVaultDescription(mountId, rawCharacter.id),
@@ -753,6 +755,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           readCharacterVaultPhysicalPrompts(mountId, rawCharacter.id),
           readCharacterVaultSystemPrompts(mountId, rawCharacter.id),
           readCharacterVaultScenarios(mountId, rawCharacter.id),
+          readCharacterVaultWardrobe(mountId, rawCharacter.id),
         ]);
 
         const patch: Record<string, unknown> = {};
@@ -806,13 +809,73 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           }
         }
 
-        if (Object.keys(patch).length === 0) {
+        // Wardrobe syncs against separate tables (wardrobe_items,
+        // outfit_presets), not character-row columns, so it doesn't feed
+        // `patch`. When the vault file is valid we replace the character's
+        // active wardrobe wholesale — the same "vault is the list" semantics
+        // used for systemPrompts / scenarios above.
+        let wardrobeItemsWritten = 0;
+        let wardrobePresetsWritten = 0;
+        const wardrobeSynced = vaultWardrobe !== null;
+        if (vaultWardrobe) {
+          const existingItems = await repos.wardrobe.findByCharacterIdRaw(
+            rawCharacter.id,
+            true,
+          );
+          for (const item of existingItems) {
+            await repos.wardrobe.delete(item.id);
+          }
+          const existingPresets = await repos.outfitPresets.findByCharacterIdRaw(
+            rawCharacter.id,
+          );
+          for (const preset of existingPresets) {
+            await repos.outfitPresets.delete(preset.id);
+          }
+
+          for (const item of vaultWardrobe.items) {
+            await repos.wardrobe.create(
+              {
+                characterId: rawCharacter.id,
+                title: item.title,
+                description: item.description ?? null,
+                types: item.types,
+                appropriateness: item.appropriateness ?? null,
+                isDefault: item.isDefault,
+                migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
+                archivedAt: item.archivedAt ?? null,
+              },
+              { id: item.id, createdAt: item.createdAt, updatedAt: item.updatedAt },
+            );
+            wardrobeItemsWritten++;
+          }
+          for (const preset of vaultWardrobe.presets) {
+            await repos.outfitPresets.create(
+              {
+                characterId: rawCharacter.id,
+                name: preset.name,
+                description: preset.description ?? null,
+                slots: preset.slots,
+              },
+              {
+                id: preset.id,
+                createdAt: preset.createdAt,
+                updatedAt: preset.updatedAt,
+              },
+            );
+            wardrobePresetsWritten++;
+          }
+        }
+
+        if (Object.keys(patch).length === 0 && !wardrobeSynced) {
           return badRequest(
             "This character's vault has no valid overlay files to sync; nothing to do"
           );
         }
 
-        const updatedCharacter = await repos.characters.update(id, patch);
+        const updatedCharacter =
+          Object.keys(patch).length > 0
+            ? await repos.characters.update(id, patch)
+            : await repos.characters.findById(id);
 
         logger.info('[Characters v1] Synced character properties from vault', {
           characterId: id,
@@ -826,6 +889,9 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           physicalSkippedNoPrimary,
           syncedSystemPromptCount: vaultPrompts.length,
           syncedScenarioCount: vaultScenarios.length,
+          syncedWardrobe: wardrobeSynced,
+          wardrobeItemsWritten,
+          wardrobePresetsWritten,
         });
 
         return NextResponse.json({ character: updatedCharacter });

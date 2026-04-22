@@ -539,6 +539,15 @@ export async function register() {
               './lib/startup/migrate-vault-physical-files'
             );
             await migrateVaultPhysicalFiles();
+
+            // One-time refresh of wardrobe.json so existing vaults reflect the
+            // canonical DB state now that wardrobe.json participates in the
+            // character overlay. Gated by an instance_settings flag, so
+            // steady-state startups no-op.
+            const { refreshVaultWardrobe } = await import(
+              './lib/startup/refresh-vault-wardrobe'
+            );
+            await refreshVaultWardrobe();
           })
           .catch((backfillError) => {
             logger.warn('Error during character vault backfill or physical-file migration', {
