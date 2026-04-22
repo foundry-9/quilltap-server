@@ -212,7 +212,7 @@ function renderIdentityMarkdown(c: Character): string {
   return lines.join('\n');
 }
 
-function renderPhysicalPromptsJson(primary: PhysicalDescription | undefined): string {
+export function renderPhysicalPromptsJson(primary: PhysicalDescription | undefined): string {
   return JSON.stringify(
     {
       short: primary?.shortPrompt ?? null,
@@ -269,18 +269,18 @@ async function writeNamedArrayIntoFolder<T>(
   }
 }
 
-function buildSystemPromptFile(p: CharacterSystemPrompt): string {
+export function buildSystemPromptFile(p: CharacterSystemPrompt): string {
   const frontmatter = p.isDefault
     ? `---\nname: ${escapeYaml(p.name)}\nisDefault: true\n---\n\n`
     : `---\nname: ${escapeYaml(p.name)}\n---\n\n`;
   return `${frontmatter}${p.content}`;
 }
 
-function buildScenarioFile(s: CharacterScenario): string {
+export function buildScenarioFile(s: CharacterScenario): string {
   return `# ${s.title}\n\n${s.content}`;
 }
 
-function sanitizeFileName(name: string): string {
+export function sanitizeFileName(name: string): string {
   const cleaned = name
     .replace(/[\\/:*?"<>|]/g, '_')
     .replace(/\s+/g, ' ')

@@ -80,7 +80,11 @@ export function CharacterBasicInfo({
   onSyncPropertiesFromVault,
 }: CharacterBasicInfoProps) {
   const overlayOn = formData.readPropertiesFromDocumentStore === true
-  const overlayManagedDisabled = overlayOn
+  // Vault-managed fields stay editable: the repository's write overlay routes
+  // those edits to vault files when the overlay is on, so the form never has
+  // to lock them. Kept as a named constant so the disabled={…} props below
+  // remain trivially diffable if we ever need a true read-only mode again.
+  const overlayManagedDisabled = false
   const toggleDisabled = !hasLinkedVault && !overlayOn
 
   return (
@@ -110,8 +114,12 @@ export function CharacterBasicInfo({
               <code className="mx-1">Prompts/*.md</code>,
               <code className="mx-1">Scenarios/*.md</code>,
               <code className="mx-1">wardrobe.json</code>).
-              Edits to those fields here are locked until the switch is off. Use
-              &ldquo;Sync from vault&rdquo; to copy the vault values back into the database record.
+              Edits made here are saved straight to the vault files, so the form
+              and the vault stay in step. Use &ldquo;Snapshot to database&rdquo;
+              before turning the switch off if you want the database row to
+              carry the vault&rsquo;s current values; otherwise toggling off
+              reverts those fields to the values they held when the switch was
+              first turned on.
             </p>
             {!hasLinkedVault && (
               <p className="text-xs qt-text-destructive mt-2">
@@ -133,15 +141,16 @@ export function CharacterBasicInfo({
         {overlayOn && (
           <div className="mt-3 flex items-center justify-between gap-3 rounded-md qt-bg-muted px-3 py-2">
             <p className="text-xs qt-text-secondary">
-              Values below are the current vault snapshot. Editing is disabled while the overlay is on.
+              Values below reflect the vault. Edits save to the vault files; the
+              database row stays frozen at its pre-overlay state.
             </p>
             <button
               type="button"
               onClick={onSyncPropertiesFromVault}
               className="qt-button-secondary qt-button-sm whitespace-nowrap"
-              title="Copy the current properties.json values into the database record"
+              title="Copy the current vault values into the database record so the row matches the vault"
             >
-              Sync from vault
+              Snapshot to database
             </button>
           </div>
         )}
@@ -346,15 +355,15 @@ export function CharacterBasicInfo({
           )}
         </div>
         <p className="text-xs qt-text-secondary mb-3">
-          {overlayManagedDisabled
-            ? 'Scenarios are read live from the vault\u2019s Scenarios/ folder. Edit the files there instead.'
+          {overlayOn
+            ? 'Scenarios live in the vault\u2019s Scenarios/ folder. Edits here save straight to those files.'
             : 'Named settings and contexts for conversations. Each scenario can be selected when starting a chat.'}
         </p>
         {formData.scenarios.length === 0 ? (
           <div className="qt-card text-center py-6">
             <p className="qt-text-small mb-3">
-              {overlayManagedDisabled
-                ? 'No scenario files found in the vault\u2019s Scenarios/ folder.'
+              {overlayOn
+                ? 'No scenario files in the vault\u2019s Scenarios/ folder yet. Add one and it\u2019ll be written there.'
                 : 'No scenarios yet. Add one to give this character distinct roleplay contexts.'}
             </p>
             {!overlayManagedDisabled && (

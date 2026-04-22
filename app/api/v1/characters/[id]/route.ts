@@ -41,14 +41,7 @@ import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.
 import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
 import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
 import {
-  readCharacterVaultProperties,
-  readCharacterVaultDescription,
-  readCharacterVaultPersonality,
-  readCharacterVaultExampleDialogues,
-  readCharacterVaultPhysicalDescription,
-  readCharacterVaultPhysicalPrompts,
-  readCharacterVaultSystemPrompts,
-  readCharacterVaultScenarios,
+  readCharacterVaultManagedFields,
   readCharacterVaultWardrobe,
 } from '@/lib/database/repositories/character-properties-overlay';
 
@@ -736,78 +729,13 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         }
 
         const mountId = rawCharacter.characterDocumentMountPointId;
-        const [
-          props,
-          descMd,
-          persMd,
-          dialoguesMd,
-          physDescMd,
-          physPromptsJson,
-          vaultPrompts,
-          vaultScenarios,
-          vaultWardrobe,
-        ] = await Promise.all([
-          readCharacterVaultProperties(mountId, rawCharacter.id),
-          readCharacterVaultDescription(mountId, rawCharacter.id),
-          readCharacterVaultPersonality(mountId, rawCharacter.id),
-          readCharacterVaultExampleDialogues(mountId, rawCharacter.id),
-          readCharacterVaultPhysicalDescription(mountId, rawCharacter.id),
-          readCharacterVaultPhysicalPrompts(mountId, rawCharacter.id),
-          readCharacterVaultSystemPrompts(mountId, rawCharacter.id),
-          readCharacterVaultScenarios(mountId, rawCharacter.id),
+        const existingPhysical = rawCharacter.physicalDescriptions ?? [];
+        const [snapshot, vaultWardrobe] = await Promise.all([
+          readCharacterVaultManagedFields(mountId, rawCharacter.id, existingPhysical),
           readCharacterVaultWardrobe(mountId, rawCharacter.id),
         ]);
-
-        const patch: Record<string, unknown> = {};
-
-        if (props) {
-          patch.pronouns = props.pronouns;
-          patch.aliases = props.aliases;
-          patch.title = props.title;
-          patch.firstMessage = props.firstMessage;
-          patch.talkativeness = props.talkativeness;
-        }
-
-        if (descMd !== null) {
-          patch.description = descMd === '' ? null : descMd;
-        }
-        if (persMd !== null) {
-          patch.personality = persMd === '' ? null : persMd;
-        }
-        if (dialoguesMd !== null) {
-          patch.exampleDialogues = dialoguesMd === '' ? null : dialoguesMd;
-        }
-
-        if (vaultPrompts.length > 0) {
-          patch.systemPrompts = vaultPrompts;
-        }
-        if (vaultScenarios.length > 0) {
-          patch.scenarios = vaultScenarios;
-        }
-
-        const existingPhysical = rawCharacter.physicalDescriptions ?? [];
-        const hasPhysicalInput = physDescMd !== null || physPromptsJson !== null;
-        let physicalSkippedNoPrimary = false;
-
-        if (hasPhysicalInput) {
-          if (existingPhysical.length === 0) {
-            physicalSkippedNoPrimary = true;
-          } else {
-            const first = existingPhysical[0];
-            const patched = { ...first };
-            if (physDescMd !== null) {
-              patched.fullDescription = physDescMd === '' ? null : physDescMd;
-            }
-            if (physPromptsJson !== null) {
-              patched.shortPrompt = physPromptsJson.short;
-              patched.mediumPrompt = physPromptsJson.medium;
-              patched.longPrompt = physPromptsJson.long;
-              patched.completePrompt = physPromptsJson.complete;
-            }
-            patched.updatedAt = new Date().toISOString();
-            patch.physicalDescriptions = [patched, ...existingPhysical.slice(1)];
-          }
-        }
+        const physicalSkippedNoPrimary = snapshot.physicalSkippedNoPrimary === true;
+        const { physicalSkippedNoPrimary: _omit, ...patch } = snapshot;
 
         // Wardrobe syncs against separate tables (wardrobe_items,
         // outfit_presets), not character-row columns, so it doesn't feed
@@ -872,23 +800,24 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           );
         }
 
+        // updateRaw bypasses the write overlay; sync-back is the one path that
+        // intentionally writes managed fields straight to the DB row.
         const updatedCharacter =
           Object.keys(patch).length > 0
-            ? await repos.characters.update(id, patch)
+            ? await repos.characters.updateRaw(id, patch)
             : await repos.characters.findById(id);
 
         logger.info('[Characters v1] Synced character properties from vault', {
           characterId: id,
           mountPointId: mountId,
-          syncedProperties: !!props,
-          syncedDescription: descMd !== null,
-          syncedPersonality: persMd !== null,
-          syncedExampleDialogues: dialoguesMd !== null,
-          syncedPhysicalDescription: physDescMd !== null && !physicalSkippedNoPrimary,
-          syncedPhysicalPrompts: physPromptsJson !== null && !physicalSkippedNoPrimary,
+          syncedProperties: snapshot.aliases !== undefined,
+          syncedDescription: snapshot.description !== undefined,
+          syncedPersonality: snapshot.personality !== undefined,
+          syncedExampleDialogues: snapshot.exampleDialogues !== undefined,
+          syncedPhysical: snapshot.physicalDescriptions !== undefined,
           physicalSkippedNoPrimary,
-          syncedSystemPromptCount: vaultPrompts.length,
-          syncedScenarioCount: vaultScenarios.length,
+          syncedSystemPromptCount: snapshot.systemPrompts?.length ?? 0,
+          syncedScenarioCount: snapshot.scenarios?.length ?? 0,
           syncedWardrobe: wardrobeSynced,
           wardrobeItemsWritten,
           wardrobePresetsWritten,

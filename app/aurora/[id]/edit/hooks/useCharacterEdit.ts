@@ -28,30 +28,6 @@ const INITIAL_FORM_DATA: CharacterFormData = {
 }
 
 /**
- * Fields that, when the Scriptorium overlay switch is on, are read from the
- * character's vault files instead of the DB. The edit form must strip these
- * from PUT payloads so a save doesn't silently persist overlaid (vault-derived)
- * values back into the DB.
- *
- * Covers properties.json (aliases/pronouns/title/firstMessage), description.md,
- * personality.md, example-dialogues.md, and the Scenarios/ folder. Physical-
- * description.md and physical-prompts.json are edited from the Descriptions
- * tab, which surfaces its own overlay warning rather than going through this
- * form. The Prompts/ folder is not represented in this form (system prompts
- * are managed via dedicated /prompts API routes).
- */
-const OVERLAY_MANAGED_FIELDS = [
-  'aliases',
-  'pronouns',
-  'title',
-  'firstMessage',
-  'description',
-  'personality',
-  'exampleDialogues',
-  'scenarios',
-] as const satisfies readonly (keyof CharacterFormData)[]
-
-/**
  * Hook for managing character edit state and operations
  * Handles fetching, form management, and API interactions
  */
@@ -242,21 +218,13 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({ ...prev, saving: true, error: null }))
 
     try {
-      // When the Scriptorium overlay is on, strip the overlay-managed fields
-      // from the PUT payload so the save doesn't silently persist overlaid
-      // (vault-derived) values back into the DB.
-      let payload: Partial<CharacterFormData> = { ...state.formData }
-      if (state.formData.readPropertiesFromDocumentStore) {
-        for (const field of OVERLAY_MANAGED_FIELDS) {
-          delete payload[field]
-        }
-      }
-
-      // Update character fields
+      // Vault-managed fields are routed to vault files by the repository when
+      // the overlay is on, so the same payload works whether overlay is on or
+      // off. The repository's write overlay handles the routing.
       const res = await fetch(`/api/v1/characters/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(state.formData),
       })
 
       if (!res.ok) {

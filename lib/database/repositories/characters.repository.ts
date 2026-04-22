@@ -13,6 +13,7 @@ import { TypedQueryFilter } from '../interfaces';
 import {
   applyDocumentStoreOverlay,
   applyDocumentStoreOverlayOne,
+  applyDocumentStoreWriteOverlay,
 } from './character-properties-overlay';
 
 /**
@@ -214,18 +215,40 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Update a character
-   * @param id The character ID
-   * @param data Partial character data to update
-   * @returns Promise<Character | null> The updated character if found, null otherwise
+   * Update a character. When the character is in vault mode
+   * (`readPropertiesFromDocumentStore` on with a linked vault), managed
+   * fields in `data` are routed to vault files instead of the DB row;
+   * non-managed fields still go to DB. The returned character is overlaid
+   * so callers see vault-backed values just like findById would.
+   *
+   * Use `updateRaw` to bypass the write overlay (e.g. the sync-back action
+   * pulling vault values into the DB row).
    */
   async update(id: string, data: Partial<Character>): Promise<Character | null> {
     return this.safeQuery(
       async () => {
-        const result = await this._update(id, data);
-        return result;
+        const dbPatch = await applyDocumentStoreWriteOverlay(id, data);
+        const hasDbWork = Object.keys(dbPatch).length > 0;
+        const result = hasDbWork ? await this._update(id, dbPatch) : await this._findById(id);
+        return applyDocumentStoreOverlayOne(result);
       },
       'Error updating character',
+      { characterId: id }
+    );
+  }
+
+  /**
+   * Update a character bypassing the document-store write overlay. Writes go
+   * directly to the DB row regardless of vault-mode state. Used by the
+   * `sync-properties-from-vault` action so vault values can be copied into
+   * the canonical DB row.
+   */
+  async updateRaw(id: string, data: Partial<Character>): Promise<Character | null> {
+    return this.safeQuery(
+      async () => {
+        return await this._update(id, data);
+      },
+      'Error updating character (raw)',
       { characterId: id }
     );
   }
