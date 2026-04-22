@@ -42,9 +42,12 @@ function CloseIcon({ className }: { className?: string }) {
 export function CharactersCard({ project, onRemoveCharacter, onToggleAllowAnyCharacter, expanded, onToggle }: CharactersCardProps) {
   const { shouldHideByIds } = useQuickHide()
 
-  // Filter characters based on quick-hide rules
+  // Filter characters based on quick-hide rules, deduping any repeated ids
   const visibleCharacters = useMemo(() => {
+    const seen = new Set<string>()
     return project.characterRoster.filter(char => {
+      if (!char.id || seen.has(char.id)) return false
+      seen.add(char.id)
       return !shouldHideByIds(char.tags || [])
     })
   }, [project.characterRoster, shouldHideByIds])
