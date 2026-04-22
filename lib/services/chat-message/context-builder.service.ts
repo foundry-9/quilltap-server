@@ -14,6 +14,7 @@ import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { modelSupportsPrefill } from '@/lib/plugins/provider-registry'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
+import { getErrorMessage } from '@/lib/errors'
 import {
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,
@@ -187,6 +188,35 @@ export async function loadAndProcessFiles(
 }
 
 /**
+ * Walk the tail of the existingMessages array, picking out ASSISTANT messages
+ * that carry image file IDs on their `attachments` array, up to a lookback
+ * window. Returns the file IDs in chronological order (oldest first),
+ * deduped, so they can be loaded as vision content for the next LLM turn.
+ */
+function collectRecentAssistantImageFileIds(
+  existingMessages: Array<{ type: string; role?: string; attachments?: string[] | null }>,
+  lookback: number,
+): string[] {
+  const collected: string[] = []
+  const seen = new Set<string>()
+  let scanned = 0
+  for (let i = existingMessages.length - 1; i >= 0 && scanned < lookback; i--) {
+    const msg = existingMessages[i]
+    if (msg.type !== 'message' || msg.role !== 'ASSISTANT') continue
+    scanned++
+    const atts = msg.attachments
+    if (!atts || atts.length === 0) continue
+    for (const fileId of atts) {
+      if (typeof fileId === 'string' && !seen.has(fileId)) {
+        seen.add(fileId)
+        collected.push(fileId)
+      }
+    }
+  }
+  return collected.reverse()
+}
+
+/**
  * Build conversation messages for context
  */
 export function buildConversationMessages(
@@ -282,7 +312,7 @@ export function buildConversationMessages(
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -411,13 +441,39 @@ export async function buildMessageContext(
       )
     : builtContext.messages
 
+  // Additionally surface image attachments from recent ASSISTANT messages
+  // (e.g. Lantern notifications announcing generated images). Without this,
+  // vision-capable providers only see the announcement text but not the
+  // actual image. We piggy-back on the existing attachments-on-last-user-turn
+  // mechanism so non-vision providers still get the text fallback.
+  const ASSISTANT_IMAGE_LOOKBACK = 6
+  let mergedAttachmentsToSend: unknown[] = attachmentsToSend
+  try {
+    const recentAssistantImageFileIds = collectRecentAssistantImageFileIds(
+      existingMessages,
+      ASSISTANT_IMAGE_LOOKBACK,
+    )
+    if (recentAssistantImageFileIds.length > 0) {
+      const extra = await loadChatFilesForLLM(recentAssistantImageFileIds, {
+        provider: connectionProfile.provider,
+      })
+      if (extra.length > 0) {
+        mergedAttachmentsToSend = [...attachmentsToSend, ...extra]
+      }
+    }
+  } catch (err) {
+    logger.warn('Failed to load recent assistant image attachments for vision', {
+      error: getErrorMessage(err),
+    })
+  }
+
   // Prepare final messages for LLM
   const formattedMessages = formattedContextMessages.map((msg, idx) => {
-    if (idx === formattedContextMessages.length - 1 && msg.role === 'user' && attachmentsToSend.length > 0) {
+    if (idx === formattedContextMessages.length - 1 && msg.role === 'user' && mergedAttachmentsToSend.length > 0) {
       return {
         role: msg.role,
         content: msg.content,
-        attachments: attachmentsToSend,
+        attachments: mergedAttachmentsToSend,
         name: msg.name,
       }
     }

@@ -25,6 +25,7 @@ interface ChatSettingsModalProps {
   chatId: string
   imageProfileId?: string | null
   avatarGenerationEnabled?: boolean | null
+  alertCharactersOfLanternImages?: boolean | null
   onSuccess?: () => void
 }
 
@@ -34,14 +35,17 @@ export default function ChatSettingsModal({
   chatId,
   imageProfileId: initialImageProfileId,
   avatarGenerationEnabled: initialAvatarGenerationEnabled,
+  alertCharactersOfLanternImages: initialAlertCharactersOfLanternImages,
   onSuccess,
 }: Readonly<ChatSettingsModalProps>) {
   const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(
     initialImageProfileId ?? null
   )
   const [avatarGenEnabled, setAvatarGenEnabled] = useState(initialAvatarGenerationEnabled ?? false)
+  const [alertImages, setAlertImages] = useState<boolean | null>(initialAlertCharactersOfLanternImages ?? null)
   const [imageProfileSaving, setImageProfileSaving] = useState(false)
   const [avatarGenSaving, setAvatarGenSaving] = useState(false)
+  const [alertImagesSaving, setAlertImagesSaving] = useState(false)
 
   // Sync local state when upstream props change
   useEffect(() => {
@@ -53,6 +57,11 @@ export default function ChatSettingsModal({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream <prop> changes (parent renders unconditionally)
     setAvatarGenEnabled(initialAvatarGenerationEnabled ?? false)
   }, [initialAvatarGenerationEnabled])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream <prop> changes (parent renders unconditionally)
+    setAlertImages(initialAlertCharactersOfLanternImages ?? null)
+  }, [initialAlertCharactersOfLanternImages])
 
   const { data: imageProfilesData, isLoading: profilesLoading } = useSWR<{ profiles: ImageProfile[] }>(
     isOpen ? '/api/v1/image-profiles' : null
@@ -67,7 +76,7 @@ export default function ChatSettingsModal({
 
   // Disable click-outside detection while saving to prevent native select dropdown clicks
   // from closing the modal (browser renders select options in a separate layer)
-  const isSaving = dataLoading || imageProfileSaving || avatarGenSaving
+  const isSaving = dataLoading || imageProfileSaving || avatarGenSaving || alertImagesSaving
 
   const handleImageProfileChange = async (profileId: string | null) => {
     try {
@@ -103,6 +112,49 @@ export default function ChatSettingsModal({
       showErrorToast(errorMessage || 'Failed to update image profile')
     } finally {
       setImageProfileSaving(false)
+    }
+  }
+
+  const handleAlertImagesChange = async (value: boolean | null) => {
+    try {
+      setAlertImagesSaving(true)
+
+      const res = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alertCharactersOfLanternImages: value }),
+      })
+
+      if (!res.ok) {
+        let errorMessage = 'Failed to update Lantern image announcements'
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          errorMessage = `HTTP ${res.status}: ${res.statusText}`
+        }
+        throw new Error(errorMessage)
+      }
+
+      setAlertImages(value)
+      showSuccessToast(
+        value === null
+          ? 'Lantern announcements will inherit from the project'
+          : value
+            ? 'Lantern images will be announced to characters'
+            : 'Lantern images will stay silent for this chat'
+      )
+      onSuccess?.()
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error('Failed to update alertCharactersOfLanternImages', {
+        chatId,
+        value,
+        error: errorMessage,
+      })
+      showErrorToast(errorMessage || 'Failed to update Lantern image announcements')
+    } finally {
+      setAlertImagesSaving(false)
     }
   }
 
@@ -191,6 +243,36 @@ export default function ChatSettingsModal({
           <p className="qt-text-xs mt-2">
             Used for generating images in this chat.
             {imageProfileSaving && <span className="ml-2">Saving...</span>}
+          </p>
+        </div>
+      </div>
+
+      {/* Lantern Image Announcements */}
+      <div className="mb-6">
+        <h3 className="qt-text-small font-medium mb-3">
+          Lantern Image Announcements
+        </h3>
+        <div className="qt-card">
+          <label htmlFor="alert-images" className="qt-label mb-1">
+            Announce generated images to characters
+          </label>
+          <select
+            id="alert-images"
+            value={alertImages === null || alertImages === undefined ? 'inherit' : alertImages ? 'enabled' : 'disabled'}
+            onChange={(e) => {
+              const v = e.target.value
+              handleAlertImagesChange(v === 'inherit' ? null : v === 'enabled')
+            }}
+            disabled={alertImagesSaving || dataLoading}
+            className="qt-select text-sm"
+          >
+            <option value="inherit">Inherit from project</option>
+            <option value="enabled">Announce to characters</option>
+            <option value="disabled">Keep silent</option>
+          </select>
+          <p className="qt-text-xs mt-2">
+            When enabled, each generated background, avatar, or character-requested picture drops an announcement into the chat so every character sees it on their next turn.
+            {alertImagesSaving && <span className="ml-2">Saving...</span>}
           </p>
         </div>
       </div>

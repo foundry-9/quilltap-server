@@ -43,6 +43,7 @@ export default function ProjectDetailPage() {
     handleSaveAvatarGeneration,
     handleSaveDefaultImageProfile,
     handleSaveBackgroundDisplayMode,
+    handleSaveAlertCharactersOfLanternImages,
     handleRemoveCharacter,
   } = useProjectDetail(projectId)
 
@@ -177,6 +178,7 @@ export default function ProjectDetailPage() {
           onAvatarGenerationChange={handleSaveAvatarGeneration}
           onDefaultImageProfileChange={handleSaveDefaultImageProfile}
           onBackgroundDisplayModeChange={handleSaveBackgroundDisplayMode}
+          onAlertCharactersOfLanternImagesChange={handleSaveAlertCharactersOfLanternImages}
           expanded={cardState.imageGeneration}
           onToggle={() => toggleCard('imageGeneration')}
         />

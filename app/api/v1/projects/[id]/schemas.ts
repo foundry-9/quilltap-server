@@ -17,6 +17,7 @@ export const updateProjectSchema = z.object({
   defaultAgentModeEnabled: z.boolean().nullable().optional(),
   defaultAvatarGenerationEnabled: z.boolean().nullable().optional(),
   defaultImageProfileId: z.string().uuid().nullable().optional(),
+  defaultAlertCharactersOfLanternImages: z.boolean().nullable().optional(),
   backgroundDisplayMode: z.enum(['latest_chat', 'project', 'static', 'theme']).optional(),
 });
 

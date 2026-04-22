@@ -1,0 +1,121 @@
+/**
+ * Writer for Lantern image notifications.
+ *
+ * When an image is produced by one of the three pipelines (story background,
+ * character avatar, or the `generate_image` tool), this helper injects a
+ * synthetic ASSISTANT-role chat message announcing the image and attaching
+ * its file ID. Characters see the announcement in their recent-history
+ * context, and vision-capable providers receive the image as multimodal
+ * content on the next turn.
+ *
+ * The feature is gated by `alertCharactersOfLanternImages` (chat override)
+ * and `defaultAlertCharactersOfLanternImages` (project default), falling back
+ * to OFF when both are null.
+ *
+ * Errors never propagate — image generation must never fail because an
+ * announcement couldn't be written.
+ */
+
+import { randomUUID } from 'node:crypto';
+import { getRepositories } from '@/lib/repositories/factory';
+import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errors';
+import type { MessageEvent } from '@/lib/schemas/types';
+import { isLanternImageAlertEnabled } from './resolver';
+
+export type LanternNotificationKind =
+  | { kind: 'avatar'; characterName: string }
+  | { kind: 'background' }
+  | { kind: 'character-image'; requesterName: string };
+
+interface PostParams {
+  chatId: string;
+  fileId: string;
+  kind: LanternNotificationKind;
+}
+
+function buildContent(kind: LanternNotificationKind): string {
+  switch (kind.kind) {
+    case 'avatar':
+      return `The Lantern has thrown up a fresh likeness of ${kind.characterName}, flickering upon the wall for all assembled to consider. Do have a look — it is attached to this very announcement.`;
+    case 'background':
+      return `The Lantern has projected a new backdrop behind the proceedings. The resulting image hangs just above, attached for your perusal.`;
+    case 'character-image':
+      return `The Lantern, acting upon the instructions of ${kind.requesterName}, has produced the following picture. It is attached here, should anyone care to examine it.`;
+  }
+}
+
+export async function postLanternImageNotification(params: PostParams): Promise<void> {
+  const { chatId, fileId, kind } = params;
+
+  try {
+    const repos = getRepositories();
+
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      logger.debug('[LanternNotification] Chat not found, skipping announcement', {
+        context: 'lantern-notifications',
+        chatId,
+        fileId,
+      });
+      return;
+    }
+
+    const project = chat.projectId
+      ? await repos.projects.findById(chat.projectId)
+      : null;
+
+    if (!isLanternImageAlertEnabled(chat, project)) {
+      logger.debug('[LanternNotification] Alert disabled, skipping', {
+        context: 'lantern-notifications',
+        chatId,
+        fileId,
+        kind: kind.kind,
+      });
+      return;
+    }
+
+    const messageId = randomUUID();
+    const now = new Date().toISOString();
+
+    const message: MessageEvent = {
+      type: 'message',
+      id: messageId,
+      role: 'ASSISTANT',
+      content: buildContent(kind),
+      attachments: [fileId],
+      createdAt: now,
+      participantId: null,
+    };
+
+    await repos.chats.addMessage(chatId, message);
+
+    try {
+      await repos.files.addLink(fileId, messageId);
+    } catch (linkError) {
+      logger.warn('[LanternNotification] Could not link file to message', {
+        context: 'lantern-notifications',
+        chatId,
+        fileId,
+        messageId,
+        error: getErrorMessage(linkError),
+      });
+    }
+
+    logger.info('[LanternNotification] Announcement posted', {
+      context: 'lantern-notifications',
+      chatId,
+      fileId,
+      messageId,
+      kind: kind.kind,
+    });
+  } catch (error) {
+    logger.error('[LanternNotification] Failed to post announcement', {
+      context: 'lantern-notifications',
+      chatId,
+      fileId,
+      kind: kind.kind,
+      error: getErrorMessage(error),
+    }, error as Error);
+  }
+}

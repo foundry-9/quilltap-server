@@ -29,6 +29,7 @@ import {
 } from '@/lib/services/dangerous-content/resolver.service';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
+import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 
 /**
  * Handle a story background generation job
@@ -660,5 +661,11 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     jobId: job.id,
     chatId: payload.chatId,
     fileId,
+  });
+
+  await postLanternImageNotification({
+    chatId: payload.chatId,
+    fileId,
+    kind: { kind: 'background' },
   });
 }

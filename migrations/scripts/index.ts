@@ -187,6 +187,8 @@ import { addAutoHousekeepingSettingsFieldMigration } from './add-auto-housekeepi
 import { addMemoryExtractionLimitsFieldMigration } from './add-memory-extraction-limits-field';
 // Add supportsImageUpload column to connection_profiles (per-profile vision capability)
 import { addProfileSupportsImageUploadFieldMigration } from './add-profile-supports-image-upload-field';
+// Add Lantern image alert columns to projects and chats
+import { addLanternImageAlertFieldsMigration } from './add-lantern-image-alert-fields';
 
 /**
  * All available migrations.
@@ -369,6 +371,8 @@ export const migrations: Migration[] = [
   addMemoryExtractionLimitsFieldMigration,
   // Add supportsImageUpload column to connection_profiles
   addProfileSupportsImageUploadFieldMigration,
+  // Add Lantern image alert columns to projects and chats
+  addLanternImageAlertFieldsMigration,
 ];
 
 export {
@@ -536,5 +540,7 @@ export {
   addMemoryExtractionLimitsFieldMigration,
   // Add supportsImageUpload column to connection_profiles
   addProfileSupportsImageUploadFieldMigration,
+  // Add Lantern image alert columns to projects and chats
+  addLanternImageAlertFieldsMigration,
 };
 

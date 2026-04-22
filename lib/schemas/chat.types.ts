@@ -395,6 +395,9 @@ export const ChatMetadataSchema = z.object({
   /** Image generation profile for this chat (shared by all participants) */
   imageProfileId: UUIDSchema.nullable().optional(),
 
+  /** When an image is generated in this chat, inject an assistant message announcing it (null = inherit from project/global) */
+  alertCharactersOfLanternImages: z.boolean().nullable().optional(),
+
   /** Whether this chat has been classified as dangerous (null = not yet classified) */
   isDangerousChat: z.boolean().nullable().optional(),
   /** Overall danger score for this chat (0-1), null = not yet classified */
@@ -526,6 +529,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Image generation profile for this chat (shared by all participants) */
   imageProfileId: UUIDSchema.nullable().optional(),
+
+  /** When an image is generated in this chat, inject an assistant message announcing it (null = inherit from project/global) */
+  alertCharactersOfLanternImages: z.boolean().nullable().optional(),
 
   /** Whether this chat has been classified as dangerous (null = not yet classified) */
   isDangerousChat: z.boolean().nullable().optional(),

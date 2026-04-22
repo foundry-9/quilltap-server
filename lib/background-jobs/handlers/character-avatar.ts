@@ -31,6 +31,7 @@ import {
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
+import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 
 /**
  * Handle CHARACTER_AVATAR_GENERATION job.
@@ -432,5 +433,11 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     chatId: payload.chatId,
     characterId: payload.characterId,
     fileId,
+  });
+
+  await postLanternImageNotification({
+    chatId: payload.chatId,
+    fileId,
+    kind: { kind: 'avatar', characterName: character.name },
   });
 }

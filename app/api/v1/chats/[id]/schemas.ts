@@ -15,6 +15,7 @@ export const updateChatSchema = z.object({
   documentEditingMode: z.boolean().optional(),
   projectId: z.uuid().nullish(),
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shared by all participants)
+  alertCharactersOfLanternImages: z.boolean().nullish(),
 });
 
 export const updateParticipantSchema = z.object({

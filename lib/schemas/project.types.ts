@@ -51,6 +51,9 @@ export const ProjectSchema = z.object({
   /** Default image generation profile for new chats in this project (null = inherit from character or global) */
   defaultImageProfileId: UUIDSchema.nullable().optional(),
 
+  /** When an image is generated (Lantern background, avatar, or character-invoked), inject an assistant message announcing it to characters (null = inherit from global, default false) */
+  defaultAlertCharactersOfLanternImages: z.boolean().nullable().optional(),
+
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),
 

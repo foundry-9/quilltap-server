@@ -202,6 +202,7 @@ export function ChatModals({
         chatId={chatId}
         imageProfileId={chat?.imageProfileId}
         avatarGenerationEnabled={chat?.avatarGenerationEnabled}
+        alertCharactersOfLanternImages={chat?.alertCharactersOfLanternImages}
         onSuccess={fetchChat}
       />
 
