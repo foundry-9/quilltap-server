@@ -26,6 +26,8 @@ Each interchange is embedded as a searchable chunk through the existing embeddin
 
 When Document Mode is open in the Salon, the Scriptorium also serves as your in-chat writing desk. For Markdown manuscripts you may work in rich text or flip over to raw source, and the formatting controls remain close at hand for either style of composition. Files that are not Markdown — JSON configurations, YAML recipes, plain text correspondence, and so forth — open in a monospaced textarea with no rich-text scaffolding whatsoever, which spares them the indignity of being quietly reformatted by a Markdown serializer. The split view remembers its layout for each chat, and the divider may be adjusted with the mouse or the keyboard — a small courtesy, perhaps, but a civilized one.
 
+Opening or saving a document in the chat no longer costs you your turn. The Librarian — that preternaturally discreet personified feature — now steps in to announce the event on your behalf, noting the document's whereabouts (and, when a character is the one who reached for it via the `doc_open_document` tool, attributing the request to the character in question). The announcements appear as attributed chat messages so everyone present is apprised of the new item on the desk, but the conversational floor remains yours to hold or yield as you see fit.
+
 ## The Tools
 
 The Scriptorium provides three tools that characters can use during conversation. These are not tools you call directly — rather, your AI characters employ them as the situation demands, much like a well-trained butler who simply knows when to bring the tea.

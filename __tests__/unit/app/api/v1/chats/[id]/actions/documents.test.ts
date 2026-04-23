@@ -20,6 +20,11 @@ jest.mock('@/lib/mount-index/embedding-scheduler', () => ({
   enqueueEmbeddingJobsForMountPoint: jest.fn(),
 }))
 
+jest.mock('@/lib/services/librarian-notifications/writer', () => ({
+  postLibrarianOpenAnnouncement: jest.fn().mockResolvedValue(null),
+  postLibrarianSaveAnnouncement: jest.fn().mockResolvedValue(null),
+}))
+
 jest.mock('fs/promises', () => ({
   mkdir: jest.fn(),
   writeFile: jest.fn(),

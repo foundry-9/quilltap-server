@@ -22,6 +22,10 @@ import {
   type DocEditScope,
 } from '@/lib/doc-edit';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import {
+  postLibrarianOpenAnnouncement,
+  postLibrarianSaveAnnouncement,
+} from '@/lib/services/librarian-notifications/writer';
 import path from 'path';
 
 // ============================================================================
@@ -48,6 +52,8 @@ const writeDocumentSchema = z.object({
   mountPoint: z.string().optional(),
   content: z.string(),
   mtime: z.number().optional(),
+  /** Pre-formatted diff content from the client; when present, a Librarian save announcement is posted */
+  diffContent: z.string().optional(),
 });
 
 function getProjectId(chat: unknown): string | undefined {
@@ -274,6 +280,16 @@ export async function handleOpenDocument(
       mode: data.mode,
     });
 
+    const librarianMessage = await postLibrarianOpenAnnouncement({
+      chatId,
+      displayTitle,
+      filePath,
+      scope: effectiveScope,
+      mountPoint: data.mountPoint,
+      isNew: !data.filePath,
+      origin: { kind: 'opened-by-user' },
+    });
+
     return successResponse({
       document: {
         id: doc.id,
@@ -284,6 +300,7 @@ export async function handleOpenDocument(
       },
       content,
       mtime,
+      librarianMessage: librarianMessage ?? null,
     });
   } catch (error) {
     logger.error('Failed to open document', {
@@ -432,11 +449,17 @@ export async function handleWriteDocument(
       filePath: data.filePath,
       scope: data.scope,
       hadExpectedMtime: data.mtime !== undefined,
+      hasDiffContent: Boolean(data.diffContent),
     });
+
+    const librarianMessage = data.diffContent
+      ? await postLibrarianSaveAnnouncement({ chatId, diffContent: data.diffContent })
+      : null;
 
     return successResponse({
       success: true,
       mtime,
+      librarianMessage: librarianMessage ?? null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

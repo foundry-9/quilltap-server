@@ -67,6 +67,7 @@ import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/bl
 import { getRepositories } from '@/lib/database/repositories';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import { postLibrarianOpenAnnouncement } from '@/lib/services/librarian-notifications/writer';
 import {
   databaseDocumentExists,
   databaseFolderExists,
@@ -1780,6 +1781,36 @@ async function handleOpenDocument(
     scope,
     mode,
     isNew,
+  });
+
+  // Post a Librarian announcement attributing the open to the invoking character, so everyone
+  // in the chat sees who opened the document. Errors never propagate — they're swallowed inside
+  // the writer — but if we can't resolve a character name we fall back to user attribution.
+  let characterName: string | null = null;
+  if (context.characterId) {
+    try {
+      const character = await repos.characters.findById(context.characterId);
+      if (character?.name) {
+        characterName = character.name;
+      }
+    } catch (error) {
+      logger.debug('Could not resolve character name for Librarian attribution', {
+        characterId: context.characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  await postLibrarianOpenAnnouncement({
+    chatId: context.chatId,
+    displayTitle,
+    filePath,
+    scope,
+    mountPoint: input.mount_point,
+    isNew,
+    origin: characterName
+      ? { kind: 'opened-by-character', characterName }
+      : { kind: 'opened-by-user' },
   });
 
   return {

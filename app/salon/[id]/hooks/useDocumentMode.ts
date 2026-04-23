@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { formatAutosaveNotification } from '@/lib/doc-edit/unified-diff'
-import type { Chat } from '../types'
+import type { Chat, Message } from '../types'
 import {
   closeDocumentForChat,
   fetchActiveDocumentRecord,
@@ -45,8 +45,8 @@ export interface FocusRequest {
 interface UseDocumentModeParams {
   chatId: string
   chat: Chat | null
-  /** Called after autosave with a diff message to send to the LLM */
-  onAutosaveNotify?: (message: string) => void
+  /** Called when the server posts a Librarian announcement (document open or save) so the UI can append it to the chat */
+  onLibrarianMessage?: (message: Message) => void
 }
 
 interface UseDocumentModeReturn {
@@ -108,7 +108,7 @@ function getDocumentModeState(
   }
 }
 
-export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentModeParams): UseDocumentModeReturn {
+export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumentModeParams): UseDocumentModeReturn {
   const [documentMode, setDocumentMode] = useState<DocumentMode>('normal')
   const [activeDocument, setActiveDocument] = useState<ActiveDocument | null>(null)
   const [dividerPosition, setDividerPositionState] = useState(45)
@@ -125,7 +125,7 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
   const contentRef = useRef<string>('')
   // Tracks the last-saved content so we can distinguish real edits from Lexical re-sync
   const savedContentRef = useRef<string>('')
-  const onAutosaveNotifyRef = useRef(onAutosaveNotify)
+  const onLibrarianMessageRef = useRef(onLibrarianMessage)
   // Mirrors isLLMEditing so memoized callbacks can read the latest value without resubscribing
   const isLLMEditingRef = useRef(false)
   // When true, the next handleContentChange is treated as Lexical's post-remount
@@ -190,8 +190,8 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
   }, [chatId])
 
   useEffect(() => {
-    onAutosaveNotifyRef.current = onAutosaveNotify
-  }, [onAutosaveNotify])
+    onLibrarianMessageRef.current = onLibrarianMessage
+  }, [onLibrarianMessage])
 
   // Load the active document for this chat from the API
   const loadActiveDocument = useCallback(async () => {
@@ -249,12 +249,25 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
 
     setIsSaving(true)
     try {
+      // Generate the diff client-side so the server can post a single Librarian save announcement
+      // with the human-readable diff in the same round-trip.
+      const oldContentForDiff = savedContentRef.current
+      const newContentForDiff = contentRef.current
+      const diffContent = oldContentForDiff !== newContentForDiff
+        ? formatAutosaveNotification(
+            oldContentForDiff,
+            newContentForDiff,
+            activeDocument.displayTitle || activeDocument.filePath,
+          ) || undefined
+        : undefined
+
       const res = await requestDocumentWrite(chatId, {
         filePath: activeDocument.filePath,
         scope: activeDocument.scope,
         mountPoint: activeDocument.mountPoint,
         content: contentRef.current,
         mtime: activeDocument.mtime,
+        diffContent,
       })
 
       if (res.status === 409) {
@@ -296,22 +309,14 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
       }
 
       const data = await res.json()
-      const oldContent = savedContentRef.current
       const newContent = contentRef.current
       savedContentRef.current = newContent
       setIsDirty(false)
       setActiveDocument(prev => prev ? { ...prev, mtime: data.mtime } : null)
 
-      const notifyAutosave = onAutosaveNotifyRef.current
-      if (notifyAutosave && oldContent !== newContent && activeDocument) {
-        const message = formatAutosaveNotification(
-          oldContent,
-          newContent,
-          activeDocument.displayTitle || activeDocument.filePath,
-        )
-        if (message) {
-          notifyAutosave(message)
-        }
+      const notifyLibrarian = onLibrarianMessageRef.current
+      if (notifyLibrarian && data.librarianMessage) {
+        notifyLibrarian(data.librarianMessage as Message)
       }
     } catch (error) {
       console.error('[DocumentMode] Failed to save document', error)
@@ -394,6 +399,11 @@ export function useDocumentMode({ chatId, chat, onAutosaveNotify }: UseDocumentM
 
       applyDocumentState(doc)
       setDocumentMode(targetMode)
+
+      const notifyLibrarian = onLibrarianMessageRef.current
+      if (notifyLibrarian && data.librarianMessage) {
+        notifyLibrarian(data.librarianMessage as Message)
+      }
 
       return doc
     } catch (error) {

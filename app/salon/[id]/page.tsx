@@ -246,11 +246,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const modals = useModalState()
 
   // --- Document Mode hook (Scriptorium Phase 3.5) ---
-  const sendProgrammaticMessageRef = useRef<((msg: string) => void) | null>(null)
+  // The Librarian announces document opens and saves as ASSISTANT-role system messages, so the
+  // user never loses their turn. The hook hands us the server-persisted message; we just append.
+  const appendLibrarianMessage = useCallback((message: Message) => {
+    setMessages(prev => {
+      if (prev.some(m => m.id === message.id)) return prev
+      return [...prev, message]
+    })
+  }, [setMessages])
   const documentModeHook = useDocumentMode({
     chatId: id,
     chat,
-    onAutosaveNotify: (msg) => sendProgrammaticMessageRef.current?.(msg),
+    onLibrarianMessage: appendLibrarianMessage,
   })
   const [showDocumentPicker, setShowDocumentPicker] = useState(false)
 
@@ -960,6 +967,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (message.systemSender === 'aurora') {
       return { name: 'Aurora', title: null, avatarUrl: '/images/avatars/aurora-avatar.webp', defaultImage: null }
     }
+    if (message.systemSender === 'librarian') {
+      return { name: 'The Librarian', title: null, avatarUrl: '/images/avatars/librarian-avatar.webp', defaultImage: null }
+    }
     if (message.participantId) {
       const participant = participantsWithImpersonation.getParticipantById(message.participantId)
       if (participant) {
@@ -996,45 +1006,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [messages, modals])
 
-  // Send a programmatic message (used for Document Mode notifications)
-  // Passes the text directly to sendMessage without touching the composer input state
-  const sendProgrammaticMessage = useCallback((messageText: string) => {
-    const syntheticEvent = { preventDefault: () => {} } as React.FormEvent
-    const noop = () => {}
-    sseStreaming.sendMessage(
-      syntheticEvent,
-      messageText,
-      noop,          // don't clear — composer input was never set
-      [],
-      [],
-      setPendingToolResults,
-      noop,          // don't clear draft — this isn't a draft
-      chatControls.userStoppedStreamRef,
-    )
-  }, [sseStreaming, setPendingToolResults, chatControls.userStoppedStreamRef])
-
-  // Wire up the ref so the document mode hook can send messages
-  sendProgrammaticMessageRef.current = sendProgrammaticMessage
-
-  // Handle document open — opens the document and sends a notification message to the LLM
+  // Handle document open — opens the document; the server posts a Librarian announcement which
+  // the hook surfaces via onLibrarianMessage, so the user never loses their turn.
   const handleOpenDocument = useCallback(async (params: Parameters<typeof documentModeHook.openDocument>[0]) => {
-    const doc = await documentModeHook.openDocument(params)
-    if (!doc) return
-
-    // Build a concise notification message for the LLM
-    const scopeLabel = doc.scope === 'document_store' && doc.mountPoint
-      ? `document store "${doc.mountPoint}"`
-      : doc.scope === 'project'
-      ? 'the project library'
-      : 'the general library'
-
-    const isNew = !params.filePath
-    const message = isNew
-      ? `I've opened a new blank document "${doc.displayTitle}" for us to work on together. You can use doc_read_file and the other doc_* editing tools to read and edit this document (path: "${doc.filePath}", scope: "${doc.scope}"${doc.mountPoint ? `, mount_point: "${doc.mountPoint}"` : ''}).`
-      : `I've opened "${doc.displayTitle}" from ${scopeLabel} for us to work on together. You can use doc_read_file to read it and the other doc_* editing tools to collaborate on it (path: "${doc.filePath}", scope: "${doc.scope}"${doc.mountPoint ? `, mount_point: "${doc.mountPoint}"` : ''}).`
-
-    sendProgrammaticMessage(message)
-  }, [documentModeHook, sendProgrammaticMessage])
+    await documentModeHook.openDocument(params)
+  }, [documentModeHook])
 
   const handleReattributed = useCallback(async () => {
     const messageId = modals.reattributeDialogState?.messageId

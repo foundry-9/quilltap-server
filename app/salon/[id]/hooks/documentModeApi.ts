@@ -1,5 +1,6 @@
 'use client'
 
+import type { Message } from '../types'
 import type { ActiveDocument, DocumentMode } from './useDocumentMode'
 
 type DocumentScope = ActiveDocument['scope']
@@ -25,6 +26,8 @@ interface OpenDocumentResponse {
   document: ActiveDocumentRecord
   content?: string
   mtime?: number
+  /** Librarian announcement message posted alongside the open (null if chat not found) */
+  librarianMessage?: Message | null
 }
 
 interface ChatStateResponse {
@@ -140,6 +143,8 @@ export async function requestDocumentWrite(
     mountPoint?: string | null
     content: string
     mtime?: number
+    /** Optional pre-formatted diff — when provided, the server posts a Librarian save announcement */
+    diffContent?: string
   },
 ): Promise<Response> {
   return fetch(`/api/v1/chats/${chatId}?action=write-document`, {
