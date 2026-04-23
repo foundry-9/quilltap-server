@@ -191,6 +191,8 @@ import { addProfileSupportsImageUploadFieldMigration } from './add-profile-suppo
 import { addLanternImageAlertFieldsMigration } from './add-lantern-image-alert-fields';
 // Convert project file storage into per-project Scriptorium document stores
 import { convertProjectFilesToDocumentStoresMigration } from './convert-project-files-to-document-stores';
+// Add systemSender column to chat_messages for personified-feature announcements
+import { addSystemSenderFieldMigration } from './add-system-sender-field';
 
 /**
  * All available migrations.
@@ -377,6 +379,8 @@ export const migrations: Migration[] = [
   addLanternImageAlertFieldsMigration,
   // Convert project file storage into per-project Scriptorium document stores
   convertProjectFilesToDocumentStoresMigration,
+  // Add systemSender column to chat_messages
+  addSystemSenderFieldMigration,
 ];
 
 export {
@@ -548,5 +552,7 @@ export {
   addLanternImageAlertFieldsMigration,
   // Convert project file storage into per-project Scriptorium document stores
   convertProjectFilesToDocumentStoresMigration,
+  // Add systemSender column to chat_messages
+  addSystemSenderFieldMigration,
 };
 

@@ -149,6 +149,16 @@ This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", a
 
 Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes (`/foundry/*`) redirect to the appropriate `/settings` tab.
 
+### Personified-feature avatars
+
+When a personified feature (the Lantern, the Concierge, Prospero, Aurora, Pascal, the Librarian, the Host, etc.) needs to "speak up" in a chat — usually via a synthetic message authored by the system in lieu of a participant — its avatar lives under `public/images/avatars/` as `<feature>-avatar.webp`. The chat UI references these as `/images/avatars/<feature>-avatar.webp` (see `getMessageAvatar` in `app/salon/[id]/page.tsx` for the Lantern case, keyed off `systemSender` on the message).
+
+Rules for adding or updating these assets:
+
+- **Always WebP.** Convert source PNGs with `cwebp -q 82 -m 6 -mt <in>.png -o <out>.webp` (or better) and delete the PNG after verifying the WebP. Don't check multi-MB PNG originals into the repo — these are bundled with the app and every byte ships.
+- **Filename pattern:** `<feature>-avatar.webp`, all lowercase, hyphen-separated. The feature name should match how the feature is referred to elsewhere (e.g. `lantern-avatar.webp`, not `the-lantern-avatar.webp`).
+- **Pair new avatars with new `systemSender` enum values.** `MessageEventSchema` in `lib/schemas/chat.types.ts` and the matching SQLite column on `chat_messages` both list the allowed senders. Adding `'concierge'` or `'prospero'` means updating the Zod enum in both places, adding a branch to `getMessageAvatar`, and including the new value in `public/schemas/qtap-export.schema.json`.
+
 ## Claude-specific instructions
 
 - If you have access to Opus and agents, then plan work in Opus for a change of any significant size and delegate it to agents running Haiku with specific instructions. If you can't use Opus then use Sonnet to plan. Feel free to aggressively agentize the work. Don't use git stash or worktrees with agents; you have a tendency to make a mess when you do that.

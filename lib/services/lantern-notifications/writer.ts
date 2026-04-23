@@ -1,5 +1,5 @@
 /**
- * Writer for Lantern image notifications.
+ * Writer for image-pipeline chat notifications.
  *
  * When an image is produced by one of the three pipelines (story background,
  * character avatar, or the `generate_image` tool), this helper injects a
@@ -7,6 +7,11 @@
  * its file ID. Characters see the announcement in their recent-history
  * context, and vision-capable providers receive the image as multimodal
  * content on the next turn.
+ *
+ * Attribution by kind:
+ *   - `background`      → The Lantern (atmospheric backdrops)
+ *   - `avatar`          → Aurora (character model, portrait keeper)
+ *   - `character-image` → The Lantern (ad-hoc image on request)
  *
  * The feature is gated by `alertCharactersOfLanternImages` (chat override)
  * and `defaultAlertCharactersOfLanternImages` (project default), falling back
@@ -37,12 +42,16 @@ interface PostParams {
 function buildContent(kind: LanternNotificationKind): string {
   switch (kind.kind) {
     case 'avatar':
-      return `The Lantern has thrown up a fresh likeness of ${kind.characterName}, flickering upon the wall for all assembled to consider. Do have a look — it is attached to this very announcement.`;
+      return `Aurora has refreshed the portrait filed under ${kind.characterName}'s name, the previous likeness now retired with due ceremony. The new one is attached here, should anyone care to take a fresh look.`;
     case 'background':
       return `The Lantern has projected a new backdrop behind the proceedings. The resulting image hangs just above, attached for your perusal.`;
     case 'character-image':
       return `The Lantern, acting upon the instructions of ${kind.requesterName}, has produced the following picture. It is attached here, should anyone care to examine it.`;
   }
+}
+
+function senderForKind(kind: LanternNotificationKind): 'lantern' | 'aurora' {
+  return kind.kind === 'avatar' ? 'aurora' : 'lantern';
 }
 
 export async function postLanternImageNotification(params: PostParams): Promise<void> {
@@ -86,6 +95,7 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       attachments: [fileId],
       createdAt: now,
       participantId: null,
+      systemSender: senderForKind(kind),
     };
 
     await repos.chats.addMessage(chatId, message);

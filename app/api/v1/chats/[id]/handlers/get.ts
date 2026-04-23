@@ -269,6 +269,7 @@ export async function handleGet(
             modelName: event.modelName || null,
             targetParticipantIds: event.targetParticipantIds || null,
             isSilentMessage: event.isSilentMessage || null,
+            systemSender: event.systemSender || null,
           };
         })
     ).then((results) => results.filter(Boolean));

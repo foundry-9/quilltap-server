@@ -449,7 +449,8 @@ CREATE TABLE "chat_messages" (
   "renderedHtml" TEXT DEFAULT NULL,
   "dangerFlags" TEXT DEFAULT NULL,
   "targetParticipantIds" TEXT DEFAULT NULL,
-  "isSilentMessage" INTEGER DEFAULT NULL
+  "isSilentMessage" INTEGER DEFAULT NULL,
+  "systemSender" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");

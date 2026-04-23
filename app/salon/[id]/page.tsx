@@ -71,6 +71,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const { fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount } = chatDataHook
 
   // --- Story background ---
+  // When the backdrop URL changes (active regeneration poll or passive SWR revalidation), refresh
+  // the chat so any Lantern announcement posted alongside the new backdrop lands in the UI without
+  // requiring the user to leave and return.
   const {
     backgroundUrl: storyBackgroundUrl,
     backgroundFileId: storyBackgroundFileId,
@@ -79,7 +82,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   } = useStoryBackground(
     id,
     chat?.projectId,
-    chatSettings?.storyBackgroundsSettings?.enabled ?? false
+    chatSettings?.storyBackgroundsSettings?.enabled ?? false,
+    () => { void fetchChat() }
   )
 
   // --- UI state that stays in page ---
@@ -950,6 +954,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [respondingParticipantId, chat?.participants, participantsWithImpersonation])
 
   const getMessageAvatar = useCallback((message: Message) => {
+    if (message.systemSender === 'lantern') {
+      return { name: 'The Lantern', title: null, avatarUrl: '/images/avatars/lantern-avatar.webp', defaultImage: null }
+    }
+    if (message.systemSender === 'aurora') {
+      return { name: 'Aurora', title: null, avatarUrl: '/images/avatars/aurora-avatar.webp', defaultImage: null }
+    }
     if (message.participantId) {
       const participant = participantsWithImpersonation.getParticipantById(message.participantId)
       if (participant) {

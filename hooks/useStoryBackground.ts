@@ -18,12 +18,16 @@ interface StoryBackgroundState {
  * @param chatId - The chat ID to get background for
  * @param projectId - Optional project ID (for project-level backgrounds)
  * @param enablePassivePolling - If true, polls every 30s to detect background changes
+ * @param onBackgroundChanged - Optional callback fired when active polling detects a URL change.
+ *                              Used to refresh adjacent state (e.g., re-fetch chat messages so
+ *                              Lantern announcements posted alongside the new backdrop appear).
  * @returns Background URL, file ID, loading state, and polling controls
  */
 export function useStoryBackground(
   chatId: string | null,
   projectId?: string | null,
-  enablePassivePolling = false
+  enablePassivePolling = false,
+  onBackgroundChanged?: () => void
 ): StoryBackgroundState & {
   refetch: () => Promise<void>
   startPolling: () => void
@@ -33,6 +37,11 @@ export function useStoryBackground(
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const initialUrlRef = useRef<string | null>(null)
+  const onBackgroundChangedRef = useRef(onBackgroundChanged)
+
+  useEffect(() => {
+    onBackgroundChangedRef.current = onBackgroundChanged
+  }, [onBackgroundChanged])
 
   // Determine which background endpoint to fetch
   let backgroundUrl_toFetch: string | null = null
@@ -98,6 +107,7 @@ export function useStoryBackground(
 
       // Stop if we detect a change (new URL or URL appeared where there was none)
       if (newUrl !== initialUrlRef.current) {
+        onBackgroundChangedRef.current?.()
         stopPolling()
         return
       }
@@ -108,6 +118,20 @@ export function useStoryBackground(
       }
     }, 5000)
   }, [backgroundUrl_derived, mutateBackground, stopPolling])
+
+  // Passive-polling path: SWR revalidates every 30s when enablePassivePolling is true.
+  // If the background URL changes between revalidations (because a background job wrote one),
+  // notify the caller so it can refresh sibling state (e.g., chat messages).
+  const previousUrlRef = useRef<string | null | undefined>(undefined)
+  useEffect(() => {
+    const previous = previousUrlRef.current
+    previousUrlRef.current = backgroundUrl_derived
+    // Skip the initial load — only fire on transitions from a known value.
+    if (previous === undefined) return
+    if (previous !== backgroundUrl_derived) {
+      onBackgroundChangedRef.current?.()
+    }
+  }, [backgroundUrl_derived])
 
   // Cleanup on unmount
   useEffect(() => {
