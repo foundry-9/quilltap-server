@@ -8,6 +8,11 @@
  * The [...path] catch-all carries the blob's relativePath within the mount
  * point (e.g. "images/avatar.webp"). This keeps Markdown references like
  * `![alt](images/avatar.webp)` resolvable against `/api/v1/mount-points/:id/blobs/`.
+ *
+ * Text documents (Markdown/txt/JSON/JSONL) live in `doc_mount_documents`, not
+ * `doc_mount_blobs`, so GET and DELETE fall back to the documents table when
+ * no blob matches — callers hit a single URL scheme regardless of where the
+ * bytes actually live.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -15,6 +20,8 @@ import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/auth';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
+import { deleteDatabaseDocument } from '@/lib/mount-index/database-store';
+import type { DocMountDocument } from '@/lib/schemas/mount-index.types';
 
 type Params = { id: string; path: string[] };
 
@@ -22,28 +29,55 @@ function joinPath(parts: string[]): string {
   return parts.map(p => decodeURIComponent(p)).join('/');
 }
 
+function mimeForDocument(doc: DocMountDocument): string {
+  switch (doc.fileType) {
+    case 'markdown': return 'text/markdown; charset=utf-8';
+    case 'txt': return 'text/plain; charset=utf-8';
+    case 'json': return 'application/json; charset=utf-8';
+    case 'jsonl': return 'application/jsonl; charset=utf-8';
+  }
+}
+
 export const GET = createAuthenticatedParamsHandler<Params>(
   async (_req: NextRequest, { repos }: RequestContext, { id, path }) => {
     try {
       const relativePath = joinPath(path);
       const meta = await repos.docMountBlobs.findByMountPointAndPath(id, relativePath);
-      if (!meta) return notFound('Blob');
-      const data = await repos.docMountBlobs.readData(meta.id);
-      if (!data) return notFound('Blob data');
+      if (meta) {
+        const data = await repos.docMountBlobs.readData(meta.id);
+        if (!data) return notFound('Blob data');
 
-      // Copy into a fresh Uint8Array — Next.js' NextResponse body expects a
-      // BlobPart / Uint8Array, and a Buffer's backing pool may otherwise
-      // bleed unrelated bytes.
-      const body = new Uint8Array(data.length);
-      data.copy(body);
+        // Copy into a fresh Uint8Array — Next.js' NextResponse body expects a
+        // BlobPart / Uint8Array, and a Buffer's backing pool may otherwise
+        // bleed unrelated bytes.
+        const body = new Uint8Array(data.length);
+        data.copy(body);
+
+        return new NextResponse(body, {
+          status: 200,
+          headers: {
+            'Content-Type': meta.storedMimeType,
+            'Content-Length': String(meta.sizeBytes),
+            'Cache-Control': 'private, max-age=3600',
+            'X-Blob-Sha256': meta.sha256,
+          },
+        });
+      }
+
+      const doc = await repos.docMountDocuments.findByMountPointAndPath(id, relativePath);
+      if (!doc) return notFound('Blob');
+
+      const bytes = Buffer.from(doc.content, 'utf-8');
+      const body = new Uint8Array(bytes.length);
+      bytes.copy(body);
 
       return new NextResponse(body, {
         status: 200,
         headers: {
-          'Content-Type': meta.storedMimeType,
-          'Content-Length': String(meta.sizeBytes),
+          'Content-Type': mimeForDocument(doc),
+          'Content-Length': String(bytes.length),
           'Cache-Control': 'private, max-age=3600',
-          'X-Blob-Sha256': meta.sha256,
+          'X-Blob-Sha256': doc.contentSha256,
         },
       });
     } catch (error) {
@@ -62,8 +96,21 @@ export const DELETE = createAuthenticatedParamsHandler<Params>(
     try {
       const relativePath = joinPath(path);
       const deleted = await repos.docMountBlobs.deleteByMountPointAndPath(id, relativePath);
-      if (!deleted) return notFound('Blob');
-      logger.info('[Mount Points v1] Deleted blob', {
+      if (deleted) {
+        logger.info('[Mount Points v1] Deleted blob', {
+          mountPointId: id,
+          relativePath,
+          userId: user.id,
+        });
+        return successResponse({ success: true });
+      }
+
+      // Text documents live in doc_mount_documents with a matching
+      // doc_mount_files index row and chunks; deleteDatabaseDocument cleans
+      // all three up and emits the store event.
+      const docDeleted = await deleteDatabaseDocument(id, relativePath);
+      if (!docDeleted) return notFound('Blob');
+      logger.info('[Mount Points v1] Deleted document', {
         mountPointId: id,
         relativePath,
         userId: user.id,
