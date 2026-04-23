@@ -5,6 +5,7 @@
 
 import {
   buildConversationMessages,
+  collectLanternImageFileIdsForCharacter,
 } from '@/lib/services/chat-message/context-builder.service'
 
 jest.mock('@/lib/logging/create-logger', () => ({
@@ -604,6 +605,125 @@ describe('context-builder.service', () => {
       expect(result.messagesWithParticipants).toHaveLength(2)
       expect(result.messagesWithParticipants![0].id).toBe('msg-1:special_id-123')
       expect(result.messagesWithParticipants![1].id).toBe('msg-2/alternative.id')
+    })
+  })
+
+  describe('collectLanternImageFileIdsForCharacter', () => {
+    const LOOKBACK = 6
+
+    it('returns an empty array when no ASSISTANT messages carry attachments', () => {
+      const msgs = [
+        { type: 'message', role: 'USER', content: 'hi' },
+        { type: 'message', role: 'ASSISTANT', content: 'hello' },
+      ]
+      expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', true, null, LOOKBACK)).toEqual([])
+    })
+
+    it('collects a single Lantern image posted after the character last responded (multi-char)', () => {
+      const msgs = [
+        { type: 'message', role: 'USER', content: 'hi', participantId: 'user' },
+        { type: 'message', role: 'ASSISTANT', content: 'A1', participantId: 'char-1' },
+        { type: 'message', role: 'USER', content: 'look at this' },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern bg', participantId: null, attachments: ['file-new'] },
+      ]
+      expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', true, null, LOOKBACK)).toEqual(['file-new'])
+    })
+
+    it('does not re-deliver an image the character has already seen (multi-char)', () => {
+      const msgs = [
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern bg', participantId: null, attachments: ['file-old'] },
+        { type: 'message', role: 'ASSISTANT', content: 'A1', participantId: 'char-1' },
+        { type: 'message', role: 'USER', content: 'again?' },
+      ]
+      expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', true, null, LOOKBACK)).toEqual([])
+    })
+
+    it('collects images from other characters turns but stops at own turn (multi-char)', () => {
+      const msgs = [
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-1', participantId: null, attachments: ['file-1'] },
+        { type: 'message', role: 'ASSISTANT', content: 'A1', participantId: 'char-1' },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-2', participantId: null, attachments: ['file-2'] },
+        { type: 'message', role: 'ASSISTANT', content: 'B1', participantId: 'char-2' },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-3', participantId: null, attachments: ['file-3'] },
+      ]
+      // For char-1: stop at their own prior turn → only file-2 and file-3.
+      expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', true, null, LOOKBACK)).toEqual(['file-2', 'file-3'])
+    })
+
+    it('collects multiple Lantern images in chronological order', () => {
+      const msgs = [
+        { type: 'message', role: 'ASSISTANT', content: 'A1', participantId: 'char-1' },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-a', participantId: null, attachments: ['file-a'] },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-b', participantId: null, attachments: ['file-b'] },
+      ]
+      expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', true, null, LOOKBACK)).toEqual(['file-a', 'file-b'])
+    })
+
+    it('dedupes a file ID that appears on more than one ASSISTANT message', () => {
+      const msgs = [
+        { type: 'message', role: 'ASSISTANT', content: 'A1', participantId: 'char-1' },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-a', participantId: null, attachments: ['file-x'] },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-b', participantId: null, attachments: ['file-x'] },
+      ]
+      expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', true, null, LOOKBACK)).toEqual(['file-x'])
+    })
+
+    it('caps the walk at the lookback value', () => {
+      const msgs: Array<{ type: string; role: string; content: string; participantId: string | null; attachments?: string[] }> = []
+      for (let i = 0; i < 10; i++) {
+        msgs.push({
+          type: 'message',
+          role: 'ASSISTANT',
+          content: `Lantern-${i}`,
+          participantId: null,
+          attachments: [`file-${i}`],
+        })
+      }
+      const result = collectLanternImageFileIdsForCharacter(msgs, 'char-1', true, null, LOOKBACK)
+      // With lookback=6 we see the 6 most recent; char-1 has no prior turn so walk runs the cap.
+      expect(result).toHaveLength(6)
+      expect(result).toEqual(['file-4', 'file-5', 'file-6', 'file-7', 'file-8', 'file-9'])
+    })
+
+    it('applies the historyCutoff to a joining character without history access', () => {
+      const msgs = [
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-old', participantId: null, attachments: ['file-pre-join'], createdAt: '2024-01-01T00:00:00Z' },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-new', participantId: null, attachments: ['file-post-join'], createdAt: '2024-01-01T01:00:00Z' },
+      ]
+      const cutoff = '2024-01-01T00:30:00Z'
+      // char-1 just joined at cutoff, no prior turn; only post-join image should be included.
+      expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', true, cutoff, LOOKBACK)).toEqual(['file-post-join'])
+    })
+
+    it('single-character chat: stops at an ASSISTANT message with no attachments', () => {
+      // In single-char chats, character responses don't set participantId, so
+      // the collector relies on the attachments signal to find the character's
+      // own prior turn.
+      const msgs = [
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-before', attachments: ['file-before'] },
+        { type: 'message', role: 'ASSISTANT', content: 'character response (no atts)' },
+        { type: 'message', role: 'USER', content: 'then what?' },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-after', attachments: ['file-after'] },
+      ]
+      expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', false, null, LOOKBACK)).toEqual(['file-after'])
+    })
+
+    it('single-character chat: includes all Lantern images if the character has never responded', () => {
+      const msgs = [
+        { type: 'message', role: 'USER', content: 'first message' },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-1', attachments: ['file-1'] },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern-2', attachments: ['file-2'] },
+      ]
+      expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', false, null, LOOKBACK)).toEqual(['file-1', 'file-2'])
+    })
+
+    it('ignores non-message entries and non-ASSISTANT messages', () => {
+      const msgs = [
+        { type: 'event', role: 'ASSISTANT', attachments: ['should-skip'] },
+        { type: 'message', role: 'USER', content: 'q', attachments: ['should-also-skip'] },
+        { type: 'message', role: 'ASSISTANT', content: 'Lantern', participantId: null, attachments: ['file-kept'] },
+      ]
+      expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', true, null, LOOKBACK)).toEqual(['file-kept'])
     })
   })
 })

@@ -188,13 +188,31 @@ export async function loadAndProcessFiles(
 }
 
 /**
- * Walk the tail of the existingMessages array, picking out ASSISTANT messages
- * that carry image file IDs on their `attachments` array, up to a lookback
- * window. Returns the file IDs in chronological order (oldest first),
- * deduped, so they can be loaded as vision content for the next LLM turn.
+ * Walk the tail of existingMessages and collect Lantern-image file IDs that
+ * the given character has not yet seen, so they can be loaded as vision
+ * content on the character's next LLM turn. A Lantern image is any image
+ * file ID attached to an ASSISTANT-role message (story background, avatar
+ * regeneration, or a `generate_image` tool invocation — all three pipelines
+ * write the announcement through postLanternImageNotification).
+ *
+ * The walk stops at the character's own most recent ASSISTANT message —
+ * anything older than that was already surfaced on a previous turn and
+ * must not be re-delivered. A `historyCutoff` (ISO timestamp) can be
+ * supplied for a joining character with no history access; images older
+ * than the cutoff are skipped even on the character's first turn.
+ *
+ * `lookback` caps how many ASSISTANT messages we scan before giving up
+ * (safety bound for very long chats).
+ *
+ * Returns file IDs in chronological order (oldest first), deduped.
+ *
+ * Exported for unit testing.
  */
-function collectRecentAssistantImageFileIds(
-  existingMessages: Array<{ type: string; role?: string; attachments?: string[] | null }>,
+export function collectLanternImageFileIdsForCharacter(
+  existingMessages: Array<{ type: string; role?: string; attachments?: string[] | null; participantId?: string | null; createdAt?: string }>,
+  characterParticipantId: string,
+  isMultiCharacter: boolean,
+  historyCutoff: string | null,
   lookback: number,
 ): string[] {
   const collected: string[] = []
@@ -203,10 +221,35 @@ function collectRecentAssistantImageFileIds(
   for (let i = existingMessages.length - 1; i >= 0 && scanned < lookback; i--) {
     const msg = existingMessages[i]
     if (msg.type !== 'message' || msg.role !== 'ASSISTANT') continue
-    scanned++
+
     const atts = msg.attachments
-    if (!atts || atts.length === 0) continue
-    for (const fileId of atts) {
+    const hasAttachments = Array.isArray(atts) && atts.length > 0
+
+    // Detect the character's own previous ASSISTANT turn. Anything older than
+    // that was already delivered, so we stop the walk there.
+    //
+    // Multi-character chats set `participantId` on every character response,
+    // while Lantern notifications leave it null — a direct id match is enough.
+    //
+    // Single-character chats don't populate participantId on character
+    // responses, so we fall back to the structural signal: Lantern
+    // notifications always carry image attachments, character responses
+    // don't. An ASSISTANT message without attachments is therefore the
+    // character's own prior turn.
+    const isOwnPriorResponse = isMultiCharacter
+      ? msg.participantId === characterParticipantId
+      : !hasAttachments
+    if (isOwnPriorResponse) break
+
+    scanned++
+
+    if (!hasAttachments) continue
+
+    // History-access guard: a participant joining mid-chat without history
+    // access must not see images from before they joined.
+    if (historyCutoff && msg.createdAt && msg.createdAt < historyCutoff) continue
+
+    for (const fileId of atts!) {
       if (typeof fileId === 'string' && !seen.has(fileId)) {
         seen.add(fileId)
         collected.push(fileId)
@@ -441,16 +484,30 @@ export async function buildMessageContext(
       )
     : builtContext.messages
 
-  // Additionally surface image attachments from recent ASSISTANT messages
-  // (e.g. Lantern notifications announcing generated images). Without this,
-  // vision-capable providers only see the announcement text but not the
-  // actual image. We piggy-back on the existing attachments-on-last-user-turn
-  // mechanism so non-vision providers still get the text fallback.
+  // Additionally surface image attachments from Lantern notifications
+  // (story background, avatar regeneration, or the generate_image tool).
+  // Without this, vision-capable providers would only see the announcement
+  // text but not the actual image. We piggy-back on the existing
+  // attachments-on-last-user-turn mechanism so non-vision providers still
+  // get the text fallback, and the collector scopes the set to images this
+  // character hasn't seen yet so they aren't re-delivered every turn.
   const ASSISTANT_IMAGE_LOOKBACK = 6
   let mergedAttachmentsToSend: unknown[] = attachmentsToSend
   try {
-    const recentAssistantImageFileIds = collectRecentAssistantImageFileIds(
+    // If this is a joining character without history access and they have
+    // not yet responded, clamp the walk to messages posted after they joined.
+    const hasPriorResponse = existingMessages.some(
+      m => m.type === 'message' && m.role === 'ASSISTANT' && m.participantId === characterParticipant.id
+    )
+    const historyCutoff = (isMultiCharacter && !characterParticipant.hasHistoryAccess && !hasPriorResponse)
+      ? (characterParticipant.createdAt ?? null)
+      : null
+
+    const recentAssistantImageFileIds = collectLanternImageFileIdsForCharacter(
       existingMessages,
+      characterParticipant.id,
+      isMultiCharacter,
+      historyCutoff,
       ASSISTANT_IMAGE_LOOKBACK,
     )
     if (recentAssistantImageFileIds.length > 0) {
