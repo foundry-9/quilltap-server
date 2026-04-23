@@ -158,10 +158,10 @@ describe('SQLite Physical Backup Module', () => {
       expect(mockFs.unlinkSync).not.toHaveBeenCalled();
     });
 
-    it('should keep 1 per week for weeks 1-4', async () => {
+    it('should keep 1 per week for weeks 1-4 (oldest in bucket)', async () => {
       const now = new Date();
       const files = [
-        // Week 1 (7-14 days ago) - 3 backups, should keep only the newest
+        // Week 1 (7-14 days ago) - 3 backups, should keep only the oldest
         formatBackupFilename(new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000)),
         formatBackupFilename(new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000)),
         formatBackupFilename(new Date(now.getTime() - 13 * 24 * 60 * 60 * 1000)),
@@ -171,8 +171,15 @@ describe('SQLite Physical Backup Module', () => {
 
       await physicalBackup.applyRetentionPolicy();
 
-      // Should delete 2 of the 3 (keeping the newest in the week)
+      // Should delete 2 of the 3 (keeping the oldest in the week so it can
+      // age into week-2 on a future retention pass).
       expect(mockFs.unlinkSync).toHaveBeenCalledTimes(2);
+      const deletedPaths = (mockFs.unlinkSync as jest.Mock).mock.calls.map(
+        (call) => path.basename(call[0] as string),
+      );
+      // The 13-day-old backup is the oldest in [7,14), so it must survive.
+      const kept = formatBackupFilename(new Date(now.getTime() - 13 * 24 * 60 * 60 * 1000));
+      expect(deletedPaths).not.toContain(kept);
     });
 
     it('should not throw when backups directory does not exist', async () => {
@@ -226,10 +233,56 @@ describe('SQLite Physical Backup Module', () => {
       expect(mockFs.unlinkSync).not.toHaveBeenCalled();
     });
 
+    it('preserves weekly and month-1 buckets across 40+ days of daily runs (regression for cascade bug)', async () => {
+      // Regression: Phase 2/3 used to iterate newest-first and break on the
+      // first match, so the newest backup in each bucket was kept — and then
+      // immediately replaced (and deleted) the next day when a fresher backup
+      // entered the same bucket. Net effect: nothing ever aged past ~8 days.
+      // With oldest-first iteration, the picked backup survives until it ages
+      // into the next bucket.
+      jest.useFakeTimers();
+      // Noon local time avoids DST/midnight edge cases when stepping by 24h.
+      const startMs = new Date(2026, 0, 1, 12, 0, 0).getTime();
+      const msPerDay = 24 * 60 * 60 * 1000;
+
+      const currentFiles = new Set<string>();
+      (mockFs.readdirSync as jest.Mock).mockImplementation(() => Array.from(currentFiles));
+      (mockFs.unlinkSync as jest.Mock).mockImplementation((filePath: string) => {
+        currentFiles.delete(path.basename(filePath as string));
+      });
+
+      try {
+        for (let day = 0; day < 40; day++) {
+          jest.setSystemTime(startMs + day * msPerDay);
+          currentFiles.add(formatBackupFilename(new Date()));
+          await physicalBackup.applyRetentionPolicy();
+        }
+
+        // After 40 days: 7 daily + 4 weekly + at least 1 month-bucket survivor
+        // (~12). The buggy code left ~8.
+        expect(currentFiles.size).toBeGreaterThanOrEqual(10);
+
+        const now = new Date();
+        const ages = Array.from(currentFiles)
+          .map((f) => physicalBackup.parseBackupFilename(f))
+          .filter((d): d is Date => d !== null)
+          .map((d) => (now.getTime() - d.getTime()) / msPerDay);
+
+        // Each weekly bucket populated:
+        expect(ages.some((a) => a >= 7 && a < 14)).toBe(true);
+        expect(ages.some((a) => a >= 14 && a < 21)).toBe(true);
+        expect(ages.some((a) => a >= 21 && a < 28)).toBe(true);
+        // Something aged ≥ 28 days (week-4 or month-1 bucket):
+        expect(ages.some((a) => a >= 28)).toBe(true);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('should apply retention to LLM logs backups independently', async () => {
       const now = new Date();
       const files = [
-        // 3 LLM logs backups in week 1 (7-14 days) — keep newest, delete 2
+        // 3 LLM logs backups in week 1 (7-14 days) — keep oldest, delete 2
         formatLLMLogsBackupFilename(new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000)),
         formatLLMLogsBackupFilename(new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000)),
         formatLLMLogsBackupFilename(new Date(now.getTime() - 13 * 24 * 60 * 60 * 1000)),
@@ -344,7 +397,7 @@ describe('SQLite Physical Backup Module', () => {
     it('should apply retention to mount index backups independently', async () => {
       const now = new Date();
       const files = [
-        // 3 mount index backups in week 1 (7-14 days) — keep newest, delete 2
+        // 3 mount index backups in week 1 (7-14 days) — keep oldest, delete 2
         formatMountIndexBackupFilename(new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000)),
         formatMountIndexBackupFilename(new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000)),
         formatMountIndexBackupFilename(new Date(now.getTime() - 13 * 24 * 60 * 60 * 1000)),

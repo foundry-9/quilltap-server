@@ -431,7 +431,11 @@ export async function createMountIndexPhysicalBackup(db: DatabaseType): Promise<
  * - 1 per month for months 1-12
  * - 1 per year indefinitely
  *
- * Within each bucket, the most recent backup is kept.
+ * Within each weekly/monthly bucket, the OLDEST backup in range is kept so
+ * that it has the most runway to age into the next bucket on the following
+ * day's retention pass. Picking the newest caused a cascade where every
+ * weekly-bucket backup was replaced (and deleted) the day after it first
+ * entered the bucket, so nothing ever aged past ~8 days.
  */
 export async function applyRetentionPolicy(): Promise<void> {
   const backupsDir = getBackupsDir();
@@ -499,12 +503,14 @@ export async function applyRetentionPolicy(): Promise<void> {
         }
       }
 
-      // Phase 2: Keep 1 per week for weeks 1-4 (days 7-28)
+      // Phase 2: Keep 1 per week for weeks 1-4 (days 7-28).
+      // Iterate oldest-first so the picked backup can age into the next bucket.
       for (let week = 1; week <= 4; week++) {
         const weekStart = 7 * week * msPerDay;
         const weekEnd = 7 * (week + 1) * msPerDay;
 
-        for (const backup of items) {
+        for (let i = items.length - 1; i >= 0; i--) {
+          const backup = items[i];
           const ageMs = now.getTime() - backup.date.getTime();
           if (ageMs >= weekStart && ageMs < weekEnd) {
             keep.add(backup.filename);
@@ -513,12 +519,14 @@ export async function applyRetentionPolicy(): Promise<void> {
         }
       }
 
-      // Phase 3: Keep 1 per month for months 1-12 (approx days 28-365)
+      // Phase 3: Keep 1 per month for months 1-12 (approx days 28-388).
+      // Iterate oldest-first for the same reason as Phase 2.
       for (let month = 1; month <= 12; month++) {
         const monthStart = (28 + (month - 1) * 30) * msPerDay;
         const monthEnd = (28 + month * 30) * msPerDay;
 
-        for (const backup of items) {
+        for (let i = items.length - 1; i >= 0; i--) {
+          const backup = items[i];
           const ageMs = now.getTime() - backup.date.getTime();
           if (ageMs >= monthStart && ageMs < monthEnd) {
             keep.add(backup.filename);
