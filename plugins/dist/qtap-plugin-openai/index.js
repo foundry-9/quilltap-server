@@ -7723,11 +7723,8 @@ var logger2 = createPluginLogger("qtap-plugin-openai");
 var OpenAIImageProvider = class {
   constructor() {
     this.provider = "OPENAI";
-    this.supportedModels = ["gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini", "dall-e-3", "dall-e-2"];
+    this.supportedModels = ["gpt-image-2", "gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini", "dall-e-3", "dall-e-2"];
   }
-  /**
-   * Check if a model is a GPT-Image model (1.5, 1, or 1-mini)
-   */
   isGptImageModel(model) {
     return model.startsWith("gpt-image-");
   }

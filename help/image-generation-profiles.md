@@ -86,7 +86,7 @@ First, obtain an API key from an image generation provider:
 
    **Model Selection:**
    - **Model** — Select which image model to use
-     - DALL-E: dall-e-3, dall-e-2
+     - OpenAI GPT Image: gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini (legacy DALL-E: dall-e-3, dall-e-2)
      - Stable Diffusion: Various model versions
      - Midjourney: Different subscription tiers
    - **Available Models** — Click to see what's available
