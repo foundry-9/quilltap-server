@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import useSWR from 'swr'
 import { FileInfo } from '../../types'
+import { buildMountBlobUrl } from '../../mountBlobUrl'
 import { PreviewType, getPreviewType } from '../types'
 
 const MAX_TEXT_SIZE = 1024 * 1024 // 1MB max for text preview
@@ -52,7 +53,13 @@ export function useFilePreview({
     () => getPreviewType(file.mimeType, file.isPlainText),
     [file.mimeType, file.isPlainText]
   )
-  const fileUrl = useMemo(() => `/api/v1/files/${file.id}`, [file.id])
+  const fileUrl = useMemo(
+    () =>
+      file.mountPointId && file.relativePath
+        ? buildMountBlobUrl(file.mountPointId, file.relativePath)
+        : `/api/v1/files/${file.id}`,
+    [file.id, file.mountPointId, file.relativePath]
+  )
 
   const currentIndex = useMemo(
     () => files.findIndex(f => f.id === file.id),
