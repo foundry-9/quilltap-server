@@ -10,6 +10,8 @@
 import { logger } from '@/lib/logger'
 import { getRepositories } from '@/lib/repositories/factory'
 import { extractFileContent } from '@/lib/services/file-content-extractor'
+import { pickPrimaryProjectStore } from '@/lib/mount-index/project-store-naming'
+import type { DocMountPoint } from '@/lib/schemas/mount-index.types'
 import {
   ProjectInfoToolInput,
   ProjectInfoToolOutput,
@@ -114,24 +116,26 @@ async function resolveProjectDocumentStore(
     const links = await repos.projectDocMountLinks.findByProjectId(projectId)
     if (!links.length) return null
 
+    const mountPoints: DocMountPoint[] = []
     for (const link of links) {
       const mp = await repos.docMountPoints.findById(link.mountPointId)
-      if (!mp) continue
-      if (mp.mountType !== 'database') continue
-
-      const [files, blobs] = await Promise.all([
-        repos.docMountFiles.findByMountPointId(mp.id),
-        repos.docMountBlobs.listByMountPoint(mp.id),
-      ])
-      return {
-        mountPointId: mp.id,
-        name: mp.name,
-        storeType: mp.storeType,
-        fileCount: files.length,
-        blobCount: blobs.length,
-      }
+      if (mp) mountPoints.push(mp)
     }
-    return null
+
+    const chosen = pickPrimaryProjectStore(mountPoints)
+    if (!chosen) return null
+
+    const [files, blobs] = await Promise.all([
+      repos.docMountFiles.findByMountPointId(chosen.id),
+      repos.docMountBlobs.listByMountPoint(chosen.id),
+    ])
+    return {
+      mountPointId: chosen.id,
+      name: chosen.name,
+      storeType: chosen.storeType,
+      fileCount: files.length,
+      blobCount: blobs.length,
+    }
   } catch {
     return null
   }

@@ -49,6 +49,7 @@ import {
 } from '../lib/database-utils';
 import { getFilesDir, getMountIndexDatabasePath } from '../../lib/paths';
 import { convertBufferToPlainText } from '../../lib/mount-index/converters';
+import { PROJECT_OWN_STORE_NAME_PREFIX } from '../../lib/mount-index/project-store-naming';
 
 // ============================================================================
 // DDL — matches the Zod schemas in lib/schemas/mount-index.types.ts and the
@@ -650,7 +651,7 @@ export const convertProjectFilesToDocumentStoresMigration: Migration = {
         }
 
         const mountPointId = randomUUID();
-        const desiredName = `Project Files: ${(project.name || 'Untitled').trim()}`.slice(0, 200);
+        const desiredName = `${PROJECT_OWN_STORE_NAME_PREFIX}${(project.name || 'Untitled').trim()}`.slice(0, 200);
         const mountPointName = uniqueMountPointName(mountDb, desiredName);
         const now = nowIso();
 

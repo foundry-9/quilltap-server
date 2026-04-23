@@ -26,6 +26,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { emitDocumentWritten } from '@/lib/mount-index/db-store-events';
+import { pickPrimaryProjectStore } from '@/lib/mount-index/project-store-naming';
+import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
 
 const STORAGE_KEY_PREFIX = 'mount-blob:';
 
@@ -49,14 +51,15 @@ export async function getProjectDocumentStore(
     const links = await repos.projectDocMountLinks.findByProjectId(projectId);
     if (!links.length) return null;
 
+    const mountPoints: DocMountPoint[] = [];
     for (const link of links) {
       const mp = await repos.docMountPoints.findById(link.mountPointId);
-      if (!mp) continue;
-      if (mp.mountType !== 'database') continue;
-      if (mp.storeType !== 'documents') continue;
-      return { mountPointId: mp.id, mountPointName: mp.name };
+      if (mp) mountPoints.push(mp);
     }
-    return null;
+
+    const chosen = pickPrimaryProjectStore(mountPoints);
+    if (!chosen) return null;
+    return { mountPointId: chosen.id, mountPointName: chosen.name };
   } catch (error) {
     logger.debug('[ProjectStoreBridge] Failed to resolve project document store', {
       projectId,

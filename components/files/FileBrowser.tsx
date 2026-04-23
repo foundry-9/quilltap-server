@@ -31,6 +31,7 @@ import { useProjectFileUpload } from './useProjectFileUpload'
 import { useMountPointBlobUpload } from './useMountPointBlobUpload'
 import { buildMountBlobUrl, encodeMountBlobPath } from './mountBlobUrl'
 import { FileInfo, FolderInfo, SortState, sortFiles } from './types'
+import { pickPrimaryProjectStore } from '@/lib/mount-index/project-store-naming'
 
 // Re-export FileInfo for backwards compatibility
 export type { FileInfo }
@@ -242,7 +243,13 @@ export default function FileBrowser({
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         const list = (data.mountPoints || []) as FileBrowserMountPoint[]
-        const first = list.find(mp => mp.mountType === 'database' && mp.storeType !== 'character') ?? null
+        // Prefer the project's auto-created "Project Files: ..." store over
+        // any manually-linked stores so Browse All Files lands where uploads
+        // do. pickPrimaryProjectStore falls back to the first eligible store
+        // if no name-match is found (e.g. projects that were only ever linked
+        // by hand, or whose auto-created store was renamed).
+        const normalised = list.map(mp => ({ ...mp, name: mp.name ?? '' }))
+        const first = pickPrimaryProjectStore(normalised)
         if (!cancelled) setAutoResolved({ projectId, value: first })
       } catch (error) {
         console.warn('[FileBrowser] Failed to resolve linked mount point; falling back to legacy mode', {
