@@ -11,7 +11,7 @@
  * into doc_mount_files so it shows up on the next refresh.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
 import type { DocumentStoreFile, DocumentStoreBlob } from '../../types'
 
 interface FileTableProps {
@@ -79,6 +79,11 @@ function EmbeddingIndicator({ chunkCount }: { chunkCount: number }) {
 type SortField = 'fileName' | 'fileType' | 'fileSizeBytes' | 'conversionStatus' | 'chunkCount' | 'lastModified'
 type SortDir = 'asc' | 'desc'
 
+/** File types backed by the blob store (pdf/docx/generic binary). */
+function isBlobBacked(fileType: string): boolean {
+  return fileType === 'blob' || fileType === 'pdf' || fileType === 'docx'
+}
+
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) {
     return (
@@ -107,10 +112,13 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [filter, setFilter] = useState('')
   const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [operationError, setOperationError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [blobDetails, setBlobDetails] = useState<Record<string, DocumentStoreBlob | null>>({})
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  // Tracks blob IDs that have been fetched (or are being fetched) so we don't
+  // issue duplicate requests when loadBlobDetail is recreated.
+  const blobFetchedRef = useRef(new Set<string>())
 
   const canUpload = mountType === 'database'
 
@@ -163,11 +171,11 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
   const handleUpload = useCallback(async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return
     if (!canUpload) {
-      setUploadError('Uploads are only supported on database-backed stores.')
+      setOperationError('Uploads are only supported on database-backed stores.')
       return
     }
     setUploading(true)
-    setUploadError(null)
+    setOperationError(null)
     try {
       for (const file of Array.from(fileList)) {
         const form = new FormData()
@@ -189,7 +197,7 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
       }
       await onRefresh()
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : String(err))
+      setOperationError(err instanceof Error ? err.message : String(err))
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -207,12 +215,15 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
       if (!res.ok) throw new Error(`Delete failed (${res.status})`)
       await onRefresh()
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : String(err))
+      setOperationError(err instanceof Error ? err.message : String(err))
     }
   }, [mountPointId, onRefresh])
 
   const loadBlobDetail = useCallback(async (file: DocumentStoreFile) => {
-    if (blobDetails[file.id] !== undefined) return
+    // Add to the set before the first await so any concurrent call for the
+    // same file sees it immediately and bails — no duplicate fetches.
+    if (blobFetchedRef.current.has(file.id)) return
+    blobFetchedRef.current.add(file.id)
     try {
       const res = await fetch(`/api/v1/mount-points/${mountPointId}/blobs`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -224,7 +235,7 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
     } catch {
       setBlobDetails(prev => ({ ...prev, [file.id]: null }))
     }
-  }, [blobDetails, mountPointId])
+  }, [mountPointId])
 
   const handleDescriptionSave = useCallback(async (
     file: DocumentStoreFile,
@@ -245,17 +256,14 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
         setBlobDetails(prev => ({ ...prev, [file.id]: data.blob as DocumentStoreBlob }))
       }
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : String(err))
+      setOperationError(err instanceof Error ? err.message : String(err))
     }
   }, [mountPointId])
 
   const toggleExpand = useCallback((file: DocumentStoreFile) => {
     const next = expandedId === file.id ? null : file.id
     setExpandedId(next)
-    if (next && file.fileType === 'blob') {
-      void loadBlobDetail(file)
-    }
-    if (next && (file.fileType === 'pdf' || file.fileType === 'docx')) {
+    if (next && isBlobBacked(file.fileType)) {
       void loadBlobDetail(file)
     }
   }, [expandedId, loadBlobDetail])
@@ -316,9 +324,9 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
         </div>
       </div>
 
-      {uploadError && (
+      {operationError && (
         <div className="mb-4 rounded-xl qt-border-destructive/30 qt-bg-destructive/10 border p-3">
-          <p className="text-sm qt-text-destructive">{uploadError}</p>
+          <p className="text-sm qt-text-destructive">{operationError}</p>
         </div>
       )}
 
@@ -359,15 +367,14 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
             </thead>
             <tbody>
               {filteredAndSorted.map((file) => {
-                const isBlobKind = file.fileType === 'blob' || file.fileType === 'pdf' || file.fileType === 'docx'
-                const blobUrl = isBlobKind
+                const blobUrl = isBlobBacked(file.fileType)
                   ? `/api/v1/mount-points/${mountPointId}/blobs/${encodePath(file.relativePath)}`
                   : null
                 const expanded = expandedId === file.id
+                const blob = blobDetails[file.id] ?? null
                 return (
-                  <>
+                  <Fragment key={file.id}>
                     <tr
-                      key={file.id}
                       className="border-b qt-border-default/50 hover:qt-bg-muted/50 transition-colors cursor-pointer"
                       onClick={() => toggleExpand(file)}
                     >
@@ -402,11 +409,12 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
                       </td>
                     </tr>
                     {expanded && (
-                      <tr key={`${file.id}:detail`} className="border-b qt-border-default/50">
+                      <tr className="border-b qt-border-default/50">
                         <td colSpan={7} className="px-4 py-3 qt-bg-muted/30">
                           <FileDetailRow
+                            key={blob?.updatedAt ?? 'loading'}
                             file={file}
-                            blob={blobDetails[file.id] ?? null}
+                            blob={blob}
                             blobUrl={blobUrl}
                             canUpload={canUpload}
                             onDelete={() => handleBlobDelete(file)}
@@ -415,7 +423,7 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 )
               })}
             </tbody>
@@ -439,7 +447,7 @@ function FileDetailRow({ file, blob, blobUrl, canUpload, onDelete, onSaveDescrip
   const [description, setDescription] = useState(blob?.description ?? '')
   const [dirty, setDirty] = useState(false)
 
-  const isBlobBacked = file.fileType === 'blob' || file.fileType === 'pdf' || file.fileType === 'docx'
+  const isBlobBackedFile = isBlobBacked(file.fileType)
   const isImage = blob?.storedMimeType.startsWith('image/') ?? false
 
   const copyMarkdown = async () => {
@@ -451,7 +459,7 @@ function FileDetailRow({ file, blob, blobUrl, canUpload, onDelete, onSaveDescrip
 
   return (
     <div className="flex flex-wrap gap-4 text-xs qt-text-secondary">
-      {isBlobBacked && blob && (
+      {isBlobBackedFile && blob && (
         <div className="flex items-start gap-3 min-w-[16rem]">
           {isImage && blobUrl ? (
             <img
@@ -479,7 +487,7 @@ function FileDetailRow({ file, blob, blobUrl, canUpload, onDelete, onSaveDescrip
           </div>
         </div>
       )}
-      {isBlobBacked && blob && (
+      {isBlobBackedFile && blob && (
         <div className="flex flex-col gap-2 flex-1 min-w-[18rem]">
           <textarea
             className="qt-input text-xs"
@@ -517,7 +525,7 @@ function FileDetailRow({ file, blob, blobUrl, canUpload, onDelete, onSaveDescrip
           </div>
         </div>
       )}
-      {!isBlobBacked && (
+      {!isBlobBackedFile && (
         <div>
           Native text document. Use the LLM&apos;s doc_read_file / doc_write_file tools to edit, or run a scan to refresh embeddings.
         </div>

@@ -26,6 +26,7 @@ import {
   postLibrarianOpenAnnouncement,
   postLibrarianSaveAnnouncement,
 } from '@/lib/services/librarian-notifications/writer';
+import { getErrorMessage } from '@/lib/errors';
 import path from 'path';
 
 // ============================================================================
@@ -68,10 +69,6 @@ function getParticipantCharacterIds(chat: unknown): string[] {
     if (p?.characterId) ids.add(p.characterId);
   }
   return Array.from(ids);
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 interface ChatDocumentContext {
