@@ -57,7 +57,10 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * Convert ProjectFile to FileInfo for the preview modal
+ * Convert ProjectFile to FileInfo for the preview modal.
+ * Passes through mountPointId/relativePath so the preview and download
+ * actions resolve against the mount-point blob endpoint when the file
+ * lives in a linked Scriptorium store.
  */
 function toFileInfo(file: ProjectFile): FileInfo {
   return {
@@ -68,6 +71,8 @@ function toFileInfo(file: ProjectFile): FileInfo {
     category: file.category,
     createdAt: file.createdAt,
     updatedAt: file.createdAt,
+    mountPointId: file.mountPointId,
+    relativePath: file.relativePath,
   }
 }
 
@@ -139,6 +144,8 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
                       alt={file.originalFilename}
                       size={40}
                       className="rounded flex-shrink-0"
+                      mountPointId={file.mountPointId}
+                      relativePath={file.relativePath}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-foreground truncate">
