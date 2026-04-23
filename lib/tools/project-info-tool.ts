@@ -61,6 +61,19 @@ export interface ProjectFileInfo {
 }
 
 /**
+ * Project document store info — the database-backed Scriptorium store
+ * linked to this project (created by the Stage 1 migration and fed by new
+ * writes from Stage 2 onward). Absent when no store is linked.
+ */
+export interface ProjectDocumentStoreInfo {
+  mountPointId: string
+  name: string
+  storeType: 'documents' | 'character'
+  fileCount: number
+  blobCount: number
+}
+
+/**
  * Output for get_info action
  */
 export interface ProjectInfoResult {
@@ -72,6 +85,7 @@ export interface ProjectInfoResult {
   fileCount: number
   chatCount: number
   memoryCount: number
+  documentStore?: ProjectDocumentStoreInfo | null
 }
 
 /**
@@ -148,7 +162,7 @@ export const projectInfoToolDefinition = {
           type: 'string',
           enum: ['get_info', 'get_instructions', 'list_files', 'read_file', 'search_files'],
           description:
-            'The action to perform. "get_info" returns project overview and character roster. "get_instructions" returns full project instructions. "list_files" lists all project files. "read_file" reads a specific file\'s content. "search_files" searches files by query.',
+            'The action to perform. "get_info" returns project overview, character roster, and the linked Scriptorium document store (if any). "get_instructions" returns full project instructions. "list_files" lists all project files. "read_file" reads a specific file\'s content. "search_files" searches files by query.',
         },
         fileId: {
           type: 'string',

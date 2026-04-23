@@ -20,6 +20,7 @@ import {
   ProjectSearchFilesResult,
   ProjectFileInfo,
   ProjectCharacterInfo,
+  ProjectDocumentStoreInfo,
   validateProjectInfoInput,
 } from '../project-info-tool'
 
@@ -85,6 +86,8 @@ async function executeGetInfo(
   const allMemories = await repos.memories.findAll()
   const memoryCount = allMemories.filter(m => m.projectId === context.projectId).length
 
+  const documentStore = await resolveProjectDocumentStore(context.projectId)
+
   return {
     id: project.id,
     name: project.name,
@@ -94,6 +97,43 @@ async function executeGetInfo(
     fileCount,
     chatCount,
     memoryCount,
+    documentStore,
+  }
+}
+
+/**
+ * Resolve the database-backed Scriptorium store linked to a project.
+ * Returns null if the project has no link or the mount index DB is
+ * unavailable — the rest of the project info stays usable either way.
+ */
+async function resolveProjectDocumentStore(
+  projectId: string
+): Promise<ProjectDocumentStoreInfo | null> {
+  const repos = getRepositories()
+  try {
+    const links = await repos.projectDocMountLinks.findByProjectId(projectId)
+    if (!links.length) return null
+
+    for (const link of links) {
+      const mp = await repos.docMountPoints.findById(link.mountPointId)
+      if (!mp) continue
+      if (mp.mountType !== 'database') continue
+
+      const [files, blobs] = await Promise.all([
+        repos.docMountFiles.findByMountPointId(mp.id),
+        repos.docMountBlobs.listByMountPoint(mp.id),
+      ])
+      return {
+        mountPointId: mp.id,
+        name: mp.name,
+        storeType: mp.storeType,
+        fileCount: files.length,
+        blobCount: blobs.length,
+      }
+    }
+    return null
+  } catch {
+    return null
   }
 }
 
@@ -428,6 +468,9 @@ export function formatProjectInfoResults(output: ProjectInfoToolOutput): string 
           ? `Characters: ${info.characterRoster.map(c => c.name).join(', ')}`
           : 'No characters in roster',
         info.allowAnyCharacter ? '(Any character can participate)' : null,
+        info.documentStore
+          ? `Document Store: ${info.documentStore.name} (${info.documentStore.fileCount} files, ${info.documentStore.blobCount} blobs, storeType=${info.documentStore.storeType})`
+          : 'Document Store: (none linked)',
       ].filter(Boolean)
       return parts.join('\n')
     }
