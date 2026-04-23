@@ -32,6 +32,26 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 
 /**
+ * Detect post-hoc content-moderation rejections from image providers.
+ * OpenAI DALL-E returns "Your request was rejected as a result of our safety
+ * system."; Grok returns "Generated image rejected by content moderation.";
+ * other providers use similar phrasings. Matching on a handful of keywords
+ * covers the common shapes without tying us to any single provider's error
+ * type.
+ */
+function isImageModerationError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes('content moderation') ||
+    message.includes('content_policy') ||
+    message.includes('content policy') ||
+    message.includes('safety system') ||
+    message.includes('rejected by content') ||
+    message.includes('moderation_blocked')
+  );
+}
+
+/**
  * Handle a story background generation job
  */
 export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promise<void> {
@@ -474,6 +494,11 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
   const decryptedKey = apiKey.key_value;
 
+  // Tracks which profile actually produced the final image — updated if we
+  // reroute through the Concierge's uncensored fallback after a moderation
+  // rejection. Used downstream for file metadata (`generationModel`).
+  let activeImageProfile = imageProfile;
+
   let generationResponse;
   const genStartTime = Date.now();
   try {
@@ -530,12 +555,133 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       durationMs: genDurationMs,
     }).catch(() => { /* never block on logging */ });
 
-    logger.error('[StoryBackground] Image generation failed', {
+    // If the provider post-hoc rejected the generated image for content
+    // moderation, the Concierge has a second door: retry with the configured
+    // uncensored image profile. Mirrors the appearance-resolution and
+    // prompt-crafting fallbacks above.
+    const uncensoredImageProfileId = dangerSettings.uncensoredImageProfileId ?? null;
+    const canRerouteViaConcierge =
+      isImageModerationError(error)
+      && uncensoredImageProfileId
+      && uncensoredImageProfileId !== imageProfile.id;
+
+    if (!canRerouteViaConcierge) {
+      logger.error('[StoryBackground] Image generation failed', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        error: errorMessage,
+        moderationRejection: isImageModerationError(error),
+        hasUncensoredImageProvider,
+      }, error as Error);
+      throw new Error(`Image generation failed: ${errorMessage}`);
+    }
+
+    logger.info('[StoryBackground] Image provider rejected for content moderation, rerouting through Concierge uncensored profile', {
       context: 'background-jobs.story-background',
       jobId: job.id,
-      error: errorMessage,
-    }, error as Error);
-    throw new Error(`Image generation failed: ${errorMessage}`);
+      originalProfileId: imageProfile.id,
+      originalProvider: imageProfile.provider,
+      fallbackProfileId: uncensoredImageProfileId,
+      originalError: errorMessage,
+    });
+
+    const uncensoredProfile = await repos.imageProfiles.findById(uncensoredImageProfileId);
+    if (!uncensoredProfile) {
+      logger.error('[StoryBackground] Concierge uncensored image profile not found', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        fallbackProfileId: uncensoredImageProfileId,
+      });
+      throw new Error(`Image generation failed: ${errorMessage}`);
+    }
+    if (!uncensoredProfile.apiKeyId) {
+      logger.error('[StoryBackground] Concierge uncensored image profile has no API key', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        fallbackProfileId: uncensoredImageProfileId,
+      });
+      throw new Error(`Image generation failed: ${errorMessage}`);
+    }
+    const uncensoredKey = await repos.connections.findApiKeyByIdAndUserId(
+      uncensoredProfile.apiKeyId,
+      job.userId
+    );
+    if (!uncensoredKey?.key_value) {
+      logger.error('[StoryBackground] Concierge uncensored image profile API key missing or invalid', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        fallbackProfileId: uncensoredImageProfileId,
+      });
+      throw new Error(`Image generation failed: ${errorMessage}`);
+    }
+
+    const rerouteProvider = createImageProvider(uncensoredProfile.provider);
+    const rerouteStartTime = Date.now();
+    try {
+      generationResponse = await rerouteProvider.generateImage({
+        prompt: finalPrompt,
+        model: uncensoredProfile.modelName,
+        n: 1,
+        size: '1792x1024',
+        quality: (uncensoredProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
+        style: 'natural',
+      }, uncensoredKey.key_value);
+
+      const rerouteDurationMs = Date.now() - rerouteStartTime;
+      const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
+
+      logLLMCall({
+        userId: job.userId,
+        type: 'IMAGE_GENERATION',
+        chatId: payload.chatId,
+        provider: uncensoredProfile.provider,
+        modelName: uncensoredProfile.modelName,
+        request: {
+          messages: [{ role: 'user', content: finalPrompt }],
+        },
+        response: {
+          content: rerouteRevisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s) (Concierge reroute)`,
+        },
+        durationMs: rerouteDurationMs,
+      }).catch(() => { /* never block on logging */ });
+
+      activeImageProfile = uncensoredProfile;
+
+      logger.info('[StoryBackground] Concierge uncensored reroute succeeded', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        fallbackProvider: uncensoredProfile.provider,
+        fallbackModel: uncensoredProfile.modelName,
+        rerouteDurationMs,
+      });
+    } catch (rerouteError) {
+      const rerouteErrorMessage = getErrorMessage(rerouteError);
+      const rerouteDurationMs = Date.now() - rerouteStartTime;
+
+      logLLMCall({
+        userId: job.userId,
+        type: 'IMAGE_GENERATION',
+        chatId: payload.chatId,
+        provider: uncensoredProfile.provider,
+        modelName: uncensoredProfile.modelName,
+        request: {
+          messages: [{ role: 'user', content: finalPrompt }],
+        },
+        response: {
+          content: '',
+          error: rerouteErrorMessage,
+        },
+        durationMs: rerouteDurationMs,
+      }).catch(() => { /* never block on logging */ });
+
+      logger.error('[StoryBackground] Image generation failed (Concierge reroute also failed)', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        originalError: errorMessage,
+        rerouteError: rerouteErrorMessage,
+      }, rerouteError as Error);
+      throw new Error(`Image generation failed after Concierge reroute: ${rerouteErrorMessage}`);
+    }
   }
 
   // 11. Save the generated image
@@ -617,7 +763,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       source,
       category,
       generationPrompt: finalPrompt,
-      generationModel: imageProfile.modelName,
+      generationModel: activeImageProfile.modelName,
       generationRevisedPrompt: imageData.revisedPrompt || null,
       description: `Story background for: ${payload.sceneContext || chat.title}`,
       tags: [],

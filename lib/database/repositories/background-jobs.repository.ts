@@ -216,6 +216,36 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
+   * Find the earliest `scheduledAt` among retry-eligible jobs
+   * (PENDING or FAILED with attempts < maxAttempts). Used by the processor to
+   * arm a wake-up timer when the queue has no currently-claimable jobs but has
+   * retries scheduled for the future. Returns null if no such job exists.
+   */
+  async findNextScheduledAt(): Promise<string | null> {
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const results = await collection.find(
+          {
+            status: { $in: ['PENDING', 'FAILED'] },
+            $expr: { $lt: ['$attempts', '$maxAttempts'] },
+          } as TypedQueryFilter<BackgroundJob>,
+          {
+            sort: { scheduledAt: 1 },
+            limit: 1,
+          } as any
+        );
+        if (!results.length) return null;
+        const scheduledAt = (results[0] as { scheduledAt?: string }).scheduledAt;
+        return scheduledAt ?? null;
+      },
+      'Error finding next scheduled retry time',
+      {},
+      null
+    );
+  }
+
+  /**
    * Create a new job
    */
   async create(

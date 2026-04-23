@@ -56,6 +56,35 @@ let stuckJobCheckInterval: ReturnType<typeof setInterval> | null = null;
 /** Number of embedding jobs currently in-flight */
 let embeddingInFlight = 0;
 
+/**
+ * Timer that re-starts the processor when a FAILED job's `scheduledAt` comes due.
+ * Without this, a retry-eligible job whose next retry is in the future would
+ * strand the processor in an auto-stopped state until something new was enqueued.
+ */
+let wakeUpTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Cap on how long we'll sleep before re-checking the queue (5 minutes). */
+const MAX_WAKE_UP_DELAY_MS = 5 * 60 * 1000;
+
+function clearWakeUpTimer(): void {
+  if (wakeUpTimer) {
+    clearTimeout(wakeUpTimer);
+    wakeUpTimer = null;
+  }
+}
+
+function armWakeUpTimer(scheduledAt: string): void {
+  clearWakeUpTimer();
+  const rawMs = new Date(scheduledAt).getTime() - Date.now();
+  const delayMs = Math.min(Math.max(rawMs, 100), MAX_WAKE_UP_DELAY_MS);
+  wakeUpTimer = setTimeout(() => {
+    wakeUpTimer = null;
+    logger.info('[JobQueue] Wake-up timer fired for scheduled retry', { scheduledAt });
+    ensureProcessorRunning();
+  }, delayMs);
+  logger.debug('[JobQueue] Wake-up timer armed for scheduled retry', { scheduledAt, delayMs });
+}
+
 /** Job types eligible for concurrent processing */
 const CONCURRENT_JOB_TYPES = new Set(['EMBEDDING_GENERATE']);
 
@@ -67,6 +96,9 @@ export function startProcessor(intervalMs: number = DEFAULT_POLL_INTERVAL): void
   if (processorRunning) {
     return;
   }
+
+  // A pending wake-up timer is now redundant — we're starting up right away.
+  clearWakeUpTimer();
 
   processorRunning = true;
   processorInterval = setInterval(() => {
@@ -111,6 +143,7 @@ export function stopProcessor(): void {
     clearInterval(stuckJobCheckInterval);
     stuckJobCheckInterval = null;
   }
+  clearWakeUpTimer();
   processorRunning = false;
   logger.info('[JobQueue] Processor stopped');
 }
@@ -188,8 +221,17 @@ export async function processNextJob(): Promise<boolean> {
     if (!job) {
       // Auto-stop when queue is empty and no embedding jobs are in-flight
       if (processorRunning && embeddingInFlight === 0) {
+        // Check for retry-eligible jobs scheduled in the future so we can wake
+        // the processor back up in time — otherwise FAILED retries strand here
+        // until something new is enqueued.
+        const nextScheduledAt = await repos.backgroundJobs.findNextScheduledAt();
         stopProcessor();
-        logger.info('[JobQueue] Processor auto-stopped - queue is empty');
+        logger.info('[JobQueue] Processor auto-stopped - queue is empty', {
+          nextScheduledAt: nextScheduledAt ?? null,
+        });
+        if (nextScheduledAt) {
+          armWakeUpTimer(nextScheduledAt);
+        }
       }
       return false;
     }
