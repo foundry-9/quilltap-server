@@ -374,6 +374,13 @@ export const ChatMetadataSchema = z.object({
   /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
 
+  /**
+   * When true, characters in this chat may read (read-only) the character vaults
+   * belonging to other present participants via the `doc_*` tools. Writes remain
+   * scoped to the acting character's own vault. Defaults to false.
+   */
+  allowCrossCharacterVaultReads: z.boolean().default(false),
+
   /** Pending outfit change notifications keyed by characterId, cleared after delivery */
   pendingOutfitNotifications: JsonSchema.nullable().optional(),
 
@@ -508,6 +515,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
+
+  /** When true, characters may read (read-only) the vaults of other present participants via doc_* tools */
+  allowCrossCharacterVaultReads: z.boolean().default(false),
 
   /** Pending outfit change notifications keyed by characterId, cleared after delivery */
   pendingOutfitNotifications: JsonSchema.nullable().optional(),

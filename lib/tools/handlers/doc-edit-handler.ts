@@ -65,6 +65,7 @@ import type { DocListBlobsInput, DocListBlobsOutput } from '../doc-list-blobs-to
 import type { DocDeleteBlobInput, DocDeleteBlobOutput } from '../doc-delete-blob-tool';
 import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
 import { getRepositories } from '@/lib/database/repositories';
+import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import {
   databaseDocumentExists,
@@ -230,12 +231,107 @@ export function formatDocEditResults(
 // ============================================================================
 
 /**
- * Build resolution context from tool input.
+ * Collect the character IDs of other present participants in the chat whose
+ * vaults should be readable — only when the chat has the
+ * `allowCrossCharacterVaultReads` flag enabled. Returns an empty array when
+ * the flag is off, the chat isn't found, or the acting character is the only
+ * present participant.
  */
-function buildResolutionContext(
+async function collectPeerCharacterIdsForReads(
+  context: DocEditToolContext
+): Promise<string[]> {
+  if (!context.chatId) return [];
+  const repos = getRepositories();
+  const chat = await repos.chats.findById(context.chatId);
+  if (!chat || !chat.allowCrossCharacterVaultReads) return [];
+
+  const acting = context.characterId;
+  const peers = new Set<string>();
+  for (const p of chat.participants) {
+    if (!p.characterId) continue;
+    if (p.characterId === acting) continue;
+    if (!isParticipantPresent(p.status)) continue;
+    peers.add(p.characterId);
+  }
+  return Array.from(peers);
+}
+
+/**
+ * If the requested mount_point refers to a peer participant's vault while
+ * cross-character reads are enabled, throw a clear read-only error. This
+ * turns what would otherwise be a generic "mount point not accessible"
+ * message into a specific message explaining the cross-character boundary.
+ */
+async function assertWriteDoesNotTargetPeerVault(
+  mountPointHint: string | undefined,
+  peerCharacterIds: string[]
+): Promise<void> {
+  if (!mountPointHint || peerCharacterIds.length === 0) return;
+  const repos = getRepositories();
+  const needle = mountPointHint.toLowerCase();
+  for (const peerId of peerCharacterIds) {
+    const peer = await repos.characters.findById(peerId);
+    if (!peer?.characterDocumentMountPointId) continue;
+    if (peer.characterDocumentMountPointId === mountPointHint) {
+      logger.info('Rejected write to peer character vault (read-only in this chat)', {
+        peerCharacterId: peerId,
+        mountPointId: peer.characterDocumentMountPointId,
+      });
+      throw new PathResolutionError(
+        `${peer.name}'s vault is read-only in this chat. Cross-character vault sharing permits reads only.`,
+        'ACCESS_DENIED'
+      );
+    }
+    const mp = await repos.docMountPoints.findById(peer.characterDocumentMountPointId);
+    if (mp && mp.name.toLowerCase() === needle) {
+      logger.info('Rejected write to peer character vault (read-only in this chat)', {
+        peerCharacterId: peerId,
+        mountPointName: mp.name,
+      });
+      throw new PathResolutionError(
+        `${peer.name}'s vault is read-only in this chat. Cross-character vault sharing permits reads only.`,
+        'ACCESS_DENIED'
+      );
+    }
+  }
+}
+
+/**
+ * Build resolution context for a read operation. When the chat has
+ * `allowCrossCharacterVaultReads` enabled, the vaults of other present
+ * participants are added to `characterIds` so the path resolver admits them.
+ */
+async function buildReadResolutionContext(
   input: { scope?: string; mount_point?: string },
   context: DocEditToolContext
 ) {
+  const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
+  if (peerCharacterIds.length > 0) {
+    logger.debug('Cross-character vault reads enabled; expanding access', {
+      chatId: context.chatId,
+      actingCharacterId: context.characterId,
+      peerCharacterIds,
+    });
+  }
+  return {
+    projectId: context.projectId,
+    characterId: context.characterId,
+    characterIds: peerCharacterIds.length > 0 ? peerCharacterIds : undefined,
+    mountPoint: input.mount_point,
+  };
+}
+
+/**
+ * Build resolution context for a write operation. Peer vaults are never
+ * admitted here; attempts to write to a peer's vault by name or ID raise
+ * a clear read-only error before resolution runs.
+ */
+async function buildWriteResolutionContext(
+  input: { scope?: string; mount_point?: string },
+  context: DocEditToolContext
+) {
+  const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
+  await assertWriteDoesNotTargetPeerVault(input.mount_point, peerCharacterIds);
   return {
     projectId: context.projectId,
     characterId: context.characterId,
@@ -283,7 +379,7 @@ async function handleReadFile(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocReadFileOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolved = await resolveDocEditPath(scope, input.path, await buildReadResolutionContext(input, context));
 
   // For database-backed stores, a non-text file (pdf/docx/arbitrary binary)
   // may still be readable if the blob has an extractedText representation.
@@ -420,7 +516,7 @@ async function handleWriteFile(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocWriteFileOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -488,7 +584,7 @@ async function handleStrReplace(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocStrReplaceOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -549,7 +645,7 @@ async function handleInsertText(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocInsertTextOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -814,7 +910,8 @@ async function handleGrep(
 
   // Search document store mount points
   if (!input.mount_point || input.mount_point) {
-    const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId);
+    const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
+    const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
 
     for (const mp of mountPoints) {
       if (input.mount_point && mp.name.toLowerCase() !== input.mount_point.toLowerCase() && mp.id !== input.mount_point) {
@@ -964,7 +1061,8 @@ async function handleListFiles(
 
   // List document store files
   if (shouldIncludeDocStore) {
-    const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId);
+    const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
+    const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
     for (const mp of mountPoints) {
       if (input.mount_point && mp.name.toLowerCase() !== input.mount_point.toLowerCase() && mp.id !== input.mount_point) {
         continue;
@@ -1044,7 +1142,7 @@ async function handleReadFrontmatter(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocReadFrontmatterOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolved = await resolveDocEditPath(scope, input.path, await buildReadResolutionContext(input, context));
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -1092,7 +1190,7 @@ async function handleUpdateFrontmatter(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocUpdateFrontmatterOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -1133,7 +1231,7 @@ async function handleReadHeading(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocReadHeadingOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolved = await resolveDocEditPath(scope, input.path, await buildReadResolutionContext(input, context));
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -1172,7 +1270,7 @@ async function handleUpdateHeading(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocUpdateHeadingOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -1225,8 +1323,9 @@ async function handleMoveFile(
   const scope = (input.scope || 'document_store') as DocEditScope;
 
   // Resolve source path
-  const resolvedSource = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
-  const resolvedDest = await resolveDocEditPath(scope, input.new_path, buildResolutionContext(input, context));
+  const writeContext = await buildWriteResolutionContext(input, context);
+  const resolvedSource = await resolveDocEditPath(scope, input.path, writeContext);
+  const resolvedDest = await resolveDocEditPath(scope, input.new_path, writeContext);
 
   // Database-backed mount: route move through the database-store module.
   if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
@@ -1318,7 +1417,7 @@ async function handleDeleteFile(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocDeleteFileOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
   // Database-backed mount: route delete through the database-store module.
   if (resolved.mountType === 'database' && resolved.mountPointId) {
@@ -1374,7 +1473,7 @@ async function handleCreateFolder(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocCreateFolderOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
   // Database-backed mounts: create explicit folder rows
   if (resolved.mountType === 'database' && resolved.mountPointId) {
@@ -1419,7 +1518,7 @@ async function handleDeleteFolder(
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocDeleteFolderOutput; error?: string; formattedText?: string }> {
   const scope = (input.scope || 'document_store') as DocEditScope;
-  const resolved = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
+  const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
   // Database-backed mount: delete explicit folder rows
   if (resolved.mountType === 'database' && resolved.mountPointId) {
@@ -1498,8 +1597,9 @@ async function handleMoveFolder(
   const scope = (input.scope || 'document_store') as DocEditScope;
 
   // Resolve source path
-  const resolvedSource = await resolveDocEditPath(scope, input.path, buildResolutionContext(input, context));
-  const resolvedDest = await resolveDocEditPath(scope, input.new_path, buildResolutionContext(input, context));
+  const writeContext = await buildWriteResolutionContext(input, context);
+  const resolvedSource = await resolveDocEditPath(scope, input.path, writeContext);
+  const resolvedDest = await resolveDocEditPath(scope, input.new_path, writeContext);
 
   // Database-backed mount: route move through the database-store module
   if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
@@ -1596,9 +1696,11 @@ async function handleOpenDocument(
   let mtime: number | undefined;
 
   if (filePath) {
-    // Opening an existing file — resolve the path to verify it exists
+    // Opening an existing file — resolve the path to verify it exists.
+    // Treated as a read so peer vaults are reachable when the chat's
+    // cross-character read flag is enabled.
     try {
-      const resolved = await resolveDocEditPath(scope, filePath, { projectId: context.projectId, characterId: context.characterId, mountPoint: input.mount_point });
+      const resolved = await resolveDocEditPath(scope, filePath, await buildReadResolutionContext({ mount_point: input.mount_point }, context));
       if (resolved.mountType === 'database' && resolved.mountPointId) {
         const exists = await databaseDocumentExists(resolved.mountPointId, resolved.relativePath);
         if (!exists) throw new Error(`File not found: ${filePath}`);
@@ -1784,11 +1886,29 @@ async function handleDocFocus(
 // Blob Tools (database-backed + universal blob layer)
 // ============================================================================
 
-async function resolveBlobMountPoint(
+async function resolveBlobMountPointForRead(
   mountPointRef: string,
   context: DocEditToolContext
 ): Promise<{ id: string; name: string } | null> {
   if (!context.projectId && !context.characterId) return null;
+  const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
+  const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
+  const needle = mountPointRef.toLowerCase();
+  const found = mountPoints.find(
+    mp => mp.name.toLowerCase() === needle || mp.id === mountPointRef
+  );
+  return found ? { id: found.id, name: found.name } : null;
+}
+
+async function resolveBlobMountPointForWrite(
+  mountPointRef: string,
+  context: DocEditToolContext
+): Promise<{ id: string; name: string } | null> {
+  if (!context.projectId && !context.characterId) return null;
+  const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
+  // Writes must not land in a peer's vault — raise the dedicated read-only error
+  // before we even enumerate accessible mounts.
+  await assertWriteDoesNotTargetPeerVault(mountPointRef, peerCharacterIds);
   const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId);
   const needle = mountPointRef.toLowerCase();
   const found = mountPoints.find(
@@ -1801,7 +1921,7 @@ async function handleWriteBlob(
   input: DocWriteBlobInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocWriteBlobOutput; error?: string; formattedText?: string }> {
-  const mp = await resolveBlobMountPoint(input.mount_point, context);
+  const mp = await resolveBlobMountPointForWrite(input.mount_point, context);
   if (!mp) {
     return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
   }
@@ -1856,7 +1976,7 @@ async function handleReadBlob(
   input: DocReadBlobInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocReadBlobOutput; error?: string; formattedText?: string }> {
-  const mp = await resolveBlobMountPoint(input.mount_point, context);
+  const mp = await resolveBlobMountPointForRead(input.mount_point, context);
   if (!mp) {
     return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
   }
@@ -1895,7 +2015,7 @@ async function handleListBlobs(
   input: DocListBlobsInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocListBlobsOutput; error?: string; formattedText?: string }> {
-  const mp = await resolveBlobMountPoint(input.mount_point, context);
+  const mp = await resolveBlobMountPointForRead(input.mount_point, context);
   if (!mp) {
     return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
   }
@@ -1927,7 +2047,7 @@ async function handleDeleteBlob(
   input: DocDeleteBlobInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocDeleteBlobOutput; error?: string; formattedText?: string }> {
-  const mp = await resolveBlobMountPoint(input.mount_point, context);
+  const mp = await resolveBlobMountPointForWrite(input.mount_point, context);
   if (!mp) {
     return { success: false, error: `Mount point not found or not linked to this project: ${input.mount_point}` };
   }

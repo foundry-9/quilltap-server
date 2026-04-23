@@ -193,6 +193,8 @@ import { addLanternImageAlertFieldsMigration } from './add-lantern-image-alert-f
 import { convertProjectFilesToDocumentStoresMigration } from './convert-project-files-to-document-stores';
 // Add systemSender column to chat_messages for personified-feature announcements
 import { addSystemSenderFieldMigration } from './add-system-sender-field';
+// Add allowCrossCharacterVaultReads column to chats
+import { addChatCrossCharacterVaultReadsFieldMigration } from './add-chat-cross-character-vault-reads-field';
 
 /**
  * All available migrations.
@@ -381,6 +383,8 @@ export const migrations: Migration[] = [
   convertProjectFilesToDocumentStoresMigration,
   // Add systemSender column to chat_messages
   addSystemSenderFieldMigration,
+  // Add allowCrossCharacterVaultReads column to chats
+  addChatCrossCharacterVaultReadsFieldMigration,
 ];
 
 export {
@@ -554,5 +558,7 @@ export {
   convertProjectFilesToDocumentStoresMigration,
   // Add systemSender column to chat_messages
   addSystemSenderFieldMigration,
+  // Add allowCrossCharacterVaultReads column to chats
+  addChatCrossCharacterVaultReadsFieldMigration,
 };
 

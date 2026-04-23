@@ -1111,25 +1111,49 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onDividerPositionChange={documentModeHook.setDividerPosition}
           chatContent={
             <>
-              {/* Whisper toggle - shown in multi-character chats */}
+              {/* Chat toggles - shown in multi-character chats */}
               {participantsWithImpersonation.isMultiChar && (
-                <div className="flex items-center justify-end gap-2 px-4 py-1">
-                  <span className="qt-text-secondary text-xs">All Whispers</span>
-                  <button
-                    onClick={() => setShowAllWhispers(!showAllWhispers)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
-                    }`}
-                    role="switch"
-                    aria-checked={showAllWhispers}
-                    title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                        showAllWhispers ? 'translate-x-6' : 'translate-x-1'
+                <div className="flex items-center justify-end gap-4 px-4 py-1">
+                  <div className="flex items-center gap-2">
+                    <span className="qt-text-secondary text-xs">Shared Vaults</span>
+                    <button
+                      onClick={chatControls.handleToggleCrossCharacterVaultReads}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        chatControls.allowCrossCharacterVaultReads ? 'bg-primary' : 'qt-bg-muted'
                       }`}
-                    />
-                  </button>
+                      role="switch"
+                      aria-checked={chatControls.allowCrossCharacterVaultReads}
+                      title={
+                        chatControls.allowCrossCharacterVaultReads
+                          ? 'Characters may read each other’s vaults (read-only). Click to lock.'
+                          : 'Each character’s vault is private. Click to let them peek at each other’s dossiers.'
+                      }
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+                          chatControls.allowCrossCharacterVaultReads ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="qt-text-secondary text-xs">All Whispers</span>
+                    <button
+                      onClick={() => setShowAllWhispers(!showAllWhispers)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
+                      }`}
+                      role="switch"
+                      aria-checked={showAllWhispers}
+                      title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+                          showAllWhispers ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
               )}
 

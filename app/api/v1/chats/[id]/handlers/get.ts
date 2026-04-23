@@ -321,6 +321,7 @@ export async function handleGet(
       projectName,
       disabledTools: chatMetadata.disabledTools || [],
       disabledToolGroups: chatMetadata.disabledToolGroups || [],
+      allowCrossCharacterVaultReads: chatMetadata.allowCrossCharacterVaultReads ?? false,
       agentModeEnabled: chatMetadata.agentModeEnabled ?? false,
       resolvedAgentModeEnabled: resolvedAgentMode.enabled,
       agentModeSource: resolvedAgentMode.enabledSource,

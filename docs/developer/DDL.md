@@ -328,7 +328,8 @@ CREATE TABLE "chats" (
   "helpPageUrl" TEXT DEFAULT NULL,
   "scenarioText" TEXT DEFAULT NULL,
   "documentMode" TEXT DEFAULT 'normal',
-  "dividerPosition" INTEGER DEFAULT 45
+  "dividerPosition" INTEGER DEFAULT 45,
+  "allowCrossCharacterVaultReads" INTEGER DEFAULT 0
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");

@@ -58,6 +58,7 @@ export function useChatControls({
   const [documentEditingMode, setDocumentEditingMode] = useState(false)
   const [agentModeEnabled, setAgentModeEnabled] = useState<boolean | null>(null)
   const [storyBackgroundsEnabled, setStoryBackgroundsEnabled] = useState(false)
+  const [allowCrossCharacterVaultReads, setAllowCrossCharacterVaultReads] = useState(false)
 
   // Refs
   const userStoppedStreamRef = useRef<boolean>(false)
@@ -91,6 +92,14 @@ export function useChatControls({
       setDocumentEditingMode(chat.documentEditingMode)
     }
   }, [chat?.documentEditingMode])
+
+  // Initialize allowCrossCharacterVaultReads from chat data
+  useEffect(() => {
+    if (chat?.allowCrossCharacterVaultReads !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by toggle handler
+      setAllowCrossCharacterVaultReads(chat.allowCrossCharacterVaultReads)
+    }
+  }, [chat?.allowCrossCharacterVaultReads])
 
   // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
   useEffect(() => {
@@ -143,6 +152,37 @@ export function useChatControls({
       showInfoToast('Auto-responses resumed')
     }
   }, [isPaused, setPauseState])
+
+  // Toggle cross-character vault reads and persist to database.
+  // When on, characters in this chat may read (read-only) other present
+  // participants' character vaults via the doc_* tools.
+  const handleToggleCrossCharacterVaultReads = useCallback(async () => {
+    const newValue = !allowCrossCharacterVaultReads
+    setAllowCrossCharacterVaultReads(newValue)
+
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { allowCrossCharacterVaultReads: newValue } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist cross-character vault reads', response.status)
+        setAllowCrossCharacterVaultReads(!newValue)
+        showErrorToast('Could not update shared-vault setting')
+        return
+      }
+      showInfoToast(
+        newValue
+          ? 'Shared vault reads enabled — characters may peek at each other’s dossiers'
+          : 'Shared vault reads disabled — each character is once more a closed book'
+      )
+    } catch (error) {
+      console.error('[Chat] Error persisting cross-character vault reads', error)
+      setAllowCrossCharacterVaultReads(!newValue)
+      showErrorToast('Could not update shared-vault setting')
+    }
+  }, [chatId, allowCrossCharacterVaultReads])
 
   // Toggle document editing mode and persist to database
   const handleToggleDocumentEditingMode = useCallback(async () => {
@@ -397,6 +437,8 @@ export function useChatControls({
     documentEditingMode,
     agentModeEnabled,
     storyBackgroundsEnabled, setStoryBackgroundsEnabled,
+    allowCrossCharacterVaultReads,
+    handleToggleCrossCharacterVaultReads,
     connectionProfiles,
     userStoppedStreamRef,
     setPauseState,

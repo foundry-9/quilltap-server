@@ -150,6 +150,8 @@ export interface Chat {
   disabledTools?: string[]
   /** Groups of tools that are disabled for this chat */
   disabledToolGroups?: string[]
+  /** When true, characters may read (read-only) other present participants' character vaults via doc_* tools */
+  allowCrossCharacterVaultReads?: boolean
   /** Image profile ID for generating images in this chat (shared by all participants) */
   imageProfileId?: string | null
   /** Whether to auto-generate character avatars when outfits change */

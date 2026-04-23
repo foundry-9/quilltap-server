@@ -16,6 +16,7 @@ export const updateChatSchema = z.object({
   projectId: z.uuid().nullish(),
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shared by all participants)
   alertCharactersOfLanternImages: z.boolean().nullish(),
+  allowCrossCharacterVaultReads: z.boolean().optional(),
 });
 
 export const updateParticipantSchema = z.object({

@@ -556,10 +556,15 @@ export interface AccessibleMountPoint {
 export async function getAccessibleMountPoints(
   projectId: string | undefined,
   characterId?: string,
+  extraCharacterIds?: string[],
 ): Promise<AccessibleMountPoint[]> {
   try {
     const repos = getRepositories();
-    const ids = await collectAccessibleMountPointIds({ projectId, characterId });
+    const ids = await collectAccessibleMountPointIds({
+      projectId,
+      characterId,
+      characterIds: extraCharacterIds && extraCharacterIds.length > 0 ? extraCharacterIds : undefined,
+    });
 
     if (ids.length === 0) {
       logger.debug(
@@ -582,7 +587,7 @@ export async function getAccessibleMountPoints(
     }
 
     logger.debug(
-      `Found ${mountPoints.length} accessible mount points for project=${projectId ?? 'none'} character=${characterId ?? 'none'}`,
+      `Found ${mountPoints.length} accessible mount points for project=${projectId ?? 'none'} character=${characterId ?? 'none'} peers=${extraCharacterIds?.length ?? 0}`,
     );
 
     return mountPoints;
