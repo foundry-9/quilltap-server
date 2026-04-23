@@ -362,7 +362,7 @@ export function CharacterBasicInfo({
                   createdAt: now,
                   updatedAt: now,
                 }
-                onScenariosChange([newScenario])
+                onScenariosChange([...formData.scenarios, newScenario])
               }}
               className="qt-button-primary"
             >

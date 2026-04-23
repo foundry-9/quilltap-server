@@ -220,6 +220,8 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
   }, [mountPointId, onRefresh])
 
   const loadBlobDetail = useCallback(async (file: DocumentStoreFile) => {
+    // Add to the set before the first await so any concurrent call for the
+    // same file sees it immediately and bails — no duplicate fetches.
     if (blobFetchedRef.current.has(file.id)) return
     blobFetchedRef.current.add(file.id)
     try {
