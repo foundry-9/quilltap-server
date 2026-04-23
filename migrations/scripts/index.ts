@@ -189,6 +189,8 @@ import { addMemoryExtractionLimitsFieldMigration } from './add-memory-extraction
 import { addProfileSupportsImageUploadFieldMigration } from './add-profile-supports-image-upload-field';
 // Add Lantern image alert columns to projects and chats
 import { addLanternImageAlertFieldsMigration } from './add-lantern-image-alert-fields';
+// Convert project file storage into per-project Scriptorium document stores
+import { convertProjectFilesToDocumentStoresMigration } from './convert-project-files-to-document-stores';
 
 /**
  * All available migrations.
@@ -373,6 +375,8 @@ export const migrations: Migration[] = [
   addProfileSupportsImageUploadFieldMigration,
   // Add Lantern image alert columns to projects and chats
   addLanternImageAlertFieldsMigration,
+  // Convert project file storage into per-project Scriptorium document stores
+  convertProjectFilesToDocumentStoresMigration,
 ];
 
 export {
@@ -542,5 +546,7 @@ export {
   addProfileSupportsImageUploadFieldMigration,
   // Add Lantern image alert columns to projects and chats
   addLanternImageAlertFieldsMigration,
+  // Convert project file storage into per-project Scriptorium document stores
+  convertProjectFilesToDocumentStoresMigration,
 };
 

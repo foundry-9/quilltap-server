@@ -83,6 +83,12 @@ A small caveat attends the image transcoding pipeline: blobs uploaded as PNG, JP
 
 A single mount point can be linked to multiple projects, and a project can reference multiple mount points. This many-to-many arrangement means you need only index your research directory once, then make it available to whichever projects require it — like a shared reference shelf in a well-organized office.
 
+### Project File Stores (automatic, per project)
+
+In earlier incarnations of Quilltap, each project kept its attached files as a scattered assortment of loose documents in a folder on disk — a perfectly serviceable arrangement for a shorter correspondence, but hardly fit for a library with pretensions. On first startup after this update, Quilltap quietly promotes every such folder to a proper database-backed document store of its very own, with a name along the lines of *Project Files: Your Project Name*. The files are gathered up and tucked safely inside the encrypted `quilltap-mount-index.db`, the new store is linked to the project that owned them, and the original directory is renamed with a `_doc_store_archive` suffix as a courtesy — proof, should you ever need it, that nothing was lost in the shuffle.
+
+You may dispose of those archived directories at your leisure once you have verified the new stores look correct in the Scriptorium. For the moment, the old file-management pages elsewhere in Quilltap continue to list the legacy entries (a further round of tidying will wire them through to the new stores in a future update), so if you wish to browse, read, or hand files to a character straight away, pop open the Scriptorium and find the *Project Files* store by that name. As with any other database-backed store, the *Scan Now* button will chunk and embed the freshly imported text files so semantic search catches up with the new arrangement.
+
 ## Searching Documents
 
 Document chunks appear as a new source type in the unified search tool. When a character searches using the `search` tool, document results appear alongside memories and conversation history, ranked by semantic relevance. Each result includes the source file name, the mount point it belongs to, and the heading context (if the document used headings), so you always know precisely where a piece of information came from.
