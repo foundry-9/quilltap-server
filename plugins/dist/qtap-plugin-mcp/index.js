@@ -18416,20 +18416,24 @@ function createParser(callbacks) {
     throw new TypeError(
       "`callbacks` must be an object, got a function instead. Did you mean `{onEvent: fn}`?"
     );
-  const { onEvent = noop2, onError = noop2, onRetry = noop2, onComment } = callbacks;
-  let incompleteLine = "", isFirstChunk = true, id, data = "", dataLines = 0, eventType;
+  const { onEvent = noop2, onError = noop2, onRetry = noop2, onComment } = callbacks, pendingFragments = [];
+  let isFirstChunk = true, id, data = "", dataLines = 0, eventType;
   function feed(chunk) {
-    if (isFirstChunk) {
-      isFirstChunk = false, feedFirst(chunk);
+    if (isFirstChunk && (isFirstChunk = false, chunk.charCodeAt(0) === 239 && chunk.charCodeAt(1) === 187 && chunk.charCodeAt(2) === 191 && (chunk = chunk.slice(3))), pendingFragments.length === 0) {
+      const trailing2 = processLines(chunk);
+      trailing2 !== "" && pendingFragments.push(trailing2);
       return;
     }
-    const input = incompleteLine === "" ? chunk : incompleteLine + chunk;
-    incompleteLine = processLines(input);
-  }
-  function feedFirst(chunk) {
-    chunk.charCodeAt(0) === 239 && chunk.charCodeAt(1) === 187 && chunk.charCodeAt(2) === 191 && (chunk = chunk.slice(3));
-    const input = incompleteLine === "" ? chunk : incompleteLine + chunk;
-    incompleteLine = processLines(input);
+    if (chunk.indexOf(`
+`) === -1 && chunk.indexOf("\r") === -1) {
+      pendingFragments.push(chunk);
+      return;
+    }
+    pendingFragments.push(chunk);
+    const input = pendingFragments.join("");
+    pendingFragments.length = 0;
+    const trailing = processLines(input);
+    trailing !== "" && pendingFragments.push(trailing);
   }
   function processLines(chunk) {
     let searchIndex = 0;
@@ -18546,7 +18550,11 @@ ${value}`, dataLines++;
     }), id = void 0, data = "", dataLines = 0, eventType = void 0;
   }
   function reset(options = {}) {
-    incompleteLine && options.consume && parseLine(incompleteLine, 0, incompleteLine.length), isFirstChunk = true, id = void 0, data = "", dataLines = 0, eventType = void 0, incompleteLine = "";
+    if (options.consume && pendingFragments.length > 0) {
+      const incompleteLine = pendingFragments.join("");
+      parseLine(incompleteLine, 0, incompleteLine.length);
+    }
+    isFirstChunk = true, id = void 0, data = "", dataLines = 0, eventType = void 0, pendingFragments.length = 0;
   }
   return { feed, reset };
 }

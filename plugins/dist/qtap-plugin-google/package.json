@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-google",
-  "version": "1.1.23",
+  "version": "1.1.24",
   "description": "Google Gemini provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.50.1",
-    "@quilltap/plugin-utils": "^2.2.2"
+    "@quilltap/plugin-utils": "^2.2.3"
   },
   "devDependencies": {
     "esbuild": "^0.28.0"
