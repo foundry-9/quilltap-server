@@ -41,6 +41,7 @@ import {
   formatInterCharacterMemoriesForContext,
   formatSummaryForContext,
   type DebugMemoryInfo,
+  type DebugInterCharacterMemoryInfo,
 } from './context/memory-injector'
 import {
   filterMessagesByHistoryAccess,
@@ -151,6 +152,10 @@ export interface BuiltContext {
   warnings: string[]
   /** Debug info: the actual memories that were included */
   debugMemories?: Array<{ summary: string; importance: number; score: number; effectiveWeight: number }>
+  /** Debug info: the inter-character memories that were included (multi-character chats) */
+  debugInterCharacterMemories?: Array<{ aboutCharacterName: string; summary: string; importance: number }>
+  /** Debug info: the memory recap content injected on chat start / character join */
+  debugMemoryRecap?: string
   /** Debug info: the conversation summary that was included */
   debugSummary?: string
   /** Debug info: the system prompt that was built (may be compressed) */
@@ -811,6 +816,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   let interCharacterMemoryContent = ''
   let interCharacterMemoryTokens = 0
   let interCharacterMemoriesIncluded = 0
+  let debugInterCharacterMemories: DebugInterCharacterMemoryInfo[] = []
 
   const tInterStart = performance.now()
   let interCharacterLoadedCount = 0
@@ -854,6 +860,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           interCharacterMemoryContent = formatted.content
           interCharacterMemoryTokens = formatted.tokenCount
           interCharacterMemoriesIncluded = formatted.memoriesUsed
+          debugInterCharacterMemories = formatted.debugMemories
 
         }
       }
@@ -1153,6 +1160,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     warnings,
     // Debug info for the debug panel
     debugMemories,
+    debugInterCharacterMemories: debugInterCharacterMemories.length > 0 ? debugInterCharacterMemories : undefined,
+    debugMemoryRecap: memoryRecapContent || undefined,
     debugSummary: chat.contextSummary || undefined,
     debugSystemPrompt: effectiveSystemPrompt,
     // Original uncompressed system prompt (for async pre-compression)

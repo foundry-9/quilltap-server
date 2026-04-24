@@ -1,8 +1,8 @@
 /**
  * Self-Inventory Tool Handler
  *
- * Assembles the five-section introspection report. Each section is wrapped in
- * a try/catch so a single failing lookup yields an "unavailable" marker
+ * Assembles the seven-section introspection report. Each section is wrapped
+ * in a try/catch so a single failing lookup yields an "unavailable" marker
  * rather than throwing the whole report away.
  */
 
@@ -13,13 +13,19 @@ import { buildSystemPrompt, buildOtherParticipantsInfo } from '@/lib/chat/contex
 import type { OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder';
 import { resolveConnectionProfile } from '@/lib/chat/connection-resolver';
 import { getModelContextLimit } from '@/lib/llm/model-context-data';
+import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types';
+import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
 import {
   SelfInventoryToolInput,
   SelfInventoryToolOutput,
   SelfInventoryVaultSection,
   SelfInventoryVaultFile,
+  SelfInventoryVaultAccessSection,
+  SelfInventoryVaultAccessParticipant,
+  SelfInventoryVaultAccessLevel,
   SelfInventoryMemorySection,
+  SelfInventoryLoadedMemoriesSection,
   SelfInventoryChatSection,
   SelfInventoryPromptSection,
   SelfInventoryLastTurnSection,
@@ -31,6 +37,7 @@ export interface SelfInventoryToolContext {
   chatId: string;
   characterId: string;
   callingParticipantId?: string;
+  loadedMemories?: LoadedMemoriesContext;
 }
 
 const HIGH_IMPORTANCE_THRESHOLD = 0.7 as const;
@@ -106,6 +113,120 @@ async function buildVaultSection(
     mountPointId: mountPoint.id,
     fileCount: files.length,
     files,
+  };
+}
+
+async function buildVaultAccessSection(
+  character: Character,
+  context: SelfInventoryToolContext
+): Promise<SelfInventoryVaultAccessSection> {
+  const repos = getRepositories();
+  const chat = await repos.chats.findById(context.chatId);
+  const sharedVaultsEnabled = Boolean(chat?.allowCrossCharacterVaultReads);
+
+  if (!character.characterDocumentMountPointId) {
+    return {
+      available: false,
+      sharedVaultsEnabled,
+      message: 'Character has no vault mount point.',
+    };
+  }
+  if (!chat) {
+    return {
+      available: false,
+      sharedVaultsEnabled,
+      message: 'Chat not found.',
+    };
+  }
+
+  const mountPoint = await repos.docMountPoints.findById(character.characterDocumentMountPointId);
+  if (!mountPoint) {
+    return {
+      available: false,
+      sharedVaultsEnabled,
+      message: `Mount point ${character.characterDocumentMountPointId} not found.`,
+    };
+  }
+
+  const participants: SelfInventoryVaultAccessParticipant[] = [];
+  const seenCharacterIds = new Set<string>();
+
+  for (const p of chat.participants) {
+    if (p.type !== 'CHARACTER') continue;
+    if (!p.characterId) continue;
+    if (!isParticipantPresent(p.status)) continue;
+    if (seenCharacterIds.has(p.characterId)) continue;
+    seenCharacterIds.add(p.characterId);
+
+    const isSelf = p.characterId === character.id;
+    const isUser = p.controlledBy === 'user';
+
+    // Self and the user persona always have read/write; the user reaches peer
+    // vaults via document mode even when tool-level cross-character reads are
+    // off. Other peer characters only get read access when shared vaults is on.
+    let access: SelfInventoryVaultAccessLevel | null = null;
+    if (isSelf || isUser) {
+      access = 'read_write';
+    } else if (sharedVaultsEnabled) {
+      access = 'read_only';
+    }
+    if (!access) continue;
+
+    let characterName = 'Unknown';
+    const c = await repos.characters.findById(p.characterId);
+    if (c) characterName = c.name;
+
+    participants.push({
+      participantId: p.id,
+      characterId: p.characterId,
+      characterName,
+      controlledBy: p.controlledBy,
+      status: p.status,
+      isSelf,
+      access,
+    });
+  }
+
+  // Sort: self first, then user persona, then others alphabetically.
+  participants.sort((a, b) => {
+    if (a.isSelf !== b.isSelf) return a.isSelf ? -1 : 1;
+    const aUser = a.controlledBy === 'user' ? 0 : 1;
+    const bUser = b.controlledBy === 'user' ? 0 : 1;
+    if (aUser !== bUser) return aUser - bUser;
+    return a.characterName.localeCompare(b.characterName);
+  });
+
+  return {
+    available: true,
+    mountPointName: mountPoint.name,
+    sharedVaultsEnabled,
+    participants,
+  };
+}
+
+function buildLoadedMemoriesSection(
+  loaded: LoadedMemoriesContext | undefined
+): SelfInventoryLoadedMemoriesSection {
+  if (!loaded) {
+    return {
+      available: false,
+      message: 'No loaded-memory data available for this turn (tool was invoked outside of a prompt-building flow).',
+    };
+  }
+  return {
+    available: true,
+    semanticMemories: (loaded.semantic ?? []).map((m) => ({
+      summary: m.summary,
+      importance: m.importance,
+      score: m.score,
+      effectiveWeight: m.effectiveWeight,
+    })),
+    interCharacterMemories: (loaded.interCharacter ?? []).map((m) => ({
+      aboutCharacterName: m.aboutCharacterName,
+      summary: m.summary,
+      importance: m.importance,
+    })),
+    recap: loaded.recap ?? null,
   };
 }
 
@@ -492,12 +613,21 @@ export async function executeSelfInventoryTool(
       characterId: '',
       characterName: '',
       vault: { available: false, reason: 'error', message: 'Missing characterId.' },
+      vaultAccess: {
+        available: false,
+        sharedVaultsEnabled: false,
+        message: 'Missing characterId.',
+      },
       memory: {
         available: false,
         totalCount: 0,
         highImportanceCount: 0,
         highImportancePercent: 0,
         threshold: HIGH_IMPORTANCE_THRESHOLD,
+        message: 'Missing characterId.',
+      },
+      loadedMemories: {
+        available: false,
         message: 'Missing characterId.',
       },
       chats: {
@@ -539,12 +669,21 @@ export async function executeSelfInventoryTool(
       characterId: context.characterId,
       characterName: '',
       vault: { available: false, reason: 'error', message: 'Character not found.' },
+      vaultAccess: {
+        available: false,
+        sharedVaultsEnabled: false,
+        message: 'Character not found.',
+      },
       memory: {
         available: false,
         totalCount: 0,
         highImportanceCount: 0,
         highImportancePercent: 0,
         threshold: HIGH_IMPORTANCE_THRESHOLD,
+        message: 'Character not found.',
+      },
+      loadedMemories: {
+        available: false,
         message: 'Character not found.',
       },
       chats: {
@@ -593,6 +732,15 @@ export async function executeSelfInventoryTool(
     })
   );
 
+  const vaultAccess: SelfInventoryVaultAccessSection = await buildVaultAccessSection(
+    character,
+    context
+  ).catch((err) => ({
+    available: false as const,
+    sharedVaultsEnabled: false,
+    message: getErrorMessage(err),
+  }));
+
   const memory: SelfInventoryMemorySection = await buildMemorySection(
     context.characterId
   ).catch((err) => ({
@@ -603,6 +751,10 @@ export async function executeSelfInventoryTool(
     threshold: HIGH_IMPORTANCE_THRESHOLD,
     message: getErrorMessage(err),
   }));
+
+  const loadedMemories: SelfInventoryLoadedMemoriesSection = buildLoadedMemoriesSection(
+    context.loadedMemories
+  );
 
   const chats: SelfInventoryChatSection = await buildChatsSection(
     context.characterId
@@ -647,7 +799,9 @@ export async function executeSelfInventoryTool(
     characterId: character.id,
     characterName: character.name,
     vault,
+    vaultAccess,
     memory,
+    loadedMemories,
     chats,
     prompt,
     lastTurn,
@@ -670,6 +824,80 @@ function formatVaultSection(section: SelfInventoryVaultSection): string {
   });
   const footer = `(To read a file: doc_read_file with scope='document_store', mount_point='${section.mountPointName}', path='<relativePath>')`;
   return `${header}\n${lines.join('\n')}\n${footer}`;
+}
+
+function formatVaultAccessSection(section: SelfInventoryVaultAccessSection): string {
+  if (!section.available) {
+    return `## Vault Access (this chat)\nUnavailable — ${section.message}`;
+  }
+
+  const toggleLine = section.sharedVaultsEnabled
+    ? `Shared Vaults: ON — other present characters can read this vault.`
+    : `Shared Vaults: OFF — only the owner and user persona can access this vault via chat tools.`;
+
+  const readWrite = section.participants.filter((p) => p.access === 'read_write');
+  const readOnly = section.participants.filter((p) => p.access === 'read_only');
+
+  const formatParticipant = (p: SelfInventoryVaultAccessParticipant): string => {
+    const tags: string[] = [];
+    if (p.isSelf) tags.push('self');
+    if (p.controlledBy === 'user') tags.push('user persona');
+    if (p.status === 'silent') tags.push('silent');
+    const tagSuffix = tags.length > 0 ? ` (${tags.join(', ')})` : '';
+    return `- ${p.characterName}${tagSuffix}`;
+  };
+
+  const rwBlock =
+    readWrite.length === 0
+      ? '(none)'
+      : readWrite.map(formatParticipant).join('\n');
+  const roBlock =
+    readOnly.length === 0
+      ? '(none)'
+      : readOnly.map(formatParticipant).join('\n');
+
+  return [
+    `## Vault Access (this chat)`,
+    `Mount point: ${section.mountPointName}`,
+    toggleLine,
+    `Read/Write:`,
+    rwBlock,
+    `Read-only:`,
+    roBlock,
+  ].join('\n');
+}
+
+function formatLoadedMemoriesSection(section: SelfInventoryLoadedMemoriesSection): string {
+  if (!section.available) {
+    return `## Memories Loaded This Turn\nUnavailable — ${section.message}`;
+  }
+
+  const parts: string[] = [`## Memories Loaded This Turn`];
+
+  if (section.recap) {
+    parts.push(`### Memory Recap`);
+    parts.push(section.recap);
+  }
+
+  if (section.semanticMemories.length > 0) {
+    parts.push(`### Relevant Memories (${section.semanticMemories.length})`);
+    for (const m of section.semanticMemories) {
+      parts.push(
+        `- [importance ${m.importance.toFixed(2)}, score ${m.score.toFixed(2)}, weight ${m.effectiveWeight.toFixed(2)}] ${m.summary}`
+      );
+    }
+  } else {
+    parts.push(`### Relevant Memories\n(none loaded this turn)`);
+  }
+
+  if (section.interCharacterMemories.length > 0) {
+    parts.push(`### Memories About Other Characters (${section.interCharacterMemories.length})`);
+    for (const m of section.interCharacterMemories) {
+      parts.push(`- About ${m.aboutCharacterName} [importance ${m.importance.toFixed(2)}]: ${m.summary}`);
+    }
+  }
+
+  return parts.join('\n');
 }
 
 function formatMemorySection(section: SelfInventoryMemorySection): string {
@@ -752,7 +980,11 @@ export function formatSelfInventoryResults(output: SelfInventoryToolOutput): str
     ``,
     formatVaultSection(output.vault),
     ``,
+    formatVaultAccessSection(output.vaultAccess),
+    ``,
     formatMemorySection(output.memory),
+    ``,
+    formatLoadedMemoriesSection(output.loadedMemories),
     ``,
     formatChatsSection(output.chats),
     ``,

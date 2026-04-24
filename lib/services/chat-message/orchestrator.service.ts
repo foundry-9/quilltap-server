@@ -982,7 +982,9 @@ async function processMessage(
     characterId: character.id,
   }))
 
-  // Create tool context
+  // Create tool context. Memories loaded into the prompt are forwarded so
+  // introspection tools (self_inventory) can report the exact slate the LLM
+  // saw this turn.
   const toolContext = createToolContext(
     chatId,
     userId,
@@ -992,6 +994,11 @@ async function processMessage(
     undefined, // embeddingProfileId: always use default embedding profile
     chat.projectId,
     options.browserUserAgent,
+    {
+      semantic: builtContext.debugMemories,
+      interCharacter: builtContext.debugInterCharacterMemories,
+      recap: builtContext.debugMemoryRecap,
+    },
   )
 
   // ============================================================================

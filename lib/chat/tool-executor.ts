@@ -149,6 +149,20 @@ export interface ToolResult {
 }
 
 /**
+ * Memory items that were loaded into the prompt for this turn. Populated by
+ * the orchestrator from the built context so tools like `self_inventory` can
+ * report the exact memory slate the LLM saw.
+ */
+export interface LoadedMemoriesContext {
+  /** Semantic-search memories rendered under `## Relevant Memories`. */
+  semantic?: Array<{ summary: string; importance: number; score: number; effectiveWeight: number }>;
+  /** Inter-character memories rendered under `## Memories About Other Characters`. */
+  interCharacter?: Array<{ aboutCharacterName: string; summary: string; importance: number }>;
+  /** Memory recap text injected on chat start or character join, if any. */
+  recap?: string;
+}
+
+/**
  * Extended context for tool execution
  */
 export interface ToolExecutionContext {
@@ -163,6 +177,8 @@ export interface ToolExecutionContext {
   projectId?: string;
   /** Browser User-Agent from the originating request (scrubbed of Electron/Quilltap tokens) */
   browserUserAgent?: string;
+  /** Memories loaded into this turn's prompt, for introspection tools. */
+  loadedMemories?: LoadedMemoriesContext;
 }
 
 /**
@@ -552,6 +568,7 @@ export async function executeToolCallWithContext(
         chatId,
         characterId,
         callingParticipantId: context.callingParticipantId,
+        loadedMemories: context.loadedMemories,
       };
 
       const result = await executeSelfInventoryTool(toolCall.arguments, selfInventoryContext);
@@ -566,7 +583,9 @@ export async function executeToolCallWithContext(
               characterId: result.characterId,
               characterName: result.characterName,
               vault: result.vault,
+              vaultAccess: result.vaultAccess,
               memory: result.memory,
+              loadedMemories: result.loadedMemories,
               chats: result.chats,
               prompt: result.prompt,
               lastTurn: result.lastTurn,

@@ -6,7 +6,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext } from '@/lib/chat/tool-executor'
+import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext, type LoadedMemoriesContext } from '@/lib/chat/tool-executor'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ToolMessage, GeneratedImage, ToolProcessingResult } from './types'
 import { encodeStatusEvent } from './streaming.service'
@@ -268,6 +268,7 @@ export function createToolContext(
   embeddingProfileId?: string,
   projectId?: string | null,
   browserUserAgent?: string,
+  loadedMemories?: LoadedMemoriesContext,
 ): ToolExecutionContext {
   return {
     chatId,
@@ -278,5 +279,6 @@ export function createToolContext(
     callingParticipantId: characterParticipantId,
     projectId: projectId || undefined,
     browserUserAgent,
+    loadedMemories,
   }
 }
