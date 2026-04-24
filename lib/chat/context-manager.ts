@@ -56,6 +56,10 @@ import {
   type SelectableMessage,
 } from './context/message-selector'
 import {
+  findMentionedCharacterIds,
+  formatMentionedCharactersSection,
+} from './context/mentioned-characters'
+import {
   shouldApplyCompression,
   shouldApplyBudgetCompression,
   splitMessagesForCompression,
@@ -430,6 +434,82 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
   }
 
+  // Build "Characters Mentioned" section: scan the conversation for references
+  // to characters that exist on the system but are not currently in the chat.
+  // Failures here must never break prompt assembly — log and skip on error.
+  let mentionedCharactersSection: string | undefined
+  try {
+    const repos = getRepositories()
+    const allUserCharacters = await repos.characters.findByUserId(userId)
+
+    // Build the set of character IDs to exclude from the candidate pool.
+    const excludedCharacterIds = new Set<string>()
+    excludedCharacterIds.add(character.id)
+    if (allParticipants) {
+      for (const participant of allParticipants) {
+        if (
+          participant.type === 'CHARACTER' &&
+          participant.characterId &&
+          participant.status !== 'removed'
+        ) {
+          excludedCharacterIds.add(participant.characterId)
+        }
+      }
+    }
+
+    // Also exclude the user's persona by name (no ID is exposed via options).
+    const userCharacterNameLower = userCharacter?.name?.trim().toLowerCase()
+
+    const candidates = allUserCharacters.filter(c => {
+      if (excludedCharacterIds.has(c.id)) return false
+      if (userCharacterNameLower && c.name.trim().toLowerCase() === userCharacterNameLower) {
+        return false
+      }
+      return true
+    })
+
+    if (candidates.length > 0) {
+      // Build the scan corpus: conversation summary plus every visible
+      // USER/ASSISTANT message in the chat history. Scanning the full
+      // history (rather than the post-compression window) lets us surface
+      // characters mentioned earlier in long conversations.
+      const visibleForScan = extractVisibleConversation(existingMessages)
+      const corpusParts: string[] = []
+      if (chat.contextSummary) corpusParts.push(chat.contextSummary)
+      for (const msg of visibleForScan) {
+        if (msg.content) corpusParts.push(msg.content)
+      }
+      const scanCorpus = corpusParts.join('\n')
+
+      const matchedIds = findMentionedCharacterIds(scanCorpus, candidates)
+      if (matchedIds.size > 0) {
+        const matched = candidates.filter(c => matchedIds.has(c.id))
+        const formatted = formatMentionedCharactersSection(matched)
+        if (formatted.section.length > 0) {
+          mentionedCharactersSection = formatted.section
+          logger.debug('[ContextManager] Mentioned characters section built', {
+            chatId: chat.id,
+            candidateCount: candidates.length,
+            matchedCount: matched.length,
+            includedCount: formatted.includedCount,
+            matchedNames: matched.map(c => c.name),
+            sectionTokens: estimateTokens(formatted.section, provider),
+          })
+        }
+      } else {
+        logger.debug('[ContextManager] No mentioned characters found', {
+          chatId: chat.id,
+          candidateCount: candidates.length,
+        })
+      }
+    }
+  } catch (error) {
+    logger.warn('[ContextManager] Failed to build mentioned-characters section', {
+      chatId: chat.id,
+      error: getErrorMessage(error),
+    })
+  }
+
   const tSystemPromptStart = performance.now()
   const systemPrompt = buildSystemPrompt(
     character,
@@ -447,6 +527,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     options.chat.scenarioText ?? undefined,
     wardrobeContext,
     options.outfitChangeNotifications
+    // mentionedCharactersSection is appended AFTER truncation below so it
+    // always survives; the in-prompt position would otherwise be lopped off
+    // whenever the core system prompt exceeds its token budget.
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
   logger.debug('[ContextManager] buildSystemPrompt complete', {
@@ -472,6 +555,14 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     warnings.push(`System prompt (${systemPromptTokens} tokens) exceeds budget (${budget.systemPromptBudget}). Truncating.`)
     finalSystemPrompt = truncateToTokenLimit(systemPrompt, budget.systemPromptBudget, provider)
   }
+
+  // Append "Characters Mentioned" after any truncation so it always survives,
+  // even when the core system prompt is over budget. The section's own length
+  // is bounded by formatMentionedCharactersSection's internal hard cap.
+  if (mentionedCharactersSection) {
+    finalSystemPrompt = `${finalSystemPrompt}\n\n${mentionedCharactersSection}`
+  }
+
   const finalSystemPromptTokens = estimateTokens(finalSystemPrompt, provider)
 
   // ============================================================================
