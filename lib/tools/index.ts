@@ -214,6 +214,27 @@ export {
   type StateToolContext,
 } from './handlers/state-handler';
 
+// Self-Inventory Tool (character introspection)
+export {
+  selfInventoryToolDefinition,
+  validateSelfInventoryInput,
+  type SelfInventoryToolInput,
+  type SelfInventoryToolOutput,
+  type SelfInventoryVaultFile,
+  type SelfInventoryVaultSection,
+  type SelfInventoryMemorySection,
+  type SelfInventoryChatSection,
+  type SelfInventoryPromptSection,
+  type SelfInventoryLastTurnSection,
+  type SelfInventoryLastTurnSource,
+} from './self-inventory-tool';
+
+export {
+  executeSelfInventoryTool,
+  formatSelfInventoryResults,
+  type SelfInventoryToolContext,
+} from './handlers/self-inventory-handler';
+
 // Shell Interactivity Tools
 export {
   shellChdirToolDefinition,

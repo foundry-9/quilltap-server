@@ -75,6 +75,12 @@ These tools are always available in Quilltap:
 - Useful for: Tabletop gaming, roleplay decisions, adding chance elements to stories
 - See [RNG Tool](rng-tool.md) for detailed usage
 
+**Self-Inventory**
+
+- Returns an introspection report for the calling character: the full file listing of the character's vault (with metadata for `doc_read_file`/`doc_write_file`), memory totals and high-importance percentage, conversation count and date range, the static system prompt that goes into every turn, and provider/model/token usage from the most recent LLM call (with context-window utilization)
+- Always available to character participants
+- Useful for: letting a character pick the right vault file to consult, ask the operator whether the context window is filling up, or dump its own configuration into the chat on request; useful to operators for debugging why a character is behaving a particular way without stepping out of the Salon
+
 ### Plugin Tools
 
 Additional tools provided by installed plugins or extensions:

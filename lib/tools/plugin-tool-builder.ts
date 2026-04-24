@@ -27,6 +27,7 @@ import {
   helpNavigateToolDefinition,
   rngToolDefinition,
   stateToolDefinition,
+  selfInventoryToolDefinition,
   whisperToolDefinition,
   getAllShellToolDefinitions,
 } from '@/lib/tools';
@@ -322,6 +323,10 @@ export async function buildToolsForProvider(
   if (options.state !== false) {
     universalTools.push(stateToolDefinition as UniversalTool);
   }
+
+  // Self-inventory tool is always available to character participants —
+  // pure introspection, no side effects.
+  universalTools.push(selfInventoryToolDefinition as UniversalTool);
 
   // Scriptorium tools (always enabled - conversation reading, annotations, and search)
   universalTools.push(readConversationToolDefinition as UniversalTool);

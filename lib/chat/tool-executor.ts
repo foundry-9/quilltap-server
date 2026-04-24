@@ -58,6 +58,11 @@ import {
   type StateToolContext,
 } from '@/lib/tools/handlers/state-handler';
 import {
+  executeSelfInventoryTool,
+  formatSelfInventoryResults,
+  type SelfInventoryToolContext,
+} from '@/lib/tools/handlers/self-inventory-handler';
+import {
   executeSubmitFinalResponseTool,
   formatSubmitFinalResponseResults,
   type SubmitFinalResponseToolContext,
@@ -208,6 +213,7 @@ const BUILT_IN_TOOLS = new Set<string>([
   'help_navigate',
   'rng',
   'state',
+  'self_inventory',
   'submit_final_response',
   'whisper',
   // Scriptorium tools
@@ -593,6 +599,46 @@ export async function executeToolCallWithContext(
           results: result.results,
           sum: result.sum,
         } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle self_inventory (character introspection)
+    if (toolCall.name === 'self_inventory') {
+      if (!characterId) {
+        return {
+          toolName: 'self_inventory',
+          success: false,
+          result: null,
+          error: 'self_inventory requires a character context',
+        };
+      }
+
+      const selfInventoryContext: SelfInventoryToolContext = {
+        userId,
+        chatId,
+        characterId,
+        callingParticipantId: context.callingParticipantId,
+      };
+
+      const result = await executeSelfInventoryTool(toolCall.arguments, selfInventoryContext);
+      const formattedResult = formatSelfInventoryResults(result);
+
+      return {
+        toolName: 'self_inventory',
+        success: result.success,
+        result: result.success
+          ? {
+              formattedText: formattedResult,
+              characterId: result.characterId,
+              characterName: result.characterName,
+              vault: result.vault,
+              memory: result.memory,
+              chats: result.chats,
+              prompt: result.prompt,
+              lastTurn: result.lastTurn,
+            }
+          : null,
         error: result.success ? undefined : result.error,
       };
     }
