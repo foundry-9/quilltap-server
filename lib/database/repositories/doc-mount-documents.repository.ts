@@ -171,15 +171,24 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
     if (mountPointIds.length === 0) {
       return [];
     }
-    const escapedFolder = folder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const escapedExt = extension.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = `^${escapedFolder}/[^/]+${escapedExt}$`;
+    // Prefix match via LIKE, then narrow to top-level + extension in JS.
+    // The SQLite $regex translator cannot express anchored patterns
+    // (it always wraps in %…%), so an anchored regex like
+    // `^folder/[^/]+\.md$` silently matches nothing.
+    const prefix = `${folder}/`;
     return this.safeQuery(
-      async () =>
-        this.findByFilter({
+      async () => {
+        const rows = await this.findByFilter({
           mountPointId: { $in: mountPointIds },
-          relativePath: { $regex: regex },
-        } as TypedQueryFilter<DocMountDocument>),
+          relativePath: { $like: `${prefix}%` },
+        } as TypedQueryFilter<DocMountDocument>);
+        return rows.filter((doc) => {
+          if (!doc.relativePath.startsWith(prefix)) return false;
+          const rest = doc.relativePath.slice(prefix.length);
+          if (rest.length === 0 || rest.includes('/')) return false;
+          return rest.endsWith(extension);
+        });
+      },
       'Error finding documents by mount point IDs and folder',
       { mountPointIdCount: mountPointIds.length, folder, extension },
       []

@@ -212,6 +212,17 @@ function translateFieldFilter(
           }
           break;
 
+        case '$like': {
+          // Literal SQL LIKE pattern. Caller supplies `%` / `_` wildcards; the
+          // translator does not wrap or transform the value. Unlike `$regex`,
+          // this is safe for prefix/anchored matches (regex→LIKE conversion
+          // cannot represent anchors because the regex path always wraps the
+          // pattern in `%…%`).
+          clauses.push(`${columnExpr} LIKE ?`);
+          params.push(String(opValue));
+          break;
+        }
+
         case '$regex': {
           // SQLite LIKE with pattern conversion (limited regex support)
           // Extract pattern source if it's a RegExp object, otherwise use as string
