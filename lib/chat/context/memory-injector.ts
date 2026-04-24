@@ -6,7 +6,7 @@
  */
 
 import type { Provider, Memory } from '@/lib/schemas/types'
-import { estimateTokens } from '@/lib/tokens/token-counter'
+import { estimateTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { calculateEffectiveWeight, formatRelativeAge } from '@/lib/memory/memory-weighting'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
 
@@ -203,7 +203,6 @@ export function formatSummaryForContext(
   }
 
   // Truncate summary to fit
-  const { truncateToTokenLimit } = require('@/lib/tokens/token-counter')
   const headerTokens = estimateTokens(header + '\n', provider)
   const availableForSummary = maxTokens - headerTokens
   const truncatedSummary = truncateToTokenLimit(summary, availableForSummary, provider)
