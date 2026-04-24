@@ -14,6 +14,7 @@ interface CharacterBasicInfoProps {
   onScenariosChange: (scenarios: CharacterScenario[]) => void
   onReadFromDocStoreToggle: (enabled: boolean) => void
   onSyncPropertiesFromVault: () => void
+  onSyncPropertiesToVault: () => void
 }
 
 /**
@@ -78,6 +79,7 @@ export function CharacterBasicInfo({
   onScenariosChange,
   onReadFromDocStoreToggle,
   onSyncPropertiesFromVault,
+  onSyncPropertiesToVault,
 }: CharacterBasicInfoProps) {
   const overlayOn = formData.readPropertiesFromDocumentStore === true
   // When the overlay is on, all vault-managed fields remain editable; the
@@ -136,20 +138,37 @@ export function CharacterBasicInfo({
             />
           </label>
         </div>
-        {overlayOn && (
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-md qt-bg-muted px-3 py-2">
-            <p className="text-xs qt-text-secondary">
-              Values below reflect the vault. Edits save to the vault files; the
-              database row stays frozen at its pre-overlay state.
-            </p>
-            <button
-              type="button"
-              onClick={onSyncPropertiesFromVault}
-              className="qt-button-secondary qt-button-sm whitespace-nowrap"
-              title="Copy the current vault values into the database record so the row matches the vault"
-            >
-              Snapshot to database
-            </button>
+        {hasLinkedVault && (
+          <div className="mt-3 rounded-md qt-bg-muted px-3 py-2 space-y-2">
+            {overlayOn ? (
+              <p className="text-xs qt-text-secondary">
+                Values below reflect the vault. Edits save to the vault files;
+                the database row stays frozen at its pre-overlay state.
+              </p>
+            ) : (
+              <p className="text-xs qt-text-secondary">
+                Values below reflect the database row. Use the buttons to copy
+                state between the database and the linked vault.
+              </p>
+            )}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={onSyncPropertiesFromVault}
+                className="qt-button-secondary qt-button-sm whitespace-nowrap"
+                title="Copy the current vault values into the database record so the row matches the vault"
+              >
+                Copy vault &rarr; database
+              </button>
+              <button
+                type="button"
+                onClick={onSyncPropertiesToVault}
+                className="qt-button-secondary qt-button-sm whitespace-nowrap"
+                title="Copy the current database values into the vault files so the vault matches the database"
+              >
+                Copy database &rarr; vault
+              </button>
+            </div>
           </div>
         )}
       </div>

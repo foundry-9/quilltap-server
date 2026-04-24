@@ -25,11 +25,17 @@ jest.mock('@/lib/repositories/factory');
 
 jest.mock('@/lib/mount-index/database-store', () => ({
   readDatabaseDocument: jest.fn(),
+  writeDatabaseDocument: jest.fn().mockResolvedValue(undefined),
+  deleteDatabaseDocument: jest.fn().mockResolvedValue(undefined),
   DatabaseStoreError: class DatabaseStoreError extends Error {
     constructor(message: string, public code: string) {
       super(message);
     }
   },
+}));
+
+jest.mock('@/lib/mount-index/folder-paths', () => ({
+  ensureFolderPath: jest.fn().mockResolvedValue(undefined),
 }));
 
 import {
@@ -43,6 +49,7 @@ import {
   readCharacterVaultPhysicalPrompts,
   readCharacterVaultSystemPrompts,
   readCharacterVaultScenarios,
+  writeCharacterVaultManagedFields,
   CharacterVaultPropertiesSchema,
   CharacterVaultPhysicalPromptsSchema,
   CHARACTER_PROPERTIES_JSON_PATH,
@@ -55,10 +62,17 @@ import {
   CHARACTER_SCENARIOS_FOLDER,
 } from '@/lib/database/repositories/character-properties-overlay';
 import type { Character, PhysicalDescription } from '@/lib/schemas/types';
-import { readDatabaseDocument, DatabaseStoreError } from '@/lib/mount-index/database-store';
+import {
+  readDatabaseDocument,
+  writeDatabaseDocument,
+  deleteDatabaseDocument,
+  DatabaseStoreError,
+} from '@/lib/mount-index/database-store';
 
 const getRepositoriesMock = jest.requireMock('@/lib/repositories/factory').getRepositories as jest.Mock;
 const readDatabaseDocumentMock = readDatabaseDocument as jest.MockedFunction<typeof readDatabaseDocument>;
+const writeDatabaseDocumentMock = writeDatabaseDocument as jest.MockedFunction<typeof writeDatabaseDocument>;
+const deleteDatabaseDocumentMock = deleteDatabaseDocument as jest.MockedFunction<typeof deleteDatabaseDocument>;
 
 function makeCharacter(overrides: Partial<Character>): Character {
   return {
@@ -1280,5 +1294,301 @@ describe('CharacterVaultPhysicalPromptsSchema', () => {
       complete: null,
     });
     expect(parsed.success).toBe(false);
+  });
+});
+
+describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRepoPaths({}, {});
+  });
+
+  function getWrite(path: string): string | undefined {
+    const call = writeDatabaseDocumentMock.mock.calls.find(
+      ([, relPath]) => relPath === path,
+    );
+    return call ? (call[2] as string) : undefined;
+  }
+
+  it('writes every single-file vault target for a character with a primary physical description', async () => {
+    const character = makeCharacter({
+      id: 'char-sync',
+      pronouns: { subject: 'they', object: 'them', possessive: 'their' },
+      aliases: ['Nick', 'Nicky'],
+      title: 'Detective',
+      firstMessage: 'Hello there.',
+      talkativeness: 0.7,
+      description: 'DB desc',
+      personality: 'DB personality',
+      exampleDialogues: 'DB dialogues',
+      physicalDescriptions: [
+        {
+          id: 'phys-1',
+          name: 'primary',
+          fullDescription: 'primary full',
+          shortPrompt: 'short',
+          mediumPrompt: 'medium',
+          longPrompt: 'long',
+          completePrompt: 'complete',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      systemPrompts: [],
+      scenarios: [],
+    });
+
+    const result = await writeCharacterVaultManagedFields('mount-1', {
+      character,
+      wardrobeItems: [],
+      outfitPresets: [],
+    });
+
+    expect(result.physicalSkippedNoPrimary).toBe(false);
+    expect(result.singleFileWriteCount).toBe(6);
+
+    const props = JSON.parse(getWrite(CHARACTER_PROPERTIES_JSON_PATH)!);
+    expect(props).toEqual({
+      pronouns: { subject: 'they', object: 'them', possessive: 'their' },
+      aliases: ['Nick', 'Nicky'],
+      title: 'Detective',
+      firstMessage: 'Hello there.',
+      talkativeness: 0.7,
+    });
+
+    expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('DB desc');
+    expect(getWrite(CHARACTER_PERSONALITY_MD_PATH)).toBe('DB personality');
+    expect(getWrite(CHARACTER_EXAMPLE_DIALOGUES_MD_PATH)).toBe('DB dialogues');
+    expect(getWrite(CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH)).toBe('primary full');
+
+    const physPrompts = JSON.parse(getWrite(CHARACTER_PHYSICAL_PROMPTS_JSON_PATH)!);
+    expect(physPrompts).toEqual({
+      short: 'short',
+      medium: 'medium',
+      long: 'long',
+      complete: 'complete',
+    });
+
+    const wardrobe = JSON.parse(getWrite('wardrobe.json')!);
+    expect(wardrobe).toEqual({
+      items: [],
+      presets: [],
+      outfit: { top: null, bottom: null, footwear: null, accessories: null },
+    });
+  });
+
+  it('writes empty strings / nulls through for characters with sparse fields', async () => {
+    const character = makeCharacter({
+      id: 'char-sparse',
+      description: null,
+      personality: null,
+      exampleDialogues: null,
+      title: null,
+      firstMessage: null,
+      aliases: [],
+      pronouns: null,
+      physicalDescriptions: [],
+      systemPrompts: [],
+      scenarios: [],
+    });
+
+    const result = await writeCharacterVaultManagedFields('mount-2', {
+      character,
+      wardrobeItems: [],
+      outfitPresets: [],
+    });
+
+    expect(result.physicalSkippedNoPrimary).toBe(true);
+    expect(result.singleFileWriteCount).toBe(4);
+
+    const props = JSON.parse(getWrite(CHARACTER_PROPERTIES_JSON_PATH)!);
+    expect(props).toEqual({
+      pronouns: null,
+      aliases: [],
+      title: null,
+      firstMessage: null,
+      talkativeness: 0.5,
+    });
+    expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('');
+    expect(getWrite(CHARACTER_PERSONALITY_MD_PATH)).toBe('');
+    expect(getWrite(CHARACTER_EXAMPLE_DIALOGUES_MD_PATH)).toBe('');
+    expect(getWrite(CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH)).toBeUndefined();
+    expect(getWrite(CHARACTER_PHYSICAL_PROMPTS_JSON_PATH)).toBeUndefined();
+  });
+
+  it('projects systemPrompts into Prompts/*.md with YAML frontmatter and marks the default', async () => {
+    const character = makeCharacter({
+      id: 'char-prompts',
+      physicalDescriptions: [],
+      systemPrompts: [
+        {
+          id: 'p1',
+          name: 'Courtly',
+          content: 'Speak formally.',
+          isDefault: true,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'p2',
+          name: 'Casual',
+          content: 'Speak casually.',
+          isDefault: false,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      scenarios: [],
+    });
+
+    const result = await writeCharacterVaultManagedFields('mount-3', {
+      character,
+      wardrobeItems: [],
+      outfitPresets: [],
+    });
+
+    expect(result.systemPromptsWritten).toBe(2);
+
+    const courtly = getWrite(`${CHARACTER_PROMPTS_FOLDER}/Courtly.md`);
+    const casual = getWrite(`${CHARACTER_PROMPTS_FOLDER}/Casual.md`);
+    expect(courtly).toBeDefined();
+    expect(casual).toBeDefined();
+    expect(courtly).toContain('name: Courtly');
+    expect(courtly).toContain('isDefault: true');
+    expect(courtly).toContain('Speak formally.');
+    expect(casual).not.toContain('isDefault');
+    expect(casual).toContain('Speak casually.');
+  });
+
+  it('projects scenarios into Scenarios/*.md with a # heading title', async () => {
+    const character = makeCharacter({
+      id: 'char-scenarios',
+      physicalDescriptions: [],
+      systemPrompts: [],
+      scenarios: [
+        {
+          id: 's1',
+          title: 'The Drawing Room',
+          content: 'A quiet gathering on a Tuesday afternoon.',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const result = await writeCharacterVaultManagedFields('mount-4', {
+      character,
+      wardrobeItems: [],
+      outfitPresets: [],
+    });
+
+    expect(result.scenariosWritten).toBe(1);
+    const scenarioFile = getWrite(`${CHARACTER_SCENARIOS_FOLDER}/The Drawing Room.md`);
+    expect(scenarioFile).toBe('# The Drawing Room\n\nA quiet gathering on a Tuesday afternoon.');
+  });
+
+  it('deletes stale files in Prompts/ and Scenarios/ that no longer correspond to a DB entry', async () => {
+    mockRepoPaths({}, {
+      [CHARACTER_PROMPTS_FOLDER]: [
+        {
+          mountPointId: 'mount-5',
+          relativePath: `${CHARACTER_PROMPTS_FOLDER}/Old.md`,
+          fileName: 'Old.md',
+          content: 'stale',
+        },
+      ],
+      [CHARACTER_SCENARIOS_FOLDER]: [
+        {
+          mountPointId: 'mount-5',
+          relativePath: `${CHARACTER_SCENARIOS_FOLDER}/Old Scene.md`,
+          fileName: 'Old Scene.md',
+          content: 'stale',
+        },
+      ],
+    });
+
+    const character = makeCharacter({
+      id: 'char-stale',
+      physicalDescriptions: [],
+      systemPrompts: [
+        {
+          id: 'p-new',
+          name: 'New',
+          content: 'Fresh.',
+          isDefault: true,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      scenarios: [
+        {
+          id: 's-new',
+          title: 'New Scene',
+          content: 'Fresh scenario.',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+
+    await writeCharacterVaultManagedFields('mount-5', {
+      character,
+      wardrobeItems: [],
+      outfitPresets: [],
+    });
+
+    const deletedPaths = deleteDatabaseDocumentMock.mock.calls.map(([, p]) => p);
+    expect(deletedPaths).toContain(`${CHARACTER_PROMPTS_FOLDER}/Old.md`);
+    expect(deletedPaths).toContain(`${CHARACTER_SCENARIOS_FOLDER}/Old Scene.md`);
+  });
+
+  it('writes wardrobe items and presets as the vault wardrobe.json payload with an outfit placeholder', async () => {
+    const character = makeCharacter({
+      id: 'char-wardrobe',
+      physicalDescriptions: [],
+      systemPrompts: [],
+      scenarios: [],
+    });
+
+    const wardrobeItems = [
+      {
+        id: 'item-1',
+        characterId: 'char-wardrobe',
+        title: 'Linen Jacket',
+        description: 'Cream linen with ivory buttons.',
+        types: ['top' as const],
+        appropriateness: null,
+        isDefault: true,
+        migratedFromClothingRecordId: null,
+        archivedAt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+    const outfitPresets = [
+      {
+        id: 'preset-1',
+        characterId: 'char-wardrobe',
+        name: 'Garden Party',
+        description: null,
+        slots: { top: 'item-1', bottom: null, footwear: null, accessories: null },
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const result = await writeCharacterVaultManagedFields('mount-6', {
+      character,
+      wardrobeItems,
+      outfitPresets,
+    });
+
+    expect(result.wardrobeItemsWritten).toBe(1);
+    expect(result.outfitPresetsWritten).toBe(1);
+
+    const wardrobe = JSON.parse(getWrite('wardrobe.json')!);
+    expect(wardrobe.items).toEqual(wardrobeItems);
+    expect(wardrobe.presets).toEqual(outfitPresets);
+    expect(wardrobe.outfit).toEqual({ top: null, bottom: null, footwear: null, accessories: null });
   });
 });

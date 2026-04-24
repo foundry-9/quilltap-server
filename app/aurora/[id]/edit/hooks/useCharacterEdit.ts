@@ -211,6 +211,30 @@ export function useCharacterEdit(id: string) {
   }
 
   /**
+   * Copy the character's DB values out into the linked vault's files. The
+   * reverse of handleSyncPropertiesFromVault; useful after turning the overlay
+   * off and making DB-only edits that the vault hasn't seen, or for seeding a
+   * newly linked vault from the existing DB row.
+   */
+  const handleSyncPropertiesToVault = async () => {
+    try {
+      const res = await fetch(`/api/v1/characters/${id}?action=sync-properties-to-vault`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to sync properties to vault')
+      }
+      showSuccessToast('Synced properties from the character record into the vault.')
+      await fetchCharacter()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to sync properties to vault'
+      showErrorToast(errorMsg)
+    }
+  }
+
+  /**
    * Submit form and save character data
    */
   const handleSubmit = async (e: React.FormEvent): Promise<boolean> => {
@@ -387,6 +411,7 @@ export function useCharacterEdit(id: string) {
     handleCancel,
     handleReadFromDocStoreToggle,
     handleSyncPropertiesFromVault,
+    handleSyncPropertiesToVault,
     setCharacterAvatar,
     getAvatarSrc,
     toggleUploadDialog,

@@ -1106,6 +1106,141 @@ export async function readCharacterVaultManagedFields(
 }
 
 // ============================================================================
+// FULL-CHARACTER VAULT WRITER
+//
+// Counterpart to readCharacterVaultManagedFields: given a raw (non-overlaid)
+// character plus its wardrobe/outfit-preset rows, project every vault-managed
+// field out to the vault's files. Used by the sync-properties-to-vault action
+// to push the DB row's state into the vault wholesale.
+//
+// This intentionally writes every managed file (not just a patch), so after a
+// successful call the vault is a faithful snapshot of the DB. Prompts/ and
+// Scenarios/ folders are reprojected — files that don't correspond to a DB
+// entry are deleted so the vault listing matches the DB arrays exactly.
+// ============================================================================
+
+export interface VaultManagedFieldsWriteInput {
+  character: Character;
+  wardrobeItems: readonly WardrobeItem[];
+  outfitPresets: readonly OutfitPreset[];
+}
+
+export interface VaultManagedFieldsWriteResult {
+  /** Number of single-file writes performed (not counting Prompts/ or Scenarios/ folder contents). */
+  singleFileWriteCount: number;
+  systemPromptsWritten: number;
+  scenariosWritten: number;
+  wardrobeItemsWritten: number;
+  outfitPresetsWritten: number;
+  /** True when the character has no physicalDescriptions[0] and the physical-* files were skipped. */
+  physicalSkippedNoPrimary: boolean;
+}
+
+export async function writeCharacterVaultManagedFields(
+  mountPointId: string,
+  { character, wardrobeItems, outfitPresets }: VaultManagedFieldsWriteInput,
+): Promise<VaultManagedFieldsWriteResult> {
+  const result: VaultManagedFieldsWriteResult = {
+    singleFileWriteCount: 0,
+    systemPromptsWritten: 0,
+    scenariosWritten: 0,
+    wardrobeItemsWritten: 0,
+    outfitPresetsWritten: 0,
+    physicalSkippedNoPrimary: false,
+  };
+
+  await writeDatabaseDocument(
+    mountPointId,
+    CHARACTER_PROPERTIES_JSON_PATH,
+    JSON.stringify(
+      {
+        pronouns: character.pronouns ?? null,
+        aliases: character.aliases ?? [],
+        title: character.title ?? null,
+        firstMessage: character.firstMessage ?? null,
+        talkativeness: character.talkativeness ?? 0.5,
+      },
+      null,
+      2,
+    ),
+  );
+  result.singleFileWriteCount++;
+
+  await writeDatabaseDocument(mountPointId, CHARACTER_DESCRIPTION_MD_PATH, character.description ?? '');
+  result.singleFileWriteCount++;
+
+  await writeDatabaseDocument(mountPointId, CHARACTER_PERSONALITY_MD_PATH, character.personality ?? '');
+  result.singleFileWriteCount++;
+
+  await writeDatabaseDocument(
+    mountPointId,
+    CHARACTER_EXAMPLE_DIALOGUES_MD_PATH,
+    character.exampleDialogues ?? '',
+  );
+  result.singleFileWriteCount++;
+
+  const primaryPhysical = character.physicalDescriptions?.[0];
+  if (primaryPhysical) {
+    await writeDatabaseDocument(
+      mountPointId,
+      CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH,
+      primaryPhysical.fullDescription ?? '',
+    );
+    result.singleFileWriteCount++;
+    await writeDatabaseDocument(
+      mountPointId,
+      CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
+      renderPhysicalPromptsJson(primaryPhysical),
+    );
+    result.singleFileWriteCount++;
+  } else {
+    result.physicalSkippedNoPrimary = true;
+  }
+
+  await projectArrayIntoVaultFolder(
+    mountPointId,
+    CHARACTER_PROMPTS_FOLDER,
+    character.systemPrompts ?? [],
+    (p) => ({
+      fileName: `${sanitizeFileName(p.name)}.md`,
+      content: buildSystemPromptFile(p),
+    }),
+    character.id,
+  );
+  result.systemPromptsWritten = character.systemPrompts?.length ?? 0;
+
+  await projectArrayIntoVaultFolder(
+    mountPointId,
+    CHARACTER_SCENARIOS_FOLDER,
+    character.scenarios ?? [],
+    (s) => ({
+      fileName: `${sanitizeFileName(s.title)}.md`,
+      content: buildScenarioFile(s),
+    }),
+    character.id,
+  );
+  result.scenariosWritten = character.scenarios?.length ?? 0;
+
+  await writeDatabaseDocument(
+    mountPointId,
+    CHARACTER_WARDROBE_JSON_PATH,
+    JSON.stringify(
+      {
+        items: wardrobeItems,
+        presets: outfitPresets,
+        outfit: { top: null, bottom: null, footwear: null, accessories: null },
+      },
+      null,
+      2,
+    ),
+  );
+  result.wardrobeItemsWritten = wardrobeItems.length;
+  result.outfitPresetsWritten = outfitPresets.length;
+
+  return result;
+}
+
+// ============================================================================
 // WRITE OVERLAY
 //
 // Symmetric counterpart to applyDocumentStoreOverlay: when an update() patch

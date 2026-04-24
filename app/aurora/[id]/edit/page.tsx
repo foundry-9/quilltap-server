@@ -82,6 +82,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     handleCancel,
     handleReadFromDocStoreToggle,
     handleSyncPropertiesFromVault,
+    handleSyncPropertiesToVault,
     setCharacterAvatar,
     getAvatarSrc,
     toggleAvatarSelector,
@@ -100,6 +101,16 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   // the character row; these lists hang off refreshKey props instead.
   const handleSyncPropertiesFromVaultAndRefreshLists = async () => {
     await handleSyncPropertiesFromVault()
+    setPhysicalDescriptionsRefreshKey((prev) => prev + 1)
+    setWardrobeRefreshKey((prev) => prev + 1)
+  }
+
+  // The reverse direction doesn't change the DB, but when the overlay is on,
+  // the overlaid values the child lists read are derived from vault files;
+  // pushing DB→vault therefore needs the same refresh so lists reflect the
+  // freshly-written vault state.
+  const handleSyncPropertiesToVaultAndRefreshLists = async () => {
+    await handleSyncPropertiesToVault()
     setPhysicalDescriptionsRefreshKey((prev) => prev + 1)
     setWardrobeRefreshKey((prev) => prev + 1)
   }
@@ -322,6 +333,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                     onScenariosChange={handleScenariosChange}
                     onReadFromDocStoreToggle={handleReadFromDocStoreToggle}
                     onSyncPropertiesFromVault={handleSyncPropertiesFromVaultAndRefreshLists}
+                    onSyncPropertiesToVault={handleSyncPropertiesToVaultAndRefreshLists}
                   />
                 )
 

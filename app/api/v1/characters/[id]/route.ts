@@ -21,6 +21,8 @@
  * - set-default-partner - Set default partner
  * - generate-external-prompt - Generate standalone system prompt for external tools
  * - refresh-archive - Re-render and re-embed all conversations for this character
+ * - sync-properties-from-vault - Copy vault-managed fields from vault files into the DB row
+ * - sync-properties-to-vault - Copy the DB row's values out into the vault files (reverse of above)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -43,6 +45,7 @@ import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
 import {
   readCharacterVaultManagedFields,
   readCharacterVaultWardrobe,
+  writeCharacterVaultManagedFields,
 } from '@/lib/database/repositories/character-properties-overlay';
 
 // ============================================================================
@@ -134,7 +137,7 @@ const generateExternalPromptSchema = z.object({
   maxTokens: z.number().int().min(1000).max(20000),
 });
 
-const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive', 'sync-properties-from-vault'] as const;
+const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive', 'sync-properties-from-vault', 'sync-properties-to-vault'] as const;
 type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 // ============================================================================
@@ -827,6 +830,51 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       } catch (error) {
         logger.error('[Characters v1] Error syncing properties from vault', { characterId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to sync properties from vault');
+      }
+    },
+
+    'sync-properties-to-vault': async () => {
+      try {
+        // Read the raw character so we project the canonical DB state into the
+        // vault, not values that would themselves be overlaid from vault files.
+        const rawCharacter = await repos.characters.findByIdRaw(id);
+        if (!rawCharacter) {
+          return notFound('Character');
+        }
+        if (!rawCharacter.characterDocumentMountPointId) {
+          return badRequest('Character has no linked document-store vault to sync to');
+        }
+
+        const mountId = rawCharacter.characterDocumentMountPointId;
+        const [wardrobeItems, outfitPresets] = await Promise.all([
+          repos.wardrobe.findByCharacterIdRaw(rawCharacter.id, true),
+          repos.outfitPresets.findByCharacterIdRaw(rawCharacter.id),
+        ]);
+
+        const writeResult = await writeCharacterVaultManagedFields(mountId, {
+          character: rawCharacter,
+          wardrobeItems,
+          outfitPresets,
+        });
+
+        logger.info('[Characters v1] Synced character properties to vault', {
+          characterId: id,
+          mountPointId: mountId,
+          singleFileWriteCount: writeResult.singleFileWriteCount,
+          systemPromptsWritten: writeResult.systemPromptsWritten,
+          scenariosWritten: writeResult.scenariosWritten,
+          wardrobeItemsWritten: writeResult.wardrobeItemsWritten,
+          outfitPresetsWritten: writeResult.outfitPresetsWritten,
+          physicalSkippedNoPrimary: writeResult.physicalSkippedNoPrimary,
+        });
+
+        // Return the overlaid character so the UI picks up vault-backed values
+        // immediately if the overlay switch happens to be on.
+        const refreshed = await repos.characters.findById(id);
+        return NextResponse.json({ character: refreshed });
+      } catch (error) {
+        logger.error('[Characters v1] Error syncing properties to vault', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to sync properties to vault');
       }
     },
 
