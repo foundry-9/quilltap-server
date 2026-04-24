@@ -296,9 +296,9 @@ See [Editing Characters](character-editing.md) for detailed guide.
 
 Find and replace hard-coded names with placeholders:
 
-- **{{character}}** — Character name
+- **{{char}}** — Character name
 - **{{user}}** — Default partner name
-- Bulk replace across all fields
+- One click sweeps every prose field on the character — description, personality, first message, example dialogues, every scenario, every system prompt variant, and every physical-description entry (including the image-prompt slots). Structured metadata such as pronouns, aliases, and title is left untouched.
 - Preview changes before applying
 
 ### Rename and Replace Tool
