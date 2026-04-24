@@ -65,11 +65,17 @@ Projects can also override the agent mode default for all chats within that proj
 
 ## The submit_final_response Tool
 
-This special tool signals that the AI has completed its work:
+This special tool signals that the AI has completed multi-step agentic work for the current turn:
 
 - **response** (required): The final, polished answer to deliver to the user
 - **summary** (optional): Brief description of what was accomplished
 - **confidence** (optional): 0-1 confidence level in the response
+
+### When It Fires — And When It Shouldn't
+
+`submit_final_response` is scoped to the *current* turn. The agent should only reach for it after doing genuine agentic work this turn that warrants a structured summary. Conversational, relational, or simple follow-up messages get ordinary in-character prose replies — even with agent mode on, and even when other tools like memory search are used along the way.
+
+If the model calls `submit_final_response` on its very first iteration with no other tool calls and no prose content — a strong signal it's trying to re-wrap work from a previous, already-concluded turn rather than responding to the current message — the orchestrator rejects that call, tells the model to respond conversationally instead, and re-prompts. This keeps relational replies feeling relational.
 
 ## Turn Limit Behavior
 

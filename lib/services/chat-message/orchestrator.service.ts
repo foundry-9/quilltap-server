@@ -16,7 +16,7 @@ import { z } from 'zod'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ConnectionProfile, ChatMetadataBase, Character, ChatSettings } from '@/lib/schemas/types'
 
-import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState } from './types'
+import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState, ToolProcessingResult } from './types'
 
 import {
   resolveRespondingParticipant,
@@ -1406,7 +1406,18 @@ async function processMessage(
       ? toolCalls.find(tc => tc.name === 'submit_final_response')
       : undefined
 
-    if (submitFinalCall) {
+    // Guardrail: if the model calls submit_final_response on iteration 0, as the only
+    // tool, and with no accompanying prose, it is almost always ghost-wrapping work from
+    // a previous (already-concluded) turn rather than responding to the current user
+    // message. Reject it, synthesize a failure tool-result, and let the loop re-prompt
+    // for a conversational reply.
+    const isGhostWrapUp =
+      !!submitFinalCall &&
+      toolIterations === 0 &&
+      toolCalls.length === 1 &&
+      !(currentResponse && currentResponse.trim().length > 0)
+
+    if (submitFinalCall && !isGhostWrapUp) {
       // Agent mode completion - extract final response
       const args = submitFinalCall.arguments as { response?: string; summary?: string; confidence?: number }
       agentFinalResponse = args.response || currentResponse
@@ -1451,8 +1462,26 @@ async function processMessage(
       await repos.chats.update(chatId, { agentTurnCount: toolIterations })
     }
 
-    // Per-tool status updates are now emitted inside processToolCalls
-    const results = await processToolCalls(toolCalls, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
+    let results: ToolProcessingResult
+    if (isGhostWrapUp && submitFinalCall) {
+      logger.info('[AgentMode] Rejecting iteration-0 submit_final_response with no prior work this turn', {
+        chatId,
+        rejectedResponseLength: (submitFinalCall.arguments as { response?: string }).response?.length,
+      })
+      results = {
+        toolMessages: [{
+          toolName: 'submit_final_response',
+          success: false,
+          content: "Rejected: submit_final_response was called on the first iteration without any accompanying task work or conversational prose this turn. The previous turn already concluded — do not re-wrap completed work. Respond to the user's current message directly, in character, as natural prose. You may use memory or other tools first if helpful, but only call submit_final_response after completing fresh agentic work that warrants a structured summary.",
+          callId: submitFinalCall.callId,
+          arguments: submitFinalCall.arguments,
+        }],
+        generatedImagePaths: [],
+      }
+    } else {
+      // Per-tool status updates are now emitted inside processToolCalls
+      results = await processToolCalls(toolCalls, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
+    }
     toolMessages = [...toolMessages, ...results.toolMessages]
     generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
