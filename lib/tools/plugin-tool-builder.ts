@@ -62,6 +62,7 @@ import { docUpdateFrontmatterTool } from '@/lib/tools/doc-update-frontmatter-too
 import { docReadHeadingTool } from '@/lib/tools/doc-read-heading-tool';
 import { docUpdateHeadingTool } from '@/lib/tools/doc-update-heading-tool';
 import { docMoveFileTool } from '@/lib/tools/doc-move-file-tool';
+import { docCopyFileTool } from '@/lib/tools/doc-copy-file-tool';
 import { docDeleteFileTool } from '@/lib/tools/doc-delete-file-tool';
 import { docCreateFolderTool } from '@/lib/tools/doc-create-folder-tool';
 import { docDeleteFolderTool } from '@/lib/tools/doc-delete-folder-tool';
@@ -358,6 +359,7 @@ export async function buildToolsForProvider(
     universalTools.push(docReadHeadingTool as UniversalTool);
     universalTools.push(docUpdateHeadingTool as UniversalTool);
     universalTools.push(docMoveFileTool as UniversalTool);
+    universalTools.push(docCopyFileTool as UniversalTool);
     universalTools.push(docDeleteFileTool as UniversalTool);
     universalTools.push(docCreateFolderTool as UniversalTool);
     universalTools.push(docDeleteFolderTool as UniversalTool);

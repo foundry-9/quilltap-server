@@ -52,6 +52,7 @@ import type { DocUpdateFrontmatterInput, DocUpdateFrontmatterOutput } from '../d
 import type { DocReadHeadingInput, DocReadHeadingOutput } from '../doc-read-heading-tool';
 import type { DocUpdateHeadingInput, DocUpdateHeadingOutput } from '../doc-update-heading-tool';
 import type { DocMoveFileInput, DocMoveFileOutput } from '../doc-move-file-tool';
+import type { DocCopyFileInput, DocCopyFileOutput } from '../doc-copy-file-tool';
 import type { DocDeleteFileInput, DocDeleteFileOutput } from '../doc-delete-file-tool';
 import type { DocCreateFolderInput, DocCreateFolderOutput } from '../doc-create-folder-tool';
 import type { DocDeleteFolderInput, DocDeleteFolderOutput } from '../doc-delete-folder-tool';
@@ -98,6 +99,7 @@ export const DOC_EDIT_TOOL_NAMES = new Set([
   'doc_read_heading',
   'doc_update_heading',
   'doc_move_file',
+  'doc_copy_file',
   'doc_delete_file',
   'doc_create_folder',
   'doc_delete_folder',
@@ -162,6 +164,8 @@ export async function executeDocEditTool(
         return await handleUpdateHeading(input as unknown as DocUpdateHeadingInput, context);
       case 'doc_move_file':
         return await handleMoveFile(input as unknown as DocMoveFileInput, context);
+      case 'doc_copy_file':
+        return await handleCopyFile(input as unknown as DocCopyFileInput, context);
       case 'doc_delete_file':
         return await handleDeleteFile(input as unknown as DocDeleteFileInput, context);
       case 'doc_create_folder':
@@ -1408,6 +1412,187 @@ async function handleMoveFile(
     success: true,
     result,
     formattedText: `Moved: ${input.path} → ${input.new_path}`,
+  };
+}
+
+// --- doc_copy_file ---
+
+/**
+ * Given a resolved destination and the source basename, decide whether the
+ * destination points at an existing directory. If it does, the file should
+ * be copied into that directory under its source filename. Otherwise the
+ * resolved path is treated as the final file path (parent dirs auto-created).
+ *
+ * Returns the final relative path to use for the destination write.
+ */
+async function resolveCopyDestination(
+  resolvedDest: ResolvedPath,
+  destRelInput: string,
+  sourceBasename: string
+): Promise<string> {
+  const normalised = destRelInput.trim();
+  if (normalised === '' || normalised === '.' || normalised === '/' || normalised === './') {
+    return sourceBasename;
+  }
+
+  // Detect directory at the resolved destination.
+  let destIsDirectory = false;
+  if (resolvedDest.mountType === 'database' && resolvedDest.mountPointId) {
+    destIsDirectory = await databaseFolderExists(
+      resolvedDest.mountPointId,
+      resolvedDest.relativePath
+    );
+  } else if (resolvedDest.absolutePath) {
+    try {
+      const stat = await fs.stat(resolvedDest.absolutePath);
+      destIsDirectory = stat.isDirectory();
+    } catch {
+      destIsDirectory = false;
+    }
+  }
+
+  if (destIsDirectory) {
+    // Use posix join so the stored relative path stays forward-slash style,
+    // matching the rest of the doc-edit layer.
+    const joined = path.posix.join(resolvedDest.relativePath.split(path.sep).join('/'), sourceBasename);
+    return joined;
+  }
+
+  return resolvedDest.relativePath;
+}
+
+async function handleCopyFile(
+  input: DocCopyFileInput,
+  context: DocEditToolContext
+): Promise<{ success: boolean; result?: DocCopyFileOutput; error?: string; formattedText?: string }> {
+  // Text-only guard, to mirror doc_write_file / doc_read_file semantics.
+  if (!isTextFile(input.source_path)) {
+    return {
+      success: false,
+      error: `doc_copy_file supports text files only. For binary assets (images, PDFs, etc.), use the blob family of tools.`,
+    };
+  }
+
+  // Resolve source (read context — peer vaults may be readable in shared chats)
+  // and destination (write context — peer vaults are never writable).
+  const readContext = await buildReadResolutionContext(
+    { mount_point: input.source_mount_point },
+    context
+  );
+  const writeContext = await buildWriteResolutionContext(
+    { mount_point: input.dest_mount_point },
+    context
+  );
+
+  const resolvedSource = await resolveDocEditPath('document_store', input.source_path, readContext);
+
+  // Initial destination resolve is against the raw dest_path; we re-resolve
+  // below once we know whether to append the source basename.
+  const destRelInput = input.dest_path ?? '';
+  const initialDestRel = destRelInput.trim() === '' || destRelInput.trim() === '/' ? '.' : destRelInput;
+  const initialResolvedDest = await resolveDocEditPath('document_store', initialDestRel, writeContext);
+
+  // Same-store guard: compare by mountPointId, which is the authoritative
+  // identifier after lookup collapses name-vs-id inputs.
+  if (
+    resolvedSource.mountPointId &&
+    initialResolvedDest.mountPointId &&
+    resolvedSource.mountPointId === initialResolvedDest.mountPointId
+  ) {
+    return {
+      success: false,
+      error: `doc_copy_file requires source and destination to be different document stores. Both resolved to "${resolvedSource.mountPointName ?? resolvedSource.mountPointId}".`,
+    };
+  }
+
+  const sourceBasename = path.posix.basename(input.source_path.split(path.sep).join('/'));
+  const finalDestRel = await resolveCopyDestination(initialResolvedDest, destRelInput, sourceBasename);
+
+  // Re-resolve with the final relative path so downstream existence checks,
+  // reindex, and write all see the true destination.
+  const resolvedDest = await resolveDocEditPath('document_store', finalDestRel, writeContext);
+
+  // Verify source exists and is a file (not a folder).
+  if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
+    if (!(await databaseDocumentExists(resolvedSource.mountPointId, resolvedSource.relativePath))) {
+      if (await databaseFolderExists(resolvedSource.mountPointId, resolvedSource.relativePath)) {
+        return { success: false, error: `Source path is a folder, not a file: ${input.source_path}.` };
+      }
+      return { success: false, error: `Source file not found: ${input.source_path}` };
+    }
+  } else {
+    try {
+      const stat = await fs.stat(resolvedSource.absolutePath);
+      if (!stat.isFile()) {
+        return { success: false, error: `Source path is not a file: ${input.source_path}` };
+      }
+    } catch {
+      return { success: false, error: `Source file not found: ${input.source_path}` };
+    }
+  }
+
+  // Refuse to overwrite — match doc_move_file semantics.
+  if (resolvedDest.mountType === 'database' && resolvedDest.mountPointId) {
+    if (await databaseDocumentExists(resolvedDest.mountPointId, resolvedDest.relativePath)) {
+      return {
+        success: false,
+        error: `Destination already exists: ${finalDestRel}. Copy will not overwrite existing files; delete it first if you want to replace it.`,
+      };
+    }
+    if (await databaseFolderExists(resolvedDest.mountPointId, resolvedDest.relativePath)) {
+      return {
+        success: false,
+        error: `Destination path ${finalDestRel} resolves to a folder, not a file location.`,
+      };
+    }
+  } else if (resolvedDest.absolutePath) {
+    try {
+      const stat = await fs.stat(resolvedDest.absolutePath);
+      if (stat.isDirectory()) {
+        return {
+          success: false,
+          error: `Destination path ${finalDestRel} resolves to a folder, not a file location.`,
+        };
+      }
+      return {
+        success: false,
+        error: `Destination already exists: ${finalDestRel}. Copy will not overwrite existing files; delete it first if you want to replace it.`,
+      };
+    } catch {
+      // Good — destination does not exist.
+    }
+  }
+
+  // Read the source content (both filesystem + database sources handled inside).
+  const { content } = await readFileWithMtime(resolvedSource);
+
+  // Write to the destination. writeFileWithMtimeCheck creates parent folders
+  // on filesystem mounts and ensures folder rows on database mounts.
+  const { mtime } = await writeFileWithMtimeCheck(resolvedDest, content);
+
+  logger.info('Copied document', {
+    source_mount_point: resolvedSource.mountPointName,
+    source_path: input.source_path,
+    dest_mount_point: resolvedDest.mountPointName,
+    dest_path: finalDestRel,
+    bytes: content.length,
+  });
+
+  await triggerReindexIfNeeded(resolvedDest);
+
+  const result: DocCopyFileOutput = {
+    success: true,
+    source_mount_point: resolvedSource.mountPointName ?? input.source_mount_point,
+    source_path: input.source_path,
+    dest_mount_point: resolvedDest.mountPointName ?? input.dest_mount_point,
+    dest_path: finalDestRel,
+    mtime,
+  };
+
+  return {
+    success: true,
+    result,
+    formattedText: `Copied: ${resolvedSource.mountPointName ?? input.source_mount_point}:${input.source_path} → ${resolvedDest.mountPointName ?? input.dest_mount_point}:${finalDestRel}`,
   };
 }
 

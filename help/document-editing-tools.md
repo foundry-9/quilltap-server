@@ -4,7 +4,7 @@ url: /settings?tab=chat
 
 # Document Editing Tools
 
-Quilltap's document editing tools — a suite of fourteen instruments bearing the distinguished `doc_*` prefix — grant your AI characters the ability to read, edit, search, and manage files stored in document stores, project files, and general files, all without leaving the conversation. Think of them as the well-trained staff of a private library: capable of fetching any volume, making careful annotations, reorganizing the shelves, and — when instructed with appropriate gravity — disposing of materials that have outlived their usefulness.
+Quilltap's document editing tools — a suite of fifteen instruments bearing the distinguished `doc_*` prefix — grant your AI characters the ability to read, edit, search, and manage files stored in document stores, project files, and general files, all without leaving the conversation. Think of them as the well-trained staff of a private library: capable of fetching any volume, making careful annotations, reorganizing the shelves, and — when instructed with appropriate gravity — disposing of materials that have outlived their usefulness.
 
 ## Prerequisites
 
@@ -56,6 +56,7 @@ Quilltap treats JSON and JSONL files as first-class document types alongside Mar
 ### File Management
 
 - **`doc_move_file`** — Move or rename a file. If the destination is in a different directory, the file is moved; if in the same directory, it is renamed. The destination must not already exist.
+- **`doc_copy_file`** — Copy a file from one document store to a different document store. Takes `source_mount_point`, `source_path`, `dest_mount_point`, and `dest_path`; source and destination must be different stores. If `dest_path` is an existing folder, the file is dropped into it with the source filename; otherwise `dest_path` is treated as the full destination path (with filename). Parent directories are created automatically. Will not overwrite an existing file at the destination. Text files only — binary assets should use the blob tools.
 - **`doc_delete_file`** — Permanently delete a file. This cannot be undone, so your characters should confirm intent before calling.
 - **`doc_create_folder`** — Create a new folder, including any necessary parent folders. Idempotent — succeeds silently if the folder already exists. For database-backed stores, explicit folder rows are created; for filesystem stores, directories are created on disk.
 - **`doc_delete_folder`** — Delete an empty folder. Non-empty folders are rejected for safety; no recursive deletion is permitted. For database-backed stores, the folder row is deleted; for filesystem stores, the directory is removed from disk.

@@ -58,6 +58,10 @@ describe('doc-edit handler tool registration', () => {
     it('includes doc_str_replace', () => {
       expect(DOC_EDIT_TOOL_NAMES.has('doc_str_replace')).toBe(true);
     });
+
+    it('includes doc_copy_file', () => {
+      expect(DOC_EDIT_TOOL_NAMES.has('doc_copy_file')).toBe(true);
+    });
   });
 
   // =========================================================================
