@@ -22,6 +22,7 @@ const mockGetRepositories = jest.mocked(getRepositories)
 function makeRepos(opts: {
   chat?: Record<string, unknown> | null
   project?: Record<string, unknown> | null
+  file?: Record<string, unknown> | null
   addMessage?: jest.Mock
   addLink?: jest.Mock
 }) {
@@ -34,6 +35,7 @@ function makeRepos(opts: {
       findById: jest.fn().mockResolvedValue(opts.project ?? null),
     },
     files: {
+      findById: jest.fn().mockResolvedValue(opts.file ?? null),
       addLink: opts.addLink ?? jest.fn().mockResolvedValue(undefined),
     },
   } as unknown as ReturnType<typeof getRepositories>
@@ -131,6 +133,66 @@ describe('postLanternImageNotification', () => {
 
     const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
     expect(message.content as string).toContain('Bertie Wooster')
+  })
+
+  it('includes the generation prompt in avatar announcements when available', async () => {
+    const addMessage = jest.fn()
+    mockGetRepositories.mockReturnValue(makeRepos({
+      chat: { id: 'c1', projectId: null, alertCharactersOfLanternImages: true },
+      project: null,
+      file: { id: 'f1', generationPrompt: 'Algernon in a velvet smoking jacket' },
+      addMessage,
+    }))
+
+    await postLanternImageNotification({
+      chatId: 'c1',
+      fileId: 'f1',
+      kind: { kind: 'avatar', characterName: 'Algernon' },
+    })
+
+    const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
+    expect(message.content as string).toContain('aiming for')
+    expect(message.content as string).toContain('velvet smoking jacket')
+  })
+
+  it('includes the generation prompt in background announcements when available', async () => {
+    const addMessage = jest.fn()
+    mockGetRepositories.mockReturnValue(makeRepos({
+      chat: { id: 'c1', projectId: null, alertCharactersOfLanternImages: true },
+      project: null,
+      file: { id: 'f1', generationPrompt: 'a moonlit conservatory in bloom' },
+      addMessage,
+    }))
+
+    await postLanternImageNotification({
+      chatId: 'c1',
+      fileId: 'f1',
+      kind: { kind: 'background' },
+    })
+
+    const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
+    expect(message.content as string).toContain('aiming for')
+    expect(message.content as string).toContain('moonlit conservatory')
+  })
+
+  it('falls back to the plain wording when no generation prompt is on the file', async () => {
+    const addMessage = jest.fn()
+    mockGetRepositories.mockReturnValue(makeRepos({
+      chat: { id: 'c1', projectId: null, alertCharactersOfLanternImages: true },
+      project: null,
+      file: { id: 'f1', generationPrompt: null },
+      addMessage,
+    }))
+
+    await postLanternImageNotification({
+      chatId: 'c1',
+      fileId: 'f1',
+      kind: { kind: 'background' },
+    })
+
+    const [, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
+    expect(message.content as string).not.toContain('aiming for')
+    expect(message.content as string).toContain('projected a new backdrop')
   })
 
   it('does not throw when addMessage fails', async () => {

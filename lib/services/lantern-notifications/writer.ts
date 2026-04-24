@@ -39,12 +39,17 @@ interface PostParams {
   kind: LanternNotificationKind;
 }
 
-function buildContent(kind: LanternNotificationKind): string {
+function buildContent(kind: LanternNotificationKind, prompt: string | null): string {
+  const aim = prompt?.trim();
   switch (kind.kind) {
     case 'avatar':
-      return `Aurora has refreshed the portrait filed under ${kind.characterName}'s name, the previous likeness now retired with due ceremony. The new one is attached here, should anyone care to take a fresh look.`;
+      return aim
+        ? `Aurora has refreshed the portrait filed under ${kind.characterName}'s name, aiming for: "${aim}". The previous likeness is retired with due ceremony; the new one is attached here, should anyone care to take a fresh look.`
+        : `Aurora has refreshed the portrait filed under ${kind.characterName}'s name, the previous likeness now retired with due ceremony. The new one is attached here, should anyone care to take a fresh look.`;
     case 'background':
-      return `The Lantern has projected a new backdrop behind the proceedings. The resulting image hangs just above, attached for your perusal.`;
+      return aim
+        ? `The Lantern has projected a new backdrop behind the proceedings, aiming for: "${aim}". The resulting image hangs just above, attached for your perusal.`
+        : `The Lantern has projected a new backdrop behind the proceedings. The resulting image hangs just above, attached for your perusal.`;
     case 'character-image':
       return `The Lantern, acting upon the instructions of ${kind.requesterName}, has produced the following picture. It is attached here, should anyone care to examine it.`;
   }
@@ -84,6 +89,19 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       return;
     }
 
+    let generationPrompt: string | null = null;
+    try {
+      const file = await repos.files.findById(fileId);
+      generationPrompt = file?.generationPrompt ?? null;
+    } catch (fetchError) {
+      logger.debug('[LanternNotification] Could not read generation prompt for file', {
+        context: 'lantern-notifications',
+        chatId,
+        fileId,
+        error: getErrorMessage(fetchError),
+      });
+    }
+
     const messageId = randomUUID();
     const now = new Date().toISOString();
 
@@ -91,7 +109,7 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       type: 'message',
       id: messageId,
       role: 'ASSISTANT',
-      content: buildContent(kind),
+      content: buildContent(kind, generationPrompt),
       attachments: [fileId],
       createdAt: now,
       participantId: null,
