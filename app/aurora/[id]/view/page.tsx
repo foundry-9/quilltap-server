@@ -321,6 +321,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           characterName={character?.name || 'Character'}
           profiles={profiles}
           defaultConnectionProfileId={character?.defaultConnectionProfileId}
+          vaultAvailable={
+            !!character?.readPropertiesFromDocumentStore &&
+            !!character?.characterDocumentMountPointId
+          }
           onClose={() => setShowOptimizerModal(false)}
           onApplied={() => {
             fetchCharacter()

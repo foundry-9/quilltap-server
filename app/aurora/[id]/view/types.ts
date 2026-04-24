@@ -69,6 +69,7 @@ export interface Character {
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
   readPropertiesFromDocumentStore?: boolean | null
+  characterDocumentMountPointId?: string | null
   defaultImage?: {
     id: string
     filepath: string

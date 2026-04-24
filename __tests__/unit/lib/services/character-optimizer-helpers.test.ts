@@ -6,10 +6,14 @@ import {
   buildCharacterContext,
   buildMemoryContext,
   getAnalysisPrompt,
-  getSuggestionsPrompt,
+  getGeneralFieldsSuggestionsPrompt,
+  getScenarioSuggestionPrompt,
+  getSystemPromptSuggestionPrompt,
+  getNewItemsSuggestionPrompt,
 } from '@/lib/services/character-optimizer.service'
 import { createMockCharacter, createMockMemory } from '../fixtures/test-factories'
 import type { OptimizerAnalysis } from '@/lib/services/character-optimizer.service'
+import type { CharacterScenario, CharacterSystemPrompt } from '@/lib/schemas/types'
 
 describe('buildCharacterContext', () => {
   it('includes character name', () => {
@@ -187,7 +191,7 @@ describe('getAnalysisPrompt', () => {
   })
 })
 
-describe('getSuggestionsPrompt', () => {
+describe('per-item suggestion prompts', () => {
   const mockAnalysis: OptimizerAnalysis = {
     behavioralPatterns: [
       {
@@ -199,32 +203,85 @@ describe('getSuggestionsPrompt', () => {
     summary: 'The character is introverted'
   }
 
-  it('contains the analysis JSON', () => {
-    const result = getSuggestionsPrompt(mockAnalysis)
-    expect(result).toContain(JSON.stringify(mockAnalysis, null, 2))
+  describe('getGeneralFieldsSuggestionsPrompt', () => {
+    it('contains the analysis JSON', () => {
+      const result = getGeneralFieldsSuggestionsPrompt(mockAnalysis)
+      expect(result).toContain(JSON.stringify(mockAnalysis, null, 2))
+    })
+
+    it('narrows scope to general fields only', () => {
+      const result = getGeneralFieldsSuggestionsPrompt(mockAnalysis)
+      expect(result).toContain('description')
+      expect(result).toContain('personality')
+      expect(result).toContain('exampleDialogues')
+      expect(result).toContain('talkativeness')
+      expect(result).toContain('0.1 and 1.0')
+    })
+
+    it('contains significance score guidance', () => {
+      const result = getGeneralFieldsSuggestionsPrompt(mockAnalysis)
+      expect(result).toContain('significance')
+      expect(result).toContain('0.3')
+      expect(result).toContain('0.6')
+    })
+
+    it('instructs on memory excerpts', () => {
+      const result = getGeneralFieldsSuggestionsPrompt(mockAnalysis)
+      expect(result).toContain('memoryExcerpts')
+    })
   })
 
-  it('contains field options list', () => {
-    const result = getSuggestionsPrompt(mockAnalysis)
-    expect(result).toContain('description|personality|scenario')
+  describe('getScenarioSuggestionPrompt', () => {
+    const scenario: CharacterScenario = {
+      id: 'scen-1',
+      title: 'Tea Room',
+      content: 'A quiet parlour with a crackling fire.',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    }
+
+    it('scopes to the provided scenario ID and title', () => {
+      const result = getScenarioSuggestionPrompt(mockAnalysis, scenario)
+      expect(result).toContain('scen-1')
+      expect(result).toContain('Tea Room')
+      expect(result).toContain('A quiet parlour with a crackling fire.')
+    })
+
+    it('instructs at most one suggestion', () => {
+      const result = getScenarioSuggestionPrompt(mockAnalysis, scenario)
+      expect(result.toLowerCase()).toContain('at most one suggestion')
+    })
   })
 
-  it('contains significance score guidance', () => {
-    const result = getSuggestionsPrompt(mockAnalysis)
-    expect(result).toContain('significance')
-    expect(result).toContain('0.3')
-    expect(result).toContain('0.6')
+  describe('getSystemPromptSuggestionPrompt', () => {
+    const prompt: CharacterSystemPrompt = {
+      id: 'sp-1',
+      name: 'Default',
+      content: 'Roleplay with decorum and wit.',
+      isDefault: true,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    }
+
+    it('scopes to the provided prompt ID and name', () => {
+      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt)
+      expect(result).toContain('sp-1')
+      expect(result).toContain('Default')
+      expect(result).toContain('Roleplay with decorum and wit.')
+    })
+
+    it('instructs at most one suggestion', () => {
+      const result = getSystemPromptSuggestionPrompt(mockAnalysis, prompt)
+      expect(result.toLowerCase()).toContain('at most one suggestion')
+    })
   })
 
-  it('instructs on memory excerpts', () => {
-    const result = getSuggestionsPrompt(mockAnalysis)
-    expect(result).toContain('memoryExcerpts')
-  })
-
-  it('includes rules for different field types', () => {
-    const result = getSuggestionsPrompt(mockAnalysis)
-    expect(result).toContain('system prompt')
-    expect(result).toContain('talkativeness')
-    expect(result).toContain('0.1 and 1.0')
+  describe('getNewItemsSuggestionPrompt', () => {
+    it('includes the analysis and guides additions only', () => {
+      const result = getNewItemsSuggestionPrompt(mockAnalysis)
+      expect(result).toContain(JSON.stringify(mockAnalysis, null, 2))
+      expect(result.toLowerCase()).toContain('new')
+      expect(result.toLowerCase()).toContain('additions only')
+    })
   })
 })

@@ -57,7 +57,9 @@ The optimizer works through three stages, each reported with an animated progres
 
 The progress bar shows three segments — one per stage — that fill as each proceeds. An elapsed timer counts up below. When filters narrow the results, you'll see a message such as "142 memoirs matched; top 30 selected for analysis."
 
-When the analysis completes, you'll see a summary of the behavioral patterns discovered.
+During **Generating**, the optimizer makes *one focused pass per subject* rather than pooling everything into a single verdict. Each of the character's existing scenarios is considered on its own terms, as is each existing system prompt; a separate pass handles the general fields (description, personality, example dialogues, talkativeness), and a final pass asks whether any genuinely new scenarios or system prompts are warranted by the patterns the memoirs reveal. The modal shows a sub-step label such as "Scenario 2 of 5 — Tea Room" so you can see which subject is currently under consideration. This is more thorough (and, in candour, more costly in model calls) than a single sweeping pass, but it means per-scenario quirks are no longer averaged out across siblings.
+
+When the analysis completes, you'll see a summary of the behavioural patterns discovered.
 
 ### Phase 3: Suggestion Review
 
@@ -80,6 +82,20 @@ Navigate between suggestions freely — you needn't review them in order, and yo
 ### Phase 4: Apply
 
 A final summary shows all accepted changes. Review them once more, then click **Apply** to update the character. The changes are saved as a batch, and the character's view refreshes to reflect the new configuration.
+
+For characters whose properties are read from a document-store vault (the "Read from document store" switch on the character edit page, with a linked character vault), accepted changes route through the existing write overlay — they are written back to the relevant vault files (e.g. `personality.md`, `Prompts/<Name>.md`, `Scenarios/<Title>.md`) rather than to the database row. No extra step is required; the apply flow detects the vault and does the right thing.
+
+## Saving Proposals to the Vault Instead of Applying
+
+For characters that have a linked document-store vault, a second output mode is available. Tick **Save as suggestions in the vault (for later discussion)** in the Preflight phase and the optimizer will, instead of presenting the usual review-and-apply flow, inscribe its findings as a single markdown dossier at:
+
+```
+Suggestions/refinement-<YYYYMMDD-HHMMSS>.md
+```
+
+inside the character's vault. The dossier opens with YAML frontmatter identifying the run, then carries the analysis summary, the observed behavioural patterns, and each proposed change as its own section — grouped as General Fields, Scenario Refinements, Proposed New Scenarios, System Prompt Refinements, and Proposed New System Prompts. Each proposal shows the current and proposed text in fenced blocks, its significance score, the rationale, and the supporting memoir excerpts.
+
+Nothing is applied to the character in this mode — the dossier exists for the author and the character to read together (or for the character to consult via `doc_read_file` in-chat) and then commission piecemeal at leisure. To actually commission a proposal, edit the relevant vault file (or re-run the optimizer in its default apply-and-review mode with the proposal as your guide). The checkbox only appears when the character is vault-backed; it has no effect on characters whose properties live solely in the database.
 
 ## Fields Eligible for Suggestions
 

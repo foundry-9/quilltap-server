@@ -11,6 +11,19 @@
 import { useState } from 'react';
 import type { OptimizerSuggestion, SuggestionDecision } from '../types';
 
+// Belt-and-braces guard: the optimizer service already coerces these fields,
+// but render paths shouldn't trust unknown JSON to be string-shaped.
+function asText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 interface SuggestionCardProps {
   suggestion: OptimizerSuggestion;
   decision?: SuggestionDecision;
@@ -97,7 +110,7 @@ function MemoryExcerpts({ excerpts }: { excerpts: string[] }) {
               key={idx}
               className="border-l-2 qt-border-primary/40 pl-3 py-1 qt-body-sm italic qt-text-secondary leading-relaxed"
             >
-              &ldquo;{excerpt}&rdquo;
+              &ldquo;{asText(excerpt)}&rdquo;
             </blockquote>
           ))}
         </div>
@@ -116,8 +129,12 @@ export function SuggestionCard({
   index,
   total,
 }: SuggestionCardProps) {
+  const safeProposedValue = asText(suggestion.proposedValue);
+  const safeCurrentValue = asText(suggestion.currentValue);
+  const safeRationale = asText(suggestion.rationale);
+
   const [editing, setEditing] = useState(false);
-  const [draftValue, setDraftValue] = useState(editedValue ?? suggestion.proposedValue);
+  const [draftValue, setDraftValue] = useState(editedValue ?? safeProposedValue);
 
   const fieldLabel = FIELD_LABELS[suggestion.field] ?? suggestion.field;
   const fieldBadge = FIELD_BADGE_CLASS[suggestion.field] ?? 'qt-badge-secondary';
@@ -129,13 +146,13 @@ export function SuggestionCard({
   };
 
   const handleStartEdit = () => {
-    setDraftValue(editedValue ?? suggestion.proposedValue);
+    setDraftValue(editedValue ?? safeProposedValue);
     setEditing(true);
   };
 
   const handleCancelEdit = () => {
     setEditing(false);
-    setDraftValue(editedValue ?? suggestion.proposedValue);
+    setDraftValue(editedValue ?? safeProposedValue);
   };
 
   const isAccepted = decision === 'accepted';
@@ -158,11 +175,11 @@ export function SuggestionCard({
       {/* Current vs proposed */}
       {!editing ? (
         <div className="flex flex-col gap-3">
-          {suggestion.currentValue ? (
+          {safeCurrentValue ? (
             <div className="flex flex-col gap-1">
               <span className="qt-caption uppercase tracking-wider">Present Wording</span>
               <p className="qt-body-sm qt-bg-muted/50 rounded-md p-3 leading-relaxed border qt-border-default/50">
-                {suggestion.currentValue}
+                {safeCurrentValue}
               </p>
             </div>
           ) : (
@@ -183,7 +200,7 @@ export function SuggestionCard({
                 ? 'qt-bg-primary/5 qt-border-primary/30'
                 : 'bg-green-500/5 border-green-500/20'
             }`}>
-              {isEdited && editedValue ? editedValue : suggestion.proposedValue}
+              {isEdited && editedValue ? editedValue : safeProposedValue}
             </p>
           </div>
         </div>
@@ -211,7 +228,7 @@ export function SuggestionCard({
       {!editing && (
         <div className="flex flex-col gap-1">
           <span className="qt-caption uppercase tracking-wider">Rationale</span>
-          <p className="qt-body-sm qt-text-secondary leading-relaxed">{suggestion.rationale}</p>
+          <p className="qt-body-sm qt-text-secondary leading-relaxed">{safeRationale}</p>
         </div>
       )}
 

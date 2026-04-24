@@ -123,6 +123,7 @@ const optimizeStreamSchema = z.object({
   useSemanticSearch: z.boolean().optional().default(true),
   sinceDate: z.string().nullable().optional().default(null),
   beforeDate: z.string().nullable().optional().default(null),
+  outputMode: z.enum(['apply', 'suggestions-file']).optional().default('apply'),
 });
 
 const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags'] as const;
@@ -501,7 +502,7 @@ async function handleOptimizeStream(
 ): Promise<NextResponse> {
 
   const body = await req.json();
-  const { connectionProfileId, maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate } = optimizeStreamSchema.parse(body);
+  const { connectionProfileId, maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate, outputMode } = optimizeStreamSchema.parse(body);
 
   logger.info('[Characters v1] Character optimizer starting (streaming)', {
     userId: user.id,
@@ -512,10 +513,11 @@ async function handleOptimizeStream(
     useSemanticSearch,
     sinceDate,
     beforeDate,
+    outputMode,
   });
 
   const encoder = new TextEncoder();
-  const optimizerOptions = { maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate };
+  const optimizerOptions = { maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate, outputMode };
 
   const stream = new ReadableStream({
     async start(controller) {
