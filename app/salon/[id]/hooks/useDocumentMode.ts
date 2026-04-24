@@ -19,6 +19,7 @@ import {
   openDocumentForChat,
   persistChatDocumentState,
   readDocumentContentForChat,
+  renameDocumentForChat,
   requestDocumentWrite,
   toActiveDocument,
 } from './documentModeApi'
@@ -58,6 +59,7 @@ interface UseDocumentModeReturn {
   isLLMEditing: boolean
   openDocument: (params: OpenDocumentParams) => Promise<ActiveDocument | null>
   closeDocument: () => Promise<void>
+  renameDocument: (newTitle: string) => Promise<void>
   toggleFocusMode: () => void
   setDividerPosition: (position: number) => void
   handleContentChange: (content: string) => void
@@ -430,6 +432,35 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     await persistMode('normal')
   }, [applyDocumentState, chatId, isDirty, activeDocument, saveDocument, persistMode])
 
+  // Rename the active document's underlying file. The server validates the
+  // new name, moves the file, and returns the updated record. We flush any
+  // pending save first so the rename operates on the latest content.
+  const renameDocument = useCallback(async (newTitle: string) => {
+    if (!activeDocument) return
+    const trimmed = newTitle.trim()
+    if (!trimmed || trimmed === activeDocument.displayTitle) return
+
+    if (isDirty) {
+      await saveDocument()
+    }
+
+    try {
+      const data = await renameDocumentForChat(chatId, trimmed)
+      setActiveDocument(prev => prev ? {
+        ...prev,
+        filePath: data.document.filePath,
+        displayTitle: data.document.displayTitle || data.document.filePath,
+      } : null)
+
+      const notifyLibrarian = onLibrarianMessageRef.current
+      if (notifyLibrarian && data.librarianMessage) {
+        notifyLibrarian(data.librarianMessage as Message)
+      }
+    } catch (error) {
+      console.error('[DocumentMode] Failed to rename document', error)
+    }
+  }, [activeDocument, chatId, isDirty, saveDocument])
+
   // Toggle between split and focus modes
   const toggleFocusMode = useCallback(() => {
     const newMode = documentMode === 'focus' ? 'split' : 'focus'
@@ -533,6 +564,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     isLLMEditing,
     openDocument,
     closeDocument,
+    renameDocument,
     toggleFocusMode,
     setDividerPosition,
     handleContentChange,

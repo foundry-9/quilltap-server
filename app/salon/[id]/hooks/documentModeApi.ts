@@ -158,3 +158,22 @@ export async function fetchChatDocumentState(chatId: string): Promise<ChatStateR
   const response = await fetch(`/api/v1/chats/${chatId}`)
   return parseJsonResponse<ChatStateResponse>(response, 'Failed to load chat state')
 }
+
+interface RenameDocumentResponse {
+  document: ActiveDocumentRecord
+  /** Librarian announcement message posted alongside the rename (null if chat not found) */
+  librarianMessage?: Message | null
+}
+
+export async function renameDocumentForChat(
+  chatId: string,
+  newTitle: string,
+): Promise<RenameDocumentResponse> {
+  const response = await fetch(`/api/v1/chats/${chatId}?action=rename-document`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ newTitle }),
+  })
+
+  return parseJsonResponse<RenameDocumentResponse>(response, 'Failed to rename document')
+}

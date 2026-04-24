@@ -1292,6 +1292,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 setScrollPosition={documentModeHook.setScrollPosition}
                 onContentChange={documentModeHook.handleContentChange}
                 onBlur={documentModeHook.flushSave}
+                onTitleChange={documentModeHook.renameDocument}
                 onToggleFocusMode={documentModeHook.toggleFocusMode}
                 onCloseDocument={documentModeHook.closeDocument}
                 focusRequest={documentModeHook.focusRequest}

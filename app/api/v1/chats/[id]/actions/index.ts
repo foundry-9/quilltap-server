@@ -36,4 +36,5 @@ export {
   handleCloseDocument,
   handleReadDocument,
   handleWriteDocument,
+  handleRenameDocument,
 } from './documents';

@@ -7,6 +7,7 @@
  * - close-document: Close the document pane
  * - read-document: Read file content for the document editor
  * - write-document: Write file content from the document editor
+ * - rename-document: Rename the active document's file (filesystem or database-backed)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -23,11 +24,17 @@ import {
 } from '@/lib/doc-edit';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import {
+  moveDatabaseDocument,
+  DatabaseStoreError,
+} from '@/lib/mount-index/database-store';
+import {
   postLibrarianOpenAnnouncement,
+  postLibrarianRenameAnnouncement,
   postLibrarianSaveAnnouncement,
 } from '@/lib/services/librarian-notifications/writer';
 import { getErrorMessage } from '@/lib/errors';
 import path from 'path';
+import fs from 'fs/promises';
 
 // ============================================================================
 // Schemas
@@ -55,6 +62,10 @@ const writeDocumentSchema = z.object({
   mtime: z.number().optional(),
   /** Pre-formatted diff content from the client; when present, a Librarian save announcement is posted */
   diffContent: z.string().optional(),
+});
+
+const renameDocumentSchema = z.object({
+  newTitle: z.string().min(1),
 });
 
 function getProjectId(chat: unknown): string | undefined {
@@ -477,4 +488,171 @@ export async function handleWriteDocument(
     });
     return serverError(`Failed to write document: ${message}`);
   }
+}
+
+/**
+ * Rename the active document's underlying file.
+ *
+ * The user types a new name in the DocumentPane title input; we treat that
+ * input as the new basename (directory preserved). If the input has no
+ * extension, the old extension is appended so users can type "backstory"
+ * and get "backstory.md". Path separators are rejected — this is a rename
+ * within the current directory, not a move.
+ *
+ * Dispatches on mount type so database-backed stores route through
+ * moveDatabaseDocument while filesystem-backed scopes use fs.rename,
+ * matching the pattern in doc_move_file.
+ */
+export async function handleRenameDocument(
+  req: NextRequest,
+  chatId: string,
+  context: AuthenticatedContext
+): Promise<NextResponse> {
+  const body = await req.json();
+  const data = renameDocumentSchema.parse(body);
+
+  const { repos } = context;
+  const doc = await repos.chatDocuments.findActiveForChat(chatId);
+  if (!doc) {
+    return badRequest('No active document to rename');
+  }
+
+  const raw = data.newTitle.trim();
+  if (!raw) {
+    return badRequest('Name cannot be empty');
+  }
+  if (raw.includes('/') || raw.includes('\\')) {
+    return badRequest('Name cannot contain path separators');
+  }
+  if (raw === '.' || raw === '..' || raw.split(/[\\/]/).includes('..')) {
+    return badRequest('Invalid name');
+  }
+
+  const oldExt = path.extname(doc.filePath);
+  const oldDir = path.dirname(doc.filePath);
+  const newBasename = path.extname(raw) ? raw : `${raw}${oldExt}`;
+  const newFilePath = oldDir === '.' || oldDir === ''
+    ? newBasename
+    : `${oldDir.replace(/\\/g, '/')}/${newBasename}`;
+
+  if (newFilePath === doc.filePath) {
+    return successResponse({
+      document: {
+        id: doc.id,
+        filePath: doc.filePath,
+        scope: doc.scope,
+        mountPoint: doc.mountPoint,
+        displayTitle: doc.displayTitle,
+      },
+    });
+  }
+
+  const chatContext = await getChatContext(chatId, context);
+  if (!chatContext) {
+    return badRequest('Chat not found');
+  }
+
+  let resolvedOld, resolvedNew;
+  try {
+    resolvedOld = (await resolveDocumentRequest(chatContext, {
+      scope: doc.scope as DocEditScope,
+      filePath: doc.filePath,
+      mountPoint: doc.mountPoint ?? undefined,
+    })).resolved;
+    resolvedNew = (await resolveDocumentRequest(chatContext, {
+      scope: doc.scope as DocEditScope,
+      filePath: newFilePath,
+      mountPoint: doc.mountPoint ?? undefined,
+    })).resolved;
+  } catch (error) {
+    const message = getErrorMessage(error);
+    logger.warn('Failed to resolve document path for rename', {
+      chatId,
+      from: doc.filePath,
+      to: newFilePath,
+      error: message,
+    });
+    return badRequest(`Could not resolve path: ${message}`);
+  }
+
+  try {
+    if (resolvedOld.mountType === 'database' && resolvedOld.mountPointId) {
+      await moveDatabaseDocument(
+        resolvedOld.mountPointId,
+        resolvedOld.relativePath,
+        resolvedNew.relativePath,
+      );
+    } else {
+      try {
+        await fs.access(resolvedNew.absolutePath);
+        return conflict(`A file already exists at that name.`);
+      } catch {
+        // destination free — proceed
+      }
+      await fs.mkdir(path.dirname(resolvedNew.absolutePath), { recursive: true });
+      await fs.rename(resolvedOld.absolutePath, resolvedNew.absolutePath);
+
+      if (doc.scope === 'document_store' && resolvedOld.mountPointId) {
+        scheduleDocumentStoreRefresh(
+          resolvedOld.mountPointId,
+          resolvedNew.relativePath,
+          resolvedNew.absolutePath,
+          repos,
+          newFilePath,
+        );
+      }
+    }
+  } catch (error) {
+    const message = getErrorMessage(error);
+    if (error instanceof DatabaseStoreError && error.code === 'CONFLICT') {
+      return conflict(`A file already exists at that name.`);
+    }
+    if (error instanceof DatabaseStoreError && error.code === 'UNSUPPORTED') {
+      return badRequest(message);
+    }
+    logger.error('Failed to rename document', {
+      chatId,
+      from: doc.filePath,
+      to: newFilePath,
+      error: message,
+    });
+    return serverError(`Failed to rename document: ${message}`);
+  }
+
+  const newDisplayTitle = path.basename(newFilePath);
+  const oldDisplayTitle = doc.displayTitle || path.basename(doc.filePath);
+  const updated = await repos.chatDocuments.update(doc.id, {
+    filePath: newFilePath,
+    displayTitle: newDisplayTitle,
+  });
+
+  logger.debug('Renamed document', {
+    chatId,
+    from: doc.filePath,
+    to: newFilePath,
+    scope: doc.scope,
+    mountType: resolvedOld.mountType ?? 'filesystem',
+  });
+
+  const librarianMessage = await postLibrarianRenameAnnouncement({
+    chatId,
+    oldDisplayTitle,
+    newDisplayTitle,
+    oldFilePath: doc.filePath,
+    newFilePath,
+    scope: doc.scope as 'project' | 'document_store' | 'general',
+    mountPoint: doc.mountPoint,
+  });
+
+  const result = updated ?? doc;
+  return successResponse({
+    document: {
+      id: result.id,
+      filePath: newFilePath,
+      scope: doc.scope,
+      mountPoint: doc.mountPoint,
+      displayTitle: newDisplayTitle,
+    },
+    librarianMessage: librarianMessage ?? null,
+  });
 }

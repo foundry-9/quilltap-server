@@ -20,15 +20,30 @@ jest.mock('@/lib/mount-index/embedding-scheduler', () => ({
   enqueueEmbeddingJobsForMountPoint: jest.fn(),
 }))
 
+class MockDatabaseStoreError extends Error {
+  constructor(message: string, public code: string) {
+    super(message)
+    this.name = 'DatabaseStoreError'
+  }
+}
+
+jest.mock('@/lib/mount-index/database-store', () => ({
+  moveDatabaseDocument: jest.fn(),
+  DatabaseStoreError: MockDatabaseStoreError,
+}))
+
 jest.mock('@/lib/services/librarian-notifications/writer', () => ({
   postLibrarianOpenAnnouncement: jest.fn().mockResolvedValue(null),
   postLibrarianSaveAnnouncement: jest.fn().mockResolvedValue(null),
+  postLibrarianRenameAnnouncement: jest.fn().mockResolvedValue(null),
 }))
 
 jest.mock('fs/promises', () => ({
   mkdir: jest.fn(),
   writeFile: jest.fn(),
   stat: jest.fn(),
+  access: jest.fn(),
+  rename: jest.fn(),
 }))
 
 const {

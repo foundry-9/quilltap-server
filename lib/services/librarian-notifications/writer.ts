@@ -7,10 +7,11 @@
  * history and know the document is available (and who opened it), without the
  * user losing their turn to the LLM.
  *
- * Three kinds of announcements:
+ * Four kinds of announcements:
  *   - 'opened-by-user'       → user-initiated Document Mode open
  *   - 'opened-by-character'  → character-initiated via the `doc_open_document` tool
  *   - 'saved'                → user autosave/manual-save from the editor (includes unified diff)
+ *   - 'renamed'              → user-initiated rename via the Document Mode title input
  *
  * Errors never propagate — document operations must never fail because an
  * announcement couldn't be written.
@@ -42,6 +43,16 @@ export interface LibrarianSaveAnnouncement {
   diffContent: string;
 }
 
+export interface LibrarianRenameAnnouncement {
+  chatId: string;
+  oldDisplayTitle: string;
+  newDisplayTitle: string;
+  oldFilePath: string;
+  newFilePath: string;
+  scope: 'project' | 'document_store' | 'general';
+  mountPoint?: string | null;
+}
+
 function scopeLabel(scope: 'project' | 'document_store' | 'general', mountPoint?: string | null): string {
   if (scope === 'document_store' && mountPoint) {
     return `the document store "${mountPoint}"`;
@@ -68,6 +79,13 @@ export function buildOpenContent(params: LibrarianOpenAnnouncement): string {
     return `The Librarian has laid out a fresh, blank page titled "${displayTitle}" upon the table at ${who}. You may use doc_read_file and the other doc_* editing tools to read or amend it (${pathDetails}).`;
   }
   return `The Librarian has set out "${displayTitle}" from ${where} at ${who}. You may use doc_read_file and the other doc_* editing tools to consult or revise it (${pathDetails}).`;
+}
+
+export function buildRenameContent(params: LibrarianRenameAnnouncement): string {
+  const { oldDisplayTitle, newDisplayTitle, oldFilePath, newFilePath, scope, mountPoint } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const pathDetails = `old_path: "${oldFilePath}", new_path: "${newFilePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  return `The Librarian has rechristened the volume formerly catalogued as "${oldDisplayTitle}" in ${where} — it now answers to "${newDisplayTitle}", and the card in the catalogue has been amended to suit. Subsequent references should use the new name (${pathDetails}).`;
 }
 
 export function buildSaveContent(diffContent: string): string {
@@ -163,4 +181,18 @@ export async function postLibrarianSaveAnnouncement(
     chatId: params.chatId,
   });
   return postLibrarianMessage(params.chatId, content, 'saved');
+}
+
+export async function postLibrarianRenameAnnouncement(
+  params: LibrarianRenameAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildRenameContent(params);
+  logger.debug('[LibrarianNotification] Posting rename announcement', {
+    context: 'librarian-notifications',
+    chatId: params.chatId,
+    oldFilePath: params.oldFilePath,
+    newFilePath: params.newFilePath,
+    scope: params.scope,
+  });
+  return postLibrarianMessage(params.chatId, content, 'renamed');
 }
