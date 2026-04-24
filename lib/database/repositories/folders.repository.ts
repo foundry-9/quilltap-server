@@ -226,21 +226,15 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
   ): Promise<Folder[]> {
     return this.safeQuery(
       async () => {
-        // Use regex to find paths that start with parentPath but are not the parentPath itself
-        const query: TypedQueryFilter<Folder> = {
-          userId,
-          path: {
-            $regex: `^${this.escapeRegex(parentPath)}`,
-            $ne: parentPath,
-          },
-          ...this.createNullableFilter('projectId', projectId),
-        };
-
-        const options: QueryOptions = { sort: { path: 1 } };
-
-        const results = await this.findByFilter(query, options);
-
-        return results;
+        // Prefix-match via JS filter. SQLite's $regex translator cannot express
+        // anchored patterns (it always wraps in %…%), so anchored `^parent`
+        // regex silently matches nothing. Fetching the user/project slice and
+        // filtering in memory keeps the behaviour correct and matches the
+        // adjacent file-rename logic in app/api/v1/files/folders/route.ts.
+        const all = await this.findAllInProject(userId, projectId);
+        return all
+          .filter((f) => f.path.startsWith(parentPath) && f.path !== parentPath)
+          .sort((a, b) => a.path.localeCompare(b.path));
       },
       'Error finding descendant folders',
       { userId, parentPath, projectId },
@@ -298,15 +292,10 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
   ): Promise<number> {
     return this.safeQuery(
       async () => {
-        // Find all folders with paths starting with the old prefix
-        const matchQuery: TypedQueryFilter<Folder> = {
-          userId,
-          path: { $regex: `^${this.escapeRegex(oldPathPrefix)}` },
-          ...this.createNullableFilter('projectId', projectId),
-        };
-
-        // Get folders to update
-        const foldersToUpdate = await this.findByFilter(matchQuery);
+        // Prefix-match via JS filter. See findDescendants for why the
+        // $regex → LIKE translator cannot do anchored matches.
+        const all = await this.findAllInProject(userId, projectId);
+        const foldersToUpdate = all.filter((f) => f.path.startsWith(oldPathPrefix));
 
         let updatedCount = 0;
         for (const folder of foldersToUpdate) {
