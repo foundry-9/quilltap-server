@@ -135,7 +135,7 @@ When the AI uses a tool:
 
 - Project Info tool must be enabled
 - Chat must be associated with a project
-- File Management tool for reading files
+- Document Editing tools (the `doc_*` family) for reading and searching project files — requires a linked Scriptorium store on the project
 
 **Best practices:**
 

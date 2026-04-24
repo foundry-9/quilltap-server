@@ -77,45 +77,6 @@ export async function processToolCalls(
       }
     }
 
-    // Handle permission-required case differently - don't add to toolMessages yet
-    // The frontend will show a prompt, and when user approves/denies,
-    // the /api/files/write-permission/complete endpoint will handle the rest
-    if (toolResult.requiresPermission) {
-      logger.info('Tool requires permission, sending pending status to frontend', {
-        toolName: toolResult.toolName,
-        pendingWrite: toolResult.pendingWrite,
-      })
-
-      // Send SSE event for frontend to show permission prompt
-      // Don't add to toolMessages - we don't want LLM to see an error yet
-      controller.enqueue(
-        encoder.encode(
-          `data: ${JSON.stringify({
-            toolResult: {
-              index: toolIndex,
-              name: toolResult.toolName,
-              success: false,
-              requiresPermission: true,
-              pendingWrite: toolResult.pendingWrite,
-              status: 'pending_approval',
-            },
-          })}\n\n`
-        )
-      )
-
-      // Add a placeholder message indicating we're waiting for approval
-      // This prevents the LLM from thinking the tool errored
-      toolMessages.push({
-        toolName: toolResult.toolName,
-        success: true, // Mark as success so LLM doesn't see it as an error
-        content: 'File write request sent to user for approval. Waiting for response.',
-        arguments: toolCall.arguments,
-        callId: toolCall.callId,
-        metadata: toolResult.metadata,
-      })
-      continue
-    }
-
     // Handle sudo approval requirement
     if (toolResult.requiresSudoApproval) {
       logger.info('Sudo command requires approval, sending to frontend', {

@@ -16,7 +16,6 @@
  * - `search` - Search the Scriptorium (memories, conversations, backgrounds)
  * - `search_web` - Web search (when enabled)
  * - `project_info` - Get project metadata
- * - `file_management` - Read/write project files
  * - `request_full_context` - Request full context reload (context compression)
  * - `help_search` - Search Quilltap help documentation
  * - `help_settings` - Read Quilltap instance settings
@@ -26,7 +25,6 @@ export const BUILTIN_TOOL_NAMES = new Set([
   'search',
   'search_web',
   'project_info',
-  'file_management',
   'request_full_context',
   'help_search',
   'help_settings',

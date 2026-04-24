@@ -73,7 +73,6 @@ export interface TextBlockEnabledToolOptions extends EnabledToolOptions {
   whisper: boolean
   state: boolean
   rng: boolean
-  fileManagement: boolean
   projectInfo: boolean
   helpSearch: boolean
   helpSettings: boolean
@@ -103,7 +102,6 @@ export function determineTextBlockToolOptions(
     whisper: isMultiCharacter,
     state: true,
     rng: true,
-    fileManagement: hasProject,
     projectInfo: hasProject,
     helpSearch: !!helpToolsEnabled,
     helpSettings: !!helpToolsEnabled,
@@ -128,7 +126,6 @@ export function buildTextBlockSystemInstructions(
     webSearch: enabledOptions.webSearch,
     state: enabledOptions.state,
     rng: enabledOptions.rng,
-    fileManagement: enabledOptions.fileManagement,
     projectInfo: enabledOptions.projectInfo,
     helpSearch: enabledOptions.helpSearch,
     helpSettings: enabledOptions.helpSettings,

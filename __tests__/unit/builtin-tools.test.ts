@@ -21,7 +21,6 @@ describe('Built-in Tool Names', () => {
         'search',
         'search_web',
         'project_info',
-        'file_management',
         'request_full_context',
         'help_search',
         'help_settings',

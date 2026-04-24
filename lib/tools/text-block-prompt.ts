@@ -26,8 +26,6 @@ export interface TextBlockPromptOptions {
   state?: boolean
   /** Enable RNG/dice tool */
   rng?: boolean
-  /** Enable file management tool */
-  fileManagement?: boolean
   /** Enable project info tool */
   projectInfo?: boolean
   /** Enable help search tool */
@@ -106,22 +104,12 @@ Format: [[RNG type="d6" count="3" /]]
 Format: [[RNG type="number" min="1" max="100" /]]`)
   }
 
-  if (options.fileManagement) {
-    toolDocs.push(`
-### File Management
-Read, write, or list files in the project or chat.
-Format (list): [[FILE_MANAGEMENT action="list" scope="project" /]]
-Format (read): [[FILE_MANAGEMENT action="read" path="notes.txt" /]]
-Format (write): [[FILE_MANAGEMENT action="write" path="notes.txt"]]file content here[[/FILE_MANAGEMENT]]`)
-  }
-
   if (options.projectInfo) {
     toolDocs.push(`
 ### Project Info
-Get information about the current project — instructions, files, search.
-Format: [[PROJECT_INFO action="instructions" /]]
-Format: [[PROJECT_INFO action="list_files" /]]
-Format: [[PROJECT_INFO action="search_files"]]search query[[/PROJECT_INFO]]`)
+Get information about the current project — name, description, character roster, instructions.
+Format: [[PROJECT_INFO action="get_info" /]]
+Format: [[PROJECT_INFO action="get_instructions" /]]`)
   }
 
   if (options.helpSearch) {

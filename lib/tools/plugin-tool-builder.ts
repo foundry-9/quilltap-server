@@ -19,7 +19,6 @@ import {
   imageGenerationToolDefinition,
   webSearchToolDefinition,
   projectInfoToolDefinition,
-  fileManagementToolDefinition,
   requestFullContextToolDefinition,
   submitFinalResponseToolDefinition,
   helpSearchToolDefinition,
@@ -162,9 +161,6 @@ export interface BuildToolsOptions {
   /** Whether to enable project info tool */
   projectInfo?: boolean;
 
-  /** Whether to enable file management tool (always enabled by default) */
-  fileManagement?: boolean;
-
   /** Whether to enable request_full_context tool (enabled when context compression is active) */
   requestFullContext?: boolean;
 
@@ -247,7 +243,6 @@ export async function buildToolsForProvider(
       imageGeneration: options.imageGeneration,
       webSearch: options.webSearch,
       projectInfo: options.projectInfo,
-      fileManagement: options.fileManagement,
       requestFullContext: options.requestFullContext,
       agentMode: options.agentMode,
       helpSearch: options.helpSearch,
@@ -287,11 +282,6 @@ export async function buildToolsForProvider(
   // Add project info tool if enabled
   if (options.projectInfo) {
     universalTools.push(projectInfoToolDefinition as UniversalTool);
-  }
-
-  // Add file management tool if enabled (defaults to true when not specified)
-  if (options.fileManagement !== false) {
-    universalTools.push(fileManagementToolDefinition as UniversalTool);
   }
 
   // Add request_full_context tool if enabled (for context compression bypass)

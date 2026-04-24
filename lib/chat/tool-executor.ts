@@ -23,11 +23,6 @@ import {
   type ProjectInfoToolContext,
 } from '@/lib/tools/handlers/project-info-handler';
 import {
-  executeFileManagementTool,
-  formatFileManagementResults,
-  type FileManagementToolContext,
-} from '@/lib/tools/handlers/file-management-handler';
-import {
   executeRequestFullContextTool,
   formatRequestFullContextResults,
   type RequestFullContextToolContext,
@@ -135,16 +130,6 @@ export interface ToolResult {
   error?: string;
   /** Human-readable error message with more details than the error code */
   message?: string;
-  /** For file_management: indicates permission is required for this write */
-  requiresPermission?: boolean;
-  /** Pending write details when requiresPermission is true */
-  pendingWrite?: {
-    filename: string;
-    content?: string;
-    mimeType?: string;
-    folderPath?: string;
-    projectId?: string | null;
-  };
   /** For sudo_sync: indicates user approval is required */
   requiresSudoApproval?: boolean;
   /** For sudo_sync: the pending command details */
@@ -206,7 +191,6 @@ const BUILT_IN_TOOLS = new Set<string>([
   'generate_image',
   'search_web',
   'project_info',
-  'file_management',
   'request_full_context',
   'help_search',
   'help_settings',
@@ -419,57 +403,6 @@ export async function executeToolCallWithContext(
 
       return {
         toolName: 'project_info',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          action: result.action,
-          data: result.data,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle file management
-    if (toolCall.name === 'file_management') {
-      // Execute file management tool
-      const fileContext: FileManagementToolContext = {
-        userId,
-        chatId,
-        projectId: context.projectId || null,
-        characterIds: characterId ? [characterId] : [],
-      };
-
-      const result = await executeFileManagementTool(toolCall.arguments, fileContext);
-
-      // Debug: Log the file management result structure
-      // Format results for LLM consumption
-      const formattedResult = formatFileManagementResults(result);
-
-      // Check if permission is required for write operations
-      if (result.requiresPermission) {
-        logger.info('File management requires permission, returning pendingWrite', {
-          filename: result.filename,
-          folderPath: result.folderPath,
-        });
-        const args = toolCall.arguments as Record<string, unknown>;
-        return {
-          toolName: 'file_management',
-          success: false,
-          result: null,
-          error: result.message || 'File write permission required',
-          requiresPermission: true,
-          pendingWrite: {
-            filename: result.filename || (args.filename as string) || 'unknown',
-            content: args.content as string | undefined,
-            mimeType: args.mimeType as string | undefined,
-            folderPath: result.folderPath || (args.targetFolderPath as string) || '/',
-            projectId: context.projectId || null,
-          },
-        };
-      }
-
-      return {
-        toolName: 'file_management',
         success: result.success,
         result: result.success ? {
           formattedText: formattedResult,

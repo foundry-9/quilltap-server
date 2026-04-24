@@ -240,7 +240,7 @@ Use AI tools during chat:
 
 - **Image Generation** — Create images in conversation
 - **Web Search** — Access current information
-- **File Management** — Read and write files
+- **Scriptorium Document Tools** — Read, search, and write files in linked document stores
 - **Memory Search** — Find past conversations
 
 See [Using Tools](tools-usage.md) for tool details.

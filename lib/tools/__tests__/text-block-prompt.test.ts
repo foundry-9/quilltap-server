@@ -63,12 +63,6 @@ describe('buildTextBlockInstructions', () => {
     expect(result).toContain('[[RNG')
   })
 
-  it('includes file management docs when enabled', () => {
-    const result = buildTextBlockInstructions({ fileManagement: true })
-    expect(result).toContain('File Management')
-    expect(result).toContain('[[FILE_MANAGEMENT')
-  })
-
   it('includes project info docs when enabled', () => {
     const result = buildTextBlockInstructions({ projectInfo: true })
     expect(result).toContain('Project Info')

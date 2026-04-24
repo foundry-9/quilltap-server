@@ -68,21 +68,18 @@ The AI can access project files during conversation:
 
 You: "What did I write about the protagonist's childhood?"
 
-AI: *Uses search_files to find relevant documents*
-AI: *Reads the character biography file*
+AI: *Uses doc_grep to find relevant documents in the project's Scriptorium store*
+AI: *Reads the character biography file with doc_read_file*
 AI: "According to your character notes, the protagonist grew up in..."
 
 ### Project Info Tool
 
-The AI has a dedicated tool for project access:
+The AI has a dedicated tool for project context:
 
-- **get_info** — Project name, description, statistics
+- **get_info** — Project name, description, character roster, counts, linked Scriptorium store
 - **get_instructions** — Full project instructions text
-- **list_files** — Available files with metadata
-- **read_file** — Full content of a specific file
-- **search_files** — Semantic search across files
 
-This tool is automatically available in project chats.
+For listing, reading, and searching project files, the AI uses the Scriptorium document tools (`doc_list_files`, `doc_read_file`, `doc_grep`), which operate against the project's linked document store. These are automatically available in project chats.
 
 ## Managing Project Chats
 

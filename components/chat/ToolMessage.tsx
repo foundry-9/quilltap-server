@@ -231,11 +231,6 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '📋',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
-    file_management: {
-      displayName: 'File Management',
-      icon: '📁',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
     rng: {
       displayName: 'Random Number Generator',
       icon: '🎲',

@@ -67,7 +67,6 @@ describe('GET /api/v1/tools', () => {
     expect(toolIds).toContain('search')
     expect(toolIds).toContain('search_web')
     expect(toolIds).toContain('project_info')
-    expect(toolIds).toContain('file_management')
     expect(toolIds).toContain('help_search')
     expect(toolIds).toContain('help_settings')
 
