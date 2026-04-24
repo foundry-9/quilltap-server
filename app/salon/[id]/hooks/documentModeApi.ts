@@ -177,3 +177,18 @@ export async function renameDocumentForChat(
 
   return parseJsonResponse<RenameDocumentResponse>(response, 'Failed to rename document')
 }
+
+interface DeleteDocumentResponse {
+  success: boolean
+  /** Librarian announcement message posted alongside the delete (null if chat not found) */
+  librarianMessage?: Message | null
+}
+
+export async function deleteDocumentForChat(chatId: string): Promise<DeleteDocumentResponse> {
+  const response = await fetch(`/api/v1/chats/${chatId}?action=delete-document`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+  })
+
+  return parseJsonResponse<DeleteDocumentResponse>(response, 'Failed to delete document')
+}

@@ -14,6 +14,7 @@ import { formatAutosaveNotification } from '@/lib/doc-edit/unified-diff'
 import type { Chat, Message } from '../types'
 import {
   closeDocumentForChat,
+  deleteDocumentForChat,
   fetchActiveDocumentRecord,
   fetchChatDocumentState,
   openDocumentForChat,
@@ -60,6 +61,7 @@ interface UseDocumentModeReturn {
   openDocument: (params: OpenDocumentParams) => Promise<ActiveDocument | null>
   closeDocument: () => Promise<void>
   renameDocument: (newTitle: string) => Promise<void>
+  deleteDocument: () => Promise<void>
   toggleFocusMode: () => void
   setDividerPosition: (position: number) => void
   handleContentChange: (content: string) => void
@@ -461,6 +463,30 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     }
   }, [activeDocument, chatId, isDirty, saveDocument])
 
+  // Delete the active document's underlying file. Cancels any pending autosave
+  // so it cannot fire against a file that's about to vanish, deactivates the
+  // chat's document association, and appends the Librarian's announcement to
+  // the transcript so present characters know the volume is gone.
+  const deleteDocument = useCallback(async () => {
+    if (!activeDocument) return
+
+    clearAutosaveTimer()
+
+    try {
+      const data = await deleteDocumentForChat(chatId)
+
+      applyDocumentState(null, false)
+      setDocumentMode('normal')
+
+      const notifyLibrarian = onLibrarianMessageRef.current
+      if (notifyLibrarian && data.librarianMessage) {
+        notifyLibrarian(data.librarianMessage as Message)
+      }
+    } catch (error) {
+      console.error('[DocumentMode] Failed to delete document', error)
+    }
+  }, [activeDocument, applyDocumentState, chatId, clearAutosaveTimer])
+
   // Toggle between split and focus modes
   const toggleFocusMode = useCallback(() => {
     const newMode = documentMode === 'focus' ? 'split' : 'focus'
@@ -565,6 +591,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     openDocument,
     closeDocument,
     renameDocument,
+    deleteDocument,
     toggleFocusMode,
     setDividerPosition,
     handleContentChange,

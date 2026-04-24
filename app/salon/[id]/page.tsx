@@ -1295,6 +1295,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 onTitleChange={documentModeHook.renameDocument}
                 onToggleFocusMode={documentModeHook.toggleFocusMode}
                 onCloseDocument={documentModeHook.closeDocument}
+                onDeleteDocument={documentModeHook.deleteDocument}
                 focusRequest={documentModeHook.focusRequest}
                 onFocusResolved={documentModeHook.setAttentionTop}
                 onFocusCleared={() => documentModeHook.setAttentionTop(null)}

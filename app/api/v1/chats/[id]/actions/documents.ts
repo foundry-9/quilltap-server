@@ -25,12 +25,14 @@ import {
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import {
   moveDatabaseDocument,
+  deleteDatabaseDocument,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 import {
   postLibrarianOpenAnnouncement,
   postLibrarianRenameAnnouncement,
   postLibrarianSaveAnnouncement,
+  postLibrarianDeleteAnnouncement,
 } from '@/lib/services/librarian-notifications/writer';
 import { getErrorMessage } from '@/lib/errors';
 import path from 'path';
@@ -653,6 +655,100 @@ export async function handleRenameDocument(
       mountPoint: doc.mountPoint,
       displayTitle: newDisplayTitle,
     },
+    librarianMessage: librarianMessage ?? null,
+  });
+}
+
+/**
+ * Delete the active document's underlying file. Database-backed stores route
+ * through deleteDatabaseDocument; filesystem scopes use fs.unlink. The chat's
+ * document association is deactivated (mirrors handleCloseDocument), and the
+ * Librarian announces the removal so characters present know the file is gone.
+ */
+export async function handleDeleteDocument(
+  chatId: string,
+  context: AuthenticatedContext
+): Promise<NextResponse> {
+  const { repos } = context;
+  const doc = await repos.chatDocuments.findActiveForChat(chatId);
+  if (!doc) {
+    return badRequest('No active document to delete');
+  }
+
+  const chatContext = await getChatContext(chatId, context);
+  if (!chatContext) {
+    return badRequest('Chat not found');
+  }
+
+  let resolved;
+  try {
+    resolved = (await resolveDocumentRequest(chatContext, {
+      scope: doc.scope as DocEditScope,
+      filePath: doc.filePath,
+      mountPoint: doc.mountPoint ?? undefined,
+    })).resolved;
+  } catch (error) {
+    const message = getErrorMessage(error);
+    logger.warn('Failed to resolve document path for delete', {
+      chatId,
+      filePath: doc.filePath,
+      error: message,
+    });
+    return badRequest(`Could not resolve path: ${message}`);
+  }
+
+  try {
+    if (resolved.mountType === 'database' && resolved.mountPointId) {
+      const deleted = await deleteDatabaseDocument(resolved.mountPointId, resolved.relativePath);
+      if (!deleted) {
+        return notFound('File not found');
+      }
+    } else {
+      try {
+        const stat = await fs.stat(resolved.absolutePath);
+        if (!stat.isFile()) {
+          return badRequest(`Path is not a file: ${doc.filePath}`);
+        }
+      } catch {
+        return notFound('File not found');
+      }
+      await fs.unlink(resolved.absolutePath);
+    }
+  } catch (error) {
+    const message = getErrorMessage(error);
+    logger.error('Failed to delete document', {
+      chatId,
+      filePath: doc.filePath,
+      error: message,
+    });
+    return serverError(`Failed to delete document: ${message}`);
+  }
+
+  await repos.chatDocuments.closeDocument(chatId);
+  await repos.chats.update(chatId, {
+    documentMode: 'normal',
+  } as Record<string, unknown>);
+
+  const displayTitle = doc.displayTitle || path.basename(doc.filePath);
+
+  logger.debug('Deleted document', {
+    chatId,
+    filePath: doc.filePath,
+    scope: doc.scope,
+    mountType: resolved.mountType ?? 'filesystem',
+  });
+
+  const librarianMessage = await postLibrarianDeleteAnnouncement({
+    chatId,
+    displayTitle,
+    filePath: doc.filePath,
+    scope: doc.scope as 'project' | 'document_store' | 'general',
+    mountPoint: doc.mountPoint,
+    origin: { kind: 'by-user' },
+  });
+
+  return successResponse({
+    success: true,
     librarianMessage: librarianMessage ?? null,
   });
 }

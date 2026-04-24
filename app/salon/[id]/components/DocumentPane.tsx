@@ -34,6 +34,7 @@ import { FormattingCommandPlugin } from '@/components/chat/lexical/plugins/Forma
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import DocumentChangeTracker from './DocumentChangeTracker'
 import DocumentFocusPlugin from './DocumentFocusPlugin'
+import { showConfirmation } from '@/lib/alert'
 import type { ActiveDocument, DocumentMode, FocusRequest } from '../hooks/useDocumentMode'
 
 interface DocumentPaneProps {
@@ -55,6 +56,7 @@ interface DocumentPaneProps {
   onBlur: () => void
   onToggleFocusMode: () => void
   onCloseDocument: () => void
+  onDeleteDocument: () => void
   onTitleChange?: (title: string) => void
   /** doc_focus tool request from the LLM */
   focusRequest?: FocusRequest | null
@@ -211,6 +213,7 @@ export default function DocumentPane({
   onBlur,
   onToggleFocusMode,
   onCloseDocument,
+  onDeleteDocument,
   onTitleChange,
   focusRequest,
   onFocusResolved,
@@ -325,6 +328,14 @@ export default function DocumentPane({
     }
   }, [editTitle, document.displayTitle, onTitleChange])
 
+  const handleDeleteClick = useCallback(async () => {
+    const confirmed = await showConfirmation(
+      `Delete "${document.displayTitle}"? This removes the underlying file and cannot be undone.`,
+    )
+    if (!confirmed) return
+    onDeleteDocument()
+  }, [document.displayTitle, onDeleteDocument])
+
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleTitleSubmit()
@@ -389,6 +400,19 @@ export default function DocumentPane({
                 // Expand icon (maximize)
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5h-4m4 0v-4m0 4l-5-5" />
               )}
+            </svg>
+          </button>
+
+          {/* Delete the underlying file */}
+          <button
+            type="button"
+            className="qt-doc-header-button"
+            onClick={handleDeleteClick}
+            title="Delete document"
+            aria-label="Delete document"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
             </svg>
           </button>
 

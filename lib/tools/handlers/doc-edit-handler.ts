@@ -68,7 +68,13 @@ import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/bl
 import { getRepositories } from '@/lib/database/repositories';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
-import { postLibrarianOpenAnnouncement } from '@/lib/services/librarian-notifications/writer';
+import {
+  postLibrarianOpenAnnouncement,
+  postLibrarianDeleteAnnouncement,
+  postLibrarianFolderCreatedAnnouncement,
+  postLibrarianFolderDeletedAnnouncement,
+  type LibrarianActorOrigin,
+} from '@/lib/services/librarian-notifications/writer';
 import {
   databaseDocumentExists,
   databaseFolderExists,
@@ -1598,6 +1604,28 @@ async function handleCopyFile(
 
 // --- doc_delete_file ---
 
+/**
+ * Resolve the LibrarianActorOrigin for a tool call. Characters are preferred;
+ * if the context has no characterId or the lookup fails, falls back to user
+ * attribution — matches the pattern in handleOpenDocument.
+ */
+async function resolveActorOrigin(context: DocEditToolContext): Promise<LibrarianActorOrigin> {
+  if (!context.characterId) return { kind: 'by-user' };
+  try {
+    const repos = getRepositories();
+    const character = await repos.characters.findById(context.characterId);
+    if (character?.name) {
+      return { kind: 'by-character', characterName: character.name };
+    }
+  } catch (error) {
+    logger.debug('Could not resolve character name for Librarian attribution', {
+      characterId: context.characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return { kind: 'by-user' };
+}
+
 async function handleDeleteFile(
   input: DocDeleteFileInput,
   context: DocEditToolContext
@@ -1615,6 +1643,14 @@ async function handleDeleteFile(
       return { success: false, error: `File not found: ${input.path}` };
     }
     logger.info('Deleted database document', { path: input.path, scope });
+    await postLibrarianDeleteAnnouncement({
+      chatId: context.chatId,
+      displayTitle: path.basename(input.path),
+      filePath: input.path,
+      scope: scope as 'project' | 'document_store' | 'general',
+      mountPoint: input.mount_point,
+      origin: await resolveActorOrigin(context),
+    });
     return {
       success: true,
       result: { success: true, path: input.path },
@@ -1638,6 +1674,15 @@ async function handleDeleteFile(
   logger.info('Deleted file', {
     path: input.path,
     scope,
+  });
+
+  await postLibrarianDeleteAnnouncement({
+    chatId: context.chatId,
+    displayTitle: path.basename(input.path),
+    filePath: input.path,
+    scope: scope as 'project' | 'document_store' | 'general',
+    mountPoint: input.mount_point,
+    origin: await resolveActorOrigin(context),
   });
 
   const result: DocDeleteFileOutput = {
@@ -1666,6 +1711,13 @@ async function handleCreateFolder(
     try {
       await createDatabaseFolder(resolved.mountPointId, resolved.relativePath);
       logger.info('Created database folder', { path: input.path, scope });
+      await postLibrarianFolderCreatedAnnouncement({
+        chatId: context.chatId,
+        folderPath: input.path,
+        scope: scope as 'project' | 'document_store' | 'general',
+        mountPoint: input.mount_point,
+        origin: await resolveActorOrigin(context),
+      });
       return {
         success: true,
         result: { success: true, path: input.path },
@@ -1683,6 +1735,14 @@ async function handleCreateFolder(
   logger.info('Created folder', {
     path: input.path,
     scope,
+  });
+
+  await postLibrarianFolderCreatedAnnouncement({
+    chatId: context.chatId,
+    folderPath: input.path,
+    scope: scope as 'project' | 'document_store' | 'general',
+    mountPoint: input.mount_point,
+    origin: await resolveActorOrigin(context),
   });
 
   const result: DocCreateFolderOutput = {
@@ -1711,6 +1771,13 @@ async function handleDeleteFolder(
     try {
       await deleteDatabaseFolder(resolved.mountPointId, resolved.relativePath);
       logger.info('Deleted database folder', { path: input.path, scope });
+      await postLibrarianFolderDeletedAnnouncement({
+        chatId: context.chatId,
+        folderPath: input.path,
+        scope: scope as 'project' | 'document_store' | 'general',
+        mountPoint: input.mount_point,
+        origin: await resolveActorOrigin(context),
+      });
       return {
         success: true,
         result: { success: true, path: input.path },
@@ -1760,6 +1827,14 @@ async function handleDeleteFolder(
   logger.info('Deleted folder', {
     path: input.path,
     scope,
+  });
+
+  await postLibrarianFolderDeletedAnnouncement({
+    chatId: context.chatId,
+    folderPath: input.path,
+    scope: scope as 'project' | 'document_store' | 'general',
+    mountPoint: input.mount_point,
+    origin: await resolveActorOrigin(context),
   });
 
   const result: DocDeleteFolderOutput = {

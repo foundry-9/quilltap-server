@@ -7,11 +7,14 @@
  * history and know the document is available (and who opened it), without the
  * user losing their turn to the LLM.
  *
- * Four kinds of announcements:
+ * Kinds of announcements:
  *   - 'opened-by-user'       → user-initiated Document Mode open
  *   - 'opened-by-character'  → character-initiated via the `doc_open_document` tool
  *   - 'saved'                → user autosave/manual-save from the editor (includes unified diff)
  *   - 'renamed'              → user-initiated rename via the Document Mode title input
+ *   - 'deleted'              → file removed (user Delete button, or character `doc_delete_file` tool)
+ *   - 'folder-created'       → character `doc_create_folder` tool
+ *   - 'folder-deleted'       → character `doc_delete_folder` tool
  *
  * Errors never propagate — document operations must never fail because an
  * announcement couldn't be written.
@@ -27,6 +30,14 @@ export type LibrarianOpenKind =
   | { kind: 'opened-by-user' }
   | { kind: 'opened-by-character'; characterName: string };
 
+/**
+ * Who initiated a destructive or structural change.
+ * Shared by delete / folder-create / folder-delete announcements.
+ */
+export type LibrarianActorOrigin =
+  | { kind: 'by-user' }
+  | { kind: 'by-character'; characterName: string };
+
 export interface LibrarianOpenAnnouncement {
   chatId: string;
   displayTitle: string;
@@ -35,6 +46,31 @@ export interface LibrarianOpenAnnouncement {
   mountPoint?: string | null;
   isNew: boolean;
   origin: LibrarianOpenKind;
+}
+
+export interface LibrarianDeleteAnnouncement {
+  chatId: string;
+  displayTitle: string;
+  filePath: string;
+  scope: 'project' | 'document_store' | 'general';
+  mountPoint?: string | null;
+  origin: LibrarianActorOrigin;
+}
+
+export interface LibrarianFolderCreatedAnnouncement {
+  chatId: string;
+  folderPath: string;
+  scope: 'project' | 'document_store' | 'general';
+  mountPoint?: string | null;
+  origin: LibrarianActorOrigin;
+}
+
+export interface LibrarianFolderDeletedAnnouncement {
+  chatId: string;
+  folderPath: string;
+  scope: 'project' | 'document_store' | 'general';
+  mountPoint?: string | null;
+  origin: LibrarianActorOrigin;
 }
 
 export interface LibrarianSaveAnnouncement {
@@ -67,6 +103,12 @@ function requesterLabel(origin: LibrarianOpenKind): string {
   return origin.kind === 'opened-by-user'
     ? "the user's request"
     : `${origin.characterName}'s request`;
+}
+
+function actorLabel(origin: LibrarianActorOrigin): string {
+  return origin.kind === 'by-user'
+    ? "the user's instruction"
+    : `${origin.characterName}'s instruction`;
 }
 
 export function buildOpenContent(params: LibrarianOpenAnnouncement): string {
@@ -195,4 +237,73 @@ export async function postLibrarianRenameAnnouncement(
     scope: params.scope,
   });
   return postLibrarianMessage(params.chatId, content, 'renamed');
+}
+
+export function buildDeleteContent(params: LibrarianDeleteAnnouncement): string {
+  const { displayTitle, filePath, scope, mountPoint, origin } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const who = actorLabel(origin);
+  const pathDetails = `path: "${filePath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  return `The Librarian has removed "${displayTitle}" from ${where} at ${who}. The volume is gone from the shelves, and its card struck from the catalogue (${pathDetails}).`;
+}
+
+export function buildFolderCreatedContent(params: LibrarianFolderCreatedAnnouncement): string {
+  const { folderPath, scope, mountPoint, origin } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const who = actorLabel(origin);
+  const pathDetails = `path: "${folderPath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  return `The Librarian has set aside a fresh shelf for "${folderPath}" in ${where} at ${who} — a new folder, presently empty, awaiting its tenants (${pathDetails}).`;
+}
+
+export function buildFolderDeletedContent(params: LibrarianFolderDeletedAnnouncement): string {
+  const { folderPath, scope, mountPoint, origin } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const who = actorLabel(origin);
+  const pathDetails = `path: "${folderPath}", scope: "${scope}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  return `The Librarian has dismantled the empty shelf at "${folderPath}" in ${where} at ${who}. The folder has been cleared from the catalogue (${pathDetails}).`;
+}
+
+export async function postLibrarianDeleteAnnouncement(
+  params: LibrarianDeleteAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildDeleteContent(params);
+  const kindLabel = params.origin.kind === 'by-user' ? 'deleted-by-user' : 'deleted-by-character';
+  logger.debug('[LibrarianNotification] Posting delete announcement', {
+    context: 'librarian-notifications',
+    chatId: params.chatId,
+    filePath: params.filePath,
+    scope: params.scope,
+    kindLabel,
+  });
+  return postLibrarianMessage(params.chatId, content, kindLabel);
+}
+
+export async function postLibrarianFolderCreatedAnnouncement(
+  params: LibrarianFolderCreatedAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildFolderCreatedContent(params);
+  const kindLabel = params.origin.kind === 'by-user' ? 'folder-created-by-user' : 'folder-created-by-character';
+  logger.debug('[LibrarianNotification] Posting folder-created announcement', {
+    context: 'librarian-notifications',
+    chatId: params.chatId,
+    folderPath: params.folderPath,
+    scope: params.scope,
+    kindLabel,
+  });
+  return postLibrarianMessage(params.chatId, content, kindLabel);
+}
+
+export async function postLibrarianFolderDeletedAnnouncement(
+  params: LibrarianFolderDeletedAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildFolderDeletedContent(params);
+  const kindLabel = params.origin.kind === 'by-user' ? 'folder-deleted-by-user' : 'folder-deleted-by-character';
+  logger.debug('[LibrarianNotification] Posting folder-deleted announcement', {
+    context: 'librarian-notifications',
+    chatId: params.chatId,
+    folderPath: params.folderPath,
+    scope: params.scope,
+    kindLabel,
+  });
+  return postLibrarianMessage(params.chatId, content, kindLabel);
 }
