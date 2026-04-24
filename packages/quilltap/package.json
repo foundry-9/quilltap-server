@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "4.3.0-dev.180",
+  "version": "4.3.0-dev.181",
   "description": "Self-hosted AI workspace for writers, worldbuilders, and roleplayers. Run with npx quilltap.",
   "author": {
     "name": "Charles Sebold",

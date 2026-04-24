@@ -195,6 +195,8 @@ import { convertProjectFilesToDocumentStoresMigration } from './convert-project-
 import { addSystemSenderFieldMigration } from './add-system-sender-field';
 // Add allowCrossCharacterVaultReads column to chats
 import { addChatCrossCharacterVaultReadsFieldMigration } from './add-chat-cross-character-vault-reads-field';
+// Drop file_permissions table (LLM write approval flow retired)
+import { dropFilePermissionsMigration } from './drop-file-permissions';
 
 /**
  * All available migrations.
@@ -385,6 +387,8 @@ export const migrations: Migration[] = [
   addSystemSenderFieldMigration,
   // Add allowCrossCharacterVaultReads column to chats
   addChatCrossCharacterVaultReadsFieldMigration,
+  // Drop file_permissions table (LLM write approval flow retired)
+  dropFilePermissionsMigration,
 ];
 
 export {
@@ -560,5 +564,7 @@ export {
   addSystemSenderFieldMigration,
   // Add allowCrossCharacterVaultReads column to chats
   addChatCrossCharacterVaultReadsFieldMigration,
+  // Drop file_permissions table (LLM write approval flow retired)
+  dropFilePermissionsMigration,
 };
 

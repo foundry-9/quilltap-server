@@ -15,7 +15,6 @@ import RunToolModal from '@/components/chat/RunToolModal'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import type { SearchReplaceResult } from '@/components/tools/search-replace/types'
 import AllLLMPauseModal from '@/components/chat/AllLLMPauseModal'
-import FileWriteApprovalModal from '@/components/chat/FileWriteApprovalModal'
 import FileConflictDialog from '@/components/chat/FileConflictDialog'
 import SelectLLMProfileDialog from '@/components/chat/SelectLLMProfileDialog'
 import { MemoryCascadeDialog } from '@/components/ui/MemoryCascadeDialog'
@@ -26,7 +25,7 @@ import SudoApprovalModal from '@/components/chat/SudoApprovalModal'
 import WorkspaceAcknowledgementModal from '@/components/chat/WorkspaceAcknowledgementModal'
 import LibraryFilePickerModal from '@/components/chat/LibraryFilePickerModal'
 import StandaloneGenerateImageDialog from '@/components/chat/StandaloneGenerateImageDialog'
-import type { ReattributeDialogState, FileWriteApprovalState, SudoApprovalState, WorkspaceAcknowledgementState, SelectLLMProfileDialogState } from '../hooks/useModalState'
+import type { ReattributeDialogState, SudoApprovalState, WorkspaceAcknowledgementState, SelectLLMProfileDialogState } from '../hooks/useModalState'
 
 interface ChatModalsProps {
   chatId: string
@@ -71,8 +70,6 @@ interface ChatModalsProps {
   // Complex modal states
   reattributeDialogState: ReattributeDialogState | null
   setReattributeDialogState: (state: ReattributeDialogState | null) => void
-  fileWriteApprovalState: FileWriteApprovalState | null
-  setFileWriteApprovalState: (state: FileWriteApprovalState | null) => void
   sudoApprovalState: SudoApprovalState | null
   setSudoApprovalState: (state: SudoApprovalState | null) => void
   workspaceAcknowledgementState: WorkspaceAcknowledgementState | null
@@ -133,7 +130,6 @@ export function ChatModals({
   allLLMPauseModalOpen, setAllLLMPauseModalOpen,
   // Complex
   reattributeDialogState, setReattributeDialogState,
-  fileWriteApprovalState, setFileWriteApprovalState,
   sudoApprovalState, setSudoApprovalState,
   workspaceAcknowledgementState, setWorkspaceAcknowledgementState,
   selectLLMProfileDialogState, setSelectLLMProfileDialogState,
@@ -413,43 +409,6 @@ export function ChatModals({
         onStop={handleAllLLMStop}
         onTakeOver={handleAllLLMTakeOver}
       />
-
-      {fileWriteApprovalState && (
-        <FileWriteApprovalModal
-          isOpen={fileWriteApprovalState.isOpen}
-          onClose={() => setFileWriteApprovalState(null)}
-          request={{
-            filename: fileWriteApprovalState.pendingWrite.filename,
-            content: fileWriteApprovalState.pendingWrite.content || '',
-            mimeType: fileWriteApprovalState.pendingWrite.mimeType || 'text/plain',
-            folderPath: fileWriteApprovalState.pendingWrite.folderPath,
-            projectId: fileWriteApprovalState.pendingWrite.projectId,
-            projectName: fileWriteApprovalState.projectName,
-          }}
-          chatId={chatId}
-          onApprove={async () => {
-            const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
-            setFileWriteApprovalState(null)
-            await fetchChat()
-            if (participantToTrigger) {
-              setTimeout(() => {
-                triggerContinueMode(participantToTrigger)
-              }, 500)
-            }
-          }}
-          onDeny={async () => {
-            const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
-            setFileWriteApprovalState(null)
-            showInfoToast('File write denied.')
-            await fetchChat()
-            if (participantToTrigger) {
-              setTimeout(() => {
-                triggerContinueMode(participantToTrigger)
-              }, 500)
-            }
-          }}
-        />
-      )}
 
       {sudoApprovalState && (
         <SudoApprovalModal

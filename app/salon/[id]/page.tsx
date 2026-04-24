@@ -361,7 +361,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     scrollOnStreamComplete: () => scrollOnStreamComplete(),
     setAttachedFiles,
     inputRef: inputRef as React.RefObject<ComposerEditorHandle>,
-    setFileWriteApprovalState: modals.setFileWriteApprovalState,
     setSudoApprovalState: modals.setSudoApprovalState,
     setWorkspaceAcknowledgementState: modals.setWorkspaceAcknowledgementState,
     getFirstCharacterParticipant: participantsWithImpersonation.getFirstCharacterParticipant,
@@ -1170,10 +1169,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onViewLLMLogs={llmLogs.handleViewLLMLogs}
           pendingToolCalls={sseStreaming.pendingToolCalls}
           ephemeralMessages={ephemeralMessages}
-          fileWriteApprovalState={modals.fileWriteApprovalState}
-          setFileWriteApprovalState={modals.setFileWriteApprovalState}
-          chatId={id}
-          triggerContinueMode={sseStreaming.triggerContinueMode}
           getRespondingCharacter={getRespondingCharacter}
           shouldShowAvatars={shouldShowAvatars}
           getFirstCharacter={participantsWithImpersonation.getFirstCharacter}
@@ -1363,8 +1358,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}
           reattributeDialogState={modals.reattributeDialogState}
           setReattributeDialogState={modals.setReattributeDialogState}
-          fileWriteApprovalState={modals.fileWriteApprovalState}
-          setFileWriteApprovalState={modals.setFileWriteApprovalState}
           sudoApprovalState={modals.sudoApprovalState}
           setSudoApprovalState={modals.setSudoApprovalState}
           workspaceAcknowledgementState={modals.workspaceAcknowledgementState}

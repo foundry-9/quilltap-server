@@ -619,26 +619,6 @@ CREATE INDEX "idx_folders_projectId" ON "folders" ("projectId");
 CREATE INDEX "idx_folders_userId" ON "folders" ("userId");
 ```
 
-### file_permissions
-
-```sql
-CREATE TABLE "file_permissions" (
-  "id" TEXT PRIMARY KEY,
-  "userId" TEXT NOT NULL,
-  "scope" TEXT NOT NULL,
-  "fileId" TEXT,
-  "projectId" TEXT,
-  "grantedAt" TEXT NOT NULL,
-  "grantedInChatId" TEXT,
-  "createdAt" TEXT NOT NULL,
-  "updatedAt" TEXT NOT NULL
-);
-
-CREATE INDEX "idx_file_permissions_createdAt" ON "file_permissions" ("createdAt" DESC);
-CREATE INDEX "idx_file_permissions_scope" ON "file_permissions" ("scope");
-CREATE INDEX "idx_file_permissions_userId" ON "file_permissions" ("userId");
-```
-
 ### help_docs
 
 Stores help documentation synced from the `help/` directory on disk. Unlike the old pre-built MessagePack bundle, help docs are now stored in the database and embedded at runtime using the user's chosen embedding profile, allowing the embedding model to be swapped system-wide. Introduced in v2.15.0 (migration: `create-help-docs-table-v1`).

@@ -38,7 +38,6 @@ import type {
   EmbeddingProfile,
   Memory,
   FileEntry,
-  FileWritePermission,
   Folder,
   ChatParticipantBase,
   PhysicalDescription,
@@ -161,8 +160,6 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const pluginConfigs = await readJsonFileOptional<PluginConfig[]>(rootPath, 'data/plugin-configs.json', []);
     // Chat settings are optional for backwards compatibility with older backups
     const chatSettings = await readJsonFileOptional<ChatSettings[]>(rootPath, 'data/chat-settings.json', []);
-    // File write permissions are optional for backwards compatibility with older backups
-    const filePermissions = await readJsonFileOptional<FileWritePermission[]>(rootPath, 'data/file-permissions.json', []);
     // Folders are optional for backwards compatibility with older backups
     const folders = await readJsonFileOptional<Folder[]>(rootPath, 'data/folders.json', []);
     // Wardrobe items and outfit presets are optional for backwards compatibility
@@ -192,7 +189,6 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       llmLogs,
       pluginConfigs,
       chatSettings,
-      filePermissions,
       folders,
       wardrobeItems,
       outfitPresets,
@@ -290,7 +286,6 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       llmLogs: data.llmLogs.length,
       pluginConfigs: data.pluginConfigs?.length || 0,
       chatSettings: data.chatSettings?.length || 0,
-      filePermissions: data.filePermissions?.length || 0,
       folders: data.folders?.length || 0,
       wardrobeItems: data.wardrobeItems?.length || 0,
       outfitPresets: data.outfitPresets?.length || 0,
@@ -313,7 +308,7 @@ async function deleteUserData(userId: string): Promise<void> {
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, filePermissions, folders, wardrobeItems, outfitPresets] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, folders, wardrobeItems, outfitPresets] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -327,7 +322,6 @@ async function deleteUserData(userId: string): Promise<void> {
       repos.projects.findAll(),
       repos.llmLogs.findAll(10000), // High limit to get all user logs
       globalRepos.chatSettings.findByUserId(userId),
-      globalRepos.filePermissions.findByUserId(userId),
       globalRepos.folders.findByUserId(userId),
       globalRepos.wardrobe.findAll(),
       globalRepos.outfitPresets.findAll(),
@@ -354,7 +348,6 @@ async function deleteUserData(userId: string): Promise<void> {
     ...projects.map((p) => repos.projects.delete(p.id)),
     ...llmLogs.map((log) => repos.llmLogs.delete(log.id)),
     ...(chatSettings ? [globalRepos.chatSettings.delete(chatSettings.id)] : []),
-    ...filePermissions.map((fp) => globalRepos.filePermissions.delete(fp.id)),
     ...folders.map((f) => globalRepos.folders.delete(f.id)),
     ...wardrobeItems.map((w) => globalRepos.wardrobe.delete(w.id)),
     ...outfitPresets.map((o) => globalRepos.outfitPresets.delete(o.id)),
@@ -390,7 +383,6 @@ async function deleteUserData(userId: string): Promise<void> {
       projects: projects.length,
       llmLogs: llmLogs.length,
       chatSettings: chatSettings ? 1 : 0,
-      filePermissions: filePermissions.length,
       folders: folders.length,
       wardrobeItems: wardrobeItems.length,
       outfitPresets: outfitPresets.length,
@@ -783,12 +775,6 @@ function remapBackupData(
     return remapped as ChatSettings;
   });
 
-  // Remap file write permissions
-  const remappedFilePermissions = (data.filePermissions || []).map((perm) => ({
-    ...remapper.remapFields(perm, ['id', 'fileId', 'projectId', 'grantedInChatId']),
-    userId: targetUserId,
-  })) as FileWritePermission[];
-
   // Remap folders
   const remappedFolders = (data.folders || []).map((folder) => ({
     ...remapper.remapFields(folder, ['id', 'parentFolderId', 'projectId']),
@@ -831,7 +817,6 @@ function remapBackupData(
     llmLogs: remappedLLMLogs,
     pluginConfigs: remappedPluginConfigs,
     chatSettings: remappedChatSettings,
-    filePermissions: remappedFilePermissions,
     folders: remappedFolders,
     wardrobeItems: remappedWardrobeItems,
     outfitPresets: remappedOutfitPresets,
@@ -1120,20 +1105,7 @@ export async function restore(
       }
     }
 
-    // 17. File Write Permissions
-    let filePermissionsRestored = 0;
-    for (const permission of data.filePermissions || []) {
-      try {
-        const { id, createdAt, updatedAt, ...permData } = permission;
-        await globalRepos.filePermissions.create(permData, { id });
-        filePermissionsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore file permission: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore file permission', { permissionId: permission.id, error });
-      }
-    }
-
-    // 18. Folders
+    // 17. Folders
     let foldersRestored = 0;
     for (const folder of data.folders || []) {
       try {
@@ -1232,7 +1204,6 @@ export async function restore(
       llmLogs: llmLogsRestored,
       pluginConfigs: pluginConfigsRestored,
       chatSettings: chatSettingsRestored,
-      filePermissions: filePermissionsRestored,
       folders: foldersRestored,
       wardrobeItems: wardrobeItemsRestored,
       outfitPresets: outfitPresetsRestored,

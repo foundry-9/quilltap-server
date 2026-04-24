@@ -54,7 +54,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     llmLogs,
     pluginConfigs,
     chatSettingsResult,
-    filePermissions,
     folders,
     wardrobeItems,
     outfitPresets,
@@ -79,8 +78,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     globalRepos.pluginConfigs.findByUserId(userId),
     // Get chat settings (returns single object or null)
     globalRepos.chatSettings.findByUserId(userId),
-    // Get file write permissions
-    globalRepos.filePermissions.findByUserId(userId),
     // Get folders
     globalRepos.folders.findByUserId(userId),
     // Get wardrobe items and outfit presets
@@ -138,7 +135,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     llmLogs,
     pluginConfigs,
     chatSettings,
-    filePermissions,
     folders,
     wardrobeItems,
     outfitPresets,
@@ -194,7 +190,6 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       llmLogs: data.llmLogs.length,
       pluginConfigs: data.pluginConfigs?.length || 0,
       chatSettings: data.chatSettings?.length || 0,
-      filePermissions: data.filePermissions?.length || 0,
       folders: data.folders?.length || 0,
       wardrobeItems: data.wardrobeItems?.length || 0,
       outfitPresets: data.outfitPresets?.length || 0,
@@ -283,7 +278,6 @@ export async function createBackup(userId: string): Promise<{
     await writeJsonFile(path.join(stagingDir, 'data', 'llm-logs.json'), data.llmLogs);
     await writeJsonFile(path.join(stagingDir, 'data', 'plugin-configs.json'), data.pluginConfigs || []);
     await writeJsonFile(path.join(stagingDir, 'data', 'chat-settings.json'), data.chatSettings || []);
-    await writeJsonFile(path.join(stagingDir, 'data', 'file-permissions.json'), data.filePermissions || []);
     await writeJsonFile(path.join(stagingDir, 'data', 'folders.json'), data.folders || []);
     await writeJsonFile(path.join(stagingDir, 'data', 'wardrobe-items.json'), data.wardrobeItems || []);
     await writeJsonFile(path.join(stagingDir, 'data', 'outfit-presets.json'), data.outfitPresets || []);

@@ -8,20 +8,6 @@ export interface ReattributeDialogState {
   currentParticipantId: string | null
 }
 
-export interface FileWriteApprovalState {
-  isOpen: boolean
-  pendingWrite: {
-    filename: string
-    content?: string
-    mimeType?: string
-    folderPath: string
-    projectId: string | null
-  }
-  projectName?: string
-  /** The participant ID that made the write request, so we can trigger them to continue */
-  respondingParticipantId?: string
-}
-
 export interface SudoApprovalState {
   isOpen: boolean
   pendingSudoCommand: {
@@ -76,7 +62,6 @@ export function useModalState() {
   // Complex modal states
   const [modalImage, setModalImage] = useState<{ src: string; filename: string; fileId?: string } | null>(null)
   const [reattributeDialogState, setReattributeDialogState] = useState<ReattributeDialogState | null>(null)
-  const [fileWriteApprovalState, setFileWriteApprovalState] = useState<FileWriteApprovalState | null>(null)
   const [selectLLMProfileDialogState, setSelectLLMProfileDialogState] = useState<SelectLLMProfileDialogState | null>(null)
   const [sudoApprovalState, setSudoApprovalState] = useState<SudoApprovalState | null>(null)
   const [workspaceAcknowledgementState, setWorkspaceAcknowledgementState] = useState<WorkspaceAcknowledgementState | null>(null)
@@ -131,7 +116,6 @@ export function useModalState() {
     // Complex modal states
     modalImage, setModalImage,
     reattributeDialogState, setReattributeDialogState,
-    fileWriteApprovalState, setFileWriteApprovalState,
     selectLLMProfileDialogState, setSelectLLMProfileDialogState,
     sudoApprovalState, setSudoApprovalState,
     workspaceAcknowledgementState, setWorkspaceAcknowledgementState,

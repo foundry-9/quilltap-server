@@ -5,7 +5,6 @@ import ToolMessage from '@/components/chat/ToolMessage'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
-import { showInfoToast } from '@/lib/toast'
 import type { Message, CharacterData, ChatSettings } from '../types'
 import type { SwipeState } from '../hooks/useChatData'
 import { MessageRow } from './MessageRow'
@@ -13,9 +12,7 @@ import { PendingToolCalls } from './PendingToolCalls'
 import { EphemeralMessages as EphemeralMessagesComponent } from './EphemeralMessages'
 import { StreamingMessage } from './StreamingMessage'
 import type { PendingToolCall } from '../hooks/useSSEStreaming'
-import FileWritePermissionPrompt from '@/components/chat/FileWritePermissionPrompt'
 import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
-import type { FileWriteApprovalState } from '../hooks/useModalState'
 
 interface VirtualizedMessageListProps {
   messages: Message[]
@@ -77,11 +74,6 @@ interface VirtualizedMessageListProps {
   pendingToolCalls: PendingToolCall[]
   // Ephemeral messages
   ephemeralMessages: EphemeralMessageData[]
-  // File write permission
-  fileWriteApprovalState: FileWriteApprovalState | null
-  setFileWriteApprovalState: (stateOrFn: FileWriteApprovalState | null | ((prev: FileWriteApprovalState | null) => FileWriteApprovalState | null)) => void
-  chatId: string
-  triggerContinueMode: (participantId: string) => Promise<void>
   // Streaming message display
   getRespondingCharacter: () => CharacterData | undefined
   shouldShowAvatars: () => boolean
@@ -135,10 +127,6 @@ export function VirtualizedMessageList({
   onViewLLMLogs,
   pendingToolCalls,
   ephemeralMessages,
-  fileWriteApprovalState,
-  setFileWriteApprovalState,
-  chatId,
-  triggerContinueMode,
   getRespondingCharacter,
   shouldShowAvatars,
   getFirstCharacter,
@@ -286,45 +274,6 @@ export function VirtualizedMessageList({
           messages={ephemeralMessages}
           onDismiss={turnManagement.handleDismissEphemeral}
         />
-
-        {/* Inline file write permission prompt */}
-        {fileWriteApprovalState && (
-          <FileWritePermissionPrompt
-            request={{
-              filename: fileWriteApprovalState.pendingWrite.filename,
-              content: fileWriteApprovalState.pendingWrite.content,
-              mimeType: fileWriteApprovalState.pendingWrite.mimeType,
-              folderPath: fileWriteApprovalState.pendingWrite.folderPath,
-              projectId: fileWriteApprovalState.pendingWrite.projectId,
-            }}
-            projectName={fileWriteApprovalState.projectName}
-            chatId={chatId}
-            onApprove={async () => {
-              const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
-              setFileWriteApprovalState(null)
-              await fetchChat()
-              if (participantToTrigger) {
-                setTimeout(() => {
-                  triggerContinueMode(participantToTrigger)
-                }, 500)
-              }
-            }}
-            onDeny={async () => {
-              const participantToTrigger = fileWriteApprovalState?.respondingParticipantId
-              setFileWriteApprovalState(null)
-              showInfoToast('File write denied.')
-              await fetchChat()
-              if (participantToTrigger) {
-                setTimeout(() => {
-                  triggerContinueMode(participantToTrigger)
-                }, 500)
-              }
-            }}
-            onViewDetails={() => {
-              setFileWriteApprovalState(prev => prev ? { ...prev, isOpen: true } : null)
-            }}
-          />
-        )}
 
         {/* Streaming message */}
         <StreamingMessage

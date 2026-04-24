@@ -19,7 +19,6 @@ export { ChatsRepository } from './chats.repository';
 export { ChatSettingsRepository } from './chat-settings.repository';
 export { ConnectionProfilesRepository } from './connection-profiles.repository';
 export { EmbeddingProfilesRepository } from './embedding-profiles.repository';
-export { FilePermissionsRepository } from './file-permissions.repository';
 export { FilesRepository } from './files.repository';
 export { FoldersRepository } from './folders.repository';
 export { ImageProfilesRepository } from './image-profiles.repository';
@@ -57,7 +56,6 @@ import { ChatsRepository } from './chats.repository';
 import { ChatSettingsRepository } from './chat-settings.repository';
 import { ConnectionProfilesRepository } from './connection-profiles.repository';
 import { EmbeddingProfilesRepository } from './embedding-profiles.repository';
-import { FilePermissionsRepository } from './file-permissions.repository';
 import { FilesRepository } from './files.repository';
 import { FoldersRepository } from './folders.repository';
 import { ImageProfilesRepository } from './image-profiles.repository';
@@ -99,7 +97,6 @@ export interface RepositoryContainer {
   chatSettings: ChatSettingsRepository;
   connections: ConnectionProfilesRepository;
   embeddingProfiles: EmbeddingProfilesRepository;
-  filePermissions: FilePermissionsRepository;
   files: FilesRepository;
   folders: FoldersRepository;
   imageProfiles: ImageProfilesRepository;
@@ -154,7 +151,6 @@ export function createRepositories(): RepositoryContainer {
       chatSettings: new ChatSettingsRepository(),
       connections: new ConnectionProfilesRepository(),
       embeddingProfiles: new EmbeddingProfilesRepository(),
-      filePermissions: new FilePermissionsRepository(),
       files: filesRepo,
       folders: new FoldersRepository(),
       imageProfiles: new ImageProfilesRepository(),

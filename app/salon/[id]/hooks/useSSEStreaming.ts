@@ -7,7 +7,7 @@ import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
-import type { FileWriteApprovalState, SudoApprovalState, WorkspaceAcknowledgementState } from './useModalState'
+import type { SudoApprovalState, WorkspaceAcknowledgementState } from './useModalState'
 
 export interface PendingToolCall {
   id: string
@@ -49,14 +49,6 @@ interface SSEEvent {
     name: string
     success: boolean
     result?: any
-    requiresPermission?: boolean
-    pendingWrite?: {
-      filename?: string
-      content?: string
-      mimeType?: string
-      folderPath?: string
-      projectId?: string | null
-    }
     requiresSudoApproval?: boolean
     pendingSudoCommand?: {
       command: string
@@ -113,7 +105,6 @@ interface UseSSEStreamingParams {
   scrollOnStreamComplete: () => void
   setAttachedFiles: (files: any[]) => void
   inputRef: React.RefObject<ComposerEditorHandle | null>
-  setFileWriteApprovalState: (state: FileWriteApprovalState | null) => void
   setSudoApprovalState: (state: SudoApprovalState | null) => void
   setWorkspaceAcknowledgementState: (state: WorkspaceAcknowledgementState | null) => void
   getFirstCharacterParticipant: () => import('../types').Participant | undefined
@@ -139,7 +130,6 @@ export function useSSEStreaming({
   scrollOnStreamComplete,
   setAttachedFiles,
   inputRef,
-  setFileWriteApprovalState,
   setSudoApprovalState,
   setWorkspaceAcknowledgementState,
   getFirstCharacterParticipant,
@@ -485,28 +475,13 @@ export function useSSEStreaming({
           }
         },
         onToolResult: (data) => {
-          const { index, name, success, result, requiresPermission, pendingWrite, requiresSudoApproval, pendingSudoCommand, requiresWorkspaceAcknowledgement } = data.toolResult!
+          const { index, name, success, result, requiresSudoApproval, pendingSudoCommand, requiresWorkspaceAcknowledgement } = data.toolResult!
 
           setPendingToolCalls(prev => prev.map((tc, idx) =>
             (index !== undefined && idx === index) || (index === undefined && tc.name === name)
               ? { ...tc, status: success ? 'success' : 'error', result }
               : tc
           ))
-
-          if (requiresPermission && pendingWrite) {
-            setFileWriteApprovalState({
-              isOpen: false,
-              pendingWrite: {
-                filename: pendingWrite.filename || 'unknown',
-                content: pendingWrite.content,
-                mimeType: pendingWrite.mimeType || 'text/plain',
-                folderPath: pendingWrite.folderPath || '/',
-                projectId: pendingWrite.projectId ?? chat?.projectId ?? null,
-              },
-              projectName: chat?.projectName ?? undefined,
-              respondingParticipantId: respondingParticipantId ?? undefined,
-            })
-          }
 
           if (requiresSudoApproval && pendingSudoCommand) {
             setSudoApprovalState({
@@ -670,7 +645,7 @@ export function useSSEStreaming({
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, setFileWriteApprovalState, setSudoApprovalState, setWorkspaceAcknowledgementState, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, setSudoApprovalState, setWorkspaceAcknowledgementState, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.

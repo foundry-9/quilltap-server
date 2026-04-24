@@ -15,7 +15,6 @@ import type {
   EmbeddingProfile,
   Memory,
   FileEntry,
-  FileWritePermission,
   Folder,
   MessageEvent,
   PromptTemplate,
@@ -88,8 +87,6 @@ export interface BackupManifest {
     pluginConfigs?: number;
     /** Number of ChatSettings entities (user chat/display settings) */
     chatSettings?: number;
-    /** Number of FileWritePermission entities (LLM file write permissions) */
-    filePermissions?: number;
     /** Number of Folder entities (user-created file folders) */
     folders?: number;
     /** Number of WardrobeItem entities (character wardrobe items) */
@@ -160,9 +157,6 @@ export interface BackupData {
 
   /** Array of ChatSettings entities (user chat/display settings) */
   chatSettings?: ChatSettings[];
-
-  /** Array of FileWritePermission entities (LLM file write permissions) */
-  filePermissions?: FileWritePermission[];
 
   /** Array of Folder entities (user-created file/project folders) */
   folders?: Folder[];
@@ -273,9 +267,6 @@ export interface RestoreSummary {
 
   /** Number of ChatSettings entities restored */
   chatSettings?: number;
-
-  /** Number of FileWritePermission entities restored */
-  filePermissions?: number;
 
   /** Number of Folder entities restored */
   folders?: number;
