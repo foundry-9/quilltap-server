@@ -557,7 +557,8 @@ CREATE TABLE "projects" (
   "storyBackgroundsEnabled" INTEGER DEFAULT NULL,
   "staticBackgroundImageId" TEXT DEFAULT NULL,
   "storyBackgroundImageId" TEXT DEFAULT NULL,
-  "backgroundDisplayMode" TEXT DEFAULT 'theme'
+  "backgroundDisplayMode" TEXT DEFAULT 'theme',
+  "officialMountPointId" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_projects_createdAt" ON "projects" ("createdAt" DESC);

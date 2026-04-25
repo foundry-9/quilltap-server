@@ -40,6 +40,7 @@ export const CharacterScenarioSchema = z.object({
   id: UUIDSchema,
   title: z.string().min(1).max(200),
   content: z.string().min(1),
+  description: z.string().max(500).optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

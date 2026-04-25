@@ -9,6 +9,7 @@ import type {
   ImageProfile,
   NewChatFormState,
   Project,
+  ProjectScenarioOption,
   SelectedCharacter,
   UserControlledCharacter,
 } from '../types'
@@ -27,6 +28,8 @@ interface UseNewChatReturn {
   imageProfiles: ImageProfile[]
   userControlledCharacters: UserControlledCharacter[]
   project: Project | null
+  /** Project scenarios from `/api/v1/projects/[id]/scenarios`; empty when no project. */
+  projectScenarios: ProjectScenarioOption[]
   // Form state
   selectedCharacters: SelectedCharacter[]
   setSelectedCharacters: React.Dispatch<React.SetStateAction<SelectedCharacter[]>>
@@ -41,6 +44,7 @@ const INITIAL_STATE: NewChatFormState = {
   imageProfileId: '',
   scenario: '',
   scenarioId: null,
+  projectScenarioPath: null,
   timestampConfig: null,
   avatarGenerationEnabled: false,
   outfitSelections: [],
@@ -67,6 +71,7 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
   const [imageProfiles, setImageProfiles] = useState<ImageProfile[]>([])
   const [userControlledCharacters, setUserControlledCharacters] = useState<UserControlledCharacter[]>([])
   const [project, setProject] = useState<Project | null>(null)
+  const [projectScenarios, setProjectScenarios] = useState<ProjectScenarioOption[]>([])
 
   const [selectedCharacters, setSelectedCharacters] = useState<SelectedCharacter[]>([])
   const [state, setState] = useState<NewChatFormState>(INITIAL_STATE)
@@ -86,6 +91,7 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
         ]
         if (projectId) {
           requests.push(fetch(`/api/v1/projects/${projectId}`))
+          requests.push(fetch(`/api/v1/projects/${projectId}/scenarios`))
         }
         if (initialCharacterId) {
           requests.push(fetch(`/api/v1/characters/${initialCharacterId}`))
@@ -100,6 +106,7 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
         const profilesRes = responses[idx++]
         const imageProfilesRes = responses[idx++]
         const projectRes = projectId ? responses[idx++] : null
+        const projectScenariosRes = projectId ? responses[idx++] : null
         const seedCharacterRes = initialCharacterId ? responses[idx++] : null
         const seedPartnerRes = initialCharacterId ? responses[idx++] : null
 
@@ -131,6 +138,25 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
           console.warn('[useNewChat] Failed to load project', { projectId, status: projectRes.status })
         }
 
+        let loadedProjectScenarios: ProjectScenarioOption[] = []
+        if (projectScenariosRes && projectScenariosRes.ok) {
+          const data = await projectScenariosRes.json()
+          // Server returns full ParsedProjectScenario[]; pick the fields the UI needs.
+          loadedProjectScenarios = (data.scenarios || []).map((s: { path: string; filename: string; name: string; description?: string; isDefault: boolean; body: string }) => ({
+            path: s.path,
+            filename: s.filename,
+            name: s.name,
+            ...(s.description !== undefined && { description: s.description }),
+            isDefault: s.isDefault,
+            body: s.body,
+          }))
+        } else if (projectScenariosRes && !projectScenariosRes.ok) {
+          console.warn('[useNewChat] Failed to load project scenarios', {
+            projectId,
+            status: projectScenariosRes.status,
+          })
+        }
+
         let seededChar: Character | null = null
         if (seedCharacterRes && seedCharacterRes.ok) {
           const { character } = await seedCharacterRes.json()
@@ -147,6 +173,12 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
         setProfiles(loadedProfiles)
         setImageProfiles(loadedImageProfiles)
         setProject(loadedProject)
+        setProjectScenarios(loadedProjectScenarios)
+
+        // The project default scenario (if any) — used to seed both the
+        // initial-character branch below and the project-only branch.
+        const projectDefaultScenarioPath =
+          loadedProjectScenarios.find((s) => s.isDefault)?.path ?? null
 
         // Seed selected character + defaults when initialCharacterId is provided
         if (initialCharacterId && seededChar && !seededRef.current) {
@@ -166,11 +198,15 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
             },
           ])
 
+          // Scenario default: project default wins over character default.
+          // The character default still rides on `state.scenarioId` so the form
+          // can render the override-visibility note offering a one-click switch.
           setState((prev) => ({
             ...prev,
             selectedUserCharacterId: seededPartnerId || char.defaultPartnerId || '',
             timestampConfig: char.defaultTimestampConfig ?? null,
             scenarioId: char.defaultScenarioId ?? null,
+            projectScenarioPath: projectDefaultScenarioPath,
             imageProfileId:
               loadedProject?.defaultImageProfileId ||
               char.defaultImageProfileId ||
@@ -181,6 +217,7 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
           // Project-only seeding (page mode)
           setState((prev) => ({
             ...prev,
+            projectScenarioPath: projectDefaultScenarioPath,
             imageProfileId: loadedProject.defaultImageProfileId || prev.imageProfileId,
             avatarGenerationEnabled:
               loadedProject.defaultAvatarGenerationEnabled ?? prev.avatarGenerationEnabled,
@@ -285,10 +322,13 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
         requestBody.imageProfileId = state.imageProfileId
       }
 
+      // Scenario precedence: custom text > character scenarioId > projectScenarioPath.
       if (state.scenario) {
         requestBody.scenario = state.scenario
       } else if (state.scenarioId) {
         requestBody.scenarioId = state.scenarioId
+      } else if (state.projectScenarioPath) {
+        requestBody.projectScenarioPath = state.projectScenarioPath
       }
 
       if (state.timestampConfig && state.timestampConfig.mode !== 'NONE') {
@@ -346,6 +386,7 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
     imageProfiles,
     userControlledCharacters,
     project,
+    projectScenarios,
     selectedCharacters,
     setSelectedCharacters,
     state,

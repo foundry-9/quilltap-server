@@ -67,8 +67,15 @@ const createParticipantSchema = z.object({
 const createChatSchema = z.object({
   participants: z.array(createParticipantSchema).min(1, 'At least one participant is required'),
   title: z.string().optional(),
-  scenario: z.string().optional(), // Custom scenario text override
+  scenario: z.string().optional(), // Custom scenario text override (highest precedence)
   scenarioId: z.string().uuid().optional(), // ID of a named scenario from the character's scenarios array
+  /**
+   * Relative path of a project scenario file (`Scenarios/<filename>.md`) inside the
+   * project's official document store. Server resolves the body from frontmatter +
+   * markdown and bakes it into `chat.scenarioText`. Lower precedence than `scenario`
+   * and `scenarioId`. Requires `projectId` to also be set.
+   */
+  projectScenarioPath: z.string().max(500).optional(),
   timestampConfig: TimestampConfigSchema.optional(),
   projectId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
@@ -700,7 +707,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // Fetch the primary character for defaults resolution
   const primaryCharacter = await repos.characters.findById(buildResult.firstCharacter.characterId);
 
-  // Resolve scenario: custom text takes priority, then scenarioId lookup, then nothing
+  // Resolve scenario: custom text > character scenarioId > project scenario path > nothing
   let resolvedScenario = validatedData.scenario;
   if (!resolvedScenario && validatedData.scenarioId) {
     const matchingScenario = primaryCharacter?.scenarios?.find(s => s.id === validatedData.scenarioId);
@@ -711,6 +718,35 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
         characterId: buildResult.firstCharacter.characterId,
         scenarioId: validatedData.scenarioId,
       });
+    }
+  }
+  if (!resolvedScenario && validatedData.projectScenarioPath) {
+    if (!validatedData.projectId) {
+      logger.warn('[Chats v1] projectScenarioPath provided without projectId; ignoring', {
+        projectScenarioPath: validatedData.projectScenarioPath,
+      });
+    } else {
+      const project = await repos.projects.findById(validatedData.projectId);
+      if (!project?.officialMountPointId) {
+        logger.warn('[Chats v1] projectScenarioPath provided but project has no officialMountPointId', {
+          projectId: validatedData.projectId,
+          projectScenarioPath: validatedData.projectScenarioPath,
+        });
+      } else {
+        const { resolveProjectScenarioBody } = await import('@/lib/mount-index/project-scenarios');
+        const body = await resolveProjectScenarioBody(
+          project.officialMountPointId,
+          validatedData.projectScenarioPath,
+        );
+        if (body) {
+          resolvedScenario = body;
+        } else {
+          logger.warn('[Chats v1] projectScenarioPath did not resolve to a body', {
+            projectId: validatedData.projectId,
+            projectScenarioPath: validatedData.projectScenarioPath,
+          });
+        }
+      }
     }
   }
 

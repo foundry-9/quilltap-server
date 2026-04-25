@@ -199,6 +199,8 @@ import { addChatCrossCharacterVaultReadsFieldMigration } from './add-chat-cross-
 import { dropFilePermissionsMigration } from './drop-file-permissions';
 // Add systemTransparency column to characters
 import { addCharacterSystemTransparencyFieldMigration } from './add-character-system-transparency-field';
+// Add officialMountPointId column to projects + backfill from `Project Files: <name>` stores
+import { addProjectOfficialMountPointMigration } from './add-project-official-mount-point';
 
 /**
  * All available migrations.
@@ -393,6 +395,8 @@ export const migrations: Migration[] = [
   dropFilePermissionsMigration,
   // Add systemTransparency column to characters
   addCharacterSystemTransparencyFieldMigration,
+  // Add officialMountPointId column to projects + backfill from `Project Files: <name>` stores
+  addProjectOfficialMountPointMigration,
 ];
 
 export {
@@ -572,5 +576,7 @@ export {
   dropFilePermissionsMigration,
   // Add systemTransparency column to characters
   addCharacterSystemTransparencyFieldMigration,
+  // Add officialMountPointId column to projects + backfill from `Project Files: <name>` stores
+  addProjectOfficialMountPointMigration,
 };
 

@@ -22,6 +22,7 @@ import {
   ImageGenerationCard,
   ChatsSection,
   DocumentStoresCard,
+  ScenariosCard,
 } from './components'
 
 export default function ProjectDetailPage() {
@@ -150,6 +151,11 @@ export default function ProjectDetailPage() {
           onToggle={() => toggleCard('documentStores')}
           onLink={linkStore}
           onUnlink={unlinkStore}
+        />
+        <ScenariosCard
+          projectId={projectId}
+          expanded={cardState.scenarios}
+          onToggle={() => toggleCard('scenarios')}
         />
         <CharactersCard
           project={project}

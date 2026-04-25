@@ -33,6 +33,7 @@ export function NewChatModal({
     imageProfiles,
     userControlledCharacters,
     project,
+    projectScenarios,
     selectedCharacters,
     setSelectedCharacters,
     state,
@@ -116,6 +117,7 @@ export function NewChatModal({
               state={state}
               setState={setState}
               project={project}
+              projectScenarios={projectScenarios}
               creating={creating}
               showSingleCharacterControls={!pickerExpanded}
             />

@@ -17,6 +17,7 @@ export default function NewChatPage() {
     imageProfiles,
     userControlledCharacters,
     project,
+    projectScenarios,
     selectedCharacters,
     setSelectedCharacters,
     state,
@@ -115,6 +116,7 @@ export default function NewChatPage() {
             state={state}
             setState={setState}
             project={project}
+            projectScenarios={projectScenarios}
             creating={creating}
             showSingleCharacterControls={false}
           />

@@ -584,6 +584,26 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.4: Ensure Project Scenario Infrastructure
+      // ================================================================
+      // For every project, make sure `officialMountPointId` is populated
+      // (creating a `Project Files: <name>` store if needed) and the
+      // `Scenarios/` folder exists inside it. Idempotent — steady-state
+      // boots are a no-op for healed projects. Synchronous so newly
+      // created stores are visible before the first request hits.
+      try {
+        const { ensureProjectScenariosForAllProjects } = await import(
+          './lib/startup/ensure-project-scenarios'
+        );
+        await ensureProjectScenariosForAllProjects();
+      } catch (ensureError) {
+        logger.warn('Error ensuring project scenario infrastructure, continuing startup', {
+          context: 'instrumentation.register',
+          error: ensureError instanceof Error ? ensureError.message : String(ensureError),
+        });
+      }
+
+      // ================================================================
       // PHASE 3.5: Start Background Schedulers (non-critical)
       // ================================================================
       try {

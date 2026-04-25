@@ -675,6 +675,7 @@
         "color": { "type": ["string", "null"], "pattern": "^#(?:[0-9a-fA-F]{3}){1,2}$" },
         "icon": { "type": ["string", "null"], "maxLength": 50 },
         "mountPointId": { "type": ["string", "null"] },
+        "officialMountPointId": { "type": ["string", "null"], "description": "ID of the project's canonical document store. Stripped on import; the destination instance recreates or links its own." },
         "defaultDisabledTools": { "type": "array", "items": { "type": "string" } },
         "defaultDisabledToolGroups": { "type": "array", "items": { "type": "string" } },
         "defaultAgentModeEnabled": { "type": ["boolean", "null"] },

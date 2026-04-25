@@ -947,7 +947,7 @@ async function importProjects(
         if (options.conflictStrategy === 'duplicate') {
           const newId = randomUUID();
           idMaps.projects.set(project.id, newId);
-          const { id: _, userId: __, createdAt, updatedAt, ...projectData } = project;
+          const { id: _, userId: __, createdAt, updatedAt, officialMountPointId: ___, ...projectData } = project;
           const newProject = await repos.projects.create({
             ...projectData,
             name: `${projectData.name} (imported)`,
@@ -957,7 +957,7 @@ async function importProjects(
         }
       }
 
-      const { id: _, userId: __, createdAt, updatedAt, ...projectData } = project;
+      const { id: _, userId: __, createdAt, updatedAt, officialMountPointId: ___, ...projectData } = project;
       const newProject = await repos.projects.create(projectData);
       idMaps.projects.set(project.id, newProject.id);
       imported++;

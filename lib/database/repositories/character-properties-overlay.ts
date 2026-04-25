@@ -363,29 +363,58 @@ function parsePromptFile(
 }
 
 /**
- * Parse a scenario file. The first `# heading` is the title; everything after
- * it (trimmed) is the body. Files without a `# heading` fall back to the
- * filename-without-extension as the title so nothing is dropped silently.
+ * Parse a scenario file. Frontmatter — when present — supplies `name` (title)
+ * and `description`; the body after the closing `---` becomes the scenario
+ * content. When no frontmatter is present, falls back to the legacy heading
+ * convention: the first `# heading` is the title and everything after it is
+ * the body. Files with neither fall back to the filename-without-extension as
+ * the title so malformed files are still visible rather than silently dropped.
+ *
+ * Project Scenarios in `lib/mount-index/project-scenarios.ts` use the same
+ * shape (frontmatter-first, heading-fallback) for symmetry between vault and
+ * project scenario authoring.
  */
 function parseScenarioFile(
   doc: DocMountDocument,
   characterId: string,
 ): CharacterScenario | null {
   const content = doc.content;
-  const lines = content.split('\n');
-  let titleLineIndex = -1;
+  const parsed = parseFrontmatter(content);
+
+  // Title resolution — frontmatter `name` wins, then first `# heading`,
+  // then filename-without-extension.
   let title: string | null = null;
-  for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(/^#\s+(.+)$/);
-    if (match) {
-      titleLineIndex = i;
-      title = match[1].trim();
-      break;
+  let frontmatterDescription: string | undefined;
+
+  if (parsed.data) {
+    const name = parsed.data.name;
+    if (typeof name === 'string' && name.trim().length > 0) {
+      title = name.trim();
+    }
+    const description = parsed.data.description;
+    if (typeof description === 'string' && description.trim().length > 0) {
+      frontmatterDescription = description.trim().slice(0, 500);
     }
   }
+
+  // Body excludes the frontmatter block (parsed.bodyStartOffset is 0 when
+  // no frontmatter was present, so this is safe in either case).
+  const afterFrontmatter = content.slice(parsed.bodyStartOffset);
+  const lines = afterFrontmatter.split('\n');
+  let titleLineIndex = -1;
+
   if (title === null) {
-    // Fall back to filename-without-extension so malformed scenario files are
-    // still visible rather than silently dropped.
+    for (let i = 0; i < lines.length; i++) {
+      const match = lines[i].match(/^#\s+(.+)$/);
+      if (match) {
+        titleLineIndex = i;
+        title = match[1].trim();
+        break;
+      }
+    }
+  }
+
+  if (title === null) {
     const fileName = doc.fileName.replace(/\.md$/i, '');
     title = fileName.trim().slice(0, 200);
     if (title.length === 0) {
@@ -396,7 +425,7 @@ function parseScenarioFile(
       });
       return null;
     }
-    logger.debug('Scenario file had no # heading; using filename as title', {
+    logger.debug('Scenario file had no name/heading; using filename as title', {
       characterId,
       mountPointId: doc.mountPointId,
       relativePath: doc.relativePath,
@@ -404,13 +433,13 @@ function parseScenarioFile(
     });
   }
 
-  // Body: everything after the title line (if any), trimmed to a reasonable
-  // shape. If no heading was found, use the whole content as body.
+  // Body: when a `# heading` was used as the title, drop that line; otherwise
+  // use everything after the frontmatter block.
   let body: string;
   if (titleLineIndex >= 0) {
     body = lines.slice(titleLineIndex + 1).join('\n').trim();
   } else {
-    body = content.trim();
+    body = afterFrontmatter.trim();
   }
   if (body.length === 0) {
     logger.warn('Scenarios/*.md body is empty; skipping', {
@@ -424,6 +453,7 @@ function parseScenarioFile(
     id: stableUuidFromString(`scenario:${doc.mountPointId}:${doc.relativePath}`),
     title: title.slice(0, 200),
     content: body,
+    ...(frontmatterDescription !== undefined && { description: frontmatterDescription }),
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
