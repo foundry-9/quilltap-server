@@ -662,6 +662,15 @@ async function processMessage(
     }
   }
 
+  // System transparency override: when the character isn't opted in, force the
+  // self_inventory tool out of the slate — the chat- and project-level toggles
+  // for that tool can't override the character-level covenant. Cheap union with
+  // whatever the chat already disables.
+  const characterIsTransparent = character?.systemTransparency === true
+  const effectiveDisabledTools = characterIsTransparent
+    ? (chat.disabledTools ?? [])
+    : Array.from(new Set([...(chat.disabledTools ?? []), 'self_inventory']))
+
   // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
   // Always pass disabledTools and disabledToolGroups for filtering
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
@@ -671,7 +680,7 @@ async function processMessage(
     userId,
     chat.projectId ?? undefined, // projectId - enables project_info tool
     compressionEnabled, // requestFullContext - enable the tool when compression is active
-    chat.disabledTools ?? [],
+    effectiveDisabledTools,
     chat.disabledToolGroups ?? [],
     agentMode.enabled, // agentModeEnabled - enables submit_final_response tool
     isMultiCharacter, // isMultiCharacter - enables whisper tool

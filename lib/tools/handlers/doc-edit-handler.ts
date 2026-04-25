@@ -268,6 +268,30 @@ async function collectPeerCharacterIdsForReads(
 }
 
 /**
+ * When a character has `systemTransparency !== true` they accept the covenant
+ * of trust — every character vault (their own and peers') is hidden from
+ * doc_* tools. Returns true if the acting character is opaque; falls back to
+ * "opaque" on lookup failure so a transient repo error doesn't accidentally
+ * grant access. Project-linked document stores remain accessible regardless.
+ */
+async function actingCharacterIsOpaqueToVaults(
+  context: DocEditToolContext
+): Promise<boolean> {
+  if (!context.characterId) return false;
+  try {
+    const repos = getRepositories();
+    const character = await repos.characters.findById(context.characterId);
+    return character?.systemTransparency !== true;
+  } catch (err) {
+    logger.warn('systemTransparency lookup failed; defaulting to opaque', {
+      characterId: context.characterId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return true;
+  }
+}
+
+/**
  * If the requested mount_point refers to a peer participant's vault while
  * cross-character reads are enabled, throw a clear read-only error. This
  * turns what would otherwise be a generic "mount point not accessible"
@@ -316,6 +340,20 @@ async function buildReadResolutionContext(
   input: { scope?: string; mount_point?: string },
   context: DocEditToolContext
 ) {
+  const opaque = await actingCharacterIsOpaqueToVaults(context);
+  if (opaque) {
+    logger.debug('Acting character is opaque (systemTransparency != true); withholding character-vault access', {
+      chatId: context.chatId,
+      actingCharacterId: context.characterId,
+      mountPointHint: input.mount_point,
+    });
+    // No characterId / characterIds → resolver admits only project document
+    // stores. Mount-point name lookups for character vaults won't resolve.
+    return {
+      projectId: context.projectId,
+      mountPoint: input.mount_point,
+    };
+  }
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
   if (peerCharacterIds.length > 0) {
     logger.debug('Cross-character vault reads enabled; expanding access', {
@@ -341,6 +379,18 @@ async function buildWriteResolutionContext(
   input: { scope?: string; mount_point?: string },
   context: DocEditToolContext
 ) {
+  const opaque = await actingCharacterIsOpaqueToVaults(context);
+  if (opaque) {
+    logger.debug('Acting character is opaque (systemTransparency != true); withholding character-vault write access', {
+      chatId: context.chatId,
+      actingCharacterId: context.characterId,
+      mountPointHint: input.mount_point,
+    });
+    return {
+      projectId: context.projectId,
+      mountPoint: input.mount_point,
+    };
+  }
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
   await assertWriteDoesNotTargetPeerVault(input.mount_point, peerCharacterIds);
   return {

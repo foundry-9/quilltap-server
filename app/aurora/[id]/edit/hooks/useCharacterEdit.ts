@@ -25,6 +25,7 @@ const INITIAL_FORM_DATA: CharacterFormData = {
   avatarUrl: '',
   defaultConnectionProfileId: '',
   readPropertiesFromDocumentStore: false,
+  systemTransparency: false,
 }
 
 /**
@@ -78,6 +79,7 @@ export function useCharacterEdit(id: string) {
           avatarUrl: char.avatarUrl || '',
           defaultConnectionProfileId: char.defaultConnectionProfileId || '',
           readPropertiesFromDocumentStore: char.readPropertiesFromDocumentStore === true,
+          systemTransparency: char.systemTransparency === true,
         }
 
         return {
@@ -150,6 +152,17 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({
       ...prev,
       formData: { ...prev.formData, scenarios },
+    }))
+  }
+
+  /**
+   * Handle systemTransparency toggle. Local state only; persists with the
+   * regular form save so the user can change their mind before committing.
+   */
+  const handleSystemTransparencyChange = (enabled: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      formData: { ...prev.formData, systemTransparency: enabled },
     }))
   }
 
@@ -407,6 +420,7 @@ export function useCharacterEdit(id: string) {
     handleAliasesChange,
     handlePronounsChange,
     handleScenariosChange,
+    handleSystemTransparencyChange,
     handleSubmit,
     handleCancel,
     handleReadFromDocStoreToggle,

@@ -1354,6 +1354,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       title: 'Detective',
       firstMessage: 'Hello there.',
       talkativeness: 0.7,
+      systemTransparency: null,
     });
 
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('DB desc');
@@ -1408,6 +1409,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       title: null,
       firstMessage: null,
       talkativeness: 0.5,
+      systemTransparency: null,
     });
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('');
     expect(getWrite(CHARACTER_PERSONALITY_MD_PATH)).toBe('');

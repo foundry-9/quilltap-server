@@ -78,6 +78,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     handleAliasesChange,
     handlePronounsChange,
     handleScenariosChange,
+    handleSystemTransparencyChange,
     handleSubmit,
     handleCancel,
     handleReadFromDocStoreToggle,
@@ -331,6 +332,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
                     onAliasesChange={handleAliasesChange}
                     onPronounsChange={handlePronounsChange}
                     onScenariosChange={handleScenariosChange}
+                    onSystemTransparencyChange={handleSystemTransparencyChange}
                     onReadFromDocStoreToggle={handleReadFromDocStoreToggle}
                     onSyncPropertiesFromVault={handleSyncPropertiesFromVaultAndRefreshLists}
                     onSyncPropertiesToVault={handleSyncPropertiesToVaultAndRefreshLists}

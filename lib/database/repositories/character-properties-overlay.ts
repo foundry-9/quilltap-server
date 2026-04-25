@@ -92,6 +92,9 @@ export const CharacterVaultPropertiesSchema = z.object({
   title: z.string().nullable(),
   firstMessage: z.string().nullable(),
   talkativeness: z.number().min(0.1).max(1.0),
+  // Optional so vaults written by older Quilltap versions still parse cleanly;
+  // missing in the file → leave the DB row's value untouched on read.
+  systemTransparency: z.boolean().nullable().optional(),
 });
 
 export type CharacterVaultProperties = z.infer<typeof CharacterVaultPropertiesSchema>;
@@ -188,6 +191,7 @@ export const MANAGED_FIELDS: ReadonlySet<keyof Character> = new Set<keyof Charac
   'title',
   'firstMessage',
   'talkativeness',
+  'systemTransparency',
   'physicalDescriptions',
   'systemPrompts',
   'scenarios',
@@ -533,7 +537,7 @@ export async function applyDocumentStoreOverlay(
     const mountId = character.characterDocumentMountPointId as string;
     let out: Character = character;
 
-    // properties.json: pronouns, aliases, title, firstMessage, talkativeness
+    // properties.json: pronouns, aliases, title, firstMessage, talkativeness, systemTransparency
     const propsRaw = propsByMount.get(mountId);
     if (propsRaw !== undefined) {
       const parsed = parseVaultProperties(propsRaw, character.id);
@@ -545,6 +549,11 @@ export async function applyDocumentStoreOverlay(
           title: parsed.title,
           firstMessage: parsed.firstMessage,
           talkativeness: parsed.talkativeness,
+          // systemTransparency is optional in the vault schema. When absent,
+          // preserve the DB value rather than nulling it out.
+          ...(parsed.systemTransparency !== undefined
+            ? { systemTransparency: parsed.systemTransparency }
+            : {}),
         };
       }
     }
@@ -1038,6 +1047,9 @@ export async function readCharacterVaultManagedFields(
           snapshot.title = props.title;
           snapshot.firstMessage = props.firstMessage;
           snapshot.talkativeness = props.talkativeness;
+          if (props.systemTransparency !== undefined) {
+            snapshot.systemTransparency = props.systemTransparency;
+          }
         }
         break;
       }
@@ -1159,6 +1171,7 @@ export async function writeCharacterVaultManagedFields(
         title: character.title ?? null,
         firstMessage: character.firstMessage ?? null,
         talkativeness: character.talkativeness ?? 0.5,
+        systemTransparency: character.systemTransparency ?? null,
       },
       null,
       2,
@@ -1295,7 +1308,7 @@ export async function applyDocumentStoreWriteOverlay(
         break;
       }
       case 'properties-json': {
-        const propsKeys = ['pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness'] as const;
+        const propsKeys = ['pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness', 'systemTransparency'] as const;
         const touched = propsKeys.filter((k) => k in patch);
         if (touched.length === 0) break;
         // Read-modify-write so a partial patch doesn't blow away unspecified
@@ -1306,6 +1319,7 @@ export async function applyDocumentStoreWriteOverlay(
           title: character.title ?? null,
           firstMessage: character.firstMessage ?? null,
           talkativeness: character.talkativeness ?? 0.5,
+          systemTransparency: character.systemTransparency ?? null,
         };
         const next: CharacterVaultProperties = {
           pronouns: 'pronouns' in patch ? (patch.pronouns ?? null) : current.pronouns,
@@ -1315,6 +1329,8 @@ export async function applyDocumentStoreWriteOverlay(
             'firstMessage' in patch ? (patch.firstMessage ?? null) : current.firstMessage,
           talkativeness:
             'talkativeness' in patch ? (patch.talkativeness ?? 0.5) : current.talkativeness,
+          systemTransparency:
+            'systemTransparency' in patch ? (patch.systemTransparency ?? null) : (current.systemTransparency ?? null),
         };
         await writeDatabaseDocument(
           mountPointId,

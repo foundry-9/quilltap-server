@@ -98,6 +98,7 @@ const updateCharacterSchema = z.object({
     .or(z.literal('').transform(() => null))
     .nullable(),
   readPropertiesFromDocumentStore: z.boolean().nullable().optional(),
+  systemTransparency: z.boolean().nullable().optional(),
 });
 
 const avatarSchema = z.object({

@@ -12,6 +12,7 @@ interface CharacterBasicInfoProps {
   onAliasesChange: (aliases: string[]) => void
   onPronounsChange: (pronouns: { subject: string; object: string; possessive: string } | null) => void
   onScenariosChange: (scenarios: CharacterScenario[]) => void
+  onSystemTransparencyChange: (enabled: boolean) => void
   onReadFromDocStoreToggle: (enabled: boolean) => void
   onSyncPropertiesFromVault: () => void
   onSyncPropertiesToVault: () => void
@@ -77,6 +78,7 @@ export function CharacterBasicInfo({
   onAliasesChange,
   onPronounsChange,
   onScenariosChange,
+  onSystemTransparencyChange,
   onReadFromDocStoreToggle,
   onSyncPropertiesFromVault,
   onSyncPropertiesToVault,
@@ -89,6 +91,52 @@ export function CharacterBasicInfo({
 
   return (
     <div className="space-y-6">
+      {/* System Transparency Switch */}
+      <div className="qt-card">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <label
+              htmlFor="systemTransparency"
+              className="block text-sm font-medium text-foreground"
+            >
+              System transparency
+            </label>
+            <p className="text-xs qt-text-secondary mt-1">
+              {formData.systemTransparency ? (
+                <>
+                  <em>On:</em> &ldquo;My character will be able to verify everything about
+                  their existence, including how they are crafted and how they
+                  interact with me.&rdquo;
+                </>
+              ) : (
+                <>
+                  <em>Off:</em> &ldquo;My character will trust me without being able to
+                  verify me. I accept the covenant of that trust.&rdquo;
+                </>
+              )}
+            </p>
+            <p className="text-xs qt-text-secondary mt-2">
+              When off, this character cannot use the <code>self_inventory</code>{' '}
+              tool, cannot perceive announcements from the Staff (the Lantern,
+              Aurora, the Librarian, and so on), and cannot reach any character
+              vault &mdash; their own included &mdash; through the document tools.
+              This setting overrides any chat- or project-level toggles for those
+              three things; turning it on simply lets the chat- and project-level
+              settings have their say.
+            </p>
+          </div>
+          <label className="inline-flex items-center cursor-pointer select-none">
+            <input
+              id="systemTransparency"
+              type="checkbox"
+              checked={formData.systemTransparency}
+              onChange={(e) => onSystemTransparencyChange(e.target.checked)}
+              className="h-5 w-5 qt-accent-primary"
+            />
+          </label>
+        </div>
+      </div>
+
       {/* Scriptorium Overlay Switch */}
       <div className="qt-card">
         <div className="flex items-start justify-between gap-4">

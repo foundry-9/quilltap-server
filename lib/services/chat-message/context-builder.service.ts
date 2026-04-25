@@ -355,7 +355,7 @@ export function buildConversationMessages(
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -382,9 +382,25 @@ export async function buildMessageContext(
     uncensoredFallbackOptions,
   } = options
 
+  // System transparency override: opaque characters (systemTransparency != true)
+  // never see Staff (Lantern/Aurora/Librarian/Prospero/Host) messages in their
+  // LLM context, regardless of any chat- or project-level toggle. We strip them
+  // here so every downstream consumer (compression, attribution, attachment
+  // scan) operates on the same filtered view.
+  const filteredExistingMessages = character.systemTransparency === true
+    ? existingMessages
+    : existingMessages.filter(m => !m.systemSender)
+  if (filteredExistingMessages.length !== existingMessages.length) {
+    logger.debug('Filtered Staff (systemSender) messages out of opaque character context', {
+      characterId: character.id,
+      removedCount: existingMessages.length - filteredExistingMessages.length,
+      keptCount: filteredExistingMessages.length,
+    })
+  }
+
   // Build conversation messages
   const { conversationMessages, messagesWithParticipants } = buildConversationMessages(
-    existingMessages,
+    filteredExistingMessages,
     isMultiCharacter
   )
 
@@ -496,7 +512,9 @@ export async function buildMessageContext(
   try {
     // If this is a joining character without history access and they have
     // not yet responded, clamp the walk to messages posted after they joined.
-    const hasPriorResponse = existingMessages.some(
+    // Use the filtered set so opaque characters never reach Staff (Lantern et
+    // al.) image attachments either — symmetric with their text-side filter.
+    const hasPriorResponse = filteredExistingMessages.some(
       m => m.type === 'message' && m.role === 'ASSISTANT' && m.participantId === characterParticipant.id
     )
     const historyCutoff = (isMultiCharacter && !characterParticipant.hasHistoryAccess && !hasPriorResponse)
@@ -504,7 +522,7 @@ export async function buildMessageContext(
       : null
 
     const recentAssistantImageFileIds = collectLanternImageFileIdsForCharacter(
-      existingMessages,
+      filteredExistingMessages,
       characterParticipant.id,
       isMultiCharacter,
       historyCutoff,

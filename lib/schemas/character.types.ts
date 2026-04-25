@@ -156,6 +156,18 @@ export const CharacterSchema = z.object({
   /** Whether this character can create new wardrobe items mid-conversation (null = enabled by default, requires tool use) */
   canCreateOutfits: z.boolean().nullable().optional(),
 
+  /**
+   * When true, this character may inspect and access "the Staff" of personified
+   * features — chat-level toggles for self_inventory, Staff messages
+   * (Lantern/Aurora/Librarian/Prospero/Host announcements), and any character
+   * vault (their own or peers') still apply. When null/false, the character
+   * cannot see Staff messages, the self_inventory tool is withheld, and every
+   * character vault (including their own) is hidden from doc_* tools — the
+   * character-level setting is a hard override on top of chat/project settings.
+   * Default: null (opaque).
+   */
+  systemTransparency: z.boolean().nullable().optional(),
+
   // Relationships
   partnerLinks: z.array(z.object({
     partnerId: UUIDSchema,

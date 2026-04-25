@@ -197,6 +197,8 @@ import { addSystemSenderFieldMigration } from './add-system-sender-field';
 import { addChatCrossCharacterVaultReadsFieldMigration } from './add-chat-cross-character-vault-reads-field';
 // Drop file_permissions table (LLM write approval flow retired)
 import { dropFilePermissionsMigration } from './drop-file-permissions';
+// Add systemTransparency column to characters
+import { addCharacterSystemTransparencyFieldMigration } from './add-character-system-transparency-field';
 
 /**
  * All available migrations.
@@ -389,6 +391,8 @@ export const migrations: Migration[] = [
   addChatCrossCharacterVaultReadsFieldMigration,
   // Drop file_permissions table (LLM write approval flow retired)
   dropFilePermissionsMigration,
+  // Add systemTransparency column to characters
+  addCharacterSystemTransparencyFieldMigration,
 ];
 
 export {
@@ -566,5 +570,7 @@ export {
   addChatCrossCharacterVaultReadsFieldMigration,
   // Drop file_permissions table (LLM write approval flow retired)
   dropFilePermissionsMigration,
+  // Add systemTransparency column to characters
+  addCharacterSystemTransparencyFieldMigration,
 };
 

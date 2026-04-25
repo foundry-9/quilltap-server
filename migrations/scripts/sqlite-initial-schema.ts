@@ -75,6 +75,7 @@ export const SQLITE_TABLES = [
       "physicalDescriptions" TEXT DEFAULT '[]',
       "clothingRecords" TEXT DEFAULT '[]',
       "readPropertiesFromDocumentStore" INTEGER DEFAULT NULL,
+      "systemTransparency" INTEGER DEFAULT NULL,
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,
