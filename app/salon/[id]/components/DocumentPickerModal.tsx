@@ -67,11 +67,23 @@ export default function DocumentPickerModal({
   const [selectedMountPoint, setSelectedMountPoint] = useState<MountPoint | null>(null)
   const [mountPoints, setMountPoints] = useState<MountPoint[]>([])
   const [mountPointFiles, setMountPointFiles] = useState<MountPointFile[]>([])
+  // Folder rows from the server (populated for database-backed mounts) so
+  // empty folders show up too. Filesystem mounts don't currently track
+  // folder rows, so this stays empty for them.
+  const [mountPointFolders, setMountPointFolders] = useState<string[]>([])
   const [mountPointFilesLoading, setMountPointFilesLoading] = useState(false)
   const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([])
   const [loading, setLoading] = useState(false)
   // Current folder path for mount point tree navigation (empty string = root)
   const [currentFolder, setCurrentFolder] = useState('')
+  // Folders created during this session — surfaced in the listing even if
+  // they're empty and so wouldn't be derived from the indexed file paths.
+  const [createdFolders, setCreatedFolders] = useState<Set<string>>(new Set())
+  // Inline "new folder" form state
+  const [showNewFolderInput, setShowNewFolderInput] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [creatingFolder, setCreatingFolder] = useState(false)
+  const [newFolderError, setNewFolderError] = useState<string | null>(null)
 
   const fetchMountPoints = async () => {
     try {
@@ -121,7 +133,13 @@ export default function DocumentPickerModal({
       setSelectedScope('project')
       setSelectedMountPoint(null)
       setMountPointFiles([])
+      setMountPointFolders([])
       setCurrentFolder('')
+      setCreatedFolders(new Set())
+      setShowNewFolderInput(false)
+      setNewFolderName('')
+      setNewFolderError(null)
+      setCreatingFolder(false)
     }
   }, [isOpen])
 
@@ -132,6 +150,7 @@ export default function DocumentPickerModal({
       if (res.ok) {
         const data = await res.json()
         setMountPointFiles(data.files || [])
+        setMountPointFolders(Array.isArray(data.folders) ? data.folders : [])
         setCurrentFolder('')
       }
     } catch (error) {
@@ -191,8 +210,6 @@ export default function DocumentPickerModal({
 
   // Compute folders and files at the current folder level for mount point tree view
   const mountPointEntries = useMemo(() => {
-    if (mountPointFiles.length === 0) return { folders: [] as string[], files: [] as MountPointFile[] }
-
     const prefix = currentFolder ? currentFolder + '/' : ''
     const folderSet = new Set<string>()
     const filesAtLevel: MountPointFile[] = []
@@ -212,6 +229,28 @@ export default function DocumentPickerModal({
       }
     }
 
+    // Merge server-known folder rows (database-backed mounts) so empty
+    // folders are visible even though no file path implies them.
+    for (const fullPath of mountPointFolders) {
+      const lastSlash = fullPath.lastIndexOf('/')
+      const parent = lastSlash === -1 ? '' : fullPath.substring(0, lastSlash)
+      const name = lastSlash === -1 ? fullPath : fullPath.substring(lastSlash + 1)
+      if (parent === currentFolder && name) {
+        folderSet.add(name)
+      }
+    }
+
+    // Merge folders created in this session that aren't yet reflected in
+    // the fetched lists (e.g. created on a filesystem mount).
+    for (const fullPath of createdFolders) {
+      const lastSlash = fullPath.lastIndexOf('/')
+      const parent = lastSlash === -1 ? '' : fullPath.substring(0, lastSlash)
+      const name = lastSlash === -1 ? fullPath : fullPath.substring(lastSlash + 1)
+      if (parent === currentFolder && name) {
+        folderSet.add(name)
+      }
+    }
+
     const folders = Array.from(folderSet).sort((a, b) => a.localeCompare(b))
     filesAtLevel.sort((a, b) => {
       const nameA = a.relativePath.split('/').pop() || ''
@@ -220,10 +259,13 @@ export default function DocumentPickerModal({
     })
 
     return { folders, files: filesAtLevel }
-  }, [mountPointFiles, currentFolder])
+  }, [mountPointFiles, mountPointFolders, currentFolder, createdFolders])
 
   const handleNavigateFolder = useCallback((folderName: string) => {
     setCurrentFolder(prev => prev ? `${prev}/${folderName}` : folderName)
+    setShowNewFolderInput(false)
+    setNewFolderName('')
+    setNewFolderError(null)
   }, [])
 
   const handleNavigateUp = useCallback(() => {
@@ -231,7 +273,72 @@ export default function DocumentPickerModal({
       const lastSlash = prev.lastIndexOf('/')
       return lastSlash === -1 ? '' : prev.substring(0, lastSlash)
     })
+    setShowNewFolderInput(false)
+    setNewFolderName('')
+    setNewFolderError(null)
   }, [])
+
+  const handleStartNewFolder = useCallback(() => {
+    setNewFolderName('')
+    setNewFolderError(null)
+    setShowNewFolderInput(true)
+  }, [])
+
+  const handleCancelNewFolder = useCallback(() => {
+    setShowNewFolderInput(false)
+    setNewFolderName('')
+    setNewFolderError(null)
+  }, [])
+
+  const handleSubmitNewFolder = useCallback(async () => {
+    if (!selectedMountPoint) return
+    const name = newFolderName.trim()
+    if (!name) {
+      setNewFolderError('Enter a folder name.')
+      return
+    }
+    if (/[\/\\<>:"|?*\x00-\x1f]/.test(name) || name === '.' || name === '..') {
+      setNewFolderError('That name has characters folders cannot contain.')
+      return
+    }
+    const fullPath = currentFolder ? `${currentFolder}/${name}` : name
+    if (createdFolders.has(fullPath)) {
+      setNewFolderError('A folder by that name already exists here.')
+      return
+    }
+    // Avoid colliding with a folder we already see in the listing
+    if (mountPointEntries.folders.includes(name)) {
+      setNewFolderError('A folder by that name already exists here.')
+      return
+    }
+    try {
+      setCreatingFolder(true)
+      setNewFolderError(null)
+      const res = await fetch(`/api/v1/mount-points/${selectedMountPoint.id}/folders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: fullPath }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        const message = typeof data?.error === 'string' ? data.error : 'Could not create folder.'
+        setNewFolderError(message)
+        return
+      }
+      setCreatedFolders(prev => {
+        const next = new Set(prev)
+        next.add(fullPath)
+        return next
+      })
+      setShowNewFolderInput(false)
+      setNewFolderName('')
+    } catch (error) {
+      console.error('[DocumentPickerModal] Failed to create folder', error)
+      setNewFolderError('Could not create folder.')
+    } finally {
+      setCreatingFolder(false)
+    }
+  }, [selectedMountPoint, newFolderName, currentFolder, createdFolders, mountPointEntries.folders])
 
   // Breadcrumb segments for current folder path
   const folderBreadcrumbs = useMemo(() => {
@@ -397,10 +504,6 @@ export default function DocumentPickerModal({
               <div className="p-2">
                 {mountPointFilesLoading ? (
                   <div className="text-center py-8 qt-text-muted text-sm">Loading files...</div>
-                ) : mountPointFiles.length === 0 ? (
-                  <div className="text-center py-8 qt-text-muted text-sm">
-                    No files found in this document store.
-                  </div>
                 ) : (
                   <div className="space-y-0.5">
                     {/* Breadcrumb path */}
@@ -436,6 +539,62 @@ export default function DocumentPickerModal({
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17l-5-5m0 0l5-5m-5 5h12" />
                         </svg>
                         <span className="text-sm qt-text-secondary">..</span>
+                      </button>
+                    )}
+
+                    {/* New folder control */}
+                    {showNewFolderInput ? (
+                      <div className="flex flex-col gap-1 px-3 py-2 rounded-md qt-bg-hover">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                          </svg>
+                          <input
+                            type="text"
+                            autoFocus
+                            value={newFolderName}
+                            onChange={(e) => setNewFolderName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                void handleSubmitNewFolder()
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault()
+                                handleCancelNewFolder()
+                              }
+                            }}
+                            placeholder="New folder name"
+                            disabled={creatingFolder}
+                            className="flex-1 min-w-0 text-sm qt-input px-2 py-1 rounded"
+                          />
+                          <button
+                            onClick={() => void handleSubmitNewFolder()}
+                            disabled={creatingFolder || newFolderName.trim().length === 0}
+                            className="text-sm qt-button-primary px-2 py-1 rounded disabled:opacity-50"
+                          >
+                            {creatingFolder ? 'Creating…' : 'Create'}
+                          </button>
+                          <button
+                            onClick={handleCancelNewFolder}
+                            disabled={creatingFolder}
+                            className="text-sm qt-text-secondary hover:qt-text-primary px-2 py-1"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                        {newFolderError && (
+                          <div className="text-xs qt-text-destructive pl-6">{newFolderError}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleStartNewFolder}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
+                      >
+                        <svg className="w-4 h-4 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span className="text-sm qt-text-secondary">New folder</span>
                       </button>
                     )}
 

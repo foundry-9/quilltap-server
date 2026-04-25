@@ -30,6 +30,8 @@ Should you wish to rechristen a document, click the title at the top of the edit
 
 Should a volume have outlived its usefulness, the header also offers a small trash-can button beside Close. A single click, a polite request for confirmation, and the underlying file is removed — whether it resides on disk or in a database-backed vault — the document pane is closed, and the Librarian announces the deletion in the chat so present characters know the volume is gone from the shelves. The action is irreversible; do reserve it for files you truly mean to dismiss.
 
+When you are browsing a document store from the Open Document picker and find that no shelf yet exists for the volume you have in mind, the picker offers a discreet **New folder** entry just above the listing. Type the name, press Enter, and a fresh folder appears at your present location, ready to be entered and populated; press Escape to think better of it. The folder is created on the spot — in the database for database-backed stores, or on disk for filesystem mounts — so the next document you save into it lands precisely where you intend.
+
 Opening, saving, renaming, or deleting a document in the chat no longer costs you your turn. The Librarian — that preternaturally discreet personified feature — steps in to announce the event on your behalf, noting the document's whereabouts (and, when a character is the one who reached for it via `doc_open_document`, `doc_delete_file`, `doc_create_folder`, or `doc_delete_folder`, attributing the act to the character in question). The announcements appear as attributed chat messages so everyone present is apprised of what has just happened at the desk, but the conversational floor remains yours to hold or yield as you see fit.
 
 ## The Tools
