@@ -51,6 +51,11 @@ describe('wardrobe tool handlers', () => {
       wardrobe: {
         findByCharacterId: jest.fn(),
         findById: jest.fn(),
+        // Displacement helpers use findByIdForCharacter; default to the same
+        // behaviour as findById so existing test mocks of findById carry over.
+        findByIdForCharacter: jest.fn((_charId: string, id: string) =>
+          repos.wardrobe.findById(id)
+        ),
         create: jest.fn(),
       },
       chats: {

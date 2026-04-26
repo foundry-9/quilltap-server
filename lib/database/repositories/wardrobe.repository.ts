@@ -94,6 +94,54 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
+   * Find a single wardrobe item wearable by a character. Honours the
+   * document-store overlay so vault-only items (which have no DB row) resolve,
+   * and falls back to a raw lookup so shared archetype items (characterId
+   * null) remain reachable. Includes archived items because callers in the
+   * equip path need an item's `types` even if it's been archived after the
+   * chat last loaded.
+   */
+  async findByIdForCharacter(characterId: string, id: string): Promise<WardrobeItem | null> {
+    return this.safeQuery(
+      async () => {
+        const items = await this.findByCharacterId(characterId, true);
+        const owned = items.find((item) => item.id === id);
+        if (owned) return owned;
+        const raw = await this._findById(id);
+        if (raw && raw.characterId == null) return raw;
+        return null;
+      },
+      'Error finding wardrobe item by character + id',
+      { characterId, wardrobeItemId: id }
+    );
+  }
+
+  /**
+   * Find multiple wardrobe items wearable by a character. Honours the
+   * document-store overlay and includes archetype items (characterId null)
+   * for any IDs not found in the character's own wardrobe.
+   */
+  async findByIdsForCharacter(characterId: string, ids: string[]): Promise<WardrobeItem[]> {
+    if (ids.length === 0) return [];
+    return this.safeQuery(
+      async () => {
+        const items = await this.findByCharacterId(characterId, true);
+        const found = new Map(items.filter((i) => ids.includes(i.id)).map((i) => [i.id, i]));
+        const missing = ids.filter((id) => !found.has(id));
+        if (missing.length > 0) {
+          const raw = await this.findByFilter({ id: { $in: missing } } as TypedQueryFilter<WardrobeItem>);
+          for (const item of raw) {
+            if (item.characterId == null) found.set(item.id, item);
+          }
+        }
+        return Array.from(found.values());
+      },
+      'Error finding wardrobe items by character + ids',
+      { characterId, idCount: ids.length }
+    );
+  }
+
+  /**
    * Find wardrobe items for a character that include a specific type/slot.
    * Since types is stored as a JSON array, we fetch by characterId then filter in JS.
    * Honours the document-store overlay via `findByCharacterId`.
