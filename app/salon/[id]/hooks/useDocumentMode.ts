@@ -92,6 +92,12 @@ interface OpenDocumentParams {
   scope?: 'project' | 'document_store' | 'general'
   mountPoint?: string
   mode?: 'split' | 'focus'
+  /**
+   * For new blank documents (no filePath), the folder relative to the scope
+   * root where the document should be created. Server picks an unused
+   * "Untitled Document.md" name inside this folder.
+   */
+  targetFolder?: string
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 30000
@@ -393,6 +399,7 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
         scope: params.scope || 'project',
         mountPoint: params.mountPoint,
         mode: targetMode,
+        targetFolder: params.targetFolder,
       })
 
       const doc: ActiveDocument = toActiveDocument(

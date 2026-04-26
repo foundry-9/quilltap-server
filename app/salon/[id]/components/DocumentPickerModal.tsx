@@ -27,6 +27,8 @@ interface DocumentPickerModalProps {
     title?: string
     scope?: 'project' | 'document_store' | 'general'
     mountPoint?: string
+    /** For new blank docs (no filePath), the folder to create inside. */
+    targetFolder?: string
   }) => void
 }
 
@@ -202,6 +204,19 @@ export default function DocumentPickerModal({
     })
     onClose()
   }, [onSelectDocument, selectedMountPoint, onClose])
+
+  // Create a brand-new "Untitled Document.md" inside the currently-browsed
+  // folder of the selected mount point. The server picks the actual filename
+  // (with collision numbering); we just hand it the scope and target folder.
+  const handleNewBlankInFolder = useCallback(() => {
+    if (!selectedMountPoint) return
+    onSelectDocument({
+      scope: 'document_store',
+      mountPoint: selectedMountPoint.name,
+      targetFolder: currentFolder || undefined,
+    })
+    onClose()
+  }, [onSelectDocument, selectedMountPoint, currentFolder, onClose])
 
   const handleBack = useCallback(() => {
     setStep('source')
@@ -541,6 +556,20 @@ export default function DocumentPickerModal({
                         <span className="text-sm qt-text-secondary">..</span>
                       </button>
                     )}
+
+                    {/* New document here — creates "Untitled Document.md" in
+                        the currently-browsed folder. The server handles
+                        collision-safe naming so the user can pick the spot
+                        and rename later. */}
+                    <button
+                      onClick={handleNewBlankInFolder}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
+                    >
+                      <svg className="w-4 h-4 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span className="text-sm qt-text-secondary">New document here</span>
+                    </button>
 
                     {/* New folder control */}
                     {showNewFolderInput ? (

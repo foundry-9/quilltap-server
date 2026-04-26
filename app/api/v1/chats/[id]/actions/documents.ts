@@ -26,6 +26,7 @@ import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-s
 import {
   moveDatabaseDocument,
   deleteDatabaseDocument,
+  readDatabaseDocument,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 import {
@@ -48,6 +49,12 @@ const openDocumentSchema = z.object({
   scope: z.enum(['project', 'document_store', 'general']).default('project'),
   mountPoint: z.string().optional(),
   mode: z.enum(['split', 'focus']).default('split'),
+  /**
+   * Folder (relative to scope root) where a new blank document should land.
+   * Forward-slash separated; ignored when `filePath` is provided. Empty/unset
+   * means scope root.
+   */
+  targetFolder: z.string().optional(),
 });
 
 const readDocumentSchema = z.object({
@@ -122,6 +129,83 @@ async function resolveDocumentRequest(
     ...chatContext,
     resolved,
   };
+}
+
+/**
+ * Probe whether a resolved doc-edit path currently has a file. Database-backed
+ * stores answer via readDatabaseDocument (NOT_FOUND → false); filesystem
+ * scopes use fs.access. Any other error bubbles, since we don't want to
+ * silently treat permission failures as "doesn't exist" and overwrite.
+ */
+async function resolvedPathExists(
+  resolved: Awaited<ReturnType<typeof resolveDocEditPath>>
+): Promise<boolean> {
+  if (resolved.mountType === 'database') {
+    if (!resolved.mountPointId) {
+      throw new Error('Database-backed ResolvedPath is missing mountPointId');
+    }
+    try {
+      await readDatabaseDocument(resolved.mountPointId, resolved.relativePath);
+      return true;
+    } catch (error) {
+      if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  try {
+    await fs.access(resolved.absolutePath);
+    return true;
+  } catch (error) {
+    const code = error instanceof Error && 'code' in error
+      ? (error as NodeJS.ErrnoException).code
+      : undefined;
+    if (code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+/**
+ * Pick an unused "Untitled Document.md" filename inside `targetFolder`.
+ * On collision, appends a counter ("Untitled Document 2.md", etc.). Returns
+ * both the relative file path (for the chat_documents row and rename math)
+ * and the resolved path it lives at (so the caller can write without a
+ * second resolution round-trip).
+ */
+async function pickUntitledDocumentPath(
+  chatContext: ChatDocumentContext,
+  scope: DocEditScope,
+  mountPoint: string | undefined,
+  targetFolder: string | undefined,
+): Promise<{ filePath: string; resolved: Awaited<ReturnType<typeof resolveDocEditPath>> }> {
+  const folder = (targetFolder ?? '').replace(/^\/+|\/+$/g, '');
+  const join = (name: string) => (folder ? `${folder}/${name}` : name);
+  const MAX_ATTEMPTS = 1000;
+
+  for (let i = 1; i <= MAX_ATTEMPTS; i++) {
+    const candidate = i === 1 ? 'Untitled Document.md' : `Untitled Document ${i}.md`;
+    const filePath = join(candidate);
+    const { resolved } = await resolveDocumentRequest(chatContext, {
+      scope,
+      filePath,
+      mountPoint,
+    });
+    if (!(await resolvedPathExists(resolved))) {
+      return { filePath, resolved };
+    }
+  }
+
+  // Defensive: if a thousand "Untitled Document N.md" already exist, fall
+  // back to a UUID so the user can still create a new doc.
+  const filePath = join(`Untitled Document ${crypto.randomUUID()}.md`);
+  const { resolved } = await resolveDocumentRequest(chatContext, {
+    scope,
+    filePath,
+    mountPoint,
+  });
+  return { filePath, resolved };
 }
 
 function scheduleDocumentStoreRefresh(
@@ -233,7 +317,7 @@ export async function handleOpenDocument(
     : requestedScope;
 
   let filePath = data.filePath;
-  let displayTitle = data.title || 'Untitled document';
+  let displayTitle = data.title;
   let content = '';
   let mtime: number | undefined;
 
@@ -248,27 +332,33 @@ export async function handleOpenDocument(
       const fileData = await readFileWithMtime(resolvedRequest.resolved);
       content = fileData.content;
       mtime = fileData.mtime;
-      if (!data.title) {
+      if (!displayTitle) {
         displayTitle = path.basename(filePath);
       }
     } catch {
       return badRequest(`File not found: ${filePath}`);
     }
   } else {
-    filePath = `${crypto.randomUUID()}.md`;
-
     try {
-      const resolvedRequest = await resolveDocumentRequest(chatContext, {
-        scope: effectiveScope,
-        filePath,
-        mountPoint: data.mountPoint,
-      });
-
-      const writeResult = await writeFileWithMtimeCheck(resolvedRequest.resolved, '');
+      const picked = await pickUntitledDocumentPath(
+        chatContext,
+        effectiveScope,
+        data.mountPoint,
+        data.targetFolder,
+      );
+      filePath = picked.filePath;
+      const writeResult = await writeFileWithMtimeCheck(picked.resolved, '');
       mtime = writeResult.mtime;
+      if (!displayTitle) {
+        displayTitle = path.basename(filePath);
+      }
     } catch (error) {
       return serverError(`Failed to create blank document: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  if (!displayTitle) {
+    displayTitle = 'Untitled document';
   }
 
   try {

@@ -158,10 +158,15 @@ describe('chats [id] document actions', () => {
     const chatId = 'chat-blank'
     ctx.repos.chats.findById.mockResolvedValueOnce({ id: chatId, projectId: null })
     resolveDocEditPath.mockResolvedValueOnce({
-      absolutePath: '/tmp/blank-doc.md',
+      absolutePath: '/tmp/Untitled Document.md',
       scope: 'general',
-      relativePath: 'blank-doc.md',
+      relativePath: 'Untitled Document.md',
     })
+    // pickUntitledDocumentPath probes existence via fs.access. ENOENT means
+    // the candidate name is free, so the first attempt ("Untitled Document.md")
+    // wins and we don't need additional resolve/access mocks.
+    const fs = require('fs/promises')
+    fs.access.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
     writeFileWithMtimeCheck.mockResolvedValueOnce({ mtime: 987654321 })
     ctx.repos.chatDocuments.openDocument.mockImplementationOnce(async (_chatId: string, data: any) => ({
       id: 'doc-blank',

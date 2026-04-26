@@ -117,6 +117,12 @@ export async function openDocumentForChat(
     scope: DocumentScope
     mountPoint?: string
     mode: 'split' | 'focus'
+    /**
+     * Folder (relative to scope root) to drop a new blank document in. Used
+     * only when `filePath` is omitted; the server picks an unused
+     * "Untitled Document.md" name within that folder.
+     */
+    targetFolder?: string
   },
 ): Promise<OpenDocumentResponse> {
   const response = await fetch(`/api/v1/chats/${chatId}?action=open-document`, {
