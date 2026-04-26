@@ -13,10 +13,13 @@
  *   - example-dialogues.md     — character.exampleDialogues
  *   - physical-description.md  — physicalDescriptions[0].fullDescription
  *   - physical-prompts.json    — physicalDescriptions[0].{short,medium,long,complete}Prompt
- *   - wardrobe.json            — wardrobe items + outfit presets (applied by the
- *                                 wardrobe / outfit-presets repositories rather
- *                                 than the character hydrator, since neither
- *                                 lives on the character row)
+ *   - Wardrobe/*.md            — wardrobe items (one file per item, frontmatter
+ *                                 carries id/title/types/appropriateness/etc.;
+ *                                 body is the freeform description). Applied by
+ *                                 the wardrobe / outfit-presets repositories.
+ *   - Outfits/*.md             — outfit presets (one file per preset; slot
+ *                                 references prefer item slugs and fall back
+ *                                 to UUIDs).
  *   - Prompts/*.md             — character.systemPrompts (one file per variant,
  *                                 YAML frontmatter carries {name, isDefault})
  *   - Scenarios/*.md           — character.scenarios (one file per scenario,
@@ -62,9 +65,11 @@ import { PronounsSchema } from '@/lib/schemas/character.types';
 import {
   WardrobeItemSchema,
   OutfitPresetSchema,
-  EquippedSlotsSchema,
+  WardrobeItemTypeEnum,
   type WardrobeItem,
   type OutfitPreset,
+  type WardrobeItemType,
+  type EquippedSlots,
 } from '@/lib/schemas/wardrobe.types';
 import {
   readDatabaseDocument,
@@ -77,8 +82,14 @@ import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import {
   buildSystemPromptFile,
   buildScenarioFile,
+  buildWardrobeItemFile,
+  buildOutfitPresetFile,
+  buildSlugByItemIdMap,
+  slugifyWardrobeTitle,
   sanitizeFileName,
   renderPhysicalPromptsJson,
+  CHARACTER_WARDROBE_FOLDER,
+  CHARACTER_OUTFITS_FOLDER,
 } from '@/lib/mount-index/character-vault';
 import type { DocMountDocument } from '@/lib/schemas/mount-index.types';
 
@@ -108,17 +119,28 @@ export const CharacterVaultPhysicalPromptsSchema = z.object({
 
 export type CharacterVaultPhysicalPrompts = z.infer<typeof CharacterVaultPhysicalPromptsSchema>;
 
-// Shape of the vault's wardrobe.json. `outfit` is the per-chat equipped state
-// placeholder the scaffold writes; it isn't consumed by the overlay (equipped
-// outfit state lives on the chat row) but we accept it on read so hand-edited
-// files don't fail validation just for keeping the scaffold's shape.
-export const CharacterVaultWardrobeSchema = z.object({
+// Snapshot of a vault's wardrobe state — items + presets together. Returned
+// from the folder-based reader; the legacy JSON parser produces the same
+// shape so callers don't have to care which file layout the vault is on.
+export interface CharacterVaultWardrobe {
+  items: WardrobeItem[];
+  presets: OutfitPreset[];
+}
+
+// The legacy JSON shape we still parse on migration. New vaults never write
+// this; the folder format is authoritative going forward.
+const LegacyVaultWardrobeJsonSchema = z.object({
   items: z.array(WardrobeItemSchema),
   presets: z.array(OutfitPresetSchema),
-  outfit: EquippedSlotsSchema.optional(),
+  outfit: z
+    .object({
+      top: z.string().nullable().optional(),
+      bottom: z.string().nullable().optional(),
+      footwear: z.string().nullable().optional(),
+      accessories: z.string().nullable().optional(),
+    })
+    .optional(),
 });
-
-export type CharacterVaultWardrobe = z.infer<typeof CharacterVaultWardrobeSchema>;
 
 /**
  * The relative paths of the overlay documents inside a character vault.
@@ -134,6 +156,7 @@ export const CHARACTER_WARDROBE_JSON_PATH = 'wardrobe.json';
 
 export const CHARACTER_PROMPTS_FOLDER = 'Prompts';
 export const CHARACTER_SCENARIOS_FOLDER = 'Scenarios';
+export { CHARACTER_WARDROBE_FOLDER, CHARACTER_OUTFITS_FOLDER };
 
 const SINGLE_FILE_OVERLAY_PATHS = [
   CHARACTER_PROPERTIES_JSON_PATH,
@@ -259,7 +282,13 @@ function parseVaultPhysicalPrompts(
   return parsed.data;
 }
 
-function parseVaultWardrobe(
+/**
+ * Parse the legacy `wardrobe.json` payload — kept for migration so vaults that
+ * shipped on the old format aren't lost when they're first read or refreshed
+ * onto the folder layout. Returns `{ items, presets }`; the legacy `outfit`
+ * placeholder is dropped on the floor (it was never consumed by anything).
+ */
+function parseLegacyWardrobeJson(
   raw: string,
   characterId: string,
 ): CharacterVaultWardrobe | null {
@@ -267,23 +296,23 @@ function parseVaultWardrobe(
   try {
     json = JSON.parse(raw);
   } catch (error) {
-    logger.warn('Invalid JSON in vault wardrobe.json; falling back to DB values', {
+    logger.warn('Invalid JSON in legacy vault wardrobe.json; falling back to DB values', {
       characterId,
       error: error instanceof Error ? error.message : String(error),
     });
     return null;
   }
 
-  const parsed = CharacterVaultWardrobeSchema.safeParse(json);
+  const parsed = LegacyVaultWardrobeJsonSchema.safeParse(json);
   if (!parsed.success) {
-    logger.warn('Vault wardrobe.json failed schema validation; falling back to DB values', {
+    logger.warn('Legacy vault wardrobe.json failed schema validation; falling back to DB values', {
       characterId,
       issues: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
     });
     return null;
   }
 
-  return parsed.data;
+  return { items: parsed.data.items, presets: parsed.data.presets };
 }
 
 /**
@@ -360,6 +389,264 @@ function parsePromptFile(
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
+}
+
+/**
+ * Parse a `Wardrobe/<title>.md` file. Frontmatter carries the structured
+ * fields (id, title, types, appropriateness, default flag, archive flag,
+ * timestamps); the body is the freeform description. Hand-edited files may
+ * omit `id` and timestamps — both are filled in on the next sync.
+ *
+ * Returns null when the file can't yield a valid `WardrobeItem` (no usable
+ * title, no valid types, etc.) so the read overlay keeps falling back to the
+ * DB value for that single file rather than blowing up the whole list.
+ */
+function parseWardrobeItemFile(
+  doc: DocMountDocument,
+  characterId: string,
+): WardrobeItem | null {
+  const parsed = parseFrontmatter(doc.content);
+
+  let title: string | null = null;
+  if (parsed.data) {
+    const t = parsed.data.title;
+    if (typeof t === 'string' && t.trim().length > 0) {
+      title = t.trim();
+    }
+  }
+  const afterFrontmatter = doc.content.slice(parsed.bodyStartOffset);
+  const lines = afterFrontmatter.split('\n');
+  let titleLineIndex = -1;
+  if (title === null) {
+    for (let i = 0; i < lines.length; i++) {
+      const match = lines[i].match(/^#\s+(.+)$/);
+      if (match) {
+        titleLineIndex = i;
+        title = match[1].trim();
+        break;
+      }
+    }
+  }
+  if (title === null) {
+    title = doc.fileName.replace(/\.md$/i, '').trim();
+  }
+  if (title.length === 0) {
+    logger.warn('Wardrobe/*.md file has no usable title; skipping', {
+      characterId,
+      mountPointId: doc.mountPointId,
+      relativePath: doc.relativePath,
+    });
+    return null;
+  }
+
+  const types = parseWardrobeTypesField(parsed.data?.types);
+  if (types === null) {
+    logger.warn('Wardrobe/*.md frontmatter has no valid `types` list; skipping', {
+      characterId,
+      mountPointId: doc.mountPointId,
+      relativePath: doc.relativePath,
+      raw: parsed.data?.types,
+    });
+    return null;
+  }
+
+  const id =
+    typeof parsed.data?.id === 'string' && /^[0-9a-f-]{36}$/i.test(parsed.data.id as string)
+      ? (parsed.data.id as string)
+      : stableUuidFromString(`wardrobe-item:${doc.mountPointId}:${doc.relativePath}`);
+
+  const appropriateness =
+    typeof parsed.data?.appropriateness === 'string' && parsed.data.appropriateness.length > 0
+      ? (parsed.data.appropriateness as string)
+      : null;
+
+  const isDefault =
+    parsed.data?.default === true || parsed.data?.isDefault === true;
+
+  let archivedAt: string | null = null;
+  const archivedAtRaw = parsed.data?.archivedAt;
+  if (typeof archivedAtRaw === 'string' && archivedAtRaw.length > 0) {
+    archivedAt = archivedAtRaw;
+  } else if (parsed.data?.archived === true) {
+    archivedAt = doc.updatedAt;
+  }
+
+  const migratedFromClothingRecordId =
+    typeof parsed.data?.migratedFromClothingRecordId === 'string'
+      ? (parsed.data.migratedFromClothingRecordId as string)
+      : null;
+
+  const createdAt =
+    typeof parsed.data?.createdAt === 'string'
+      ? (parsed.data.createdAt as string)
+      : doc.createdAt;
+  const updatedAt =
+    typeof parsed.data?.updatedAt === 'string'
+      ? (parsed.data.updatedAt as string)
+      : doc.updatedAt;
+
+  const bodyText = (titleLineIndex >= 0
+    ? lines.slice(titleLineIndex + 1).join('\n')
+    : afterFrontmatter
+  ).trim();
+  const description = bodyText.length > 0 ? bodyText : null;
+
+  return {
+    id,
+    characterId,
+    title: title.slice(0, 200),
+    description,
+    types,
+    appropriateness,
+    isDefault,
+    migratedFromClothingRecordId,
+    archivedAt,
+    createdAt,
+    updatedAt,
+  };
+}
+
+function parseWardrobeTypesField(raw: unknown): WardrobeItemType[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const allowed = new Set(WardrobeItemTypeEnum.options);
+  const out: WardrobeItemType[] = [];
+  const seen = new Set<string>();
+  for (const v of raw) {
+    if (typeof v !== 'string') return null;
+    if (!allowed.has(v as WardrobeItemType)) return null;
+    if (seen.has(v)) continue;
+    seen.add(v);
+    out.push(v as WardrobeItemType);
+  }
+  return out.length > 0 ? out : null;
+}
+
+/**
+ * Parse an `Outfits/<name>.md` file. Frontmatter carries the preset's name,
+ * id, slot map, and timestamps; the body is the freeform description. Slot
+ * values are first resolved against the in-vault slug map (built from the
+ * `Wardrobe/` items) and fall back to interpreting the value as a literal
+ * UUID, so a hand-edit that uses `top: blue-tweed-jacket` keeps working
+ * across renames as long as the slug or the explicit UUID matches something.
+ */
+function parseOutfitPresetFile(
+  doc: DocMountDocument,
+  characterId: string,
+  itemBySlug: ReadonlyMap<string, WardrobeItem>,
+  itemById: ReadonlyMap<string, WardrobeItem>,
+): OutfitPreset | null {
+  const parsed = parseFrontmatter(doc.content);
+
+  let name: string | null = null;
+  if (parsed.data) {
+    const n = parsed.data.name;
+    if (typeof n === 'string' && n.trim().length > 0) {
+      name = n.trim();
+    }
+  }
+  const afterFrontmatter = doc.content.slice(parsed.bodyStartOffset);
+  const lines = afterFrontmatter.split('\n');
+  let titleLineIndex = -1;
+  if (name === null) {
+    for (let i = 0; i < lines.length; i++) {
+      const match = lines[i].match(/^#\s+(.+)$/);
+      if (match) {
+        titleLineIndex = i;
+        name = match[1].trim();
+        break;
+      }
+    }
+  }
+  if (name === null) {
+    name = doc.fileName.replace(/\.md$/i, '').trim();
+  }
+  if (name.length === 0) {
+    logger.warn('Outfits/*.md file has no usable name; skipping', {
+      characterId,
+      mountPointId: doc.mountPointId,
+      relativePath: doc.relativePath,
+    });
+    return null;
+  }
+
+  const id =
+    typeof parsed.data?.id === 'string' && /^[0-9a-f-]{36}$/i.test(parsed.data.id as string)
+      ? (parsed.data.id as string)
+      : stableUuidFromString(`outfit-preset:${doc.mountPointId}:${doc.relativePath}`);
+
+  const slots: EquippedSlots = {
+    top: resolveSlotRef(parsed.data?.slots, 'top', itemBySlug, itemById, doc, characterId),
+    bottom: resolveSlotRef(parsed.data?.slots, 'bottom', itemBySlug, itemById, doc, characterId),
+    footwear: resolveSlotRef(parsed.data?.slots, 'footwear', itemBySlug, itemById, doc, characterId),
+    accessories: resolveSlotRef(
+      parsed.data?.slots,
+      'accessories',
+      itemBySlug,
+      itemById,
+      doc,
+      characterId,
+    ),
+  };
+
+  const createdAt =
+    typeof parsed.data?.createdAt === 'string'
+      ? (parsed.data.createdAt as string)
+      : doc.createdAt;
+  const updatedAt =
+    typeof parsed.data?.updatedAt === 'string'
+      ? (parsed.data.updatedAt as string)
+      : doc.updatedAt;
+
+  const bodyText = (titleLineIndex >= 0
+    ? lines.slice(titleLineIndex + 1).join('\n')
+    : afterFrontmatter
+  ).trim();
+  const description = bodyText.length > 0 ? bodyText : null;
+
+  return {
+    id,
+    characterId,
+    name: name.slice(0, 200),
+    description,
+    slots,
+    createdAt,
+    updatedAt,
+  };
+}
+
+function resolveSlotRef(
+  slotsField: unknown,
+  key: 'top' | 'bottom' | 'footwear' | 'accessories',
+  itemBySlug: ReadonlyMap<string, WardrobeItem>,
+  itemById: ReadonlyMap<string, WardrobeItem>,
+  doc: DocMountDocument,
+  characterId: string,
+): string | null {
+  if (!slotsField || typeof slotsField !== 'object' || Array.isArray(slotsField)) return null;
+  const value = (slotsField as Record<string, unknown>)[key];
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string') {
+    logger.warn('Outfit preset slot value is not a string', {
+      characterId,
+      mountPointId: doc.mountPointId,
+      relativePath: doc.relativePath,
+      slot: key,
+      raw: value,
+    });
+    return null;
+  }
+  const bySlug = itemBySlug.get(value);
+  if (bySlug) return bySlug.id;
+  const byId = itemById.get(value);
+  if (byId) return byId.id;
+  logger.warn('Outfit preset slot references unknown wardrobe item', {
+    characterId,
+    mountPointId: doc.mountPointId,
+    relativePath: doc.relativePath,
+    slot: key,
+    ref: value,
+  });
+  return null;
 }
 
 /**
@@ -822,21 +1109,85 @@ export async function readCharacterVaultScenarios(
 }
 
 /**
- * Read a character's vault wardrobe.json and return a validated snapshot, or
- * null if the file is missing/malformed/invalid. Consumed by the wardrobe /
- * outfit-presets repositories to overlay list reads.
+ * Read a character's vault wardrobe and return a validated snapshot, or null
+ * if neither the new folder layout nor the legacy `wardrobe.json` is usable.
+ *
+ * Read order:
+ *   1. `Wardrobe/*.md` + `Outfits/*.md` (current format).
+ *   2. legacy `wardrobe.json` (still honored so existing vaults don't lose
+ *      hand-edits between this change shipping and the migration running).
+ *
+ * Items + presets are returned together because preset slot references need
+ * the item slug map; loading them apart would require resolving references
+ * twice.
  */
 export async function readCharacterVaultWardrobe(
   mountPointId: string,
   characterId?: string,
 ): Promise<CharacterVaultWardrobe | null> {
-  const content = await readVaultTextFile(
+  const repos = getRepositories();
+  const charId = characterId ?? mountPointId;
+
+  const [itemDocs, presetDocs] = await Promise.all([
+    repos.docMountDocuments.findManyByMountPointsInFolder(
+      [mountPointId],
+      CHARACTER_WARDROBE_FOLDER,
+      '.md',
+    ),
+    repos.docMountDocuments.findManyByMountPointsInFolder(
+      [mountPointId],
+      CHARACTER_OUTFITS_FOLDER,
+      '.md',
+    ),
+  ]);
+
+  if (itemDocs.length > 0 || presetDocs.length > 0) {
+    const items = itemDocs
+      .slice()
+      .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+      .map((doc) => parseWardrobeItemFile(doc, charId))
+      .filter((item): item is WardrobeItem => item !== null);
+
+    const itemById = new Map<string, WardrobeItem>();
+    const itemBySlug = new Map<string, WardrobeItem>();
+    const claimedSlugs = new Set<string>();
+    for (const item of items) {
+      itemById.set(item.id, item);
+      const slug = slugifyWardrobeTitle(item.title);
+      if (slug.length === 0 || claimedSlugs.has(slug)) {
+        if (slug.length > 0) {
+          logger.warn('Wardrobe items share a slug; later item only addressable by UUID', {
+            characterId: charId,
+            mountPointId,
+            slug,
+            itemId: item.id,
+            title: item.title,
+          });
+        }
+        continue;
+      }
+      claimedSlugs.add(slug);
+      itemBySlug.set(slug, item);
+    }
+
+    const presets = presetDocs
+      .slice()
+      .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+      .map((doc) => parseOutfitPresetFile(doc, charId, itemBySlug, itemById))
+      .filter((preset): preset is OutfitPreset => preset !== null);
+
+    return { items, presets };
+  }
+
+  // Folders empty (or missing) — fall through to legacy wardrobe.json so
+  // pre-migration vaults still surface their items.
+  const legacyContent = await readVaultTextFile(
     mountPointId,
     CHARACTER_WARDROBE_JSON_PATH,
     characterId,
   );
-  if (content === null) return null;
-  return parseVaultWardrobe(content, characterId ?? mountPointId);
+  if (legacyContent === null) return null;
+  return parseLegacyWardrobeJson(legacyContent, charId);
 }
 
 export interface WardrobeOverlayOptions {
@@ -848,9 +1199,10 @@ export interface WardrobeOverlayOptions {
 
 /**
  * Overlay a wardrobe-items list read. If the character has
- * `readPropertiesFromDocumentStore` on and a linked vault, wardrobe.json is the
- * source of truth; the caller's DB loader is skipped. Otherwise the DB loader
- * runs and its result is returned.
+ * `readPropertiesFromDocumentStore` on and a linked vault, the vault's
+ * `Wardrobe/*.md` files (or the legacy wardrobe.json on a not-yet-migrated
+ * vault) are the source of truth; the caller's DB loader is skipped.
+ * Otherwise the DB loader runs and its result is returned.
  *
  * Items parsed from the vault have their `characterId` coerced to the lookup
  * ID — a wardrobe file scoped to one character's vault always belongs to that
@@ -885,7 +1237,7 @@ export async function getOverlaidWardrobeItems(
     items = items.filter((item) => item.isDefault);
   }
 
-  logger.debug('Wardrobe items read overlaid from vault wardrobe.json', {
+  logger.debug('Wardrobe items read overlaid from vault folders', {
     characterId,
     mountPointId,
     itemCount: items.length,
@@ -921,7 +1273,7 @@ export async function getOverlaidOutfitPresets(
     characterId,
   }));
 
-  logger.debug('Outfit presets read overlaid from vault wardrobe.json', {
+  logger.debug('Outfit presets read overlaid from vault folders', {
     characterId,
     mountPointId,
     presetCount: presets.length,
@@ -931,19 +1283,20 @@ export async function getOverlaidOutfitPresets(
 }
 
 /**
- * Per-character write chain. The overlay treats vault wardrobe.json as
- * authoritative on read, so each mutation of wardrobe items or outfit presets
- * must project the new DB state into the vault file. Chaining per characterId
- * prevents two concurrent sync calls from each reading a stale DB snapshot and
- * writing a file that loses one of the changes.
+ * Per-character write chain. The overlay treats the vault wardrobe folders
+ * as authoritative on read, so each mutation of wardrobe items or outfit
+ * presets must project the new DB state back out into Wardrobe/*.md and
+ * Outfits/*.md. Chaining per characterId prevents two concurrent sync calls
+ * from each reading a stale DB snapshot and writing files that lose one of
+ * the changes.
  */
 const wardrobeSyncChains = new Map<string, Promise<void>>();
 
 /**
  * After a wardrobe-item or outfit-preset write, re-project the character's
- * DB state into the vault's wardrobe.json. No-ops for archetype rows
- * (characterId null), missing characters, and characters that aren't overlay
- * candidates (flag off or no linked vault).
+ * DB state into the vault's Wardrobe/ and Outfits/ folders. No-ops for
+ * archetype rows (characterId null), missing characters, and characters
+ * that aren't overlay candidates (flag off or no linked vault).
  *
  * Failures are logged but not propagated — the DB write is already committed,
  * and the next successful sync (or the startup refresh) will reconcile. We'd
@@ -982,33 +1335,73 @@ async function performVaultWardrobeSync(characterId: string): Promise<void> {
       repos.outfitPresets.findByCharacterIdRaw(characterId),
     ]);
 
-    await writeDatabaseDocument(
-      mountPointId,
-      CHARACTER_WARDROBE_JSON_PATH,
-      JSON.stringify(
-        {
-          items,
-          presets,
-          outfit: { top: null, bottom: null, footwear: null, accessories: null },
-        },
-        null,
-        2,
-      ),
-    );
+    await projectVaultWardrobe(mountPointId, characterId, items, presets);
 
-    logger.debug('Synced wardrobe.json from DB', {
+    logger.debug('Synced wardrobe folders from DB', {
       characterId,
       mountPointId,
       itemCount: items.length,
       presetCount: presets.length,
     });
   } catch (err) {
-    logger.error('Failed to sync wardrobe.json from DB; vault is now stale', {
+    logger.error('Failed to sync wardrobe folders from DB; vault is now stale', {
       characterId,
       mountPointId,
       error: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
+  }
+}
+
+/**
+ * Project an authoritative `(items, presets)` pair into the vault's
+ * `Wardrobe/` and `Outfits/` folders, deleting any stale legacy
+ * `wardrobe.json` so the new format is the single source on disk. Shared
+ * between the per-write sync chain, the full-character writer, and the
+ * startup migration so they all produce the same on-disk shape.
+ */
+export async function projectVaultWardrobe(
+  mountPointId: string,
+  characterId: string,
+  items: readonly WardrobeItem[],
+  presets: readonly OutfitPreset[],
+): Promise<void> {
+  const slugByItemId = buildSlugByItemIdMap(items);
+
+  await projectArrayIntoVaultFolder(
+    mountPointId,
+    CHARACTER_WARDROBE_FOLDER,
+    items,
+    (item) => ({
+      fileName: `${sanitizeFileName(item.title)}.md`,
+      content: buildWardrobeItemFile(item),
+    }),
+    characterId,
+  );
+
+  await projectArrayIntoVaultFolder(
+    mountPointId,
+    CHARACTER_OUTFITS_FOLDER,
+    presets,
+    (preset) => ({
+      fileName: `${sanitizeFileName(preset.name)}.md`,
+      content: buildOutfitPresetFile(preset, slugByItemId),
+    }),
+    characterId,
+  );
+
+  // The legacy single-JSON file is always cleaned up after a successful
+  // projection so it can't drift back to authoritative-on-read.
+  try {
+    await deleteDatabaseDocument(mountPointId, CHARACTER_WARDROBE_JSON_PATH);
+  } catch (err) {
+    if (!(err instanceof DatabaseStoreError && err.code === 'NOT_FOUND')) {
+      logger.warn('Failed to delete legacy wardrobe.json after folder projection', {
+        characterId,
+        mountPointId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 }
 
@@ -1264,19 +1657,7 @@ export async function writeCharacterVaultManagedFields(
   );
   result.scenariosWritten = character.scenarios?.length ?? 0;
 
-  await writeDatabaseDocument(
-    mountPointId,
-    CHARACTER_WARDROBE_JSON_PATH,
-    JSON.stringify(
-      {
-        items: wardrobeItems,
-        presets: outfitPresets,
-        outfit: { top: null, bottom: null, footwear: null, accessories: null },
-      },
-      null,
-      2,
-    ),
-  );
+  await projectVaultWardrobe(mountPointId, character.id, wardrobeItems, outfitPresets);
   result.wardrobeItemsWritten = wardrobeItems.length;
   result.outfitPresetsWritten = outfitPresets.length;
 

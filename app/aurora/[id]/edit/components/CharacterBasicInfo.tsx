@@ -161,7 +161,8 @@ export function CharacterBasicInfo({
               <code className="mx-1">physical-prompts.json</code>,
               <code className="mx-1">Prompts/*.md</code>,
               <code className="mx-1">Scenarios/*.md</code>,
-              <code className="mx-1">wardrobe.json</code>).
+              <code className="mx-1">Wardrobe/*.md</code>,
+              <code className="mx-1">Outfits/*.md</code>).
               Edits made here are saved straight to the vault files, so the form
               and the vault stay in step. Use &ldquo;Snapshot to database&rdquo;
               before turning the switch off if you want the database row to

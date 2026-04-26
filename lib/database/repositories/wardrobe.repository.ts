@@ -56,7 +56,7 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
    * Find all wardrobe items belonging to a specific character. Honours the
    * per-character document-store overlay: when the character's
    * `readPropertiesFromDocumentStore` flag is on, items are sourced from the
-   * vault's wardrobe.json instead of the DB.
+   * vault's `Wardrobe/*.md` files instead of the DB.
    *
    * @param characterId The character ID
    * @param includeArchived When false (default), excludes items where archivedAt is not null

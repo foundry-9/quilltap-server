@@ -1370,12 +1370,12 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       complete: 'complete',
     });
 
-    const wardrobe = JSON.parse(getWrite('wardrobe.json')!);
-    expect(wardrobe).toEqual({
-      items: [],
-      presets: [],
-      outfit: { top: null, bottom: null, footwear: null, accessories: null },
-    });
+    // No items, no presets → no Wardrobe/*.md or Outfits/*.md writes, and the
+    // legacy wardrobe.json must never be re-seeded.
+    const writtenPaths = writeDatabaseDocumentMock.mock.calls.map(([, p]) => p);
+    expect(writtenPaths).not.toContain('wardrobe.json');
+    expect(writtenPaths.some((p) => p.startsWith('Wardrobe/'))).toBe(false);
+    expect(writtenPaths.some((p) => p.startsWith('Outfits/'))).toBe(false);
   });
 
   it('writes empty strings / nulls through for characters with sparse fields', async () => {
@@ -1544,7 +1544,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     expect(deletedPaths).toContain(`${CHARACTER_SCENARIOS_FOLDER}/Old Scene.md`);
   });
 
-  it('writes wardrobe items and presets as the vault wardrobe.json payload with an outfit placeholder', async () => {
+  it('projects wardrobe items into Wardrobe/*.md with frontmatter, presets into Outfits/*.md with slug slot refs', async () => {
     const character = makeCharacter({
       id: 'char-wardrobe',
       physicalDescriptions: [],
@@ -1588,9 +1588,22 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     expect(result.wardrobeItemsWritten).toBe(1);
     expect(result.outfitPresetsWritten).toBe(1);
 
-    const wardrobe = JSON.parse(getWrite('wardrobe.json')!);
-    expect(wardrobe.items).toEqual(wardrobeItems);
-    expect(wardrobe.presets).toEqual(outfitPresets);
-    expect(wardrobe.outfit).toEqual({ top: null, bottom: null, footwear: null, accessories: null });
+    const writtenPaths = writeDatabaseDocumentMock.mock.calls.map(([, p]) => p);
+    expect(writtenPaths).not.toContain('wardrobe.json');
+
+    const itemFile = getWrite('Wardrobe/Linen Jacket.md');
+    expect(itemFile).toBeDefined();
+    expect(itemFile).toContain('id: item-1');
+    expect(itemFile).toContain('title: Linen Jacket');
+    expect(itemFile).toContain('- top');
+    expect(itemFile).toContain('default: true');
+    expect(itemFile).toContain('Cream linen with ivory buttons.');
+
+    const presetFile = getWrite('Outfits/Garden Party.md');
+    expect(presetFile).toBeDefined();
+    expect(presetFile).toContain('id: preset-1');
+    expect(presetFile).toContain('name: Garden Party');
+    expect(presetFile).toContain('top: linen-jacket');
+    expect(presetFile).toContain('bottom: null');
   });
 });

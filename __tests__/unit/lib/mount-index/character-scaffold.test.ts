@@ -78,21 +78,23 @@ describe('scaffoldCharacterMount', () => {
     writeDatabaseDocumentMock.mockResolvedValue({ mtime: 0 });
   });
 
-  it('scaffolds all eight files and five folders on a fresh database-backed character mount', async () => {
+  it('scaffolds the seeded files and seven folders on a fresh database-backed character mount', async () => {
     const repos = makeRepos();
     getRepositoriesMock.mockReturnValue(repos);
 
     const result = await scaffoldCharacterMount(MOUNT_ID);
 
-    expect(result).toEqual({ filesCreated: 8, filesSkipped: 0, foldersCreated: 5 });
-    expect(ensureFolderPathMock).toHaveBeenCalledTimes(5);
+    expect(result).toEqual({ filesCreated: 7, filesSkipped: 0, foldersCreated: 7 });
+    expect(ensureFolderPathMock).toHaveBeenCalledTimes(7);
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Prompts');
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Scenarios');
+    expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Wardrobe');
+    expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Outfits');
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'lore');
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'images');
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'files');
 
-    expect(writeDatabaseDocumentMock).toHaveBeenCalledTimes(8);
+    expect(writeDatabaseDocumentMock).toHaveBeenCalledTimes(7);
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'identity.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'description.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'personality.md', '');
@@ -130,20 +132,16 @@ describe('scaffoldCharacterMount', () => {
     });
   });
 
-  it('writes wardrobe.json mirroring wardrobe.types.ts shape', async () => {
+  it('does not seed a wardrobe.json — items live in Wardrobe/, presets in Outfits/', async () => {
     const repos = makeRepos();
     getRepositoriesMock.mockReturnValue(repos);
 
     await scaffoldCharacterMount(MOUNT_ID);
 
-    const wardrobeCall = writeDatabaseDocumentMock.mock.calls.find(c => c[1] === 'wardrobe.json');
-    expect(wardrobeCall).toBeDefined();
-    const parsed = JSON.parse(wardrobeCall![2] as string);
-    expect(parsed).toEqual({
-      items: [],
-      presets: [],
-      outfit: { top: null, bottom: null, footwear: null, accessories: null },
-    });
+    const writtenPaths = writeDatabaseDocumentMock.mock.calls.map(c => c[1]);
+    expect(writtenPaths).not.toContain('wardrobe.json');
+    expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Wardrobe');
+    expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Outfits');
   });
 
   it('no-op when mountType is not database', async () => {
@@ -187,9 +185,9 @@ describe('scaffoldCharacterMount', () => {
 
     const result = await scaffoldCharacterMount(MOUNT_ID);
 
-    expect(result.filesCreated).toBe(6);
+    expect(result.filesCreated).toBe(5);
     expect(result.filesSkipped).toBe(2);
-    expect(result.foldersCreated).toBe(3);
+    expect(result.foldersCreated).toBe(5);
 
     const writtenPaths = writeDatabaseDocumentMock.mock.calls.map(c => c[1]);
     expect(writtenPaths).not.toContain('identity.md');
@@ -198,6 +196,6 @@ describe('scaffoldCharacterMount', () => {
     expect(writtenPaths).toContain('personality.md');
     expect(writtenPaths).toContain('physical-description.md');
     expect(writtenPaths).toContain('example-dialogues.md');
-    expect(writtenPaths).toContain('wardrobe.json');
+    expect(writtenPaths).not.toContain('wardrobe.json');
   });
 });

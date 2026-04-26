@@ -31,6 +31,8 @@ const BLANK_MARKDOWN_FILES = [
 const TOP_LEVEL_FOLDERS = [
   'Prompts',
   'Scenarios',
+  'Wardrobe',
+  'Outfits',
   'lore',
   'images',
   'files',
@@ -42,17 +44,6 @@ const PROPERTIES_JSON = {
   title: '',
   firstMessage: '',
   talkativeness: 0.5,
-};
-
-const WARDROBE_JSON = {
-  items: [],
-  presets: [],
-  outfit: {
-    top: null,
-    bottom: null,
-    footwear: null,
-    accessories: null,
-  },
 };
 
 const PHYSICAL_PROMPTS_JSON = {
@@ -110,7 +101,6 @@ export async function scaffoldCharacterMount(
   const fileSpecs: Array<{ path: string; content: string }> = [
     ...BLANK_MARKDOWN_FILES.map(path => ({ path, content: '' })),
     { path: 'properties.json', content: JSON.stringify(PROPERTIES_JSON, null, 2) },
-    { path: 'wardrobe.json', content: JSON.stringify(WARDROBE_JSON, null, 2) },
     { path: 'physical-prompts.json', content: JSON.stringify(PHYSICAL_PROMPTS_JSON, null, 2) },
   ];
 

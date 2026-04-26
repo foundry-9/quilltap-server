@@ -20,6 +20,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
+import { serializeFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import type {
   Character,
   PhysicalDescription,
@@ -27,7 +28,10 @@ import type {
   CharacterScenario,
   ClothingRecord,
 } from '@/lib/schemas/character.types';
-import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import type { WardrobeItem, OutfitPreset } from '@/lib/schemas/wardrobe.types';
+
+export const CHARACTER_WARDROBE_FOLDER = 'Wardrobe';
+export const CHARACTER_OUTFITS_FOLDER = 'Outfits';
 
 const logger = createServiceLogger('MountIndex:CharacterVault');
 
@@ -144,7 +148,7 @@ async function populateVaultWithCharacterData(
     ),
   );
 
-  // Raw reads so the populator writes DB values to wardrobe.json, never the
+  // Raw reads so the populator writes DB values to the vault, never the
   // overlaid (vault-sourced) values it would otherwise see.
   const wardrobeItems = await repos.wardrobe.findByCharacterIdRaw(character.id);
   const outfitPresets = await repos.outfitPresets.findByCharacterIdRaw(character.id);
@@ -152,19 +156,27 @@ async function populateVaultWithCharacterData(
     character.id,
     character.clothingRecords ?? [],
   );
+  const allItems: WardrobeItem[] = [...wardrobeItems, ...migratedClothingItems];
+  const slugByItemId = buildSlugByItemIdMap(allItems);
 
-  await writeDatabaseDocument(
+  await writeNamedArrayIntoFolder(
     mountPointId,
-    'wardrobe.json',
-    JSON.stringify(
-      {
-        items: [...wardrobeItems, ...migratedClothingItems],
-        presets: outfitPresets,
-        outfit: { top: null, bottom: null, footwear: null, accessories: null },
-      },
-      null,
-      2,
-    ),
+    CHARACTER_WARDROBE_FOLDER,
+    allItems,
+    (item) => ({
+      fileName: `${sanitizeFileName(item.title)}.md`,
+      content: buildWardrobeItemFile(item),
+    }),
+  );
+
+  await writeNamedArrayIntoFolder(
+    mountPointId,
+    CHARACTER_OUTFITS_FOLDER,
+    outfitPresets,
+    (preset) => ({
+      fileName: `${sanitizeFileName(preset.name)}.md`,
+      content: buildOutfitPresetFile(preset, slugByItemId),
+    }),
   );
 
   await writeNamedArrayIntoFolder(
@@ -293,4 +305,95 @@ function escapeYaml(value: string): string {
     return JSON.stringify(value);
   }
   return value;
+}
+
+/**
+ * Kebab-case slug derived from a wardrobe item's title. Used as the in-vault
+ * identity for slot references in outfit preset files — `top: blue-tweed-jacket`
+ * is friendlier to read and edit than a UUID. Two items whose titles slugify
+ * to the same string will collide; the read overlay handles that by warning
+ * and only registering the first.
+ */
+export function slugifyWardrobeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+/**
+ * Build a `{ itemId → slug }` map from a list of wardrobe items, taking the
+ * first item that slugifies to each slug (skipping later collisions). Mirrors
+ * the read-time slug map and lets `buildOutfitPresetFile` translate slot UUIDs
+ * to slugs without a separate pass.
+ */
+export function buildSlugByItemIdMap(
+  items: readonly WardrobeItem[],
+): Map<string, string> {
+  const slugByItemId = new Map<string, string>();
+  const claimedSlugs = new Set<string>();
+  for (const item of items) {
+    const slug = slugifyWardrobeTitle(item.title);
+    if (slug.length === 0 || claimedSlugs.has(slug)) continue;
+    claimedSlugs.add(slug);
+    slugByItemId.set(item.id, slug);
+  }
+  return slugByItemId;
+}
+
+export function buildWardrobeItemFile(item: WardrobeItem): string {
+  const data: Record<string, unknown> = {
+    id: item.id,
+    title: item.title,
+    types: item.types,
+  };
+  if (item.appropriateness != null && item.appropriateness !== '') {
+    data.appropriateness = item.appropriateness;
+  }
+  if (item.isDefault) {
+    data.default = true;
+  }
+  if (item.archivedAt) {
+    data.archived = true;
+    data.archivedAt = item.archivedAt;
+  }
+  if (item.migratedFromClothingRecordId) {
+    data.migratedFromClothingRecordId = item.migratedFromClothingRecordId;
+  }
+  data.createdAt = item.createdAt;
+  data.updatedAt = item.updatedAt;
+
+  const body = item.description ?? '';
+  return `${serializeFrontmatter(data)}\n${body}`;
+}
+
+export function buildOutfitPresetFile(
+  preset: OutfitPreset,
+  slugByItemId: ReadonlyMap<string, string>,
+): string {
+  const slots: Record<string, string | null> = {
+    top: slotValueForFile(preset.slots.top, slugByItemId),
+    bottom: slotValueForFile(preset.slots.bottom, slugByItemId),
+    footwear: slotValueForFile(preset.slots.footwear, slugByItemId),
+    accessories: slotValueForFile(preset.slots.accessories, slugByItemId),
+  };
+  const data: Record<string, unknown> = {
+    id: preset.id,
+    name: preset.name,
+    slots,
+    createdAt: preset.createdAt,
+    updatedAt: preset.updatedAt,
+  };
+
+  const body = preset.description ?? '';
+  return `${serializeFrontmatter(data)}\n${body}`;
+}
+
+function slotValueForFile(
+  itemId: string | null,
+  slugByItemId: ReadonlyMap<string, string>,
+): string | null {
+  if (itemId === null) return null;
+  return slugByItemId.get(itemId) ?? itemId;
 }

@@ -39,7 +39,7 @@ export class OutfitPresetsRepository extends AbstractBaseRepository<OutfitPreset
    * Find all outfit presets belonging to a specific character. Honours the
    * per-character document-store overlay: when the character's
    * `readPropertiesFromDocumentStore` flag is on, presets are sourced from the
-   * vault's wardrobe.json instead of the DB.
+   * vault's `Outfits/*.md` files instead of the DB.
    */
   async findByCharacterId(characterId: string): Promise<OutfitPreset[]> {
     return this.safeQuery(

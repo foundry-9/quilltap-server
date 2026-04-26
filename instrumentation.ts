@@ -540,10 +540,10 @@ export async function register() {
             );
             await migrateVaultPhysicalFiles();
 
-            // One-time refresh of wardrobe.json so existing vaults reflect the
-            // canonical DB state now that wardrobe.json participates in the
-            // character overlay. Gated by an instance_settings flag, so
-            // steady-state startups no-op.
+            // One-time projection of every linked vault's wardrobe into the
+            // Wardrobe/<title>.md + Outfits/<name>.md folder layout, deleting
+            // the legacy wardrobe.json on the way out. Gated by an
+            // instance_settings flag so steady-state startups no-op.
             const { refreshVaultWardrobe } = await import(
               './lib/startup/refresh-vault-wardrobe'
             );

@@ -1,24 +1,20 @@
 /**
  * Vault Wardrobe Refresh
  *
- * One-time startup task that rewrites every linked character vault's
- * `wardrobe.json` from the canonical DB state (wardrobe_items + outfit_presets
- * tables). Needed because `wardrobe.json` was historically written once at
- * vault creation and never resynced, so existing vaults carry stale snapshots
- * from whenever the vault was provisioned.
+ * One-time startup task that projects every linked character vault's wardrobe
+ * into the `Wardrobe/<title>.md` + `Outfits/<name>.md` folder layout from the
+ * canonical DB state (wardrobe_items + outfit_presets tables) and deletes any
+ * legacy `wardrobe.json` left over from the older single-file format. The
+ * read overlay treats vault wardrobe files as authoritative whenever a
+ * character has `readPropertiesFromDocumentStore` on, so this refresh runs
+ * once per database to bring every vault onto the folder format the moment
+ * the user upgrades.
  *
- * The wardrobe overlay (see `character-properties-overlay.ts`) now treats
- * `wardrobe.json` as authoritative whenever a character has
- * `readPropertiesFromDocumentStore` on, so any drift becomes user-visible the
- * moment the flag is flipped. Refreshing once brings every vault up to date so
- * nobody is surprised by stale items or missing presets.
- *
- * Idempotent via the `wardrobe_json_refreshed_v1` flag in `instance_settings`:
+ * Idempotent via the `wardrobe_folder_migrated_v1` flag in `instance_settings`:
  * runs exactly once per database, then no-ops on every subsequent startup.
  * Chained after `backfillCharacterVaults` + `migrateVaultPhysicalFiles` so
- * vaults created that morning are already in the new shape and get skipped
- * here (their `wardrobe.json` was written from the DB moments before this runs
- * — rewriting it is a no-op).
+ * vaults created that morning are already in the folder shape and get
+ * skipped here (their projection is a no-op).
  *
  * @module startup/refresh-vault-wardrobe
  */
@@ -26,12 +22,11 @@
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
-import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
+import { projectVaultWardrobe } from '@/lib/database/repositories/character-properties-overlay';
 
 const logger = createServiceLogger('Startup:VaultWardrobeRefresh');
 
-const WARDROBE_JSON_PATH = 'wardrobe.json';
-const REFRESH_FLAG_KEY = 'wardrobe_json_refreshed_v1';
+const REFRESH_FLAG_KEY = 'wardrobe_folder_migrated_v1';
 
 export interface VaultWardrobeRefreshResult {
   scanned: number;
@@ -74,22 +69,10 @@ export async function refreshVaultWardrobe(): Promise<VaultWardrobeRefreshResult
       const items = await repos.wardrobe.findByCharacterIdRaw(character.id);
       const presets = await repos.outfitPresets.findByCharacterIdRaw(character.id);
 
-      await writeDatabaseDocument(
-        mountPointId,
-        WARDROBE_JSON_PATH,
-        JSON.stringify(
-          {
-            items,
-            presets,
-            outfit: { top: null, bottom: null, footwear: null, accessories: null },
-          },
-          null,
-          2,
-        ),
-      );
+      await projectVaultWardrobe(mountPointId, character.id, items, presets);
 
       result.refreshed++;
-      logger.debug('Refreshed wardrobe.json from DB', {
+      logger.debug('Migrated wardrobe folders from DB', {
         characterId: character.id,
         mountPointId,
         itemCount: items.length,
@@ -97,7 +80,7 @@ export async function refreshVaultWardrobe(): Promise<VaultWardrobeRefreshResult
       });
     } catch (err) {
       result.errors++;
-      logger.error('Failed to refresh wardrobe.json for character', {
+      logger.error('Failed to migrate wardrobe folders for character', {
         characterId: character.id,
         mountPointId,
         error: err instanceof Error ? err.message : String(err),
