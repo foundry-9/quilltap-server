@@ -20,6 +20,12 @@ interface LibraryFilePickerModalProps {
   isOpen: boolean
   onClose: () => void
   chatId: string
+  /**
+   * Called when a legacy library file (not a Scriptorium document-store file)
+   * has been linked to the chat. The parent typically pushes the result into
+   * the composer's pending-attachments tray so the user's next message picks
+   * it up.
+   */
   onFileLinked: (file: {
     id: string
     filename: string
@@ -27,6 +33,13 @@ interface LibraryFilePickerModalProps {
     mimeType: string
     url: string
   }) => void
+  /**
+   * Called when a Scriptorium document-store file has been pinned to the chat
+   * via a Librarian announcement. There is no composer-tray hand-off — the
+   * announcement is already in the transcript — so the parent should refetch
+   * the chat to reveal it.
+   */
+  onMountFileAttached?: () => void
 }
 
 interface Project {
@@ -41,6 +54,7 @@ export default function LibraryFilePickerModal({
   onClose,
   chatId,
   onFileLinked,
+  onMountFileAttached,
 }: Readonly<LibraryFilePickerModalProps>) {
   const [step, setStep] = useState<'scope' | 'browse'>('scope')
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
@@ -76,8 +90,49 @@ export default function LibraryFilePickerModal({
     async (file: FileInfo) => {
       if (linking) return
 
+      // Scriptorium document-store files don't live in the legacy `files`
+      // table, so the link endpoint can't take their id. Post a Librarian
+      // attachment announcement instead — the synthetic message carries the
+      // mount-file id as a message-level attachment, and the assistant-side
+      // attachment walker surfaces it to the next character turn.
+      const isMountFile = !!file.mountPointId && !!file.relativePath
+      const filename = file.originalFilename || file.filename || 'file'
+
       try {
         setLinking(true)
+
+        if (isMountFile) {
+          const res = await fetch(
+            `/api/v1/chats/${chatId}/files?action=attach-mount-file`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                mountPointId: file.mountPointId,
+                relativePath: file.relativePath,
+              }),
+            }
+          )
+
+          if (!res.ok) {
+            let errorMessage = 'Failed to attach document'
+            try {
+              const errorData = await res.json()
+              errorMessage = errorData.error || errorMessage
+            } catch {
+              errorMessage = `HTTP ${res.status}: ${res.statusText}`
+            }
+            throw new Error(errorMessage)
+          }
+
+          showSuccessToast(`Attached "${filename}" — the Librarian has noted it`)
+          if (onMountFileAttached) {
+            onMountFileAttached()
+          }
+          onClose()
+          return
+        }
+
         const res = await fetch(
           `/api/v1/chats/${chatId}/files?action=link`,
           {
@@ -101,7 +156,7 @@ export default function LibraryFilePickerModal({
         const data = await res.json()
         const linkedFile = data.file
 
-        showSuccessToast(`Linked "${file.filename}" to chat`)
+        showSuccessToast(`Linked "${filename}" to chat`)
         onFileLinked({
           id: linkedFile.id,
           filename: linkedFile.filename,
@@ -113,17 +168,20 @@ export default function LibraryFilePickerModal({
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : String(error)
-        console.error('[LibraryFilePickerModal] Failed to link file', {
+        console.error('[LibraryFilePickerModal] Failed to attach file', {
           chatId,
           fileId: file.id,
+          mountPointId: file.mountPointId ?? null,
+          relativePath: file.relativePath ?? null,
+          isMountFile,
           error: errorMessage,
         })
-        showErrorToast(errorMessage || 'Failed to link file')
+        showErrorToast(errorMessage || 'Failed to attach file')
       } finally {
         setLinking(false)
       }
     },
-    [chatId, linking, onFileLinked, onClose]
+    [chatId, linking, onFileLinked, onMountFileAttached, onClose]
   )
 
   const handleBack = useCallback(() => {

@@ -13,6 +13,10 @@ import { createAuthenticatedParamsHandler, getFilePath } from '@/lib/api/middlew
 import { uploadChatFile, type ConflictResolution } from '@/lib/chat-files-v2';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
+import { postLibrarianAttachAnnouncement } from '@/lib/services/librarian-notifications/writer';
+import { generateImageDescription } from '@/lib/chat/file-attachment-fallback';
+import type { RepositoryContainer } from '@/lib/database/repositories';
+import type { FileAttachment } from '@/lib/llm/base';
 
 /**
  * POST /api/v1/chats/[id]/files - Upload a file or link an existing file
@@ -36,6 +40,10 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
 
       if (action === 'link') {
         return handleLinkFile(req, repos, chatId);
+      }
+
+      if (action === 'attach-mount-file') {
+        return handleAttachMountFile(req, repos, user.id, chatId);
       }
 
       // Default: file upload flow
@@ -155,6 +163,171 @@ async function handleLinkFile(
 }
 
 /**
+ * Handle a "Librarian announces an attachment" request from the picker.
+ *
+ * The body is `{ mountPointId, relativePath }`. Resolves to a doc_mount_files
+ * row, posts a Librarian announcement message carrying the row's id as a
+ * message-level attachment, and returns the file metadata + the announcement
+ * message id so the chat UI can refresh.
+ *
+ * No mount-link table is involved — the announcement message *is* the
+ * attachment record. The existing assistant-attachment walker surfaces it to
+ * the LLM, and the resolver in chat-files-v2 turns the id into bytes.
+ */
+/**
+ * Ensure an image blob has a description in `doc_mount_blobs.description`,
+ * generating one via the configured imageDescriptionProfile if the field is
+ * empty. Returns whatever description ends up associated with the blob —
+ * cached, freshly generated, or empty string on failure.
+ *
+ * Reused at every attach so vision providers and non-vision providers can
+ * both find the description in the announcement message body.
+ */
+async function ensureImageDescription(
+  repos: RepositoryContainer,
+  userId: string,
+  blob: { id: string; storedMimeType: string; description: string; originalFileName: string; sizeBytes: number },
+): Promise<string> {
+  if (!blob.storedMimeType.toLowerCase().startsWith('image/')) {
+    return '';
+  }
+  const existing = blob.description?.trim();
+  if (existing) {
+    logger.debug('[Chats v1 Files] Reusing cached blob description', {
+      blobId: blob.id,
+      descriptionLength: existing.length,
+    });
+    return existing;
+  }
+
+  let bytes: Buffer | null = null;
+  try {
+    bytes = await repos.docMountBlobs.readData(blob.id);
+  } catch (err) {
+    logger.warn('[Chats v1 Files] Failed to read blob bytes for description', {
+      blobId: blob.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return '';
+  }
+  if (!bytes) {
+    return '';
+  }
+
+  const fileAttachment: FileAttachment = {
+    id: blob.id,
+    filename: blob.originalFileName,
+    mimeType: blob.storedMimeType,
+    size: blob.sizeBytes,
+    data: bytes.toString('base64'),
+  };
+
+  const result = await generateImageDescription(fileAttachment, repos, userId);
+  if (result.type !== 'image_description' || !result.imageDescription) {
+    logger.warn('[Chats v1 Files] Image description generation did not return a description', {
+      blobId: blob.id,
+      resultType: result.type,
+      error: result.error,
+    });
+    return '';
+  }
+
+  const description = result.imageDescription.trim();
+  try {
+    await repos.docMountBlobs.updateDescription(blob.id, description);
+    logger.info('[Chats v1 Files] Cached generated image description on blob', {
+      blobId: blob.id,
+      descriptionLength: description.length,
+      descriptionProfileId: result.processingMetadata?.descriptionProfileId,
+    });
+  } catch (err) {
+    logger.warn('[Chats v1 Files] Failed to persist generated description', {
+      blobId: blob.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return description;
+}
+
+async function handleAttachMountFile(
+  req: NextRequest,
+  repos: RepositoryContainer,
+  userId: string,
+  chatId: string,
+): Promise<NextResponse> {
+  const body = await req.json();
+  const { mountPointId, relativePath } = body ?? {};
+
+  if (!mountPointId || typeof mountPointId !== 'string') {
+    return badRequest('mountPointId is required');
+  }
+  if (!relativePath || typeof relativePath !== 'string') {
+    return badRequest('relativePath is required');
+  }
+
+  const mountFile = await repos.docMountFiles.findByMountPointAndPath(mountPointId, relativePath);
+  if (!mountFile) {
+    return notFound('Mount-point file');
+  }
+
+  const blob = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, relativePath);
+  if (!blob) {
+    logger.warn('[Chats v1 Files] Mount file has no blob row, refusing to attach', {
+      chatId,
+      mountPointId,
+      relativePath,
+    });
+    return notFound('Mount-point file blob');
+  }
+
+  const mountPoint = await repos.docMountPoints.findById(mountPointId);
+  const mountPointName = mountPoint?.name ?? null;
+
+  const description = await ensureImageDescription(repos, userId, blob);
+
+  const announcement = await postLibrarianAttachAnnouncement({
+    chatId,
+    displayTitle: blob.originalFileName || mountFile.fileName,
+    filePath: relativePath,
+    mountPoint: mountPointName,
+    mountFileId: mountFile.id,
+    mimeType: blob.storedMimeType,
+    description,
+  });
+
+  if (!announcement) {
+    return serverError('Failed to post Librarian attachment announcement');
+  }
+
+  const url = `/api/v1/mount-points/${mountPointId}/blobs/${encodeURI(relativePath)}`;
+
+  logger.info('[Chats v1 Files] Mount-point file attached via Librarian', {
+    chatId,
+    mountFileId: mountFile.id,
+    mountPointId,
+    relativePath,
+    announcementMessageId: announcement.id,
+    descriptionIncluded: description.length > 0,
+  });
+
+  return NextResponse.json({
+    file: {
+      id: mountFile.id,
+      filename: blob.originalFileName || mountFile.fileName,
+      filepath: url,
+      mimeType: blob.storedMimeType,
+      size: blob.sizeBytes,
+      url,
+      type: 'mountFile' as const,
+    },
+    announcement: {
+      id: announcement.id,
+      createdAt: announcement.createdAt,
+    },
+  });
+}
+
+/**
  * GET /api/v1/chats/[id]/files - List files for a chat (includes uploaded files and generated images)
  */
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
@@ -170,8 +343,18 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
       // Get all files linked to this chat from repository
       const chatFiles = await repos.files.findByLinkedTo(chatId);
 
-      // Format files for response
-      const allFiles = chatFiles.map((f) => ({
+      type ChatFilesEntry = {
+        id: string;
+        filename: string;
+        filepath: string;
+        mimeType: string;
+        size: number;
+        url: string;
+        createdAt: string;
+        type: 'chatFile' | 'generatedImage' | 'mountFile';
+      };
+
+      const allFiles: ChatFilesEntry[] = chatFiles.map((f) => ({
         id: f.id,
         filename: f.originalFilename,
         filepath: getFilePath(f),
@@ -179,11 +362,51 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         size: f.size,
         url: getFilePath(f),
         createdAt: f.createdAt,
-        type: f.source === 'GENERATED' ? 'generatedImage' as const : 'chatFile' as const,
+        type: f.source === 'GENERATED' ? 'generatedImage' : 'chatFile',
       }));
 
+      // Mount-file attachments are recorded only on Librarian announcement
+      // messages (no link table). Walk the chat's messages and collect any
+      // attachment ids that resolve through doc_mount_files.
+      const seenIds = new Set(allFiles.map((f) => f.id));
+      try {
+        const events = await repos.chats.getMessages(chatId);
+        for (const event of events) {
+          if (event.type !== 'message') continue;
+          const ids = Array.isArray(event.attachments) ? event.attachments : [];
+          for (const attachmentId of ids) {
+            if (seenIds.has(attachmentId)) continue;
+            const mountFile = await repos.docMountFiles.findById(attachmentId);
+            if (!mountFile) continue;
+            const blob = await repos.docMountBlobs.findByMountPointAndPath(
+              mountFile.mountPointId,
+              mountFile.relativePath,
+            );
+            if (!blob) continue;
+            const url = `/api/v1/mount-points/${mountFile.mountPointId}/blobs/${encodeURI(mountFile.relativePath)}`;
+            allFiles.push({
+              id: mountFile.id,
+              filename: blob.originalFileName || mountFile.fileName,
+              filepath: url,
+              mimeType: blob.storedMimeType,
+              size: blob.sizeBytes,
+              url,
+              createdAt: event.createdAt,
+              type: 'mountFile',
+            });
+            seenIds.add(mountFile.id);
+          }
+        }
+      } catch (err) {
+        logger.warn('[Chats v1 Files] Failed to enumerate mount-file attachments', {
+          chatId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
       // Sort by creation time, newest first
-      allFiles.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());return NextResponse.json({
+      allFiles.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return NextResponse.json({
         files: allFiles,
       });
     } catch (error) {

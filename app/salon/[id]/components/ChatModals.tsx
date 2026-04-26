@@ -277,6 +277,11 @@ export function ChatModals({
             },
           ])
         }}
+        onMountFileAttached={() => {
+          // The Librarian announcement is already in the transcript;
+          // refetch so it appears (with its attached document) in the UI.
+          fetchChat()
+        }}
       />
 
       <StandaloneGenerateImageDialog

@@ -89,6 +89,32 @@ export interface LibrarianRenameAnnouncement {
   mountPoint?: string | null;
 }
 
+/**
+ * Announcement that the user has pinned a Scriptorium document-store file
+ * to the chat for the LLM to consult. The doc_mount_files row id rides on
+ * the synthetic message's `attachments` so the existing assistant-attachment
+ * walker surfaces the bytes to the next character turn — text excerpts go
+ * through fallback, images go to vision providers natively.
+ *
+ * For images, an optional `description` is woven into the announcement body
+ * so non-vision providers (which would otherwise see only the announcement
+ * sentence and silently drop the bytes) still know what was placed before
+ * them. The description is generated from the image once at attach time and
+ * cached on `doc_mount_blobs.description`.
+ */
+export interface LibrarianAttachAnnouncement {
+  chatId: string;
+  displayTitle: string;
+  filePath: string;
+  mountPoint?: string | null;
+  /** doc_mount_files.id of the attached file */
+  mountFileId: string;
+  /** MIME type (storedMimeType from the blob row) */
+  mimeType: string;
+  /** Cached or freshly-generated image description; empty for non-images or unavailable */
+  description?: string;
+}
+
 function scopeLabel(scope: 'project' | 'document_store' | 'general', mountPoint?: string | null): string {
   if (scope === 'document_store' && mountPoint) {
     return `the document store "${mountPoint}"`;
@@ -142,7 +168,12 @@ export function buildSaveContent(diffContent: string): string {
   return rephrased;
 }
 
-async function postLibrarianMessage(chatId: string, content: string, kindLabel: string): Promise<MessageEvent | null> {
+async function postLibrarianMessage(
+  chatId: string,
+  content: string,
+  kindLabel: string,
+  attachments: string[] = [],
+): Promise<MessageEvent | null> {
   try {
     const repos = getRepositories();
 
@@ -164,7 +195,7 @@ async function postLibrarianMessage(chatId: string, content: string, kindLabel: 
       id: messageId,
       role: 'ASSISTANT',
       content,
-      attachments: [],
+      attachments,
       createdAt: now,
       participantId: null,
       systemSender: 'librarian',
@@ -177,6 +208,7 @@ async function postLibrarianMessage(chatId: string, content: string, kindLabel: 
       chatId,
       messageId,
       kindLabel,
+      attachmentCount: attachments.length,
     });
 
     return message;
@@ -291,6 +323,42 @@ export async function postLibrarianFolderCreatedAnnouncement(
     kindLabel,
   });
   return postLibrarianMessage(params.chatId, content, kindLabel);
+}
+
+function isImageMime(mime: string): boolean {
+  return mime.toLowerCase().startsWith('image/');
+}
+
+export function buildAttachContent(params: LibrarianAttachAnnouncement): string {
+  const { displayTitle, filePath, mountPoint, mimeType, description } = params;
+  const where = mountPoint ? `the document store "${mountPoint}"` : 'the document store';
+  const pathDetails = `path: "${filePath}"${mountPoint ? `, mount_point: "${mountPoint}"` : ''}`;
+  const kindPhrase = isImageMime(mimeType)
+    ? `the illustration "${displayTitle}"`
+    : `the volume "${displayTitle}"`;
+  const lead = `The user has bid the Librarian set ${kindPhrase} from ${where} upon the table for your perusal — please consult it as part of your reply (${pathDetails}).`;
+  // Splice the description into the announcement body for the benefit of
+  // non-vision providers that would otherwise see only the lead sentence.
+  // Vision providers see both the description text *and* the image bytes.
+  const trimmed = description?.trim();
+  if (trimmed) {
+    return `${lead}\n\nThe Librarian's catalogue describes the illustration thus:\n\n${trimmed}`;
+  }
+  return lead;
+}
+
+export async function postLibrarianAttachAnnouncement(
+  params: LibrarianAttachAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildAttachContent(params);
+  logger.debug('[LibrarianNotification] Posting attach announcement', {
+    context: 'librarian-notifications',
+    chatId: params.chatId,
+    filePath: params.filePath,
+    mountFileId: params.mountFileId,
+    mimeType: params.mimeType,
+  });
+  return postLibrarianMessage(params.chatId, content, 'attached', [params.mountFileId]);
 }
 
 export async function postLibrarianFolderDeletedAnnouncement(

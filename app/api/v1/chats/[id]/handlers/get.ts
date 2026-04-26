@@ -222,12 +222,45 @@ export async function handleGet(
           if (event.type !== 'message') return null;
 
           const linkedFiles = await repos.files.findByLinkedTo(event.id);
-          const attachments = linkedFiles.map((file) => ({
+          const attachments: Array<{ id: string; filename: string; filepath: string; mimeType: string }> = linkedFiles.map((file) => ({
             id: file.id,
             filename: file.originalFilename,
             filepath: getFilePath(file),
             mimeType: file.mimeType,
           }));
+
+          // Mount-file attachments (Scriptorium documents pinned to a chat
+          // via a Librarian announcement) live entirely in event.attachments
+          // — there's no linkedTo entry for them. Resolve any ids that the
+          // legacy lookup didn't cover by probing doc_mount_files.
+          const eventAttachmentIds = Array.isArray(event.attachments) ? event.attachments : [];
+          const alreadyResolved = new Set(attachments.map((a) => a.id));
+          for (const attachmentId of eventAttachmentIds) {
+            if (alreadyResolved.has(attachmentId)) continue;
+            try {
+              const mountFile = await repos.docMountFiles.findById(attachmentId);
+              if (!mountFile) continue;
+              const blob = await repos.docMountBlobs.findByMountPointAndPath(
+                mountFile.mountPointId,
+                mountFile.relativePath,
+              );
+              if (!blob) continue;
+              const url = `/api/v1/mount-points/${mountFile.mountPointId}/blobs/${encodeURI(mountFile.relativePath)}`;
+              attachments.push({
+                id: mountFile.id,
+                filename: blob.originalFileName || mountFile.fileName,
+                filepath: url,
+                mimeType: blob.storedMimeType,
+              });
+              alreadyResolved.add(mountFile.id);
+            } catch (err) {
+              logger.warn('[Chats v1] Failed to resolve mount-file attachment', {
+                messageId: event.id,
+                attachmentId,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
 
           // Determine if this message can be pre-rendered
           const hasAttachments = attachments.length > 0;
