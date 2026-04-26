@@ -120,11 +120,12 @@ export async function executeWardrobeUpdateOutfitTool(
         );
       }
 
-      // Check that none of the preset's items are archived
+      // Check that none of the preset's items are archived. Use the overlay-
+      // aware lookup so vault-only items (no DB row) resolve correctly.
       for (const slotKey of WARDROBE_SLOT_TYPES) {
         const itemId = preset.slots[slotKey];
         if (itemId) {
-          const item = await repos.wardrobe.findById(itemId);
+          const item = await repos.wardrobe.findByIdForCharacter(context.characterId, itemId);
           if (item?.archivedAt) {
             logger.warn('Preset references archived wardrobe item', {
               context: 'wardrobe-update-outfit-handler',
@@ -147,7 +148,7 @@ export async function executeWardrobeUpdateOutfitTool(
       for (const slotKey of WARDROBE_SLOT_TYPES) {
         const itemId = preset.slots[slotKey];
         if (itemId !== null && itemId !== undefined) {
-          const presetItem = await repos.wardrobe.findById(itemId);
+          const presetItem = await repos.wardrobe.findByIdForCharacter(context.characterId, itemId);
           if (presetItem) {
             await equipWithDisplacement(repos, context.chatId, context.characterId, presetItem);
           } else {
@@ -175,7 +176,7 @@ export async function executeWardrobeUpdateOutfitTool(
 
       // Load full current state after preset application
       const currentState = await loadCurrentState(repos, context);
-      const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
+      const coverageSummary = await buildCoverageSummaryFromState(repos, context.characterId, currentState);
 
       // Trigger avatar generation if enabled
       await triggerAvatarGenerationIfEnabled(repos, {
@@ -203,9 +204,11 @@ export async function executeWardrobeUpdateOutfitTool(
       // --- Equip action ---
       let item: WardrobeItem | null = null;
 
-      // Look up item by ID first
+      // Look up item by ID first. Use the overlay-aware lookup so vault-only
+      // items (no DB row, UUID derived from the file path) resolve correctly,
+      // and so that archetypes (characterId == null) also resolve.
       if (item_id) {
-        item = await repos.wardrobe.findById(item_id);
+        item = await repos.wardrobe.findByIdForCharacter(context.characterId, item_id);
         logger.debug('Wardrobe item lookup by ID', {
           context: 'wardrobe-update-outfit-handler',
           itemId: item_id,
@@ -240,21 +243,6 @@ export async function executeWardrobeUpdateOutfitTool(
         });
         throw new WardrobeUpdateOutfitError(
           `Wardrobe item not found${item_id ? ` with ID "${item_id}"` : ''}${item_title ? ` with title "${item_title}"` : ''}`,
-          'NOT_FOUND'
-        );
-      }
-
-      // Validate item belongs to this character (or is an archetype with null characterId)
-      if (item.characterId != null && item.characterId !== context.characterId) {
-        logger.warn('Wardrobe item does not belong to character', {
-          context: 'wardrobe-update-outfit-handler',
-          userId: context.userId,
-          characterId: context.characterId,
-          itemCharacterId: item.characterId,
-          itemId: item.id,
-        });
-        throw new WardrobeUpdateOutfitError(
-          `Item "${item.title}" does not belong to this character`,
           'NOT_FOUND'
         );
       }
@@ -307,7 +295,7 @@ export async function executeWardrobeUpdateOutfitTool(
 
       // Load full current state after update
       const currentState = await loadCurrentState(repos, context);
-      const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
+      const coverageSummary = await buildCoverageSummaryFromState(repos, context.characterId, currentState);
 
       // Trigger avatar generation if enabled
       await triggerAvatarGenerationIfEnabled(repos, {
@@ -341,7 +329,7 @@ export async function executeWardrobeUpdateOutfitTool(
 
       // Load full current state after update
       const currentState = await loadCurrentState(repos, context);
-      const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
+      const coverageSummary = await buildCoverageSummaryFromState(repos, context.characterId, currentState);
 
       // Trigger avatar generation if enabled
       await triggerAvatarGenerationIfEnabled(repos, {
@@ -442,6 +430,7 @@ async function loadCurrentState(
  */
 async function buildCoverageSummaryFromState(
   repos: ReturnType<typeof getRepositories>,
+  characterId: string,
   slots: EquippedSlots
 ): Promise<string> {
   const items: Record<string, WardrobeItem | null> = {
@@ -454,7 +443,7 @@ async function buildCoverageSummaryFromState(
   for (const slotKey of ['top', 'bottom', 'footwear', 'accessories'] as const) {
     const itemId = slots[slotKey];
     if (itemId) {
-      items[slotKey] = await repos.wardrobe.findById(itemId);
+      items[slotKey] = await repos.wardrobe.findByIdForCharacter(characterId, itemId);
     }
   }
 
