@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { formatAutosaveNotification } from '@/lib/doc-edit/unified-diff'
+import { showErrorToast } from '@/lib/toast'
 import type { Chat, Message } from '../types'
 import {
   closeDocumentForChat,
@@ -116,6 +117,35 @@ function getDocumentModeState(
     mode: (source?.documentMode as DocumentMode) || 'normal',
     dividerPosition: source?.dividerPosition ?? 45,
   }
+}
+
+/**
+ * Map an open-document error from the API into a single-line user-facing
+ * message. The server returns a JSON body whose `error` field is the raw
+ * message; if parsing fails, we fall back to the original text.
+ */
+function friendlyOpenDocumentError(
+  rawMessage: string,
+  filePath: string | undefined,
+  title: string | undefined,
+): string {
+  let serverMessage = rawMessage
+  try {
+    const parsed = JSON.parse(rawMessage) as { error?: string }
+    if (parsed && typeof parsed.error === 'string' && parsed.error.length > 0) {
+      serverMessage = parsed.error
+    }
+  } catch {
+    // rawMessage isn't JSON — leave it alone.
+  }
+
+  if (/^File not found/i.test(serverMessage)) {
+    const target = filePath || title
+    return target
+      ? `Couldn't open "${target}" — file not found. It may have been deleted or renamed.`
+      : "Couldn't open document — file not found."
+  }
+  return serverMessage || "Couldn't open document."
 }
 
 export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumentModeParams): UseDocumentModeReturn {
@@ -418,7 +448,14 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
 
       return doc
     } catch (error) {
-      console.error('[DocumentMode] Failed to open document', error)
+      // Surface the error to the user as a toast and log without console.error
+      // so we don't trigger Next's red-screen dev overlay for what is usually
+      // a recoverable miss (e.g., a file the picker pointed at has since been
+      // deleted from the vault).
+      const rawMessage = error instanceof Error ? error.message : String(error)
+      const toastMessage = friendlyOpenDocumentError(rawMessage, params.filePath, params.title)
+      showErrorToast(toastMessage)
+      console.warn('[DocumentMode] Failed to open document', { rawMessage, params })
       return null
     }
   }, [applyDocumentState, chatId, isDirty, activeDocument, saveDocument])

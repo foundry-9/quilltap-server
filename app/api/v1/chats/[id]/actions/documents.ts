@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { successResponse, badRequest, conflict, notFound, serverError } from '@/lib/api/responses';
+import { successResponse, badRequest, conflict, notFound, serverError, errorResponse } from '@/lib/api/responses';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import {
   resolveDocEditPath,
@@ -336,7 +336,10 @@ export async function handleOpenDocument(
         displayTitle = path.basename(filePath);
       }
     } catch {
-      return badRequest(`File not found: ${filePath}`);
+      // 404 (not 400) so the client can distinguish a genuinely missing file
+      // from a malformed request and surface a friendly toast instead of the
+      // dev error overlay.
+      return errorResponse(`File not found: ${filePath}`, 404);
     }
   } else {
     try {
@@ -489,7 +492,10 @@ export async function handleReadDocument(
 
     if (code === 'ENOENT') {
       logger.debug('Document not found on disk', { chatId, filePath: data.filePath, scope: data.scope });
-      return notFound(`File not found: ${data.filePath}`);
+      // notFound() appends "not found" to its argument, which would produce
+      // "File not found: X not found" — use errorResponse so the client sees
+      // the same shape as open-document's missing-file response.
+      return errorResponse(`File not found: ${data.filePath}`, 404);
     }
 
     logger.error('Failed to read document', {

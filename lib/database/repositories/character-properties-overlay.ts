@@ -1330,6 +1330,13 @@ async function performVaultWardrobeSync(characterId: string): Promise<void> {
   const mountPointId = character.characterDocumentMountPointId as string;
 
   try {
+    // Promote any vault-only wardrobe items / outfit presets into the DB
+    // before projecting back out. The projection sweep deletes any Wardrobe/
+    // or Outfits/ file not represented in the DB-derived list, so vault-only
+    // files (created by hand or via Document Mode, with no DB row) would get
+    // wiped on every sync without this step.
+    await ingestVaultOnlyWardrobeIntoDb(mountPointId, characterId);
+
     const [items, presets] = await Promise.all([
       repos.wardrobe.findByCharacterIdRaw(characterId),
       repos.outfitPresets.findByCharacterIdRaw(characterId),
@@ -1350,6 +1357,76 @@ async function performVaultWardrobeSync(characterId: string): Promise<void> {
       error: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
+  }
+}
+
+/**
+ * Read the character's vault wardrobe folders and copy any items/presets
+ * that aren't yet in the DB into the DB, preserving their ids and
+ * timestamps. The downstream projection sees them as managed rows and
+ * leaves their files in place; without this step it would delete them as
+ * unmanaged.
+ *
+ * Failures on individual items are logged but don't abort the rest of the
+ * ingestion or the sync — losing one item to a validation error is better
+ * than rolling back and clobbering the whole vault on the projection step.
+ */
+async function ingestVaultOnlyWardrobeIntoDb(
+  mountPointId: string,
+  characterId: string,
+): Promise<void> {
+  const repos = getRepositories();
+  const vault = await readCharacterVaultWardrobe(mountPointId, characterId);
+  if (!vault) return;
+
+  if (vault.items.length > 0) {
+    const dbItems = await repos.wardrobe.findByCharacterIdRaw(characterId, true);
+    const dbItemIds = new Set(dbItems.map((i) => i.id));
+    for (const item of vault.items) {
+      if (dbItemIds.has(item.id)) continue;
+      try {
+        await repos.wardrobe.createFromVault(item);
+        logger.info('Promoted vault-only wardrobe item into DB before sync', {
+          characterId,
+          mountPointId,
+          itemId: item.id,
+          title: item.title,
+        });
+      } catch (err) {
+        logger.warn('Failed to promote vault-only wardrobe item into DB; will be deleted by projection', {
+          characterId,
+          mountPointId,
+          itemId: item.id,
+          title: item.title,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  if (vault.presets.length > 0) {
+    const dbPresets = await repos.outfitPresets.findByCharacterIdRaw(characterId);
+    const dbPresetIds = new Set(dbPresets.map((p) => p.id));
+    for (const preset of vault.presets) {
+      if (dbPresetIds.has(preset.id)) continue;
+      try {
+        await repos.outfitPresets.createFromVault(preset);
+        logger.info('Promoted vault-only outfit preset into DB before sync', {
+          characterId,
+          mountPointId,
+          presetId: preset.id,
+          name: preset.name,
+        });
+      } catch (err) {
+        logger.warn('Failed to promote vault-only outfit preset into DB; will be deleted by projection', {
+          characterId,
+          mountPointId,
+          presetId: preset.id,
+          name: preset.name,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
   }
 }
 

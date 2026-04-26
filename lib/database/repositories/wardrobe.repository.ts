@@ -268,6 +268,43 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
+   * Insert a wardrobe item that originated from a character's vault, preserving
+   * its stable id and timestamps. Bypasses `syncCharacterVaultWardrobe` so the
+   * sync chain itself can promote vault-only items into the DB without
+   * recursing back into another sync.
+   *
+   * Why: the projection sweep in `projectArrayIntoVaultFolder` deletes any
+   * `Wardrobe/*.md` file not represented in the DB-derived list. Vault-only
+   * items (created by hand or via Document Mode, never written to the DB) get
+   * wiped out on the next sync. Promoting them to DB rows ahead of the
+   * projection makes the sweep see them as "managed" and leave them alone.
+   */
+  async createFromVault(item: WardrobeItem): Promise<WardrobeItem> {
+    return this.safeQuery(
+      () =>
+        this._create(
+          {
+            characterId: item.characterId ?? null,
+            title: item.title,
+            description: item.description ?? null,
+            types: item.types,
+            appropriateness: item.appropriateness ?? null,
+            isDefault: item.isDefault,
+            migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
+            archivedAt: item.archivedAt ?? null,
+          } as Omit<WardrobeItem, 'id' | 'createdAt' | 'updatedAt'>,
+          {
+            id: item.id,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+          },
+        ),
+      'Error ingesting vault-only wardrobe item into DB',
+      { wardrobeItemId: item.id, characterId: item.characterId ?? null, title: item.title },
+    );
+  }
+
+  /**
    * Update a wardrobe item
    */
   async update(id: string, data: Partial<WardrobeItem>): Promise<WardrobeItem | null> {

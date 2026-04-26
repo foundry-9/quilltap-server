@@ -50,6 +50,7 @@ import {
   readCharacterVaultSystemPrompts,
   readCharacterVaultScenarios,
   writeCharacterVaultManagedFields,
+  syncCharacterVaultWardrobe,
   CharacterVaultPropertiesSchema,
   CharacterVaultPhysicalPromptsSchema,
   CHARACTER_PROPERTIES_JSON_PATH,
@@ -1605,5 +1606,177 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     expect(presetFile).toContain('name: Garden Party');
     expect(presetFile).toContain('top: linen-jacket');
     expect(presetFile).toContain('bottom: null');
+  });
+});
+
+describe('syncCharacterVaultWardrobe — vault-only items', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // Regression: a wardrobe Markdown file written via Document Mode (no DB
+  // row) used to be deleted on the next sync, because the projection treated
+  // the DB-only list as authoritative and swept any unmanaged file. Now the
+  // sync ingests vault-only items into the DB before projecting, so the file
+  // survives and the equip handler's deterministic UUID still resolves.
+  it('promotes a vault-only wardrobe item into the DB instead of deleting its file', async () => {
+    // The mocked DB starts empty; createFromVault appends so the subsequent
+    // findByCharacterIdRaw call inside the projection step sees the promoted
+    // item and the projection re-writes its file instead of sweeping it.
+    const dbItems: any[] = [];
+    const findByCharacterIdRaw = jest.fn(async () => dbItems.slice());
+    const findByCharacterIdRawPresets = jest.fn().mockResolvedValue([]);
+    const createFromVault = jest.fn(async (item) => {
+      dbItems.push(item);
+      return item;
+    });
+    const createFromVaultPreset = jest.fn(async (preset) => preset);
+    const findByIdRaw = jest.fn().mockResolvedValue({
+      id: 'gary',
+      readPropertiesFromDocumentStore: true,
+      characterDocumentMountPointId: 'mount-gary',
+    });
+
+    const findManyByMountPointsInFolder = jest
+      .fn()
+      .mockImplementation((_ids: string[], folder: string) => {
+        if (folder === 'Wardrobe') {
+          return Promise.resolve([
+            {
+              id: 'doc-dressing-gown',
+              mountPointId: 'mount-gary',
+              relativePath: 'Wardrobe/Dressing Gown.md',
+              fileName: 'Dressing Gown.md',
+              fileType: 'markdown',
+              contentSha256: 'x'.repeat(64),
+              plainTextLength: 100,
+              folderId: null,
+              lastModified: 0,
+              createdAt: '2026-04-26T22:01:00.000Z',
+              updatedAt: '2026-04-26T22:06:00.000Z',
+              content: [
+                '---',
+                'title: Dressing Gown',
+                'types:',
+                '- top',
+                '- bottom',
+                'appropriateness: casual, around the house',
+                '---',
+                '',
+                'A silk dressing gown with a sash to tie it.',
+              ].join('\n'),
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+
+    getRepositoriesMock.mockReturnValue({
+      docMountDocuments: {
+        findManyByMountPointsAndPath: jest.fn().mockResolvedValue([]),
+        findManyByMountPointsInFolder,
+      },
+      characters: { findByIdRaw },
+      wardrobe: {
+        findByCharacterIdRaw,
+        createFromVault,
+      },
+      outfitPresets: {
+        findByCharacterIdRaw: findByCharacterIdRawPresets,
+        createFromVault: createFromVaultPreset,
+      },
+    });
+
+    await syncCharacterVaultWardrobe('gary');
+
+    // The vault-only Dressing Gown was promoted into the DB.
+    expect(createFromVault).toHaveBeenCalledTimes(1);
+    expect(createFromVault).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Dressing Gown',
+        types: ['top', 'bottom'],
+        characterId: 'gary',
+      }),
+    );
+
+    // And the projection step did not sweep the file away.
+    const deletedPaths = deleteDatabaseDocumentMock.mock.calls.map(([, p]) => p);
+    expect(deletedPaths).not.toContain('Wardrobe/Dressing Gown.md');
+  });
+
+  it('skips ingestion when every vault item already has a DB row', async () => {
+    const existingItemId = 'a1b2c3d4-e5f6-4789-aabb-ccddeeff0011';
+    const existingItem = {
+      id: existingItemId,
+      characterId: 'gary',
+      title: 'Velvet Robe',
+      description: null,
+      types: ['top' as const, 'bottom' as const],
+      appropriateness: null,
+      isDefault: false,
+      migratedFromClothingRecordId: null,
+      archivedAt: null,
+      createdAt: '2026-04-26T00:00:00.000Z',
+      updatedAt: '2026-04-26T00:00:00.000Z',
+    };
+    const findByCharacterIdRaw = jest.fn().mockResolvedValue([existingItem]);
+    const createFromVault = jest.fn();
+
+    getRepositoriesMock.mockReturnValue({
+      docMountDocuments: {
+        findManyByMountPointsAndPath: jest.fn().mockResolvedValue([]),
+        findManyByMountPointsInFolder: jest
+          .fn()
+          .mockImplementation((_ids: string[], folder: string) => {
+            if (folder === 'Wardrobe') {
+              return Promise.resolve([
+                {
+                  id: 'doc-velvet',
+                  mountPointId: 'mount-gary',
+                  relativePath: 'Wardrobe/Velvet Robe.md',
+                  fileName: 'Velvet Robe.md',
+                  fileType: 'markdown',
+                  contentSha256: 'x'.repeat(64),
+                  plainTextLength: 50,
+                  folderId: null,
+                  lastModified: 0,
+                  createdAt: '2026-04-26T00:00:00.000Z',
+                  updatedAt: '2026-04-26T00:00:00.000Z',
+                  content: [
+                    '---',
+                    `id: ${existingItemId}`,
+                    'title: Velvet Robe',
+                    'types:',
+                    '- top',
+                    '- bottom',
+                    '---',
+                    '',
+                  ].join('\n'),
+                },
+              ]);
+            }
+            return Promise.resolve([]);
+          }),
+      },
+      characters: {
+        findByIdRaw: jest.fn().mockResolvedValue({
+          id: 'gary',
+          readPropertiesFromDocumentStore: true,
+          characterDocumentMountPointId: 'mount-gary',
+        }),
+      },
+      wardrobe: {
+        findByCharacterIdRaw,
+        createFromVault,
+      },
+      outfitPresets: {
+        findByCharacterIdRaw: jest.fn().mockResolvedValue([]),
+        createFromVault: jest.fn(),
+      },
+    });
+
+    await syncCharacterVaultWardrobe('gary');
+
+    expect(createFromVault).not.toHaveBeenCalled();
   });
 });

@@ -95,6 +95,34 @@ export class OutfitPresetsRepository extends AbstractBaseRepository<OutfitPreset
   }
 
   /**
+   * Insert an outfit preset that originated from a character's vault,
+   * preserving its stable id and timestamps. Bypasses
+   * `syncCharacterVaultWardrobe` so the sync chain itself can promote
+   * vault-only presets into the DB without recursing back into another sync.
+   * Symmetric with `WardrobeRepository.createFromVault`.
+   */
+  async createFromVault(preset: OutfitPreset): Promise<OutfitPreset> {
+    return this.safeQuery(
+      () =>
+        this._create(
+          {
+            characterId: preset.characterId ?? null,
+            name: preset.name,
+            description: preset.description ?? null,
+            slots: preset.slots,
+          } as Omit<OutfitPreset, 'id' | 'createdAt' | 'updatedAt'>,
+          {
+            id: preset.id,
+            createdAt: preset.createdAt,
+            updatedAt: preset.updatedAt,
+          },
+        ),
+      'Error ingesting vault-only outfit preset into DB',
+      { outfitPresetId: preset.id, characterId: preset.characterId ?? null, name: preset.name, context: 'wardrobe' }
+    );
+  }
+
+  /**
    * Update an outfit preset
    */
   async update(id: string, data: Partial<OutfitPreset>): Promise<OutfitPreset | null> {
