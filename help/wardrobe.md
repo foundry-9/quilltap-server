@@ -128,6 +128,12 @@ When Quilltap generates images of a character --- whether through the Lantern ba
 
 If no wardrobe items are equipped, the system falls back gracefully to the character's legacy clothing description, so nothing breaks for characters who have not yet been fitted with a proper wardrobe.
 
+## Aurora's Wardrobe Announcements
+
+Whenever a character's outfit changes during a chat --- whether you yourself adjust a slot from the sidebar, gift a freshly-tailored garment with the equip-now option ticked, or the character themselves invokes the `update_outfit_item` tool --- Aurora will quietly take note. After a polite minute of stillness (long enough for you to fuss with all four slots without setting off a flurry of announcements), she steps in with a brief Markdown summary of the present ensemble, addressed to everyone at the table. The wait resets each time another change lands, so she only speaks once the dust has truly settled.
+
+These announcements appear as ordinary chat messages attributed to Aurora and are visible to every character in the conversation, ensuring nobody is left guessing about who is now wearing what.
+
 ## Per-Conversation Avatars
 
 Should you wish it, Quilltap can generate fresh character portraits whenever an outfit changes --- a sort of automated daguerreotype service, if you will. When enabled, each outfit change triggers a background portrait generation that reflects the character's current ensemble. The resulting avatar appears alongside their messages, creating a visual chronicle of the character's sartorial journey through the conversation.

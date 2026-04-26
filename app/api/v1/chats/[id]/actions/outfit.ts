@@ -14,6 +14,7 @@ import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/o
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
+import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 
 const equipSlotSchema = z.object({
   characterId: z.string().min(1, 'characterId is required'),
@@ -144,6 +145,16 @@ export async function handleEquipSlot(
       characterId,
       callerContext: '[Chats v1] outfit-equip',
     });
+
+    // Schedule a debounced Aurora announcement (or push back the existing one)
+    try {
+      await enqueueWardrobeOutfitAnnouncement(ctx.user.id, { chatId, characterId });
+    } catch (announceError) {
+      logger.warn('[Chats v1] Failed to schedule outfit announcement', {
+        chatId, characterId,
+        error: announceError instanceof Error ? announceError.message : String(announceError),
+      });
+    }
 
     return NextResponse.json({ equippedSlots: updatedSlots });
   } catch (error) {

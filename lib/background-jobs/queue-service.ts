@@ -735,6 +735,75 @@ export async function enqueueCharacterAvatarGeneration(
 }
 
 /**
+ * Payload for wardrobe outfit announcement job
+ */
+export interface WardrobeOutfitAnnouncementPayload {
+  /** Chat where the outfit change occurred */
+  chatId: string;
+  /** Character whose outfit changed */
+  characterId: string;
+}
+
+/**
+ * Debounce window for outfit announcements. Each new wardrobe change for the
+ * same (chatId, characterId) pair pushes the existing pending job's
+ * scheduledAt forward by this much, so a flurry of slot edits collapses into
+ * a single announcement once the dust settles.
+ */
+const WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS = 60_000;
+
+/**
+ * Enqueue a wardrobe outfit announcement job, debounced per (chatId, characterId).
+ *
+ * If a pending job already exists for this pair, its scheduledAt is pushed
+ * forward by WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS rather than enqueuing a duplicate.
+ * The job, when it finally fires, reads the chat's current equipped outfit and
+ * posts an Aurora system message visible to everyone in the chat.
+ */
+export async function enqueueWardrobeOutfitAnnouncement(
+  userId: string,
+  payload: WardrobeOutfitAnnouncementPayload,
+): Promise<{ jobId: string; isNew: boolean }> {
+  const repos = getRepositories();
+  const scheduledAt = new Date(Date.now() + WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS);
+
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existing = pendingJobs.find(
+    job => job.type === 'WARDROBE_OUTFIT_ANNOUNCEMENT'
+      && (job.payload as unknown as WardrobeOutfitAnnouncementPayload).characterId === payload.characterId
+  );
+
+  if (existing) {
+    await repos.backgroundJobs.update(existing.id, { scheduledAt: scheduledAt.toISOString() });
+    logger.info('[WardrobeAnnouncement] Rescheduled pending announcement', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      characterId: payload.characterId,
+      jobId: existing.id,
+      newScheduledAt: scheduledAt.toISOString(),
+    });
+    return { jobId: existing.id, isNew: false };
+  }
+
+  const jobId = await enqueueJob(
+    userId,
+    'WARDROBE_OUTFIT_ANNOUNCEMENT',
+    payload as unknown as Record<string, unknown>,
+    { scheduledAt, priority: -1 }
+  );
+
+  logger.info('[WardrobeAnnouncement] Announcement job enqueued', {
+    context: 'background-jobs.queue',
+    chatId: payload.chatId,
+    characterId: payload.characterId,
+    jobId,
+    scheduledAt: scheduledAt.toISOString(),
+  });
+
+  return { jobId, isNew: true };
+}
+
+/**
  * Cleanup old completed jobs
  */
 export async function cleanupOldJobs(daysOld: number = 7): Promise<number> {

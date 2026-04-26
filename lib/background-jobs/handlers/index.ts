@@ -19,6 +19,7 @@ import { handleSceneStateTracking } from './scene-state-tracking';
 import { handleCharacterAvatarGeneration } from './character-avatar';
 import { handleConversationRender } from './conversation-render';
 import { handleMemoryHousekeeping } from './memory-housekeeping';
+import { handleWardrobeOutfitAnnouncement } from './wardrobe-announcement';
 
 /**
  * Job handler function type
@@ -43,6 +44,7 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   CHARACTER_AVATAR_GENERATION: handleCharacterAvatarGeneration,
   CONVERSATION_RENDER: handleConversationRender,
   MEMORY_HOUSEKEEPING: handleMemoryHousekeeping,
+  WARDROBE_OUTFIT_ANNOUNCEMENT: handleWardrobeOutfitAnnouncement,
 };
 
 /**
@@ -71,3 +73,4 @@ export { handleSceneStateTracking };
 export { handleCharacterAvatarGeneration };
 export { handleConversationRender };
 export { handleMemoryHousekeeping };
+export { handleWardrobeOutfitAnnouncement };

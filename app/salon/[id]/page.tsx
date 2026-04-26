@@ -24,7 +24,6 @@ import {
   isAllLLMChat,
 } from '@/lib/chat/turn-manager'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
-import { describeOutfit } from '@/lib/wardrobe/outfit-description'
 
 // Import extracted hooks
 import {
@@ -42,7 +41,6 @@ import {
   useChatControls,
   useSSEStreaming,
   useOutfit,
-  useOutfitNotification,
   type SwipeState,
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
@@ -398,52 +396,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     [chat?.participants]
   )
   const outfit = useOutfit(id, participantCharacterIds)
-  const outfitNotification = useOutfitNotification(id)
 
-  // Refresh outfit state when a tool result comes back (generation completes)
-  // Invalidate wardrobe cache first since tools may have created/gifted new items
-  // Also detect tool-based outfit changes by comparing state before/after streaming
+  // Refresh outfit state when a tool result comes back (generation completes).
+  // Invalidate wardrobe cache first since tools may have created/gifted new items.
+  // The Aurora announcement of any tool-driven change is scheduled server-side
+  // by the wardrobe-update-outfit tool handler, so the client only needs to
+  // refresh its local view of the outfit.
   const wasGeneratingForOutfitRef = useRef(false)
-  const preStreamingOutfitRef = useRef<Record<string, Record<string, { title: string } | null>>>({})
   useEffect(() => {
     const isGenerating = sseStreaming.streaming || sseStreaming.waitingForResponse
-    if (!wasGeneratingForOutfitRef.current && isGenerating) {
-      // Streaming just started — snapshot current outfit state
-      const snapshot: Record<string, Record<string, { title: string } | null>> = {}
-      for (const [charId, charState] of Object.entries(outfit.outfitState)) {
-        snapshot[charId] = { ...charState.items }
-      }
-      preStreamingOutfitRef.current = snapshot
-    }
     if (wasGeneratingForOutfitRef.current && !isGenerating) {
       outfit.invalidateWardrobe()
-      outfit.refreshOutfit().then((newState) => {
-        if (!newState) return
-        // After refresh, compare outfit state to detect tool-based changes
-        const oldSnapshot = preStreamingOutfitRef.current
-        for (const [charId, charState] of Object.entries(newState)) {
-          const oldItems = oldSnapshot[charId]
-          if (!oldItems) continue
-          // Check if any slot changed
-          const changed = (['top', 'bottom', 'footwear', 'accessories'] as const).some(
-            slot => (oldItems[slot]?.title ?? null) !== (charState.items[slot]?.title ?? null)
-          )
-          if (changed) {
-            const participant = chat?.participants.find(p => p.character?.id === charId)
-            const charName = participant?.character?.name
-            if (charName) {
-              const outfitText = describeOutfit({
-                top: charState.items.top?.title ?? null,
-                bottom: charState.items.bottom?.title ?? null,
-                footwear: charState.items.footwear?.title ?? null,
-                accessories: charState.items.accessories?.title ?? null,
-              })
-              outfitNotification.addNotification(charName, 'clothing', outfitText)
-            }
-          }
-        }
-        preStreamingOutfitRef.current = {}
-      })
+      void outfit.refreshOutfit()
     }
     wasGeneratingForOutfitRef.current = isGenerating
   // eslint-disable-next-line react-hooks/exhaustive-deps -- outfit.refreshOutfit and invalidateWardrobe are stable (useCallback)
@@ -453,24 +417,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const handleEquipSlot = useCallback(async (participantId: string, slot: string, itemId: string | null) => {
     const participant = chat?.participants.find(p => p.id === participantId)
     const characterId = participant?.character?.id
-    const characterName = participant?.character?.name
     if (characterId) {
-      const newItems = await outfit.equipSlot(characterId, slot, itemId)
-      if (newItems && characterName) {
-        const outfitText = describeOutfit({
-          top: newItems.top?.title ?? null,
-          bottom: newItems.bottom?.title ?? null,
-          footwear: newItems.footwear?.title ?? null,
-          accessories: newItems.accessories?.title ?? null,
-        })
-        outfitNotification.addNotification(characterName, 'clothing', outfitText)
-      }
+      await outfit.equipSlot(characterId, slot, itemId)
       // If avatar generation is enabled, start polling for the auto-triggered avatar update
       if (chat?.avatarGenerationEnabled) {
         startAvatarPoll(characterId)
       }
     }
-  }, [chat?.participants, chat?.avatarGenerationEnabled, outfit, outfitNotification, startAvatarPoll])
+  }, [chat?.participants, chat?.avatarGenerationEnabled, outfit, startAvatarPoll])
 
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
@@ -1270,9 +1224,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           hideStopButton={modals.showParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
           narrationDelimiters={narrationDelimiters}
-          outfitNotificationHasPending={outfitNotification.hasPending}
-          outfitNotificationCount={outfitNotification.pendingCount}
-          onConsumeOutfitNotifications={outfitNotification.consumeNotifications}
         />
             </>
           }
@@ -1457,13 +1408,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           recipientName={giftTarget.name}
           chatId={id}
           onClose={() => setGiftTarget(null)}
-          onGifted={(giftInfo) => {
+          onGifted={() => {
             outfit.invalidateWardrobe(giftTarget.characterId)
-            if (giftInfo) {
-              const slotsText = giftInfo.types.map(t => `**${t}**`).join(', ')
-              const description = `- received **${giftInfo.title}** (${slotsText})${giftInfo.equipped ? ' — now wearing' : ''}\n`
-              outfitNotification.addNotification(giftTarget.name, 'wardrobe', description)
-            }
             setGiftTarget(null)
             outfit.refreshOutfit()
           }}

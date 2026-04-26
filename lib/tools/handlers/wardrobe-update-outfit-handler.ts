@@ -13,6 +13,7 @@ import { EMPTY_EQUIPPED_SLOTS, buildCoverageSummary, WARDROBE_SLOT_TYPES } from 
 import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 
 export interface WardrobeUpdateOutfitToolContext {
   userId: string;
@@ -184,6 +185,8 @@ export async function executeWardrobeUpdateOutfitTool(
         callerContext: 'wardrobe-update-outfit-handler',
       });
 
+      await scheduleAnnouncement(context, 'preset');
+
       return {
         success: true,
         action: 'equipped',
@@ -314,6 +317,8 @@ export async function executeWardrobeUpdateOutfitTool(
         callerContext: 'wardrobe-update-outfit-handler',
       });
 
+      await scheduleAnnouncement(context, slot);
+
       return {
         success: true,
         action: 'equipped',
@@ -345,6 +350,8 @@ export async function executeWardrobeUpdateOutfitTool(
         characterId: context.characterId,
         callerContext: 'wardrobe-update-outfit-handler',
       });
+
+      await scheduleAnnouncement(context, slot);
 
       return {
         success: true,
@@ -388,6 +395,31 @@ export async function executeWardrobeUpdateOutfitTool(
       coverage_summary: '',
       error: error instanceof Error ? error.message : 'Unknown error during outfit update',
     };
+  }
+}
+
+/**
+ * Best-effort schedule of the debounced Aurora outfit announcement.
+ * Failures are swallowed — the outfit change itself succeeded, the
+ * announcement is purely cosmetic.
+ */
+async function scheduleAnnouncement(
+  context: WardrobeUpdateOutfitToolContext,
+  slot: string,
+): Promise<void> {
+  try {
+    await enqueueWardrobeOutfitAnnouncement(context.userId, {
+      chatId: context.chatId,
+      characterId: context.characterId,
+    });
+  } catch (error) {
+    logger.warn('Failed to schedule wardrobe outfit announcement', {
+      context: 'wardrobe-update-outfit-handler',
+      chatId: context.chatId,
+      characterId: context.characterId,
+      slot,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

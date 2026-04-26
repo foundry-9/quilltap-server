@@ -9,7 +9,6 @@ import { LexicalComposerWrapper } from '@/components/chat/lexical'
 import type { ComposerEditorHandle } from '@/components/chat/lexical'
 import type { AttachedFile, PendingToolResult } from '../types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
-import type { OutfitNotifications } from '../hooks/useOutfitNotification'
 
 // Platform detection for keyboard shortcuts
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
@@ -97,12 +96,6 @@ interface ChatComposerProps {
   onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
   /** Current roleplay template narration delimiters (e.g. '*' or ['[', ']']) */
   narrationDelimiters?: NarrationDelimiters
-  /** Whether there are pending outfit change notifications */
-  outfitNotificationHasPending?: boolean
-  /** Number of pending outfit notifications */
-  outfitNotificationCount?: number
-  /** Consume all pending outfit notifications, returns them and clears state */
-  onConsumeOutfitNotifications?: () => OutfitNotifications
 }
 
 export function ChatComposer({
@@ -166,9 +159,6 @@ export function ChatComposer({
   hideStopButton = false,
   onPendingToolResult,
   narrationDelimiters,
-  outfitNotificationHasPending = false,
-  outfitNotificationCount = 0,
-  onConsumeOutfitNotifications,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
@@ -212,30 +202,6 @@ export function ChatComposer({
       }, 0)
     }
   }, [id, attachedFiles.length, pendingToolResults.length, setInput])
-
-  // Handle outfit notification insertion
-  const handleInsertOutfitNotification = useCallback(() => {
-    if (!onConsumeOutfitNotifications) return
-    const notifications = onConsumeOutfitNotifications()
-    if (Object.keys(notifications).length === 0) return
-
-    // Build the text to insert
-    const parts: string[] = []
-    for (const [name, entry] of Object.entries(notifications)) {
-      const label = entry.type === 'clothing' ? 'clothing change' : 'wardrobe change'
-      parts.push(`${label}: ${name}:\n${entry.description}`)
-    }
-    const notificationText = parts.join('\n').trimEnd()
-
-    // Wrap in a ```wardrobe code block so the model sees the change as
-    // structured data rather than narration. Route through setMarkdown so the
-    // fence is parsed into a real code-block node — prependText would wrap the
-    // whole string in a text node and escape the backticks on serialization.
-    const wrappedText = `\`\`\`wardrobe\n${notificationText}\n\`\`\``
-    const existing = editorRef.current?.getMarkdown() ?? ''
-    const combined = existing.trim() ? `${wrappedText}\n\n${existing}` : wrappedText
-    editorRef.current?.setMarkdown(combined)
-  }, [onConsumeOutfitNotifications])
 
   // Capture the Lexical editor instance when the wrapper mounts
   const composerRefCallback = useCallback(
@@ -439,20 +405,7 @@ export function ChatComposer({
 
           {/* Left side toolbar - gutter tools, then main toolbar buttons */}
           <div className="qt-chat-toolbar-row">
-            {/* Outfit notification button - shown above gutter tools when changes are pending */}
             <div className="qt-composer-gutter-column">
-              {outfitNotificationHasPending && (
-                <button
-                  type="button"
-                  onClick={handleInsertOutfitNotification}
-                  className="qt-composer-outfit-notify-button"
-                  title={`Insert ${outfitNotificationCount} outfit notification${outfitNotificationCount > 1 ? 's' : ''} into message`}
-                >
-                  <span className="qt-composer-outfit-notify-label">Notify</span>
-                  <span className="qt-composer-outfit-notify-icon">👗</span>
-                </button>
-              )}
-
             {/* Gutter tools - Attach, Generate, RNG */}
             <ComposerGutterTools
               onAttachFileClick={handleAttachFileClick}
