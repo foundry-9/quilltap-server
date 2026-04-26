@@ -20,6 +20,10 @@ import { enrichParticipant, handleAddParticipant, handleParticipantUpdate, handl
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/types';
+import {
+  postHostAddAnnouncement,
+  postHostRemoveAnnouncement,
+} from '@/lib/services/host-notifications/writer';
 
 /**
  * Start impersonating a participant
@@ -223,13 +227,20 @@ export async function handleAddParticipantAction(
       const reactivatedParticipant = updatedChat.participants.find(p => p.id === removedParticipant.id);
       const enrichedParticipant = reactivatedParticipant ? await enrichParticipant(reactivatedParticipant, repos) : null;
 
-      const reactivatedCharacterName = reactivatedParticipant?.characterId
-        ? (await repos.characters.findById(reactivatedParticipant.characterId))?.name || 'Unknown'
-        : 'Unknown';
+      let reactivatedCharacter = null;
+      if (reactivatedParticipant?.characterId) {
+        reactivatedCharacter = await repos.characters.findById(reactivatedParticipant.characterId);
+      }
+      const reactivatedCharacterName = reactivatedCharacter?.name || 'Unknown';
       logger.info('[Chats v1] Participant reactivated', {
         chatId, participantId: removedParticipant.id, characterName: reactivatedCharacterName,
         controlledBy,
       });
+
+      if (reactivatedCharacter) {
+        await postHostAddAnnouncement({ chatId, character: reactivatedCharacter });
+      }
+
       return NextResponse.json({ participant: enrichedParticipant, chat: updatedChat }, { status: 200 });
     }
   }
@@ -248,13 +259,18 @@ export async function handleAddParticipantAction(
 
   const enrichedParticipant = newParticipant ? await enrichParticipant(newParticipant, repos) : null;
 
-  const addedCharacterName = validatedData.characterId
-    ? (await repos.characters.findById(validatedData.characterId))?.name || 'Unknown'
-    : 'Unknown';
+  const addedCharacter = validatedData.characterId
+    ? await repos.characters.findById(validatedData.characterId)
+    : null;
+  const addedCharacterName = addedCharacter?.name || 'Unknown';
   logger.info('[Chats v1] Participant added', {
     chatId, participantId: newParticipant?.id, characterName: addedCharacterName,
     controlledBy: validatedData.controlledBy || 'llm',
   });
+
+  if (addedCharacter) {
+    await postHostAddAnnouncement({ chatId, character: addedCharacter });
+  }
 
   return NextResponse.json({ participant: enrichedParticipant, chat: result.chat }, { status: 201 });
 }
@@ -387,6 +403,10 @@ export async function handleRemoveParticipantAction(
     chatId, participantId: validatedData.participantId, characterName,
     previousStatus,
   });
+
+  if (characterName !== 'Unknown') {
+    await postHostRemoveAnnouncement({ chatId, characterName });
+  }
 
   return NextResponse.json({ success: true, chat: result.chat });
 }

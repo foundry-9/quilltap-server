@@ -7,13 +7,17 @@
 import { z } from 'zod';
 import { enrichWithDefaultImage, enrichWithApiKey } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import type { ChatMetadata, ChatParticipantBase } from '@/lib/schemas/types';
+import type { ChatMetadata, ChatParticipantBase, ParticipantStatus } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   updateParticipantSchema,
   addParticipantSchema,
   chatUpdateRequestSchema,
 } from './schemas';
+import {
+  postHostStatusChangeAnnouncement,
+  postHostRemoveAnnouncement,
+} from '@/lib/services/host-notifications/writer';
 
 type Repos = RepositoryContainer;
 
@@ -169,6 +173,19 @@ export async function handleParticipantUpdate(
       const character = await repos.characters.findById(participant.characterId);
       if (character) {
         await recordStatusChangeEvent(chatId, character.name, oldStatus, newStatus, repos);
+        if (newStatus === 'removed') {
+          await postHostRemoveAnnouncement({ chatId, characterName: character.name });
+        } else if (
+          (oldStatus === 'active' || oldStatus === 'silent' || oldStatus === 'absent') &&
+          (newStatus === 'active' || newStatus === 'silent' || newStatus === 'absent')
+        ) {
+          await postHostStatusChangeAnnouncement({
+            chatId,
+            characterName: character.name,
+            oldStatus: oldStatus as ParticipantStatus,
+            newStatus,
+          });
+        }
       }
     }
   }
@@ -185,6 +202,12 @@ export async function handleParticipantUpdate(
       const character = await repos.characters.findById(participant.characterId);
       if (character) {
         await recordStatusChangeEvent(chatId, character.name, oldStatus, newStatus, repos);
+        await postHostStatusChangeAnnouncement({
+          chatId,
+          characterName: character.name,
+          oldStatus: oldStatus as ParticipantStatus,
+          newStatus: newStatus as ParticipantStatus,
+        });
       }
     }
   }

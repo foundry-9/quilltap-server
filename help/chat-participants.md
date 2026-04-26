@@ -211,6 +211,12 @@ Controls auto-response flow:
 
 ## Managing Participants
 
+### Announcements from the Host
+
+Whenever a character is added to the chat, removed from it, or switched between **active**, **silent**, and **absent** states, the Host steps forward and announces the change in the conversation as a synthetic message — visible to you and to every other LLM character in the chat. Add announcements include the new arrival's avatar and either their **identity** (drawn from `identity.md` in the character's vault, when one exists) or their **description** field as a fallback — identity preferred, description used only when there is no vault identity to draw upon. Remove and state-switch announcements are text-only.
+
+Characters whose **System Transparency** is off do not see the Host's messages — the same Staff-filter rule that already hides Lantern, Aurora, Librarian, and Prospero announcements from opaque characters applies here too. You always see them.
+
 ### Adding Characters
 
 1. Click **Add Character** at the bottom of the sidebar
