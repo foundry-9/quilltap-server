@@ -15,6 +15,7 @@ import {
   chatUpdateRequestSchema,
 } from './schemas';
 import {
+  postHostAddAnnouncement,
   postHostStatusChangeAnnouncement,
   postHostRemoveAnnouncement,
 } from '@/lib/services/host-notifications/writer';
@@ -395,12 +396,30 @@ export async function processChatUpdates(
     );
     if ('error' in result) return result;
     updatedChat = result.chat;
+
+    if (validatedData.addParticipant.characterId) {
+      const addedCharacter = await repos.characters.findById(validatedData.addParticipant.characterId);
+      if (addedCharacter) {
+        await postHostAddAnnouncement({ chatId, character: addedCharacter });
+      }
+    }
   }
 
   if (validatedData.removeParticipantId) {
+    const removedParticipant = updatedChat.participants.find((p) => p.id === validatedData.removeParticipantId);
+    let removedCharacterName: string | null = null;
+    if (removedParticipant?.characterId) {
+      const character = await repos.characters.findById(removedParticipant.characterId);
+      if (character) removedCharacterName = character.name;
+    }
+
     const result = await handleRemoveParticipant(chatId, validatedData.removeParticipantId, repos);
     if ('error' in result) return result;
     updatedChat = result.chat;
+
+    if (removedCharacterName) {
+      await postHostRemoveAnnouncement({ chatId, characterName: removedCharacterName });
+    }
   }
 
   return { chat: updatedChat };
