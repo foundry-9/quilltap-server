@@ -113,8 +113,8 @@ export const MessageEventSchema = z.object({
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage: z.boolean().nullable().optional(),
-  /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'prospero' / 'host' = reserved for upcoming agent and host-of-the-Salon announcements. */
-  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'prospero', 'host']).nullable().optional(),
+  /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' / 'host' = reserved for upcoming agent and host-of-the-Salon announcements. */
+  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host']).nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;

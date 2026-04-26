@@ -35,8 +35,8 @@ export interface Message {
   targetParticipantIds?: string[] | null
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage?: boolean
-  /** Personified feature that authored this message (e.g., 'lantern' for Lantern announcements, 'aurora' for character-avatar refreshes, 'librarian' for Document Mode open/save announcements, 'host' for Salon participation announcements) */
-  systemSender?: 'lantern' | 'aurora' | 'librarian' | 'prospero' | 'host' | null
+  /** Personified feature that authored this message (e.g., 'lantern' for Lantern announcements, 'aurora' for character-avatar refreshes, 'librarian' for Document Mode open/save announcements, 'concierge' for dangerous-content classification announcements, 'host' for Salon participation announcements) */
+  systemSender?: 'lantern' | 'aurora' | 'librarian' | 'concierge' | 'prospero' | 'host' | null
   /** Danger flags from content classification */
   dangerFlags?: Array<{
     category: string

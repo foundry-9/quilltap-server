@@ -923,6 +923,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (message.systemSender === 'librarian') {
       return { name: 'The Librarian', title: null, avatarUrl: '/images/avatars/librarian-avatar.webp', defaultImage: null }
     }
+    if (message.systemSender === 'concierge') {
+      return { name: 'The Concierge', title: null, avatarUrl: '/images/avatars/concierge-avatar.webp', defaultImage: null }
+    }
     if (message.systemSender === 'host') {
       return { name: 'The Host', title: null, avatarUrl: '/images/avatars/host-avatar.webp', defaultImage: null }
     }
