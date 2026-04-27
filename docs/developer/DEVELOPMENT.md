@@ -291,7 +291,7 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
    - DRY
    - KISS
    - YAGNI
-4. Ensure that API endpoints adhere to the `/api/v{version}/{entityname}` standard to try to streamline and minimize API maintenance
+4. Ensure that API endpoints adhere to the `/api/v{version}/{entityname}` standard (currently `/api/v1/{entityname}`), with only these non-versioned exceptions: `/api/health`, `/api/plugin-routes/[...path]`, and `/api/themes/*`.
 5. Run a test for dead code and refactor that out. Use `npx knip` if it's helpful. We have a [dead code report](DEAD-CODE-REPORT.md) (in the same directory) and that should be updated.
 6. Ensure that the debug logging we always create for new work has been removed unless we still need it.
 7. Verify that new UI components that were created adhere to the standard of using `qt-*` theme utility classes
