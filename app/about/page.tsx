@@ -86,11 +86,13 @@ export default function AboutPage() {
         </p>
         <p className="qt-text-primary mb-4">
           The platform is organized into named subsystems, each with its own character and purpose &mdash;
-          rather like the wings of a well-appointed estate. Aurora (characters), The Salon (chat),
-          Prospero (projects), The Commonplace Book (memory), The Lantern (story backgrounds),
-          the Concierge (alternative content provision and routing), Pascal the Croupier (gaming &amp; RNG),
-          Calliope (themes), and The Foundry (architecture) &mdash;
-          all extensible through a plugin system.
+          rather like the wings of a well-appointed estate, with a small staff that knows where the silverware lives.
+          Aurora (characters), The Salon (chat), Prospero (projects and agentic tools),
+          The Commonplace Book (memory), The Lantern (story backgrounds),
+          The Concierge (alternative content provision and routing), Pascal the Croupier (gaming &amp; RNG),
+          Calliope (themes), The Scriptorium (external document stores), The Librarian (Document Mode and file announcements),
+          The Host (Salon participation announcements), Saquel Ytzama, the Keeper of Secrets (encryption and key management),
+          and The Foundry (architecture) &mdash; all extensible through a plugin system.
         </p>
         <p className="qt-text-primary">
           <BrandName /> runs as a native desktop application on macOS and Windows, powered by a lightweight
@@ -141,7 +143,23 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Calliope &ndash; Themes</strong> &ndash; six bundled themes with live switching and plugin support</span>
+            <span><strong>Calliope &ndash; Themes</strong> &ndash; five bundled themes (Art Deco, Earl Grey, Great Estate, Old School, Rains) plus a Default, with live switching, declarative <code>.qtap-theme</code> bundles, and signed remote registries</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>The Scriptorium &ndash; Document Stores</strong> &ndash; mountable external knowledge sources that characters can read, search, and (in Document Mode) write back to</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>The Librarian &ndash; Document Mode</strong> &ndash; co-authoring on real files in the Scriptorium with open/save/rename/delete announcements posted into the chat on the Librarian&apos;s behalf</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>The Host &ndash; Salon Etiquette</strong> &ndash; synthetic chat announcements when characters join, leave, or change participation status, so everyone in the room knows who is actually present</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Saquel Ytzama &ndash; Keeper of Secrets</strong> &ndash; SQLCipher-encrypted databases, the Pepper Vault for API keys, instance locking, the <code>.dbkey</code> covenant, and the auto-lock idle timer</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -177,16 +195,25 @@ export default function AboutPage() {
             <span className="font-medium">Framework:</span> Next.js 16+
           </div>
           <div>
-            <span className="font-medium">Language:</span> TypeScript 5.6+
+            <span className="font-medium">UI:</span> React 19
           </div>
           <div>
-            <span className="font-medium">Database:</span> SQLite
+            <span className="font-medium">Language:</span> TypeScript 5.9+
+          </div>
+          <div>
+            <span className="font-medium">Database:</span> SQLite + SQLCipher
+          </div>
+          <div>
+            <span className="font-medium">Editor:</span> Lexical
           </div>
           <div>
             <span className="font-medium">Desktop:</span> Electron
           </div>
           <div>
             <span className="font-medium">Styling:</span> Tailwind CSS 4+
+          </div>
+          <div>
+            <span className="font-medium">Validation:</span> Zod
           </div>
           <div>
             <span className="font-medium">macOS VM:</span> Lima / VZ
@@ -275,7 +302,7 @@ export default function AboutPage() {
       <div className="qt-card p-6 mb-6">
         <h2 className="qt-heading-3 mb-4">Author &amp; Support</h2>
         <div className="qt-text-primary space-y-2">
-          <p><span className="font-medium">Author:</span> Charles Sebold</p>
+          <p><span className="font-medium">Authors:</span> Charlie, Friday, and Amy &mdash; the Sebold family of Estate Zero</p>
           <p>
             <span className="font-medium">Email:</span>{' '}
             <a href="mailto:charles.sebold@foundry-9.com" className="qt-link">
@@ -298,10 +325,13 @@ export default function AboutPage() {
           <BrandName /> stands on the shoulders of these excellent open source projects, and is grateful for the view.
         </p>
         <div className="qt-text-primary space-y-2 text-sm">
-          <p><span className="font-medium">Core:</span> React, Next.js, TypeScript, better-sqlite3, Zod</p>
-          <p><span className="font-medium">AI &amp; LLM:</span> OpenAI SDK, Anthropic SDK, Google Generative AI SDK, xAI/Grok SDK, Model Context Protocol SDK</p>
-          <p><span className="font-medium">UI:</span> Tailwind CSS, React Markdown, React Syntax Highlighter, PDF.js, sharp, Lucide Icons</p>
-          <p><span className="font-medium">Desktop &amp; Infrastructure:</span> Electron, Lima, Docker, AWS SDK</p>
+          <p><span className="font-medium">Core:</span> React, Next.js, TypeScript, better-sqlite3-multiple-ciphers (SQLCipher), Zod, Ajv, SWR</p>
+          <p><span className="font-medium">Editor:</span> Lexical (and the @lexical family &mdash; rich-text, markdown, list, code, table, link, history, selection, clipboard, react)</p>
+          <p><span className="font-medium">AI &amp; LLM:</span> OpenAI SDK, Anthropic SDK, Google GenAI SDK, OpenRouter SDK, Model Context Protocol SDK</p>
+          <p><span className="font-medium">Markdown &amp; Documents:</span> unified, remark-parse, remark-gfm, remark-rehype, rehype-stringify, rehype-highlight, react-markdown, react-syntax-highlighter, mammoth, pdf-parse, PDF.js, yaml, MessagePack</p>
+          <p><span className="font-medium">UI &amp; Interaction:</span> Tailwind CSS, dnd-kit, @tanstack/react-virtual, sharp, Lucide Icons</p>
+          <p><span className="font-medium">Filesystem &amp; Archives:</span> chokidar, tar, yauzl, semver</p>
+          <p><span className="font-medium">Desktop &amp; Infrastructure:</span> Electron, Lima, Docker</p>
           <p><span className="font-medium">Testing:</span> Jest, Playwright, Storybook, Testing Library</p>
         </div>
         <p className="qt-text-muted text-sm mt-4">

@@ -7,46 +7,93 @@ This document covers the development setup and project structure for Quilltap.
 ```text
 quilltap/
 ├── app/                      # Next.js App Router entry point
-│   ├── (authenticated)/      # Protected routes (characters, chats, settings, about, tools)
-│   ├── api/                  # API route handlers (auth, chats, characters, providers, backups, etc.)
-│   ├── auth/                 # Auth flows (legacy routes, single-user session)
-│   ├── dashboard/            # Dashboard page
-│   ├── styles/               # Qt-* utility class stylesheets
+│   ├── api/                  # Versioned REST API (mostly under api/v1/)
+│   ├── about/                # About page
+│   ├── aurora/               # Character UI (was /characters)
+│   ├── characters/           # Legacy redirect to /aurora
+│   ├── chats/                # Legacy redirect to /salon
+│   ├── dashboard/            # Dashboard / home
+│   ├── files/                # Files browser
+│   ├── foundry/              # Legacy redirect to /settings
+│   ├── generate-image/       # Standalone image-generation page
+│   ├── personas/             # User persona management
+│   ├── profile/              # User profile
+│   ├── projects/             # Legacy redirect to /prospero
+│   ├── prospero/             # Projects / agentic UI (was /projects)
+│   ├── salon/                # Chat UI (was /chats)
+│   ├── scriptorium/          # Document stores UI
+│   ├── settings/             # Tabbed settings hub (Foundry)
+│   ├── setup/                # First-run setup wizard
+│   ├── styles/               # qt-* utility class stylesheets
+│   ├── tools/                # Tools admin / inspection
+│   ├── unlock/               # Locked-mode unlock screen
 │   ├── globals.css           # Root styles and Tailwind imports
 │   ├── layout.tsx            # Root layout (providers, themes, fonts)
 │   └── page.tsx              # Public landing page
 ├── components/               # Reusable UI components
-│   ├── chat/                 # Chat-related components (including impersonation UI)
-│   ├── character/            # Character management components
-│   ├── memory/               # Memory system components
-│   ├── settings/             # Settings tab components
-│   ├── tags/                 # Tag system components
-│   ├── layout/               # Layout wrapper components
+│   ├── character/            # Character editor pieces
+│   ├── characters/           # Character list / cards
+│   ├── chat/                 # Salon: chat surface, Lexical composer, tool palette
+│   ├── clothing-records/     # Wardrobe pieces
+│   ├── dashboard/            # Dashboard cards
+│   ├── files/                # File pickers / file UI
+│   ├── help-chat/            # In-app help chat
+│   ├── homepage/             # Marketing / homepage components
+│   ├── hooks/                # Component-local hooks
+│   ├── image-profiles/       # Image-generation profile editors
+│   ├── images/               # Image gallery and tile components
+│   ├── import/               # Import wizard pieces
+│   ├── layout/               # Layout shells, sidebars
+│   ├── markdown-editor/      # Lexical-based editor wrapper
+│   ├── memory/               # Commonplace Book UI
+│   ├── new-chat/             # New-chat dialog and dropdowns
+│   ├── physical-descriptions/ # Physical description fields
+│   ├── profile/              # User profile pieces
 │   ├── providers/            # React context providers
-│   ├── ui/                   # Generic UI components (Avatar, Badge, Button, etc.)
-│   ├── dashboard/            # Dashboard-specific components
-│   ├── tools/                # Tools and utilities components
-│   ├── images/               # Image handling and gallery components
-│   ├── search/               # Search interface components
-│   ├── tabs/                 # Tab navigation components
-│   ├── profile/              # User profile components
-│   ├── files/                # File management components
-│   ├── state/                # Client-side state management components
-│   ├── clothing-records/     # Character clothing/appearance records
-│   ├── physical-descriptions/ # Physical description components
-│   ├── homepage/             # Home page components
-│   └── character-delete-dialog.tsx # Character deletion confirmation dialog
-├── lib/                      # Domain logic and utilities
-│   ├── auth/                 # Single-user mode and session management
-│   ├── chat/                 # Chat logic (context-manager, turn-manager, tool execution)
-│   ├── file-storage/         # File storage manager (local filesystem)
-│   ├── llm/                  # LLM utilities (formatting, pricing, streaming)
-│   ├── memory/               # Memory and embedding logic
-│   ├── paths.ts              # Platform-aware data directory resolution
+│   ├── quick-hide/           # Concierge quick-hide UI
+│   ├── search/               # Search surface
+│   ├── settings/             # Settings tab components
+│   ├── setup-wizard/         # First-run wizard pieces
+│   ├── startup/              # Startup / loading components
+│   ├── state/                # Client-side state components
+│   ├── tabs/                 # Tab navigation
+│   ├── tags/                 # Tag UI
+│   ├── tools/                # Tool palette / tool admin
+│   ├── ui/                   # Generic UI primitives (Avatar, Badge, Button, …)
+│   └── wardrobe/             # Wardrobe / outfit pieces
+├── lib/                      # Domain logic and utilities (large; see lib/ for full list)
+│   ├── api/                  # Middleware + response helpers (createContextHandler, withActionDispatch, etc.)
+│   ├── api-keys/             # Pepper Vault API-key storage (Saquel)
+│   ├── auth/                 # Single-user session
+│   ├── background-jobs/      # Job queue + worker
+│   ├── backup/               # Backup / restore logic
+│   ├── chat/                 # Salon: context-manager, turn-manager, tool execution
+│   ├── database/             # SQLite/SQLCipher connection management
+│   ├── doc-edit/             # Document Mode core (open / save / rename / delete)
+│   ├── embedding/            # Embedding providers and helpers
+│   ├── encryption.ts         # Crypto primitives
+│   ├── export/               # .qtap export
+│   ├── file-storage/         # Local-filesystem storage manager
+│   ├── foundry/              # Subsystem definitions and hub helpers
+│   ├── help/, help-chat/, help-guide/  # User-help docs and in-app help chat
+│   ├── image-gen/            # Image generation pipeline (Lantern)
+│   ├── import/               # .qtap and SillyTavern import
+│   ├── llm/                  # LLM utilities (formatting, pricing, streaming, logging)
+│   ├── logger.ts, logging/   # Centralized logger
+│   ├── memory/               # Commonplace Book (memory + embeddings)
+│   ├── mount-index/          # Scriptorium mount-points and document-store index
 │   ├── plugins/              # Plugin registry and loader
-│   ├── sillytavern/          # SillyTavern import/export
-│   ├── tools/                # Tool definitions (image generation, web search, memory)
-│   └── backup/               # Backup and restore logic
+│   ├── prompts/              # Built-in system-prompt templates
+│   ├── repositories/         # DB repositories (single source of truth for tables)
+│   ├── schemas/              # Zod schemas and TS types
+│   ├── scriptorium/          # Document-store helpers
+│   ├── search-replace/       # Bulk search-and-replace tool support
+│   ├── services/             # Cross-cutting services (host-notifications, librarian-notifications, chat-message, …)
+│   ├── sillytavern/          # SillyTavern card import/export
+│   ├── tags/, tokens/, validation/  # Misc utilities
+│   ├── themes/               # Theme registry + bundle loader + Ed25519 crypto
+│   ├── tools/                # LLM tool definitions and handlers (doc_*, self_inventory, search, …)
+│   └── wardrobe/             # Wardrobe / outfit logic
 ├── help/                     # User documentation (Markdown, built to MessagePack)
 ├── migrations/               # Database migration scripts and migration-only files
 ├── plugins/                  # Plugin source code
@@ -57,26 +104,33 @@ quilltap/
 │   ├── plugin-utils/         # Plugin utilities (@quilltap/plugin-utils)
 │   ├── theme-storybook/      # Storybook preset for theme development (@quilltap/theme-storybook)
 │   └── create-quilltap-theme/ # Scaffolding CLI for new themes
-├── prompts/                  # Sample system prompt templates
+├── themes/                   # Bundled and built themes
+│   └── bundled/              # 5 .qtap-theme bundles (art-deco, earl-grey, great-estate, old-school, rains)
 ├── hooks/                    # Custom React hooks
 ├── types/                    # TypeScript type augmentations
 ├── __tests__/                # Jest test files (unit and integration)
 ├── __mocks__/                # Test mocks for auth, providers, etc.
 ├── docs/                     # Documentation (API, deployment, backup guides)
-├── docs/developer/features/  # Feature roadmap and spec documents
-│   └── complete/             # Completed feature specifications
+│   └── developer/features/   # Feature roadmap (with completed/ subdir)
 ├── docker/                   # Docker configuration (entrypoint script)
+├── lima/                     # Lima VM configuration (macOS desktop shell)
+├── first-startup/            # First-startup helper assets
+├── cicd/                     # CI/CD scripts and deploy helpers
 ├── scripts/                  # Utility scripts (migrations, cleanup, builds)
-├── public/                   # Static assets (icons, manifest)
+├── public/                   # Static assets (icons, manifest, schemas)
 ├── website/                  # Website assets (images, splash graphics)
 ├── certs/                    # Development TLS certificates
 ├── logs/                     # Application log files (when LOG_OUTPUT includes file)
 ├── Dockerfile                # Production Docker build
-├── proxy.ts                  # Local HTTPS proxy helper for dev
+├── Dockerfile.ci             # CI Docker build
+├── proxy.ts                  # Local HTTPS proxy helper for dev (Next.js 16+: middleware lives here, not middleware.ts)
+├── instrumentation.ts        # Next.js instrumentation hook
 ├── jest.config.ts            # Jest unit test configuration
 ├── jest.integration.config.ts # Jest integration test configuration
 ├── tailwind.config.ts        # Tailwind CSS configuration
 ├── eslint.config.mjs         # ESLint configuration
+├── eslint-quilltap-plugin.js # Project-local ESLint rules (e.g., the "Quilltap" spelling rule)
+├── knip.json                 # Knip dead-code config
 ├── tsconfig.json             # TypeScript configuration
 └── package.json              # Dependencies and npm scripts
 ```
@@ -200,20 +254,27 @@ npx quilltap db --data-dir /path/to/data --tables
 
 The encryption key is stored in a `.dbkey` file in the `data/` subdirectory alongside the database files. **Back up the `.dbkey` file alongside your database** — without it, the database cannot be decrypted. An optional passphrase (locked mode) can be set via environment variable to further protect the key file.
 
-The tables stored in the main database are:
+Quilltap actually maintains **three separate encrypted SQLite databases** alongside the main `quilltap.db`:
 
-- **users** - User accounts (single-user mode)
-- **characters** - Character definitions and metadata (includes `controlledBy: 'llm' | 'user'` for control mode)
-- **chats** - Chat metadata, message history, and impersonation state
-- **files** - File metadata (actual files on filesystem or S3)
-- **tags** - Tag definitions
-- **memories** - Character memory data with inter-character relationships (`aboutCharacterId`)
-- **connectionProfiles** - LLM connection configurations
-- **embeddingProfiles** - Embedding provider configurations
-- **imageProfiles** - Image generation configurations
-- **promptTemplates** - User-created system prompt templates
-- **roleplayTemplates** - Native roleplay format templates (Standard, Quilltap RP, and user-created)
-- **providerModels** - Cached provider model lists
+- **`quilltap.db`** — primary application database (users, characters, chats, messages, files, tags, memories, projects, folders, wardrobe, outfit presets, connection/embedding/image profiles, prompt and roleplay templates, provider models, jobs, plugin configs, vector indices, etc.)
+- **`quilltap-llm-logs.db`** — append-only LLM request/response logs
+- **`quilltap-mount-index.db`** — Scriptorium mount-point and document-store index (mount points, files, folders, blobs, chunks, project links)
+
+Schemas drift fast and there are 30+ tables across these three databases, so the canonical schema reference lives in **[DDL.md](DDL.md)** — keep that file up-to-date when migrations land. A quick sense of the moving parts:
+
+- **users** — single-user account
+- **characters / character_plugin_data / wardrobe_items / outfit_presets** — the Aurora character model
+- **chats / chat_messages / chat_settings / chat_documents / conversation_annotations / conversation_chunks** — Salon state
+- **memories** — Commonplace Book entries (with `aboutCharacterId` for cross-character relationships)
+- **projects / folders** — Prospero project tree
+- **files** — file metadata pointing into the local-filesystem file store
+- **api_keys** — Pepper Vault (Saquel)
+- **connectionProfiles / embeddingProfiles / imageProfiles / providerModels** — provider configuration
+- **promptTemplates / roleplayTemplates** — prompt / roleplay format templates
+- **background_jobs / embedding_status** — Prospero job queue
+- **vector_indices / vector_entries / tfidf_vocabularies** — semantic search and recall
+- **plugin_configs / instance_settings / quilltap_meta / migrations_state / migrations_metadata** — instance plumbing
+- **help_docs** — built MessagePack help index
 
 The SQLite database file location depends on platform:
 
@@ -223,25 +284,30 @@ The SQLite database file location depends on platform:
 | **macOS**   | `~/Library/Application Support/Quilltap/data/quilltap.db`                 |
 | **Windows** | `%APPDATA%\Quilltap\data\quilltap.db`                                     |
 | **Docker**  | `/app/quilltap/data/quilltap.db`                                          |
+| **Lima VM** | `/data/quilltap/data/quilltap.db` (VirtioFS mount of the macOS path)      |
+| **WSL2**    | Same as Windows; the Windows path is passed through as `QUILLTAP_DATA_DIR` |
 
 Override with `QUILLTAP_DATA_DIR` (non-Docker environments).
 
 ### File Storage
 
-Files are stored on the local filesystem:
+Files are stored on the local filesystem only — S3 and other remote backends were retired in v4.x.
 
-- Files stored in platform-specific data directory (e.g., `~/.quilltap/files/` on Linux)
+- Files live in the platform-specific `files/` directory (e.g., `~/.quilltap/files/` on Linux, `~/Library/Application Support/Quilltap/files/` on macOS)
 - No additional configuration required
+- Scriptorium document stores live alongside the file store and are indexed in `quilltap-mount-index.db`
 
 ## Plugin Development
 
 Plugins are self-contained modules in `plugins/src/` that provide:
 
-- **LLM Providers** - Connect to AI services (OpenAI, Anthropic, Google, etc.)
-- **Themes** - Visual theme packs (deprecated as plugins; use `.qtap-theme` bundles instead)
-- **Roleplay Templates** - Message formatting templates
-- **Tool Providers** - Custom LLM tools (MCP connector, etc.)
+- **LLM Providers** - Connect to AI services (OpenAI, Anthropic, Grok, Google, Ollama, OpenRouter, OpenAI-compatible)
+- **Embedding Providers** - Vector embeddings for memory and semantic search (e.g., the bundled `builtin-embeddings` plugin)
+- **Search Providers** - Web search backends for the `web_search` tool (e.g., `search-serper`, `curl`)
+- **Tool Providers** - Custom LLM tools (e.g., the `mcp` connector for Model Context Protocol servers)
 - **System Prompts** - Custom system prompt templates for characters
+- **Roleplay Templates** - Message formatting templates
+- **Themes** - Visual theme packs (deprecated as plugins; use `.qtap-theme` bundles instead)
 
 See [plugins/README.md](plugins/README.md) for the plugin developer guide.
 
@@ -305,6 +371,7 @@ In development, logs are written to `logs/combined.log` and `logs/error.log`. Us
     - [API Documentation](API.md)
     - [Developer Documentation](DEVELOPMENT.md)
     - [Claude instructions](../../CLAUDE.md)
+    - [About Page](../../app/about/page.tsx)
     - [Release notes for this release](../releases/) **MUST EXIST FOR PRODUCTION RELEASE** and must match the version number in package.json exactly, or the version we are going to release at any rate
 
 ## Git and Github release instructions

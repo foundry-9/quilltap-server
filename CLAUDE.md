@@ -12,10 +12,10 @@ Quilltap is a self-hosted AI workspace for writers, worldbuilders, roleplayers, 
 - **Build Tools**: Next.js
 - **Language**: TypeScript
 - **Package Manager**: npm
-- **Testing**: Jest and coverage tools (Istanbul/nyc), Playwright
+- **Testing**: Jest (with native coverage) and Playwright
 - **Data Storage**: SQLite with SQLCipher encryption at rest. Uses `better-sqlite3-multiple-ciphers` driver (aliased as `better-sqlite3`). Data models are defined as TypeScript interfaces with Zod schemas.
 - **File Storage**: local filesystem only
-- **AI and LLM Services**: OpenAI, Anthropic, xAI/Grok, Google, OpenRouter
+- **AI and LLM Services**: OpenAI, Anthropic, Grok (xAI), Google, Ollama, OpenRouter, and any OpenAI-compatible endpoint
 - **Design Documentation**: Storybook
 - **API Structure**: Versioned REST API under `/api/v1/` with action dispatch pattern
 - **User Documentation**: Found in `/help/` and maintained and searchable using MessagePack
@@ -136,16 +136,19 @@ This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", a
 
 ### Feature Names
 
-- **The Concierge** - the dangerous content tracking/rerouting/hiding system
-- **The Commonplace Book** - the memory system that characters have, a self-managed RAG
-- **The Lantern** - the story backgrounds subsystem, that can send context to image providers and put them up as backgrounds for chats or projects
-- **Prospero** - the agentic and tool-using systems, and the way LLMs work — UI route: `/prospero` (was `/projects`)
-- **Aurora** - the complex character model and how it interacts with the prompts — UI route: `/aurora` (was `/characters`)
-- **Calliope** - the UX/UI and themes systems
-- **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/settings` (was `/foundry`, `/tools`); all settings now live on a single tabbed page with 7 tabs
+- **The Concierge** - the dangerous content tracking/rerouting/hiding system — merged into Chat tab at `/settings?tab=chat`
+- **The Commonplace Book** - the memory system that characters have, a self-managed RAG — settings at `/settings?tab=memory`
+- **The Lantern** - the story backgrounds subsystem, that can send context to image providers and put them up as backgrounds for chats or projects — settings at `/settings?tab=images`
+- **Prospero** - the agentic and tool-using systems, and the way LLMs work — UI route: `/prospero` (was `/projects`); settings tab `/settings?tab=system` (task queue, capabilities, LLM logs)
+- **Aurora** - the character model on the UI side (UI route: `/aurora` — was `/characters`) and the roleplay-template / prompt configuration on the settings side (`/settings?tab=templates`)
+- **Calliope** - the UX/UI and themes systems — settings at `/settings?tab=appearance`
+- **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/settings` (was `/foundry`, `/tools`); settings live on a single tabbed page (current tabs: providers, chat, system, templates, memory, images, appearance — see `lib/foundry/subsystem-defaults.ts` for the source of truth)
 - **The Salon** - the chat interface — UI route: `/salon` (was `/chats`)
+- **The Scriptorium** - external document stores / mountable knowledge sources — UI route: `/scriptorium`; API stays at `/api/v1/mount-points`
 - **Pascal the Croupier** - the RNG and game state tracking system — merged into Chat tab at `/settings?tab=chat`
 - **Saquel Ytzama, the Keeper of Secrets** - the encryption, API key management, and secrets system — merged into Data & System tab at `/settings?tab=system`
+- **The Librarian** - synthetic chat-message author for Document Mode events (open/save/rename/delete) and character-driven `doc_*` tool calls; speaks via `systemSender: 'librarian'`
+- **The Host** - synthetic chat-message author for Salon participation events (character add/remove/status change); speaks via `systemSender: 'host'`
 
 Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes (`/foundry/*`) redirect to the appropriate `/settings` tab.
 
@@ -157,7 +160,13 @@ Rules for adding or updating these assets:
 
 - **Always WebP.** Convert source PNGs with `cwebp -q 82 -m 6 -mt <in>.png -o <out>.webp` (or better) and delete the PNG after verifying the WebP. Don't check multi-MB PNG originals into the repo — these are bundled with the app and every byte ships.
 - **Filename pattern:** `<feature>-avatar.webp`, all lowercase, hyphen-separated. The feature name should match how the feature is referred to elsewhere (e.g. `lantern-avatar.webp`, not `the-lantern-avatar.webp`).
-- **Pair new avatars with new `systemSender` enum values.** `MessageEventSchema` in `lib/schemas/chat.types.ts` and the matching SQLite column on `chat_messages` both list the allowed senders. Adding `'concierge'` or `'prospero'` means updating the Zod enum in both places, adding a branch to `getMessageAvatar`, and including the new value in `public/schemas/qtap-export.schema.json`. Current personified senders: `lantern`, `aurora`, `librarian` (Document Mode open/save/rename/delete announcements, plus character `doc_delete_file` / `doc_create_folder` / `doc_delete_folder` tool calls).
+- **Pair new avatars with new `systemSender` enum values.** `MessageEventSchema` in `lib/schemas/chat.types.ts` and the matching SQLite column on `chat_messages` both list the allowed senders. Adding a new sender means updating the Zod enum in both places, adding a branch to `getMessageAvatar`, and including the new value in `public/schemas/qtap-export.schema.json`. Current `systemSender` enum (`lib/schemas/chat.types.ts`): `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`. (A `pascal-avatar.webp` exists on disk but Pascal does not currently author synthetic messages — the avatar is reserved for future use.) Sender responsibilities:
+  - `lantern` — image-pipeline announcements (background generation, etc.)
+  - `aurora` — character avatar refresh / wardrobe announcements
+  - `librarian` — Document Mode open/save/rename/delete announcements, plus character `doc_delete_file` / `doc_create_folder` / `doc_delete_folder` / `doc_copy_file` tool calls
+  - `concierge` — dangerous-content classification announcements
+  - `host` — Salon participation announcements (character add/remove/status change)
+  - `prospero` — reserved for upcoming agentic/tool-use announcements
 
 ## Claude-specific instructions
 
