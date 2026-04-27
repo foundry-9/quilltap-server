@@ -4,6 +4,10 @@
 
 ### 4.3-dev
 
+#### Maintenance
+
+- **Plugin package hygiene — `@quilltap/plugin-types` now explicitly declared in all plugins that use it**: Six plugins (`qtap-plugin-anthropic`, `qtap-plugin-google`, `qtap-plugin-grok`, `qtap-plugin-ollama`, `qtap-plugin-openai`, `qtap-plugin-openrouter`) imported `@quilltap/plugin-types` types without listing it in their own `package.json`, relying on the transitive `plugin-utils → plugin-types` chain. Added `"@quilltap/plugin-types": "^2.3.0"` to each plugin's `dependencies` so that external plugin developers following these as reference implementations see a correct, self-contained dependency declaration. No runtime behavior change — all imports were `import type` (erased at compile time). (`plugins/dist/qtap-plugin-anthropic/package.json`, `plugins/dist/qtap-plugin-google/package.json`, `plugins/dist/qtap-plugin-grok/package.json`, `plugins/dist/qtap-plugin-ollama/package.json`, `plugins/dist/qtap-plugin-openai/package.json`, `plugins/dist/qtap-plugin-openrouter/package.json`)
+
 #### Style
 
 - **qt-* compliance pass on all new UI components since 4.3-dev start**: Updated `qt-page-title` CSS to match the established `text-3xl font-semibold leading-tight` pattern used across all page `<h1>` headings (the previous definition `text-2xl font-bold tracking-tight` was never applied anywhere). Applied `qt-page-title`, `qt-section-title`, `qt-label`, `qt-body`, `qt-body-sm`, `qt-dialog-title`, and `qt-action` in place of raw Tailwind typography classes in: `app/scriptorium/page.tsx`, `app/scriptorium/[id]/page.tsx`, `app/scriptorium/[id]/components/FileTable.tsx`, `app/scriptorium/components/DocumentStoreCard.tsx`, `app/scriptorium/components/CreateDocumentStoreDialog.tsx`, `app/scriptorium/components/EditDocumentStoreDialog.tsx`, `app/prospero/[id]/components/ScenariosCard.tsx`, `app/prospero/[id]/components/DocumentStoresCard.tsx`, `components/new-chat/CharacterPickerPanel.tsx`, `components/new-chat/NewChatForm.tsx`, `components/new-chat/NewChatModal.tsx`. (`app/styles/qt-components/_typography.css`)
