@@ -24,7 +24,7 @@ export function ErrorAlert({
     <div className={`qt-alert-error ${className}`}>
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1">
-          <p className="text-sm font-medium">{message}</p>
+          <p className="qt-label">{message}</p>
         </div>
         {onRetry && (
           <button

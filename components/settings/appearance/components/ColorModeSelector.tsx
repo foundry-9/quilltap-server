@@ -86,7 +86,7 @@ export function ColorModeSelector({
             onClick={() => !disabled && onChange(option.value as ColorMode)}
             disabled={disabled}
             className={`
-              flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium
+              flex-1 flex items-center justify-center gap-2 px-3 py-2 qt-label
               border rounded-lg transition-colors
               ${isSelected
                 ? 'qt-border-primary bg-primary text-primary-foreground'

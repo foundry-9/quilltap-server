@@ -75,7 +75,7 @@ export function CharacterHeader({
       <div className="flex items-center">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-semibold">
+            <h1 className="qt-heading-1">
               {character?.name || 'Loading...'}
               {character?.aliases && character.aliases.length > 0 && (
                 <span className="text-lg font-normal qt-text-secondary ml-2">({character.aliases.join(' / ')})</span>
@@ -125,14 +125,14 @@ export function CharacterHeader({
         <button
           onClick={onToggleNpc}
           disabled={togglingNpc}
-          className="inline-flex items-center justify-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted disabled:opacity-50"
         >
           {togglingNpc ? 'Converting...' : character?.npc ? 'Convert to Character' : 'Convert to NPC'}
         </button>
         {onGenerateExternalPrompt && (
           <button
             onClick={onGenerateExternalPrompt}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted"
             title="Generate a standalone system prompt for use in external tools"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -144,7 +144,7 @@ export function CharacterHeader({
         {onOptimize && (
           <button
             onClick={onOptimize}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted"
             title="Analyze memories and suggest character refinements"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -156,7 +156,7 @@ export function CharacterHeader({
         {onSearchReplace && (
           <button
             onClick={onSearchReplace}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border qt-border-default qt-bg-card px-4 py-2 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted"
             title="Search & Replace across all chats and memories for this character"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

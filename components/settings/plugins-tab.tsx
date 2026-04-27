@@ -520,7 +520,7 @@ export default function PluginsTab() {
         <div className="flex gap-4">
           <button
             onClick={() => setActiveTab('installed')}
-            className={`pb-2 px-1 text-sm font-medium transition-colors relative ${
+            className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'installed'
                 ? 'text-foreground'
                 : 'qt-text-secondary hover:text-foreground'
@@ -533,7 +533,7 @@ export default function PluginsTab() {
           </button>
           <button
             onClick={() => setActiveTab('upgrades')}
-            className={`pb-2 px-1 text-sm font-medium transition-colors relative ${
+            className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'upgrades'
                 ? 'text-foreground'
                 : 'qt-text-secondary hover:text-foreground'
@@ -546,7 +546,7 @@ export default function PluginsTab() {
           </button>
           <button
             onClick={() => setActiveTab('browse')}
-            className={`pb-2 px-1 text-sm font-medium transition-colors relative ${
+            className={`pb-2 px-1 qt-label transition-colors relative ${
               activeTab === 'browse'
                 ? 'text-foreground'
                 : 'qt-text-secondary hover:text-foreground'

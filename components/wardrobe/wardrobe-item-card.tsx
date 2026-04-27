@@ -58,17 +58,17 @@ export function WardrobeItemCard({
               {item.title}
             </h3>
             {item.isDefault && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full qt-text-label-xs bg-primary/10 text-primary">
                 Default
               </span>
             )}
             {isShared && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium qt-badge-wardrobe-shared">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full qt-text-label-xs qt-badge-wardrobe-shared">
                 Shared
               </span>
             )}
             {isArchived && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium qt-bg-muted qt-text-muted">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full qt-text-label-xs qt-bg-muted qt-text-muted">
                 Archived
               </span>
             )}
@@ -77,7 +77,7 @@ export function WardrobeItemCard({
             {item.types.map((type) => (
               <span
                 key={type}
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_BADGE_CLASSES[type]}`}
+                className={`inline-flex items-center px-2 py-0.5 rounded-full qt-text-label-xs ${TYPE_BADGE_CLASSES[type]}`}
               >
                 {type}
               </span>

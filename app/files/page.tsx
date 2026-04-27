@@ -19,7 +19,7 @@ function FilesPageContent() {
     <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/commonplace_book.webp)' } as React.CSSProperties}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <div>
-          <h1 className="text-3xl font-semibold leading-tight">Files</h1>
+          <h1 className="qt-heading-1 leading-tight">Files</h1>
           <p className="qt-text-small qt-text-secondary mt-1">
             Browse and manage your general files (not in any project)
           </p>

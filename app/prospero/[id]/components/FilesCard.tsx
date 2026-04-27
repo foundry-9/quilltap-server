@@ -148,7 +148,7 @@ export function FilesCard({ files, expanded, onToggle, projectId, onFilesChange 
                       relativePath={file.relativePath}
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">
+                      <p className="qt-label text-foreground truncate">
                         {file.originalFilename}
                       </p>
                       <p className="qt-text-xs qt-text-secondary">

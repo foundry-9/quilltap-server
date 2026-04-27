@@ -276,7 +276,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       <div>
         <Link
           href="/aurora"
-          className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
+          className="mb-4 inline-flex items-center qt-label text-primary transition hover:text-primary/80"
         >
           ← Back to Characters
         </Link>

@@ -78,7 +78,7 @@ export function CharactersCard({ project, onRemoveCharacter, onToggleAllowAnyCha
           {/* Allow Any Character Toggle */}
           <div className="flex items-center justify-between px-4 py-3 qt-bg-muted">
             <div>
-              <h4 className="text-sm font-medium text-foreground">Allow Any Character</h4>
+              <h4 className="qt-label text-foreground">Allow Any Character</h4>
               <p className="qt-text-xs qt-text-secondary">
                 {project.allowAnyCharacter
                   ? 'Any character can join project chats.'

@@ -62,10 +62,10 @@ export function ProjectDetailHeader({
               type="text"
               value={editForm.name}
               onChange={(e) => onEditFormChange({ ...editForm, name: e.target.value })}
-              className="text-2xl font-semibold bg-transparent border-b qt-border-primary focus:outline-none"
+              className="qt-heading-2 bg-transparent border-b qt-border-primary focus:outline-none"
             />
           ) : (
-            <h1 className="text-2xl font-semibold">{project.name}</h1>
+            <h1 className="qt-heading-2">{project.name}</h1>
           )}
           {isEditing ? (
             <input

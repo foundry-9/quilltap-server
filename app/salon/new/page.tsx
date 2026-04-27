@@ -48,12 +48,12 @@ export default function NewChatPage() {
       <div>
         <Link
           href={project ? `/prospero/${project.id}` : '/salon'}
-          className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
+          className="mb-4 inline-flex items-center qt-label text-primary transition hover:text-primary/80"
         >
           ← Back to {project ? project.name : 'Chats'}
         </Link>
 
-        <h1 className="mb-6 text-3xl font-semibold">New Chat</h1>
+        <h1 className="mb-6 qt-heading-1">New Chat</h1>
 
         {project && (
           <div className="mb-6 rounded-lg border qt-border-default qt-bg-card/50 p-4">

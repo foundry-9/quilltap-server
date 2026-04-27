@@ -58,7 +58,7 @@ export default function LLMLogsCard() {
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-foreground mb-1">
+          <h2 className="qt-heading-2 text-foreground mb-1">
             LLM Logs
           </h2>
           <p className="qt-text-small">

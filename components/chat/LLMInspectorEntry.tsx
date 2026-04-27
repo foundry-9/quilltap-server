@@ -146,7 +146,7 @@ export default function LLMInspectorEntry({ log, isHighlighted }: Readonly<LLMIn
                 key={tab}
                 type="button"
                 onClick={() => setActiveTab(tab)}
-                className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                className={`px-3 py-2 qt-text-label-xs transition-colors border-b-2 ${
                   activeTab === tab
                     ? 'qt-border-primary qt-text'
                     : 'border-transparent qt-text-secondary hover:qt-text'

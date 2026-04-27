@@ -200,7 +200,7 @@ export function ThemeCard({
             {(() => {
               const badge = isDefault ? { label: 'Built-in', deprecated: false } : getSourceBadge(theme?.source, theme?.deprecated)
               return badge ? (
-                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.deprecated ? 'qt-bg-warning/15 qt-text-warning' : 'qt-bg-muted qt-text-secondary'}`}>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded qt-text-label-xs ${badge.deprecated ? 'qt-bg-warning/15 qt-text-warning' : 'qt-bg-muted qt-text-secondary'}`}>
                   {badge.label}
                   {badge.deprecated && ' (deprecated)'}
                 </span>
@@ -360,7 +360,7 @@ export function ThemeCard({
             const badge = isDefault ? { label: 'Built-in', deprecated: false } : getSourceBadge(theme?.source, theme?.deprecated)
             return badge ? (
               <span
-                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                className="inline-flex items-center px-2 py-0.5 rounded qt-text-label-xs"
                 style={{
                   backgroundColor: badge.deprecated ? 'rgba(234, 179, 8, 0.15)' : `${cardTextColor}15`,
                   color: badge.deprecated ? '#eab308' : cardTextColor,
@@ -373,7 +373,7 @@ export function ThemeCard({
           })()}
           {/* Light mode badge - all themes support light */}
           <span
-            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+            className="inline-flex items-center px-2 py-0.5 rounded qt-text-label-xs"
             style={{
               backgroundColor: `${cardTextColor}15`,
               color: cardTextColor,
@@ -392,7 +392,7 @@ export function ThemeCard({
           {/* Dark mode badge - only if supported */}
           {supportsDarkMode && (
             <span
-              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+              className="inline-flex items-center px-2 py-0.5 rounded qt-text-label-xs"
               style={{
                 backgroundColor: `${cardTextColor}15`,
                 color: cardTextColor,
@@ -416,7 +416,7 @@ export function ThemeCard({
           <button
             type="button"
             onClick={handlePreviewClick}
-            className="relative z-10 inline-flex items-center px-2 py-1 rounded text-xs font-medium transition-colors"
+            className="relative z-10 inline-flex items-center px-2 py-1 rounded qt-text-label-xs transition-colors"
             style={{
               backgroundColor: `${cardTextColor}10`,
               color: cardTextColor,
@@ -444,7 +444,7 @@ export function ThemeCard({
         {/* Active Indicator */}
         {isActive && (
           <div
-            className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium"
+            className="absolute top-2 right-2 flex items-center gap-1 px-2 py-0.5 rounded qt-text-label-xs"
             style={{
               backgroundColor: previewColors?.dark?.primary || '#22c55e',
               color: '#ffffff',

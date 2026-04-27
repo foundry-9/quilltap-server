@@ -35,7 +35,7 @@ export function DangerFlagBadge({ dangerFlags, onOverride }: DangerFlagBadgeProp
       {dangerFlags.map((flag, idx) => (
         <span
           key={`${flag.category}-${idx}`}
-          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded qt-text-label-xs ${
             flag.userOverridden
               ? 'qt-bg-muted qt-text-secondary line-through'
               : 'qt-bg-warning/10 qt-text-warning'

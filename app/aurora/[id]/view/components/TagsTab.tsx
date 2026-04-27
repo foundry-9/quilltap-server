@@ -11,7 +11,7 @@ export function TagsTab({ characterId }: TagsTabProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">
+          <h2 className="qt-heading-4 text-foreground">
             Character Tags
           </h2>
           <p className="qt-text-small">
