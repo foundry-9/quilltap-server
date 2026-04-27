@@ -173,14 +173,14 @@ export default function DocumentStoreDetailPage() {
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
           {store.chunkCount === 0 ? (
             <>
-              <div className="qt-text-secondary">No chunks</div>
+              <div className="qt-label qt-text-secondary">No chunks</div>
               <div className="text-xs qt-text-secondary">Embedding Status</div>
             </>
           ) : store.embeddedChunkCount === store.chunkCount ? (
             <>
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full qt-dot-success" />
-                <span className="qt-text-success">Complete</span>
+                <span className="qt-label qt-text-success">Complete</span>
               </div>
               <div className="text-xs qt-text-secondary">{store.embeddedChunkCount}/{store.chunkCount} chunks embedded</div>
             </>
@@ -188,7 +188,7 @@ export default function DocumentStoreDetailPage() {
             <>
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 animate-pulse rounded-full qt-dot-warning" />
-                <span className="qt-text-warning">{Math.round((store.embeddedChunkCount / store.chunkCount) * 100)}%</span>
+                <span className="qt-label qt-text-warning">{Math.round((store.embeddedChunkCount / store.chunkCount) * 100)}%</span>
               </div>
               <div className="text-xs qt-text-secondary">{store.embeddedChunkCount}/{store.chunkCount} chunks embedded</div>
             </>
