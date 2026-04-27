@@ -141,13 +141,14 @@ This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", a
 - **The Lantern** - the story backgrounds subsystem, that can send context to image providers and put them up as backgrounds for chats or projects
 - **Prospero** - the agentic and tool-using systems, and the way LLMs work — UI route: `/prospero` (was `/projects`)
 - **Aurora** - the complex character model and how it interacts with the prompts — UI route: `/aurora` (was `/characters`)
+- **The Scriptorium** - the document stores (mount-points) subsystem for managing files and database-backed vaults that LLMs can read and write — UI route: `/scriptorium`
 - **Calliope** - the UX/UI and themes systems
 - **The Foundry** - the architecture underneath, plugins and packages and services — UI route: `/settings` (was `/foundry`, `/tools`); all settings now live on a single tabbed page with 7 tabs
 - **The Salon** - the chat interface — UI route: `/salon` (was `/chats`)
 - **Pascal the Croupier** - the RNG and game state tracking system — merged into Chat tab at `/settings?tab=chat`
 - **Saquel Ytzama, the Keeper of Secrets** - the encryption, API key management, and secrets system — merged into Data & System tab at `/settings?tab=system`
 
-Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes (`/foundry/*`) redirect to the appropriate `/settings` tab.
+Note: API routes remain at their original paths (`/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects`). Old UI routes (`/foundry/*`) redirect to the appropriate `/settings` tab. The old `/chats`, `/characters`, and `/projects` UI routes also redirect to their current equivalents (`/salon`, `/aurora`, `/prospero`).
 
 ### Personified-feature avatars
 
@@ -157,7 +158,13 @@ Rules for adding or updating these assets:
 
 - **Always WebP.** Convert source PNGs with `cwebp -q 82 -m 6 -mt <in>.png -o <out>.webp` (or better) and delete the PNG after verifying the WebP. Don't check multi-MB PNG originals into the repo — these are bundled with the app and every byte ships.
 - **Filename pattern:** `<feature>-avatar.webp`, all lowercase, hyphen-separated. The feature name should match how the feature is referred to elsewhere (e.g. `lantern-avatar.webp`, not `the-lantern-avatar.webp`).
-- **Pair new avatars with new `systemSender` enum values.** `MessageEventSchema` in `lib/schemas/chat.types.ts` and the matching SQLite column on `chat_messages` both list the allowed senders. Adding `'concierge'` or `'prospero'` means updating the Zod enum in both places, adding a branch to `getMessageAvatar`, and including the new value in `public/schemas/qtap-export.schema.json`. Current personified senders: `lantern`, `aurora`, `librarian` (Document Mode open/save/rename/delete announcements, plus character `doc_delete_file` / `doc_create_folder` / `doc_delete_folder` tool calls).
+- **Pair new avatars with new `systemSender` enum values.** `MessageEventSchema` in `lib/schemas/chat.types.ts` and the matching SQLite column on `chat_messages` both list the allowed senders. Adding a new sender means updating the Zod enum in both places, adding a branch to `getMessageAvatar` in `app/salon/[id]/page.tsx`, and including the new value in `public/schemas/qtap-export.schema.json`. Current personified senders:
+  - `lantern` — Lantern image-background announcements
+  - `aurora` — Character avatar refresh notifications
+  - `librarian` — Document Mode open/save/rename/delete announcements, plus character `doc_delete_file` / `doc_create_folder` / `doc_delete_folder` tool calls
+  - `concierge` — Dangerous-content classification announcements (The Concierge)
+  - `host` — Salon participation announcements: character join/leave/status-change (The Host)
+  - `prospero` — Reserved for upcoming Prospero agent announcements
 
 ## Claude-specific instructions
 
