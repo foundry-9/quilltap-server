@@ -80,7 +80,7 @@ export default function DocumentStoreDetailPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-foreground">Loading document store...</p>
+        <p className="qt-section-title">Loading document store...</p>
       </div>
     )
   }
@@ -117,7 +117,7 @@ export default function DocumentStoreDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-semibold leading-tight">{store.name}</h1>
+              <h1 className="qt-page-title">{store.name}</h1>
               {!store.enabled && (
                 <span className="qt-badge-disabled inline-flex items-center">
                   Disabled
@@ -167,7 +167,7 @@ export default function DocumentStoreDetailPage() {
           <div className="text-xs qt-text-secondary">Total Size</div>
         </div>
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-          <div className="text-sm font-medium text-foreground">{lastScanned}</div>
+          <div className="qt-label">{lastScanned}</div>
           <div className="text-xs qt-text-secondary">Last Scanned</div>
         </div>
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">

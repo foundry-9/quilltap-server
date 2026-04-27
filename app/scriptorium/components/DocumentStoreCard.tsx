@@ -197,7 +197,7 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, on
             <DatabaseIcon className="w-5 h-5 qt-text-secondary" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-foreground truncate">{store.name}</h2>
+            <h2 className="qt-section-title truncate">{store.name}</h2>
             <p className="qt-text-small truncate" title={store.basePath || 'Database-backed — no path'}>
               {store.basePath || <em className="qt-text-secondary">Database-backed — no path</em>}
             </p>
@@ -220,11 +220,11 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, on
 
       <div className="grid grid-cols-3 gap-2 mb-3 text-center">
         <div className="rounded-lg qt-bg-muted/50 px-2 py-1.5">
-          <div className="text-lg font-semibold text-foreground">{store.fileCount}</div>
+          <div className="qt-section-title">{store.fileCount}</div>
           <div className="text-xs qt-text-secondary">Files</div>
         </div>
         <div className="rounded-lg qt-bg-muted/50 px-2 py-1.5">
-          <div className="text-lg font-semibold text-foreground">{formatBytes(store.totalSizeBytes)}</div>
+          <div className="qt-section-title">{formatBytes(store.totalSizeBytes)}</div>
           <div className="text-xs qt-text-secondary">Total Size</div>
         </div>
         <div className="rounded-lg qt-bg-muted/50 px-2 py-1.5">

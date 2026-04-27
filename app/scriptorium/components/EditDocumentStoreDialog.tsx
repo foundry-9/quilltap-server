@@ -109,7 +109,7 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
                   onChange={() => setMountType('filesystem')}
                   className="qt-radio"
                 />
-                <span className="text-sm text-foreground">Filesystem</span>
+                <span className="qt-body">Filesystem</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -120,7 +120,7 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
                   onChange={() => setMountType('obsidian')}
                   className="qt-radio"
                 />
-                <span className="text-sm text-foreground">Obsidian Vault</span>
+                <span className="qt-body">Obsidian Vault</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -131,7 +131,7 @@ export function EditDocumentStoreDialog({ store, onClose, onSubmit }: EditDocume
                   onChange={() => setMountType('database')}
                   className="qt-radio"
                 />
-                <span className="text-sm text-foreground">Database-backed</span>
+                <span className="qt-body">Database-backed</span>
               </label>
             </div>
             {isDatabaseBacked && (

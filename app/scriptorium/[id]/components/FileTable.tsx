@@ -69,7 +69,7 @@ function EmbeddingIndicator({ chunkCount }: { chunkCount: number }) {
     return <span className="text-xs qt-text-secondary">None</span>
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-foreground">
+    <span className="inline-flex items-center gap-1 qt-body-sm">
       <span className="h-1.5 w-1.5 rounded-full qt-dot-success" />
       {chunkCount} chunk{chunkCount !== 1 ? 's' : ''}
     </span>
@@ -280,7 +280,7 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
     <div>
       {/* Summary bar */}
       <div className="flex flex-wrap items-center gap-4 mb-4">
-        <div className="flex items-center gap-6 text-sm">
+        <div className="flex items-center gap-6 qt-body">
           <span className="qt-text-secondary">
             <strong className="text-foreground">{files.length}</strong> files
           </span>

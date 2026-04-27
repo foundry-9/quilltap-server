@@ -141,7 +141,7 @@ export function CharacterPickerPanel({
   return (
     <div className="new-chat-character-picker grid grid-cols-1 gap-6 lg:grid-cols-2 items-stretch">
       <div className="flex flex-col rounded-xl border qt-border-default qt-bg-card p-6">
-        <h2 className="mb-4 text-lg font-semibold">Select Characters</h2>
+        <h2 className="mb-4 qt-section-title">Select Characters</h2>
         <div className="mb-4 flex-shrink-0">
           <input
             ref={searchInputRef}
@@ -216,7 +216,7 @@ export function CharacterPickerPanel({
       </div>
 
       <div className="rounded-xl border qt-border-default qt-bg-card p-6">
-        <h2 className="mb-4 text-lg font-semibold">Selected Characters ({selectedCharacters.length})</h2>
+        <h2 className="mb-4 qt-section-title">Selected Characters ({selectedCharacters.length})</h2>
         {selectedCharacters.length === 0 ? (
           <div className="py-8 text-center qt-text-small">Click on characters to add them to the chat</div>
         ) : (

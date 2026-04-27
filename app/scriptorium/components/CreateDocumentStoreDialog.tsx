@@ -94,7 +94,7 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
                   onChange={() => setMountType('filesystem')}
                   className="qt-radio"
                 />
-                <span className="text-sm text-foreground">Filesystem — read/write documents on disk</span>
+                <span className="qt-body">Filesystem — read/write documents on disk</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -105,7 +105,7 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
                   onChange={() => setMountType('obsidian')}
                   className="qt-radio"
                 />
-                <span className="text-sm text-foreground">Obsidian Vault — filesystem with Obsidian-friendly defaults</span>
+                <span className="qt-body">Obsidian Vault — filesystem with Obsidian-friendly defaults</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -116,7 +116,7 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
                   onChange={() => setMountType('database')}
                   className="qt-radio"
                 />
-                <span className="text-sm text-foreground">Database-backed — everything stays encrypted inside Quilltap</span>
+                <span className="qt-body">Database-backed — everything stays encrypted inside Quilltap</span>
               </label>
             </div>
           </div>
@@ -136,7 +136,7 @@ export function CreateDocumentStoreDialog({ open, onClose, onSubmit }: CreateDoc
 
           {isDatabaseBacked && (
             <div className="mb-4 qt-callout">
-              <p className="text-sm">
+              <p className="qt-body">
                 Database-backed stores live entirely inside Quilltap&apos;s encrypted mount-index database — no
                 filesystem path required. Documents and blobs you upload are included in the standard Quilltap backups.
               </p>

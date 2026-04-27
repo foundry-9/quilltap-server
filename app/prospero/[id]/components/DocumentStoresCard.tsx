@@ -127,7 +127,7 @@ export function DocumentStoresCard({
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-foreground truncate">{store.name}</p>
+                      <p className="qt-label truncate">{store.name}</p>
                       <span className="qt-text-xs qt-bg-muted px-2 py-0.5 rounded-full flex-shrink-0">
                         {store.mountType}
                       </span>

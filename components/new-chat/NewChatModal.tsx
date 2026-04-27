@@ -76,7 +76,7 @@ export function NewChatModal({
         className={`w-full max-w-md ${widthClass} rounded-2xl border qt-border-default qt-bg-card p-6 qt-shadow-lg max-h-[90vh] flex flex-col`}
       >
         <div className="mb-4 flex items-start justify-between gap-4 flex-shrink-0">
-          <h3 className="text-lg font-semibold">
+          <h3 className="qt-dialog-title">
             {selectedCharacters.length > 1
               ? `Start Chat (${selectedCharacters.length} characters)`
               : `Start Chat with ${characterName}`}
@@ -84,7 +84,7 @@ export function NewChatModal({
           <button
             type="button"
             onClick={() => setPickerExpanded((v) => !v)}
-            className="text-sm text-primary hover:underline flex-shrink-0"
+            className="qt-action flex-shrink-0"
             disabled={creating}
           >
             {pickerExpanded ? '− Hide character picker' : '+ Add another character'}

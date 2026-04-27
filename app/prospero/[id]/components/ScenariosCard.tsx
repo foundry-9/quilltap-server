@@ -192,7 +192,7 @@ export function ScenariosCard({ projectId, expanded, onToggle }: ScenariosCardPr
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 flex-wrap">
-                      <h4 className="text-sm font-medium text-foreground truncate">
+                      <h4 className="qt-label truncate">
                         {scenario.name}
                       </h4>
                       <span className="qt-text-xs qt-text-secondary truncate">

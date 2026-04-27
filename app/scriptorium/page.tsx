@@ -93,7 +93,7 @@ export default function DocumentStoresPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-foreground">Loading document stores...</p>
+        <p className="qt-section-title">Loading document stores...</p>
       </div>
     )
   }
@@ -110,7 +110,7 @@ export default function DocumentStoresPage() {
     <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/scriptorium.webp)' } as React.CSSProperties}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <div>
-          <h1 className="text-3xl font-semibold leading-tight">The Scriptorium</h1>
+          <h1 className="qt-page-title">The Scriptorium</h1>
           <p className="mt-1 qt-text-small">Mount external document directories as searchable knowledge sources</p>
         </div>
         <button

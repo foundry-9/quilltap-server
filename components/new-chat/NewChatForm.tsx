@@ -195,12 +195,12 @@ export function NewChatForm({
     <div className="new-chat-form grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
       {/* Left card: Character Customization */}
       <div className="rounded-xl border qt-border-default qt-bg-card p-6 space-y-4">
-        <h3 className="text-lg font-semibold">Character Customization</h3>
+        <h3 className="qt-section-title">Character Customization</h3>
 
         {profiles.length === 0 && (
           <div className="rounded-lg border qt-border-warning/50 qt-bg-warning/10 p-3 qt-text-warning">
-            <p className="text-sm font-medium">No connection profiles available</p>
-            <p className="mt-1 text-xs">
+            <p className="qt-label">No connection profiles available</p>
+            <p className="mt-1 qt-body-sm">
               <Link href="/settings?tab=providers" className="underline hover:no-underline">
                 Add an AI provider
               </Link>{' '}
@@ -395,7 +395,7 @@ export function NewChatForm({
 
       {/* Right card: Reality Injection Mode */}
       <div className="rounded-xl border qt-border-default qt-bg-card p-6 space-y-4">
-        <h3 className="text-lg font-semibold">Reality Injection Mode</h3>
+        <h3 className="qt-section-title">Reality Injection Mode</h3>
         <TimestampConfigCard
           value={state.timestampConfig}
           onChange={handleTimestampConfigChange}
@@ -417,7 +417,7 @@ export function NewChatForm({
             </div>
             <div className="min-w-0">
               <p className="qt-text-xs qt-text-muted">In project</p>
-              <p className="text-sm truncate">{project.name}</p>
+              <p className="qt-body truncate">{project.name}</p>
             </div>
           </div>
         </div>
