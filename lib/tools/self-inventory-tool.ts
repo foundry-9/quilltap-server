@@ -126,6 +126,7 @@ export interface SelfInventoryLastTurnSection {
 
 export interface SelfInventoryToolOutput {
   success: boolean;
+  quilltapVersion: string;
   characterId: string;
   characterName: string;
   vault: SelfInventoryVaultSection;

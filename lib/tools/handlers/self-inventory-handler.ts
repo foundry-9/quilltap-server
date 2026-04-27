@@ -6,6 +6,7 @@
  * rather than throwing the whole report away.
  */
 
+import packageJson from '@/package.json';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
@@ -610,6 +611,7 @@ export async function executeSelfInventoryTool(
   if (!context.characterId) {
     return {
       success: false,
+      quilltapVersion: packageJson.version,
       characterId: '',
       characterName: '',
       vault: { available: false, reason: 'error', message: 'Missing characterId.' },
@@ -666,6 +668,7 @@ export async function executeSelfInventoryTool(
   if (!character) {
     return {
       success: false,
+      quilltapVersion: packageJson.version,
       characterId: context.characterId,
       characterName: '',
       vault: { available: false, reason: 'error', message: 'Character not found.' },
@@ -796,6 +799,7 @@ export async function executeSelfInventoryTool(
 
   return {
     success: true,
+    quilltapVersion: packageJson.version,
     characterId: character.id,
     characterName: character.name,
     vault,
@@ -971,10 +975,12 @@ function formatLastTurnSection(section: SelfInventoryLastTurnSection): string {
 
 export function formatSelfInventoryResults(output: SelfInventoryToolOutput): string {
   if (!output.success) {
-    return `Self-Inventory Error: ${output.error ?? 'Unknown error'}`;
+    return `You are running on Quilltap v${output.quilltapVersion}.\n\nSelf-Inventory Error: ${output.error ?? 'Unknown error'}`;
   }
 
   const lines = [
+    `You are running on Quilltap v${output.quilltapVersion}.`,
+    ``,
     `# Self-Inventory Report`,
     `Character: ${output.characterName} (id: ${output.characterId})`,
     ``,

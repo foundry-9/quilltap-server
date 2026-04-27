@@ -580,6 +580,7 @@ export async function executeToolCallWithContext(
         result: result.success
           ? {
               formattedText: formattedResult,
+              quilltapVersion: result.quilltapVersion,
               characterId: result.characterId,
               characterName: result.characterName,
               vault: result.vault,
