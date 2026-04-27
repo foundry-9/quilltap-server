@@ -278,13 +278,13 @@ Schemas drift fast and there are 30+ tables across these three databases, so the
 
 The SQLite database file location depends on platform:
 
-| Environment | Database Path                                                             |
-| ----------- | ------------------------------------------------------------------------- |
-| **Linux**   | `~/.quilltap/data/quilltap.db`                                            |
-| **macOS**   | `~/Library/Application Support/Quilltap/data/quilltap.db`                 |
-| **Windows** | `%APPDATA%\Quilltap\data\quilltap.db`                                     |
-| **Docker**  | `/app/quilltap/data/quilltap.db`                                          |
-| **Lima VM** | `/data/quilltap/data/quilltap.db` (VirtioFS mount of the macOS path)      |
+| Environment | Database Path                                                              |
+| ----------- | -------------------------------------------------------------------------  |
+| **Linux**   | `~/.quilltap/data/quilltap.db`                                             |
+| **macOS**   | `~/Library/Application Support/Quilltap/data/quilltap.db`                  |
+| **Windows** | `%APPDATA%\Quilltap\data\quilltap.db`                                      |
+| **Docker**  | `/app/quilltap/data/quilltap.db`                                           |
+| **Lima VM** | `/data/quilltap/data/quilltap.db` (VirtioFS mount of the macOS path)       |
 | **WSL2**    | Same as Windows; the Windows path is passed through as `QUILLTAP_DATA_DIR` |
 
 Override with `QUILLTAP_DATA_DIR` (non-Docker environments).
