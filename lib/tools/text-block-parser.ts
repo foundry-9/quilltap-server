@@ -37,9 +37,9 @@ export interface ParsedTextBlock {
 }
 
 /**
- * Standard tool call request format (re-exported for convenience)
+ * Standard tool call request format (used locally by convertTextBlockToToolCallRequest)
  */
-export interface ToolCallRequest {
+interface ToolCallRequest {
   name: string
   arguments: Record<string, unknown>
 }
