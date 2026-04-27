@@ -19,7 +19,7 @@ import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import { getNpmPluginsDir } from '@/lib/paths';
+import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
 import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { UuidRemapper } from './uuid-remapper';
 import type {
@@ -48,6 +48,8 @@ import type {
   Project,
   LLMLog,
   PluginConfig,
+  CharacterPluginData,
+  ConversationAnnotation,
 } from '@/lib/schemas/types';
 import type { WardrobeItem, OutfitPreset } from '@/lib/schemas/wardrobe.types';
 
@@ -165,6 +167,9 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     // Wardrobe items and outfit presets are optional for backwards compatibility
     const wardrobeItems = await readJsonFileOptional<WardrobeItem[]>(rootPath, 'data/wardrobe-items.json', []);
     const outfitPresets = await readJsonFileOptional<OutfitPreset[]>(rootPath, 'data/outfit-presets.json', []);
+    // Character plugin data and conversation annotations are optional for backwards compatibility
+    const characterPluginData = await readJsonFileOptional<CharacterPluginData[]>(rootPath, 'data/character-plugin-data.json', []);
+    const conversationAnnotations = await readJsonFileOptional<ConversationAnnotation[]>(rootPath, 'data/conversation-annotations.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
@@ -192,6 +197,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       folders,
       wardrobeItems,
       outfitPresets,
+      characterPluginData,
+      conversationAnnotations,
     };
 
     return { data, extractDir, rootFolder };
@@ -290,6 +297,9 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       wardrobeItems: data.wardrobeItems?.length || 0,
       outfitPresets: data.outfitPresets?.length || 0,
       npmPlugins: npmPluginCount,
+      characterPluginData: data.characterPluginData?.length || 0,
+      conversationAnnotations: data.conversationAnnotations?.length || 0,
+      userInstalledThemes: 0, // Counted after zip extraction; not shown in preview
       warnings: [],
     };
   } finally {
@@ -820,6 +830,12 @@ function remapBackupData(
     folders: remappedFolders,
     wardrobeItems: remappedWardrobeItems,
     outfitPresets: remappedOutfitPresets,
+    characterPluginData: (data.characterPluginData || []).map((cpd) => ({
+      ...remapper.remapFields(cpd, ['id', 'characterId']),
+    })) as CharacterPluginData[],
+    conversationAnnotations: (data.conversationAnnotations || []).map((annotation) => ({
+      ...remapper.remapFields(annotation, ['id', 'chatId', 'sourceMessageId']),
+    })) as ConversationAnnotation[],
   };
 }
 
@@ -1144,7 +1160,33 @@ export async function restore(
       }
     }
 
-    // 21. NPM Plugins (copy from extracted dir to plugins/npm directory)
+    // 21. Character Plugin Data (depends on characters)
+    let characterPluginDataRestored = 0;
+    for (const cpd of data.characterPluginData || []) {
+      try {
+        const { id, createdAt, updatedAt, ...cpdData } = cpd;
+        await globalRepos.characterPluginData.create(cpdData, { id: cpd.id });
+        characterPluginDataRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore character plugin data for plugin "${cpd.pluginName}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore character plugin data', { cpdId: cpd.id, pluginName: cpd.pluginName, error });
+      }
+    }
+
+    // 22. Conversation Annotations (depends on chats)
+    let conversationAnnotationsRestored = 0;
+    for (const annotation of data.conversationAnnotations || []) {
+      try {
+        const { id, createdAt, updatedAt, ...annotationData } = annotation;
+        await globalRepos.conversationAnnotations.create(annotationData, { id: annotation.id });
+        conversationAnnotationsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore conversation annotation: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore conversation annotation', { annotationId: annotation.id, error });
+      }
+    }
+
+    // 23. NPM Plugins (copy from extracted dir to plugins/npm directory)
     let npmPluginsRestored = 0;
     const npmPluginsSrcDir = path.join(rootPath, 'plugins', 'npm');
 
@@ -1181,6 +1223,50 @@ export async function restore(
       moduleLogger.debug('No npm plugins directory in backup');
     }
 
+    // 24. User-installed theme bundles (copy from extracted dir to themes directory)
+    let userInstalledThemesRestored = 0;
+    const themesSrcDir = path.join(rootPath, 'themes');
+
+    try {
+      const themeEntries = await fs.promises.readdir(themesSrcDir, { withFileTypes: true });
+      const themesDir = getThemesDir();
+
+      // Ensure the themes directory exists
+      await fs.promises.mkdir(themesDir, { recursive: true });
+
+      for (const entry of themeEntries) {
+        if (entry.isDirectory() && entry.name !== '.cache') {
+          try {
+            const srcPath = path.join(themesSrcDir, entry.name);
+            const destPath = path.join(themesDir, entry.name);
+            await fs.promises.cp(srcPath, destPath, { recursive: true, force: true });
+            userInstalledThemesRestored++;
+            moduleLogger.debug('Restored theme bundle', { themeId: entry.name });
+          } catch (error) {
+            warnings.push(`Failed to restore theme bundle "${entry.name}": ${error instanceof Error ? error.message : String(error)}`);
+            moduleLogger.warn('Failed to restore theme bundle', { themeId: entry.name, error });
+          }
+        } else if (entry.isFile() && entry.name === 'themes-index.json') {
+          // Restore the themes index file
+          try {
+            const themesDir2 = getThemesDir();
+            await fs.promises.cp(path.join(themesSrcDir, 'themes-index.json'), path.join(themesDir2, 'themes-index.json'), { force: true });
+          } catch (error) {
+            moduleLogger.warn('Failed to restore themes-index.json', { error });
+          }
+        }
+      }
+
+      if (userInstalledThemesRestored > 0) {
+        moduleLogger.info('Restored user-installed theme bundles', {
+          count: userInstalledThemesRestored,
+        });
+      }
+    } catch {
+      // No themes directory in the backup — that's fine
+      moduleLogger.debug('No themes directory in backup');
+    }
+
     moduleLogger.info('All entities restored with preserved IDs - no reconciliation needed');
 
     const summary: RestoreSummary = {
@@ -1208,6 +1294,9 @@ export async function restore(
       wardrobeItems: wardrobeItemsRestored,
       outfitPresets: outfitPresetsRestored,
       npmPlugins: npmPluginsRestored,
+      characterPluginData: characterPluginDataRestored,
+      conversationAnnotations: conversationAnnotationsRestored,
+      userInstalledThemes: userInstalledThemesRestored,
       warnings,
     };
 

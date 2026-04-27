@@ -16,7 +16,7 @@ import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import { getNpmPluginsDir } from '@/lib/paths';
+import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { runBackupCheckpoint } from '@/lib/database/backends/sqlite/protection';
 import { getRawLLMLogsDatabase } from '@/lib/database/backends/sqlite/llm-logs-client';
@@ -109,6 +109,19 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     characters.map((char) => repos.memories.findByCharacterId(char.id))
   );
   const memories = memoriesArrays.flat();
+
+  // Collect character plugin data for all characters
+  const characterPluginDataArrays = await Promise.all(
+    characters.map((char) => globalRepos.characterPluginData.findByCharacterId(char.id))
+  );
+  const characterPluginData = characterPluginDataArrays.flat();
+
+  // Collect conversation annotations for all user's chats
+  const conversationAnnotationsArrays = await Promise.all(
+    chatMetadatas.map((chat) => globalRepos.conversationAnnotations.findByChatId(chat.id))
+  );
+  const conversationAnnotations = conversationAnnotationsArrays.flat();
+
   // Strip encrypted API key data from connection profiles for security
   // API keys are encrypted with user-specific keys and can't be restored to another account
   const sanitizedConnectionProfiles = connectionProfiles.map((profile) => ({
@@ -138,6 +151,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     folders,
     wardrobeItems,
     outfitPresets,
+    characterPluginData,
+    conversationAnnotations,
   };
 }
 
@@ -155,6 +170,26 @@ function countNpmPlugins(): number {
     return entries.filter(entry => entry.isDirectory()).length;
   } catch (error) {
     moduleLogger.warn('Failed to count npm plugins', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return 0;
+  }
+}
+
+/**
+ * Counts user-installed theme bundles in the themes directory
+ */
+function countUserInstalledThemes(): number {
+  try {
+    const themesDir = getThemesDir();
+    if (!fs.existsSync(themesDir)) {
+      return 0;
+    }
+    // Count subdirectories (each is a theme bundle), excluding .cache
+    const entries = fs.readdirSync(themesDir, { withFileTypes: true });
+    return entries.filter(entry => entry.isDirectory() && entry.name !== '.cache').length;
+  } catch (error) {
+    moduleLogger.warn('Failed to count user-installed themes', {
       error: error instanceof Error ? error.message : String(error),
     });
     return 0;
@@ -194,6 +229,9 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       wardrobeItems: data.wardrobeItems?.length || 0,
       outfitPresets: data.outfitPresets?.length || 0,
       npmPlugins: countNpmPlugins(),
+      characterPluginData: data.characterPluginData?.length || 0,
+      conversationAnnotations: data.conversationAnnotations?.length || 0,
+      userInstalledThemes: countUserInstalledThemes(),
     },
   };
 }
@@ -281,6 +319,8 @@ export async function createBackup(userId: string): Promise<{
     await writeJsonFile(path.join(stagingDir, 'data', 'folders.json'), data.folders || []);
     await writeJsonFile(path.join(stagingDir, 'data', 'wardrobe-items.json'), data.wardrobeItems || []);
     await writeJsonFile(path.join(stagingDir, 'data', 'outfit-presets.json'), data.outfitPresets || []);
+    await writeJsonFile(path.join(stagingDir, 'data', 'character-plugin-data.json'), data.characterPluginData || []);
+    await writeJsonFile(path.join(stagingDir, 'data', 'conversation-annotations.json'), data.conversationAnnotations || []);
 
     moduleLogger.debug('Wrote all JSON data files to staging directory');
 
@@ -326,6 +366,32 @@ export async function createBackup(userId: string): Promise<{
           error: error instanceof Error ? error.message : String(error),
         });
         // Continue with backup even if npm plugins fail
+      }
+    }
+
+    // Copy user-installed theme bundles (excluding .cache directory)
+    const themesDir = getThemesDir();
+    if (fs.existsSync(themesDir)) {
+      try {
+        const themeEntries = fs.readdirSync(themesDir, { withFileTypes: true });
+        for (const entry of themeEntries) {
+          if (entry.isDirectory() && entry.name !== '.cache') {
+            const srcPath = path.join(themesDir, entry.name);
+            const destPath = path.join(stagingDir, 'themes', entry.name);
+            await fs.promises.cp(srcPath, destPath, { recursive: true });
+            moduleLogger.debug('Added theme bundle to backup', { themeId: entry.name });
+          }
+        }
+        // Also copy the themes-index.json if it exists
+        const indexPath = path.join(themesDir, 'themes-index.json');
+        if (fs.existsSync(indexPath)) {
+          await fs.promises.cp(indexPath, path.join(stagingDir, 'themes', 'themes-index.json'));
+        }
+      } catch (error) {
+        moduleLogger.warn('Failed to add theme bundles to backup', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        // Continue with backup even if themes fail
       }
     }
 
