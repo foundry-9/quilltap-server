@@ -23,7 +23,7 @@ export function ResultsStep({ result, error }: ResultsStepProps) {
             <span className="text-2xl">❌</span>
           </div>
 
-          <h3 className="qt-text-destructive text-lg font-medium mb-2">
+          <h3 className="qt-text-destructive qt-text-section mb-2">
             Operation Failed
           </h3>
 
@@ -60,7 +60,7 @@ export function ResultsStep({ result, error }: ResultsStepProps) {
           </span>
         </div>
 
-        <h3 className="qt-text-primary text-lg font-medium mb-2">
+        <h3 className="qt-text-section mb-2">
           {hasErrors ? 'Completed with Warnings' : 'Operation Complete'}
         </h3>
 
