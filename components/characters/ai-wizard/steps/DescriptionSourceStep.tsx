@@ -170,7 +170,7 @@ export function DescriptionSourceStep({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-foreground mb-2">
+        <h3 className="qt-heading-4 text-foreground mb-2">
           Physical Description Source
         </h3>
         <p className="text-sm qt-text-secondary">
@@ -314,7 +314,7 @@ export function DescriptionSourceStep({
             <div className="fixed inset-0 z-50 flex items-center justify-center qt-bg-overlay-caption">
               <div className="qt-dialog w-full max-w-4xl max-h-[80vh] m-4 flex flex-col">
                 <div className="qt-dialog-header flex justify-between items-center">
-                  <h3 className="text-lg font-semibold">Select Image</h3>
+                  <h3 className="qt-heading-4">Select Image</h3>
                   <button
                     type="button"
                     onClick={() => setShowGallery(false)}

@@ -354,7 +354,7 @@ export function FileTable({ files, loading, mountPointId, mountType, onRefresh }
                   <th
                     key={field}
                     onClick={() => handleSort(field)}
-                    className="px-4 py-3 text-left text-xs font-medium qt-text-secondary uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
+                    className="px-4 py-3 text-left qt-text-secondary uppercase tracking-wider cursor-pointer hover:text-foreground select-none"
                   >
                     <span className="inline-flex items-center">
                       {label}

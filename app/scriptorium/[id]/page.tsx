@@ -159,11 +159,11 @@ export default function DocumentStoreDetailPage() {
       {/* Info cards */}
       <div className="grid grid-cols-2 gap-4 mb-8 sm:grid-cols-4">
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-          <div className="text-2xl font-bold text-foreground">{store.fileCount}</div>
+          <div className="qt-heading-2 text-foreground">{store.fileCount}</div>
           <div className="text-xs qt-text-secondary">Indexed Files</div>
         </div>
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-          <div className="text-2xl font-bold text-foreground">{formatBytes(store.totalSizeBytes)}</div>
+          <div className="qt-heading-2 text-foreground">{formatBytes(store.totalSizeBytes)}</div>
           <div className="text-xs qt-text-secondary">Total Size</div>
         </div>
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
@@ -173,14 +173,14 @@ export default function DocumentStoreDetailPage() {
         <div className="rounded-xl qt-bg-card border qt-border-default p-4">
           {store.chunkCount === 0 ? (
             <>
-              <div className="text-sm font-medium qt-text-secondary">No chunks</div>
+              <div className="qt-text-secondary">No chunks</div>
               <div className="text-xs qt-text-secondary">Embedding Status</div>
             </>
           ) : store.embeddedChunkCount === store.chunkCount ? (
             <>
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full qt-dot-success" />
-                <span className="text-sm font-medium qt-text-success">Complete</span>
+                <span className="qt-text-success">Complete</span>
               </div>
               <div className="text-xs qt-text-secondary">{store.embeddedChunkCount}/{store.chunkCount} chunks embedded</div>
             </>
@@ -188,7 +188,7 @@ export default function DocumentStoreDetailPage() {
             <>
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 animate-pulse rounded-full qt-dot-warning" />
-                <span className="text-sm font-medium qt-text-warning">{Math.round((store.embeddedChunkCount / store.chunkCount) * 100)}%</span>
+                <span className="qt-text-warning">{Math.round((store.embeddedChunkCount / store.chunkCount) * 100)}%</span>
               </div>
               <div className="text-xs qt-text-secondary">{store.embeddedChunkCount}/{store.chunkCount} chunks embedded</div>
             </>
@@ -208,7 +208,7 @@ export default function DocumentStoreDetailPage() {
       {store.mountType !== 'database' && (
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-            <h3 className="text-xs font-medium qt-text-secondary uppercase tracking-wider mb-2">Include Patterns</h3>
+            <h3 className="qt-text-secondary uppercase tracking-wider mb-2">Include Patterns</h3>
             <div className="flex flex-wrap gap-1.5">
               {store.includePatterns.map((p, i) => (
                 <span key={i} className="inline-flex rounded qt-bg-success/10 qt-text-success px-2 py-0.5 text-xs font-mono">
@@ -218,7 +218,7 @@ export default function DocumentStoreDetailPage() {
             </div>
           </div>
           <div className="rounded-xl qt-bg-card border qt-border-default p-4">
-            <h3 className="text-xs font-medium qt-text-secondary uppercase tracking-wider mb-2">Exclude Patterns</h3>
+            <h3 className="qt-text-secondary uppercase tracking-wider mb-2">Exclude Patterns</h3>
             <div className="flex flex-wrap gap-1.5">
               {store.excludePatterns.map((p, i) => (
                 <span key={i} className="inline-flex rounded qt-bg-destructive/10 qt-text-destructive px-2 py-0.5 text-xs font-mono">
@@ -235,7 +235,7 @@ export default function DocumentStoreDetailPage() {
           an Upload button in this table; filesystem stores get populated by
           scans. */}
       <div className="border-t qt-border-default/60 pt-6">
-        <h2 className="text-xl font-semibold mb-4">Indexed Files</h2>
+        <h2 className="qt-heading-3 mb-4">Indexed Files</h2>
         <FileTable
           files={files}
           loading={filesLoading}
