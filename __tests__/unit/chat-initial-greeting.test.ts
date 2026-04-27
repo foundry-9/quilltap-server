@@ -1,11 +1,14 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
 import { createLLMProvider } from '@/lib/llm'
+import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { LLMProvider } from '@/lib/llm/base'
 
 jest.mock('@/lib/llm/plugin-factory')
+// llm-logging.service is mocked globally in jest.setup.ts due to SWC import-hoisting
 
 const mockCreateProvider = jest.mocked(createLLMProvider)
+const mockLogLLMCall = jest.mocked(logLLMCall)
 
 type GreetingChunk = {
   content?: string
@@ -257,6 +260,108 @@ describe('generateGreetingMessage', () => {
       // No usage data → can't confirm tokens were consumed → not a content filter
       expect(result.content).toBe('')
       expect(result.contentFilterDetected).toBe(false)
+    })
+  })
+
+  describe('recent conversations injection', () => {
+    it('appends the recentConversationsBlock to the system prompt when provided', async () => {
+      await generateGreetingMessage({
+        systemPrompt: 'Base system prompt.',
+        characterName: 'Friday',
+        provider: 'OPENAI',
+        modelName: 'gpt-test',
+        recentConversationsBlock: '### Recent Conversations\n\n#### Tea on the Verandah (`chat-A`)\nThey spoke of orchids.',
+      })
+
+      const call = mockProvider.streamMessage.mock.calls[0] as [any, string]
+      const payload = call[0] as { messages: Array<{ role: string; content: string }> }
+      const systemContent = payload.messages[0].content
+
+      expect(systemContent).toContain('### Recent Conversations')
+      expect(systemContent).toContain('#### Tea on the Verandah (`chat-A`)')
+      expect(systemContent).toContain('They spoke of orchids.')
+    })
+
+    it('omits the Recent Conversations section when no block is provided', async () => {
+      await generateGreetingMessage({
+        systemPrompt: 'Base system prompt.',
+        characterName: 'Friday',
+        provider: 'OPENAI',
+        modelName: 'gpt-test',
+      })
+
+      const call = mockProvider.streamMessage.mock.calls[0] as [any, string]
+      const payload = call[0] as { messages: Array<{ role: string; content: string }> }
+      expect(payload.messages[0].content).not.toContain('### Recent Conversations')
+    })
+  })
+
+  describe('LLM logging', () => {
+    it('writes to llm_logs as CHAT_MESSAGE when userId is provided', async () => {
+      mockProvider.streamMessage.mockImplementationOnce(() =>
+        mockStream([
+          { content: 'Hello.' },
+          { content: '', done: true, usage: { promptTokens: 12, completionTokens: 3, totalTokens: 15 } },
+        ])
+      )
+
+      await generateGreetingMessage({
+        systemPrompt: 'sp',
+        characterName: 'Friday',
+        provider: 'OPENAI',
+        modelName: 'gpt-test',
+        userId: 'user-1',
+        chatId: 'chat-1',
+        characterId: 'char-1',
+      })
+
+      expect(mockLogLLMCall).toHaveBeenCalledTimes(1)
+      const args = mockLogLLMCall.mock.calls[0][0] as Parameters<typeof logLLMCall>[0]
+      expect(args.type).toBe('CHAT_MESSAGE')
+      expect(args.userId).toBe('user-1')
+      expect(args.chatId).toBe('chat-1')
+      expect(args.characterId).toBe('char-1')
+      expect(args.provider).toBe('OPENAI')
+      expect(args.modelName).toBe('gpt-test')
+      expect(args.response.content).toBe('Hello.')
+      expect(args.usage).toEqual({ promptTokens: 12, completionTokens: 3, totalTokens: 15 })
+      expect(args.durationMs).toBeGreaterThanOrEqual(0)
+    })
+
+    it('logs the call with an error field when the stream throws', async () => {
+      mockProvider.streamMessage.mockImplementationOnce(() => {
+        async function* gen() {
+          yield { content: 'partial', done: false }
+          throw new Error('boom')
+        }
+        return gen()
+      })
+
+      await expect(
+        generateGreetingMessage({
+          systemPrompt: 'sp',
+          characterName: 'Friday',
+          provider: 'OPENAI',
+          modelName: 'gpt-test',
+          userId: 'user-1',
+        })
+      ).rejects.toThrow('boom')
+
+      expect(mockLogLLMCall).toHaveBeenCalledTimes(1)
+      const args = mockLogLLMCall.mock.calls[0][0] as Parameters<typeof logLLMCall>[0]
+      expect(args.response.content).toBe('partial')
+      expect(args.response.error).toBe('boom')
+    })
+
+    it('does not write to llm_logs when userId is omitted', async () => {
+      await generateGreetingMessage({
+        systemPrompt: 'sp',
+        characterName: 'Friday',
+        provider: 'OPENAI',
+        modelName: 'gpt-test',
+      })
+
+      expect(mockLogLLMCall).not.toHaveBeenCalled()
     })
   })
 })

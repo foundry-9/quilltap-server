@@ -230,8 +230,8 @@ export function shouldSummarizeConversation(
     return true
   }
 
-  // Or if we have more than 50 messages
-  if (messageCount > 50) {
+  // Or if we have more than 20 messages
+  if (messageCount > 20) {
     return true
   }
 

@@ -54,9 +54,13 @@ const mockFormatRelativeAge = weightingMock.formatRelativeAge
 
 // Mock repository
 const mockFindRecentByImportanceTier = jest.fn()
+const mockFindRecentSummarizedByCharacter = jest.fn()
 const mockRepos = {
   memories: {
     findRecentByImportanceTier: mockFindRecentByImportanceTier,
+  },
+  chats: {
+    findRecentSummarizedByCharacter: mockFindRecentSummarizedByCharacter,
   },
 }
 
@@ -99,6 +103,9 @@ describe('Memory Recap Service', () => {
     jest.clearAllMocks()
     mockGetRepositories.mockReturnValue(mockRepos)
     mockFormatRelativeAge.mockReturnValue('2 days ago')
+    // Default: no recent summarized chats. Tests that exercise the Recent Conversations
+    // block override this.
+    mockFindRecentSummarizedByCharacter.mockResolvedValue([])
 
     // Re-import the module under test so it picks up mocked dependencies
     jest.isolateModules(() => {
@@ -456,6 +463,125 @@ describe('Memory Recap Service', () => {
       )
 
       expect(result).toEqual({ content: '', memoriesUsed: 0 })
+    })
+
+    it('should append a Recent Conversations block listing summarized prior chats', async () => {
+      mockFindRecentByImportanceTier.mockResolvedValue({
+        high: [makeMemory()],
+        medium: [],
+        low: [],
+      })
+      mockFormatRelativeAge.mockReturnValue('1 day ago')
+      mockSummarizeMemoryRecap.mockResolvedValue({
+        success: true,
+        result: 'Narrative recap.',
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+      })
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([
+        { id: 'chat-A', title: 'Tea on the Verandah', contextSummary: 'They spoke of orchids.' },
+        { id: 'chat-B', title: 'A Fateful Carriage Ride', contextSummary: 'A near miss with a horse.' },
+      ])
+
+      const result = await generateMemoryRecap(
+        testCharacterId,
+        testCharacterName,
+        testSelection,
+        testUserId,
+        testChatId
+      )
+
+      expect(result.content).toContain('### Recent Conversations')
+      expect(result.content).toContain('#### Tea on the Verandah (`chat-A`)')
+      expect(result.content).toContain('They spoke of orchids.')
+      expect(result.content).toContain('#### A Fateful Carriage Ride (`chat-B`)')
+      expect(result.content).toContain('A near miss with a horse.')
+      // Narrative still rendered above
+      expect(result.content).toContain('Narrative recap.')
+    })
+
+    it('should render Recent Conversations even when there are no narrative memories', async () => {
+      mockFindRecentByImportanceTier.mockResolvedValue({ high: [], medium: [], low: [] })
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([
+        { id: 'chat-X', title: 'Old Friends', contextSummary: 'Reunion at the club.' },
+      ])
+
+      const result = await generateMemoryRecap(
+        testCharacterId,
+        testCharacterName,
+        testSelection,
+        testUserId,
+        testChatId
+      )
+
+      expect(mockSummarizeMemoryRecap).not.toHaveBeenCalled()
+      expect(result.content).toContain('## What You Remember')
+      expect(result.content).toContain('### Recent Conversations')
+      expect(result.content).toContain('#### Old Friends (`chat-X`)')
+    })
+
+    it('should pass the current chatId as excludeChatId when looking up recent conversations', async () => {
+      mockFindRecentByImportanceTier.mockResolvedValue({ high: [], medium: [], low: [] })
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([])
+
+      await generateMemoryRecap(
+        testCharacterId,
+        testCharacterName,
+        testSelection,
+        testUserId,
+        testChatId
+      )
+
+      expect(mockFindRecentSummarizedByCharacter).toHaveBeenCalledWith(
+        testCharacterId,
+        expect.objectContaining({ excludeChatId: testChatId })
+      )
+    })
+
+    it('should scale the recent-conversations limit linearly with maxContext', async () => {
+      mockFindRecentByImportanceTier.mockResolvedValue({ high: [], medium: [], low: [] })
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([])
+
+      // 4K → 5
+      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 4000)
+      expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
+        testCharacterId,
+        expect.objectContaining({ limit: 5 })
+      )
+
+      // 32K → 20
+      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 32000)
+      expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
+        testCharacterId,
+        expect.objectContaining({ limit: 20 })
+      )
+
+      // Midpoint 18K → ~12.5 → rounds to 13
+      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 18000)
+      expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
+        testCharacterId,
+        expect.objectContaining({ limit: 13 })
+      )
+
+      // Below 4K clamps to MIN
+      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 2000)
+      expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
+        testCharacterId,
+        expect.objectContaining({ limit: 5 })
+      )
+
+      // Above 32K clamps to MAX
+      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 200000)
+      expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
+        testCharacterId,
+        expect.objectContaining({ limit: 20 })
+      )
+
+      // null/undefined defaults to MAX
+      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, null)
+      expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
+        testCharacterId,
+        expect.objectContaining({ limit: 20 })
+      )
     })
 
     it('should count memories across all tiers correctly', async () => {

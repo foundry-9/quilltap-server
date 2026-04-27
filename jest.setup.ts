@@ -314,6 +314,25 @@ jest.mock('@/lib/file-storage/manager', () => {
   }
 })
 
+// Mock LLM logging service — same SWC hoisting reason as below. Tests that need
+// to assert against logLLMCall do so via `jest.mocked(logLLMCall)`.
+jest.mock('@/lib/services/llm-logging.service', () => ({
+  logLLMCall: jest.fn().mockResolvedValue(null),
+  isLoggingEnabled: jest.fn().mockResolvedValue({ enabled: true, verboseMode: false, retentionDays: 30 }),
+  getLogsForMessage: jest.fn().mockResolvedValue([]),
+  getLogsForChat: jest.fn().mockResolvedValue([]),
+  getLogsForCharacter: jest.fn().mockResolvedValue([]),
+  messageHasLogs: jest.fn().mockResolvedValue(false),
+  getLogsForUser: jest.fn().mockResolvedValue([]),
+  getRecentLogs: jest.fn().mockResolvedValue([]),
+  countLogsForUser: jest.fn().mockResolvedValue(0),
+  getTotalTokenUsage: jest.fn().mockResolvedValue({ promptTokens: 0, completionTokens: 0, totalTokens: 0 }),
+  getLogsByType: jest.fn().mockResolvedValue([]),
+  cleanupOldLogs: jest.fn().mockResolvedValue(0),
+  deleteAllLogsForUser: jest.fn().mockResolvedValue(0),
+  getStandaloneLogs: jest.fn().mockResolvedValue([]),
+}))
+
 // Mock embedding service — required here because SWC's import hoisting prevents
 // test-level jest.mock from taking effect before ES imports resolve.
 // Tests that need the REAL embedding service (e.g. embedding-service.test.ts)

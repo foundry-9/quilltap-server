@@ -15,6 +15,8 @@ import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
+import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/memory-recap';
+import { getModelContextLimit } from '@/lib/llm/model-context-data';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import { z } from 'zod';
@@ -398,7 +400,7 @@ async function createInitialMessages(
   let firstMessageContent = (context.firstMessage || '').trim();
 
   if (!firstMessageContent) {
-    firstMessageContent = await autoGenerateFirstMessage(context, participants, userId, repos, projectId);
+    firstMessageContent = await autoGenerateFirstMessage(chatId, context, participants, userId, repos, projectId);
   }
 
   if (!firstMessageContent) {
@@ -425,6 +427,7 @@ async function createInitialMessages(
   await repos.chats.addMessage(chatId, firstMessage);}
 
 async function autoGenerateFirstMessage(
+  chatId: string,
   context: ChatContext,
   participants: ChatParticipantBaseInput[],
   userId: string,
@@ -480,6 +483,32 @@ async function autoGenerateFirstMessage(
     });
   }
 
+  // Compute the Recent Conversations block once and reuse across retry attempts.
+  // The new chat has no contextSummary yet, so excluding it is defensive only.
+  let recentConversationsBlock = '';
+  try {
+    const maxContext =
+      connectionProfile.maxContext ??
+      getModelContextLimit(connectionProfile.provider, connectionProfile.modelName);
+    const limit = calculateRecentConversationsLimit(maxContext);
+    recentConversationsBlock = await buildRecentConversationsBlock(
+      context.character.id,
+      chatId,
+      limit
+    );
+  } catch (error) {
+    logger.warn('[Chats v1] Failed to build recent-conversations block for greeting', {
+      characterId: context.character.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const loggingFields = {
+    userId,
+    chatId,
+    characterId: context.character.id,
+  };
+
   const extractNumber = (value: unknown): number | undefined => {
     if (typeof value === 'number' && !Number.isNaN(value)) return value;
     if (typeof value === 'string') {
@@ -508,8 +537,10 @@ async function autoGenerateFirstMessage(
   try {
     const result = await generateGreetingMessage({
       ...baseParams,
+      ...loggingFields,
       participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
       projectContext,
+      recentConversationsBlock: recentConversationsBlock || undefined,
     });
 
     if (result.content) {
@@ -536,7 +567,9 @@ async function autoGenerateFirstMessage(
 
       const result = await generateGreetingMessage({
         ...baseParams,
+        ...loggingFields,
         projectContext,
+        recentConversationsBlock: recentConversationsBlock || undefined,
       });
 
       if (result.content) {
@@ -583,6 +616,7 @@ async function autoGenerateFirstMessage(
           const uncensoredParameters = uncensoredParams ?? {};
 
           const result = await generateGreetingMessage({
+            ...loggingFields,
             systemPrompt: context.systemPrompt,
             characterName: context.character.name,
             provider: routeResult.connectionProfile.provider,
@@ -594,6 +628,7 @@ async function autoGenerateFirstMessage(
             topP: extractNumber(uncensoredParameters.topP) ?? extractNumber(parameters.topP),
             participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
             projectContext,
+            recentConversationsBlock: recentConversationsBlock || undefined,
           });
 
           if (result.content) {
@@ -617,7 +652,7 @@ async function autoGenerateFirstMessage(
   // Attempt 4: Final plain retry with delay for transient failures
   try {
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    const result = await generateGreetingMessage({ ...baseParams });
+    const result = await generateGreetingMessage({ ...baseParams, ...loggingFields });
 
     if (result.content) {
       logger.info('[Chats v1] Greeting generation succeeded on final retry', {

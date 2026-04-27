@@ -813,7 +813,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         options.cheapLLMSelection,
         userId,
         chat.id,
-        options.uncensoredFallbackOptions
+        options.uncensoredFallbackOptions,
+        budgetInfo?.maxContext
       )
 
       if (recapResult.content) {
