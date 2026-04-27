@@ -99,7 +99,7 @@ export default function RoleplayTemplatesTab() {
 
       {/* Default Template Section */}
       <section className="border qt-border-default rounded-lg p-4 qt-bg-card">
-        <h2 className="text-lg font-semibold mb-2">Default Template</h2>
+        <h2 className="qt-heading-4 mb-2">Default Template</h2>
         <p className="qt-text-small mb-4">
           This template will be applied to all new chats by default. You can override it per-character or per-chat.
         </p>
@@ -130,7 +130,7 @@ export default function RoleplayTemplatesTab() {
 
       {/* Built-in Templates Section */}
       <section>
-        <h2 className="text-xl font-semibold mb-2">Built-in Templates</h2>
+        <h2 className="qt-heading-3 mb-2">Built-in Templates</h2>
         <p className="qt-text-small mb-4">
           These templates are provided by Quilltap and cannot be modified. You can copy them to create your own version.
         </p>
@@ -158,7 +158,7 @@ export default function RoleplayTemplatesTab() {
       <section>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-xl font-semibold">My Templates</h2>
+            <h2 className="qt-heading-3">My Templates</h2>
             <p className="qt-text-small mt-1">
               Custom templates you&apos;ve created for your roleplay sessions.
             </p>
@@ -201,7 +201,7 @@ export default function RoleplayTemplatesTab() {
         <div className="qt-dialog-overlay">
           <div className="bg-background border qt-border-default rounded-lg qt-shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
             <div className="p-6">
-              <h2 className="text-xl font-semibold mb-4">
+              <h2 className="qt-heading-3 mb-4">
                 {editingTemplate ? 'Edit Template' : 'Create Template'}
               </h2>
 
@@ -503,7 +503,7 @@ export default function RoleplayTemplatesTab() {
             <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h2 className="text-xl font-semibold">{previewTemplate.name}</h2>
+                  <h2 className="qt-heading-3">{previewTemplate.name}</h2>
                   {previewTemplate.description && (
                     <p className="qt-text-small mt-1">
                       {previewTemplate.description}

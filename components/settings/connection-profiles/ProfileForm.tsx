@@ -89,7 +89,7 @@ export function ProfileForm({
 
   return (
     <div id="profile-form" className="qt-bg-card border qt-border-default rounded-lg p-6">
-      <h3 className="text-lg font-semibold mb-4">
+      <h3 className="qt-heading-4 mb-4">
         {editingId ? 'Edit Connection Profile' : 'Add New Connection Profile'}
       </h3>
       <form onSubmit={onSubmit} className="space-y-4">
