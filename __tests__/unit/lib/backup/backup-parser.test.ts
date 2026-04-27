@@ -966,4 +966,224 @@ describe('Backup Parser', () => {
       }
     })
   })
+
+  // ===========================================================================
+  // Regression: character-plugin-data and conversation-annotations
+  // fix(backup) 253c448d — these were silently omitted from backups before
+  // ===========================================================================
+  describe('parseBackupZip() — new data categories from fix(backup)', () => {
+    it('parses character-plugin-data.json when present in the archive', async () => {
+      const characterPluginData = [
+        {
+          id: 'cpd-1',
+          characterId: 'char-1',
+          pluginName: 'qtap-plugin-test',
+          data: { someKey: 'someValue' },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'cpd-2',
+          characterId: 'char-1',
+          pluginName: 'qtap-plugin-other',
+          data: { counter: 42 },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ]
+
+      const zipPath = createBackupZipFile({
+        characters: [createMockCharacter({ id: 'char-1' })],
+        chats: [],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
+      })
+
+      // Inject character-plugin-data.json into the zip after creation
+      const tempDir = path.dirname(zipPath)
+      const rootFolder = path.basename(zipPath, '.zip')
+      const stagingDir = path.join(tempDir, rootFolder)
+      fs.mkdirSync(path.join(stagingDir, 'data'), { recursive: true })
+      fs.writeFileSync(
+        path.join(stagingDir, 'data', 'character-plugin-data.json'),
+        JSON.stringify(characterPluginData, null, 2)
+      )
+      execFileSync('zip', ['-r', zipPath, rootFolder], { cwd: tempDir })
+      fs.rmSync(stagingDir, { recursive: true, force: true })
+
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
+
+        expect(result.characterPluginData).toBeDefined()
+        expect(result.characterPluginData).toHaveLength(2)
+        expect(result.characterPluginData![0].pluginName).toBe('qtap-plugin-test')
+        expect(result.characterPluginData![1].pluginName).toBe('qtap-plugin-other')
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
+    }, 15000)
+
+    it('returns empty array for characterPluginData when file is absent (backwards compat)', async () => {
+      const zipPath = createBackupZipFile({
+        characters: [],
+        chats: [],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
+      })
+
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
+
+        // Must not throw; gracefully falls back to []
+        expect(result.characterPluginData).toBeDefined()
+        expect(Array.isArray(result.characterPluginData)).toBe(true)
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
+    }, 15000)
+
+    it('parses conversation-annotations.json when present in the archive', async () => {
+      const now = new Date().toISOString()
+      const conversationAnnotations = [
+        {
+          id: 'ann-1',
+          chatId: 'chat-1',
+          messageIndex: 0,
+          sourceMessageId: 'msg-1',
+          characterName: 'Amy',
+          content: 'This is an annotation.',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]
+
+      const zipPath = createBackupZipFile({
+        characters: [],
+        chats: [{ ...createMockChat({ id: 'chat-1' }), messages: [] }],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
+      })
+
+      // Inject conversation-annotations.json into the zip after creation
+      const tempDir = path.dirname(zipPath)
+      const rootFolder = path.basename(zipPath, '.zip')
+      const stagingDir = path.join(tempDir, rootFolder)
+      fs.mkdirSync(path.join(stagingDir, 'data'), { recursive: true })
+      fs.writeFileSync(
+        path.join(stagingDir, 'data', 'conversation-annotations.json'),
+        JSON.stringify(conversationAnnotations, null, 2)
+      )
+      execFileSync('zip', ['-r', zipPath, rootFolder], { cwd: tempDir })
+      fs.rmSync(stagingDir, { recursive: true, force: true })
+
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
+
+        expect(result.conversationAnnotations).toBeDefined()
+        expect(result.conversationAnnotations).toHaveLength(1)
+        expect(result.conversationAnnotations![0].characterName).toBe('Amy')
+        expect(result.conversationAnnotations![0].content).toBe('This is an annotation.')
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
+    }, 15000)
+
+    it('returns empty array for conversationAnnotations when file is absent (backwards compat)', async () => {
+      const zipPath = createBackupZipFile({
+        characters: [],
+        chats: [],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
+      })
+
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
+
+        expect(result.conversationAnnotations).toBeDefined()
+        expect(Array.isArray(result.conversationAnnotations)).toBe(true)
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
+    }, 15000)
+
+    it('includes characterPluginData and conversationAnnotations counts in previewRestore()', async () => {
+      const now = new Date().toISOString()
+      const characterPluginData = [
+        { id: 'cpd-1', characterId: 'char-1', pluginName: 'p1', data: {}, createdAt: now, updatedAt: now },
+        { id: 'cpd-2', characterId: 'char-1', pluginName: 'p2', data: {}, createdAt: now, updatedAt: now },
+      ]
+      const conversationAnnotations = [
+        {
+          id: 'ann-1',
+          chatId: 'chat-1',
+          messageIndex: 0,
+          sourceMessageId: null,
+          characterName: 'Amy',
+          content: 'note',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]
+
+      const zipPath = createBackupZipFile({
+        characters: [createMockCharacter({ id: 'char-1' })],
+        chats: [{ ...createMockChat({ id: 'chat-1' }), messages: [] }],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
+      })
+
+      // Inject extra files
+      const tempDir = path.dirname(zipPath)
+      const rootFolder = path.basename(zipPath, '.zip')
+      const stagingDir = path.join(tempDir, rootFolder)
+      fs.mkdirSync(path.join(stagingDir, 'data'), { recursive: true })
+      fs.writeFileSync(
+        path.join(stagingDir, 'data', 'character-plugin-data.json'),
+        JSON.stringify(characterPluginData, null, 2)
+      )
+      fs.writeFileSync(
+        path.join(stagingDir, 'data', 'conversation-annotations.json'),
+        JSON.stringify(conversationAnnotations, null, 2)
+      )
+      execFileSync('zip', ['-r', zipPath, rootFolder], { cwd: tempDir })
+      fs.rmSync(stagingDir, { recursive: true, force: true })
+
+      try {
+        const summary = await previewRestore(zipPath)
+
+        expect(summary.characterPluginData).toBe(2)
+        expect(summary.conversationAnnotations).toBe(1)
+      } finally {
+        cleanupZip(zipPath)
+      }
+    }, 15000)
+  })
 })

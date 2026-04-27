@@ -232,6 +232,63 @@ describe('SQLite Query Translator', () => {
         // Surrounding % added for substring matching
         expect(result.params).toEqual(['%test%']);
       });
+
+      it('should NOT anchor regex patterns — anchors pass through as literals', () => {
+        // Regression test: anchored patterns like ^folder/[^/]+\.md$ were silently
+        // matching nothing because the translator wraps in %…% and doesn't handle
+        // anchors. This test documents the known limitation so a future change
+        // doesn't accidentally "fix" $regex to anchor and break other callers.
+        const result = translateFilter({ path: { $regex: '^Prompts/[^/]+\\.md$' } });
+        expect(result.sql).toBe('"path" LIKE ?');
+        // Anchors and character classes pass through as literals in the LIKE pattern
+        expect(result.params[0]).toContain('%');
+      });
+    });
+
+    describe('$like operator', () => {
+      it('should emit a literal LIKE without wrapping', () => {
+        // Regression test: $like was added specifically because $regex always wraps
+        // in %…% which prevents anchored/prefix matches from working. $like lets
+        // the caller supply exact LIKE wildcards.
+        const result = translateFilter({ path: { $like: 'Prompts/%' } });
+        expect(result.sql).toBe('"path" LIKE ?');
+        expect(result.params).toEqual(['Prompts/%']);
+      });
+
+      it('should pass the pattern through exactly — no wrapping', () => {
+        const result = translateFilter({ filePath: { $like: 'projects/abc/%' } });
+        expect(result.sql).toBe('"filePath" LIKE ?');
+        expect(result.params).toEqual(['projects/abc/%']);
+      });
+
+      it('should support underscore wildcard without transformation', () => {
+        const result = translateFilter({ name: { $like: 'user_name' } });
+        expect(result.sql).toBe('"name" LIKE ?');
+        expect(result.params).toEqual(['user_name']);
+      });
+
+      it('should work inside $and alongside other operators', () => {
+        const result = translateFilter({
+          $and: [
+            { mountPointId: 'mp-1' },
+            { path: { $like: 'Scenarios/%' } },
+          ],
+        });
+        expect(result.sql).toContain('"mountPointId" = ?');
+        expect(result.sql).toContain('"path" LIKE ?');
+        expect(result.params).toContain('mp-1');
+        expect(result.params).toContain('Scenarios/%');
+      });
+
+      it('differs from $regex in that it does not add surrounding percent signs', () => {
+        // $regex wraps in %…%, $like does not
+        const regexResult = translateFilter({ path: { $regex: 'Prompts' } });
+        const likeResult = translateFilter({ path: { $like: 'Prompts' } });
+        // $regex adds surrounding %
+        expect(regexResult.params).toEqual(['%Prompts%']);
+        // $like passes through unchanged
+        expect(likeResult.params).toEqual(['Prompts']);
+      });
     });
 
     describe('Logical operators - $and', () => {
