@@ -19,6 +19,7 @@ import {
   postHostStatusChangeAnnouncement,
   postHostRemoveAnnouncement,
 } from '@/lib/services/host-notifications/writer';
+import { postProsperoConnectionProfileChangeAnnouncement } from '@/lib/services/prospero-notifications/writer';
 
 type Repos = RepositoryContainer;
 
@@ -125,9 +126,32 @@ export async function handleParticipantUpdate(
     return { error: 'Chat not found', status: 404 };
   }
 
+  const oldParticipant = chat.participants.find((p) => p.id === participantId);
+  const oldConnectionProfileId = oldParticipant?.connectionProfileId ?? null;
+
   const result = await repos.chats.updateParticipant(chatId, participantId, participantData);
   if (!result) {
     return { error: 'Participant not found', status: 404 };
+  }
+
+  if (
+    participantData.connectionProfileId !== undefined &&
+    participantData.connectionProfileId !== oldConnectionProfileId &&
+    oldParticipant?.characterId
+  ) {
+    const character = await repos.characters.findById(oldParticipant.characterId);
+    if (character) {
+      const oldProfile = oldConnectionProfileId
+        ? await repos.connections.findById(oldConnectionProfileId)
+        : null;
+      const newProfile = await repos.connections.findById(participantData.connectionProfileId);
+      await postProsperoConnectionProfileChangeAnnouncement({
+        chatId,
+        characterName: character.name,
+        oldProfileLabel: oldProfile?.name ?? null,
+        newProfileLabel: newProfile?.name ?? null,
+      });
+    }
   }
 
   if (participantData.controlledBy !== undefined) {

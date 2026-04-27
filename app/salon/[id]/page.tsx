@@ -929,6 +929,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (message.systemSender === 'host') {
       return { name: 'The Host', title: null, avatarUrl: '/images/avatars/host-avatar.webp', defaultImage: null }
     }
+    if (message.systemSender === 'prospero') {
+      return { name: 'Prospero', title: null, avatarUrl: '/images/avatars/prospero-avatar.webp', defaultImage: null }
+    }
     if (message.participantId) {
       const participant = participantsWithImpersonation.getParticipantById(message.participantId)
       if (participant) {
