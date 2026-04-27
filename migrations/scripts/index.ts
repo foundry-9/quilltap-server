@@ -201,6 +201,8 @@ import { dropFilePermissionsMigration } from './drop-file-permissions';
 import { addCharacterSystemTransparencyFieldMigration } from './add-character-system-transparency-field';
 // Add officialMountPointId column to projects + backfill from `Project Files: <name>` stores
 import { addProjectOfficialMountPointMigration } from './add-project-official-mount-point';
+// Add compositionModeDefault column to chat_settings
+import { addCompositionModeDefaultFieldMigration } from './add-composition-mode-default-field';
 
 /**
  * All available migrations.
@@ -397,6 +399,8 @@ export const migrations: Migration[] = [
   addCharacterSystemTransparencyFieldMigration,
   // Add officialMountPointId column to projects + backfill from `Project Files: <name>` stores
   addProjectOfficialMountPointMigration,
+  // Add compositionModeDefault column to chat_settings
+  addCompositionModeDefaultFieldMigration,
 ];
 
 export {
@@ -578,5 +582,7 @@ export {
   addCharacterSystemTransparencyFieldMigration,
   // Add officialMountPointId column to projects + backfill from `Project Files: <name>` stores
   addProjectOfficialMountPointMigration,
+  // Add compositionModeDefault column to chat_settings
+  addCompositionModeDefaultFieldMigration,
 };
 

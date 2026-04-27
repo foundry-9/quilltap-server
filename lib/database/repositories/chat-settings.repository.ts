@@ -207,6 +207,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               retentionDays: 30,
             },
             autoDetectRng: true,
+            compositionModeDefault: false,
             agentModeSettings: {
               maxTurns: 10,
               defaultEnabled: false,

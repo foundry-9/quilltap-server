@@ -361,6 +361,7 @@ export async function handleGet(
       avatarGenerationEnabled: chatMetadata.avatarGenerationEnabled ?? null,
       isDangerousChat: chatMetadata.isDangerousChat ?? null,
       dangerCategories: chatMetadata.dangerCategories || [],
+      documentEditingMode: chatMetadata.documentEditingMode ?? false,
       documentMode: chatMetadata.documentMode || 'normal',
       dividerPosition: chatMetadata.dividerPosition ?? 45,
     };

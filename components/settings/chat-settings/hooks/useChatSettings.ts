@@ -48,6 +48,7 @@ interface UseChatSettingsReturn {
   handleContextCompressionUpdate: (updates: Partial<ContextCompressionSettings>) => Promise<void>
   handleLLMLoggingChange: (key: keyof LLMLoggingSettings, value: boolean | number) => Promise<void>
   handleAutoDetectRngChange: (value: boolean) => Promise<void>
+  handleCompositionModeDefaultChange: (value: boolean) => Promise<void>
   handleAgentModeDefaultEnabledChange: (value: boolean) => Promise<void>
   handleAgentModeMaxTurnsChange: (value: number) => Promise<void>
   handleStoryBackgroundsEnabledChange: (value: boolean) => Promise<void>
@@ -428,6 +429,40 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Update default-composition-mode setting
+   */
+  const handleCompositionModeDefaultChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ compositionModeDefault: value }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update composition mode default')
+        }
+
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update composition mode default', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
    * Update agent mode default enabled setting
    */
   const handleAgentModeDefaultEnabledChange = useCallback(
@@ -675,6 +710,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleContextCompressionUpdate,
     handleLLMLoggingChange,
     handleAutoDetectRngChange,
+    handleCompositionModeDefaultChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
     handleStoryBackgroundsEnabledChange,

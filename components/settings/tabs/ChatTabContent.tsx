@@ -3,6 +3,7 @@
 import { useSubsystemInfo } from '@/components/providers/theme-provider'
 import { useChatSettingsContext } from '@/components/settings/chat-settings/ChatSettingsProvider'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
+import { CompositionModeDefaultSettings } from '@/components/settings/chat-settings/CompositionModeDefaultSettings'
 import { TokenDisplaySettingsComponent } from '@/components/settings/chat-settings/TokenDisplaySettings'
 import { ContextCompressionSettingsComponent } from '@/components/settings/chat-settings/ContextCompressionSettings'
 import { MemoryCascadeSettings } from '@/components/settings/chat-settings/MemoryCascadeSettings'
@@ -23,6 +24,7 @@ export function ChatTabContent() {
     imageProfiles,
     loadingProfiles,
     handleTokenDisplayChange,
+    handleCompositionModeDefaultChange,
     handleContextCompressionUpdate,
     handleMemoryCascadeUpdate,
     handleImageDescriptionProfileChange,
@@ -50,6 +52,14 @@ export function ChatTabContent() {
       <p className="qt-text-small qt-text-muted italic mb-6">{info.description}</p>
 
       <div className="space-y-4">
+        <CollapsibleCard title="Composition Mode" description="Whether new chats start in composition mode" sectionId="composition-mode" forceOpen={activeSection === 'composition-mode'}>
+          <CompositionModeDefaultSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleCompositionModeDefaultChange}
+          />
+        </CollapsibleCard>
+
         <CollapsibleCard title="Token Display" description="Configure token count and cost display" sectionId="token-display" forceOpen={activeSection === 'token-display'}>
           <TokenDisplaySettingsComponent
             settings={settings}

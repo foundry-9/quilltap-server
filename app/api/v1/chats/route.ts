@@ -861,6 +861,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     disabledToolGroups: projectToolDefaults.disabledToolGroups,
     imageProfileId: chatImageProfileId,
     avatarGenerationEnabled: validatedData.avatarGenerationEnabled ?? projectAvatarGenerationDefault ?? null,
+    documentEditingMode: chatSettings?.compositionModeDefault ?? false,
   });
 
   // Apply outfit selections to the newly created chat

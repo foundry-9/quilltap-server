@@ -488,6 +488,7 @@ CREATE TABLE "chat_settings" (
   "storyBackgroundsSettings" TEXT DEFAULT '{"enabled":false,"defaultImageProfileId":null}',
   "dangerousContentSettings" TEXT DEFAULT '{"mode":"OFF","threshold":0.7,"scanTextChat":true,"scanImagePrompts":true,"scanImageGeneration":false,"displayMode":"SHOW","showWarningBadges":true}',
   "autoLockSettings" TEXT DEFAULT '{"enabled":false,"idleMinutes":15}',
+  "compositionModeDefault" INTEGER DEFAULT 0,
   UNIQUE("userId")
 );
 

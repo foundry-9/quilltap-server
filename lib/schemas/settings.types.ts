@@ -349,6 +349,8 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically (default: true) */
   autoDetectRng: z.boolean().default(true),
+  /** Whether new chats start in composition mode (Enter = newline, Ctrl/Cmd+Enter = submit) by default */
+  compositionModeDefault: z.boolean().default(false),
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings: AgentModeSettingsSchema.default({
     maxTurns: 10,
