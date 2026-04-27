@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import { getRepositories } from '@/lib/repositories/factory';
+import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
 import type {
   Character,
   ChatMetadata,
@@ -1007,6 +1008,31 @@ function migrateCharacterScenarios(character: any): any {
   };
 }
 
+/**
+ * Provision a character vault for a newly imported character. Awaited so the
+ * import's reported success state matches reality (vault-aware features like
+ * the Scriptorium can see the character immediately). Failures are recorded
+ * as warnings rather than aborting the import — the startup backfill will
+ * retry, since `ensureCharacterVault` is idempotent.
+ */
+async function provisionImportedCharacterVault(
+  character: Character,
+  warnings: string[]
+): Promise<void> {
+  try {
+    await ensureCharacterVault(character);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warnings.push(
+      `Failed to provision character vault for "${character.name}": ${message}`
+    );
+    moduleLogger.warn('Failed to provision vault during import', {
+      characterId: character.id,
+      error: message,
+    });
+  }
+}
+
 async function importCharacters(
   userId: string,
   characters: Character[],
@@ -1083,6 +1109,8 @@ async function importCharacters(
             warnings
           );
 
+          await provisionImportedCharacterVault(newCharacter, warnings);
+
           imported++;
           continue;
         }
@@ -1105,6 +1133,8 @@ async function importCharacters(
         newCharacter.id,
         warnings
       );
+
+      await provisionImportedCharacterVault(newCharacter, warnings);
 
       imported++;
     } catch (error) {
