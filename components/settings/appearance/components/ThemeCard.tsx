@@ -188,7 +188,7 @@ export function ThemeCard({
         {/* Header with theme name, apply, and close buttons */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <div className="qt-text-primary text-lg font-semibold">{name}</div>
+            <div className="qt-text-primary qt-heading-4">{name}</div>
             {description && (
               <div className="qt-text-small mt-0.5 max-w-2xl">
                 {description}

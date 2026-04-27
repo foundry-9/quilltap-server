@@ -73,7 +73,7 @@ export function ProfilesTab({
     <div className="space-y-8">
       {/* Connection Profile Section */}
       <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-2">
+        <h2 className="qt-heading-4 text-foreground mb-2">
           Default Connection Profile
         </h2>
         <p className="qt-text-small mb-4">
@@ -114,7 +114,7 @@ export function ProfilesTab({
 
       {/* Default Partner Section */}
       <div className={`character-section-card rounded-lg border qt-border-default qt-bg-card p-6 ${isUserControlled ? 'opacity-50' : ''}`}>
-        <h2 className="text-lg font-semibold text-foreground mb-2">
+        <h2 className="qt-heading-4 text-foreground mb-2">
           Default Conversation Partner
         </h2>
         <p className="qt-text-small mb-4">
@@ -154,7 +154,7 @@ export function ProfilesTab({
 
       {/* Image Profile Section */}
       <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-2">
+        <h2 className="qt-heading-4 text-foreground mb-2">
           Image Generation Profile
         </h2>
         <p className="qt-text-small mb-4">
@@ -181,7 +181,7 @@ export function ProfilesTab({
       {/* Default System Prompt Section - only show if more than one prompt */}
       {character.systemPrompts && character.systemPrompts.length > 1 && (
         <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-2">
+          <h2 className="qt-heading-4 text-foreground mb-2">
             Default System Prompt
           </h2>
           <p className="qt-text-small mb-4">
@@ -214,7 +214,7 @@ export function ProfilesTab({
       {/* Default Scenario Section - only show if more than one scenario */}
       {character.scenarios && character.scenarios.length > 1 && (
         <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-2">
+          <h2 className="qt-heading-4 text-foreground mb-2">
             Default Scenario
           </h2>
           <p className="qt-text-small mb-4">
@@ -246,7 +246,7 @@ export function ProfilesTab({
 
       {/* Agent Mode Section */}
       <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-2">
+        <h2 className="qt-heading-4 text-foreground mb-2">
           Agent Mode
         </h2>
         <p className="qt-text-small mb-4">
@@ -278,7 +278,7 @@ export function ProfilesTab({
 
       {/* Help Tools Section */}
       <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-2">
+        <h2 className="qt-heading-4 text-foreground mb-2">
           Help Tools
         </h2>
         <p className="qt-text-small mb-4">
@@ -310,13 +310,13 @@ export function ProfilesTab({
 
       {/* Wardrobe Section */}
       <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-2">
+        <h2 className="qt-heading-4 text-foreground mb-2">
           Wardrobe
         </h2>
 
         {/* Self-Dressing */}
         <div className="mb-6">
-          <h3 className="text-sm font-medium text-foreground mb-1">Self-Dressing</h3>
+          <h3 className="qt-text-label mb-1">Self-Dressing</h3>
           <p className="qt-text-small mb-3">
             Control whether this character can change their own outfit during conversations using wardrobe tools.
           </p>
@@ -345,7 +345,7 @@ export function ProfilesTab({
 
         {/* Outfit Creation */}
         <div>
-          <h3 className="text-sm font-medium text-foreground mb-1">Outfit Creation</h3>
+          <h3 className="qt-text-label mb-1">Outfit Creation</h3>
           <p className="qt-text-small mb-3">
             Control whether this character can create new wardrobe items mid-conversation. Requires tool use.
           </p>
@@ -375,7 +375,7 @@ export function ProfilesTab({
 
       {/* Default Timestamp Settings Section */}
       <div className="character-section-card rounded-lg border qt-border-default qt-bg-card p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-2">
+        <h2 className="qt-heading-4 text-foreground mb-2">
           Default Timestamp Settings
         </h2>
         <p className="qt-text-small mb-4">
