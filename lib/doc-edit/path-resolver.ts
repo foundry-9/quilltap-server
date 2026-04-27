@@ -88,19 +88,44 @@ function isAbsolutePath(p: string): boolean {
 }
 
 /**
- * Safely resolve a real path with fallback to path.resolve if realpath fails
+ * Safely resolve a real path with fallback to path.resolve if realpath fails.
+ *
+ * When the leaf doesn't exist yet (e.g. a new file we're about to write),
+ * walks up the path to the deepest existing ancestor, realpaths *that*, then
+ * re-attaches the missing tail. This keeps boundary checks correct on data
+ * directories that live behind a symlink — e.g. `~/iCloud` on macOS, which
+ * resolves to `~/Library/Mobile Documents/com~apple~CloudDocs`. Without the
+ * walk-up, the file's realpath would expand the symlink while a missing
+ * sibling's `path.resolve` would not, and the two sides of a containment
+ * check would disagree even though both refer to the same tree.
  */
 async function safeRealpath(p: string): Promise<string> {
   try {
     return await fs.realpath(p);
   } catch {
-    // Fallback if file doesn't exist yet or other errors
+    // Walk up to the deepest existing ancestor and realpath that, then
+    // re-attach the unresolved tail. This handles "file doesn't exist yet"
+    // without losing symlink resolution on the parent directory.
+    const tail: string[] = [];
+    let current = path.resolve(p);
+    while (current !== path.dirname(current)) {
+      const parent = path.dirname(current);
+      try {
+        const realParent = await fs.realpath(parent);
+        return path.join(realParent, ...tail.reverse(), path.basename(current));
+      } catch {
+        tail.push(path.basename(current));
+        current = parent;
+      }
+    }
     return path.resolve(p);
   }
 }
 
 /**
- * Verify that a resolved path stays within the expected base directory
+ * Verify that a resolved path stays within the expected base directory.
+ * Both arguments must already be realpath'd (or both unresolved) so symlink
+ * expansion is symmetric — see `safeRealpath` for why that matters.
  */
 function verifyPathIsWithinBase(resolvedPath: string, baseDir: string): boolean {
   // Normalize both paths for comparison
@@ -297,12 +322,15 @@ async function resolveDocumentStorePath(
 
   const baseDir = mountPoint.basePath;
   const joinedPath = path.join(baseDir, relativePath);
-  const realPath = await safeRealpath(joinedPath);
+  const [realBase, realPath] = await Promise.all([
+    safeRealpath(baseDir),
+    safeRealpath(joinedPath),
+  ]);
 
   // Verify path stays within base directory
-  if (!verifyPathIsWithinBase(realPath, baseDir)) {
+  if (!verifyPathIsWithinBase(realPath, realBase)) {
     logger.warn(
-      `Path resolution escaped base directory: ${relativePath} -> ${realPath} (base: ${baseDir})`
+      `Path resolution escaped base directory: ${relativePath} -> ${realPath} (base: ${realBase})`
     );
     throw new PathResolutionError(
       `Path escapes mount point boundary`,
@@ -341,12 +369,15 @@ async function resolveProjectPath(
   const filesDir = getFilesDir();
   const baseDir = path.join(filesDir, context.projectId);
   const joinedPath = path.join(baseDir, relativePath);
-  const realPath = await safeRealpath(joinedPath);
+  const [realBase, realPath] = await Promise.all([
+    safeRealpath(baseDir),
+    safeRealpath(joinedPath),
+  ]);
 
   // Verify path stays within project directory
-  if (!verifyPathIsWithinBase(realPath, baseDir)) {
+  if (!verifyPathIsWithinBase(realPath, realBase)) {
     logger.warn(
-      `Path resolution escaped project directory: ${relativePath} -> ${realPath} (base: ${baseDir})`
+      `Path resolution escaped project directory: ${relativePath} -> ${realPath} (base: ${realBase})`
     );
     throw new PathResolutionError(
       `Path escapes project boundary`,
@@ -359,7 +390,7 @@ async function resolveProjectPath(
   return {
     absolutePath: realPath,
     scope: 'project',
-    basePath: baseDir,
+    basePath: realBase,
     relativePath,
   };
 }
@@ -374,12 +405,15 @@ async function resolveGeneralPath(
   const filesDir = getFilesDir();
   const baseDir = path.join(filesDir, '_general');
   const joinedPath = path.join(baseDir, relativePath);
-  const realPath = await safeRealpath(joinedPath);
+  const [realBase, realPath] = await Promise.all([
+    safeRealpath(baseDir),
+    safeRealpath(joinedPath),
+  ]);
 
   // Verify path stays within general directory
-  if (!verifyPathIsWithinBase(realPath, baseDir)) {
+  if (!verifyPathIsWithinBase(realPath, realBase)) {
     logger.warn(
-      `Path resolution escaped general directory: ${relativePath} -> ${realPath} (base: ${baseDir})`
+      `Path resolution escaped general directory: ${relativePath} -> ${realPath} (base: ${realBase})`
     );
     throw new PathResolutionError(
       `Path escapes general storage boundary`,
@@ -392,7 +426,7 @@ async function resolveGeneralPath(
   return {
     absolutePath: realPath,
     scope: 'general',
-    basePath: baseDir,
+    basePath: realBase,
     relativePath,
   };
 }
