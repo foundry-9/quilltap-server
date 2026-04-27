@@ -283,7 +283,7 @@ export class UsersRepository extends AbstractBaseRepository<User> {
         const chatSettings: ChatSettings = chatSettingsDocs[0];
 
         // Create the compound general settings object
-        const now = new Date().toISOString();
+        const now = this.getCurrentTimestamp();
         const generalSettings: GeneralSettings = {
           version: 1,
           user,

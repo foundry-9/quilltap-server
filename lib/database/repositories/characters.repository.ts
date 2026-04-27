@@ -278,26 +278,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   // TAG OPERATIONS
   // ============================================================================
 
-  /**
-   * Add a tag to a character
-   * @param characterId The character ID
-   * @param tagId The tag ID
-   * @returns Promise<Character | null> The updated character if found, null otherwise
-   */
-  async addTag(characterId: string, tagId: string): Promise<Character | null> {
-    return super.addTag(characterId, tagId);
-  }
-
-  /**
-   * Remove a tag from a character
-   * @param characterId The character ID
-   * @param tagId The tag ID
-   * @returns Promise<Character | null> The updated character if found, null otherwise
-   */
-  async removeTag(characterId: string, tagId: string): Promise<Character | null> {
-    return super.removeTag(characterId, tagId);
-  }
-
   // ============================================================================
   // PARTNER LINK OPERATIONS
   // ============================================================================
@@ -370,14 +350,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
   async setFavorite(characterId: string, isFavorite: boolean): Promise<Character | null> {
-    return this.safeQuery(
-      async () => {
-        const result = await this.update(characterId, { isFavorite });
-        return result;
-      },
-      'Error setting favorite status',
-      { characterId, isFavorite }
-    );
+    return this.update(characterId, { isFavorite });
   }
 
   /**
@@ -387,13 +360,146 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<Character | null> The updated character if found, null otherwise
    */
   async setControlledBy(characterId: string, controlledBy: 'llm' | 'user'): Promise<Character | null> {
+    return this.update(characterId, { controlledBy });
+  }
+
+  // ============================================================================
+  // GENERIC SUB-ARRAY HELPERS
+  // ============================================================================
+
+  private async addToSubArray<S extends { id: string; createdAt: string; updatedAt: string }>(
+    characterId: string,
+    getItems: (c: Character) => S[],
+    buildItem: (id: string, now: string) => S,
+    applyUpdate: (items: S[]) => Partial<Character>,
+    errorMsg: string,
+    logContext?: Record<string, unknown>,
+    onBeforeAdd?: (existingItems: S[], newItem: S) => void
+  ): Promise<S | null> {
     return this.safeQuery(
       async () => {
-        const result = await this.update(characterId, { controlledBy });
-        return result;
+        const character = await this.findById(characterId);
+        if (!character) {
+          logger.warn(`Character not found: ${errorMsg}`, { characterId });
+          return null;
+        }
+        const id = this.generateId();
+        const now = this.getCurrentTimestamp();
+        const newItem = buildItem(id, now);
+        const items = getItems(character);
+        onBeforeAdd?.(items, newItem);
+        items.push(newItem);
+        await this.update(characterId, applyUpdate(items));
+        return newItem;
       },
-      'Error setting controlledBy status',
-      { characterId, controlledBy }
+      errorMsg,
+      { characterId, ...logContext }
+    );
+  }
+
+  private async updateInSubArray<S extends { id: string; createdAt: string; updatedAt: string }>(
+    characterId: string,
+    itemId: string,
+    getItems: (c: Character) => S[],
+    buildUpdated: (existing: S, now: string) => S,
+    applyUpdate: (items: S[]) => Partial<Character>,
+    errorMsg: string,
+    logContext?: Record<string, unknown>,
+    onAfterBuild?: (items: S[], index: number, updated: S) => void
+  ): Promise<S | null> {
+    return this.safeQuery(
+      async () => {
+        const character = await this.findById(characterId);
+        if (!character) {
+          logger.warn(`Character not found: ${errorMsg}`, { characterId });
+          return null;
+        }
+        const items = getItems(character);
+        const index = items.findIndex((i) => i.id === itemId);
+        if (index === -1) {
+          logger.warn(`Item not found: ${errorMsg}`, { characterId, itemId });
+          return null;
+        }
+        const now = this.getCurrentTimestamp();
+        const updated = buildUpdated(items[index], now);
+        onAfterBuild?.(items, index, updated);
+        items[index] = updated;
+        await this.update(characterId, applyUpdate(items));
+        return updated;
+      },
+      errorMsg,
+      { characterId, ...logContext }
+    );
+  }
+
+  private async removeFromSubArray<S extends { id: string }>(
+    characterId: string,
+    itemId: string,
+    getItems: (c: Character) => S[],
+    applyUpdate: (items: S[]) => Partial<Character>,
+    errorMsg: string,
+    onAfterRemove?: (remaining: S[]) => void
+  ): Promise<boolean> {
+    return this.safeQuery(
+      async () => {
+        const character = await this.findById(characterId);
+        if (!character) {
+          logger.warn(`Character not found: ${errorMsg}`, { characterId });
+          return false;
+        }
+        const items = getItems(character);
+        const filtered = items.filter((i) => i.id !== itemId);
+        if (filtered.length === items.length) {
+          logger.warn(`Item not found for removal: ${errorMsg}`, { characterId, itemId });
+          return false;
+        }
+        onAfterRemove?.(filtered);
+        await this.update(characterId, applyUpdate(filtered));
+        return true;
+      },
+      errorMsg,
+      { characterId, itemId }
+    );
+  }
+
+  private async getFromSubArray<S extends { id: string }>(
+    characterId: string,
+    itemId: string,
+    getItems: (c: Character) => S[],
+    errorMsg: string
+  ): Promise<S | null> {
+    return this.safeQuery(
+      async () => {
+        const character = await this.findById(characterId);
+        if (!character) {
+          logger.warn(`Character not found: ${errorMsg}`, { characterId });
+          return null;
+        }
+        return getItems(character).find((i) => i.id === itemId) ?? null;
+      },
+      errorMsg,
+      { characterId, itemId },
+      null
+    );
+  }
+
+  private async getAllFromSubArray<S>(
+    characterId: string,
+    getItems: (c: Character) => S[],
+    errorMsg: string
+  ): Promise<S[]> {
+    return this.safeQuery(
+      async () => {
+        const character = await this.findById(characterId);
+        if (!character) {
+          logger.warn(`Character not found: ${errorMsg}`, { characterId });
+          return [];
+        }
+        return getItems(character);
+      },
+      errorMsg,
+      { characterId },
+      []
     );
   }
 
@@ -411,30 +517,13 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     characterId: string,
     data: Omit<PhysicalDescription, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<PhysicalDescription | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for description addition', { characterId });
-          return null;
-        }
-
-        const now = this.getCurrentTimestamp();
-        const description: PhysicalDescription = {
-          ...data,
-          id: this.generateId(),
-          createdAt: now,
-          updatedAt: now,
-        };
-
-        character.physicalDescriptions = character.physicalDescriptions || [];
-        character.physicalDescriptions.push(description);
-
-        await this.update(characterId, { physicalDescriptions: character.physicalDescriptions });
-        return description;
-      },
+    return this.addToSubArray<PhysicalDescription>(
+      characterId,
+      (c) => c.physicalDescriptions ?? [],
+      (id, now) => ({ ...data, id, createdAt: now, updatedAt: now }),
+      (items) => ({ physicalDescriptions: items }),
       'Error adding physical description',
-      { characterId, descriptionName: data.name }
+      { descriptionName: data.name }
     );
   }
 
@@ -450,36 +539,14 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     descriptionId: string,
     data: Partial<Omit<PhysicalDescription, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<PhysicalDescription | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for description update', { characterId });
-          return null;
-        }
-
-        const descriptions = character.physicalDescriptions || [];
-        const index = descriptions.findIndex((d) => d.id === descriptionId);
-        if (index === -1) {
-          logger.warn('Physical description not found', { characterId, descriptionId });
-          return null;
-        }
-
-        const now = this.getCurrentTimestamp();
-        const updated: PhysicalDescription = {
-          ...descriptions[index],
-          ...data,
-          id: descriptions[index].id,
-          createdAt: descriptions[index].createdAt,
-          updatedAt: now,
-        };
-
-        descriptions[index] = updated;
-        await this.update(characterId, { physicalDescriptions: descriptions });
-        return updated;
-      },
+    return this.updateInSubArray<PhysicalDescription>(
+      characterId,
+      descriptionId,
+      (c) => c.physicalDescriptions ?? [],
+      (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
+      (items) => ({ physicalDescriptions: items }),
       'Error updating physical description',
-      { characterId, descriptionId }
+      { descriptionId }
     );
   }
 
@@ -490,27 +557,12 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<boolean> True if description was deleted, false if not found
    */
   async removeDescription(characterId: string, descriptionId: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for description removal', { characterId });
-          return false;
-        }
-
-        const descriptions = character.physicalDescriptions || [];
-        const filtered = descriptions.filter((d) => d.id !== descriptionId);
-
-        if (filtered.length === descriptions.length) {
-          logger.warn('Physical description not found for removal', { characterId, descriptionId });
-          return false;
-        }
-
-        await this.update(characterId, { physicalDescriptions: filtered });
-        return true;
-      },
-      'Error removing physical description',
-      { characterId, descriptionId }
+    return this.removeFromSubArray<PhysicalDescription>(
+      characterId,
+      descriptionId,
+      (c) => c.physicalDescriptions ?? [],
+      (items) => ({ physicalDescriptions: items }),
+      'Error removing physical description'
     );
   }
 
@@ -521,20 +573,11 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<PhysicalDescription | null> The description if found, null otherwise
    */
   async getDescription(characterId: string, descriptionId: string): Promise<PhysicalDescription | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for description retrieval', { characterId });
-          return null;
-        }
-
-        const descriptions = character.physicalDescriptions || [];
-        const description = descriptions.find((d) => d.id === descriptionId) || null;
-        return description;
-      },
-      'Error getting physical description',
-      { characterId, descriptionId }
+    return this.getFromSubArray<PhysicalDescription>(
+      characterId,
+      descriptionId,
+      (c) => c.physicalDescriptions ?? [],
+      'Error getting physical description'
     );
   }
 
@@ -544,20 +587,10 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<PhysicalDescription[]> Array of all descriptions for the character
    */
   async getDescriptions(characterId: string): Promise<PhysicalDescription[]> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for descriptions retrieval', { characterId });
-          return [];
-        }
-
-        const descriptions = character.physicalDescriptions || [];
-        return descriptions;
-      },
-      'Error getting physical descriptions',
-      { characterId },
-      []
+    return this.getAllFromSubArray<PhysicalDescription>(
+      characterId,
+      (c) => c.physicalDescriptions ?? [],
+      'Error getting physical descriptions'
     );
   }
 
@@ -575,30 +608,13 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     characterId: string,
     data: Omit<ClothingRecord, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<ClothingRecord | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for clothing record addition', { characterId });
-          return null;
-        }
-
-        const now = this.getCurrentTimestamp();
-        const record: ClothingRecord = {
-          ...data,
-          id: this.generateId(),
-          createdAt: now,
-          updatedAt: now,
-        };
-
-        character.clothingRecords = character.clothingRecords || [];
-        character.clothingRecords.push(record);
-
-        await this.update(characterId, { clothingRecords: character.clothingRecords });
-        return record;
-      },
+    return this.addToSubArray<ClothingRecord>(
+      characterId,
+      (c) => c.clothingRecords ?? [],
+      (id, now) => ({ ...data, id, createdAt: now, updatedAt: now }),
+      (items) => ({ clothingRecords: items }),
       'Error adding clothing record',
-      { characterId, recordName: data.name }
+      { recordName: data.name }
     );
   }
 
@@ -614,36 +630,14 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     recordId: string,
     data: Partial<Omit<ClothingRecord, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<ClothingRecord | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for clothing record update', { characterId });
-          return null;
-        }
-
-        const records = character.clothingRecords || [];
-        const index = records.findIndex((r) => r.id === recordId);
-        if (index === -1) {
-          logger.warn('Clothing record not found', { characterId, recordId });
-          return null;
-        }
-
-        const now = this.getCurrentTimestamp();
-        const updated: ClothingRecord = {
-          ...records[index],
-          ...data,
-          id: records[index].id,
-          createdAt: records[index].createdAt,
-          updatedAt: now,
-        };
-
-        records[index] = updated;
-        await this.update(characterId, { clothingRecords: records });
-        return updated;
-      },
+    return this.updateInSubArray<ClothingRecord>(
+      characterId,
+      recordId,
+      (c) => c.clothingRecords ?? [],
+      (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
+      (items) => ({ clothingRecords: items }),
       'Error updating clothing record',
-      { characterId, recordId }
+      { recordId }
     );
   }
 
@@ -654,27 +648,12 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<boolean> True if record was deleted, false if not found
    */
   async removeClothingRecord(characterId: string, recordId: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for clothing record removal', { characterId });
-          return false;
-        }
-
-        const records = character.clothingRecords || [];
-        const filtered = records.filter((r) => r.id !== recordId);
-
-        if (filtered.length === records.length) {
-          logger.warn('Clothing record not found for removal', { characterId, recordId });
-          return false;
-        }
-
-        await this.update(characterId, { clothingRecords: filtered });
-        return true;
-      },
-      'Error removing clothing record',
-      { characterId, recordId }
+    return this.removeFromSubArray<ClothingRecord>(
+      characterId,
+      recordId,
+      (c) => c.clothingRecords ?? [],
+      (items) => ({ clothingRecords: items }),
+      'Error removing clothing record'
     );
   }
 
@@ -685,20 +664,11 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<ClothingRecord | null> The record if found, null otherwise
    */
   async getClothingRecord(characterId: string, recordId: string): Promise<ClothingRecord | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for clothing record retrieval', { characterId });
-          return null;
-        }
-
-        const records = character.clothingRecords || [];
-        const record = records.find((r) => r.id === recordId) || null;
-        return record;
-      },
-      'Error getting clothing record',
-      { characterId, recordId }
+    return this.getFromSubArray<ClothingRecord>(
+      characterId,
+      recordId,
+      (c) => c.clothingRecords ?? [],
+      'Error getting clothing record'
     );
   }
 
@@ -708,20 +678,10 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<ClothingRecord[]> Array of all clothing records for the character
    */
   async getClothingRecords(characterId: string): Promise<ClothingRecord[]> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for clothing records retrieval', { characterId });
-          return [];
-        }
-
-        const records = character.clothingRecords || [];
-        return records;
-      },
-      'Error getting clothing records',
-      { characterId },
-      []
+    return this.getAllFromSubArray<ClothingRecord>(
+      characterId,
+      (c) => c.clothingRecords ?? [],
+      'Error getting clothing records'
     );
   }
 
@@ -739,37 +699,19 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     characterId: string,
     data: Omit<CharacterSystemPrompt, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<CharacterSystemPrompt | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for prompt addition', { characterId });
-          return null;
-        }
-
-        const now = this.getCurrentTimestamp();
-        const prompt: CharacterSystemPrompt = {
-          ...data,
-          id: this.generateId(),
-          createdAt: now,
-          updatedAt: now,
-        };
-
-        // If this is the first prompt or isDefault is true, ensure only this one is default
-        const prompts = character.systemPrompts || [];
-        if (data.isDefault || prompts.length === 0) {
-          // Unset default on all existing prompts
-          prompts.forEach(p => p.isDefault = false);
-          prompt.isDefault = true;
-        }
-
-        prompts.push(prompt);
-
-        await this.update(characterId, { systemPrompts: prompts });
-        return prompt;
-      },
+    return this.addToSubArray<CharacterSystemPrompt>(
+      characterId,
+      (c) => c.systemPrompts ?? [],
+      (id, now) => ({ ...data, id, createdAt: now, updatedAt: now }),
+      (items) => ({ systemPrompts: items }),
       'Error adding system prompt',
-      { characterId, promptName: data.name }
+      { promptName: data.name },
+      (existingItems, newItem) => {
+        if (data.isDefault || existingItems.length === 0) {
+          existingItems.forEach((p) => { p.isDefault = false; });
+          newItem.isDefault = true;
+        }
+      }
     );
   }
 
@@ -781,42 +723,20 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     promptId: string,
     data: Partial<Omit<CharacterSystemPrompt, 'id' | 'createdAt' | 'updatedAt'>>
   ): Promise<CharacterSystemPrompt | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for prompt update', { characterId });
-          return null;
-        }
-
-        const prompts = character.systemPrompts || [];
-        const index = prompts.findIndex(p => p.id === promptId);
-        if (index === -1) {
-          logger.warn('System prompt not found', { characterId, promptId });
-          return null;
-        }
-
-        const now = this.getCurrentTimestamp();
-        const updated: CharacterSystemPrompt = {
-          ...prompts[index],
-          ...data,
-          id: prompts[index].id,
-          createdAt: prompts[index].createdAt,
-          updatedAt: now,
-        };
-
-        // If setting as default, unset others
+    return this.updateInSubArray<CharacterSystemPrompt>(
+      characterId,
+      promptId,
+      (c) => c.systemPrompts ?? [],
+      (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
+      (items) => ({ systemPrompts: items }),
+      'Error updating system prompt',
+      { promptId },
+      (items, _index, updated) => {
         if (data.isDefault) {
-          prompts.forEach(p => p.isDefault = false);
+          items.forEach((p) => { p.isDefault = false; });
           updated.isDefault = true;
         }
-
-        prompts[index] = updated;
-        await this.update(characterId, { systemPrompts: prompts });
-        return updated;
-      },
-      'Error updating system prompt',
-      { characterId, promptId }
+      }
     );
   }
 
@@ -824,32 +744,17 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * Delete a system prompt from a character
    */
   async deleteSystemPrompt(characterId: string, promptId: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for prompt deletion', { characterId });
-          return false;
-        }
-
-        const prompts = character.systemPrompts || [];
-        const filtered = prompts.filter(p => p.id !== promptId);
-
-        if (filtered.length === prompts.length) {
-          logger.warn('System prompt not found for deletion', { characterId, promptId });
-          return false;
-        }
-
-        // If we deleted the default, set first remaining as default
-        if (filtered.length > 0 && !filtered.some(p => p.isDefault)) {
-          filtered[0].isDefault = true;
-        }
-
-        await this.update(characterId, { systemPrompts: filtered });
-        return true;
-      },
+    return this.removeFromSubArray<CharacterSystemPrompt>(
+      characterId,
+      promptId,
+      (c) => c.systemPrompts ?? [],
+      (items) => ({ systemPrompts: items }),
       'Error deleting system prompt',
-      { characterId, promptId }
+      (remaining) => {
+        if (remaining.length > 0 && !remaining.some((p) => p.isDefault)) {
+          remaining[0].isDefault = true;
+        }
+      }
     );
   }
 
@@ -865,23 +770,21 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
           return null;
         }
 
-        const prompts = character.systemPrompts || [];
-        const targetIndex = prompts.findIndex(p => p.id === promptId);
+        const prompts = character.systemPrompts ?? [];
+        const targetIndex = prompts.findIndex((p) => p.id === promptId);
 
         if (targetIndex === -1) {
           logger.warn('System prompt not found', { characterId, promptId });
           return null;
         }
 
-        // Unset all defaults, set target as default
         const now = this.getCurrentTimestamp();
         prompts.forEach((p, i) => {
           p.isDefault = i === targetIndex;
           p.updatedAt = now;
         });
 
-        const result = await this.update(characterId, { systemPrompts: prompts });
-        return result;
+        return this.update(characterId, { systemPrompts: prompts });
       },
       'Error setting default system prompt',
       { characterId, promptId }
@@ -892,19 +795,11 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * Get a single system prompt by ID
    */
   async getSystemPrompt(characterId: string, promptId: string): Promise<CharacterSystemPrompt | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for prompt retrieval', { characterId });
-          return null;
-        }
-
-        const prompts = character.systemPrompts || [];
-        return prompts.find(p => p.id === promptId) || null;
-      },
-      'Error getting system prompt',
-      { characterId, promptId }
+    return this.getFromSubArray<CharacterSystemPrompt>(
+      characterId,
+      promptId,
+      (c) => c.systemPrompts ?? [],
+      'Error getting system prompt'
     );
   }
 
@@ -912,19 +807,10 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * Get all system prompts for a character
    */
   async getSystemPrompts(characterId: string): Promise<CharacterSystemPrompt[]> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for prompts retrieval', { characterId });
-          return [];
-        }
-
-        return character.systemPrompts || [];
-      },
-      'Error getting system prompts',
-      { characterId },
-      []
+    return this.getAllFromSubArray<CharacterSystemPrompt>(
+      characterId,
+      (c) => c.systemPrompts ?? [],
+      'Error getting system prompts'
     );
   }
 
@@ -942,32 +828,13 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     characterId: string,
     data: { title: string; content: string }
   ): Promise<CharacterScenario | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for scenario addition', { characterId });
-          return null;
-        }
-
-        const now = this.getCurrentTimestamp();
-        const scenario: CharacterScenario = {
-          id: this.generateId(),
-          title: data.title,
-          content: data.content,
-          createdAt: now,
-          updatedAt: now,
-        };
-
-        const scenarios = character.scenarios || [];
-        scenarios.push(scenario);
-
-        await this.update(characterId, { scenarios });
-
-        return scenario;
-      },
+    return this.addToSubArray<CharacterScenario>(
+      characterId,
+      (c) => c.scenarios ?? [],
+      (id, now) => ({ id, title: data.title, content: data.content, createdAt: now, updatedAt: now }),
+      (items) => ({ scenarios: items }),
       'Error adding scenario',
-      { characterId, title: data.title }
+      { title: data.title }
     );
   }
 
@@ -983,37 +850,14 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     scenarioId: string,
     data: { title?: string; content?: string }
   ): Promise<CharacterScenario | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for scenario update', { characterId });
-          return null;
-        }
-
-        const scenarios = character.scenarios || [];
-        const index = scenarios.findIndex(s => s.id === scenarioId);
-        if (index === -1) {
-          logger.warn('Scenario not found for update', { characterId, scenarioId });
-          return null;
-        }
-
-        const now = this.getCurrentTimestamp();
-        const updated: CharacterScenario = {
-          ...scenarios[index],
-          ...data,
-          id: scenarios[index].id,
-          createdAt: scenarios[index].createdAt,
-          updatedAt: now,
-        };
-
-        scenarios[index] = updated;
-        await this.update(characterId, { scenarios });
-
-        return updated;
-      },
+    return this.updateInSubArray<CharacterScenario>(
+      characterId,
+      scenarioId,
+      (c) => c.scenarios ?? [],
+      (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
+      (items) => ({ scenarios: items }),
       'Error updating scenario',
-      { characterId, scenarioId }
+      { scenarioId }
     );
   }
 
@@ -1024,28 +868,12 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<boolean> True if scenario was removed, false if not found
    */
   async removeScenario(characterId: string, scenarioId: string): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for scenario removal', { characterId });
-          return false;
-        }
-
-        const scenarios = character.scenarios || [];
-        const filtered = scenarios.filter(s => s.id !== scenarioId);
-
-        if (filtered.length === scenarios.length) {
-          logger.warn('Scenario not found for removal', { characterId, scenarioId });
-          return false;
-        }
-
-        await this.update(characterId, { scenarios: filtered });
-
-        return true;
-      },
-      'Error removing scenario',
-      { characterId, scenarioId }
+    return this.removeFromSubArray<CharacterScenario>(
+      characterId,
+      scenarioId,
+      (c) => c.scenarios ?? [],
+      (items) => ({ scenarios: items }),
+      'Error removing scenario'
     );
   }
 
@@ -1055,19 +883,10 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    * @returns Promise<CharacterScenario[]> Array of all scenarios for the character
    */
   async getScenarios(characterId: string): Promise<CharacterScenario[]> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn('Character not found for scenarios retrieval', { characterId });
-          return [];
-        }
-
-        return character.scenarios || [];
-      },
-      'Error getting scenarios',
-      { characterId },
-      []
+    return this.getAllFromSubArray<CharacterScenario>(
+      characterId,
+      (c) => c.scenarios ?? [],
+      'Error getting scenarios'
     );
   }
 }
