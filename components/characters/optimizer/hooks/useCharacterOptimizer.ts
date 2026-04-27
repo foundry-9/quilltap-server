@@ -16,6 +16,8 @@ import type {
   OptimizerAnalysis,
   OptimizerSuggestion,
   OptimizerFilterOptions,
+  OptimizerOutputMode,
+  OptimizerSubStep,
 } from '../types';
 
 interface UseCharacterOptimizerReturn {
@@ -31,12 +33,19 @@ interface UseCharacterOptimizerReturn {
   filteredCount: number;
   loading: boolean;
   progressStep: string | null;
+  progressSubStep: OptimizerSubStep | null;
   noSuggestionsMessage: string | null;
   applying: boolean;
   startedAt: number | null;
+  suggestionsFilePath: string | null;
 
   // Actions
-  startOptimization: (characterId: string, connectionProfileId: string, filterOptions?: OptimizerFilterOptions) => Promise<void>;
+  startOptimization: (
+    characterId: string,
+    connectionProfileId: string,
+    filterOptions?: OptimizerFilterOptions,
+    outputMode?: OptimizerOutputMode,
+  ) => Promise<void>;
   decideSuggestion: (id: string, decision: SuggestionDecision) => void;
   editSuggestion: (id: string, newValue: string) => void;
   goToSuggestion: (index: number) => void;
@@ -59,15 +68,25 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
   const [memoryCount, setMemoryCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [progressStep, setProgressStep] = useState<string | null>(null);
+  const [progressSubStep, setProgressSubStep] = useState<OptimizerSubStep | null>(null);
   const [noSuggestionsMessage, setNoSuggestionsMessage] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [filteredCount, setFilteredCount] = useState(0);
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [suggestionsFilePath, setSuggestionsFilePath] = useState<string | null>(null);
+  const outputModeRef = useRef<OptimizerOutputMode>('apply');
 
   // Ref to track current suggestions count during async streaming
   const suggestionsRef = useRef<OptimizerSuggestion[]>([]);
 
-  const startOptimization = useCallback(async (characterId: string, connectionProfileId: string, filterOptions?: OptimizerFilterOptions) => {
+  const startOptimization = useCallback(
+    async (
+      characterId: string,
+      connectionProfileId: string,
+      filterOptions?: OptimizerFilterOptions,
+      outputMode: OptimizerOutputMode = 'apply',
+    ) => {
+    outputModeRef.current = outputMode;
     setLoading(true);
     setError(null);
     setAnalysis(null);
@@ -77,13 +96,15 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
     setDecisions(new Map());
     setEditedValues(new Map());
     setProgressStep(null);
+    setProgressSubStep(null);
     setNoSuggestionsMessage(null);
     setFilteredCount(0);
     setStartedAt(Date.now());
+    setSuggestionsFilePath(null);
     setPhase('progress');
 
     try {
-      const requestBody: Record<string, unknown> = { connectionProfileId };
+      const requestBody: Record<string, unknown> = { connectionProfileId, outputMode };
       if (filterOptions) {
         requestBody.maxMemories = filterOptions.maxMemories;
         requestBody.searchQuery = filterOptions.searchQuery;
@@ -128,6 +149,28 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
 
                 case 'step_start':
                   setProgressStep(event.step as string);
+                  if (event.step !== 'generating') {
+                    setProgressSubStep(null);
+                  }
+                  break;
+
+                case 'substep_start':
+                  if (event.subStep) {
+                    setProgressSubStep(event.subStep as OptimizerSubStep);
+                  }
+                  break;
+
+                case 'substep_complete':
+                  // Accumulate suggestions incrementally so the user sees the
+                  // count climb as per-item passes finish.
+                  if (Array.isArray(event.partialSuggestions)) {
+                    const partial = event.partialSuggestions as OptimizerSuggestion[];
+                    if (partial.length > 0) {
+                      const next = [...suggestionsRef.current, ...partial];
+                      suggestionsRef.current = next;
+                      setSuggestions(next);
+                    }
+                  }
                   break;
 
                 case 'step_complete':
@@ -142,7 +185,12 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
                     const newSuggestions = event.suggestions as OptimizerSuggestion[];
                     suggestionsRef.current = newSuggestions;
                     setSuggestions(newSuggestions);
+                    setProgressSubStep(null);
                   }
+                  break;
+
+                case 'suggestions_file_written':
+                  setSuggestionsFilePath((event.suggestionsFilePath as string) ?? null);
                   break;
 
                 case 'done': {
@@ -151,9 +199,14 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
                     suggestionsRef.current = doneSuggestions;
                     setSuggestions(doneSuggestions);
                   }
+                  const filePath = (event.suggestionsFilePath as string | undefined) ?? null;
+                  if (filePath) setSuggestionsFilePath(filePath);
                   setLoading(false);
                   setProgressStep(null);
-                  if (suggestionsRef.current.length > 0) {
+                  setProgressSubStep(null);
+                  if (outputModeRef.current === 'suggestions-file' && filePath) {
+                    setPhase('suggestions-file-written');
+                  } else if (suggestionsRef.current.length > 0) {
                     setPhase('review');
                   } else {
                     setNoSuggestionsMessage(
@@ -402,10 +455,13 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
     setMemoryCount(0);
     setLoading(false);
     setProgressStep(null);
+    setProgressSubStep(null);
     setNoSuggestionsMessage(null);
     setApplying(false);
     setFilteredCount(0);
     setStartedAt(null);
+    setSuggestionsFilePath(null);
+    outputModeRef.current = 'apply';
   }, []);
 
   return {
@@ -420,9 +476,11 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
     filteredCount,
     loading,
     progressStep,
+    progressSubStep,
     noSuggestionsMessage,
     applying,
     startedAt,
+    suggestionsFilePath,
     startOptimization,
     decideSuggestion,
     editSuggestion,

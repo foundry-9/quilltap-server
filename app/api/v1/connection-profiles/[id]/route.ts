@@ -117,6 +117,7 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         modelClass,
         maxContext,
         sortIndex,
+        supportsImageUpload,
       } = body;
 
       // Build update data
@@ -254,6 +255,13 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
           return badRequest('sortIndex must be a non-negative integer');
         }
         updateData.sortIndex = sortIndex;
+      }
+
+      if (supportsImageUpload !== undefined) {
+        if (typeof supportsImageUpload !== 'boolean') {
+          return badRequest('supportsImageUpload must be a boolean');
+        }
+        updateData.supportsImageUpload = supportsImageUpload;
       }
 
       // Update the profile

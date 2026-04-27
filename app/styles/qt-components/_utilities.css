@@ -519,4 +519,42 @@
     background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
     border-color: var(--qt-border-color, var(--color-border));
   }
+
+  /* ==========================================================================
+     INDICATOR DOT UTILITIES
+     Small circular status indicators used inside badges or standalone.
+     Replaces: bg-green-400, bg-amber-400, bg-red-400, bg-blue-400
+     ========================================================================== */
+
+  /**
+   * Success indicator dot
+   * Usage: <span class="qt-dot-success h-1.5 w-1.5 rounded-full" />
+   */
+  .qt-dot-success {
+    background-color: var(--qt-status-success-fg, var(--color-success));
+  }
+
+  /**
+   * Warning indicator dot
+   * Usage: <span class="qt-dot-warning h-1.5 w-1.5 rounded-full" />
+   */
+  .qt-dot-warning {
+    background-color: var(--qt-status-warning-fg, var(--color-warning));
+  }
+
+  /**
+   * Destructive/error indicator dot
+   * Usage: <span class="qt-dot-destructive h-1.5 w-1.5 rounded-full" />
+   */
+  .qt-dot-destructive {
+    background-color: var(--qt-status-error-fg, var(--color-destructive));
+  }
+
+  /**
+   * Info indicator dot
+   * Usage: <span class="qt-dot-info h-1.5 w-1.5 rounded-full" />
+   */
+  .qt-dot-info {
+    background-color: var(--qt-status-info-fg, var(--color-info));
+  }
 }

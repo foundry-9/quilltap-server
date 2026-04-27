@@ -18,8 +18,76 @@ import {
   calculateReinforcedImportance,
 } from './memory-gate'
 import { calculateEffectiveWeight } from './memory-weighting'
+import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 export type { MemoryGateOutcome } from './memory-gate'
+
+/** Fraction of the per-character cap at which auto-housekeeping engages. */
+const HOUSEKEEPING_WATERMARK = 0.9
+
+/**
+ * If auto-housekeeping is enabled for this user and the character has reached
+ * the watermark fraction of its cap, enqueue a housekeeping job for that
+ * character. The enqueue helper dedupes against in-flight jobs, so calling
+ * this after every insert is safe even during high-frequency extraction.
+ *
+ * Never throws — a failure here must not block the memory write that just
+ * succeeded.
+ */
+async function maybeEnqueueHousekeeping(characterId: string, userId: string): Promise<void> {
+  try {
+    const repos = getRepositories()
+    const chatSettings = await repos.chatSettings.findByUserId(userId)
+    const autoSettings = chatSettings?.autoHousekeepingSettings
+    if (!autoSettings?.enabled) {
+      return
+    }
+
+    const cap =
+      autoSettings.perCharacterCapOverrides?.[characterId] ??
+      autoSettings.perCharacterCap ??
+      2000
+
+    const count = await repos.memories.countByCharacterId(characterId)
+    if (count < Math.floor(cap * HOUSEKEEPING_WATERMARK)) {
+      return
+    }
+
+    // When the previous sweep for this character deleted nothing, it's very
+    // likely the next watermark-triggered sweep will also delete nothing —
+    // the protection score just said everything was worth keeping, and
+    // ~6 extra memories per chat turn won't flip that verdict. Running the
+    // sweep anyway burns 10–15 minutes of main-thread time for no benefit
+    // and blocks the next chat turn's context build. Back off for an hour.
+    if (shouldSkipWatermarkSweep(characterId)) {
+      logger.debug('[Housekeeping] Skipping watermark sweep — previous sweep deleted zero within backoff window', {
+        userId,
+        characterId,
+        count,
+        cap,
+      })
+      return
+    }
+
+    const { enqueueMemoryHousekeeping } = await import('@/lib/background-jobs/queue-service')
+    await enqueueMemoryHousekeeping(userId, {
+      characterId,
+      reason: 'watermark',
+    })
+    logger.debug('[Housekeeping] Watermark reached; enqueued housekeeping job', {
+      userId,
+      characterId,
+      count,
+      cap,
+    })
+  } catch (error) {
+    logger.warn('[Housekeeping] Failed watermark check after insert (non-fatal)', {
+      userId,
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
 
 /**
  * Options for memory creation
@@ -82,15 +150,18 @@ export interface SemanticSearchResult {
  *
  * This is the primary function for creating memories. It:
  * 1. Runs the Memory Gate to check for duplicates/related memories (unless skipGate)
- * 2. Based on gate decision: REINFORCE, INSERT_RELATED, or INSERT
+ * 2. Based on gate decision: REINFORCE, INSERT_RELATED, INSERT, SKIP_NEAR_DUPLICATE,
+ *    or SKIP_EMBEDDING_FAILED
  * 3. Generates embedding and adds to vector store
  *
- * Return type unchanged for backward compatibility.
+ * Returns the resulting memory — for SKIP_NEAR_DUPLICATE this is the existing
+ * memory the candidate collapsed into. Returns null on SKIP_EMBEDDING_FAILED
+ * (no row was written because generating an embedding for dedup failed).
  */
 export async function createMemoryWithEmbedding(
   data: CreateMemoryOptions,
   options: MemoryServiceOptions
-): Promise<Memory> {
+): Promise<Memory | null> {
   const outcome = await createMemoryWithGate(data, options)
   return outcome.memory
 }
@@ -127,6 +198,26 @@ export async function createMemoryWithGate(
   const { decision, embedding } = gateResult
 
   switch (decision.action) {
+    case 'SKIP_NEAR_DUPLICATE': {
+      // Candidate is essentially identical to an existing memory; do not write
+      // a new row and do not reinforce — just absorb the observation silently.
+      return {
+        memory: decision.existingMemory,
+        action: 'SKIP_NEAR_DUPLICATE',
+        similarity: decision.similarity,
+      }
+    }
+
+    case 'SKIP_EMBEDDING_FAILED': {
+      // Embedding generation failed after retry; do not insert a row without
+      // an embedding (that would be invisible to every future gate check).
+      return {
+        memory: null,
+        action: 'SKIP_EMBEDDING_FAILED',
+        reason: decision.reason,
+      }
+    }
+
     case 'REINFORCE': {
       // Boost the existing memory instead of creating a new row
       const { memory: reinforced, novelDetails } = await reinforceMemory(
@@ -151,6 +242,8 @@ export async function createMemoryWithGate(
         data.characterId,
         decision.relatedMemories
       )
+      // Fire-and-forget watermark check. Never awaited — never blocks the write.
+      void maybeEnqueueHousekeeping(data.characterId, options.userId)
       return {
         memory,
         action: 'INSERT_RELATED',
@@ -162,6 +255,7 @@ export async function createMemoryWithGate(
     default: {
       // Straightforward insert with pre-computed embedding
       const memory = await createMemoryDirectWithEmbedding(data, options, embedding)
+      void maybeEnqueueHousekeeping(data.characterId, options.userId)
       return { memory, action: 'INSERT' }
     }
   }
@@ -242,7 +336,7 @@ async function createMemoryDirect(
 async function createMemoryDirectWithEmbedding(
   data: CreateMemoryOptions,
   options: MemoryServiceOptions,
-  embedding: number[] | null
+  embedding: Float32Array | null
 ): Promise<Memory> {
   const repos = getRepositories()
   const importance = data.importance ?? 0.5
@@ -400,6 +494,11 @@ export async function searchMemoriesSemantic(
   const limit = options.limit || 20
   const minScore = options.minScore || 0.0
 
+  // Timing markers — left in at debug level so we can see which stage of a
+  // semantic search is slow on big-corpus characters without having to
+  // re-instrument after every performance change.
+  const t0 = performance.now()
+
   // Try semantic search first
   try {
     const embeddingResult = await generateEmbeddingForUser(
@@ -407,18 +506,42 @@ export async function searchMemoriesSemantic(
       options.userId,
       options.embeddingProfileId
     )
+    const tEmbed = performance.now()
 
     const vectorStore = await getCharacterVectorStore(characterId)
+    const storedDimensions = vectorStore.getDimensions()
+
+    // Check for dimension mismatch before searching — if the search embedding
+    // profile differs from the one used to build the index, vector search will
+    // return nothing. Fall back to text search immediately rather than silently
+    // returning empty results.
+    if (storedDimensions !== null && embeddingResult.embedding.length !== storedDimensions) {
+      logger.warn('[Memory] Embedding dimension mismatch — search profile produces different dimensions than stored index, falling back to text search', {
+        characterId,
+        query: query.substring(0, 100),
+        storedDimensions,
+        queryDimensions: embeddingResult.embedding.length,
+        userId: options.userId,
+        embeddingProfileId: options.embeddingProfileId ?? 'default',
+      })
+      return searchMemoriesText(characterId, query, options)
+    }
 
     // Search vectors
     const vectorResults = vectorStore.search(
       embeddingResult.embedding,
-      limit * 2 // Get more results to filter
+      limit * 3 // Get more results to filter
     )
+    const tVector = performance.now()
 
     if (vectorResults.length > 0) {
-      // Get full memory data for results
-      const memories = await repos.memories.findByCharacterId(characterId)
+      // Hydrate only the matched memories. The previous version called
+      // findByCharacterId here, which decrypted and Zod-validated the whole
+      // corpus (20k+ rows on heavy characters) just to pluck ~60 hits out of
+      // a Map. The Memory Gate read path already uses this shape — see
+      // lib/memory/memory-gate.ts findByIds(matchedIds).
+      const matchedIds = vectorResults.map(vr => vr.id)
+      const memories = await repos.memories.findByIds(matchedIds)
       const memoryMap = new Map(memories.map(m => [m.id, m]))
 
       let results: SemanticSearchResult[] = vectorResults
@@ -445,25 +568,69 @@ export async function searchMemoriesSemantic(
       }
 
       // Combine cosine similarity with effective weight for final ranking
-      // Similarity still dominates (60%), but weight influences ordering (40%)
+      // Weight dominates (60%), with similarity influencing ordering (40%)
       results.sort((a, b) => {
-        const finalScoreA = a.score * 0.6 + (a.effectiveWeight ?? 0) * 0.4
-        const finalScoreB = b.score * 0.6 + (b.effectiveWeight ?? 0) * 0.4
+        const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
+        const finalScoreB = b.score * 0.4 + (b.effectiveWeight ?? 0) * 0.6
         return finalScoreB - finalScoreA
       })
 
-      return results.slice(0, limit)
+      const tDone = performance.now()
+      logger.debug('[Memory] Semantic search timings', {
+        characterId,
+        corpusSize: vectorStore.size,
+        vectorHits: vectorResults.length,
+        finalHits: Math.min(results.length, limit),
+        embedMs: Math.round(tEmbed - t0),
+        vectorSearchMs: Math.round(tVector - tEmbed),
+        hydrateAndRankMs: Math.round(tDone - tVector),
+        totalMs: Math.round(tDone - t0),
+      })
+
+      const finalResults = results.slice(0, limit)
+      bumpAccessTimes(characterId, finalResults.map(r => r.memory.id))
+      return finalResults
     }
   } catch (error) {
     logger.warn(`[Memory] Semantic search failed, falling back to text search`, { characterId, query: query.substring(0, 100), userId: options.userId, error: String(error) })
   }
 
   // Fallback to text-based search
-  return searchMemoriesText(characterId, query, options)
+  const textResults = await searchMemoriesText(characterId, query, options)
+  bumpAccessTimes(characterId, textResults.map(r => r.memory.id))
+  return textResults
+}
+
+/**
+ * Fire-and-forget bulk update of lastAccessedAt for memories returned from a
+ * retrieval path. The recent-access component of the blended protection score
+ * is otherwise starved of signal — on a 17k-memory corpus we were seeing 13
+ * rows with a non-null lastAccessedAt because only the Memories API route
+ * called updateAccessTime, and the chat context path never did.
+ *
+ * Character-scoped bulk update so a stale id list cannot affect other
+ * characters. Errors are swallowed at warn level — a missed access bump
+ * shouldn't fail a chat turn.
+ */
+function bumpAccessTimes(characterId: string, memoryIds: string[]): void {
+  if (memoryIds.length === 0) return
+  const repos = getRepositories()
+  repos.memories.updateAccessTimeBulk(characterId, memoryIds).catch(err => {
+    logger.warn('[Memory] Failed to bump lastAccessedAt for retrieved memories', {
+      characterId,
+      count: memoryIds.length,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  })
 }
 
 /**
  * Text-based memory search (fallback when embeddings unavailable)
+ *
+ * Searches for the full query phrase first, then broadens to individual
+ * significant words if the full phrase doesn't match enough results.
+ * This is critical when this function is the fallback for a failed
+ * semantic search (e.g. dimension mismatch).
  */
 async function searchMemoriesText(
   characterId: string,
@@ -477,7 +644,49 @@ async function searchMemoriesText(
   const repos = getRepositories()
   const limit = options.limit || 20
 
+  // Try full-phrase search first
   let memories = await repos.memories.searchByContent(characterId, query)
+
+  // If full-phrase search returned too few results, broaden to per-word search.
+  // Filter out common stop words to keep results relevant.
+  const STOP_WORDS = new Set([
+    'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+    'of', 'with', 'by', 'is', 'was', 'are', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+    'should', 'may', 'might', 'can', 'shall', 'that', 'this', 'these',
+    'those', 'it', 'its', 'my', 'your', 'his', 'her', 'our', 'their',
+    'what', 'which', 'who', 'whom', 'how', 'when', 'where', 'why',
+    'not', 'no', 'nor', 'if', 'then', 'than', 'so', 'as', 'about',
+    'from', 'into', 'up', 'out', 'off', 'over', 'under', 'again',
+    'before', 'after', 'between', 'through',
+  ])
+
+  if (memories.length < limit) {
+    const queryWords = query.toLowerCase().split(/\s+/)
+      .filter(w => w.length > 2 && !STOP_WORDS.has(w))
+
+    if (queryWords.length > 0) {
+      const existingIds = new Set(memories.map(m => m.id))
+
+      // Search for each significant word individually
+      for (const word of queryWords) {
+        const wordResults = await repos.memories.searchByContent(characterId, word)
+        for (const mem of wordResults) {
+          if (!existingIds.has(mem.id)) {
+            existingIds.add(mem.id)
+            memories.push(mem)
+          }
+        }
+      }
+
+      logger.debug('[Memory] Text search broadened to per-word search', {
+        characterId,
+        query: query.substring(0, 100),
+        significantWords: queryWords,
+        totalCandidates: memories.length,
+      })
+    }
+  }
 
   // Apply filters
   if (options.minImportance !== undefined) {
@@ -489,25 +698,35 @@ async function searchMemoriesText(
 
   // Score based on text matching
   const queryLower = query.toLowerCase()
+  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w))
   const results: SemanticSearchResult[] = memories.map(memory => {
     let score = 0
     const contentLower = memory.content.toLowerCase()
     const summaryLower = memory.summary.toLowerCase()
 
-    // Exact match in summary is highest score
+    // Exact full-phrase match in summary is highest score
     if (summaryLower.includes(queryLower)) {
-      score += 0.5
+      score += 0.4
     }
-    // Match in content
+    // Exact full-phrase match in content
     if (contentLower.includes(queryLower)) {
       score += 0.3
     }
+
+    // Per-word matching in content and summary
+    if (queryWords.length > 0) {
+      const contentWordMatches = queryWords.filter(w => contentLower.includes(w)).length
+      const summaryWordMatches = queryWords.filter(w => summaryLower.includes(w)).length
+      // Score based on proportion of query words matched
+      score += 0.2 * (contentWordMatches / queryWords.length)
+      score += 0.1 * (summaryWordMatches / queryWords.length)
+    }
+
     // Keyword matches
-    const queryWords = queryLower.split(/\s+/)
     const matchingKeywords = memory.keywords.filter(kw =>
       queryWords.some(qw => kw.toLowerCase().includes(qw))
     )
-    score += 0.2 * (matchingKeywords.length / Math.max(memory.keywords.length, 1))
+    score += 0.1 * (matchingKeywords.length / Math.max(memory.keywords.length, 1))
 
     const { effectiveWeight } = calculateEffectiveWeight(memory)
 
@@ -519,14 +738,17 @@ async function searchMemoriesText(
     }
   })
 
+  // Filter out zero-score results (no words matched at all)
+  const scoredResults = results.filter(r => r.score > 0)
+
   // Combine text score with effective weight for final ranking
-  results.sort((a, b) => {
-    const finalScoreA = a.score * 0.6 + (a.effectiveWeight ?? 0) * 0.4
-    const finalScoreB = b.score * 0.6 + (b.effectiveWeight ?? 0) * 0.4
+  scoredResults.sort((a, b) => {
+    const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
+    const finalScoreB = b.score * 0.4 + (b.effectiveWeight ?? 0) * 0.6
     return finalScoreB - finalScoreA
   })
 
-  return results.slice(0, limit)
+  return scoredResults.slice(0, limit)
 }
 
 /**
@@ -552,9 +774,10 @@ export async function findSimilarMemories(
     const vectorStore = await getCharacterVectorStore(characterId)
     const results = vectorStore.search(embeddingResult.embedding, 10)
 
-    // Get full memory data
+    // Hydrate only the matched memories, not the whole corpus.
     const repos = getRepositories()
-    const memories = await repos.memories.findByCharacterId(characterId)
+    const matchedIds = results.map(r => r.id)
+    const memories = await repos.memories.findByIds(matchedIds)
     const memoryMap = new Map(memories.map(m => [m.id, m]))
 
     return results
@@ -578,7 +801,7 @@ export async function findSimilarMemories(
  */
 export async function findSimilarMemoriesWithEmbedding(
   characterId: string,
-  embedding: number[],
+  embedding: Float32Array,
   options: {
     threshold?: number
     limit?: number
@@ -592,7 +815,8 @@ export async function findSimilarMemoriesWithEmbedding(
     const results = vectorStore.search(embedding, limit)
 
     const repos = getRepositories()
-    const memories = await repos.memories.findByCharacterId(characterId)
+    const matchedIds = results.map(r => r.id)
+    const memories = await repos.memories.findByIds(matchedIds)
     const memoryMap = new Map(memories.map(m => [m.id, m]))
 
     return results

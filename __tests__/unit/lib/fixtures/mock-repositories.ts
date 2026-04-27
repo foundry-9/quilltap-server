@@ -31,6 +31,8 @@ import type {
 export interface MockCharactersRepository {
   findById: jest.Mock<(id: string) => Promise<Character | null>>;
   findAll: jest.Mock<() => Promise<Character[]>>;
+  findByIdRaw: jest.Mock<(id: string) => Promise<Character | null>>;
+  findAllRaw: jest.Mock<() => Promise<Character[]>>;
   create: jest.Mock<(data: Partial<Character>) => Promise<Character>>;
   update: jest.Mock<(id: string, data: Partial<Character>) => Promise<Character | null>>;
   delete: jest.Mock<(id: string) => Promise<boolean>>;
@@ -185,9 +187,22 @@ export interface MockGlobalRepositories {
  * Create a mock characters repository
  */
 export function createMockCharactersRepository(): MockCharactersRepository {
+  const findById = jest.fn<(id: string) => Promise<Character | null>>().mockResolvedValue(null);
+  const findAll = jest.fn<() => Promise<Character[]>>().mockResolvedValue([]);
+  // Raw variants bypass the document-store overlay in production code. In
+  // tests we alias them to the regular mocks so configuring findById /
+  // findAll automatically applies to findByIdRaw / findAllRaw as well.
+  const findByIdRaw = jest
+    .fn<(id: string) => Promise<Character | null>>()
+    .mockImplementation((id: string) => findById(id));
+  const findAllRaw = jest
+    .fn<() => Promise<Character[]>>()
+    .mockImplementation(() => findAll());
   return {
-    findById: jest.fn<(id: string) => Promise<Character | null>>().mockResolvedValue(null),
-    findAll: jest.fn<() => Promise<Character[]>>().mockResolvedValue([]),
+    findById,
+    findAll,
+    findByIdRaw,
+    findAllRaw,
     create: jest.fn<(data: Partial<Character>) => Promise<Character>>(),
     update: jest.fn<(id: string, data: Partial<Character>) => Promise<Character | null>>().mockResolvedValue(null),
     delete: jest.fn<(id: string) => Promise<boolean>>().mockResolvedValue(true),

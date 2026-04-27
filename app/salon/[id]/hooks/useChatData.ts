@@ -102,7 +102,7 @@ export function useChatData(chatId: string) {
 
   const fetchChatSettings = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/settings/chat')
+      const res = await fetch('/api/v1/settings/chat', { cache: 'no-store' })
       if (!res.ok) {
         const errorBody = await res.text().catch(() => 'Unable to read response body')
         throw new Error(`Failed to fetch chat settings: ${res.status} ${res.statusText} - ${errorBody}`)
@@ -121,7 +121,7 @@ export function useChatData(chatId: string) {
 
   const fetchChat = useCallback(async () => {
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}`)
+      const res = await fetch(`/api/v1/chats/${chatId}`, { cache: 'no-store' })
       if (!res.ok) throw new Error('Failed to fetch chat')
       const data = await res.json()
       setChat(data.chat)
@@ -172,7 +172,7 @@ export function useChatData(chatId: string) {
 
   const fetchChatPhotoCount = useCallback(async () => {
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=files`)
+      const res = await fetch(`/api/v1/chats/${chatId}?action=files`, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         const imageCount = (data.files || []).filter((f: { mimeType: string }) => f.mimeType.startsWith('image/')).length

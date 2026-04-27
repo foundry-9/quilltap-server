@@ -158,7 +158,7 @@ export class VectorIndicesRepository {
   /**
    * Add a single entry
    */
-  async addEntry(entry: { id: string; characterId: string; embedding: number[] }): Promise<void> {
+  async addEntry(entry: { id: string; characterId: string; embedding: Float32Array }): Promise<void> {
     try {
       const collection = await this.getEntriesCollection();
       await collection.insertOne({
@@ -181,7 +181,7 @@ export class VectorIndicesRepository {
   /**
    * Add multiple entries in a batch
    */
-  async addEntries(entries: { id: string; characterId: string; embedding: number[] }[]): Promise<void> {
+  async addEntries(entries: { id: string; characterId: string; embedding: Float32Array }[]): Promise<void> {
     if (entries.length === 0) return;
 
     try {
@@ -249,7 +249,7 @@ export class VectorIndicesRepository {
   /**
    * Update an entry's embedding
    */
-  async updateEntryEmbedding(id: string, embedding: number[]): Promise<boolean> {
+  async updateEntryEmbedding(id: string, embedding: Float32Array): Promise<boolean> {
     try {
       const collection = await this.getEntriesCollection();
       const result = await collection.updateOne(

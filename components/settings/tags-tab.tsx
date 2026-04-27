@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import useSWR from 'swr'
 import { useTagStyles } from '@/components/providers/tag-style-provider'
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles'
 import type { TagVisualStyle } from '@/lib/schemas/types'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { getErrorMessage } from '@/lib/error-utils'
 import { DeleteConfirmPopover } from '@/components/ui/DeleteConfirmPopover'
 
 interface TagUsageCount {
@@ -28,7 +30,6 @@ interface TagOption {
 }
 
 export default function TagsTab() {
-  const [loading, setLoading] = useState(true)
   const [tagSaving, setTagSaving] = useState<string | null>(null)
   const [tagOptions, setTagOptions] = useState<TagOption[]>([])
   const [selectedTagId, setSelectedTagId] = useState('')
@@ -37,39 +38,19 @@ export default function TagsTab() {
   const [deleting, setDeleting] = useState(false)
   const { refresh: refreshTagStyles } = useTagStyles()
   const { refresh: refreshQuickHideTags } = useQuickHide()
-  const tagFetchIdRef = useRef(0)
   const colorDebounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
-  const fetchTags = useCallback(async () => {
-    const requestId = ++tagFetchIdRef.current
-    setLoading(true)
-    try {
-      const res = await fetch('/api/v1/tags', { cache: 'no-store' })
-      if (!res.ok) {
-        throw new Error('Failed to load tags')
-      }
-      const data = await res.json()
-      if (tagFetchIdRef.current === requestId) {
-        setTagOptions((data.tags || []).map((tag: any) => ({
-          id: tag.id,
-          name: tag.name,
-          quickHide: Boolean(tag.quickHide),
-          visualStyle: tag.visualStyle ?? null,
-          _count: tag._count,
-          totalUsage: tag.totalUsage ?? 0,
-        })))
-      }
-    } catch (err) {
-      console.error('Error loading tags', { error: err instanceof Error ? err.message : String(err) })
-      showErrorToast('Failed to load tags')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const { data, isLoading, error: loadError, mutate: mutateTags } = useSWR<{ tags: TagOption[] }>(
+    '/api/v1/tags'
+  )
 
+  // Sync SWR data to local state for UI mutations
   useEffect(() => {
-    fetchTags()
-  }, [fetchTags])
+    if (data?.tags) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      setTagOptions(data.tags)
+    }
+  }, [data?.tags])
 
   const updateTagVisualStyle = useCallback(async (tagId: string, visualStyle: TagVisualStyle | null) => {
     setTagSaving(tagId)
@@ -227,7 +208,7 @@ export default function TagsTab() {
 
       // Refresh everything
       await Promise.all([
-        fetchTags(),
+        mutateTags(),
         refreshTagStyles(),
         refreshQuickHideTags(),
       ])
@@ -236,7 +217,7 @@ export default function TagsTab() {
     } finally {
       setDeleting(false)
     }
-  }, [fetchTags, refreshTagStyles, refreshQuickHideTags])
+  }, [mutateTags, refreshTagStyles, refreshQuickHideTags])
 
   const tagLabelLookup = useMemo(() => {
     const entries = new Map<string, string>()
@@ -258,7 +239,7 @@ export default function TagsTab() {
     [tagOptions]
   )
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="qt-text-secondary">Loading settings...</div>

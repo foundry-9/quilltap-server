@@ -141,6 +141,24 @@ abstract class UserScopedTaggableRepository<
  * User-scoped Characters Repository
  */
 class UserScopedCharactersRepository extends UserScopedTaggableRepository<Character, CharactersRepository> {
+  /**
+   * Return all characters without applying the document-store properties overlay.
+   * Used by the export path so round-trips are lossless.
+   */
+  async findAllRaw(): Promise<Character[]> {
+    return this.filterByUser(await this.baseRepo.findAllRaw());
+  }
+
+  /**
+   * Return a single character without applying the document-store properties overlay.
+   * Used by the export path and the sync-back action.
+   */
+  async findByIdRaw(id: string): Promise<Character | null> {
+    const item = await this.baseRepo.findByIdRaw(id);
+    if (!item || item.userId !== this.userId) return null;
+    return item;
+  }
+
   async setFavorite(characterId: string, isFavorite: boolean): Promise<Character | null> {
     const character = await this.findById(characterId);
     if (!character) return null;

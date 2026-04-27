@@ -180,9 +180,9 @@ When chatting in a project, the AI can:
 **You:** "What does the magic system doc say about healing spells?"
 
 **AI's Process:**
-1. Uses `search_files` with query "healing spells magic system"
-2. Finds `magic-system.md` with high relevance
-3. Uses `read_file` to get the content
+1. Uses `doc_grep` with query "healing spells" across the project's document store
+2. Finds `magic-system.md` with matching hits
+3. Uses `doc_read_file` to get the surrounding content
 4. Responds with information from your document
 
 ### File Content in Context

@@ -84,7 +84,7 @@ export function ModelBehaviorCard({
         <div className="border-t qt-border-default p-4 space-y-4">
           {/* Agent Mode Setting */}
           <div className="p-3 rounded-lg qt-border qt-bg-surface">
-            <h4 className="text-sm font-medium text-foreground mb-1">Agent Mode</h4>
+            <h4 className="qt-label text-foreground mb-1">Agent Mode</h4>
             <p className="qt-text-xs qt-text-secondary mb-2">
               Default agent mode for chats in this project. Agent mode allows iterative tool use with self-correction.
             </p>
@@ -105,7 +105,7 @@ export function ModelBehaviorCard({
           {/* Default Tool Settings */}
           <div className="flex items-center justify-between p-3 rounded-lg qt-border qt-bg-surface">
             <div>
-              <h4 className="text-sm font-medium text-foreground">Default Tool Settings</h4>
+              <h4 className="qt-label text-foreground">Default Tool Settings</h4>
               <p className="qt-text-xs qt-text-secondary">
                 {toolSummary}
               </p>

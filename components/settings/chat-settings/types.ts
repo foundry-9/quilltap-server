@@ -30,7 +30,6 @@ export interface CheapLLMSettings {
   defaultCheapProfileId?: string | null
   fallbackToLocal: boolean
   embeddingProvider: EmbeddingProvider
-  embeddingProfileId?: string | null
   /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
   imagePromptProfileId?: string | null
 }
@@ -74,6 +73,8 @@ export interface ChatSettings {
   llmLoggingSettings?: LLMLoggingSettings
   /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically */
   autoDetectRng?: boolean
+  /** Whether new chats start in composition mode by default */
+  compositionModeDefault?: boolean
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings?: AgentModeSettings
   /** Story backgrounds settings for AI-generated chat backgrounds */
@@ -101,6 +102,7 @@ export interface ConnectionProfile {
   isDefault: boolean
   isCheap?: boolean
   isDangerousCompatible?: boolean
+  supportsImageUpload?: boolean
   apiKeyId?: string
   apiKey?: ApiKey | null
 }
@@ -166,12 +168,6 @@ export const AVATAR_STYLES = [
     preview: '▭',
   },
 ] as const
-
-/**
- * Vision-Capable Providers
- * List of providers that support vision/image analysis capabilities
- */
-export const VISION_PROVIDERS = ['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK'] as const
 
 /**
  * Timestamp Injection Mode Options

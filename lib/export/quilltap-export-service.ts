@@ -31,6 +31,11 @@ import type {
   TagsExportData,
   ProjectsExportData,
   MemoryCollection,
+  DocumentStoresExportData,
+  ExportedDocumentStore,
+  ExportedDocumentStoreDocument,
+  ExportedDocumentStoreBlob,
+  ExportedProjectDocMountLink,
 } from './types';
 import type {
   Character,
@@ -125,7 +130,7 @@ async function collectChatMemories(
 ): Promise<Memory[]> {
   try {
     // Get all characters and collect their memories filtered by chatId
-    const characters = await repos.characters.findAll();
+    const characters = await repos.characters.findAllRaw();
     const memoriesArrays = await Promise.all(
       characters.map(char => repos.memories.findByCharacterId(char.id))
     );
@@ -202,14 +207,15 @@ export async function exportCharacters(
   // Fetch characters
   const characters: ExportedCharacter[] = [];
   for (const id of characterIds) {
-    const character = await repos.characters.findById(id);
+    const character = await repos.characters.findByIdRaw(id);
     if (character) {
       const tagNames = await resolveTagNames(repos, character.tags);
 
-      // Load wardrobe items for this character (skip archetypes — characterId=null)
+      // Load wardrobe items for this character (skip archetypes — characterId=null).
+      // Raw variant so exports reflect canonical DB rows, not the overlay.
       let wardrobeItems: WardrobeItem[] = [];
       try {
-        wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id);
+        wardrobeItems = await globalRepos.wardrobe.findByCharacterIdRaw(id);
         logger.debug('Loaded wardrobe items for character export', {
           characterId: id,
           wardrobeItemCount: wardrobeItems.length,
@@ -289,7 +295,7 @@ export async function exportChats(
           let characterName: string | undefined;
 
           if (p.type === 'CHARACTER' && p.characterId) {
-            const char = await repos.characters.findById(p.characterId);
+            const char = await repos.characters.findByIdRaw(p.characterId);
             characterName = char?.name;
           }
 
@@ -475,7 +481,7 @@ export async function exportProjects(
       // Resolve character roster names
       const characterRosterNames: string[] = [];
       for (const characterId of project.characterRoster ?? []) {
-        const character = await repos.characters.findById(characterId);
+        const character = await repos.characters.findByIdRaw(characterId);
         if (character) characterRosterNames.push(character.name);
       }
 
@@ -499,6 +505,100 @@ export async function exportProjects(
   return {
     projects,
   };
+}
+
+/**
+ * Export document stores (Scriptorium mount points).
+ *
+ * Returns every mount point's configuration plus — for database-backed
+ * mounts — the document bodies and blobs that live inside
+ * quilltap-mount-index.db. Filesystem/obsidian mounts export their
+ * configuration only; the user keeps the files on disk.
+ *
+ * Blob bytes are base64-encoded for JSON safety.
+ */
+export async function exportDocumentStores(
+  _userId: string,
+  mountPointIds: string[]
+): Promise<DocumentStoresExportData> {
+  // Document stores are instance-scoped (Quilltap is single-user) so we use
+  // the global repository container — UserScopedRepositoryContainer does not
+  // wrap the docMount* repos on purpose.
+  const repos = getRepositories();
+
+  const mountPoints: ExportedDocumentStore[] = [];
+  const documents: ExportedDocumentStoreDocument[] = [];
+  const blobs: ExportedDocumentStoreBlob[] = [];
+  const projectLinks: ExportedProjectDocMountLink[] = [];
+  const mountIdSet = new Set<string>();
+
+  for (const id of mountPointIds) {
+    const mp = await repos.docMountPoints.findById(id);
+    if (!mp) continue;
+    mountIdSet.add(mp.id);
+    mountPoints.push({
+      id: mp.id,
+      name: mp.name,
+      basePath: mp.basePath,
+      mountType: mp.mountType,
+      storeType: mp.storeType,
+      includePatterns: mp.includePatterns,
+      excludePatterns: mp.excludePatterns,
+      enabled: mp.enabled,
+    });
+
+    if (mp.mountType === 'database') {
+      const docs = await repos.docMountDocuments.findByMountPointId(mp.id);
+      for (const d of docs) {
+        documents.push({
+          mountPointId: d.mountPointId,
+          relativePath: d.relativePath,
+          fileName: d.fileName,
+          fileType: d.fileType,
+          content: d.content,
+          contentSha256: d.contentSha256,
+          plainTextLength: d.plainTextLength,
+          lastModified: d.lastModified,
+        });
+      }
+    }
+
+    // Blobs are universal — export for every mount type so uploads persist.
+    const blobMetas = await repos.docMountBlobs.listByMountPoint(mp.id);
+    for (const meta of blobMetas) {
+      const data = await repos.docMountBlobs.readData(meta.id);
+      if (!data) continue;
+      blobs.push({
+        mountPointId: meta.mountPointId,
+        relativePath: meta.relativePath,
+        originalFileName: meta.originalFileName,
+        originalMimeType: meta.originalMimeType,
+        storedMimeType: meta.storedMimeType,
+        sizeBytes: meta.sizeBytes,
+        sha256: meta.sha256,
+        description: meta.description,
+        descriptionUpdatedAt: meta.descriptionUpdatedAt ?? null,
+        extractedText: meta.extractedText ?? null,
+        extractedTextSha256: meta.extractedTextSha256 ?? null,
+        extractionStatus: meta.extractionStatus ?? 'none',
+        extractionError: meta.extractionError ?? null,
+        dataBase64: data.toString('base64'),
+      });
+    }
+
+    // Project ↔ mount-point links. Import side remaps both IDs through the
+    // project and mount-point ID maps so the associations survive even when
+    // the target instance rewrites IDs under a 'duplicate' conflict strategy.
+    const links = await repos.projectDocMountLinks.findByMountPointId(mp.id);
+    for (const link of links) {
+      projectLinks.push({
+        projectId: link.projectId,
+        mountPointId: link.mountPointId,
+      });
+    }
+  }
+
+  return { mountPoints, documents, blobs, projectLinks };
 }
 
 // ============================================================================
@@ -529,7 +629,7 @@ export async function createExport(
     switch (options.type) {
       case 'characters': {
         const allCharacters = options.scope === 'all'
-          ? await repos.characters.findAll()
+          ? await repos.characters.findAllRaw()
           : [];
         const ids = options.scope === 'all'
           ? allCharacters.map(c => c.id)
@@ -636,6 +736,20 @@ export async function createExport(
         break;
       }
 
+      case 'document-stores': {
+        const globalReposDS = getRepositories();
+        const allStores = options.scope === 'all'
+          ? await globalReposDS.docMountPoints.findAll()
+          : [];
+        const ids = options.scope === 'all'
+          ? allStores.map(s => s.id)
+          : entityIds;
+
+        data = await exportDocumentStores(userId, ids);
+        entityCount = data.mountPoints.length;
+        break;
+      }
+
       default:
         throw new Error(`Unknown export type: ${options.type}`);
     }
@@ -645,6 +759,15 @@ export async function createExport(
     counts[options.type] = entityCount;
     if (memoryCount > 0) {
       counts.memories = memoryCount;
+    }
+    // Document stores carry several extra counts for document bodies, blobs,
+    // and project-link associations — surface them in the manifest so
+    // importers know what they're about to load.
+    if (options.type === 'document-stores' && data && 'documents' in data && 'blobs' in data) {
+      counts.documentStores = entityCount;
+      counts.documentStoreDocuments = (data as DocumentStoresExportData).documents.length;
+      counts.documentStoreBlobs = (data as DocumentStoresExportData).blobs.length;
+      counts.documentStoreProjectLinks = (data as DocumentStoresExportData).projectLinks?.length ?? 0;
     }
 
     const manifest = createManifest(options.type, options, counts);
@@ -684,14 +807,14 @@ export async function previewExport(
     switch (options.type) {
       case 'characters': {
         const allCharacters = options.scope === 'all'
-          ? await repos.characters.findAll()
+          ? await repos.characters.findAllRaw()
           : [];
         const ids = options.scope === 'all'
           ? allCharacters.map(c => c.id)
           : entityIds;
 
         for (const id of ids) {
-          const char = await repos.characters.findById(id);
+          const char = await repos.characters.findByIdRaw(id);
           if (char) {
             entities.push({ id: char.id, name: char.name });
             if (options.includeMemories) {
@@ -824,6 +947,23 @@ export async function previewExport(
           const project = await repos.projects.findById(id);
           if (project) {
             entities.push({ id: project.id, name: project.name });
+          }
+        }
+        break;
+      }
+
+      case 'document-stores': {
+        const globalReposDS = getRepositories();
+        const allStores = options.scope === 'all'
+          ? await globalReposDS.docMountPoints.findAll()
+          : [];
+        const ids = options.scope === 'all'
+          ? allStores.map(s => s.id)
+          : entityIds;
+        for (const id of ids) {
+          const store = await globalReposDS.docMountPoints.findById(id);
+          if (store) {
+            entities.push({ id: store.id, name: store.name });
           }
         }
         break;

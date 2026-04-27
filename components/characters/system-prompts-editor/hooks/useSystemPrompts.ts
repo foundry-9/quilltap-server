@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import useSWR from 'swr'
 import {
   CharacterSystemPrompt,
   PromptTemplate,
@@ -55,8 +56,6 @@ export function useSystemPrompts(
   characterId: string,
   onUpdate?: () => void
 ): UseSystemPromptsReturn {
-  const [prompts, setPrompts] = useState<CharacterSystemPrompt[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -69,7 +68,6 @@ export function useSystemPrompts(
 
   // Import modal state
   const [showImportModal, setShowImportModal] = useState(false)
-  const [templates, setTemplates] = useState<PromptTemplate[]>([])
   const [loadingTemplates, setLoadingTemplates] = useState(false)
 
   // Preview modal state
@@ -78,22 +76,16 @@ export function useSystemPrompts(
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
+  const { data: promptsData, isLoading: loading, mutate: mutatePrompts } = useSWR<{ prompts: CharacterSystemPrompt[] }>(
+    `/api/v1/characters/${characterId}/prompts`
+  )
+  const prompts = promptsData?.prompts ?? []
+
+  const [templates, setTemplates] = useState<PromptTemplate[]>([])
+
   const fetchPrompts = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await fetch(`/api/v1/characters/${characterId}/prompts`)
-      if (!res.ok) throw new Error('Failed to fetch prompts')
-      const data = await res.json()
-      setPrompts(data.prompts || [])
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'An error occurred'
-      setError(message)
-      console.error('Error fetching character prompts', { error: message })
-    } finally {
-      setLoading(false)
-    }
-  }, [characterId])
+    await mutatePrompts()
+  }, [mutatePrompts])
 
   const fetchTemplates = useCallback(async () => {
     try {
@@ -112,10 +104,6 @@ export function useSystemPrompts(
       setLoadingTemplates(false)
     }
   }, [])
-
-  useEffect(() => {
-    fetchPrompts()
-  }, [fetchPrompts])
 
   const openCreateModal = () => {
     setEditingPrompt(null)

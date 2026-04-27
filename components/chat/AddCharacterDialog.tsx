@@ -12,7 +12,8 @@
  * - Optional join scenario text
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import useSWR from 'swr'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
@@ -58,15 +59,12 @@ export default function AddCharacterDialog({
   existingCharacterIds,
   onCharacterAdded,
 }: AddCharacterDialogProps) {
-  const [characters, setCharacters] = useState<CharacterOption[]>([])
-  const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   // This can be a profile ID or USER_IMPERSONATION_VALUE for user control
   const [selectedConnectionProfileId, setSelectedConnectionProfileId] = useState<string | null>(null)
   const [hasHistoryAccess, setHasHistoryAccess] = useState(false)
   const [joinScenario, setJoinScenario] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [isCreateNPCOpen, setIsCreateNPCOpen] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
@@ -76,16 +74,26 @@ export default function AddCharacterDialog({
   // intercepts console calls and triggers setState. Logging should only happen
   // inside useEffect, event handlers, or other non-render contexts.
 
-  // Load characters and connection profiles when dialog opens
+  const { data: charactersData, isLoading } = useSWR<{ characters: CharacterOption[] }>(
+    isOpen ? '/api/v1/characters' : null
+  )
+  const { data: profilesData, error: profilesError } = useSWR<{ profiles: ConnectionProfile[] }>(
+    isOpen ? '/api/v1/connection-profiles' : null
+  )
+
+  const characters = useMemo(() => charactersData?.characters ?? [], [charactersData])
+  const connectionProfiles = useMemo(() => profilesData?.profiles ?? [], [profilesData])
+
+  // Load characters and connection profiles when dialog opens and focus search input
   useEffect(() => {
-    if (isOpen) {
-      loadData()
+    if (isOpen && !isLoading) {
       // Focus search input after loading
       setTimeout(() => {
         searchInputRef.current?.focus()
       }, 100)
-    } else {
+    } else if (!isOpen) {
       // Reset state when dialog closes
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset fires only on open; parent renders unconditionally
       setSelectedCharacterId(null)
       setSelectedConnectionProfileId(null)
       setHasHistoryAccess(false)
@@ -93,13 +101,14 @@ export default function AddCharacterDialog({
       setSearchTerm('')
       setIsCreateNPCOpen(false)
     }
-  }, [isOpen])
+  }, [isOpen, isLoading])
 
   // Set default connection profile when character is selected
   useEffect(() => {
     if (selectedCharacterId) {
       const character = characters.find(c => c.id === selectedCharacterId)
       if (character?.defaultConnectionProfileId) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream selectedCharacterId changes (parent renders unconditionally)
         setSelectedConnectionProfileId(character.defaultConnectionProfileId)
       } else {
         // Fall back to first available profile
@@ -109,37 +118,6 @@ export default function AddCharacterDialog({
       }
     }
   }, [selectedCharacterId, characters, connectionProfiles])
-
-  const loadData = async () => {
-    setIsLoading(true)
-
-    try {
-      const [charactersRes, profilesRes] = await Promise.all([
-        fetch('/api/v1/characters'),
-        fetch('/api/v1/connection-profiles'),
-      ])
-
-      if (!charactersRes.ok || !profilesRes.ok) {
-        throw new Error('Failed to load data')
-      }
-
-      const charactersData = await charactersRes.json()
-      const profilesData = await profilesRes.json()
-
-      const loadedCharacters = charactersData.characters || []
-      const loadedProfiles = profilesData.profiles || []
-
-      setCharacters(loadedCharacters)
-      setConnectionProfiles(loadedProfiles)
-    } catch (error) {
-      console.error('[AddCharacterDialog] Error loading data', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      showErrorToast('Failed to load characters')
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // Filter out characters already in the chat and apply search
   const { regularCharacters, npcCharacters } = useMemo(() => {
@@ -233,9 +211,6 @@ export default function AddCharacterDialog({
   }
 
   const handleNPCCreated = async (characterId: string) => {
-    // Refresh the character list
-    await loadData()
-
     // Auto-select the new NPC
     setSelectedCharacterId(characterId)
 

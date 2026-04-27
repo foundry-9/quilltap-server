@@ -9,7 +9,8 @@
  * @module components/wardrobe/outfit-selector
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useMemo } from 'react'
+import useSWR from 'swr'
 import type {
   OutfitSelectionMode,
   OutfitPreset,
@@ -81,72 +82,25 @@ function CharacterOutfitSection({
   showHeader,
 }: CharacterOutfitSectionProps) {
   const [expanded, setExpanded] = useState(false)
-  const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([])
-  const [presets, setPresets] = useState<OutfitPreset[]>([])
-  const [loadingWardrobe, setLoadingWardrobe] = useState(false)
-  const [loadingPresets, setLoadingPresets] = useState(false)
-  const [wardrobeFetched, setWardrobeFetched] = useState(false)
-  const [presetsFetched, setPresetsFetched] = useState(false)
   const [internalMode, setInternalMode] = useState<InternalMode>(selection.mode)
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
 
-  // Fetch wardrobe items when mode is manual and items not yet fetched
-  useEffect(() => {
-    if ((internalMode !== 'manual' && internalMode !== 'preset') || wardrobeFetched) return
+  // Fetch wardrobe items when mode is manual or preset
+  const { data: wardrobeData, isLoading: loadingWardrobe } = useSWR<{ wardrobeItems: WardrobeItem[] }>(
+    (internalMode === 'manual' || internalMode === 'preset')
+      ? `/api/v1/characters/${character.id}/wardrobe`
+      : null
+  )
 
-    let cancelled = false
-    const fetchWardrobe = async () => {
-      try {
-        const res = await fetch(`/api/v1/characters/${character.id}/wardrobe`)
-        if (!res.ok) throw new Error('Failed to fetch wardrobe')
-        const data = await res.json()
-        if (!cancelled) {
-          setWardrobeItems(data.wardrobeItems || [])
-          setWardrobeFetched(true)
-        }
-      } catch (err) {
-        console.error('[OutfitSelector] Failed to fetch wardrobe', {
-          characterId: character.id,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      } finally {
-        if (!cancelled) setLoadingWardrobe(false)
-      }
-    }
+  // Fetch presets when mode is preset
+  const { data: presetsData, isLoading: loadingPresets } = useSWR<{ presets: OutfitPreset[] }>(
+    internalMode === 'preset' ? `/api/v1/characters/${character.id}/wardrobe/presets` : null
+  )
 
-    setLoadingWardrobe(true)
-    fetchWardrobe()
-    return () => { cancelled = true }
-  }, [internalMode, character.id, wardrobeFetched])
-
-  // Fetch presets when mode is preset and presets not yet fetched
-  useEffect(() => {
-    if (internalMode !== 'preset' || presetsFetched) return
-
-    let cancelled = false
-    const fetchPresets = async () => {
-      try {
-        const res = await fetch(`/api/v1/characters/${character.id}/wardrobe/presets`)
-        if (!res.ok) throw new Error('Failed to fetch presets')
-        const data = await res.json()
-        if (!cancelled) {
-          setPresets(data.presets || [])
-          setPresetsFetched(true)
-        }
-      } catch (err) {
-        console.error('[OutfitSelector] Failed to fetch presets', {
-          characterId: character.id,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      } finally {
-        if (!cancelled) setLoadingPresets(false)
-      }
-    }
-
-    setLoadingPresets(true)
-    fetchPresets()
-    return () => { cancelled = true }
-  }, [internalMode, character.id, presetsFetched])
+  const wardrobeItems = useMemo(() => wardrobeData?.wardrobeItems ?? [], [wardrobeData])
+  const presets = useMemo(() => presetsData?.presets ?? [], [presetsData])
+  const wardrobeFetched = wardrobeData !== undefined
+  const presetsFetched = presetsData !== undefined
 
   const handleModeChange = useCallback(
     (mode: InternalMode) => {

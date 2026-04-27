@@ -31,7 +31,7 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
         return (
           <div key={step} className="flex items-center gap-2">
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+              className={`w-8 h-8 rounded-full flex items-center justify-center qt-label ${
                 isActive
                   ? 'qt-bg-accent qt-text-on-accent'
                   : isComplete

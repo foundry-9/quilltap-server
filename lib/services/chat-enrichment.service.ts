@@ -8,12 +8,32 @@
  * Provides unified enrichment for chat participants with options for different view modes.
  */
 
-import type { ChatParticipantBase, ChatMetadata } from '@/lib/schemas/types'
+import type {
+  ChatParticipantBase,
+  ChatMetadata,
+  Character,
+  FileEntry,
+  Project,
+} from '@/lib/schemas/types'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
 import { getFilePath } from '@/lib/api/middleware/file-path'
 import { logger } from '@/lib/logger'
 
 type Repos = RepositoryContainer
+
+/**
+ * Pre-loaded data for batched list enrichment. Populated once by
+ * `enrichChatsForList` and threaded through the per-chat / per-participant
+ * helpers so they skip per-row `findById` calls. Without this, 287 chats ×
+ * N participants turned into ~500+ `characters.findById` calls, each of
+ * which triggered the 8-query `applyDocumentStoreOverlay` block — a 4000+
+ * query stall right after startup.
+ */
+export interface ChatListPreloaded {
+  characters: Map<string, Character>
+  files: Map<string, FileEntry>
+  projects: Map<string, Project>
+}
 
 // ============================================================================
 // Types
@@ -41,6 +61,15 @@ export interface EnrichedCharacterBase {
 }
 
 /**
+ * Named system prompt summary for detail view
+ */
+export interface EnrichedCharacterSystemPrompt {
+  id: string
+  name: string
+  isDefault: boolean
+}
+
+/**
  * Character info for list/summary view (includes tags)
  */
 export interface EnrichedCharacterSummary extends EnrichedCharacterBase {
@@ -48,9 +77,13 @@ export interface EnrichedCharacterSummary extends EnrichedCharacterBase {
 }
 
 /**
- * Character info for detail view (no tags, used with full participant)
+ * Character info for detail view (no tags, used with full participant).
+ * Includes the character's named system prompts so per-participant overrides
+ * can be chosen from the sidebar.
  */
-export type EnrichedCharacterDetail = EnrichedCharacterBase
+export interface EnrichedCharacterDetail extends EnrichedCharacterBase {
+  systemPrompts: EnrichedCharacterSystemPrompt[]
+}
 
 
 /**
@@ -105,6 +138,7 @@ export interface EnrichedParticipantDetail {
   character: EnrichedCharacterDetail | null
   connectionProfile: EnrichedConnectionProfile | null
   imageProfile: EnrichedImageProfile | null
+  selectedSystemPromptId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -160,27 +194,35 @@ export interface EnrichedChatSummary {
 // ============================================================================
 
 /**
- * Get enriched character info for list/summary view (includes tags)
+ * Get enriched character info for list/summary view (includes tags).
+ *
+ * When `preloaded` is supplied, both the character and its defaultImage are
+ * read from the pre-fetched maps instead of hitting the repository — this is
+ * the batched list path. Without `preloaded`, falls back to per-row lookups
+ * for the single-character callers.
  */
 export async function getCharacterSummary(
   characterId: string,
-  repos: Repos
+  repos: Repos,
+  preloaded?: ChatListPreloaded,
 ): Promise<EnrichedCharacterSummary | null> {
-  const character = await repos.characters.findById(characterId)
+  const character = preloaded
+    ? preloaded.characters.get(characterId) ?? null
+    : await repos.characters.findById(characterId)
   if (!character) {
-
     return null
   }
 
   let defaultImage: EnrichedImage | null = null
   if (character.defaultImageId) {
-    const fileEntry = await repos.files.findById(character.defaultImageId)
+    const fileEntry = preloaded
+      ? preloaded.files.get(character.defaultImageId) ?? null
+      : await repos.files.findById(character.defaultImageId)
     if (fileEntry) {
       defaultImage = { id: fileEntry.id, filepath: getFilePath(fileEntry), url: null }
     }
   }
 
-  // Build avatar URL: use explicit avatarUrl if non-empty, else fall back to defaultImage
   let avatarUrl: string | null = character.avatarUrl || null
   if (!avatarUrl && defaultImage) {
     avatarUrl = `/api/v1/files/${defaultImage.id}`
@@ -212,6 +254,12 @@ export async function getCharacterDetail(
     return null
   }
 
+  const systemPrompts: EnrichedCharacterSystemPrompt[] = (character.systemPrompts || []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    isDefault: p.isDefault ?? false,
+  }))
+
   // Check for chat-specific avatar override (from wardrobe avatar generation)
   if (chatId && character.avatarOverrides?.length) {
     const override = character.avatarOverrides.find(o => o.chatId === chatId)
@@ -226,6 +274,7 @@ export async function getCharacterDetail(
           avatarUrl: `/api/v1/files/${overrideFile.id}`,
           defaultImageId: override.imageId,
           defaultImage: overrideImage,
+          systemPrompts,
         }
       }
     }
@@ -252,6 +301,7 @@ export async function getCharacterDetail(
     avatarUrl,
     defaultImageId: character.defaultImageId ?? null,
     defaultImage,
+    systemPrompts,
   }
 }
 
@@ -320,10 +370,11 @@ export async function getImageProfile(
  */
 export async function enrichParticipantSummary(
   participant: ChatParticipantBase,
-  repos: Repos
+  repos: Repos,
+  preloaded?: ChatListPreloaded,
 ): Promise<EnrichedParticipantSummary> {
   const character = participant.type === 'CHARACTER' && participant.characterId
-    ? await getCharacterSummary(participant.characterId, repos)
+    ? await getCharacterSummary(participant.characterId, repos, preloaded)
     : null
 
   return {
@@ -368,6 +419,7 @@ export async function enrichParticipantDetail(
     character,
     connectionProfile,
     imageProfile,
+    selectedSystemPromptId: participant.selectedSystemPromptId ?? null,
     createdAt: participant.createdAt,
     updatedAt: participant.updatedAt,
   }
@@ -415,23 +467,22 @@ export async function enrichTags(
  */
 export async function enrichChatForList(
   chat: ChatMetadata,
-  repos: Repos
+  repos: Repos,
+  preloaded?: ChatListPreloaded,
 ): Promise<EnrichedChatSummary> {
-  // Enrich participants
   const participants = await Promise.all(
-    chat.participants.map(p => enrichParticipantSummary(p, repos))
+    chat.participants.map(p => enrichParticipantSummary(p, repos, preloaded))
   )
 
-  // Get tags
   const tags = await enrichTags(chat.tags, repos)
 
-  // Get message count
   const messageCount = await repos.chats.getMessageCount(chat.id)
 
-  // Get project info if chat belongs to a project
   let project: EnrichedProject | null = null
   if (chat.projectId) {
-    const projectData = await repos.projects.findById(chat.projectId)
+    const projectData = preloaded
+      ? preloaded.projects.get(chat.projectId) ?? null
+      : await repos.projects.findById(chat.projectId)
     if (projectData) {
       project = {
         id: projectData.id,
@@ -441,10 +492,11 @@ export async function enrichChatForList(
     }
   }
 
-  // Get story background if available
   let storyBackground: EnrichedStoryBackground | null = null
   if (chat.storyBackgroundImageId) {
-    const bgFile = await repos.files.findById(chat.storyBackgroundImageId)
+    const bgFile = preloaded
+      ? preloaded.files.get(chat.storyBackgroundImageId) ?? null
+      : await repos.files.findById(chat.storyBackgroundImageId)
     if (bgFile) {
       storyBackground = {
         id: bgFile.id,
@@ -479,20 +531,59 @@ export async function enrichChatForList(
 }
 
 /**
- * Enrich multiple chats for list view with sorting
+ * Enrich multiple chats for list view with sorting.
+ *
+ * Batches the cross-chat lookups (characters, their default images, chat
+ * projects, chat story-background images) into three queries — one per
+ * repository — before fanning out the per-chat enrichment. On instances with
+ * hundreds of chats referencing the same one or two characters, this replaces
+ * the old N+1 pattern where every participant triggered its own
+ * `characters.findById` → `applyDocumentStoreOverlay` block.
  */
 export async function enrichChatsForList(
   chats: ChatMetadata[],
   repos: Repos
 ): Promise<EnrichedChatSummary[]> {
-  // Sort by lastMessageAt descending, falling back to updatedAt for chats without messages
   const sortedChats = [...chats].sort((a, b) => {
     const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.updatedAt).getTime()
     const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.updatedAt).getTime()
     return bTime - aTime
   })
 
-  return Promise.all(sortedChats.map(chat => enrichChatForList(chat, repos)))
+  const characterIds = new Set<string>()
+  const projectIds = new Set<string>()
+  const fileIds = new Set<string>()
+  for (const chat of sortedChats) {
+    if (chat.projectId) projectIds.add(chat.projectId)
+    if (chat.storyBackgroundImageId) fileIds.add(chat.storyBackgroundImageId)
+    for (const p of chat.participants) {
+      if (p.type === 'CHARACTER' && p.characterId) characterIds.add(p.characterId)
+    }
+  }
+
+  const characters = characterIds.size > 0
+    ? await repos.characters.findByIds(Array.from(characterIds))
+    : []
+  const charactersMap = new Map(characters.map(c => [c.id, c]))
+
+  // Union character defaultImage ids with chat storyBackground ids so all
+  // file lookups go through a single findByIds call.
+  for (const character of characters) {
+    if (character.defaultImageId) fileIds.add(character.defaultImageId)
+  }
+
+  const [files, projects] = await Promise.all([
+    fileIds.size > 0 ? repos.files.findByIds(Array.from(fileIds)) : Promise.resolve([] as FileEntry[]),
+    projectIds.size > 0 ? repos.projects.findByIds(Array.from(projectIds)) : Promise.resolve([] as Project[]),
+  ])
+
+  const preloaded: ChatListPreloaded = {
+    characters: charactersMap,
+    files: new Map(files.map(f => [f.id, f])),
+    projects: new Map(projects.map(p => [p.id, p])),
+  }
+
+  return Promise.all(sortedChats.map(chat => enrichChatForList(chat, repos, preloaded)))
 }
 
 /**

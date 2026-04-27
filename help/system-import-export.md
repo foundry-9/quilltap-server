@@ -218,19 +218,21 @@ When using the "Create New" conflict strategy, all internal references are autom
 
 ## Import/Export File Format
 
-**File format:** `.qtap` (JSON format)
+**File format:** `.qtap` — streaming newline-delimited JSON (NDJSON).
 
 **Structure:**
 
-- Contains all data in standardized JSON format
-- Includes metadata for each entity
+- First line is an envelope carrying the manifest (`{"format":"qtap-ndjson","version":1,"manifest":{...}}`)
+- Each subsequent line is a single tagged record — one character, one memory, one message, and so on — so nothing in the pipeline has to hold the whole export in memory at once
+- Large binary blobs (document-store attachments) are split across multiple chunk lines and stitched back together on import
+- A trailing footer line carries authoritative record counts
 - Relationships stored as references that are remapped on import
-- Memories stored separately from chat data
+- Because every line is independently valid JSON, a `.qtap` file can be browsed or grepped with any text tool
 
 **Compatibility:**
 
-- Export from version 2.5+ can be imported into version 2.5+
-- Older exports may not be compatible with newest versions
+- Version 4.3+ writes the streaming NDJSON format. Older versions wrote a single monolithic JSON object; those files still import just fine, though exports above ~450 MB that were produced by those older versions cannot be read — re-export them from a current Quilltap build first
+- Export files are version-tagged, so older clients refusing a newer file is the expected behavior
 - Contact support if import fails
 
 ## Troubleshooting
@@ -238,14 +240,15 @@ When using the "Create New" conflict strategy, all internal references are autom
 **Export failed**
 
 - Check that you selected at least one item
-- Try exporting fewer items (may be too large)
-- Ensure sufficient disk space
+- Ensure sufficient disk space for the download
+- As of version 4.3 the export streams record-by-record, so even characters with tens of thousands of memories export cleanly — if a modern export still fails, check the server log for a specific error
 - Contact support if issue persists
 
 **Import failed**
 
-- Verify file is valid `.quilltap` format
-- Check that file hasn't been corrupted
+- Verify file is a valid `.qtap` file (either streaming NDJSON or a legacy monolithic JSON export)
+- Check that file hasn't been corrupted (a truncated NDJSON file will report a specific line number)
+- Very old exports above ~450 MB that used the monolithic JSON format are too large to import on modern runtimes — re-export them from a newer Quilltap build first
 - Try changing conflict resolution strategy
 - Contact support if error persists
 
@@ -254,7 +257,6 @@ When using the "Create New" conflict strategy, all internal references are autom
 - Large imports take time (importing 1000+ messages can be slow)
 - Don't close browser tab during import
 - Check Tasks Queue to see import progress
-- Very large files may need to be split
 
 **Memories didn't import**
 

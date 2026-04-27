@@ -1,15 +1,15 @@
 /**
  * Help Search Unit Tests
+ *
+ * Tests for the DB-backed HelpSearch class that loads help documents
+ * from the database and searches them using cosine similarity.
  */
 
-import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals'
-import { gzipSync } from 'node:zlib'
-import { encode } from '@msgpack/msgpack'
-import { HelpSearch, getHelpSearch, resetHelpSearch } from '@/lib/help-search'
-import type { HelpBundle } from '@/lib/help-search.types'
+import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
 
 // Mock the logger
 jest.mock('@/lib/logger', () => ({
+  __esModule: true,
   logger: {
     debug: jest.fn(),
     info: jest.fn(),
@@ -18,76 +18,95 @@ jest.mock('@/lib/logger', () => ({
   },
 }))
 
-/**
- * Create a test bundle with sample documents
- */
-function createTestBundle(documentCount: number = 3, dimensions: number = 4): HelpBundle {
-  const documents = []
-  for (let i = 0; i < documentCount; i++) {
-    // Create embeddings that will produce predictable similarity scores
-    const embedding = new Array(dimensions).fill(0)
-    embedding[i % dimensions] = 1 // One-hot encoding for easy testing
+// Mock the help-doc-sync module (not covered by jest.setup.ts)
+jest.mock('@/lib/help/help-doc-sync', () => ({
+  ensureHelpDocsSynced: jest.fn().mockResolvedValue(undefined),
+}))
 
-    documents.push({
-      id: `doc-${i}`,
-      title: `Document ${i}`,
-      path: `help/doc-${i}.md`,
-      url: `/test/doc-${i}`,
-      content: `This is the content of document ${i}. It contains helpful information about topic ${i}.`,
-      embedding,
-    })
-  }
+// Mock cosine similarity with a simple dot product
+jest.mock('@/lib/embedding/embedding-service', () => ({
+  cosineSimilarity: jest.fn((a: number[], b: number[]) => {
+    let dot = 0
+    for (let i = 0; i < a.length; i++) dot += a[i] * b[i]
+    return dot
+  }),
+}))
 
-  return {
-    version: '2.0.0',
-    generated: new Date().toISOString(),
-    embeddingModel: 'test-model',
-    embeddingDimensions: dimensions,
-    documents,
-  }
-}
+import { HelpSearch, getHelpSearch, resetHelpSearch } from '@/lib/help-search'
+import { ensureHelpDocsSynced } from '@/lib/help/help-doc-sync'
+import { getRepositories } from '@/lib/repositories/factory'
+import { logger } from '@/lib/logger'
 
-/**
- * Compress a bundle to the expected format
- */
-function compressBundle(bundle: HelpBundle): Buffer {
-  const encoded = encode(bundle)
-  return gzipSync(Buffer.from(encoded))
-}
+// Cast to jest.Mock for the mocked functions (these are created by global jest in jest.setup.ts / jest.mock)
+const mockedEnsureHelpDocsSynced = ensureHelpDocsSynced as jest.Mock
+const mockedGetRepositories = getRepositories as jest.Mock
+const mockedLogger = logger as jest.Mocked<typeof logger>
+
+const mockHelpDocs = [
+  { id: 'doc-0', title: 'Document 0', path: 'help/doc-0.md', url: '/test/doc-0', content: 'Content 0', contentHash: 'hash0', embedding: null, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+  { id: 'doc-1', title: 'Document 1', path: 'help/doc-1.md', url: '/test/doc-1', content: 'Content 1', contentHash: 'hash1', embedding: null, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+  { id: 'doc-2', title: 'Document 2', path: 'help/doc-2.md', url: '/test/doc-2', content: 'Content 2', contentHash: 'hash2', embedding: null, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+]
+
+const mockEmbeddedDocs = [
+  { ...mockHelpDocs[0], embedding: [1, 0, 0, 0] },
+  { ...mockHelpDocs[1], embedding: [0, 1, 0, 0] },
+  { ...mockHelpDocs[2], embedding: [0, 0, 1, 0] },
+]
 
 describe('HelpSearch', () => {
   let helpSearch: HelpSearch
+  let mockFindAll: jest.Mock
+  let mockFindAllWithEmbeddings: jest.Mock
 
   beforeEach(() => {
     helpSearch = new HelpSearch()
+
+    // Create fresh mock functions for each test
+    mockFindAll = jest.fn().mockResolvedValue(mockHelpDocs)
+    mockFindAllWithEmbeddings = jest.fn().mockResolvedValue(mockEmbeddedDocs)
+
+    // Configure getRepositories to return our fresh mocks
+    mockedGetRepositories.mockReturnValue({
+      helpDocs: {
+        findAll: mockFindAll,
+        findAllWithEmbeddings: mockFindAllWithEmbeddings,
+      },
+    })
+
+    mockedEnsureHelpDocsSynced.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
     resetHelpSearch()
+    jest.clearAllMocks()
   })
 
-  describe('loadFromBuffer', () => {
-    it('should load a valid bundle', async () => {
-      const bundle = createTestBundle()
-      const compressed = compressBundle(bundle)
+  describe('loadFromDatabase', () => {
+    it('should load documents from the database', async () => {
+      await helpSearch.loadFromDatabase()
 
-      await helpSearch.loadFromBuffer(compressed)
-
+      expect(mockedEnsureHelpDocsSynced).toHaveBeenCalled()
+      expect(mockFindAll).toHaveBeenCalled()
       expect(helpSearch.isLoaded()).toBe(true)
     })
 
-    it('should store bundle metadata correctly', async () => {
-      const bundle = createTestBundle(5, 8)
-      const compressed = compressBundle(bundle)
+    it('should store the correct number of documents', async () => {
+      await helpSearch.loadFromDatabase()
 
-      await helpSearch.loadFromBuffer(compressed)
+      const docs = await helpSearch.getAllDocuments()
+      expect(docs.length).toBe(3)
+    })
 
-      const metadata = helpSearch.getMetadata()
-      expect(metadata).not.toBeNull()
-      expect(metadata?.version).toBe('2.0.0')
-      expect(metadata?.embeddingModel).toBe('test-model')
-      expect(metadata?.embeddingDimensions).toBe(8)
-      expect(metadata?.documentCount).toBe(5)
+    it('should deduplicate concurrent loadFromDatabase calls', async () => {
+      const p1 = helpSearch.loadFromDatabase()
+      const p2 = helpSearch.loadFromDatabase()
+
+      await Promise.all([p1, p2])
+
+      // ensureHelpDocsSynced and findAll should only be called once
+      expect(mockedEnsureHelpDocsSynced).toHaveBeenCalledTimes(1)
+      expect(mockFindAll).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -97,110 +116,114 @@ describe('HelpSearch', () => {
     })
 
     it('should return true after loading', async () => {
-      const bundle = createTestBundle()
-      await helpSearch.loadFromBuffer(compressBundle(bundle))
-
+      await helpSearch.loadFromDatabase()
       expect(helpSearch.isLoaded()).toBe(true)
     })
   })
 
-  describe('getMetadata', () => {
-    it('should return null when not loaded', () => {
-      expect(helpSearch.getMetadata()).toBeNull()
-    })
-  })
-
   describe('search', () => {
-    it('should return empty array when bundle not loaded', () => {
-      const results = helpSearch.search([1, 0, 0, 0])
-      expect(results).toEqual([])
-    })
+    it('should return results from embedded docs with cosine similarity scoring', async () => {
+      const results = await helpSearch.search([1, 0, 0, 0])
 
-    it('should return empty array for wrong dimension query', async () => {
-      const bundle = createTestBundle(3, 4)
-      await helpSearch.loadFromBuffer(compressBundle(bundle))
-
-      // Query with wrong dimensions
-      const results = helpSearch.search([1, 0]) // Only 2 dimensions instead of 4
-      expect(results).toEqual([])
-    })
-
-    it('should find the most similar document', async () => {
-      const bundle = createTestBundle(3, 4)
-      await helpSearch.loadFromBuffer(compressBundle(bundle))
-
-      // Query that matches doc-0's embedding exactly
-      const results = helpSearch.search([1, 0, 0, 0])
-
-      expect(results.length).toBeGreaterThan(0)
+      expect(results.length).toBe(3)
       expect(results[0].document.id).toBe('doc-0')
-      expect(results[0].score).toBe(1) // Perfect match
+      expect(results[0].score).toBe(1) // Perfect match via dot product
     })
 
     it('should return results sorted by score descending', async () => {
-      const bundle = createTestBundle(3, 4)
-      await helpSearch.loadFromBuffer(compressBundle(bundle))
-
-      // Query that partially matches multiple documents
-      const results = helpSearch.search([0.5, 0.5, 0, 0])
+      const results = await helpSearch.search([0.5, 0.5, 0, 0])
 
       expect(results.length).toBe(3)
-      // Scores should be in descending order
       for (let i = 1; i < results.length; i++) {
         expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score)
       }
     })
 
     it('should respect the limit parameter', async () => {
-      const bundle = createTestBundle(10, 4)
-      await helpSearch.loadFromBuffer(compressBundle(bundle))
-
-      const results = helpSearch.search([1, 0, 0, 0], 3)
-      expect(results.length).toBe(3)
+      const results = await helpSearch.search([1, 0, 0, 0], 2)
+      expect(results.length).toBe(2)
     })
 
-    it('should return all documents when limit exceeds count', async () => {
-      const bundle = createTestBundle(3, 4)
-      await helpSearch.loadFromBuffer(compressBundle(bundle))
+    it('should handle empty results when no embedded docs exist', async () => {
+      mockFindAllWithEmbeddings.mockResolvedValue([])
 
-      const results = helpSearch.search([1, 0, 0, 0], 100)
-      expect(results.length).toBe(3)
+      const results = await helpSearch.search([1, 0, 0, 0])
+      expect(results).toEqual([])
+    })
+
+    it('should skip docs with dimension mismatch and log debug', async () => {
+      // Docs have 4-dimensional embeddings, query has 2 dimensions
+      const results = await helpSearch.search([1, 0])
+
+      expect(results).toEqual([])
+      expect(mockedLogger.debug).toHaveBeenCalledWith(
+        'Skipping help doc with dimension mismatch',
+        expect.objectContaining({
+          context: 'help-search',
+          expected: 2,
+        })
+      )
+    })
+
+    it('should skip docs with null or empty embeddings', async () => {
+      mockFindAllWithEmbeddings.mockResolvedValue([
+        { ...mockHelpDocs[0], embedding: null },
+        { ...mockHelpDocs[1], embedding: [] },
+        { ...mockHelpDocs[2], embedding: [0, 0, 1, 0] },
+      ])
+
+      const results = await helpSearch.search([0, 0, 1, 0])
+      expect(results.length).toBe(1)
+      expect(results[0].document.id).toBe('doc-2')
     })
   })
 
   describe('getDocument', () => {
-    it('should return null when bundle not loaded', () => {
-      expect(helpSearch.getDocument('doc-0')).toBeNull()
+    it('should return null before loading', () => {
+      // isLoaded is false before any load call
+      expect(helpSearch.isLoaded()).toBe(false)
     })
 
-    it('should return null for non-existent ID', async () => {
-      const bundle = createTestBundle()
-      await helpSearch.loadFromBuffer(compressBundle(bundle))
+    it('should return the correct document after loading', async () => {
+      await helpSearch.loadFromDatabase()
 
-      expect(helpSearch.getDocument('non-existent')).toBeNull()
-    })
-
-    it('should return the correct document', async () => {
-      const bundle = createTestBundle()
-      await helpSearch.loadFromBuffer(compressBundle(bundle))
-
-      const doc = helpSearch.getDocument('doc-1')
+      const doc = await helpSearch.getDocument('doc-1')
       expect(doc).not.toBeNull()
       expect(doc?.id).toBe('doc-1')
       expect(doc?.title).toBe('Document 1')
+      expect(doc?.path).toBe('help/doc-1.md')
+      expect(doc?.url).toBe('/test/doc-1')
+      expect(doc?.content).toBe('Content 1')
+    })
+
+    it('should return null for non-existent ID', async () => {
+      await helpSearch.loadFromDatabase()
+
+      const doc = await helpSearch.getDocument('non-existent')
+      expect(doc).toBeNull()
+    })
+
+    it('should auto-load from database when not yet loaded', async () => {
+      // getDocument calls ensureLoaded which triggers loadFromDatabase
+      const doc = await helpSearch.getDocument('doc-0')
+      expect(mockedEnsureHelpDocsSynced).toHaveBeenCalled()
+      expect(mockFindAll).toHaveBeenCalled()
+      expect(doc?.id).toBe('doc-0')
     })
   })
 
   describe('getAllDocuments', () => {
-    it('should return empty array when bundle not loaded', () => {
-      expect(helpSearch.getAllDocuments()).toEqual([])
+    it('should return empty array before loading when DB is empty', async () => {
+      mockFindAll.mockResolvedValue([])
+
+      const docs = await helpSearch.getAllDocuments()
+      expect(docs).toEqual([])
     })
 
-    it('should return all documents without embeddings', async () => {
-      const bundle = createTestBundle(3, 4)
-      await helpSearch.loadFromBuffer(compressBundle(bundle))
+    it('should return all documents after loading', async () => {
+      await helpSearch.loadFromDatabase()
 
-      const docs = helpSearch.getAllDocuments()
+      const docs = await helpSearch.getAllDocuments()
       expect(docs.length).toBe(3)
 
       for (const doc of docs) {
@@ -209,21 +232,34 @@ describe('HelpSearch', () => {
         expect(doc).toHaveProperty('path')
         expect(doc).toHaveProperty('url')
         expect(doc).toHaveProperty('content')
+      }
+    })
+
+    it('should not include embedding data in returned documents', async () => {
+      await helpSearch.loadFromDatabase()
+
+      const docs = await helpSearch.getAllDocuments()
+      for (const doc of docs) {
         expect(doc).not.toHaveProperty('embedding')
+        expect(doc).not.toHaveProperty('contentHash')
+        expect(doc).not.toHaveProperty('createdAt')
+        expect(doc).not.toHaveProperty('updatedAt')
       }
     })
   })
 
   describe('listDocuments', () => {
-    it('should return empty array when bundle not loaded', () => {
-      expect(helpSearch.listDocuments()).toEqual([])
+    it('should return empty array before loading when DB is empty', async () => {
+      mockFindAll.mockResolvedValue([])
+
+      const list = await helpSearch.listDocuments()
+      expect(list).toEqual([])
     })
 
-    it('should return document listing', async () => {
-      const bundle = createTestBundle(3, 4)
-      await helpSearch.loadFromBuffer(compressBundle(bundle))
+    it('should return document listing after loading', async () => {
+      await helpSearch.loadFromDatabase()
 
-      const list = helpSearch.listDocuments()
+      const list = await helpSearch.listDocuments()
       expect(list.length).toBe(3)
 
       for (const item of list) {
@@ -234,6 +270,26 @@ describe('HelpSearch', () => {
         expect(item).not.toHaveProperty('content')
         expect(item).not.toHaveProperty('embedding')
       }
+    })
+  })
+
+  describe('invalidate', () => {
+    it('should reset loaded state', async () => {
+      await helpSearch.loadFromDatabase()
+      expect(helpSearch.isLoaded()).toBe(true)
+
+      helpSearch.invalidate()
+      expect(helpSearch.isLoaded()).toBe(false)
+    })
+
+    it('should cause next access to reload from database', async () => {
+      await helpSearch.loadFromDatabase()
+      expect(mockFindAll).toHaveBeenCalledTimes(1)
+
+      helpSearch.invalidate()
+
+      await helpSearch.getAllDocuments()
+      expect(mockFindAll).toHaveBeenCalledTimes(2)
     })
   })
 })

@@ -16,7 +16,7 @@ import { z } from 'zod'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ConnectionProfile, ChatMetadataBase, Character, ChatSettings } from '@/lib/schemas/types'
 
-import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState } from './types'
+import type { SendMessageOptions, ToolMessage, GeneratedImage, ProcessMessageResult, StreamingState, ToolProcessingResult } from './types'
 
 import {
   resolveRespondingParticipant,
@@ -63,6 +63,7 @@ import {
 import { getProvider } from '@/lib/plugins/provider-registry'
 import {
   triggerSceneStateTracking,
+  triggerConversationRender,
 } from './memory-trigger.service'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
@@ -84,7 +85,9 @@ import {
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 import {
   finalizeMessageResponse,
+  saveAssistantMessage,
 } from './message-finalizer.service'
+import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import {
   resolveAgentModeSetting,
   buildAgentModeInstructions,
@@ -193,6 +196,18 @@ export async function handleSendMessage(
             })
           } catch (error) {
             logger.warn('Failed to trigger scene state tracking', {
+              chatId,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+
+        // Trigger conversation render (Scriptorium) - runs on every turn with content
+        if (result.hasContent) {
+          try {
+            await triggerConversationRender(repos, { chatId, userId })
+          } catch (error) {
+            logger.warn('Failed to trigger conversation render', {
               chatId,
               error: error instanceof Error ? error.message : String(error),
             })
@@ -632,6 +647,30 @@ async function processMessage(
   const canDressThemselves = character?.canDressThemselves !== false
   const canCreateOutfits = character?.canCreateOutfits !== false
 
+  // Determine if document editing tools should be enabled (Scriptorium Phase 3.3)
+  // Enabled when the project has linked document stores
+  let documentEditingEnabled = false
+  if (chat.projectId) {
+    try {
+      const mountLinks = await repos.projectDocMountLinks.findByProjectId(chat.projectId)
+      documentEditingEnabled = mountLinks.length > 0
+    } catch (mountLinkError) {
+      logger.debug('[Orchestrator] Failed to check mount point links for doc editing tools', {
+        projectId: chat.projectId,
+        error: mountLinkError instanceof Error ? mountLinkError.message : String(mountLinkError),
+      })
+    }
+  }
+
+  // System transparency override: when the character isn't opted in, force the
+  // self_inventory tool out of the slate — the chat- and project-level toggles
+  // for that tool can't override the character-level covenant. Cheap union with
+  // whatever the chat already disables.
+  const characterIsTransparent = character?.systemTransparency === true
+  const effectiveDisabledTools = characterIsTransparent
+    ? (chat.disabledTools ?? [])
+    : Array.from(new Set([...(chat.disabledTools ?? []), 'self_inventory']))
+
   // Build tools (include request_full_context when compression is enabled, submit_final_response when agent mode is enabled)
   // Always pass disabledTools and disabledToolGroups for filtering
   const { tools, modelSupportsNativeTools, useNativeWebSearch } = await buildTools(
@@ -641,13 +680,14 @@ async function processMessage(
     userId,
     chat.projectId ?? undefined, // projectId - enables project_info tool
     compressionEnabled, // requestFullContext - enable the tool when compression is active
-    chat.disabledTools ?? [],
+    effectiveDisabledTools,
     chat.disabledToolGroups ?? [],
     agentMode.enabled, // agentModeEnabled - enables submit_final_response tool
     isMultiCharacter, // isMultiCharacter - enables whisper tool
     helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
     canDressThemselves, // canDressThemselves - enables list_wardrobe and update_outfit_item
-    canCreateOutfits // canCreateOutfits - enables create_wardrobe_item
+    canCreateOutfits, // canCreateOutfits - enables create_wardrobe_item
+    documentEditingEnabled // documentEditingEnabled - enables doc_* editing tools
   )
 
   const useTextBlockTools = checkShouldUseTextBlockTools(modelSupportsNativeTools)
@@ -674,9 +714,7 @@ async function processMessage(
   // Build message context
   const modelParams = streamingState.effectiveProfile.parameters as Record<string, unknown>
   const contextChatSettings = chatSettings ? {
-    cheapLLMSettings: chatSettings.cheapLLMSettings ? {
-      embeddingProfileId: chatSettings.cheapLLMSettings.embeddingProfileId ?? undefined,
-    } : undefined,
+    cheapLLMSettings: chatSettings.cheapLLMSettings ? {} : undefined,
     defaultTimestampConfig: chatSettings.defaultTimestampConfig,
   } : null
 
@@ -811,15 +849,12 @@ async function processMessage(
 
     // Search memories using extracted keywords
     const searchQuery = keywordResult.result.join(' ')
-    const embeddingProfileId = chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined
-
     try {
       const memoryResults = await searchMemoriesSemantic(
         character.id,
         searchQuery,
         {
           userId,
-          embeddingProfileId,
           limit: 20,
           minImportance: 0.3,
         }
@@ -841,10 +876,18 @@ async function processMessage(
   }
 
   // Run compression check and proactive recall in parallel
+  const tParallelStart = performance.now()
   const [cachedCompressionResponse, preSearchedMemories] = await Promise.all([
     compressionTask(),
     proactiveRecallTask(),
   ])
+  const tParallelEnd = performance.now()
+  logger.debug('[Orchestrator] Parallel compression + proactive recall complete', {
+    chatId,
+    durationMs: Math.round(tParallelEnd - tParallelStart),
+    hadCachedCompression: !!cachedCompressionResponse,
+    preSearchedMemoriesCount: preSearchedMemories?.length ?? 0,
+  })
 
   // Start keep-alive pings during context building (especially important during compression)
   // This prevents proxy/load balancer timeouts during long compression operations
@@ -870,6 +913,7 @@ async function processMessage(
     characterId: character.id,
   }))
 
+  const tBuildContextStart = performance.now()
   const { builtContext, formattedMessages, isInitialMessage } = await buildMessageContext(
     {
       repos,
@@ -925,6 +969,12 @@ async function processMessage(
     existingMessages,
     fileProcessing.attachmentsToSend
   )
+  const tBuildContextEnd = performance.now()
+  logger.debug('[Orchestrator] buildMessageContext complete', {
+    chatId,
+    durationMs: Math.round(tBuildContextEnd - tBuildContextStart),
+    formattedMessageCount: formattedMessages.length,
+  })
 
   // Stop keep-alive pings after context building completes
   if (keepAliveInterval) {
@@ -941,16 +991,23 @@ async function processMessage(
     characterId: character.id,
   }))
 
-  // Create tool context
+  // Create tool context. Memories loaded into the prompt are forwarded so
+  // introspection tools (self_inventory) can report the exact slate the LLM
+  // saw this turn.
   const toolContext = createToolContext(
     chatId,
     userId,
     character.id,
     characterParticipant.id,
     imageProfileId,
-    chatSettings?.cheapLLMSettings?.embeddingProfileId ?? undefined,
+    undefined, // embeddingProfileId: always use default embedding profile
     chat.projectId,
     options.browserUserAgent,
+    {
+      semantic: builtContext.debugMemories,
+      interCharacter: builtContext.debugInterCharacterMemories,
+      recap: builtContext.debugMemoryRecap,
+    },
   )
 
   // ============================================================================
@@ -1093,6 +1150,64 @@ async function processMessage(
   // Pre-generate assistant message ID so logs can reference it
   const preGeneratedAssistantMessageId = crypto.randomUUID()
 
+  // Shared helper: when any of the six streamMessage callsites in this function
+  // fails mid-stream, preserve whatever accumulated in streamingState.fullResponse
+  // to the DB with an OOC marker before re-throwing. Idempotent: the first call
+  // that finds content writes it; subsequent calls (if the same id was already
+  // written) are swallowed so the original error still propagates.
+  let partialPreserved = false
+  const preservePartialOnError = async (error: unknown): Promise<void> => {
+    if (partialPreserved) return
+    if (!streamingState.hasStartedStreaming || streamingState.fullResponse.length === 0) {
+      logger.debug('No partial content to preserve after upstream error', {
+        chatId,
+        hasStartedStreaming: streamingState.hasStartedStreaming,
+        fullResponseLength: streamingState.fullResponse.length,
+      })
+      return
+    }
+    partialPreserved = true
+    const errorReason = error instanceof Error ? error.message : String(error)
+    const normalizedPartial = normalizeContentBlockFormat(streamingState.fullResponse)
+    const cleanedPartial = stripCharacterNamePrefix(normalizedPartial, character.name, character.aliases)
+    const preservedContent = `${cleanedPartial.trimEnd()}\n\n{{OOC: stream ended abruptly (${errorReason})}}`
+
+    try {
+      const preservedMessageId = await saveAssistantMessage(
+        repos,
+        chatId,
+        character,
+        characterParticipant,
+        preservedContent,
+        streamingState.usage,
+        streamingState.rawResponse,
+        streamingState.thoughtSignature,
+        [],
+        [],
+        preGeneratedAssistantMessageId,
+        streamingState.effectiveProfile.provider,
+        streamingState.effectiveProfile.modelName
+      )
+      logger.info('Preserved partial streamed response after upstream error', {
+        chatId,
+        messageId: preservedMessageId,
+        characterId: character.id,
+        characterName: character.name,
+        provider: streamingState.effectiveProfile.provider,
+        model: streamingState.effectiveProfile.modelName,
+        partialLength: streamingState.fullResponse.length,
+        error: errorReason,
+      })
+    } catch (persistError) {
+      logger.error('Failed to persist partial streamed response', {
+        chatId,
+        characterId: character.id,
+        error: persistError instanceof Error ? persistError.message : String(persistError),
+        originalError: errorReason,
+      })
+    }
+  }
+
   // Extract previous response ID for conversation chaining (OpenAI Responses API)
   // This allows OpenAI to use its internal cache, reducing input token costs
   let previousResponseId: string | undefined
@@ -1229,6 +1344,7 @@ async function processMessage(
           model: streamingState.effectiveProfile.modelName,
           error: retryError instanceof Error ? retryError.message : String(retryError),
         })
+        await preservePartialOnError(retryError)
         throw retryError
       }
     }
@@ -1277,7 +1393,9 @@ async function processMessage(
       logger.warn('Request limit recovery failed, propagating error', { chatId })
     }
 
-    // Not a recoverable error or recovery failed - re-throw
+    // Not a recoverable error or recovery failed. Preserve any partial content
+    // streamed before the upstream connection dropped.
+    await preservePartialOnError(streamingError)
     throw streamingError
   }
 
@@ -1304,7 +1422,18 @@ async function processMessage(
       ? toolCalls.find(tc => tc.name === 'submit_final_response')
       : undefined
 
-    if (submitFinalCall) {
+    // Guardrail: if the model calls submit_final_response on iteration 0, as the only
+    // tool, and with no accompanying prose, it is almost always ghost-wrapping work from
+    // a previous (already-concluded) turn rather than responding to the current user
+    // message. Reject it, synthesize a failure tool-result, and let the loop re-prompt
+    // for a conversational reply.
+    const isGhostWrapUp =
+      !!submitFinalCall &&
+      toolIterations === 0 &&
+      toolCalls.length === 1 &&
+      !(currentResponse && currentResponse.trim().length > 0)
+
+    if (submitFinalCall && !isGhostWrapUp) {
       // Agent mode completion - extract final response
       const args = submitFinalCall.arguments as { response?: string; summary?: string; confidence?: number }
       agentFinalResponse = args.response || currentResponse
@@ -1349,8 +1478,26 @@ async function processMessage(
       await repos.chats.update(chatId, { agentTurnCount: toolIterations })
     }
 
-    // Per-tool status updates are now emitted inside processToolCalls
-    const results = await processToolCalls(toolCalls, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
+    let results: ToolProcessingResult
+    if (isGhostWrapUp && submitFinalCall) {
+      logger.info('[AgentMode] Rejecting iteration-0 submit_final_response with no prior work this turn', {
+        chatId,
+        rejectedResponseLength: (submitFinalCall.arguments as { response?: string }).response?.length,
+      })
+      results = {
+        toolMessages: [{
+          toolName: 'submit_final_response',
+          success: false,
+          content: "Rejected: submit_final_response was called on the first iteration without any accompanying task work or conversational prose this turn. The previous turn already concluded — do not re-wrap completed work. Respond to the user's current message directly, in character, as natural prose. You may use memory or other tools first if helpful, but only call submit_final_response after completing fresh agentic work that warrants a structured summary.",
+          callId: submitFinalCall.callId,
+          arguments: submitFinalCall.arguments,
+        }],
+        generatedImagePaths: [],
+      }
+    } else {
+      // Per-tool status updates are now emitted inside processToolCalls
+      results = await processToolCalls(toolCalls, toolContext, controller, encoder, { characterName: character.name, characterId: character.id })
+    }
     toolMessages = [...toolMessages, ...results.toolMessages]
     generatedImagePaths = [...generatedImagePaths, ...results.generatedImagePaths]
 
@@ -1406,44 +1553,49 @@ async function processMessage(
     currentRawResponse = null
 
     let emittedStreamingStatus = false
-    for await (const chunk of streamMessage({
-      messages: currentMessages,
-      connectionProfile: streamingState.effectiveProfile,
-      apiKey: streamingState.effectiveApiKey,
-      modelParams,
-      tools: actualTools,
-      useNativeWebSearch,
-      userId,
-      messageId: preGeneratedAssistantMessageId,
-      chatId,
-      characterId: character.id,
-    })) {
-      if (chunk.content) {
-        // Emit streaming status on first content in this tool iteration
-        if (!emittedStreamingStatus) {
-          emittedStreamingStatus = true
-          safeEnqueue(controller, encodeStatusEvent(encoder, {
-            stage: 'streaming',
-            message: `${character.name} is responding...`,
-            characterName: character.name,
-            characterId: character.id,
-          }))
+    try {
+      for await (const chunk of streamMessage({
+        messages: currentMessages,
+        connectionProfile: streamingState.effectiveProfile,
+        apiKey: streamingState.effectiveApiKey,
+        modelParams,
+        tools: actualTools,
+        useNativeWebSearch,
+        userId,
+        messageId: preGeneratedAssistantMessageId,
+        chatId,
+        characterId: character.id,
+      })) {
+        if (chunk.content) {
+          // Emit streaming status on first content in this tool iteration
+          if (!emittedStreamingStatus) {
+            emittedStreamingStatus = true
+            safeEnqueue(controller, encodeStatusEvent(encoder, {
+              stage: 'streaming',
+              message: `${character.name} is responding...`,
+              characterName: character.name,
+              characterId: character.id,
+            }))
+          }
+          currentResponse += chunk.content
+          streamingState.fullResponse += chunk.content
+          controller.enqueue(encodeContentChunk(encoder, chunk.content))
         }
-        currentResponse += chunk.content
-        streamingState.fullResponse += chunk.content
-        controller.enqueue(encodeContentChunk(encoder, chunk.content))
-      }
 
-      if (chunk.done) {
-        streamingState.usage = chunk.usage || null
-        streamingState.cacheUsage = chunk.cacheUsage || null
-        streamingState.attachmentResults = chunk.attachmentResults || null
-        currentRawResponse = chunk.rawResponse
-        streamingState.rawResponse = chunk.rawResponse
-        if (chunk.thoughtSignature) {
-          streamingState.thoughtSignature = chunk.thoughtSignature
+        if (chunk.done) {
+          streamingState.usage = chunk.usage || null
+          streamingState.cacheUsage = chunk.cacheUsage || null
+          streamingState.attachmentResults = chunk.attachmentResults || null
+          currentRawResponse = chunk.rawResponse
+          streamingState.rawResponse = chunk.rawResponse
+          if (chunk.thoughtSignature) {
+            streamingState.thoughtSignature = chunk.thoughtSignature
+          }
         }
       }
+    } catch (toolLoopStreamError) {
+      await preservePartialOnError(toolLoopStreamError)
+      throw toolLoopStreamError
     }
 
     // If the LLM returned tool calls without any content (silent tool use),
@@ -1485,43 +1637,48 @@ async function processMessage(
       ]
 
       // Make one final call with force message
-      for await (const chunk of streamMessage({
-        messages: currentMessages,
-        connectionProfile: streamingState.effectiveProfile,
-        apiKey: streamingState.effectiveApiKey,
-        modelParams,
-        tools: actualTools,
-        useNativeWebSearch,
-        userId,
-        messageId: preGeneratedAssistantMessageId,
-        chatId,
-      })) {
-        if (chunk.content) {
-          streamingState.fullResponse += chunk.content
-          controller.enqueue(encodeContentChunk(encoder, chunk.content))
-        }
-
-        if (chunk.done) {
-          streamingState.usage = chunk.usage || null
-          streamingState.cacheUsage = chunk.cacheUsage || null
-          streamingState.attachmentResults = chunk.attachmentResults || null
-          streamingState.rawResponse = chunk.rawResponse
-          if (chunk.thoughtSignature) {
-            streamingState.thoughtSignature = chunk.thoughtSignature
+      try {
+        for await (const chunk of streamMessage({
+          messages: currentMessages,
+          connectionProfile: streamingState.effectiveProfile,
+          apiKey: streamingState.effectiveApiKey,
+          modelParams,
+          tools: actualTools,
+          useNativeWebSearch,
+          userId,
+          messageId: preGeneratedAssistantMessageId,
+          chatId,
+        })) {
+          if (chunk.content) {
+            streamingState.fullResponse += chunk.content
+            controller.enqueue(encodeContentChunk(encoder, chunk.content))
           }
 
-          // Check if the final call includes submit_final_response
-          if (chunk.rawResponse) {
-            const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, streamingState.effectiveProfile.provider)
-            const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
-            if (submitCall) {
-              const args = submitCall.arguments as { response?: string }
-              if (args.response) {
-                streamingState.fullResponse = args.response
+          if (chunk.done) {
+            streamingState.usage = chunk.usage || null
+            streamingState.cacheUsage = chunk.cacheUsage || null
+            streamingState.attachmentResults = chunk.attachmentResults || null
+            streamingState.rawResponse = chunk.rawResponse
+            if (chunk.thoughtSignature) {
+              streamingState.thoughtSignature = chunk.thoughtSignature
+            }
+
+            // Check if the final call includes submit_final_response
+            if (chunk.rawResponse) {
+              const finalToolCalls = detectToolCallsInResponse(chunk.rawResponse, streamingState.effectiveProfile.provider)
+              const submitCall = finalToolCalls.find(tc => tc.name === 'submit_final_response')
+              if (submitCall) {
+                const args = submitCall.arguments as { response?: string }
+                if (args.response) {
+                  streamingState.fullResponse = args.response
+                }
               }
             }
           }
         }
+      } catch (forceFinalStreamError) {
+        await preservePartialOnError(forceFinalStreamError)
+        throw forceFinalStreamError
       }
     } else {
       logger.warn('Max tool iterations reached', { iterations: toolIterations, chatId })
@@ -1578,30 +1735,38 @@ async function processMessage(
 
       // Continue conversation with tool results
       let continuationResponse = ''
-      for await (const chunk of streamMessage({
-        messages: currentMessages,
-        connectionProfile: streamingState.effectiveProfile,
-        apiKey: streamingState.effectiveApiKey,
-        modelParams,
-        tools: actualTools,
-        useNativeWebSearch,
-        userId,
-        messageId: preGeneratedAssistantMessageId,
-        chatId,
-      })) {
-        if (chunk.content) {
-          continuationResponse += chunk.content
-          controller.enqueue(encodeContentChunk(encoder, chunk.content))
-        }
+      try {
+        for await (const chunk of streamMessage({
+          messages: currentMessages,
+          connectionProfile: streamingState.effectiveProfile,
+          apiKey: streamingState.effectiveApiKey,
+          modelParams,
+          tools: actualTools,
+          useNativeWebSearch,
+          userId,
+          messageId: preGeneratedAssistantMessageId,
+          chatId,
+        })) {
+          if (chunk.content) {
+            continuationResponse += chunk.content
+            controller.enqueue(encodeContentChunk(encoder, chunk.content))
+          }
 
-        if (chunk.done) {
-          streamingState.usage = chunk.usage || null
-          streamingState.cacheUsage = chunk.cacheUsage || null
-          streamingState.rawResponse = chunk.rawResponse
-          if (chunk.thoughtSignature) {
-            streamingState.thoughtSignature = chunk.thoughtSignature
+          if (chunk.done) {
+            streamingState.usage = chunk.usage || null
+            streamingState.cacheUsage = chunk.cacheUsage || null
+            streamingState.rawResponse = chunk.rawResponse
+            if (chunk.thoughtSignature) {
+              streamingState.thoughtSignature = chunk.thoughtSignature
+            }
           }
         }
+      } catch (textToolContinuationError) {
+        // Reconstruct combined response so the preserved message reflects what
+        // the user actually saw streamed (stripped initial + partial continuation).
+        streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
+        await preservePartialOnError(textToolContinuationError)
+        throw textToolContinuationError
       }
 
       streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
@@ -1660,30 +1825,37 @@ async function processMessage(
 
       // Continue conversation with tool results
       let continuationResponse = ''
-      for await (const chunk of streamMessage({
-        messages: currentMessages,
-        connectionProfile: streamingState.effectiveProfile,
-        apiKey: streamingState.effectiveApiKey,
-        modelParams,
-        tools: useTextBlockTools ? [] : actualTools,
-        useNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
-        userId,
-        messageId: preGeneratedAssistantMessageId,
-        chatId,
-      })) {
-        if (chunk.content) {
-          continuationResponse += chunk.content
-          controller.enqueue(encodeContentChunk(encoder, chunk.content))
-        }
+      try {
+        for await (const chunk of streamMessage({
+          messages: currentMessages,
+          connectionProfile: streamingState.effectiveProfile,
+          apiKey: streamingState.effectiveApiKey,
+          modelParams,
+          tools: useTextBlockTools ? [] : actualTools,
+          useNativeWebSearch: useNativeWebSearch && !useTextBlockTools,
+          userId,
+          messageId: preGeneratedAssistantMessageId,
+          chatId,
+        })) {
+          if (chunk.content) {
+            continuationResponse += chunk.content
+            controller.enqueue(encodeContentChunk(encoder, chunk.content))
+          }
 
-        if (chunk.done) {
-          streamingState.usage = chunk.usage || null
-          streamingState.cacheUsage = chunk.cacheUsage || null
-          streamingState.rawResponse = chunk.rawResponse
-          if (chunk.thoughtSignature) {
-            streamingState.thoughtSignature = chunk.thoughtSignature
+          if (chunk.done) {
+            streamingState.usage = chunk.usage || null
+            streamingState.cacheUsage = chunk.cacheUsage || null
+            streamingState.rawResponse = chunk.rawResponse
+            if (chunk.thoughtSignature) {
+              streamingState.thoughtSignature = chunk.thoughtSignature
+            }
           }
         }
+      } catch (textBlockContinuationError) {
+        streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse
+        streamingState.fullResponse = stripTextBlockMarkersFromResponse(streamingState.fullResponse)
+        await preservePartialOnError(textBlockContinuationError)
+        throw textBlockContinuationError
       }
 
       streamingState.fullResponse = strippedResponse + (strippedResponse.trim() && continuationResponse.trim() ? '\n\n' : '') + continuationResponse

@@ -287,18 +287,18 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
       async () => {
         const query: Record<string, unknown> = {
           userId,
+          ...this.createNullableFilter('projectId', projectId),
         };
 
-        // Root folder matches everything
-        if (folderPath !== '/') {
-          // Use regex to match folder path prefix
-          query.folderPath = { $regex: `^${this.escapeRegex(folderPath)}` };
-        }
-
-        Object.assign(query, this.createNullableFilter('projectId', projectId));
-
         const files = await this.findByFilter(query as TypedQueryFilter<FileEntry>);
-        return files;
+
+        // Root folder matches everything; otherwise prefix-match in JS.
+        // SQLite's $regex translator cannot express anchored patterns, so an
+        // anchored `^folder` regex silently matches nothing.
+        if (folderPath === '/') {
+          return files;
+        }
+        return files.filter((f) => (f.folderPath ?? '').startsWith(folderPath));
       },
       'Error finding files in folder (recursive)',
       { userId, projectId, folderPath }

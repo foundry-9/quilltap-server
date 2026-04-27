@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import useSWR from 'swr'
 // Using native img tag instead of next/image because /api/files/* routes
 // are dynamic API endpoints that can't go through Next.js image optimization
 import dynamic from 'next/dynamic'
@@ -44,9 +45,6 @@ interface Character {
 }
 
 export default function CharactersPage() {
-  const [characters, setCharacters] = useState<Character[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [aiImportDialogOpen, setAIImportDialogOpen] = useState(false)
   const [resetBuiltinsDialogOpen, setResetBuiltinsDialogOpen] = useState(false)
@@ -56,6 +54,10 @@ export default function CharactersPage() {
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
   const router = useRouter()
+
+  const { data, isLoading: loading, error: loadError, mutate: mutateCharacters } = useSWR<{ characters: Character[] }>('/api/v1/characters')
+  const characters = useMemo(() => data?.characters ?? [], [data])
+  const error = loadError ? (loadError instanceof Error ? loadError.message : 'An error occurred') : null
 
   const visibleCharacters = useMemo(
     () => characters
@@ -79,10 +81,6 @@ export default function CharactersPage() {
     [characters, shouldHideByIds]
   )
 
-  useEffect(() => {
-    fetchCharacters()
-  }, [])
-
   const getAvatarSrc = (character: Character): string | null => {
     if (character.defaultImage) {
       // Handle filepath - check if it already has a leading slash (e.g., S3 files use /api/files/...)
@@ -90,19 +88,6 @@ export default function CharactersPage() {
       return character.defaultImage.url || (filepath.startsWith('/') ? filepath : `/${filepath}`)
     }
     return character.avatarUrl || null
-  }
-
-  const fetchCharacters = async () => {
-    try {
-      const res = await fetch('/api/v1/characters')
-      if (!res.ok) throw new Error('Failed to fetch characters')
-      const data = await res.json()
-      setCharacters(data.characters)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
   }
 
   const openDeleteDialog = (character: Character) => {
@@ -123,7 +108,7 @@ export default function CharactersPage() {
       if (!res.ok) throw new Error('Failed to delete character')
 
       const result = await res.json()
-      setCharacters(characters.filter((c) => c.id !== id))
+      await mutateCharacters()
       setDeleteDialogCharacter(null)
 
       // Show success message with details
@@ -150,8 +135,10 @@ export default function CharactersPage() {
       const res = await fetch(`/api/v1/characters/${id}?action=favorite`, { method: 'POST' })
       if (!res.ok) throw new Error('Failed to toggle favorite')
       const data = await res.json()
-      setCharacters(characters.map((c) => (c.id === id ? { ...c, isFavorite: data.character.isFavorite } : c)))
-
+      await mutateCharacters(
+        (prev) => prev && { characters: prev.characters.map((c) => (c.id === id ? { ...c, isFavorite: data.character.isFavorite } : c)) },
+        { revalidate: false }
+      )
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle favorite')
     }
@@ -163,7 +150,10 @@ export default function CharactersPage() {
       const res = await fetch(`/api/v1/characters/${id}?action=toggle-controlled-by`, { method: 'POST' })
       if (!res.ok) throw new Error('Failed to toggle controlled-by')
       const data = await res.json()
-      setCharacters(characters.map((c) => (c.id === id ? { ...c, controlledBy: data.character.controlledBy } : c)))
+      await mutateCharacters(
+        (prev) => prev && { characters: prev.characters.map((c) => (c.id === id ? { ...c, controlledBy: data.character.controlledBy } : c)) },
+        { revalidate: false }
+      )
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle controlled-by')
     }
@@ -190,8 +180,8 @@ export default function CharactersPage() {
 
       if (!res.ok) throw new Error('Failed to import character')
 
-      const character = await res.json()
-      setCharacters([character, ...characters])
+      await res.json()
+      await mutateCharacters()
       setImportDialogOpen(false)
       showSuccessToast('Character imported successfully!')
     } catch (err) {
@@ -213,7 +203,7 @@ export default function CharactersPage() {
       }
 
       await res.json()
-      await fetchCharacters()
+      await mutateCharacters()
       setResetBuiltinsDialogOpen(false)
       showSuccessToast('Built-in characters reset successfully.')
     } catch (err) {
@@ -243,7 +233,7 @@ export default function CharactersPage() {
   return (
     <div className="character-page qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/aurora.webp)' } as React.CSSProperties}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
-        <h1 className="text-3xl font-semibold leading-tight">Characters</h1>
+        <h1 className="qt-page-title">Characters</h1>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setResetBuiltinsDialogOpen(true)}
@@ -311,7 +301,7 @@ export default function CharactersPage() {
                     </div>
                   )}
                   <div className="flex-grow">
-                    <h2 className="text-xl font-semibold text-foreground">{character.name}</h2>
+                    <h2 className="qt-heading-3 text-foreground">{character.name}</h2>
                     {character.title && (
                       <p className="qt-text-small">{character.title}</p>
                     )}
@@ -401,7 +391,7 @@ export default function CharactersPage() {
       {importDialogOpen && (
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
-            <h3 className="mb-4 text-lg font-semibold text-foreground">
+            <h3 className="mb-4 qt-dialog-title text-foreground">
               Import from SillyTavern
             </h3>
             <form onSubmit={handleImport}>
@@ -441,7 +431,7 @@ export default function CharactersPage() {
       {resetBuiltinsDialogOpen && (
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
-            <h3 className="mb-3 text-lg font-semibold text-foreground">
+            <h3 className="mb-3 qt-dialog-title text-foreground">
               Reset Built-in Characters
             </h3>
             <p className="mb-5 qt-text-small">
@@ -474,7 +464,7 @@ export default function CharactersPage() {
         <div className="character-import-dialog fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground">
+              <h3 className="qt-dialog-title text-foreground">
                 Summon From Lore
               </h3>
               <button
@@ -487,7 +477,7 @@ export default function CharactersPage() {
             <AIImportWizard
               onClose={() => setAIImportDialogOpen(false)}
               onImportSuccess={() => {
-                fetchCharacters()
+                mutateCharacters()
               }}
             />
           </div>

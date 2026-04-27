@@ -24,16 +24,16 @@ export async function resolveHelpContentForUrl(url: string): Promise<HelpPageCon
   const helpSearch = getHelpSearch()
 
   if (!helpSearch.isLoaded()) {
-    helpChatLogger.debug('Help bundle not loaded, attempting to load', { url })
+    helpChatLogger.debug('Help docs not loaded, attempting to load from database', { url })
     try {
-      await helpSearch.loadFromUrl('/api/v1/system/help-bundle')
+      await helpSearch.loadFromDatabase()
     } catch (error) {
-      helpChatLogger.error('Failed to load help bundle', { error: error instanceof Error ? error.message : String(error) })
+      helpChatLogger.error('Failed to load help docs from database', { error: error instanceof Error ? error.message : String(error) })
       return null
     }
   }
 
-  const documents = helpSearch.listDocuments()
+  const documents = await helpSearch.listDocuments()
   if (documents.length === 0) {
     helpChatLogger.warn('No help documents available')
     return null
@@ -146,7 +146,7 @@ export function matchUrlPattern(pattern: string, actualPath: string): boolean {
  */
 async function buildContext(documentId: string, matchType: HelpPageContext['matchType']): Promise<HelpPageContext | null> {
   const helpSearch = getHelpSearch()
-  const doc = helpSearch.getDocument(documentId)
+  const doc = await helpSearch.getDocument(documentId)
 
   if (!doc) {
     helpChatLogger.warn('Document not found after matching', { documentId, matchType })
@@ -185,7 +185,7 @@ export async function resolveAllHelpContentForUrl(url: string): Promise<HelpPage
   // Also include wildcard documents that apply everywhere
   const helpSearch = getHelpSearch()
   if (helpSearch.isLoaded()) {
-    const documents = helpSearch.listDocuments()
+    const documents = await helpSearch.listDocuments()
     const wildcardDocs = documents.filter(doc => doc.url === '*')
 
     for (const doc of wildcardDocs) {

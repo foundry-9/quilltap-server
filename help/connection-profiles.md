@@ -280,6 +280,23 @@ Profiles with tool use disabled display a **No Tools** badge on their profile ca
 
 To re-enable tools, simply check the box again. Per-chat and per-project tool settings will resume their normal effect immediately.
 
+## Supports Image Attachments
+
+The **Supports image attachments (vision input)** checkbox tells Quilltap that this particular profile's model can read images — photographs, screenshots, diagrams, character portraits, and so forth. Some models see; most do not; a single provider will happily serve both sorts on the same API, so the distinction must be made at the profile level rather than by guessing from the provider's name on the door.
+
+**When to tick the box:**
+
+- You're configuring a known vision model — GPT‑4o, Claude Sonnet or Opus, Gemini 1.5+, Grok 2 Vision, and their descendants.
+- You've pointed an **OpenRouter** profile at a vision‑capable model ID (`openai/gpt-4o`, `anthropic/claude-sonnet-4-5`, and so on).
+- You're running a local vision model through **Ollama** (LLaVA, MiniCPM‑V, Llama 3.2 Vision) or an **OpenAI Compatible** endpoint whose backing model handles images.
+
+**When to leave it unticked:**
+
+- The model is purely textual (GPT‑3.5, Claude Instant, most 7B local models).
+- You're unsure. When unticked, Quilltap routes any image the user attaches through your configured *Image Description Profile* (set in Chat settings), which produces a written description using whichever other profile *is* ticked. The conversation continues as if the image had been typed out in words — imperfect, but serviceable, and it never sends image bytes to a model that will baulk.
+
+**What happens under the hood:** every bit of Quilltap that asks "can this profile see pictures?" — the Salon's attachment handler, the wardrobe image analyzer, the Aurora wizard's *Describe from image* step, the *Image Description Profile* dropdown in Chat settings — consults this checkbox. Existing installs were seeded automatically: profiles on OpenAI, Anthropic, Google, and Grok had the box pre‑ticked to match their prior behaviour; everything else starts unticked, so users who want vision on OpenRouter or Ollama must opt in explicitly.
+
 ## Connection Profile Limitations
 
 ### What affects availability
@@ -292,14 +309,17 @@ To re-enable tools, simply check the box again. Per-chat and per-project tool se
 
 ### Attachment Support
 
-Different providers support different types of attachments in messages:
+Different providers handle attachments differently, and — more importantly — so do different *models* within a single provider. A single OpenRouter account can point at GPT‑4o (which cheerfully eats images) or at a purely textual model (which will politely decline). Quilltap therefore treats **image upload** as a per‑profile toggle rather than a per‑provider assumption.
 
-- **OpenAI:** Images, documents
-- **Anthropic:** Images, documents
-- **Google:** Images, documents
-- **Ollama:** Limited attachment support
+**Image attachments** — every profile now carries a *Supports image attachments (vision input)* checkbox. Tick it on any profile whose model can accept images, whether that's a first‑party OpenAI/Anthropic/Google/Grok profile or an OpenRouter/Ollama/OpenAI‑compatible profile pointed at a vision‑capable model (LLaVA on Ollama, GPT‑4o through OpenRouter, and so forth). When the box is ticked, chat messages with image attachments are sent straight to the model; when it is not, the Salon falls back to the configured *Image Description Profile* in Chat settings, which generates a text description using whichever other profile *does* have the box ticked.
 
-Check your provider's documentation for details on file types and sizes.
+**Documents and text files** — PDF and plaintext support still follows provider capabilities, as those vary little from model to model:
+
+- **Anthropic:** PDFs and plain text supported natively.
+- **OpenAI, Google, Grok:** no native document support; text files are inlined into the message for profiles that don't accept them natively.
+- **Ollama, OpenRouter, OpenAI Compatible:** no native document support.
+
+Check your provider's documentation for the exact list of supported file types and size limits on the model you've chosen.
 
 ## Troubleshooting Connection Profiles
 

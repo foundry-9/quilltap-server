@@ -61,6 +61,8 @@ interface ParticipantSidebarProps {
   // Connection profile controls (passed to cards)
   connectionProfiles?: ConnectionProfileOption[]
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
+  // System prompt override per participant (passed to cards)
+  onSystemPromptChange?: (participantId: string, promptId: string | null) => void
   onParticipantSettingsChange?: (participantId: string, updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
   // Outfit display
   outfitState?: OutfitState
@@ -71,6 +73,8 @@ interface ParticipantSidebarProps {
   onGiftItem?: (participantId: string) => void
   // Avatar regeneration
   onRegenerateAvatar?: (participantId: string) => void
+  // Danger state — when the Concierge has flagged this chat
+  isDangerousChat?: boolean
   className?: string
 }
 
@@ -99,6 +103,7 @@ export function ParticipantSidebar({
   onStopImpersonate,
   connectionProfiles,
   onConnectionProfileChange,
+  onSystemPromptChange,
   onParticipantSettingsChange,
   outfitState,
   wardrobeCache,
@@ -106,6 +111,7 @@ export function ParticipantSidebar({
   onEquipSlot,
   onGiftItem,
   onRegenerateAvatar,
+  isDangerousChat = false,
   className = '',
 }: ParticipantSidebarProps) {
   // Collapsed state with localStorage persistence (default: collapsed)
@@ -447,6 +453,7 @@ export function ParticipantSidebar({
               onStopImpersonate={onStopImpersonate}
               connectionProfiles={connectionProfiles}
               onConnectionProfileChange={onConnectionProfileChange}
+              onSystemPromptChange={onSystemPromptChange}
               onActiveChange={onParticipantSettingsChange
                 ? (pId, active) => onParticipantSettingsChange(pId, { isActive: active })
                 : undefined}
@@ -461,6 +468,7 @@ export function ParticipantSidebar({
               outfitLoading={outfitLoading}
               onGiftItem={onGiftItem}
               onRegenerateAvatar={onRegenerateAvatar}
+              isDangerousChat={isDangerousChat}
             />
           )
         })}

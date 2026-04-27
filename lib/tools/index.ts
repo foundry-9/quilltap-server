@@ -29,22 +29,6 @@ export {
   type ImageToolExecutionContext,
 } from './handlers/image-generation-handler';
 
-// Memory Search Tool (Sprint 6)
-export {
-  memorySearchToolDefinition,
-  validateMemorySearchInput,
-  type MemorySearchToolInput,
-  type MemorySearchToolOutput,
-  type MemorySearchResult,
-} from './memory-search-tool';
-
-export {
-  executeMemorySearchTool,
-  formatMemorySearchResults,
-  MemorySearchError,
-  type MemorySearchToolContext,
-} from './handlers/memory-search-handler';
-
 // Web Search Tool
 export {
   webSearchToolDefinition,
@@ -70,9 +54,6 @@ export {
   type ProjectInfoToolOutput,
   type ProjectInfoResult,
   type ProjectInstructionsResult,
-  type ProjectFilesListResult,
-  type ProjectReadFileResult,
-  type ProjectSearchFilesResult,
 } from './project-info-tool';
 
 export {
@@ -81,31 +62,6 @@ export {
   ProjectInfoError,
   type ProjectInfoToolContext,
 } from './handlers/project-info-handler';
-
-// File Management Tool
-export {
-  fileManagementToolDefinition,
-  validateFileManagementInput,
-  type FileManagementAction,
-  type FileScope,
-  type FileManagementToolInput,
-  type FileManagementToolOutput,
-  type FileInfo,
-  type FolderInfo,
-  type FileListResult,
-  type FolderListResult,
-  type FileReadResult,
-  type FileWriteResult,
-  type FolderCreateResult,
-  type AttachmentPromoteResult,
-} from './file-management-tool';
-
-export {
-  executeFileManagementTool,
-  formatFileManagementResults,
-  FileManagementError,
-  type FileManagementToolContext,
-} from './handlers/file-management-handler';
 
 // Request Full Context Tool (Context Compression Feature)
 export {
@@ -230,6 +186,27 @@ export {
   type StateToolContext,
 } from './handlers/state-handler';
 
+// Self-Inventory Tool (character introspection)
+export {
+  selfInventoryToolDefinition,
+  validateSelfInventoryInput,
+  type SelfInventoryToolInput,
+  type SelfInventoryToolOutput,
+  type SelfInventoryVaultFile,
+  type SelfInventoryVaultSection,
+  type SelfInventoryMemorySection,
+  type SelfInventoryChatSection,
+  type SelfInventoryPromptSection,
+  type SelfInventoryLastTurnSection,
+  type SelfInventoryLastTurnSource,
+} from './self-inventory-tool';
+
+export {
+  executeSelfInventoryTool,
+  formatSelfInventoryResults,
+  type SelfInventoryToolContext,
+} from './handlers/self-inventory-handler';
+
 // Shell Interactivity Tools
 export {
   shellChdirToolDefinition,
@@ -306,6 +283,42 @@ export {
   type WardrobeCreateItemToolContext,
 } from './handlers/wardrobe-create-item-handler';
 
+// Scriptorium Tools (Conversation Rendering + Annotations)
+export {
+  readConversationToolDefinition,
+  validateReadConversationInput,
+  type ReadConversationToolInput,
+  type ReadConversationToolOutput,
+} from './read-conversation-tool';
+
+export {
+  upsertAnnotationToolDefinition,
+  validateUpsertAnnotationInput,
+  type UpsertAnnotationToolInput,
+  type UpsertAnnotationToolOutput,
+} from './upsert-annotation-tool';
+
+export {
+  deleteAnnotationToolDefinition,
+  validateDeleteAnnotationInput,
+  type DeleteAnnotationToolInput,
+  type DeleteAnnotationToolOutput,
+} from './delete-annotation-tool';
+
+export {
+  searchScriptoriumToolDefinition,
+  validateSearchScriptoriumInput,
+  type SearchScriptoriumToolInput,
+  type SearchScriptoriumToolOutput,
+  type SearchScriptoriumResult,
+} from './search-scriptorium-tool';
+
+export {
+  executeSearchScriptoriumTool,
+  formatSearchScriptoriumResults,
+  type SearchScriptoriumToolContext,
+} from './handlers/search-scriptorium-handler';
+
 // Tool Support (for checking model capabilities and tool mode)
 export {
   checkModelSupportsTools,
@@ -331,3 +344,44 @@ export {
   buildTextBlockInstructions,
   type TextBlockPromptOptions,
 } from './text-block-prompt';
+
+// Document Editing Tools (Scriptorium Phase 3.3)
+export { docReadFileTool, validateDocReadFileInput, type DocReadFileInput, type DocReadFileOutput } from './doc-read-file-tool';
+export { docWriteFileTool, validateDocWriteFileInput, type DocWriteFileInput, type DocWriteFileOutput } from './doc-write-file-tool';
+export { docStrReplaceTool, validateDocStrReplaceInput, type DocStrReplaceInput, type DocStrReplaceOutput } from './doc-str-replace-tool';
+export { docInsertTextTool, validateDocInsertTextInput, type DocInsertTextInput, type DocInsertTextOutput } from './doc-insert-text-tool';
+export { docGrepTool, validateDocGrepInput, type DocGrepInput, type DocGrepOutput, type DocGrepMatch } from './doc-grep-tool';
+export { docListFilesTool, validateDocListFilesInput, type DocListFilesInput, type DocListFilesOutput, type DocFileInfo } from './doc-list-files-tool';
+export { docReadFrontmatterTool, validateDocReadFrontmatterInput, type DocReadFrontmatterInput, type DocReadFrontmatterOutput } from './doc-read-frontmatter-tool';
+export { docUpdateFrontmatterTool, validateDocUpdateFrontmatterInput, type DocUpdateFrontmatterInput, type DocUpdateFrontmatterOutput } from './doc-update-frontmatter-tool';
+export { docReadHeadingTool, validateDocReadHeadingInput, type DocReadHeadingInput, type DocReadHeadingOutput } from './doc-read-heading-tool';
+export { docUpdateHeadingTool, validateDocUpdateHeadingInput, type DocUpdateHeadingInput, type DocUpdateHeadingOutput } from './doc-update-heading-tool';
+
+// Document File Management Tools (Scriptorium Phase 3.4)
+export { docMoveFileTool, validateDocMoveFileInput, type DocMoveFileInput, type DocMoveFileOutput } from './doc-move-file-tool';
+export { docCopyFileTool, validateDocCopyFileInput, type DocCopyFileInput, type DocCopyFileOutput } from './doc-copy-file-tool';
+export { docDeleteFileTool, validateDocDeleteFileInput, type DocDeleteFileInput, type DocDeleteFileOutput } from './doc-delete-file-tool';
+export { docCreateFolderTool, validateDocCreateFolderInput, type DocCreateFolderInput, type DocCreateFolderOutput } from './doc-create-folder-tool';
+export { docDeleteFolderTool, validateDocDeleteFolderInput, type DocDeleteFolderInput, type DocDeleteFolderOutput } from './doc-delete-folder-tool';
+
+// Document Folder Management Tool (Scriptorium Phase 4.0 Deliverable 3 - Phase B)
+export { docMoveFolderTool, validateDocMoveFolderInput, type DocMoveFolderInput, type DocMoveFolderOutput } from './doc-move-folder-tool';
+
+// Document Blob Tools (database-backed stores + universal blob layer)
+export { docWriteBlobTool, validateDocWriteBlobInput, type DocWriteBlobInput, type DocWriteBlobOutput } from './doc-write-blob-tool';
+export { docReadBlobTool, validateDocReadBlobInput, type DocReadBlobInput, type DocReadBlobOutput } from './doc-read-blob-tool';
+export { docListBlobsTool, validateDocListBlobsInput, type DocListBlobsInput, type DocListBlobsOutput, type DocBlobSummary } from './doc-list-blobs-tool';
+export { docDeleteBlobTool, validateDocDeleteBlobInput, type DocDeleteBlobInput, type DocDeleteBlobOutput } from './doc-delete-blob-tool';
+
+// Document UI Tools (Scriptorium Phase 3.5)
+export { docOpenDocumentTool, validateDocOpenDocumentInput, type DocOpenDocumentInput, type DocOpenDocumentOutput } from './doc-open-document-tool';
+export { docCloseDocumentTool, validateDocCloseDocumentInput, type DocCloseDocumentInput, type DocCloseDocumentOutput } from './doc-close-document-tool';
+export { docFocusTool, validateDocFocusInput, type DocFocusInput, type DocFocusOutput } from './doc-focus-tool';
+
+export {
+  executeDocEditTool,
+  formatDocEditResults,
+  isDocEditTool,
+  DOC_EDIT_TOOL_NAMES,
+  type DocEditToolContext,
+} from './handlers/doc-edit-handler';

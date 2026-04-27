@@ -20,7 +20,9 @@ The backup creates a ZIP file containing:
 
 **Data (JSON files)**
 - All characters and their metadata (including user-controlled characters)
+- Character plugin data (per-character, per-plugin metadata such as Commonplace Book entries)
 - Chat history, messages, and impersonation state
+- Conversation annotations (per-message annotations added during roleplay)
 - Tags
 - Memories (including inter-character relationships)
 - Connection profiles (API key references preserved, but keys require re-entry)
@@ -32,6 +34,8 @@ The backup creates a ZIP file containing:
 - LLM request/response logs
 - Plugin configurations (per-plugin settings)
 - Provider model cache
+- Wardrobe items and outfit presets
+- Folder structure
 
 **Files**
 - All uploaded files (images, documents, attachments)
@@ -41,7 +45,13 @@ The backup creates a ZIP file containing:
 - npm-installed plugins from the `plugins/npm/` directory
 - Plugin configuration settings
 
-This creates a complete portable backup that can recreate your entire Quilltap environment.
+**Themes**
+- User-installed theme bundles (from `<data-dir>/themes/`)
+- Bundled/built-in themes are not included (they ship with the app)
+
+**Not included**
+- API key values (encrypted with user-specific keys; must be re-entered after restore)
+- Previous backup files (to avoid recursion)
 
 ### API Endpoints
 

@@ -109,6 +109,13 @@ interface MessageContentProps {
   renderingPatterns?: RenderingPattern[]
   /** Optional dialogue detection for paragraph-level styling */
   dialogueDetection?: DialogueDetection | null
+  /**
+   * Mount point ID for resolving relative image paths. When set, an image
+   * reference like `![alt](images/avatar.webp)` will resolve to the blob
+   * API at `/api/v1/mount-points/<id>/blobs/images/avatar.webp` so
+   * database-backed stores' images render inline.
+   */
+  blobMountPointId?: string
 }
 
 // Internal compiled pattern type
@@ -351,6 +358,7 @@ export default function MessageContent({
   className = '',
   renderingPatterns,
   dialogueDetection,
+  blobMountPointId,
 }: MessageContentProps) {
   // Use provided patterns or fall back to defaults
   const patterns = renderingPatterns && renderingPatterns.length > 0
@@ -465,7 +473,25 @@ export default function MessageContent({
         </div>
       )
     },
-  }), [compiledPatterns, dialogueConfig])
+    // Images — when a blob mount-point context is supplied, rewrite relative
+    // references so `![alt](images/avatar.webp)` resolves to the mount-point
+    // blob API. Absolute URLs, data URIs, and paths under the existing /api
+    // tree pass through untouched.
+    img({ src, alt, title, ...props }) {
+      let resolvedSrc = typeof src === 'string' ? src : ''
+      if (
+        blobMountPointId &&
+        resolvedSrc &&
+        !/^([a-z]+:)?\/\//i.test(resolvedSrc) &&
+        !resolvedSrc.startsWith('data:') &&
+        !resolvedSrc.startsWith('/')
+      ) {
+        const encoded = resolvedSrc.split('/').map(encodeURIComponent).join('/')
+        resolvedSrc = `/api/v1/mount-points/${blobMountPointId}/blobs/${encoded}`
+      }
+      return <img src={resolvedSrc} alt={alt || ''} title={title} {...props} />
+    },
+  }), [compiledPatterns, dialogueConfig, blobMountPointId])
 
   return (
     <>

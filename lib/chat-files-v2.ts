@@ -439,8 +439,94 @@ async function readFileAsBase64(
 }
 
 /**
+ * Load a Scriptorium document-store file (doc_mount_files row) as a
+ * FileAttachment for the LLM. Used when an attachment id refers to a
+ * mount-point file rather than a row in the legacy `files` table — the two
+ * tables draw IDs from disjoint UUID space, so callers can probe the legacy
+ * table first and fall through here on miss. Returns null when the id isn't
+ * a mount-file or its bytes are unreachable.
+ */
+async function loadMountFileAsAttachment(
+  mountFileId: string,
+  options: LoadChatFilesOptions = {}
+): Promise<FileAttachment | null> {
+  const { provider, autoResize = true } = options;
+  const repos = getRepositories();
+
+  const mountFile = await repos.docMountFiles.findById(mountFileId);
+  if (!mountFile) {
+    return null;
+  }
+
+  const blob = await repos.docMountBlobs.findByMountPointAndPath(
+    mountFile.mountPointId,
+    mountFile.relativePath
+  );
+  if (!blob) {
+    logger.warn('[chat-files-v2] Mount file has no blob row', {
+      mountFileId,
+      mountPointId: mountFile.mountPointId,
+      relativePath: mountFile.relativePath,
+    });
+    return null;
+  }
+
+  const bytes = await repos.docMountBlobs.readData(blob.id);
+  if (!bytes) {
+    logger.warn('[chat-files-v2] Mount blob bytes unreadable', {
+      mountFileId,
+      blobId: blob.id,
+    });
+    return null;
+  }
+
+  let buffer = bytes;
+  let outputMimeType = blob.storedMimeType;
+
+  if (autoResize && provider && outputMimeType.startsWith('image/') && canResizeImage(outputMimeType)) {
+    const maxBase64Size = getProviderMaxBase64Size(provider);
+    const base64Size = calculateBase64Size(buffer);
+    if (base64Size > maxBase64Size) {
+      logger.info('[chat-files-v2] Mount image exceeds provider limits, resizing', {
+        mountFileId,
+        originalSize: buffer.length,
+        base64Size,
+        maxBase64Size,
+        provider,
+      });
+      const resizeResult = await resizeImageForProvider({
+        provider,
+        buffer,
+        mimeType: outputMimeType,
+        filename: blob.originalFileName,
+      });
+      if (resizeResult.wasResized) {
+        buffer = resizeResult.buffer;
+        outputMimeType = resizeResult.mimeType;
+      }
+    }
+  }
+
+  const url = `/api/v1/mount-points/${mountFile.mountPointId}/blobs/${encodeURI(mountFile.relativePath)}`;
+
+  return {
+    id: mountFile.id,
+    filepath: url,
+    filename: blob.originalFileName || mountFile.fileName,
+    mimeType: outputMimeType,
+    size: buffer.length,
+    data: buffer.toString('base64'),
+    url,
+  };
+}
+
+/**
  * Convert file entries to FileAttachment format for LLM
- * Loads file data as base64, optionally resizing images for provider limits
+ * Loads file data as base64, optionally resizing images for provider limits.
+ *
+ * Each id is probed against the legacy `files` table first; on miss it falls
+ * through to the Scriptorium document-store (doc_mount_files), so chats can
+ * mix uploaded attachments with mount-linked documents in the same set.
  */
 export async function loadChatFilesForLLM(
   fileIds: string[],
@@ -453,26 +539,36 @@ export async function loadChatFilesForLLM(
   for (const fileId of fileIds) {
     try {
       const fileEntry = await repos.files.findById(fileId);
-      if (!fileEntry) {
-        logger.error(`File not found: ${fileId}`, { fileId });
+      if (fileEntry) {
+        const { data, mimeType } = await readFileAsBase64(
+          fileId,
+          fileEntry.mimeType,
+          autoResize ? provider : undefined
+        );
+
+        attachments.push({
+          id: fileEntry.id,
+          filepath: getFileApiPath(fileEntry.id),
+          filename: fileEntry.originalFilename,
+          mimeType,
+          size: fileEntry.size,
+          data,
+        });
         continue;
       }
 
-      // Read file with potential resizing
-      const { data, wasResized, mimeType } = await readFileAsBase64(
-        fileId,
-        fileEntry.mimeType,
-        autoResize ? provider : undefined
-      );
+      const mountAttachment = await loadMountFileAsAttachment(fileId, options);
+      if (mountAttachment) {
+        logger.debug('[chat-files-v2] Loaded mount-file attachment for LLM', {
+          mountFileId: fileId,
+          mimeType: mountAttachment.mimeType,
+          size: mountAttachment.size,
+        });
+        attachments.push(mountAttachment);
+        continue;
+      }
 
-      attachments.push({
-        id: fileEntry.id,
-        filepath: getFileApiPath(fileEntry.id),
-        filename: fileEntry.originalFilename,
-        mimeType, // Use potentially updated MIME type
-        size: fileEntry.size,
-        data,
-      });
+      logger.error(`File not found in either files or doc_mount_files: ${fileId}`, { fileId });
     } catch (error) {
       logger.error(`Failed to load chat file ${fileId}:`, {}, error instanceof Error ? error : new Error(String(error)));
       // Skip files that can't be loaded

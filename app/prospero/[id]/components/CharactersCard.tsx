@@ -42,9 +42,12 @@ function CloseIcon({ className }: { className?: string }) {
 export function CharactersCard({ project, onRemoveCharacter, onToggleAllowAnyCharacter, expanded, onToggle }: CharactersCardProps) {
   const { shouldHideByIds } = useQuickHide()
 
-  // Filter characters based on quick-hide rules
+  // Filter characters based on quick-hide rules, deduping any repeated ids
   const visibleCharacters = useMemo(() => {
+    const seen = new Set<string>()
     return project.characterRoster.filter(char => {
+      if (!char.id || seen.has(char.id)) return false
+      seen.add(char.id)
       return !shouldHideByIds(char.tags || [])
     })
   }, [project.characterRoster, shouldHideByIds])
@@ -75,7 +78,7 @@ export function CharactersCard({ project, onRemoveCharacter, onToggleAllowAnyCha
           {/* Allow Any Character Toggle */}
           <div className="flex items-center justify-between px-4 py-3 qt-bg-muted">
             <div>
-              <h4 className="text-sm font-medium text-foreground">Allow Any Character</h4>
+              <h4 className="qt-label text-foreground">Allow Any Character</h4>
               <p className="qt-text-xs qt-text-secondary">
                 {project.allowAnyCharacter
                   ? 'Any character can join project chats.'

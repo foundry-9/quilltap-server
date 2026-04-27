@@ -125,7 +125,7 @@ export function RestoreDialog({
       {/* Replace Mode Warning */}
       {state.restoreMode === 'replace' && (
         <div className="qt-bg-destructive/10 border qt-border-destructive rounded-lg p-4">
-          <p className="text-sm font-medium qt-text-destructive mb-3">
+          <p className="qt-text-destructive mb-3">
             Warning: This will DELETE all your current data!
           </p>
           <label className="flex items-center gap-2 cursor-pointer">

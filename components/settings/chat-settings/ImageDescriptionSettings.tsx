@@ -1,7 +1,7 @@
 'use client'
 
 import { SettingsCard } from '@/components/ui/SettingsCard'
-import { ChatSettings, ConnectionProfile, VISION_PROVIDERS } from './types'
+import { ChatSettings, ConnectionProfile } from './types'
 
 export interface ImageDescriptionSettingsProps {
   settings: ChatSettings
@@ -22,9 +22,7 @@ export function ImageDescriptionSettings({
   connectionProfiles,
   onProfileChange,
 }: ImageDescriptionSettingsProps) {
-  const visionProfiles = connectionProfiles.filter(profile =>
-    VISION_PROVIDERS.includes(profile.provider as typeof VISION_PROVIDERS[number])
-  )
+  const visionProfiles = connectionProfiles.filter(profile => profile.supportsImageUpload === true)
 
   return (
     <SettingsCard
@@ -58,7 +56,7 @@ export function ImageDescriptionSettings({
           </select>
           {visionProfiles.length === 0 && (
             <p className="mt-1 text-xs qt-text-warning">
-              No vision-capable profiles found. Create an OpenAI, Anthropic, Google, or Grok profile in the Connection Profiles tab.
+              No vision-capable profiles found. Edit a connection profile and enable &ldquo;Supports image attachments&rdquo;, or create a new one.
             </p>
           )}
         </div>

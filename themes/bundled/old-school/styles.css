@@ -253,6 +253,7 @@
   /* Queue status badge colors */
 
   --qt-queue-badge-memory-bg: hsl(217 91% 50%);
+  --qt-queue-badge-embedding-bg: hsl(270 60% 50%);
   --qt-queue-badge-summary-bg: hsl(142 76% 36%);
   --qt-queue-badge-danger-bg: hsl(0 84% 50%);
   --qt-queue-badge-story-bg: hsl(220 15% 35%);
@@ -381,6 +382,7 @@
 
   /* Queue status badge tokens - slightly brighter for dark backgrounds */
   --qt-queue-badge-memory-bg: hsl(217 91% 55%);
+  --qt-queue-badge-embedding-bg: hsl(270 60% 55%);
   --qt-queue-badge-summary-bg: hsl(142 76% 40%);
   --qt-queue-badge-danger-bg: hsl(0 84% 55%);
   --qt-queue-badge-story-bg: hsl(220 15% 45%);

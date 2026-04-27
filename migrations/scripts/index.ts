@@ -167,6 +167,42 @@ import { migratePluginTemplatesToNativeMigration } from './migrate-plugin-templa
 import { addProjectDefaultImageProfileMigration } from './add-project-default-image-profile';
 // Create character_plugin_data table for per-character per-plugin metadata
 import { createCharacterPluginDataTableMigration } from './create-character-plugin-data-table';
+// Add renderedMarkdown field to chats for Scriptorium conversation rendering
+import { addRenderedMarkdownFieldMigration } from './add-rendered-markdown-field';
+// Create conversation tables for Scriptorium (annotations + chunks)
+import { createConversationTablesMigration } from './create-conversation-tables';
+// Create help_docs table for runtime-embedded help documentation
+import { createHelpDocsTableMigration } from './create-help-docs-table';
+// Add document mode fields for Scriptorium Phase 3.5
+import { addDocumentModeFieldsMigration } from './add-document-mode-fields';
+// Add characterDocumentMountPointId field to characters
+import { addCharacterDocumentMountPointFieldMigration } from './add-character-document-mount-point-field';
+// Add readPropertiesFromDocumentStore field to characters
+import { addReadPropertiesFromDocumentStoreFieldMigration } from './add-read-properties-from-document-store-field';
+// Normalise all stored embeddings to unit length for fast cosine similarity
+import { normalizeEmbeddingsUnitVectorsMigration } from './normalize-embeddings-unit-vectors';
+// Add autoHousekeepingSettings column to chat_settings
+import { addAutoHousekeepingSettingsFieldMigration } from './add-auto-housekeeping-settings-field';
+// Add memoryExtractionLimits column to chat_settings
+import { addMemoryExtractionLimitsFieldMigration } from './add-memory-extraction-limits-field';
+// Add supportsImageUpload column to connection_profiles (per-profile vision capability)
+import { addProfileSupportsImageUploadFieldMigration } from './add-profile-supports-image-upload-field';
+// Add Lantern image alert columns to projects and chats
+import { addLanternImageAlertFieldsMigration } from './add-lantern-image-alert-fields';
+// Convert project file storage into per-project Scriptorium document stores
+import { convertProjectFilesToDocumentStoresMigration } from './convert-project-files-to-document-stores';
+// Add systemSender column to chat_messages for personified-feature announcements
+import { addSystemSenderFieldMigration } from './add-system-sender-field';
+// Add allowCrossCharacterVaultReads column to chats
+import { addChatCrossCharacterVaultReadsFieldMigration } from './add-chat-cross-character-vault-reads-field';
+// Drop file_permissions table (LLM write approval flow retired)
+import { dropFilePermissionsMigration } from './drop-file-permissions';
+// Add systemTransparency column to characters
+import { addCharacterSystemTransparencyFieldMigration } from './add-character-system-transparency-field';
+// Add officialMountPointId column to projects + backfill from `Project Files: <name>` stores
+import { addProjectOfficialMountPointMigration } from './add-project-official-mount-point';
+// Add compositionModeDefault column to chat_settings
+import { addCompositionModeDefaultFieldMigration } from './add-composition-mode-default-field';
 
 /**
  * All available migrations.
@@ -329,6 +365,42 @@ export const migrations: Migration[] = [
   addProjectDefaultImageProfileMigration,
   // Create character_plugin_data table for per-character per-plugin metadata
   createCharacterPluginDataTableMigration,
+  // Add renderedMarkdown field to chats for Scriptorium conversation rendering
+  addRenderedMarkdownFieldMigration,
+  // Create conversation tables for Scriptorium (annotations + chunks)
+  createConversationTablesMigration,
+  // Create help_docs table for runtime-embedded help documentation
+  createHelpDocsTableMigration,
+  // Add document mode fields for Scriptorium Phase 3.5
+  addDocumentModeFieldsMigration,
+  // Add characterDocumentMountPointId field to characters
+  addCharacterDocumentMountPointFieldMigration,
+  // Add readPropertiesFromDocumentStore field to characters
+  addReadPropertiesFromDocumentStoreFieldMigration,
+  // Normalise all stored embeddings to unit length for fast cosine similarity
+  normalizeEmbeddingsUnitVectorsMigration,
+  // Add autoHousekeepingSettings column to chat_settings
+  addAutoHousekeepingSettingsFieldMigration,
+  // Add memoryExtractionLimits column to chat_settings
+  addMemoryExtractionLimitsFieldMigration,
+  // Add supportsImageUpload column to connection_profiles
+  addProfileSupportsImageUploadFieldMigration,
+  // Add Lantern image alert columns to projects and chats
+  addLanternImageAlertFieldsMigration,
+  // Convert project file storage into per-project Scriptorium document stores
+  convertProjectFilesToDocumentStoresMigration,
+  // Add systemSender column to chat_messages
+  addSystemSenderFieldMigration,
+  // Add allowCrossCharacterVaultReads column to chats
+  addChatCrossCharacterVaultReadsFieldMigration,
+  // Drop file_permissions table (LLM write approval flow retired)
+  dropFilePermissionsMigration,
+  // Add systemTransparency column to characters
+  addCharacterSystemTransparencyFieldMigration,
+  // Add officialMountPointId column to projects + backfill from `Project Files: <name>` stores
+  addProjectOfficialMountPointMigration,
+  // Add compositionModeDefault column to chat_settings
+  addCompositionModeDefaultFieldMigration,
 ];
 
 export {
@@ -476,5 +548,41 @@ export {
   addProjectDefaultImageProfileMigration,
   // Create character_plugin_data table for per-character per-plugin metadata
   createCharacterPluginDataTableMigration,
+  // Add renderedMarkdown field to chats for Scriptorium conversation rendering
+  addRenderedMarkdownFieldMigration,
+  // Create conversation tables for Scriptorium (annotations + chunks)
+  createConversationTablesMigration,
+  // Create help_docs table for runtime-embedded help documentation
+  createHelpDocsTableMigration,
+  // Add document mode fields for Scriptorium Phase 3.5
+  addDocumentModeFieldsMigration,
+  // Add characterDocumentMountPointId field to characters
+  addCharacterDocumentMountPointFieldMigration,
+  // Add readPropertiesFromDocumentStore field to characters
+  addReadPropertiesFromDocumentStoreFieldMigration,
+  // Normalise all stored embeddings to unit length for fast cosine similarity
+  normalizeEmbeddingsUnitVectorsMigration,
+  // Add autoHousekeepingSettings column to chat_settings
+  addAutoHousekeepingSettingsFieldMigration,
+  // Add memoryExtractionLimits column to chat_settings
+  addMemoryExtractionLimitsFieldMigration,
+  // Add supportsImageUpload column to connection_profiles
+  addProfileSupportsImageUploadFieldMigration,
+  // Add Lantern image alert columns to projects and chats
+  addLanternImageAlertFieldsMigration,
+  // Convert project file storage into per-project Scriptorium document stores
+  convertProjectFilesToDocumentStoresMigration,
+  // Add systemSender column to chat_messages
+  addSystemSenderFieldMigration,
+  // Add allowCrossCharacterVaultReads column to chats
+  addChatCrossCharacterVaultReadsFieldMigration,
+  // Drop file_permissions table (LLM write approval flow retired)
+  dropFilePermissionsMigration,
+  // Add systemTransparency column to characters
+  addCharacterSystemTransparencyFieldMigration,
+  // Add officialMountPointId column to projects + backfill from `Project Files: <name>` stores
+  addProjectOfficialMountPointMigration,
+  // Add compositionModeDefault column to chat_settings
+  addCompositionModeDefaultFieldMigration,
 };
 

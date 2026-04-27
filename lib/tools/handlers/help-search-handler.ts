@@ -4,15 +4,18 @@
  * Executes help documentation search when the LLM requests assistance
  * understanding Quilltap features, settings, or usage.
  *
- * Uses semantic search when OPENAI_API_KEY is available (to generate query embeddings),
- * with automatic fallback to keyword-based search when no API key is configured.
+ * Uses the user's configured embedding profile for semantic search,
+ * with automatic fallback to keyword-based search when no embedding
+ * profile is configured or when embedding fails.
  */
 
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { logger } from '@/lib/logger'
 import { getHelpSearch } from '@/lib/help-search'
-import { extractSearchTerms, textSimilarity } from '@/lib/embedding/embedding-service'
+import {
+  generateEmbeddingForUser,
+  extractSearchTerms,
+  textSimilarity,
+} from '@/lib/embedding/embedding-service'
 import {
   HelpSearchToolInput,
   HelpSearchToolOutput,
@@ -24,7 +27,7 @@ import {
  * Context required for help search execution
  */
 export interface HelpSearchToolContext {
-  /** User ID for logging */
+  /** User ID for embedding profile lookup and logging */
   userId: string
 }
 
@@ -41,88 +44,21 @@ export class HelpSearchError extends Error {
   }
 }
 
-/** OpenAI embedding model used in the help bundle */
-const HELP_BUNDLE_EMBEDDING_MODEL = 'text-embedding-3-small'
-
-/** OpenAI embeddings API endpoint */
-const OPENAI_EMBEDDINGS_URL = 'https://api.openai.com/v1/embeddings'
-
-/** Path to the help bundle file */
-const HELP_BUNDLE_PATH = join(process.cwd(), 'public', 'help-bundle.msgpack.gz')
-
 /**
- * Generate an embedding for the query using OpenAI API directly
- *
- * Uses the same model as the help bundle to ensure dimension compatibility.
- *
- * @param query - The search query to embed
- * @param apiKey - OpenAI API key
- * @returns Embedding vector
- */
-async function generateQueryEmbedding(query: string, apiKey: string): Promise<number[]> {
-  const response = await fetch(OPENAI_EMBEDDINGS_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: HELP_BUNDLE_EMBEDDING_MODEL,
-      input: query,
-    }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new HelpSearchError(
-      `OpenAI embedding failed: ${error.error?.message || response.statusText}`,
-      'API_ERROR'
-    )
-  }
-
-  const data = await response.json()
-  return data.data[0].embedding
-}
-
-/**
- * Load the help bundle into the singleton HelpSearch instance
- */
-async function ensureHelpBundleLoaded(): Promise<boolean> {
-  const helpSearch = getHelpSearch()
-
-  if (helpSearch.isLoaded()) {
-    return true
-  }
-
-  try {
-    const bundleBuffer = await readFile(HELP_BUNDLE_PATH)
-    await helpSearch.loadFromBuffer(bundleBuffer)
-    return true
-  } catch (error) {
-    logger.error('Failed to load help bundle', {
-      context: 'help-search-handler',
-      path: HELP_BUNDLE_PATH,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return false
-  }
-}
-
-/**
- * Perform semantic search using embeddings
+ * Perform semantic search using the user's embedding profile
  */
 async function semanticSearch(
   query: string,
   limit: number,
-  apiKey: string
+  userId: string
 ): Promise<HelpSearchResult[]> {
   const helpSearch = getHelpSearch()
 
-  // Generate embedding for the query
-  const queryEmbedding = await generateQueryEmbedding(query, apiKey)
+  // Generate embedding for the query using the user's profile
+  const embeddingResult = await generateEmbeddingForUser(query, userId)
 
-  // Search the help bundle
-  const results = helpSearch.search(queryEmbedding, limit)
+  // Search the help docs
+  const results = await helpSearch.search(embeddingResult.embedding, limit)
 
   return results.map(result => ({
     id: result.document.id,
@@ -137,12 +73,12 @@ async function semanticSearch(
 /**
  * Perform keyword-based fallback search
  */
-function keywordSearch(query: string, limit: number): HelpSearchResult[] {
+async function keywordSearch(query: string, limit: number): Promise<HelpSearchResult[]> {
   const helpSearch = getHelpSearch()
   const searchTerms = extractSearchTerms(query)
 
   // Get all documents and score them
-  const allDocs = helpSearch.getAllDocuments()
+  const allDocs = await helpSearch.getAllDocuments()
 
   const scored = allDocs.map(doc => ({
     doc,
@@ -194,40 +130,27 @@ export async function executeHelpSearchTool(
 
     const { query, limit = 3 } = input
 
-    // Ensure the help bundle is loaded
-    const bundleLoaded = await ensureHelpBundleLoaded()
-    if (!bundleLoaded) {
-      return {
-        success: false,
-        error: 'Help documentation bundle is not available. Please run "npm run build:help" to generate it.',
-        totalFound: 0,
-        query,
-      }
+    // Ensure help docs are loaded
+    const helpSearch = getHelpSearch()
+    if (!helpSearch.isLoaded()) {
+      await helpSearch.loadFromDatabase()
     }
-
-    // Check for OpenAI API key for semantic search
-    const apiKey = process.env.OPENAI_API_KEY
 
     let results: HelpSearchResult[]
     let searchMethod: 'semantic' | 'keyword'
 
-    if (apiKey) {
-      try {
-        results = await semanticSearch(query, limit, apiKey)
-        searchMethod = 'semantic'
-      } catch (error) {
-        // Fall back to keyword search on API error
-        logger.warn('Semantic search failed, falling back to keyword search', {
-          context: 'help-search-handler',
-          userId: context.userId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        results = keywordSearch(query, limit)
-        searchMethod = 'keyword'
-      }
-    } else {
-      // No API key, use keyword search directly
-      results = keywordSearch(query, limit)
+    // Try semantic search first using the user's embedding profile
+    try {
+      results = await semanticSearch(query, limit, context.userId)
+      searchMethod = 'semantic'
+    } catch (error) {
+      // Fall back to keyword search on embedding error
+      logger.warn('Semantic help search failed, falling back to keyword search', {
+        context: 'help-search-handler',
+        userId: context.userId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      results = await keywordSearch(query, limit)
       searchMethod = 'keyword'
     }
 

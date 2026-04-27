@@ -4,6 +4,7 @@
  * GET /api/v1/embedding-profiles - List all embedding profiles for current user
  * POST /api/v1/embedding-profiles - Create a new embedding profile
  * GET /api/v1/embedding-profiles?action=list-models - List available embedding models
+ * GET /api/v1/embedding-profiles?action=fetch-models&provider=OLLAMA&baseUrl=... - Fetch installed models from provider
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -17,6 +18,8 @@ import {
   getEmbeddingModels,
   getAllEmbeddingModels,
 } from '@/lib/plugins/provider-validation';
+import { providerRegistry } from '@/lib/plugins/provider-registry';
+import { isLocalEmbeddingProvider } from '@quilltap/plugin-types';
 
 /**
  * GET /api/v1/embedding-profiles
@@ -31,6 +34,11 @@ export const GET = createAuthenticatedHandler(async (req, context) => {
   // Handle list-models action
   if (action === 'list-models') {
     return handleListModels(req, context);
+  }
+
+  // Handle fetch-models action (dynamic fetch from provider)
+  if (action === 'fetch-models') {
+    return handleFetchModels(req, context);
   }
 
   // Handle list-providers action
@@ -114,6 +122,73 @@ function handleListProviders() {
   } catch (error) {
     logger.error('[Embedding Profiles v1] Error in list-providers', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to fetch embedding providers');
+  }
+}
+
+/**
+ * Handle fetch-models action
+ * Dynamically fetches installed models from the provider (e.g., Ollama /api/tags)
+ */
+async function handleFetchModels(req: NextRequest, context: AuthenticatedContext) {
+  try {
+    const { searchParams } = req.nextUrl;
+    const provider = searchParams.get('provider')?.toUpperCase();
+    const baseUrl = searchParams.get('baseUrl') || undefined;
+
+    if (!provider) {
+      return badRequest('Provider is required');
+    }
+
+    const embeddingProviders = getEmbeddingProviders();
+    if (!embeddingProviders.includes(provider)) {
+      return badRequest('Invalid provider. Must be one of: ' + embeddingProviders.join(', '));
+    }
+
+    // Create the embedding provider instance
+    let embeddingProvider;
+    try {
+      embeddingProvider = providerRegistry.createEmbeddingProvider(provider, baseUrl);
+    } catch {
+      return badRequest(`Provider ${provider} does not support embeddings`);
+    }
+
+    // Local providers (BUILTIN) don't fetch models dynamically
+    if (isLocalEmbeddingProvider(embeddingProvider)) {
+      return successResponse({ provider, models: [] });
+    }
+
+    // Fetch models dynamically
+    if (!embeddingProvider.getAvailableModels) {
+      return successResponse({ provider, models: [] });
+    }
+
+    const modelIds = await embeddingProvider.getAvailableModels('');
+
+    // Get static model info for dimension hints
+    const staticModels = getEmbeddingModels(provider);
+
+    // Merge: use static info where available, otherwise return bare model IDs
+    const models = modelIds.map(id => {
+      const staticInfo = staticModels.find(m => m.id === id);
+      return {
+        id,
+        name: staticInfo?.name || id,
+        dimensions: staticInfo?.dimensions,
+        description: staticInfo?.description,
+        installed: true,
+      };
+    });
+
+    logger.info('[Embedding Profiles v1] Fetched models from provider', {
+      provider,
+      baseUrl,
+      modelCount: models.length,
+    });
+
+    return successResponse({ provider, models });
+  } catch (error) {
+    logger.error('[Embedding Profiles v1] Error fetching models from provider', {}, error instanceof Error ? error : undefined);
+    return serverError('Failed to fetch models from provider');
   }
 }
 
@@ -251,6 +326,22 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     const apiKey = await enrichWithApiKey(profile.apiKeyId, repos);
 
     logger.info('[Embedding Profiles v1] Profile created', { profileId: profile.id, provider: profile.provider });
+
+    // If this is a default profile, trigger help doc embedding immediately
+    if (profile.isDefault) {
+      try {
+        const { enqueueEmbeddingReindexAll } = await import('@/lib/background-jobs/queue-service');
+        await enqueueEmbeddingReindexAll(user.id, { profileId: profile.id });
+        logger.info('[Embedding Profiles v1] Triggered initial embedding for new default profile', {
+          profileId: profile.id,
+        });
+      } catch (embeddingError) {
+        logger.warn('[Embedding Profiles v1] Failed to trigger initial embedding', {
+          profileId: profile.id,
+          error: embeddingError instanceof Error ? embeddingError.message : String(embeddingError),
+        });
+      }
+    }
 
     return created({ ...profile, apiKey });
   } catch (error) {

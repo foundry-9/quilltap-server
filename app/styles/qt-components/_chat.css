@@ -450,9 +450,203 @@
     border: 1px solid var(--qt-input-border);
   }
 
-  .qt-chat-composer-input:focus {
+  .qt-chat-composer-input:focus,
+  .qt-chat-composer-input:focus-within {
     border-color: var(--qt-input-focus-ring);
     --tw-ring-color: var(--qt-input-focus-ring);
+  }
+
+  /**
+   * Source mode textarea — monospace raw markdown editing
+   */
+  .qt-source-mode-textarea {
+    @apply resize-none overflow-y-auto flex-1 min-w-0 self-stretch;
+    font-family: var(--qt-formatting-code-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace);
+    font-size: 0.8125rem;
+    tab-size: 2;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  /**
+   * Lexical editor contenteditable styling
+   * Ensures the rich text editor matches the textarea appearance.
+   */
+  .qt-chat-composer-input.qt-lexical-contenteditable {
+    @apply overflow-y-auto h-full;
+    position: relative;
+  }
+
+  .qt-lexical-contenteditable [contenteditable] {
+    outline: none;
+    min-height: 1.5em;
+  }
+
+  /**
+   * Lexical placeholder — positioned absolutely over the editor
+   */
+  .qt-lexical-placeholder {
+    @apply text-muted-foreground text-sm pointer-events-none;
+    @apply absolute;
+    padding: var(--qt-input-padding-y) var(--qt-input-padding-x);
+    top: 0;
+    left: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /**
+   * Lexical rich text node styles
+   */
+  .qt-lexical-root {
+    outline: none;
+    min-height: 1.5em;
+  }
+
+  .qt-lexical-paragraph {
+    margin: 0;
+  }
+
+  .qt-lexical-bold {
+    font-weight: 700;
+  }
+
+  .qt-lexical-italic {
+    font-style: italic;
+  }
+
+  .qt-lexical-underline {
+    text-decoration: underline;
+  }
+
+  .qt-lexical-strikethrough {
+    text-decoration: line-through;
+  }
+
+  .qt-lexical-code {
+    @apply font-mono text-xs;
+    background: var(--qt-code-bg, rgba(0, 0, 0, 0.1));
+    padding: 0.1em 0.3em;
+    border-radius: 0.2em;
+  }
+
+  .qt-lexical-h1 {
+    @apply text-xl font-bold;
+    margin: 0.5em 0 0.25em;
+  }
+
+  .qt-lexical-h2 {
+    @apply text-lg font-bold;
+    margin: 0.4em 0 0.2em;
+  }
+
+  .qt-lexical-h3 {
+    @apply text-base font-semibold;
+    margin: 0.3em 0 0.15em;
+  }
+
+  .qt-lexical-h4 {
+    @apply text-sm font-semibold;
+    margin: 0.25em 0 0.1em;
+  }
+
+  .qt-lexical-h5 {
+    @apply text-xs font-semibold;
+    margin: 0.2em 0 0.1em;
+  }
+
+  .qt-lexical-h6 {
+    @apply text-xs font-medium;
+    margin: 0.2em 0 0.1em;
+  }
+
+  .qt-lexical-ul {
+    @apply list-disc pl-6;
+    margin: 0.25em 0;
+  }
+
+  .qt-lexical-ol {
+    @apply list-decimal pl-6;
+    margin: 0.25em 0;
+  }
+
+  .qt-lexical-li {
+    margin: 0.1em 0;
+  }
+
+  /* Checklist items */
+  .qt-lexical-checklist {
+    @apply list-none pl-0;
+  }
+
+  .qt-lexical-li-checked,
+  .qt-lexical-li-unchecked {
+    @apply relative pl-6 list-none;
+    margin: 0.15em 0;
+  }
+
+  .qt-lexical-li-checked::before,
+  .qt-lexical-li-unchecked::before {
+    content: '';
+    @apply absolute left-0 top-1 w-4 h-4 rounded border cursor-pointer;
+    border-color: var(--qt-border-color, hsl(var(--border)));
+  }
+
+  .qt-lexical-li-checked::before {
+    background: hsl(var(--primary));
+    border-color: hsl(var(--primary));
+    /* Checkmark via CSS */
+    content: '';
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");
+    background-size: 12px 12px;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .qt-lexical-li-checked {
+    @apply opacity-60 line-through;
+  }
+
+  .qt-lexical-blockquote {
+    @apply border-l-4 pl-3 italic;
+    border-color: var(--qt-border-color, rgba(0, 0, 0, 0.2));
+    margin: 0.25em 0;
+  }
+
+  .qt-lexical-link {
+    @apply underline;
+    color: var(--qt-link-color, hsl(var(--primary)));
+  }
+
+  .qt-lexical-code-block {
+    @apply font-mono text-xs;
+    background: var(--qt-code-bg, rgba(0, 0, 0, 0.15));
+    padding: 0.5em 0.75em;
+    border-radius: 0.3em;
+    margin: 0.25em 0;
+    overflow-x: auto;
+    tab-size: 2;
+  }
+
+  /* Lexical table styling */
+  .qt-lexical-contenteditable table {
+    @apply w-full border-collapse my-2;
+  }
+
+  .qt-lexical-contenteditable th,
+  .qt-lexical-contenteditable td {
+    @apply border border-border px-3 py-1.5 text-left;
+    min-width: 60px;
+  }
+
+  .qt-lexical-contenteditable th {
+    @apply font-semibold;
+    background: var(--color-muted);
+  }
+
+  .qt-lexical-contenteditable tr:nth-child(even) td {
+    background: color-mix(in srgb, var(--color-muted) 30%, transparent);
   }
 
   /**
@@ -542,49 +736,6 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 0.25rem;
-  }
-
-  /**
-   * Outfit notification button - bright, attention-grabbing pill
-   * that appears above the gutter tools when outfit changes are pending.
-   */
-  .qt-composer-outfit-notify-button {
-    @apply inline-flex items-center gap-1;
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
-    @apply transition-all duration-200;
-    padding: 0.25rem 0.625rem;
-    border-radius: var(--radius-full, 9999px);
-    border: 1px solid var(--color-primary);
-    background: color-mix(in srgb, var(--color-primary) 15%, transparent);
-    color: var(--color-primary);
-    cursor: pointer;
-    font-size: 0.75rem;
-    font-weight: 600;
-    line-height: 1.25;
-    animation: qt-outfit-notify-pulse 2s ease-in-out infinite;
-  }
-
-  .qt-composer-outfit-notify-button:hover {
-    background: color-mix(in srgb, var(--color-primary) 25%, transparent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--color-primary) 40%, transparent);
-  }
-
-  .qt-composer-outfit-notify-label {
-    letter-spacing: 0.02em;
-  }
-
-  .qt-composer-outfit-notify-icon {
-    font-size: 0.875rem;
-    line-height: 1;
-  }
-
-  @keyframes qt-outfit-notify-pulse {
-    0%, 100% {
-      box-shadow: 0 0 4px color-mix(in srgb, var(--color-primary) 20%, transparent);
-    }
-    50% {
-      box-shadow: 0 0 12px color-mix(in srgb, var(--color-primary) 50%, transparent);
-    }
   }
 
   /* ==========================================================================
@@ -814,25 +965,57 @@
   }
 
   /**
-   * Preview button - toggle for preview mode in formatting toolbar
+   * Heading buttons - serif font to distinguish from body text buttons
    */
-  .qt-formatting-button-preview {
+  .qt-formatting-button-h1,
+  .qt-formatting-button-h2,
+  .qt-formatting-button-h3,
+  .qt-formatting-button-h4,
+  .qt-formatting-button-h5,
+  .qt-formatting-button-h6 {
+    font-family: var(--qt-formatting-heading-font, Georgia, 'Times New Roman', serif);
+  }
+
+  /**
+   * Blockquote button - larger smart quote character for readability
+   */
+  .qt-formatting-button-blockquote {
+    font-family: var(--qt-formatting-heading-font, Georgia, 'Times New Roman', serif);
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+    padding-top: 0.35em;
+    padding-bottom: 0;
+  }
+
+  /**
+   * Code block button - monospace font
+   */
+  .qt-formatting-button-code-block {
+    font-family: var(--qt-formatting-code-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace);
+  }
+
+  /**
+   * Source mode toggle button
+   */
+  .qt-formatting-button-source {
     @apply flex items-center justify-center;
     min-width: 1.75rem;
     height: 1.75rem;
     padding: 0 0.375rem;
   }
 
+
   /**
-   * Preview button active state - highlighted when preview is on
+   * Active state for formatting toggle buttons (e.g., CODE block toggle)
    */
-  .qt-formatting-button-preview-active {
+  .qt-formatting-button-active {
     background: var(--color-primary);
     color: var(--color-primary-foreground);
     border-color: var(--color-primary);
   }
 
-  .qt-formatting-button-preview-active:hover:not(:disabled) {
+  .qt-formatting-button-active:hover:not(:disabled) {
     background: color-mix(in srgb, var(--color-primary) 85%, black);
     border-color: color-mix(in srgb, var(--color-primary) 85%, black);
   }
@@ -1140,6 +1323,242 @@
     width: 50%;
     @apply h-full;
   }
+
+  /* ========================================================================
+   * Document Mode — Split-panel layout (Scriptorium Phase 3.5)
+   * ======================================================================== */
+
+  /**
+   * Split layout container for Document Mode
+   * Wraps the chat pane + divider + document pane inside .qt-chat-main
+   */
+  .qt-doc-split-layout {
+    @apply flex flex-row h-full;
+    @apply overflow-hidden;
+  }
+
+  /**
+   * Chat pane in split mode
+   * Min-width prevents the chat from becoming unusable
+   */
+  .qt-doc-chat-pane {
+    @apply flex flex-col h-full;
+    @apply overflow-hidden;
+    min-width: 320px;
+  }
+
+  /**
+   * Draggable divider between chat and document panes
+   * 6px wide handle with a visible grip indicator
+   */
+  .qt-doc-divider {
+    @apply flex-shrink-0 h-full;
+    @apply flex items-center justify-center;
+    width: 6px;
+    cursor: col-resize;
+    background: var(--qt-border);
+    transition: background 0.15s ease;
+    user-select: none;
+    touch-action: none;
+  }
+
+  .qt-doc-divider:hover,
+  .qt-doc-divider.qt-doc-divider-active {
+    background: var(--qt-primary);
+  }
+
+  /** Grip dots indicator on the divider */
+  .qt-doc-divider-grip {
+    @apply flex flex-col gap-1;
+  }
+
+  .qt-doc-divider-grip span {
+    display: block;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--qt-text-muted);
+  }
+
+  .qt-doc-divider:hover .qt-doc-divider-grip span,
+  .qt-doc-divider.qt-doc-divider-active .qt-doc-divider-grip span {
+    background: var(--qt-primary-fg, #fff);
+  }
+
+  /**
+   * Document pane container
+   * Sits to the right of the divider in split mode
+   */
+  .qt-doc-pane {
+    @apply flex flex-col h-full;
+    @apply overflow-hidden;
+    min-width: 360px;
+    background: color-mix(in srgb, var(--qt-content-bg) 92%, transparent);
+    border-left: 1px solid var(--qt-border);
+  }
+
+  /**
+   * Focus mode — document pane fills the entire main area
+   * Chat pane is hidden
+   */
+  .qt-doc-focus-mode .qt-doc-editor-area {
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /**
+   * Document header bar
+   * Contains title, badges, and mode toggle buttons
+   */
+  .qt-doc-header {
+    @apply flex items-center gap-2 px-4 py-2;
+    @apply flex-shrink-0;
+    border-bottom: 1px solid var(--qt-border);
+    background: color-mix(in srgb, var(--qt-content-bg) 95%, transparent);
+  }
+
+  /** Green "Document" badge in the header */
+  .qt-doc-badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+    background: var(--qt-success-bg, color-mix(in srgb, #22c55e 15%, var(--qt-content-bg)));
+    color: var(--qt-success-fg, #22c55e);
+  }
+
+  /** Editable document title in the header */
+  .qt-doc-title {
+    @apply flex-1 text-sm font-medium truncate;
+    color: var(--qt-text-primary);
+  }
+
+  .qt-doc-title-input {
+    @apply text-sm font-medium w-full;
+    @apply bg-transparent border-b border-dashed;
+    border-color: var(--qt-border);
+    color: var(--qt-text-primary);
+    outline: none;
+  }
+
+  .qt-doc-title-input:focus {
+    border-color: var(--qt-primary);
+  }
+
+  /** Header action buttons (maximize, show chat, exit) */
+  .qt-doc-header-button {
+    @apply p-1.5 rounded transition-colors;
+    color: var(--qt-text-secondary);
+  }
+
+  .qt-doc-header-button:hover {
+    color: var(--qt-text-primary);
+    background: var(--qt-hover-bg, color-mix(in srgb, var(--qt-text-primary) 10%, transparent));
+  }
+
+  /**
+   * Document editor toolbar
+   * Formatting buttons for the document pane, always visible
+   */
+  .qt-doc-toolbar {
+    @apply flex items-center gap-1 px-4 py-1.5;
+    @apply flex-shrink-0;
+    border-bottom: 1px solid var(--qt-border);
+    background: color-mix(in srgb, var(--qt-content-bg) 95%, transparent);
+  }
+
+  /**
+   * Document editor area
+   * Fills available vertical space, independently scrollable
+   */
+  .qt-doc-editor-area {
+    @apply flex-1;
+    @apply overflow-y-auto;
+    position: relative;
+    padding: 1rem 1.5rem;
+  }
+
+  /**
+   * Status bar at the bottom of the document pane
+   */
+  .qt-doc-status-bar {
+    @apply flex items-center gap-4 px-4 py-1;
+    @apply flex-shrink-0;
+    @apply text-xs;
+    border-top: 1px solid var(--qt-border);
+    color: var(--qt-text-muted);
+    background: color-mix(in srgb, var(--qt-content-bg) 95%, transparent);
+  }
+
+  .qt-doc-status-item {
+    @apply inline-flex items-center gap-1;
+  }
+
+  /** Saving indicator dot animation */
+  .qt-doc-status-saving {
+    @apply inline-block w-1.5 h-1.5 rounded-full;
+    background: var(--qt-warning-fg, #f59e0b);
+    animation: qt-doc-pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes qt-doc-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  /** Saved indicator dot */
+  .qt-doc-status-saved {
+    @apply inline-block w-1.5 h-1.5 rounded-full;
+    background: var(--qt-success-fg, #22c55e);
+  }
+
+  /**
+   * "Open document" button in composer toolbar
+   * Hidden at viewport widths below 1026px (not enough space for split pane)
+   * When used inside qt-chat-toolbar, inherits toolbar button styling
+   */
+  @media (max-width: 1025px) {
+    .qt-doc-open-button {
+      display: none !important;
+    }
+  }
+
+  /* Document Gutter */
+  .qt-doc-editor-with-gutter {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .qt-doc-gutter {
+    position: relative;
+    flex-shrink: 0;
+    width: 20px;
+    border-right: 1px solid var(--qt-border-color, rgba(128, 128, 128, 0.2));
+  }
+
+  .qt-doc-gutter-change {
+    position: absolute;
+    left: 6px;
+    width: 3px;
+    border-radius: 1.5px;
+    background-color: var(--qt-gutter-change-color, #3b82f6);
+    opacity: 0.6;
+  }
+
+  .qt-doc-gutter-eye {
+    position: absolute;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    color: var(--qt-gutter-eye-color, #f59e0b);
+    opacity: 0.85;
+    pointer-events: none;
+  }
+
+  /* Focus highlight: DocumentFocusPlugin creates a fixed-position overlay on
+     document.body with all styles inline. Themes can override the highlight
+     color by setting --qt-focus-highlight-color on the editor root. */
 
   /**
    * Chat messages container
@@ -1543,6 +1962,35 @@
    */
   .qt-participant-card-silent {
     border-color: var(--qt-chat-silent-border);
+  }
+
+  /**
+   * Dangerous chat — red border on participant cards when the Concierge
+   * has flagged this conversation and is auto-routing to uncensored providers.
+   */
+  .qt-participant-card-dangerous {
+    border-color: var(--color-destructive, #dc2626);
+    box-shadow: 0 0 0 1px var(--color-destructive, #dc2626);
+  }
+
+  /**
+   * Dangerous chat — red ring on message avatars in the chat window
+   * when the Concierge has flagged the conversation.
+   * Targets the Avatar component's image container (the overflow-hidden div).
+   */
+  .qt-chat-avatar-dangerous .overflow-hidden {
+    outline: 2px solid var(--color-destructive, #dc2626);
+    outline-offset: 2px;
+  }
+
+  /**
+   * Danger badge for breadcrumb header
+   */
+  .qt-danger-badge {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium;
+    background: color-mix(in srgb, var(--color-destructive, #dc2626) 15%, transparent);
+    color: var(--color-destructive, #dc2626);
+    border: 1px solid color-mix(in srgb, var(--color-destructive, #dc2626) 40%, transparent);
   }
 
   /**

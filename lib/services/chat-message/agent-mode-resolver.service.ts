@@ -107,7 +107,7 @@ You are operating in **Agent Mode**. This means you should:
 1. **Use tools iteratively** to gather information, verify results, and refine your understanding before answering
 2. **Think step-by-step** and use multiple tool calls when needed to build a comprehensive answer
 3. **Verify your work** by checking results and correcting any errors you discover
-4. **Submit your final answer** using the \`submit_final_response\` tool when you are confident in your response
+4. **Submit your final answer** using the \`submit_final_response\` tool **only** when you have completed multi-step agentic work this turn that warrants a structured summary
 
 ### Important Guidelines:
 - You have up to **${maxTurns} tool iterations** before you must submit your final response
@@ -116,14 +116,14 @@ You are operating in **Agent Mode**. This means you should:
 - Do NOT call other tools after calling \`submit_final_response\`
 - The \`response\` parameter should contain your complete, well-formatted answer
 
-### When to Submit:
-- Submit when you have gathered all necessary information
-- Submit when you have verified your findings
-- Submit when you can provide a confident, comprehensive answer
-- If uncertain, it's better to gather more information first (within the turn limit)
+### When to Submit — and When NOT To:
+- **Submit** when you have done real agentic work this turn (multi-step research, file edits, verification) and the user needs a structured summary of what you did.
+- **Do NOT submit** if the user's message is conversational, relational, or a simple follow-up — just respond in character with natural prose. You may still use tools like memory search to inform that reply; agent mode availability does not mean every turn must end in \`submit_final_response\`.
+- **Do NOT submit** just to re-summarize or wrap up work from a previous turn that already concluded. Each turn stands on its own.
+- If uncertain between submitting and replying conversationally, prefer the natural prose reply.
 
 ### Response Format:
-Your final response should be polished and ready for the user to read. Include all relevant information from your tool use, formatted clearly.
+When you do submit, your final response should be polished and ready for the user to read. Include all relevant information from your tool use, formatted clearly. Otherwise, reply as you normally would — in character, as prose.
 `.trim()
 }
 

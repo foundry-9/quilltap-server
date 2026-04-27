@@ -76,22 +76,22 @@ describe('ErrorAlert', () => {
     expect(button).toBeInTheDocument()
   })
 
-  it('displays message as bold text', () => {
+  it('displays message as semantic label text', () => {
     const { container } = render(
       <ErrorAlert message="Error occurred" />
     )
 
-    const messageParagraph = container.querySelector('.font-medium')
+    const messageParagraph = container.querySelector('.qt-label')
     expect(messageParagraph).toBeInTheDocument()
     expect(messageParagraph?.textContent).toBe('Error occurred')
   })
 
-  it('applies text-sm to message', () => {
+  it('applies qt-label class to message', () => {
     const { container } = render(
       <ErrorAlert message="Error" />
     )
 
-    const messageParagraph = container.querySelector('.text-sm')
+    const messageParagraph = container.querySelector('.qt-label')
     expect(messageParagraph).toBeInTheDocument()
   })
 

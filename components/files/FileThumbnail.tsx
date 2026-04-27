@@ -8,9 +8,10 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
+import { buildMountBlobUrl } from './mountBlobUrl'
 
 interface FileThumbnailProps {
-  /** File ID for thumbnail generation */
+  /** File ID for thumbnail generation (legacy files-table id) */
   fileId: string
   /** MIME type to determine if thumbnail is available */
   mimeType: string
@@ -20,6 +21,13 @@ interface FileThumbnailProps {
   size?: number
   /** Additional CSS classes */
   className?: string
+  /**
+   * When present, the thumbnail resolves to the mount-point blob endpoint
+   * rather than the legacy /api/v1/files/{id} thumbnail action. The blob
+   * endpoint serves the full bytes; the browser scales with CSS.
+   */
+  mountPointId?: string
+  relativePath?: string
 }
 
 /**
@@ -60,6 +68,8 @@ export default function FileThumbnail({
   alt,
   size = 150,
   className = '',
+  mountPointId,
+  relativePath,
 }: Readonly<FileThumbnailProps>) {
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
   const [isVisible, setIsVisible] = useState(false)
@@ -68,9 +78,12 @@ export default function FileThumbnail({
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const canShowThumbnail = supportsThumbnail(mimeType)
-  // Append retry count to bust browser cache on retry
+  const isMountBlob = !!mountPointId && !!relativePath
+  const retryQuery = retryCount > 0 ? `${isMountBlob ? '?' : '&'}_r=${retryCount}` : ''
   const thumbnailUrl = canShowThumbnail
-    ? `/api/v1/files/${fileId}?action=thumbnail&size=${size}${retryCount > 0 ? `&_r=${retryCount}` : ''}`
+    ? (isMountBlob
+        ? `${buildMountBlobUrl(mountPointId, relativePath)}${retryQuery}`
+        : `/api/v1/files/${fileId}?action=thumbnail&size=${size}${retryQuery}`)
     : null
 
   // Lazy loading with Intersection Observer

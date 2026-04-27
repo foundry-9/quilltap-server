@@ -14,11 +14,14 @@ A complete backup includes everything needed to recreate your Quilltap environme
 
 **Your Content**
 - All characters and their configurations
+- Per-character plugin data (such as Commonplace Book entries stored by plugins)
 - All chat histories and messages
+- Conversation annotations (marginal notes added during roleplay sessions)
 - All memories and memory data
 - All files you've uploaded (images, documents, attachments)
 - All folder structures you've created
 - Projects and their settings
+- Wardrobe items and outfit presets
 
 **Profiles & Settings**
 - Connection profiles (API key references — keys need re-entry after restore)
@@ -36,6 +39,10 @@ A complete backup includes everything needed to recreate your Quilltap environme
 **Plugins**
 - npm-installed plugins from your `plugins/npm/` directory
 - Plugin-specific configurations
+
+**Themes**
+- User-installed theme bundles (themes you have installed from registries or manually)
+- Built-in bundled themes are not included as they ship with the application
 
 **Logs & History**
 - LLM request/response logs (the Inspector's records)

@@ -2,15 +2,13 @@
 
 import { use, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { showErrorToast } from '@/lib/toast'
+import { useSearchParams } from 'next/navigation'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
-import type { TimestampConfig } from '@/lib/schemas/types'
-import type { OutfitSelection } from '@/components/wardrobe'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { EntityTabs } from '@/components/tabs'
-import { useCharacterView, useChatCreation } from './hooks'
+import { NewChatModal } from '@/components/new-chat'
+import { useCharacterView } from './hooks'
 import {
   CharacterHeader,
   CharacterDetails,
@@ -21,7 +19,6 @@ import {
   ConversationsTab,
   MemoriesTab,
   DescriptionsTab,
-  ChatCreationDialog,
   ExternalPromptDialog,
   ExternalPromptResultDialog,
 } from './components'
@@ -43,15 +40,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
   const [showExternalPromptDialog, setShowExternalPromptDialog] = useState(false)
   const [externalPromptResult, setExternalPromptResult] = useState<string | null>(null)
   const [dataRefreshKey, setDataRefreshKey] = useState(0)
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('')
-  const [selectedUserCharacterId, setSelectedUserCharacterId] = useState<string>('')
-  const [selectedImageProfileId, setSelectedImageProfileId] = useState<string | null>(null)
-  const [scenario, setScenario] = useState<string>('')
-  const [scenarioId, setScenarioId] = useState<string | null>(null)
-  const [selectedSystemPromptId, setSelectedSystemPromptId] = useState<string | null>(null)
-  const [timestampConfig, setTimestampConfig] = useState<TimestampConfig | null>(null)
-  const [outfitSelections, setOutfitSelections] = useState<OutfitSelection[]>([])
-  const [avatarGenerationEnabled, setAvatarGenerationEnabled] = useState(false)
   const [openedFromQuery, setOpenedFromQuery] = useState(false)
   const chatDialogInitializedRef = useRef(false)
   const [savingConnectionProfile, setSavingConnectionProfile] = useState(false)
@@ -102,8 +90,6 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     savingDefaultSystemPrompt,
   } = useCharacterView(id)
 
-  const { creatingChat, handleCreateChat } = useChatCreation()
-
   const characterTagIds = character?.tags || []
 
   // Initialize data on mount
@@ -115,105 +101,18 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     fetchImageProfiles()
   }, [fetchCharacter, fetchProfiles, fetchUserControlledCharacters, fetchDefaultPartner, fetchImageProfiles, id])
 
-  // Handle chat dialog opening from query params (only initialize once)
+  // Open the chat modal when arriving via ?action=chat (initialize once)
   useEffect(() => {
     if (searchParams.get('action') === 'chat' && !chatDialogInitializedRef.current && character) {
       chatDialogInitializedRef.current = true
       setShowChatDialog(true)
       setOpenedFromQuery(true)
-
-      // Set default profile when opening from query
-      if (character.defaultConnectionProfileId) {
-        setSelectedProfileId(character.defaultConnectionProfileId)
-      } else if (profiles.length > 0) {
-        setSelectedProfileId(profiles[0].id)
-      }
-
-      // Set default user character if available
-      if (defaultPartnerId) {
-        setSelectedUserCharacterId(defaultPartnerId)
-      }
-
-      // Initialize timestamp config from character's default
-      if (character.defaultTimestampConfig) {
-        setTimestampConfig(character.defaultTimestampConfig)
-      }
-
-      // Initialize default image profile if set
-      if (defaultImageProfileId) {
-        setSelectedImageProfileId(defaultImageProfileId)
-      }
-
-      // Initialize default scenario if set
-      if (character.defaultScenarioId) {
-        setScenarioId(character.defaultScenarioId)
-      }
-
-      // Initialize default system prompt if set
-      if (character.defaultSystemPromptId) {
-        setSelectedSystemPromptId(character.defaultSystemPromptId)
-      }
     }
-  }, [searchParams, character, defaultImageProfileId, profiles, defaultPartnerId])
+  }, [searchParams, character])
 
   const handleStartChat = () => {
-    if (character?.defaultConnectionProfileId) {
-      setSelectedProfileId(character.defaultConnectionProfileId)
-    } else if (profiles.length === 0) {
-      showErrorToast('No connection profiles available. Please set up a profile first.')
-      return
-    } else {
-      setSelectedProfileId(profiles[0].id)
-    }
-
-    if (defaultPartnerId) {
-      setSelectedUserCharacterId(defaultPartnerId)
-    } else {
-      setSelectedUserCharacterId('')
-    }
-
-    // Initialize timestamp config from character's default if set
-    if (character?.defaultTimestampConfig) {
-      setTimestampConfig(character.defaultTimestampConfig)
-    } else {
-      setTimestampConfig(null)
-    }
-
-    // Initialize default image profile if set
-    setSelectedImageProfileId(defaultImageProfileId || null)
-
-    // Initialize default scenario if set
-    if (character?.defaultScenarioId) {
-      setScenarioId(character.defaultScenarioId)
-    } else {
-      setScenarioId(null)
-    }
-
-    // Initialize default system prompt if set
-    if (character?.defaultSystemPromptId) {
-      setSelectedSystemPromptId(character.defaultSystemPromptId)
-    } else {
-      setSelectedSystemPromptId(null)
-    }
-
+    setOpenedFromQuery(false)
     setShowChatDialog(true)
-  }
-
-  const handleCreateChatClick = async () => {
-    await handleCreateChat({
-      characterId: id,
-      characterName: character?.name,
-      selectedProfileId,
-      selectedUserCharacterId,
-      selectedImageProfileId,
-      selectedSystemPromptId: selectedSystemPromptId ?? undefined,
-      scenario,
-      scenarioId: scenarioId ?? undefined,
-      timestampConfig,
-      avatarGenerationEnabled,
-      outfitSelections: outfitSelections.length > 0 ? outfitSelections : undefined,
-    })
-    setShowChatDialog(false)
   }
 
   const handleConnectionProfileSave = async (profileId: string) => {
@@ -328,7 +227,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         )
 
       case 'descriptions':
-        return <DescriptionsTab characterId={id} />
+        return (
+          <DescriptionsTab
+            characterId={id}
+            overlayActive={character?.readPropertiesFromDocumentStore === true}
+          />
+        )
 
       default:
         return null
@@ -372,7 +276,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
       <div>
         <Link
           href="/aurora"
-          className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
+          className="mb-4 inline-flex items-center qt-label text-primary transition hover:text-primary/80"
         >
           ← Back to Characters
         </Link>
@@ -399,43 +303,14 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
         </EntityTabs>
       </div>
 
-      {/* Chat Creation Dialog */}
-      {showChatDialog && (
-        <ChatCreationDialog
+      {/* Chat Creation Modal */}
+      {showChatDialog && character && (
+        <NewChatModal
+          isOpen={true}
+          onClose={() => setShowChatDialog(false)}
           characterId={id}
-          characterName={character?.name}
-          profiles={profiles}
-          userControlledCharacters={userControlledCharacters}
-          systemPrompts={character?.systemPrompts}
-          selectedProfileId={selectedProfileId}
-          selectedUserCharacterId={selectedUserCharacterId}
-          selectedImageProfileId={selectedImageProfileId}
-          selectedSystemPromptId={selectedSystemPromptId}
-          scenario={scenario}
-          scenarioId={scenarioId}
-          scenarios={character?.scenarios}
-          timestampConfig={timestampConfig}
-          creatingChat={creatingChat}
+          characterName={character.name}
           openedFromQuery={openedFromQuery}
-          onProfileChange={setSelectedProfileId}
-          onUserCharacterChange={setSelectedUserCharacterId}
-          onImageProfileChange={setSelectedImageProfileId}
-          onSystemPromptChange={setSelectedSystemPromptId}
-          onScenarioChange={setScenario}
-          onScenarioIdChange={setScenarioId}
-          onTimestampConfigChange={setTimestampConfig}
-          avatarGenerationEnabled={avatarGenerationEnabled}
-          onAvatarGenerationChange={setAvatarGenerationEnabled}
-          outfitSelections={outfitSelections}
-          onOutfitSelectionsChange={setOutfitSelections}
-          onCancel={() => {
-            if (openedFromQuery) {
-              window.location.href = '/aurora'
-            } else {
-              setShowChatDialog(false)
-            }
-          }}
-          onCreateChat={handleCreateChatClick}
         />
       )}
 
@@ -446,6 +321,10 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           characterName={character?.name || 'Character'}
           profiles={profiles}
           defaultConnectionProfileId={character?.defaultConnectionProfileId}
+          vaultAvailable={
+            !!character?.readPropertiesFromDocumentStore &&
+            !!character?.characterDocumentMountPointId
+          }
           onClose={() => setShowOptimizerModal(false)}
           onApplied={() => {
             fetchCharacter()

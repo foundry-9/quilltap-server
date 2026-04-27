@@ -16,7 +16,7 @@ jest.mock('@/lib/logger', () => ({
 
 describe('buildTextBlockInstructions', () => {
   it('returns empty string when all tools explicitly disabled', () => {
-    const result = buildTextBlockInstructions({ memorySearch: false })
+    const result = buildTextBlockInstructions({ search: false })
     expect(result).toBe('')
   })
 
@@ -27,14 +27,14 @@ describe('buildTextBlockInstructions', () => {
     expect(result).toContain('to="')
   })
 
-  it('includes memory search by default (unless explicitly false)', () => {
-    // memorySearch !== false means it's included by default (same as pseudo-tool pattern)
+  it('includes search by default (unless explicitly false)', () => {
+    // search !== false means it's included by default (same as pseudo-tool pattern)
     const result = buildTextBlockInstructions({})
-    expect(result).toContain('Memory Search')
-    expect(result).toContain('[[SEARCH_MEMORIES')
+    expect(result).toContain('Search')
+    expect(result).toContain('[[SEARCH')
 
     // Explicitly disabled
-    const result2 = buildTextBlockInstructions({ memorySearch: false })
+    const result2 = buildTextBlockInstructions({ search: false })
     expect(result2).toBe('')
   })
 
@@ -63,12 +63,6 @@ describe('buildTextBlockInstructions', () => {
     expect(result).toContain('[[RNG')
   })
 
-  it('includes file management docs when enabled', () => {
-    const result = buildTextBlockInstructions({ fileManagement: true })
-    expect(result).toContain('File Management')
-    expect(result).toContain('[[FILE_MANAGEMENT')
-  })
-
   it('includes project info docs when enabled', () => {
     const result = buildTextBlockInstructions({ projectInfo: true })
     expect(result).toContain('Project Info')
@@ -82,7 +76,7 @@ describe('buildTextBlockInstructions', () => {
   })
 
   it('includes format instructions header', () => {
-    const result = buildTextBlockInstructions({ whisper: true, memorySearch: true })
+    const result = buildTextBlockInstructions({ whisper: true, search: true })
     expect(result).toContain('Available Tools')
     expect(result).toContain('Marker Format')
     expect(result).toContain('Self-closing')
@@ -92,7 +86,7 @@ describe('buildTextBlockInstructions', () => {
   it('includes all enabled tools in one output', () => {
     const options: TextBlockPromptOptions = {
       whisper: true,
-      memorySearch: true,
+      search: true,
       imageGeneration: true,
       webSearch: true,
       state: true,
@@ -101,7 +95,7 @@ describe('buildTextBlockInstructions', () => {
     const result = buildTextBlockInstructions(options)
 
     expect(result).toContain('Whisper')
-    expect(result).toContain('Memory Search')
+    expect(result).toContain('Search')
     expect(result).toContain('Image Generation')
     expect(result).toContain('Web Search')
     expect(result).toContain('State Management')

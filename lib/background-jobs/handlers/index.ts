@@ -17,6 +17,9 @@ import { handleStoryBackgroundGeneration } from './story-background';
 import { handleChatDangerClassification } from './chat-danger-classification';
 import { handleSceneStateTracking } from './scene-state-tracking';
 import { handleCharacterAvatarGeneration } from './character-avatar';
+import { handleConversationRender } from './conversation-render';
+import { handleMemoryHousekeeping } from './memory-housekeeping';
+import { handleWardrobeOutfitAnnouncement } from './wardrobe-announcement';
 
 /**
  * Job handler function type
@@ -39,6 +42,9 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   CHAT_DANGER_CLASSIFICATION: handleChatDangerClassification,
   SCENE_STATE_TRACKING: handleSceneStateTracking,
   CHARACTER_AVATAR_GENERATION: handleCharacterAvatarGeneration,
+  CONVERSATION_RENDER: handleConversationRender,
+  MEMORY_HOUSEKEEPING: handleMemoryHousekeeping,
+  WARDROBE_OUTFIT_ANNOUNCEMENT: handleWardrobeOutfitAnnouncement,
 };
 
 /**
@@ -65,3 +71,6 @@ export { handleStoryBackgroundGeneration };
 export { handleChatDangerClassification };
 export { handleSceneStateTracking };
 export { handleCharacterAvatarGeneration };
+export { handleConversationRender };
+export { handleMemoryHousekeeping };
+export { handleWardrobeOutfitAnnouncement };

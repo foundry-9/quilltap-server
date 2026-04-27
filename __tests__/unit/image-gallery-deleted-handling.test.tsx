@@ -4,7 +4,17 @@
 
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { SWRConfig } from 'swr'
+import { swrFetcher } from '@/lib/swr-fetcher'
 import { ImageGallery } from '@/components/images/image-gallery'
+
+function renderGallery(ui: React.ReactElement) {
+  return render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, fetcher: swrFetcher }}>
+      {ui}
+    </SWRConfig>
+  )
+}
 
 // Mock the alert and toast utilities
 jest.mock('@/lib/alert', () => ({
@@ -73,7 +83,7 @@ describe('ImageGallery - Deleted Image Handling', () => {
 
   describe('Error detection', () => {
     it('should detect image load errors via onError handler', async () => {
-      render(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
+      renderGallery(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
 
       await waitFor(() => {
         expect(screen.getAllByRole('img')).toHaveLength(2)
@@ -91,7 +101,7 @@ describe('ImageGallery - Deleted Image Handling', () => {
     })
 
     it('should detect images with zero dimensions via onLoad handler', async () => {
-      render(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
+      renderGallery(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
 
       await waitFor(() => {
         expect(screen.getAllByRole('img')).toHaveLength(2)
@@ -110,7 +120,7 @@ describe('ImageGallery - Deleted Image Handling', () => {
     })
 
     it('should not show placeholder for successfully loaded images', async () => {
-      render(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
+      renderGallery(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
 
       await waitFor(() => {
         expect(screen.getAllByRole('img')).toHaveLength(2)
@@ -130,7 +140,7 @@ describe('ImageGallery - Deleted Image Handling', () => {
 
   describe('Cleanup functionality', () => {
     it('should reload images after cleanup', async () => {
-      render(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
+      renderGallery(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
 
       await waitFor(() => {
         expect(screen.getAllByRole('img')).toHaveLength(2)
@@ -164,7 +174,7 @@ describe('ImageGallery - Deleted Image Handling', () => {
       const { showConfirmation } = require('@/lib/alert')
       showConfirmation.mockResolvedValue(true)
 
-      render(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
+      renderGallery(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
 
       await waitFor(() => {
         expect(screen.getAllByRole('img')).toHaveLength(2)
@@ -184,7 +194,7 @@ describe('ImageGallery - Deleted Image Handling', () => {
     })
 
     it('should maintain separate state for multiple missing images', async () => {
-      render(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
+      renderGallery(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
 
       await waitFor(() => {
         expect(screen.getAllByRole('img')).toHaveLength(2)
@@ -209,7 +219,7 @@ describe('ImageGallery - Deleted Image Handling', () => {
         () => new Promise(() => {}) // Never resolves
       )
 
-      render(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
+      renderGallery(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
 
       expect(screen.getByText('Loading images...')).toBeInTheDocument()
     })
@@ -217,7 +227,7 @@ describe('ImageGallery - Deleted Image Handling', () => {
     it('should show error state on load failure', async () => {
       ;(global.fetch as jest.Mock).mockRejectedValue(new Error('Failed to load'))
 
-      render(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
+      renderGallery(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
 
       await waitFor(() => {
         expect(screen.getByText(/Error:/)).toBeInTheDocument()
@@ -230,7 +240,7 @@ describe('ImageGallery - Deleted Image Handling', () => {
         json: async () => ({ data: [] }),
       })
 
-      render(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
+      renderGallery(<ImageGallery tagType="CHARACTER" tagId="char-1" />)
 
       await waitFor(() => {
         expect(screen.getByText('No images found')).toBeInTheDocument()

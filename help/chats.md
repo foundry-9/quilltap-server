@@ -226,6 +226,12 @@ Quilltap can extract and store memories from your chats:
 
 See [Chat Settings](chat-settings.md) for memory configuration.
 
+### Mentioned Characters
+
+When the conversation invokes the name of a character who exists in your workspace but is not, at present, *in* the chat — a former companion, a notorious uncle, the upstairs maid — Quilltap quietly slips a *Characters Mentioned* dossier into the responding character's briefing. The dossier carries the absent party's name, any known aliases, pronouns, and their full description, so the speaker may refer to them with the easy familiarity of one who has read the social register, rather than improvising particulars on the spot.
+
+The mechanism is unobtrusive by design. It scans the conversation (including the running summary) for any of your characters' names or aliases as whole words, with case sensibly disregarded; the responding character themselves and every present participant are excluded, as is your own persona. If nothing matches — the most ordinary state of affairs — the section is omitted altogether and the prompt continues as it always did. The dossier is appended *after* the ordinary system-prompt budget is reconciled, so even on long, crowded chats where the main prompt is shortened to fit, the mentioned characters' particulars are never the casualty.
+
 ### Context Management
 
 For long conversations:
@@ -240,7 +246,7 @@ Use AI tools during chat:
 
 - **Image Generation** — Create images in conversation
 - **Web Search** — Access current information
-- **File Management** — Read and write files
+- **Scriptorium Document Tools** — Read, search, and write files in linked document stores
 - **Memory Search** — Find past conversations
 
 See [Using Tools](tools-usage.md) for tool details.

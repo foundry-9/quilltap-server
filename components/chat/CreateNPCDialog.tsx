@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import useSWR from 'swr'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 
 interface ConnectionProfile {
@@ -42,22 +43,34 @@ export default function CreateNPCDialog({
   const [systemPrompt, setSystemPrompt] = useState('')
   const [selectedConnectionProfileId, setSelectedConnectionProfileId] = useState<string | null>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
-  const [connectionProfiles, setConnectionProfiles] = useState<ConnectionProfile[]>([])
-  const [isLoading, setIsLoading] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Load connection profiles when dialog opens
+  const { data: profilesData, isLoading } = useSWR<{ profiles: ConnectionProfile[] }>(
+    isOpen ? '/api/v1/connection-profiles' : null
+  )
+  const connectionProfiles = profilesData?.profiles || []
+
+  // Auto-select first profile when data loads
   useEffect(() => {
-    if (isOpen) {
-      loadConnectionProfiles()
+    if (connectionProfiles.length > 0 && !selectedConnectionProfileId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream connectionProfiles changes (parent renders unconditionally)
+      setSelectedConnectionProfileId(connectionProfiles[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: only initialize once; don't re-run when selectedConnectionProfileId is set
+  }, [connectionProfiles])
+
+  // Load connection profiles when dialog opens and focus name input
+  useEffect(() => {
+    if (isOpen && !isLoading) {
       // Focus name input after loading
       setTimeout(() => {
         nameInputRef.current?.focus()
       }, 100)
-    } else {
-      // Reset state when dialog closes
+    } else if (!isOpen) {
+      // Reset state when dialog closes (modal-reset pattern)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset fires only on open; parent renders unconditionally
       setName('')
       setDescription('')
       setPhysicalDescription('')
@@ -66,7 +79,7 @@ export default function CreateNPCDialog({
       setSelectedConnectionProfileId(null)
       setAvatarFile(null)
     }
-  }, [isOpen])
+  }, [isOpen, isLoading])
 
   // Handle escape key to close dialog
   useEffect(() => {
@@ -89,35 +102,6 @@ export default function CreateNPCDialog({
       onClose()
     }
   }, [isCreating, onClose])
-
-  const loadConnectionProfiles = async () => {
-    setIsLoading(true)
-
-    try {
-      const response = await fetch('/api/v1/connection-profiles')
-
-      if (!response.ok) {
-        throw new Error('Failed to load connection profiles')
-      }
-
-      const profilesData = await response.json()
-      const loadedProfiles = profilesData.profiles || []
-
-      setConnectionProfiles(loadedProfiles)
-
-      // Auto-select first profile if available
-      if (loadedProfiles.length > 0) {
-        setSelectedConnectionProfileId(loadedProfiles[0].id)
-      }
-    } catch (error) {
-      console.error('[CreateNPCDialog] Error loading connection profiles', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      showErrorToast('Failed to load connection profiles')
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

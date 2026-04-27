@@ -231,6 +231,45 @@ describe('Cheap LLM Tasks Service', () => {
       expect(result.success).toBe(false)
       expect(result.error).toContain('No API key')
     })
+
+    it('caps significant candidates at HARD_CANDIDATE_CAP when LLM overshoots', async () => {
+      // LLM returns 12 significant + 2 non-significant; parser must return only 5.
+      const candidates = [
+        ...Array.from({ length: 12 }, (_, i) => ({
+          significant: true,
+          content: `Fact ${i}`,
+          summary: `Summary ${i}`,
+          keywords: ['k'],
+          importance: 0.6,
+        })),
+        { significant: false, content: 'noise', summary: 'noise', keywords: [], importance: 0.2 },
+        { significant: false, content: 'noise2', summary: 'noise2', keywords: [], importance: 0.2 },
+      ]
+
+      mockSendMessage.mockResolvedValue({
+        content: JSON.stringify(candidates),
+        usage: { promptTokens: 100, completionTokens: 500, totalTokens: 600 },
+      })
+
+      const result = await extractMemoryFromMessage(
+        'User message',
+        'Assistant message',
+        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
+        'TestChar',
+        undefined,
+        testSelection,
+        testUserId,
+        undefined,
+        undefined,
+        undefined,
+        128000 // large output budget would otherwise allow 16 candidates
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.result).toHaveLength(5)
+      // All returned candidates are significant
+      expect(result.result?.every(c => c.significant)).toBe(true)
+    })
   })
 
   describe('summarizeChat', () => {

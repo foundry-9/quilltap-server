@@ -25,7 +25,7 @@ const logger = createServiceLogger('ToolModeService')
  */
 export interface EnabledToolOptions {
   imageGeneration: boolean
-  memorySearch: boolean
+  search: boolean
   webSearch: boolean
 }
 
@@ -47,7 +47,7 @@ export function determineEnabledToolOptions(
 ): EnabledToolOptions {
   return {
     imageGeneration: !!imageProfileId,
-    memorySearch: true, // Always enable memory search
+    search: true, // Always enable search
     webSearch: allowWebSearch,
   }
 }
@@ -73,7 +73,6 @@ export interface TextBlockEnabledToolOptions extends EnabledToolOptions {
   whisper: boolean
   state: boolean
   rng: boolean
-  fileManagement: boolean
   projectInfo: boolean
   helpSearch: boolean
   helpSettings: boolean
@@ -98,12 +97,11 @@ export function determineTextBlockToolOptions(
 ): TextBlockEnabledToolOptions {
   return {
     imageGeneration: !!imageProfileId,
-    memorySearch: true,
+    search: true,
     webSearch: allowWebSearch,
     whisper: isMultiCharacter,
     state: true,
     rng: true,
-    fileManagement: hasProject,
     projectInfo: hasProject,
     helpSearch: !!helpToolsEnabled,
     helpSettings: !!helpToolsEnabled,
@@ -123,12 +121,11 @@ export function buildTextBlockSystemInstructions(
 ): string {
   const options: TextBlockPromptOptions = {
     whisper: enabledOptions.whisper,
-    memorySearch: enabledOptions.memorySearch,
+    search: enabledOptions.search,
     imageGeneration: enabledOptions.imageGeneration,
     webSearch: enabledOptions.webSearch,
     state: enabledOptions.state,
     rng: enabledOptions.rng,
-    fileManagement: enabledOptions.fileManagement,
     projectInfo: enabledOptions.projectInfo,
     helpSearch: enabledOptions.helpSearch,
     helpSettings: enabledOptions.helpSettings,

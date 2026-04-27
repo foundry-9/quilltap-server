@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { showSuccessToast, showErrorToast, showWarningToast, showInfoToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
-import type { FileWriteApprovalState, SudoApprovalState, WorkspaceAcknowledgementState } from './useModalState'
+import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
+import type { SudoApprovalState, WorkspaceAcknowledgementState } from './useModalState'
 
 export interface PendingToolCall {
   id: string
@@ -48,14 +49,6 @@ interface SSEEvent {
     name: string
     success: boolean
     result?: any
-    requiresPermission?: boolean
-    pendingWrite?: {
-      filename?: string
-      content?: string
-      mimeType?: string
-      folderPath?: string
-      projectId?: string | null
-    }
     requiresSudoApproval?: boolean
     pendingSudoCommand?: {
       command: string
@@ -111,12 +104,13 @@ interface UseSSEStreamingParams {
   scrollOnUserMessage: () => void
   scrollOnStreamComplete: () => void
   setAttachedFiles: (files: any[]) => void
-  inputRef: React.RefObject<HTMLTextAreaElement | null>
-  setFileWriteApprovalState: (state: FileWriteApprovalState | null) => void
+  inputRef: React.RefObject<ComposerEditorHandle | null>
   setSudoApprovalState: (state: SudoApprovalState | null) => void
   setWorkspaceAcknowledgementState: (state: WorkspaceAcknowledgementState | null) => void
   getFirstCharacterParticipant: () => import('../types').Participant | undefined
   setPauseState: (paused: boolean) => void
+  /** Called when a tool result arrives, allowing the page to react to specific tools */
+  onToolResult?: (name: string, success: boolean, result: unknown) => void
 }
 
 export function useSSEStreaming({
@@ -136,11 +130,11 @@ export function useSSEStreaming({
   scrollOnStreamComplete,
   setAttachedFiles,
   inputRef,
-  setFileWriteApprovalState,
   setSudoApprovalState,
   setWorkspaceAcknowledgementState,
   getFirstCharacterParticipant,
   setPauseState,
+  onToolResult: onToolResultCallback,
 }: UseSSEStreamingParams) {
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
@@ -151,6 +145,45 @@ export function useSSEStreaming({
   const [responseStatus, setResponseStatus] = useState<ResponseStatus | null>(null)
 
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  // rAF-coalesced streaming content updates. SSE chunks can arrive faster
+  // than React can render them — in long multi-character chains that burst
+  // of per-chunk state updates has tripped React's update-depth limit. We
+  // buffer the latest accumulated content in a ref and flush at most once
+  // per animation frame, capping the render rate at the display refresh
+  // rate regardless of chunk cadence.
+  const streamingContentBufferRef = useRef<string>('')
+  const streamingContentRafRef = useRef<number | null>(null)
+
+  const flushStreamingContent = useCallback(() => {
+    streamingContentRafRef.current = null
+    setStreamingContent(streamingContentBufferRef.current)
+  }, [])
+
+  const scheduleStreamingContent = useCallback((content: string) => {
+    streamingContentBufferRef.current = content
+    if (streamingContentRafRef.current === null) {
+      streamingContentRafRef.current = requestAnimationFrame(flushStreamingContent)
+    }
+  }, [flushStreamingContent])
+
+  const resetStreamingContent = useCallback(() => {
+    if (streamingContentRafRef.current !== null) {
+      cancelAnimationFrame(streamingContentRafRef.current)
+      streamingContentRafRef.current = null
+    }
+    streamingContentBufferRef.current = ''
+    setStreamingContent('')
+  }, [])
+
+  // Cancel any pending rAF on unmount to avoid setting state after teardown.
+  useEffect(() => {
+    return () => {
+      if (streamingContentRafRef.current !== null) {
+        cancelAnimationFrame(streamingContentRafRef.current)
+      }
+    }
+  }, [])
 
   // Focus input after response completes
   const focusInput = useCallback(() => {
@@ -182,6 +215,13 @@ export function useSSEStreaming({
     const decoder = new TextDecoder()
     let fullContent = ''
     let inChain = false
+    // Tracks whether the "streaming started" flags have been flipped for the
+    // current turn. The flags are idempotent after the first content chunk,
+    // so re-firing them on every chunk just pressures the reconciler — in
+    // long multi-character chains, that pressure has tipped React past its
+    // update-depth limit. Reset on turnStart so each chained turn transitions
+    // cleanly.
+    let hasStartedStreaming = false
 
     while (true) {
       const { done, value } = await reader.read()
@@ -208,9 +248,12 @@ export function useSSEStreaming({
         // Handle content chunks
         if (data.content) {
           fullContent += data.content
-          setWaitingForResponse(false)
-          setStreaming(true)
-          setStreamingContent(fullContent)
+          if (!hasStartedStreaming) {
+            setWaitingForResponse(false)
+            setStreaming(true)
+            hasStartedStreaming = true
+          }
+          scheduleStreamingContent(fullContent)
         }
 
         // Handle errors
@@ -248,7 +291,8 @@ export function useSSEStreaming({
         if (data.turnStart) {
           inChain = true
           fullContent = ''
-          setStreamingContent('')
+          hasStartedStreaming = false
+          resetStreamingContent()
           setStreaming(false)
           setWaitingForResponse(true)
           if (data.participantId) {
@@ -284,7 +328,7 @@ export function useSSEStreaming({
     }
 
     return fullContent
-  }, [])
+  }, [scheduleStreamingContent, resetStreamingContent])
 
   // Handle common error extraction
   const extractErrorMessage = useCallback((err: unknown): string => {
@@ -337,15 +381,11 @@ export function useSSEStreaming({
     setSending(true)
     setWaitingForResponse(true)
     setStreaming(false)
-    setStreamingContent('')
+    resetStreamingContent()
     const firstCharParticipant = getFirstCharacterParticipant()
     // Track the current responding participant across chained turns (mutable for closures)
     let currentParticipantId = firstCharParticipant?.id || null
     setRespondingParticipantId(currentParticipantId)
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto'
-    }
-
     // Build display content with file indicators
     const displayContent = messageAttachments.length > 0
       ? `${userMessage}${userMessage ? '\n' : ''}[Attached: ${messageAttachments.map(f => f.filename).join(', ')}]`
@@ -435,28 +475,13 @@ export function useSSEStreaming({
           }
         },
         onToolResult: (data) => {
-          const { index, name, success, result, requiresPermission, pendingWrite, requiresSudoApproval, pendingSudoCommand, requiresWorkspaceAcknowledgement } = data.toolResult!
+          const { index, name, success, result, requiresSudoApproval, pendingSudoCommand, requiresWorkspaceAcknowledgement } = data.toolResult!
 
           setPendingToolCalls(prev => prev.map((tc, idx) =>
             (index !== undefined && idx === index) || (index === undefined && tc.name === name)
               ? { ...tc, status: success ? 'success' : 'error', result }
               : tc
           ))
-
-          if (requiresPermission && pendingWrite) {
-            setFileWriteApprovalState({
-              isOpen: false,
-              pendingWrite: {
-                filename: pendingWrite.filename || 'unknown',
-                content: pendingWrite.content,
-                mimeType: pendingWrite.mimeType || 'text/plain',
-                folderPath: pendingWrite.folderPath || '/',
-                projectId: pendingWrite.projectId ?? chat?.projectId ?? null,
-              },
-              projectName: chat?.projectName ?? undefined,
-              respondingParticipantId: respondingParticipantId ?? undefined,
-            })
-          }
 
           if (requiresSudoApproval && pendingSudoCommand) {
             setSudoApprovalState({
@@ -501,11 +526,14 @@ export function useSSEStreaming({
               showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
             }
           }
+
+          // Notify the page about tool results (for Document Mode, etc.)
+          onToolResultCallback?.(name, success, result)
         },
         onDone: async (fullContent, data) => {
           if (data.emptyResponse) {
             showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
-            setStreamingContent('')
+            resetStreamingContent()
             setStreaming(false)
             setWaitingForResponse(false)
             setSending(false)
@@ -527,7 +555,7 @@ export function useSSEStreaming({
             isSilentMessage: data.isSilentMessage || undefined,
           }
           setMessages((prev) => [...prev, assistantMessage])
-          setStreamingContent('')
+          resetStreamingContent()
           setStreaming(false)
           setWaitingForResponse(false)
           setRespondingParticipantId(null)
@@ -557,24 +585,24 @@ export function useSSEStreaming({
             isSilentMessage: data.isSilentMessage || undefined,
           }
           setMessages((prev) => [...prev, assistantMessage])
-          setStreamingContent('')
+          resetStreamingContent()
           setStreaming(false)
         },
         onTurnStart: (event) => {
           currentParticipantId = event.participantId
           setRespondingParticipantId(event.participantId)
-          setStreamingContent('')
+          resetStreamingContent()
           setWaitingForResponse(true)
           setStreaming(false)
         },
         onTurnComplete: async (event) => {
-          setStreamingContent('')
+          resetStreamingContent()
           setStreaming(false)
           setWaitingForResponse(false)
           await fetchChat()
         },
         onChainComplete: async (event) => {
-          setStreamingContent('')
+          resetStreamingContent()
           setStreaming(false)
           setWaitingForResponse(false)
           setRespondingParticipantId(null)
@@ -588,7 +616,7 @@ export function useSSEStreaming({
       const isAbort = err instanceof Error && err.name === 'AbortError'
 
       if (isAbort) {
-        setStreamingContent('')
+        resetStreamingContent()
         setStreaming(false)
         setWaitingForResponse(false)
         setRespondingParticipantId(null)
@@ -602,7 +630,7 @@ export function useSSEStreaming({
 
         // Don't remove the user message — the backend already saved it.
         // Re-fetch the chat to replace the temp message with the real one.
-        setStreamingContent('')
+        resetStreamingContent()
         setStreaming(false)
         setWaitingForResponse(false)
         setRespondingParticipantId(null)
@@ -616,7 +644,8 @@ export function useSSEStreaming({
       setResponseStatus(null)
       focusInput()
     }
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, inputRef, setFileWriteApprovalState, setSudoApprovalState, setWorkspaceAcknowledgementState, readSSEStream, extractErrorMessage, focusInput])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, setSudoApprovalState, setWorkspaceAcknowledgementState, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
@@ -643,7 +672,7 @@ export function useSSEStreaming({
 
     setWaitingForResponse(true)
     setStreaming(false)
-    setStreamingContent('')
+    resetStreamingContent()
     // Track the current responding participant across chained turns (mutable for closures)
     let currentParticipantId = participantId
     setRespondingParticipantId(participantId)
@@ -717,18 +746,18 @@ export function useSSEStreaming({
         onTurnStart: (event) => {
           currentParticipantId = event.participantId
           setRespondingParticipantId(event.participantId)
-          setStreamingContent('')
+          resetStreamingContent()
           setWaitingForResponse(true)
           setStreaming(false)
         },
         onTurnComplete: async (event) => {
-          setStreamingContent('')
+          resetStreamingContent()
           setStreaming(false)
           setWaitingForResponse(false)
           await fetchChat()
         },
         onChainComplete: async (event) => {
-          setStreamingContent('')
+          resetStreamingContent()
           setStreaming(false)
           setWaitingForResponse(false)
           setRespondingParticipantId(null)
@@ -747,7 +776,7 @@ export function useSSEStreaming({
     } finally {
       setStreaming(false)
       setWaitingForResponse(false)
-      setStreamingContent('')
+      resetStreamingContent()
       setRespondingParticipantId(null)
       setResponseStatus(null)
       abortControllerRef.current = null
@@ -757,7 +786,7 @@ export function useSSEStreaming({
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat])
+  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {
@@ -776,8 +805,8 @@ export function useSSEStreaming({
     if (streamingContent) {
       showInfoToast('Response stopped - chat paused')
     }
-    setStreamingContent('')
-  }, [streamingContent, isMultiChar, setPauseState, setRespondingParticipantId])
+    resetStreamingContent()
+  }, [streamingContent, isMultiChar, setPauseState, setRespondingParticipantId, resetStreamingContent])
 
   return {
     sending,

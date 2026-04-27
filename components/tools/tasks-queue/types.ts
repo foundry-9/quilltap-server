@@ -11,6 +11,8 @@ export interface QueueStats {
 export interface ProcessorStatus {
   running: boolean
   processing: boolean
+  embeddingInFlight: number
+  embeddingConcurrency: number
 }
 
 export interface JobDetail {

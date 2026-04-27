@@ -114,6 +114,17 @@ Each character card includes a **connection profile dropdown** that lets you cha
 
 This makes switching models the fastest possible action — no need to open a settings modal.
 
+### System Prompt Dropdown
+
+Immediately beneath the connection profile selector, each LLM-controlled character card also carries a **system prompt dropdown**. If the character has more than one named system prompt (defined on the character's edit page), this lets you pick which one the LLM should speak from — without leaving the chat:
+
+- **Use default prompt** — the entry marked as default on the character takes the stage
+- **Every named prompt** the character carries appears in the list, with the default marked
+- **Effect is immediate** — the next turn (nudge, auto-response, or swipe) uses the newly chosen prompt
+- Only shown for LLM-controlled characters that have at least one named prompt on file
+
+If you want a character to keep the same costume but change their register for an afternoon — swap them from their "Formal" variant to their "Casual" one here, and the switch takes effect with the very next line they speak.
+
 ### Status Indicators
 
 **Control Mode:**
@@ -199,6 +210,16 @@ Controls auto-response flow:
 - Most useful for all-LLM chats
 
 ## Managing Participants
+
+### Announcements from the Host
+
+Whenever a character is added to the chat, removed from it, or switched between **active**, **silent**, and **absent** states, the Host steps forward and announces the change in the conversation as a synthetic message — visible to you and to every other LLM character in the chat. Add announcements include the new arrival's avatar and either their **identity** (drawn from `identity.md` in the character's vault, when one exists) or their **description** field as a fallback — identity preferred, description used only when there is no vault identity to draw upon. Remove and state-switch announcements are text-only.
+
+Characters whose **System Transparency** is off do not see the Host's messages — the same Staff-filter rule that already hides Lantern, Aurora, Librarian, and Prospero announcements from opaque characters applies here too. You always see them.
+
+### Announcements from Prospero
+
+When you reassign a participant to a different connection profile from the sidebar — swapping the LLM that drives a particular character — Prospero, master of the agentic and tool-using systems, steps forward and announces the change so the rest of the room is in on the news. The note records the participant's name, the new profile, and the one it replaced. Like the Host's announcements, Prospero's messages are filtered out of the conversation handed to characters whose **System Transparency** is off; you always see them.
 
 ### Adding Characters
 

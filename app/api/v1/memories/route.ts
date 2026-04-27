@@ -9,11 +9,19 @@
  *
  * Actions (via ?action= query parameter):
  * - POST ?action=search - Semantic/keyword search (characterId in body)
- * - POST ?action=housekeep - Run memory cleanup (characterId in body)
+ * - POST ?action=housekeep - Run memory cleanup synchronously (characterId in body)
+ * - POST ?action=housekeep-sweep - Enqueue a background sweep across every character owned by the user
  * - POST ?action=embeddings - Generate missing embeddings (characterId in body)
+ * - POST ?action=housekeeping-config - Update auto-housekeeping settings
+ * - POST ?action=extraction-limits-config - Update per-hour extraction rate limits
+ * - POST ?action=backfill-embeddings - Enqueue embedding-generate jobs for memories missing an embedding
  * - PUT ?action=embeddings - Rebuild vector index (characterId in body)
  * - GET ?action=housekeep&characterId= - Get housekeeping preview
  * - GET ?action=embeddings&characterId= - Get embedding status
+ * - GET ?action=housekeeping-config - Read current auto-housekeeping settings
+ * - GET ?action=extraction-limits-config - Read current extraction rate limits
+ * - GET ?action=backfill-embeddings - Report progress of the embedding backfill
+ * - GET ?action=character-memory-counts - List user's characters with memory counts (for housekeeping UI)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,6 +33,8 @@ import { createMemoryWithEmbedding, searchMemoriesSemantic, generateMissingEmbed
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
+import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
+import { enqueueEmbeddingGenerate, enqueueMemoryHousekeeping } from '@/lib/background-jobs/queue-service';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -80,6 +90,28 @@ const rebuildIndexSchema = z.object({
   }),
 });
 
+const housekeepingConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  perCharacterCap: z.number().int().min(100).max(100000).optional(),
+  perCharacterCapOverrides: z.record(z.string(), z.number().int().positive()).optional(),
+  autoMergeSimilarThreshold: z.number().min(0).max(1).optional(),
+  mergeSimilar: z.boolean().optional(),
+});
+
+const extractionLimitsConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  maxPerHour: z.number().int().min(1).max(10000).optional(),
+  softStartFraction: z.number().min(0).max(1).optional(),
+  softFloor: z.number().min(0).max(1).optional(),
+});
+
+const backfillStartSchema = z.object({
+  /** Restrict backfill to one character; omit to backfill all of user's characters. */
+  characterId: z.uuid().optional(),
+  /** Batch size per call (caller may poll repeatedly for large backlogs). */
+  batchSize: z.number().int().min(1).max(2000).prefault(500),
+});
+
 // =============================================================================
 // GET /api/v1/memories - List memories
 // =============================================================================
@@ -98,6 +130,22 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'embeddings') {
     return handleEmbeddingStatus(req, { user, repos }, characterId);
+  }
+
+  if (action === 'housekeeping-config') {
+    return handleReadHousekeepingConfig(req, { user, repos });
+  }
+
+  if (action === 'extraction-limits-config') {
+    return handleReadExtractionLimitsConfig(req, { user, repos });
+  }
+
+  if (action === 'backfill-embeddings') {
+    return handleBackfillProgress(req, { user, repos });
+  }
+
+  if (action === 'character-memory-counts') {
+    return handleCharacterMemoryCounts(req, { user, repos });
   }
 
   // Standard list operations - require a filter
@@ -144,8 +192,24 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     return handleHousekeep(req, { user, repos });
   }
 
+  if (action === 'housekeep-sweep') {
+    return handleHousekeepSweep(req, { user });
+  }
+
   if (action === 'embeddings') {
     return handleGenerateEmbeddings(req, { user, repos });
+  }
+
+  if (action === 'housekeeping-config') {
+    return handleWriteHousekeepingConfig(req, { user, repos });
+  }
+
+  if (action === 'extraction-limits-config') {
+    return handleWriteExtractionLimitsConfig(req, { user, repos });
+  }
+
+  if (action === 'backfill-embeddings') {
+    return handleBackfillStart(req, { user, repos });
   }
 
   // Default: Create memory
@@ -420,6 +484,13 @@ async function handleCreateMemory(
     { userId: user.id, skipGate: validatedData.skipGate }
   );
 
+  if (!memory) {
+    // Embedding generation failed after retry; no row was written because a
+    // memory without an embedding would be invisible to every future gate
+    // check. Surface this to the client so the UI can show the real reason.
+    return serverError('Failed to generate embedding for memory — no row was created. Check the configured embedding profile.');
+  }
+
   // Schedule vocabulary refit for BUILTIN profiles (debounced)
   // This runs in the background and doesn't block the response
   scheduleRefit(user.id).catch((error) => {
@@ -464,15 +535,8 @@ async function handleSearch(
     tagDetails: result.memory.tags.map((tagId: string) => tagMap.get(tagId)).filter(Boolean),
   }));
 
-  // Update access times (fire and forget)
-  Promise.all(
-    searchResults.map((r: any) => repos.memories.updateAccessTime(characterId, r.memory.id))
-  ).catch((err) =>
-    logger.warn('[Memories API] Failed to update access times after search', {
-      characterId,
-      error: err instanceof Error ? err.message : String(err),
-    })
-  );
+  // Access times are bumped inside searchMemoriesSemantic (single source of
+  // truth for retrieval-time access updates).
 
   return NextResponse.json({
     memories: memoriesWithTags,
@@ -506,11 +570,7 @@ async function handleHousekeep(
     userId: user.id,
   };
 
-  // Get embedding profile from chat settings
-  const chatSettings = await repos.chatSettings.findByUserId(user.id);
-  if (chatSettings?.cheapLLMSettings?.embeddingProfileId) {
-    options.embeddingProfileId = chatSettings.cheapLLMSettings.embeddingProfileId;
-  }
+  // Embedding profile is always the system default — no per-chat override
 
   // Run housekeeping (or preview if dryRun)
   const result = options.dryRun
@@ -531,6 +591,26 @@ async function handleHousekeep(
       details: options.dryRun ? result.details : undefined,
     },
   });
+}
+
+async function handleHousekeepSweep(
+  _req: NextRequest,
+  { user }: { user: { id: string } }
+) {
+  try {
+    const jobId = await enqueueMemoryHousekeeping(user.id, { reason: 'manual' });
+    logger.info('[Memories API] Enqueued manual housekeeping sweep', {
+      userId: user.id,
+      jobId,
+    });
+    return NextResponse.json({ success: true, jobId });
+  } catch (error) {
+    logger.error('[Memories API] Failed to enqueue housekeeping sweep', {
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serverError('Failed to enqueue housekeeping sweep');
+  }
 }
 
 async function handleHousekeepPreview(
@@ -577,11 +657,7 @@ async function handleHousekeepPreview(
     options.mergeSimilar = searchParams.get('mergeSimilar') === 'true';
   }
 
-  // Get embedding profile from chat settings
-  const chatSettings = await repos.chatSettings.findByUserId(user.id);
-  if (chatSettings?.cheapLLMSettings?.embeddingProfileId) {
-    options.embeddingProfileId = chatSettings.cheapLLMSettings.embeddingProfileId;
-  }
+  // Embedding profile is always the system default — no per-chat override
 
   const preview = await getHousekeepingPreview(characterId, options);
 
@@ -595,6 +671,235 @@ async function handleHousekeepPreview(
       totalAfter: preview.totalAfter,
       details: preview.details,
     },
+  });
+}
+
+async function handleReadHousekeepingConfig(
+  _req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const settings = await repos.chatSettings.findByUserId(user.id);
+  const autoHousekeepingSettings = settings?.autoHousekeepingSettings ?? {
+    enabled: false,
+    perCharacterCap: 2000,
+    perCharacterCapOverrides: {},
+    autoMergeSimilarThreshold: 0.90,
+    mergeSimilar: false,
+  };
+  return NextResponse.json({ success: true, settings: autoHousekeepingSettings });
+}
+
+async function handleWriteHousekeepingConfig(
+  req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json();
+  const parsed = housekeepingConfigSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+
+  const existing = await repos.chatSettings.findByUserId(user.id);
+  const currentSettings = existing?.autoHousekeepingSettings ?? {
+    enabled: false,
+    perCharacterCap: 2000,
+    perCharacterCapOverrides: {},
+    autoMergeSimilarThreshold: 0.90,
+    mergeSimilar: false,
+  };
+
+  const merged = {
+    enabled: parsed.data.enabled ?? currentSettings.enabled,
+    perCharacterCap: parsed.data.perCharacterCap ?? currentSettings.perCharacterCap,
+    perCharacterCapOverrides: parsed.data.perCharacterCapOverrides ?? currentSettings.perCharacterCapOverrides,
+    autoMergeSimilarThreshold: parsed.data.autoMergeSimilarThreshold ?? currentSettings.autoMergeSimilarThreshold,
+    mergeSimilar: parsed.data.mergeSimilar ?? currentSettings.mergeSimilar,
+  };
+
+  await repos.chatSettings.updateForUser(user.id, {
+    autoHousekeepingSettings: merged,
+  });
+
+  logger.info('[Memories API] Auto-housekeeping settings updated', {
+    userId: user.id,
+    enabled: merged.enabled,
+    perCharacterCap: merged.perCharacterCap,
+  });
+
+  return NextResponse.json({ success: true, settings: merged });
+}
+
+async function handleReadExtractionLimitsConfig(
+  _req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const settings = await repos.chatSettings.findByUserId(user.id);
+  const memoryExtractionLimits = settings?.memoryExtractionLimits ?? {
+    enabled: false,
+    maxPerHour: 20,
+    softStartFraction: 0.7,
+    softFloor: 0.7,
+  };
+  return NextResponse.json({ success: true, settings: memoryExtractionLimits });
+}
+
+async function handleWriteExtractionLimitsConfig(
+  req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json();
+  const parsed = extractionLimitsConfigSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+
+  const existing = await repos.chatSettings.findByUserId(user.id);
+  const currentSettings = existing?.memoryExtractionLimits ?? {
+    enabled: false,
+    maxPerHour: 20,
+    softStartFraction: 0.7,
+    softFloor: 0.7,
+  };
+
+  const merged = {
+    enabled: parsed.data.enabled ?? currentSettings.enabled,
+    maxPerHour: parsed.data.maxPerHour ?? currentSettings.maxPerHour,
+    softStartFraction: parsed.data.softStartFraction ?? currentSettings.softStartFraction,
+    softFloor: parsed.data.softFloor ?? currentSettings.softFloor,
+  };
+
+  await repos.chatSettings.updateForUser(user.id, {
+    memoryExtractionLimits: merged,
+  });
+
+  logger.info('[Memories API] Extraction rate limits updated', {
+    userId: user.id,
+    enabled: merged.enabled,
+    maxPerHour: merged.maxPerHour,
+  });
+
+  return NextResponse.json({ success: true, settings: merged });
+}
+
+async function handleCharacterMemoryCounts(
+  _req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const characters = await repos.characters.findByUserId(user.id);
+  const results = await Promise.all(
+    characters.map(async (c: { id: string; name: string }) => ({
+      id: c.id,
+      name: c.name,
+      memoryCount: await repos.memories.countByCharacterId(c.id),
+    }))
+  );
+  // Sort by memory count descending so busy characters surface first
+  results.sort((a, b) => b.memoryCount - a.memoryCount);
+  return NextResponse.json({ success: true, characters: results });
+}
+
+async function handleBackfillProgress(
+  _req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  // Count memories still missing embeddings (across this user's characters)
+  const remaining = await repos.memories.countWithoutEmbedding();
+
+  // Count in-flight EMBEDDING_GENERATE jobs for this user
+  const [pending, processing] = await Promise.all([
+    repos.backgroundJobs.findByUserId(user.id, 'PENDING'),
+    repos.backgroundJobs.findByUserId(user.id, 'PROCESSING'),
+  ]);
+  const isEmbeddingMemory = (job: { type: string; payload: unknown }) => {
+    if (job.type !== 'EMBEDDING_GENERATE') return false;
+    const payload = job.payload as { entityType?: string } | undefined;
+    return payload?.entityType === 'MEMORY';
+  };
+  const inFlight = pending.filter(isEmbeddingMemory).length + processing.filter(isEmbeddingMemory).length;
+
+  return NextResponse.json({
+    success: true,
+    progress: {
+      remaining,
+      inFlight,
+    },
+  });
+}
+
+async function handleBackfillStart(
+  req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json().catch(() => ({}));
+  const parsed = backfillStartSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  const { characterId, batchSize } = parsed.data;
+
+  // Verify ownership if targeting a specific character
+  if (characterId) {
+    const character = await repos.characters.findById(characterId);
+    if (!character) {
+      return notFound('Character');
+    }
+  }
+
+  // Find memories missing embeddings (up to batchSize)
+  const missing = await repos.memories.findIdsWithoutEmbedding({ characterId, limit: batchSize });
+  if (missing.length === 0) {
+    return NextResponse.json({
+      success: true,
+      enqueued: 0,
+      remaining: 0,
+      message: 'No memories missing embeddings — nothing to backfill.',
+    });
+  }
+
+  // Resolve the user's active embedding profile — the plan assumes a single
+  // profile is in use per instance, so we just use the default.
+  const profile = await getDefaultEmbeddingProfile(user.id);
+  if (!profile) {
+    return badRequest(
+      'No default embedding profile is configured. Set one in the Commonplace Book tab before running the backfill.'
+    );
+  }
+
+  let enqueued = 0;
+  for (const memory of missing) {
+    try {
+      await enqueueEmbeddingGenerate(user.id, {
+        entityType: 'MEMORY',
+        entityId: memory.id,
+        characterId: memory.characterId,
+        profileId: profile.id,
+      });
+      enqueued++;
+    } catch (error) {
+      logger.warn('[Memories API] Failed to enqueue backfill embedding job', {
+        memoryId: memory.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const remaining = await repos.memories.countWithoutEmbedding(characterId);
+
+  logger.info('[Memories API] Embedding backfill batch enqueued', {
+    userId: user.id,
+    characterId: characterId ?? '(all)',
+    enqueued,
+    remaining,
+  });
+
+  return NextResponse.json({
+    success: true,
+    enqueued,
+    remaining,
+    message:
+      remaining > 0
+        ? `Enqueued ${enqueued} embedding jobs. ${remaining} memories still missing embeddings — run again to continue.`
+        : `Enqueued ${enqueued} embedding jobs. All memories are now accounted for.`,
   });
 }
 

@@ -6,7 +6,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext } from '@/lib/chat/tool-executor'
+import { detectToolCalls, executeToolCallWithContext, type ToolExecutionContext, type LoadedMemoriesContext } from '@/lib/chat/tool-executor'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ToolMessage, GeneratedImage, ToolProcessingResult } from './types'
 import { encodeStatusEvent } from './streaming.service'
@@ -75,45 +75,6 @@ export async function processToolCalls(
           })
         }
       }
-    }
-
-    // Handle permission-required case differently - don't add to toolMessages yet
-    // The frontend will show a prompt, and when user approves/denies,
-    // the /api/files/write-permission/complete endpoint will handle the rest
-    if (toolResult.requiresPermission) {
-      logger.info('Tool requires permission, sending pending status to frontend', {
-        toolName: toolResult.toolName,
-        pendingWrite: toolResult.pendingWrite,
-      })
-
-      // Send SSE event for frontend to show permission prompt
-      // Don't add to toolMessages - we don't want LLM to see an error yet
-      controller.enqueue(
-        encoder.encode(
-          `data: ${JSON.stringify({
-            toolResult: {
-              index: toolIndex,
-              name: toolResult.toolName,
-              success: false,
-              requiresPermission: true,
-              pendingWrite: toolResult.pendingWrite,
-              status: 'pending_approval',
-            },
-          })}\n\n`
-        )
-      )
-
-      // Add a placeholder message indicating we're waiting for approval
-      // This prevents the LLM from thinking the tool errored
-      toolMessages.push({
-        toolName: toolResult.toolName,
-        success: true, // Mark as success so LLM doesn't see it as an error
-        content: 'File write request sent to user for approval. Waiting for response.',
-        arguments: toolCall.arguments,
-        callId: toolCall.callId,
-        metadata: toolResult.metadata,
-      })
-      continue
     }
 
     // Handle sudo approval requirement
@@ -307,6 +268,7 @@ export function createToolContext(
   embeddingProfileId?: string,
   projectId?: string | null,
   browserUserAgent?: string,
+  loadedMemories?: LoadedMemoriesContext,
 ): ToolExecutionContext {
   return {
     chatId,
@@ -317,5 +279,6 @@ export function createToolContext(
     callingParticipantId: characterParticipantId,
     projectId: projectId || undefined,
     browserUserAgent,
+    loadedMemories,
   }
 }

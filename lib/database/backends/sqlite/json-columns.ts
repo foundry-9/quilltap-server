@@ -293,24 +293,29 @@ export function jsonArrayLength(column: string): string {
 // ============================================================================
 
 /**
- * Convert a number[] embedding to a Float32 BLOB Buffer for compact SQLite storage.
+ * Convert an embedding to a Float32 BLOB Buffer for compact SQLite storage.
  * Float32 uses 4 bytes per dimension vs ~8-10 bytes per dimension in JSON text.
+ * Accepts either number[] (legacy) or Float32Array (preferred).
  */
-export function embeddingToBlob(embedding: number[]): Buffer {
-  const float32 = new Float32Array(embedding);
+export function embeddingToBlob(embedding: ArrayLike<number>): Buffer {
+  const float32 = embedding instanceof Float32Array
+    ? embedding
+    : new Float32Array(Array.from(embedding as ArrayLike<number>));
   return Buffer.from(float32.buffer, float32.byteOffset, float32.byteLength);
 }
 
 /**
- * Convert a Float32 BLOB Buffer back to a number[] embedding.
+ * Convert a Float32 BLOB Buffer back to a Float32Array embedding.
+ * Returns a fresh Float32Array (copy) so it outlives the source Buffer —
+ * the Buffer's underlying ArrayBuffer may be pooled/reused by Node.
  */
-export function blobToEmbedding(blob: Buffer): number[] {
-  const float32 = new Float32Array(
+export function blobToEmbedding(blob: Buffer): Float32Array {
+  const view = new Float32Array(
     blob.buffer,
     blob.byteOffset,
     blob.byteLength / Float32Array.BYTES_PER_ELEMENT
   );
-  return Array.from(float32);
+  return new Float32Array(view);
 }
 
 // ============================================================================
@@ -329,8 +334,10 @@ export function documentToRow(
   const row: Record<string, string | number | Buffer | null> = {};
 
   for (const [key, value] of Object.entries(document)) {
-    // BLOB columns: convert number[] to Float32 Buffer
-    if (blobColumns.has(key) && Array.isArray(value) && typeof value[0] === 'number') {
+    // BLOB columns: convert Float32Array or number[] to Float32 Buffer
+    if (blobColumns.has(key) && value instanceof Float32Array) {
+      row[key] = value.length === 0 ? null : embeddingToBlob(value);
+    } else if (blobColumns.has(key) && Array.isArray(value) && typeof value[0] === 'number') {
       row[key] = embeddingToBlob(value as number[]);
     } else if (blobColumns.has(key) && Array.isArray(value) && value.length === 0) {
       row[key] = null; // Empty embedding arrays stored as NULL

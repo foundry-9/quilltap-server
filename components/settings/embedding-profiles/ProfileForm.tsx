@@ -53,7 +53,7 @@ export function ProfileForm({
     // Auto-fill dimensions if we know them
     const models = embeddingModels[form.formData.provider] || []
     const model = models.find(m => m.id === modelId)
-    if (model) {
+    if (model?.dimensions) {
       form.setField('dimensions', model.dimensions.toString())
     }
   }
@@ -268,7 +268,7 @@ export function ProfileForm({
                   <option value="">Select a model...</option>
                   {currentModels.map(model => (
                     <option key={model.id} value={model.id}>
-                      {model.name} ({model.dimensions} dims)
+                      {model.name}{model.dimensions ? ` (${model.dimensions} dims)` : ''}
                     </option>
                   ))}
                 </select>

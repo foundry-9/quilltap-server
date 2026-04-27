@@ -97,5 +97,25 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
     userId: user.id,
   });
 
-  return created({ project });
+  // Ensure the project's official document store and Scenarios folder exist
+  // synchronously so the Files tab and Scenarios are immediately usable.
+  // Failure here doesn't block project creation — the startup hook will heal
+  // on next boot, and the GET /scenarios endpoint also calls these helpers.
+  try {
+    const { ensureProjectOfficialStore } = await import('@/lib/mount-index/ensure-project-store');
+    const { ensureProjectScenariosFolder } = await import('@/lib/mount-index/project-scenarios');
+    const result = await ensureProjectOfficialStore(project.id, project.name);
+    if (result) {
+      await ensureProjectScenariosFolder(result.mountPointId);
+    }
+  } catch (ensureError) {
+    logger.warn('[Projects v1] Failed to ensure project document store on create', {
+      projectId: project.id,
+      error: ensureError instanceof Error ? ensureError.message : String(ensureError),
+    });
+  }
+
+  // Return the latest project row so the FK is reflected in the response.
+  const finalProject = await repos.projects.findById(project.id);
+  return created({ project: finalProject ?? project });
 });

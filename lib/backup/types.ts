@@ -15,7 +15,6 @@ import type {
   EmbeddingProfile,
   Memory,
   FileEntry,
-  FileWritePermission,
   Folder,
   MessageEvent,
   PromptTemplate,
@@ -24,6 +23,8 @@ import type {
   Project,
   LLMLog,
   PluginConfig,
+  CharacterPluginData,
+  ConversationAnnotation,
 } from '@/lib/schemas/types';
 import type { WardrobeItem, OutfitPreset } from '@/lib/schemas/wardrobe.types';
 
@@ -88,8 +89,6 @@ export interface BackupManifest {
     pluginConfigs?: number;
     /** Number of ChatSettings entities (user chat/display settings) */
     chatSettings?: number;
-    /** Number of FileWritePermission entities (LLM file write permissions) */
-    filePermissions?: number;
     /** Number of Folder entities (user-created file folders) */
     folders?: number;
     /** Number of WardrobeItem entities (character wardrobe items) */
@@ -98,6 +97,12 @@ export interface BackupManifest {
     outfitPresets?: number;
     /** Number of npm-installed plugins backed up */
     npmPlugins?: number;
+    /** Number of CharacterPluginData entities (per-character plugin metadata) */
+    characterPluginData?: number;
+    /** Number of ConversationAnnotation entities (per-chat message annotations) */
+    conversationAnnotations?: number;
+    /** Number of user-installed theme bundles backed up */
+    userInstalledThemes?: number;
   };
 }
 
@@ -161,9 +166,6 @@ export interface BackupData {
   /** Array of ChatSettings entities (user chat/display settings) */
   chatSettings?: ChatSettings[];
 
-  /** Array of FileWritePermission entities (LLM file write permissions) */
-  filePermissions?: FileWritePermission[];
-
   /** Array of Folder entities (user-created file/project folders) */
   folders?: Folder[];
 
@@ -172,6 +174,12 @@ export interface BackupData {
 
   /** Array of OutfitPreset entities (character outfit presets) */
   outfitPresets?: OutfitPreset[];
+
+  /** Array of CharacterPluginData entities (per-character plugin metadata) */
+  characterPluginData?: CharacterPluginData[];
+
+  /** Array of ConversationAnnotation entities (per-chat message annotations) */
+  conversationAnnotations?: ConversationAnnotation[];
 }
 
 // ============================================================================
@@ -274,9 +282,6 @@ export interface RestoreSummary {
   /** Number of ChatSettings entities restored */
   chatSettings?: number;
 
-  /** Number of FileWritePermission entities restored */
-  filePermissions?: number;
-
   /** Number of Folder entities restored */
   folders?: number;
 
@@ -288,6 +293,15 @@ export interface RestoreSummary {
 
   /** Number of npm plugins restored */
   npmPlugins?: number;
+
+  /** Number of CharacterPluginData entities restored */
+  characterPluginData?: number;
+
+  /** Number of ConversationAnnotation entities restored */
+  conversationAnnotations?: number;
+
+  /** Number of user-installed theme bundles restored */
+  userInstalledThemes?: number;
 
   /**
    * Array of warning messages for issues that occurred during restore

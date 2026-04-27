@@ -71,9 +71,9 @@ jest.mock('@/components/ui/Avatar', () => {
   }
 })
 
-// Mock QuickChatDialog
-jest.mock('@/components/dashboard/QuickChatDialog', () => ({
-  QuickChatDialog: function MockQuickChatDialog({
+// Mock NewChatModal
+jest.mock('@/components/new-chat', () => ({
+  NewChatModal: function MockNewChatModal({
     characterId,
     characterName,
     isOpen,
@@ -82,7 +82,7 @@ jest.mock('@/components/dashboard/QuickChatDialog', () => ({
     if (!isOpen) return null
     return (
       <div
-        data-testid="quick-chat-dialog"
+        data-testid="new-chat-modal"
         data-character-id={characterId}
         data-character-name={characterName}
         role="dialog"
@@ -738,8 +738,15 @@ describe('ProjectItem', () => {
   it('links to project page', () => {
     const project = createMockProject({ id: 'proj-123' })
     render(<ProjectItem project={project} />)
-    const link = screen.getByRole('link')
-    expect(link).toHaveAttribute('href', '/prospero/proj-123')
+    const links = screen.getAllByRole('link')
+    expect(links[0]).toHaveAttribute('href', '/prospero/proj-123')
+  })
+
+  it('renders a new-chat button linking to /salon/new with projectId', () => {
+    const project = createMockProject({ id: 'proj-123' })
+    const { container } = render(<ProjectItem project={project} />)
+    const chatLink = container.querySelector('a[href="/salon/new?projectId=proj-123"]')
+    expect(chatLink).toBeInTheDocument()
   })
 
   it('renders formatted time', () => {
@@ -758,10 +765,9 @@ describe('ProjectItem', () => {
 
   it('applies hover styling', () => {
     const { container } = render(<ProjectItem project={createMockProject()} />)
-    const link = container.querySelector('a')
-    expect(link).toBeInTheDocument()
-    // Verify the link contains styling for hover and transition
-    const className = link?.getAttribute('class') || ''
+    const wrapper = container.querySelector('.hover\\:qt-bg-muted\\/50')
+    expect(wrapper).toBeInTheDocument()
+    const className = wrapper?.getAttribute('class') || ''
     expect(className).toContain('rounded-lg')
   })
 
@@ -902,9 +908,9 @@ describe('CharacterCard', () => {
     fireEvent.click(chatButton)
 
     await waitFor(() => {
-      expect(screen.getByTestId('quick-chat-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('new-chat-modal')).toBeInTheDocument()
     })
-    expect(screen.getByTestId('quick-chat-dialog')).toHaveAttribute(
+    expect(screen.getByTestId('new-chat-modal')).toHaveAttribute(
       'data-character-id',
       'char-123'
     )
@@ -918,14 +924,14 @@ describe('CharacterCard', () => {
     fireEvent.click(chatButton)
 
     await waitFor(() => {
-      expect(screen.getByTestId('quick-chat-dialog')).toBeInTheDocument()
+      expect(screen.getByTestId('new-chat-modal')).toBeInTheDocument()
     })
 
     const closeButton = screen.getByRole('button', { name: /Close/i })
     fireEvent.click(closeButton)
 
     await waitFor(() => {
-      expect(screen.queryByTestId('quick-chat-dialog')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('new-chat-modal')).not.toBeInTheDocument()
     })
   })
 

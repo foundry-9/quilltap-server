@@ -76,7 +76,7 @@ export function ProfileSelectionStep({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-foreground mb-2">
+        <h3 className="qt-heading-4 text-foreground mb-2">
           Select AI Model
         </h3>
         <p className="text-sm qt-text-secondary">
@@ -116,7 +116,7 @@ export function ProfileSelectionStep({
               <>
                 <dt className="qt-text-secondary">Type:</dt>
                 <dd className="text-foreground">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium qt-bg-success/10 qt-text-success">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded qt-text-label-xs qt-bg-success/10 qt-text-success">
                     Cost-efficient
                   </span>
                 </dd>

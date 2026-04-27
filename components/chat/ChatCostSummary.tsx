@@ -55,31 +55,49 @@ export function ChatCostSummary({
   const [costData, setCostData] = useState<CostData | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Fetch cost data when dependencies change
   useEffect(() => {
     if (!show) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch effect; setLoading is managed by loading lifecycle
       setLoading(false)
       return
     }
 
+    // AbortController lets us cancel the in-flight fetch cleanly when the
+    // effect re-runs (StrictMode double-invoke in dev) or the component
+    // unmounts. Without this, the aborted fetch would surface as a generic
+    // "Failed to fetch chat cost summary" error on every render.
+    const controller = new AbortController()
+    let cancelled = false
+
     async function fetchCostData() {
       try {
-        const res = await fetch(`/api/v1/chats/${chatId}?action=cost`)
+        const res = await fetch(`/api/v1/chats/${chatId}?action=cost`, {
+          signal: controller.signal,
+        })
         if (!res.ok) {
-          throw new Error('Failed to fetch cost data')
+          throw new Error(`Cost endpoint returned HTTP ${res.status}`)
         }
         const data = await res.json()
-        setCostData(data)
+        if (!cancelled) setCostData(data)
       } catch (error) {
-        console.error('Failed to fetch chat cost summary', {
-          chatId,
-          error: error instanceof Error ? error.message : String(error),
-        })
+        // Swallow aborts — they're the expected outcome of effect cleanup.
+        if (controller.signal.aborted) return
+        const message = error instanceof Error ? error.message : String(error)
+        // Use warn rather than error; a missing cost breakdown is a UI degradation,
+        // not something the user needs to see as a red console alarm every render.
+        console.warn(`ChatCostSummary: ${message} (chatId=${chatId})`)
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     fetchCostData()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [chatId, show, refreshKey])
 
   if (!show) {

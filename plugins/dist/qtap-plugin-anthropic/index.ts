@@ -158,6 +158,22 @@ export const plugin: TextProviderPlugin = {
   getModelInfo: () => {
     return [
       {
+        id: 'claude-opus-4-6',
+        name: 'Claude Opus 4.6',
+        contextWindow: 200000,
+        maxOutputTokens: 16000,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
+        id: 'claude-sonnet-4-6',
+        name: 'Claude Sonnet 4.6',
+        contextWindow: 200000,
+        maxOutputTokens: 16000,
+        supportsImages: true,
+        supportsTools: true,
+      },
+      {
         id: 'claude-sonnet-4-5-20250929',
         name: 'Claude Sonnet 4.5',
         contextWindow: 200000,
@@ -214,6 +230,21 @@ export const plugin: TextProviderPlugin = {
         supportsTools: true,
       },
     ];
+  },
+
+  /**
+   * Check whether a model supports assistant message prefill.
+   * Claude 4.6 models dropped support for assistant prefill — ending the
+   * messages array with an assistant role message now returns a 400 error.
+   */
+  modelSupportsPrefill: (model: string): boolean => {
+    // Claude 4.6+ models do not support assistant prefill
+    // Match patterns: claude-*-4-6, claude-*-4-6-*, and any future 4.7+, 5.x+, etc.
+    if (/claude-(?:opus|sonnet|haiku)-4-6/.test(model)) {
+      return false;
+    }
+    // All older Claude models support prefill
+    return true;
   },
 
   /**

@@ -375,12 +375,6 @@ export async function attemptRequestLimitRecovery(
 }
 
 /**
- * @deprecated Use attemptRequestLimitRecovery instead
- * Kept for backwards compatibility
- */
-export const attemptTokenLimitRecovery = attemptRequestLimitRecovery
-
-/**
  * Stream a static fallback message when LLM recovery fails
  */
 async function streamStaticFallback(

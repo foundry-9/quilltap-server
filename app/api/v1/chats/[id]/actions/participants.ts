@@ -20,6 +20,10 @@ import { enrichParticipant, handleAddParticipant, handleParticipantUpdate, handl
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/types';
+import {
+  postHostAddAnnouncement,
+  postHostRemoveAnnouncement,
+} from '@/lib/services/host-notifications/writer';
 
 /**
  * Start impersonating a participant
@@ -223,7 +227,20 @@ export async function handleAddParticipantAction(
       const reactivatedParticipant = updatedChat.participants.find(p => p.id === removedParticipant.id);
       const enrichedParticipant = reactivatedParticipant ? await enrichParticipant(reactivatedParticipant, repos) : null;
 
-      logger.info('[Chats v1] Participant reactivated', { chatId, participantId: removedParticipant.id });
+      let reactivatedCharacter = null;
+      if (reactivatedParticipant?.characterId) {
+        reactivatedCharacter = await repos.characters.findById(reactivatedParticipant.characterId);
+      }
+      const reactivatedCharacterName = reactivatedCharacter?.name || 'Unknown';
+      logger.info('[Chats v1] Participant reactivated', {
+        chatId, participantId: removedParticipant.id, characterName: reactivatedCharacterName,
+        controlledBy,
+      });
+
+      if (reactivatedCharacter) {
+        await postHostAddAnnouncement({ chatId, character: reactivatedCharacter });
+      }
+
       return NextResponse.json({ participant: enrichedParticipant, chat: updatedChat }, { status: 200 });
     }
   }
@@ -242,7 +259,18 @@ export async function handleAddParticipantAction(
 
   const enrichedParticipant = newParticipant ? await enrichParticipant(newParticipant, repos) : null;
 
-  logger.info('[Chats v1] Participant added', { chatId, participantId: newParticipant?.id });
+  const addedCharacter = validatedData.characterId
+    ? await repos.characters.findById(validatedData.characterId)
+    : null;
+  const addedCharacterName = addedCharacter?.name || 'Unknown';
+  logger.info('[Chats v1] Participant added', {
+    chatId, participantId: newParticipant?.id, characterName: addedCharacterName,
+    controlledBy: validatedData.controlledBy || 'llm',
+  });
+
+  if (addedCharacter) {
+    await postHostAddAnnouncement({ chatId, character: addedCharacter });
+  }
 
   return NextResponse.json({ participant: enrichedParticipant, chat: result.chat }, { status: 201 });
 }
@@ -260,9 +288,32 @@ export async function handleUpdateParticipantAction(
   const rawData = body.updateParticipant ?? body;
   const validatedData = updateParticipantSchema.parse(rawData);
 
+  // Capture pre-update state for logging
+  const preChat = await repos.chats.findById(chatId);
+  const preParticipant = preChat?.participants.find((p) => p.id === validatedData.participantId);
+  const preStatus = preParticipant?.status || (preParticipant?.isActive ? 'active' : 'absent');
+
+  // Resolve character name for logging
+  let characterName = 'Unknown';
+  if (preParticipant?.characterId) {
+    const character = await repos.characters.findById(preParticipant.characterId);
+    if (character) characterName = character.name;
+  }
+
+  const { participantId, ...updateFields } = validatedData;
+  logger.debug('[Chats v1] Participant update requested', {
+    chatId, participantId, characterName, preStatus,
+    updateFields: Object.keys(updateFields),
+    updates: updateFields,
+  });
+
   const result = await handleParticipantUpdate(chatId, validatedData, user.id, repos);
 
   if ('error' in result) {
+    logger.warn('[Chats v1] Participant update failed', {
+      chatId, participantId, characterName,
+      error: result.error, status: result.status,
+    });
     if (result.status === 404) return notFound('Resource');
     if (result.status === 400) return badRequest(result.error);
     return serverError(result.error);
@@ -270,8 +321,13 @@ export async function handleUpdateParticipantAction(
 
   const updatedParticipant = result.chat.participants.find((p) => p.id === validatedData.participantId);
   const enrichedParticipant = updatedParticipant ? await enrichParticipant(updatedParticipant, repos) : null;
+  const postStatus = updatedParticipant?.status || 'unknown';
 
-  logger.info('[Chats v1] Participant updated', { chatId, participantId: validatedData.participantId });
+  logger.info('[Chats v1] Participant updated', {
+    chatId, participantId: validatedData.participantId, characterName,
+    statusChange: preStatus !== postStatus ? `${preStatus} → ${postStatus}` : null,
+    updatedFields: Object.keys(updateFields),
+  });
 
   return NextResponse.json({ participant: enrichedParticipant, chat: result.chat });
 }
@@ -290,17 +346,40 @@ export async function handleRemoveParticipantAction(
 
   const participantToRemove = chat.participants.find((p) => p.id === validatedData.participantId);
   if (!participantToRemove) {
+    logger.warn('[Chats v1] Participant removal failed: not found', {
+      chatId, participantId: validatedData.participantId,
+    });
     return notFound('Participant');
   }
 
+  // Resolve character name for logging
+  let characterName = 'Unknown';
+  if (participantToRemove.characterId) {
+    const character = await repos.characters.findById(participantToRemove.characterId);
+    if (character) characterName = character.name;
+  }
+  const previousStatus = participantToRemove.status || (participantToRemove.isActive ? 'active' : 'absent');
+
+  logger.debug('[Chats v1] Participant removal requested', {
+    chatId, participantId: validatedData.participantId, characterName, previousStatus,
+  });
+
   const activeCharacters = chat.participants.filter((p) => p.type === 'CHARACTER' && isParticipantPresent(p.status));
   if (activeCharacters.length <= 1 && participantToRemove.type === 'CHARACTER') {
+    logger.warn('[Chats v1] Participant removal blocked: last character', {
+      chatId, participantId: validatedData.participantId, characterName,
+      activeCharacterCount: activeCharacters.length,
+    });
     return badRequest('Cannot remove the last character from the chat');
   }
 
   const result = await handleRemoveParticipant(chatId, validatedData.participantId, repos);
 
   if ('error' in result) {
+    logger.warn('[Chats v1] Participant removal failed', {
+      chatId, participantId: validatedData.participantId, characterName,
+      error: result.error, status: result.status,
+    });
     if (result.status === 404) return notFound('Resource');
     if (result.status === 400) return badRequest(result.error);
     return serverError(result.error);
@@ -315,9 +394,19 @@ export async function handleRemoveParticipantAction(
       updateData.activeTypingParticipantId = cleanedIds[0] || null;
     }
     await repos.chats.update(chatId, updateData);
+    logger.debug('[Chats v1] Cleaned up impersonation state for removed participant', {
+      chatId, participantId: validatedData.participantId, characterName,
+    });
   }
 
-  logger.info('[Chats v1] Participant removed', { chatId, participantId: validatedData.participantId });
+  logger.info('[Chats v1] Participant removed', {
+    chatId, participantId: validatedData.participantId, characterName,
+    previousStatus,
+  });
+
+  if (characterName !== 'Unknown') {
+    await postHostRemoveAnnouncement({ chatId, characterName });
+  }
 
   return NextResponse.json({ success: true, chat: result.chat });
 }

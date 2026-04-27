@@ -42,6 +42,33 @@ describe('wardrobe outfit utilities', () => {
         '',
       ].join('\n'))
     })
+
+    it('collapses slots sharing the same value onto a single line', () => {
+      expect(
+        describeOutfit({
+          top: 'Working Outfit',
+          bottom: 'Working Outfit',
+          footwear: 'Working Outfit',
+          accessories: 'Working Outfit',
+        })
+      ).toBe('- **top, bottom, footwear, accessories:** Working Outfit\n')
+    })
+
+    it('groups multi-slot items but keeps distinct slots separate', () => {
+      expect(
+        describeOutfit({
+          top: 'silk dress',
+          bottom: 'silk dress',
+          footwear: 'leather boots',
+          accessories: 'pearl earrings',
+        })
+      ).toBe([
+        '- **top, bottom:** silk dress',
+        '- **footwear:** leather boots',
+        '- **accessories:** pearl earrings',
+        '',
+      ].join('\n'))
+    })
   })
 
   describe('computeDisplacedSlots', () => {
@@ -96,7 +123,7 @@ describe('wardrobe outfit utilities', () => {
 
   describe('repo-backed displacement helpers', () => {
     let repos: {
-      wardrobe: { findById: jest.Mock }
+      wardrobe: { findByIdForCharacter: jest.Mock }
       chats: {
         getEquippedOutfitForCharacter: jest.Mock
         setEquippedOutfit: jest.Mock
@@ -106,7 +133,7 @@ describe('wardrobe outfit utilities', () => {
     beforeEach(() => {
       repos = {
         wardrobe: {
-          findById: jest.fn(),
+          findByIdForCharacter: jest.fn(),
         },
         chats: {
           getEquippedOutfitForCharacter: jest.fn(),
@@ -122,7 +149,7 @@ describe('wardrobe outfit utilities', () => {
         footwear: 'boots-1',
         accessories: null,
       })
-      repos.wardrobe.findById.mockImplementation(async (id: string) => {
+      repos.wardrobe.findByIdForCharacter.mockImplementation(async (_charId: string, id: string) => {
         if (id === 'dress-1') return { id, types: ['top', 'bottom'] }
         return null
       })
@@ -132,6 +159,7 @@ describe('wardrobe outfit utilities', () => {
         types: ['top'],
       })
 
+      expect(repos.wardrobe.findByIdForCharacter).toHaveBeenCalledWith('char-1', 'dress-1')
       expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith('chat-1', 'char-1', {
         top: 'shirt-1',
         bottom: null,
@@ -153,7 +181,7 @@ describe('wardrobe outfit utilities', () => {
         footwear: 'boots-1',
         accessories: null,
       })
-      repos.wardrobe.findById.mockResolvedValue(null)
+      repos.wardrobe.findByIdForCharacter.mockResolvedValue(null)
 
       const result = await unequipWithDisplacement(repos, 'chat-1', 'char-1', 'top')
 
@@ -167,6 +195,38 @@ describe('wardrobe outfit utilities', () => {
         top: null,
         bottom: null,
         footwear: 'boots-1',
+        accessories: null,
+      })
+    })
+
+    it('passes characterId through to overlay-aware lookup so vault-only items resolve', async () => {
+      // Regression: a vault-only wardrobe item has no DB row, so the legacy
+      // raw findById would return null and the multi-slot displacement logic
+      // would silently leave stale slots behind. The displacement helper must
+      // use findByIdForCharacter (which honours the document-store overlay).
+      repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+        top: 'vault-dress',
+        bottom: 'vault-dress',
+        footwear: null,
+        accessories: null,
+      })
+      repos.wardrobe.findByIdForCharacter.mockImplementation(async (charId: string, id: string) => {
+        if (charId === 'char-1' && id === 'vault-dress') {
+          return { id, types: ['top', 'bottom'] }
+        }
+        return null
+      })
+
+      await equipWithDisplacement(repos, 'chat-1', 'char-1', {
+        id: 'vault-jacket',
+        types: ['top'],
+      })
+
+      expect(repos.wardrobe.findByIdForCharacter).toHaveBeenCalledWith('char-1', 'vault-dress')
+      expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith('chat-1', 'char-1', {
+        top: 'vault-jacket',
+        bottom: null,
+        footwear: null,
         accessories: null,
       })
     })

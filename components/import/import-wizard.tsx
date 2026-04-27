@@ -504,7 +504,7 @@ export function ImportWizard({
                 <div key={s.key} className="flex items-center gap-1 flex-1">
                   <div className="flex items-center gap-2 flex-1">
                     <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 transition-colors ${
+                      className={`w-6 h-6 rounded-full flex items-center justify-center qt-text-label-xs flex-shrink-0 transition-colors ${
                         i < currentStepIndex
                           ? 'bg-primary text-primary-foreground'
                           : i === currentStepIndex

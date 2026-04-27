@@ -372,9 +372,60 @@ describe('autoConfigureProfile', () => {
       .mockResolvedValueOnce({ sendMessage: mockSendMessage })
       .mockResolvedValueOnce({ sendMessage: cheapSendMessage })
 
+    // With a single candidate (the default), the wrapper summarises the one attempt
+    // and surfaces the underlying parse failure.
     await expect(autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)).rejects.toThrow(
-      'Failed to parse auto-configure results'
+      'Auto-configure failed on all 1 candidate provider(s)'
     )
+    await expect(autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)).rejects.toThrow(
+      'Failed to parse response from ANTHROPIC'
+    )
+  })
+
+  // --------------------------------------------------------------------------
+  // Cross-provider fallback
+  // --------------------------------------------------------------------------
+
+  it('should fall back to another provider when the default profile fails', async () => {
+    const defaultProfile = createMockDefaultProfile()
+    const fallbackProfile = {
+      id: 'profile-2',
+      name: 'OpenAI Fallback',
+      provider: 'OPENAI',
+      modelName: 'gpt-5',
+      apiKeyId: 'key-2',
+      baseUrl: null,
+      userId: TEST_USER_ID,
+      isDefault: false,
+      modelClass: 'Deep',
+      parameters: {},
+    }
+
+    const repos = createMockRepos({
+      findApiKeyById: jest.fn().mockImplementation((id: string) =>
+        Promise.resolve({ key_value: id === 'key-1' ? 'sk-default' : 'sk-fallback' })
+      ),
+      findAll: jest.fn().mockResolvedValue([defaultProfile, fallbackProfile]),
+    })
+    mockGetUserRepositories.mockReturnValue(repos)
+
+    const failingSend = jest.fn().mockRejectedValue(new Error('429 rate_limit_exceeded'))
+    const succeedingSend = jest.fn().mockResolvedValue({
+      content: JSON.stringify(VALID_LLM_RESPONSE),
+      usage: { promptTokens: 500, completionTokens: 100 },
+    })
+
+    mockCreateLLMProvider
+      .mockResolvedValueOnce({ sendMessage: failingSend })
+      .mockResolvedValueOnce({ sendMessage: succeedingSend })
+
+    const result = await autoConfigureProfile(TEST_PROVIDER, TEST_MODEL, TEST_USER_ID)
+
+    expect(failingSend).toHaveBeenCalledTimes(1)
+    expect(succeedingSend).toHaveBeenCalledTimes(1)
+    expect(mockCreateLLMProvider).toHaveBeenNthCalledWith(1, 'ANTHROPIC', undefined)
+    expect(mockCreateLLMProvider).toHaveBeenNthCalledWith(2, 'OPENAI', undefined)
+    expect(result.maxContext).toBe(200000)
   })
 
   // --------------------------------------------------------------------------

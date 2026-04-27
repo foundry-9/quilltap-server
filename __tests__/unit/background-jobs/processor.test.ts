@@ -24,6 +24,7 @@ type MockBackgroundJobsRepo = {
   markCompleted: jest.Mock;
   markFailed: jest.Mock;
   resetStuckJobs: jest.Mock;
+  findNextScheduledAt: jest.Mock;
 };
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>;
@@ -39,6 +40,7 @@ beforeEach(() => {
     markCompleted: jest.fn().mockResolvedValue(undefined),
     markFailed: jest.fn().mockResolvedValue(undefined),
     resetStuckJobs: jest.fn().mockResolvedValue(0),
+    findNextScheduledAt: jest.fn().mockResolvedValue(null),
   };
 
   handlerImpl = jest.fn().mockResolvedValue(undefined);
@@ -119,6 +121,28 @@ describe('processNextJob', () => {
 
     expect(processed).toBe(false);
     expect(processor.getProcessorStatus().running).toBe(false);
+  });
+
+  it('wakes the processor back up when a FAILED job is scheduled for a future retry', async () => {
+    jest.useFakeTimers();
+    processor.startProcessor(1000);
+
+    // Claim returns null because the only job's scheduledAt is in the future,
+    // but findNextScheduledAt surfaces that retry time so the processor can
+    // arm a wake-up timer instead of stranding the job.
+    const scheduledAt = new Date(Date.now() + 5000).toISOString();
+    backgroundJobs.claimNextJob.mockResolvedValue(null);
+    backgroundJobs.findNextScheduledAt.mockResolvedValue(scheduledAt);
+
+    await processor.processNextJob();
+
+    expect(backgroundJobs.findNextScheduledAt).toHaveBeenCalled();
+    expect(processor.getProcessorStatus().running).toBe(false);
+
+    // Advance past the scheduled time — the wake-up timer should restart the
+    // processor without any new enqueue.
+    await jest.advanceTimersByTimeAsync(5100);
+    expect(processor.getProcessorStatus().running).toBe(true);
   });
 });
 

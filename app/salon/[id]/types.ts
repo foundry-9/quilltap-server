@@ -35,6 +35,8 @@ export interface Message {
   targetParticipantIds?: string[] | null
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage?: boolean
+  /** Personified feature that authored this message (e.g., 'lantern' for Lantern announcements, 'aurora' for character-avatar refreshes, 'librarian' for Document Mode open/save announcements, 'concierge' for dangerous-content classification announcements, 'host' for Salon participation announcements) */
+  systemSender?: 'lantern' | 'aurora' | 'librarian' | 'concierge' | 'prospero' | 'host' | null
   /** Danger flags from content classification */
   dangerFlags?: Array<{
     category: string
@@ -58,6 +60,11 @@ export interface CharacterData {
     url?: string
   } | null
   talkativeness?: number
+  systemPrompts?: Array<{
+    id: string
+    name: string
+    isDefault?: boolean
+  }>
 }
 
 export interface ConnectionProfileData {
@@ -90,6 +97,8 @@ export interface Participant {
     provider: string
     modelName: string
   } | null
+  /** Selected named system prompt from the character's systemPrompts[] array */
+  selectedSystemPromptId?: string | null
   removedAt?: string | null
   // Multi-character chat fields
   hasHistoryAccess?: boolean
@@ -121,8 +130,12 @@ export interface Chat {
   activeTypingParticipantId?: string | null
   /** Turns since last user input or pause (for all-LLM pause logic) */
   allLLMPauseTurnCount?: number
-  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode?: boolean
+  /** Document Mode layout state: normal (chat only), split (chat + document), focus (document only) */
+  documentMode?: 'normal' | 'split' | 'focus'
+  /** Divider position for split mode as percentage of main area width */
+  dividerPosition?: number
   /** Whether agent mode is enabled for this chat */
   agentModeEnabled?: boolean | null
   /** Resolved agent mode enabled state (from cascade: global → character → project → chat) */
@@ -137,10 +150,18 @@ export interface Chat {
   disabledTools?: string[]
   /** Groups of tools that are disabled for this chat */
   disabledToolGroups?: string[]
+  /** When true, characters may read (read-only) other present participants' character vaults via doc_* tools */
+  allowCrossCharacterVaultReads?: boolean
   /** Image profile ID for generating images in this chat (shared by all participants) */
   imageProfileId?: string | null
   /** Whether to auto-generate character avatars when outfits change */
   avatarGenerationEnabled?: boolean | null
+  /** Whether to announce Lantern-generated images to characters (null = inherit from project/global) */
+  alertCharactersOfLanternImages?: boolean | null
+  /** Whether the Concierge has classified this chat as dangerous (null = not yet classified) */
+  isDangerousChat?: boolean | null
+  /** Categories of dangerous content detected (e.g. 'nsfw', 'violence') */
+  dangerCategories?: string[]
 }
 
 export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'

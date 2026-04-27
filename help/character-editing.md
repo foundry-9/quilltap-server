@@ -97,6 +97,50 @@ The Details tab contains all basic character information.
 
 Want to change multiple characters at once? Use Rename/Replace tab (see below).
 
+### Living Properties from the Scriptorium
+
+Each character carries a private vault in the Scriptorium — a small database-backed document store seeded at creation with your character's identity, personality, wardrobe, and a small, tidy cluster of files that mirror the fields the Aurora editor knows by heart. When the overlay switch is thrown, Quilltap treats those files as the living authority for reads: the character you see in chats, on the roster, in image prompts, and in every other corner of the application comes straight from the vault.
+
+**The overlaid files and what each one governs:**
+
+| Vault file | What it replaces |
+|---|---|
+| `properties.json` | **pronouns**, **aliases**, **title**, **first message**, **talkativeness** |
+| `description.md` | **Description** (the general prose field) |
+| `personality.md` | **Personality** (the behavioral prose field) |
+| `example-dialogues.md` | **Example Dialogues** (style samples for the LLM) |
+| `physical-description.md` | The **Full Description** of the character's first (default) physical description |
+| `physical-prompts.json` | The **short / medium / long / complete** prompts of the first (default) physical description (JSON with `short`, `medium`, `long`, `complete` keys) |
+| `Prompts/*.md` | The character's **System Prompts** — one file per named variant, with YAML frontmatter carrying `name` (required) and an optional `isDefault: true` |
+| `Scenarios/*.md` | The character's **Scenarios** — one file per scene, with the first `# heading` as the title and the body beneath as the context |
+| `Wardrobe/*.md` | The character's **Wardrobe Items** — one Markdown file per garment, with frontmatter carrying `title`, `types`, `appropriateness`, the `default` flag, and timestamps; the body beneath is the freeform description |
+| `Outfits/*.md` | The character's **Outfit Presets** — one Markdown file per ensemble, with frontmatter carrying `name` and the four-slot `slots` map (referenced by item slug, with raw UUIDs accepted as a fallback); the body beneath is whatever notes you care to keep |
+
+By default, every one of these is read from the character's database row — the ordinary state of affairs, in which the editor is the single source of truth. Flip the switch marked **Read this character's core fields from the Scriptorium vault** at the top of the Aurora edit page, however, and henceforth Quilltap will consult the vault for all of the above every time any part of the application reads your character — the roster on the home page, the system prompt for a chat, the image-generation pipeline's appearance prompts, the scene state tracker, the turn manager's talkativeness roll, all of it.
+
+**What the switch changes:**
+
+- **Reads:** the overlaid fields come live from the vault files. Edit any file in the Scriptorium, save, reload the character, and the new values appear throughout the app without any further ceremony.
+- **Writes:** every save to an overlaid field — whether it comes from the Aurora editor, an import, an API call, or the optimizer — is routed to the matching vault file rather than the database column. The form remains entirely editable while the switch is on, because the engine underneath knows where each field properly lives and routes accordingly. The character's database row, meanwhile, is left frozen at the values it carried the moment the switch was first thrown, standing by as a quiet understudy should the overlay later be dismissed.
+- **Per-file fallback:** should a particular file go missing or fail to parse cleanly, Quilltap does not panic. Only that file's fields fall back to their database values (all-or-nothing within a file), and a warning is written to the log so you may investigate at your leisure. The other overlay files remain in effect.
+
+**Copying between the two.** Whenever a character has a linked vault — switch on or switch off — a small pair of buttons sits beneath the overlay switch, offering to carry state from one ledger to the other:
+
+- **Copy vault → database.** Reads the vault's current files and writes their values straight into the character's database row — and, for the wardrobe, into the `wardrobe_items` and `outfit_presets` tables as well — bringing the understudy up to speed with whatever the vault has lately become. Fields whose vault files are missing or invalid are left alone; the rest are written. For the wardrobe, the vault's listing is treated as authoritative: any items or presets no longer in `Wardrobe/` or `Outfits/` are removed from the database (including archived ones), and each item/preset is inserted with its id and timestamps preserved so references from outfit-preset slots survive the round-trip. Do this before flipping the overlay switch off if you want the database to remember the vault's current state; otherwise, turning the overlay off reveals whatever values the database has been quietly holding all along.
+- **Copy database → vault.** The reverse errand: reads the character's database row (and `wardrobe_items`, `outfit_presets`) and projects every one of them out into the matching vault files, replacing whatever was there before. Useful when you've been editing a character with the overlay switch *off* and would like the vault to catch up, or when you've just linked a new vault and want it seeded with the database's current values. Prompts, scenarios, wardrobe items, and outfit presets are reprojected wholesale — any `.md` files in the vault's `Prompts/`, `Scenarios/`, `Wardrobe/`, or `Outfits/` folders that don't correspond to a database entry are removed so the folder listings match the database state exactly. The physical-description files are written from the character's first (default) physical description; if the character has none, the `physical-description.md` and `physical-prompts.json` files are skipped rather than written empty.
+
+**A note on physical descriptions.** The `physical-description.md` and `physical-prompts.json` overlays target the **first** physical description (the one at index 0 — typically your character's default). Subsequent descriptions remain database-canonical. The overlay requires at least one physical description already present in the database; if your character has none, populate the first description the usual way in the Descriptions tab before filling in the vault files.
+
+**A note on `Prompts/` and `Scenarios/`.** Each directory is read as a whole set — when the overlay is on and the folder holds at least one parseable file, the vault listing entirely replaces the character's database-backed array. An empty or malformed folder falls back to the database. Prompt files require YAML frontmatter naming them; a file that lacks frontmatter (or a `name` field) is quietly skipped while its siblings carry on. Scenario files want a `# Scenario Title` at the top, though if one is missing Quilltap will use the filename (without the `.md`) rather than drop the file entirely. Identifiers for synthesized prompts and scenarios are derived deterministically from the mount point and the file's relative path, so a chat's selected prompt or default scenario keeps its reference across reads as long as the filename doesn't change.
+
+**A note on example dialogues.** An *empty* `example-dialogues.md` is a perfectly valid state — it means "no examples," and Quilltap treats it accordingly rather than falling back to the database. If you genuinely want the database value to show through, delete the file entirely; presence of the file (even at zero bytes) is what tells the overlay to take over.
+
+**A note on the wardrobe.** The character's wardrobe lives across two folders. `Wardrobe/` holds one Markdown file per item — frontmatter carries the `title`, the `types` list (one or more of `top`, `bottom`, `footwear`, `accessories`), an optional `appropriateness` tag, the `default` flag, and the timestamps; the body of the file is the freeform description, written however you please. `Outfits/` holds one Markdown file per saved preset — frontmatter carries the `name` and a four-slot `slots` map naming which item belongs in each slot, where each value is an item *slug* (the kebab-cased title, e.g. `top: blue-tweed-jacket`) and a raw UUID is accepted as a fallback for items the slug map can't find. Adding a new item, then, is as easy as dropping a fresh `.md` file into `Wardrobe/` with `title:` and `types:` in the frontmatter; the system fills in the `id` and timestamps on its next sync. Items marked with `archived: true` (or carrying a non-null `archivedAt`) are filtered out of the normal list the same way they are in the database. When the overlay is on, the Salon sidebar, the wardrobe tools the LLM reaches for, and every other consumer read their lists from these folders. The first time Quilltap boots after the folder format ships, a one-time sweep projects every existing character's wardrobe from the database into the new layout and tidies away the legacy `wardrobe.json` — so stale snapshots from earlier vault provisioning don't mislead anyone the moment the switch is flipped on.
+
+**When to use it.** Reach for this switch when you would rather author your character's prose fields as plain Markdown — version-controlled in your own tooling, perhaps, or edited alongside the character's narrative notes — and have the rest of Quilltap treat those files as the current truth. Leave the switch off for the conventional editor-as-source-of-truth workflow, which remains the default and entirely sensible choice.
+
+**Prerequisite.** The switch requires a linked Scriptorium vault. Quilltap creates one for each character automatically (on character creation, or by the startup backfill), so this is almost always already in place; if for some reason it isn't, the toggle will disable itself with a note explaining why.
+
 ## Editing System Prompts
 
 System Prompts tab contains detailed AI instructions.

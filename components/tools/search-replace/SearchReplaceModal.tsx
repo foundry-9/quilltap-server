@@ -193,7 +193,7 @@ export function SearchReplaceModal({
                   <div className="flex items-center">
                     <div
                       className={`
-                        w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
+                        w-8 h-8 rounded-full flex items-center justify-center qt-label
                         ${isComplete
                           ? 'bg-primary text-primary-foreground'
                           : isActive

@@ -115,18 +115,60 @@ function validateResult(raw: Record<string, unknown>): AutoConfigureResult {
 }
 
 /**
- * Get the decrypted API key for a connection profile
+ * Get the decrypted API key for a connection profile.
+ * Returns '' for OLLAMA (no key needed).
  */
 async function getApiKey(profile: ConnectionProfile, userId: string): Promise<string> {
+  if (profile.provider === 'OLLAMA') {
+    return ''
+  }
   if (!profile.apiKeyId) {
-    throw new Error('Default profile has no API key configured')
+    throw new Error(`Profile "${profile.name}" has no API key configured`)
   }
   const repos = getUserRepositories(userId)
   const apiKey = await repos.connections.findApiKeyById(profile.apiKeyId)
   if (!apiKey) {
-    throw new Error('Could not retrieve API key for default profile')
+    throw new Error(`Could not retrieve API key for profile "${profile.name}"`)
   }
   return apiKey.key_value
+}
+
+/**
+ * Pick candidate profiles for auto-configure analysis, ordered by preference.
+ *
+ * Order:
+ * 1. The default profile (respects the user's choice).
+ * 2. For each other provider, its highest-`modelClass` profile.
+ *
+ * Profiles without an API key are skipped unless they are OLLAMA.
+ */
+function pickAutoConfigureCandidates(
+  allProfiles: ConnectionProfile[],
+  defaultProfile: ConnectionProfile
+): ConnectionProfile[] {
+  const tierRank = (name: string | null | undefined): number => {
+    if (!name) return -1
+    const mc = MODEL_CLASSES.find(c => c.name === name)
+    return mc ? mc.quality : -1
+  }
+
+  const eligible = allProfiles.filter(p => p.provider === 'OLLAMA' || !!p.apiKeyId)
+
+  // Highest-tier profile per provider (excluding the default's provider, which the default already represents).
+  const bestByProvider = new Map<string, ConnectionProfile>()
+  for (const p of eligible) {
+    if (p.provider === defaultProfile.provider) continue
+    const current = bestByProvider.get(p.provider)
+    if (!current || tierRank(p.modelClass) > tierRank(current.modelClass)) {
+      bestByProvider.set(p.provider, p)
+    }
+  }
+
+  const others = Array.from(bestByProvider.values()).sort(
+    (a, b) => tierRank(b.modelClass) - tierRank(a.modelClass)
+  )
+
+  return [defaultProfile, ...others]
 }
 
 /**
@@ -134,7 +176,7 @@ async function getApiKey(profile: ConnectionProfile, userId: string): Promise<st
  */
 async function cleanupWithCheapLLM(
   rawResponse: string,
-  defaultProfile: ConnectionProfile,
+  currentProfile: ConnectionProfile,
   allProfiles: ConnectionProfile[],
   userId: string
 ): Promise<AutoConfigureResult> {
@@ -142,7 +184,7 @@ async function cleanupWithCheapLLM(
     responsePreview: rawResponse.substring(0, 200),
   })
 
-  const cheapSelection = getCheapLLMProvider(defaultProfile, undefined, allProfiles)
+  const cheapSelection = getCheapLLMProvider(currentProfile, undefined, allProfiles)
   const cheapProvider = await createLLMProvider(cheapSelection.provider, cheapSelection.baseUrl)
 
   let cheapApiKey = ''
@@ -191,6 +233,61 @@ async function cleanupWithCheapLLM(
 
   const parsed = parseLLMJson<Record<string, unknown>>(cleanupResponse.content)
   return validateResult(parsed)
+}
+
+/**
+ * Run the analysis LLM call against a single profile and parse the result.
+ * Falls back to cheap-LLM JSON cleanup on parse failure. Throws on any failure.
+ */
+async function analyzeWithProfile(
+  profile: ConnectionProfile,
+  messages: LLMMessage[],
+  userId: string,
+  allProfiles: ConnectionProfile[]
+): Promise<AutoConfigureResult> {
+  const apiKey = await getApiKey(profile, userId)
+  const llmProvider = await createLLMProvider(profile.provider, profile.baseUrl ?? undefined)
+
+  const response = await llmProvider.sendMessage(
+    { messages, model: profile.modelName, temperature: 0.2, maxTokens: 1000 },
+    apiKey
+  )
+
+  logLLMCall({
+    userId,
+    type: 'AUTO_CONFIGURE',
+    provider: profile.provider,
+    modelName: profile.modelName,
+    request: {
+      messages: messages.map(m => ({ role: m.role, content: m.content })),
+      temperature: 0.2,
+      maxTokens: 1000,
+    },
+    response: { content: response.content },
+    usage: response.usage,
+  }).catch(err => {
+    logger.warn('[Auto-Configure] Failed to log LLM call', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  })
+
+  try {
+    const parsed = parseLLMJson<Record<string, unknown>>(response.content)
+    return validateResult(parsed)
+  } catch (primaryError) {
+    return await cleanupWithCheapLLM(response.content, profile, allProfiles, userId).catch(cleanupError => {
+      logger.warn('[Auto-Configure] Primary and cleanup parsing both failed for profile', {
+        profileId: profile.id,
+        provider: profile.provider,
+        modelName: profile.modelName,
+        primaryError: primaryError instanceof Error ? primaryError.message : String(primaryError),
+        cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+      })
+      throw new Error(
+        `Failed to parse response from ${profile.provider}: ${primaryError instanceof Error ? primaryError.message : String(primaryError)}`
+      )
+    })
+  }
 }
 
 /**
@@ -261,53 +358,48 @@ export async function autoConfigureProfile(
     { role: 'user', content: userPrompt },
   ]
 
-  // Send to the default LLM for analysis
-  const apiKey = await getApiKey(defaultProfile, userId)
-  const llmProvider = await createLLMProvider(defaultProfile.provider, defaultProfile.baseUrl ?? undefined)
+  // Build the ordered list of candidate profiles to try. Fall back through
+  // other providers when the current one fails (quota, auth, network, etc.).
+  const allProfiles = await repos.connections.findAll()
+  const candidates = pickAutoConfigureCandidates(allProfiles, defaultProfile)
 
-  const response = await llmProvider.sendMessage(
-    { messages, model: defaultProfile.modelName, temperature: 0.2, maxTokens: 1000 },
-    apiKey
-  )
-
-  // Log the LLM call
-  logLLMCall({
-    userId,
-    type: 'AUTO_CONFIGURE',
-    provider: defaultProfile.provider,
-    modelName: defaultProfile.modelName,
-    request: {
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
-      temperature: 0.2,
-      maxTokens: 1000,
-    },
-    response: { content: response.content },
-    usage: response.usage,
-  }).catch(err => {
-    logger.warn('[Auto-Configure] Failed to log LLM call', {
-      error: err instanceof Error ? err.message : String(err),
-    })
+  logger.debug('[Auto-Configure] Candidate profiles', {
+    count: candidates.length,
+    candidates: candidates.map(c => ({ provider: c.provider, modelName: c.modelName, modelClass: c.modelClass })),
   })
 
-  // Parse the response
-  let result: AutoConfigureResult
-  try {
-    const parsed = parseLLMJson<Record<string, unknown>>(response.content)
-    result = validateResult(parsed)
-  } catch (primaryError) {
-    // If primary parse fails, try cheap LLM cleanup
+  let result: AutoConfigureResult | undefined
+  const attempts: Array<{ provider: string; modelName: string; error: string }> = []
+
+  for (const candidate of candidates) {
     try {
-      const allProfiles = await repos.connections.findAll()
-      result = await cleanupWithCheapLLM(response.content, defaultProfile, allProfiles, userId)
-    } catch (cleanupError) {
-      logger.error('[Auto-Configure] Both primary and cleanup parsing failed', {
-        provider,
-        modelName,
-        primaryError: primaryError instanceof Error ? primaryError.message : String(primaryError),
-        cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+      logger.info('[Auto-Configure] Attempting analysis', {
+        provider: candidate.provider,
+        modelName: candidate.modelName,
+        isDefault: candidate.id === defaultProfile.id,
       })
-      throw new Error('Failed to parse auto-configure results. The LLM response could not be processed.')
+      result = await analyzeWithProfile(candidate, messages, userId, allProfiles)
+      if (candidate.id !== defaultProfile.id) {
+        logger.info('[Auto-Configure] Default profile failed, succeeded with fallback', {
+          fallbackProvider: candidate.provider,
+          fallbackModel: candidate.modelName,
+        })
+      }
+      break
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      attempts.push({ provider: candidate.provider, modelName: candidate.modelName, error: message })
+      logger.warn('[Auto-Configure] Candidate failed, trying next', {
+        provider: candidate.provider,
+        modelName: candidate.modelName,
+        error: message,
+      })
     }
+  }
+
+  if (!result) {
+    const summary = attempts.map(a => `${a.provider} (${a.modelName}): ${a.error}`).join('; ')
+    throw new Error(`Auto-configure failed on all ${attempts.length} candidate provider(s). ${summary}`)
   }
 
   result.searchSources = searchSources

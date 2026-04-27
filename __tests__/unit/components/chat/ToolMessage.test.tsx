@@ -111,7 +111,7 @@ describe('ToolMessage', () => {
           id: 'msg-3',
           createdAt: '2026-04-09T00:00:00.000Z',
           content: JSON.stringify({
-            tool: 'file_management',
+            tool: 'doc_write_file',
             success: true,
             result: 'Saved a file',
           }),

@@ -12,7 +12,9 @@ import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
+import { modelSupportsPrefill } from '@/lib/plugins/provider-registry'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
+import { getErrorMessage } from '@/lib/errors'
 import {
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,
@@ -46,7 +48,7 @@ export interface BuildMessageContextOptions {
   isMultiCharacter: boolean
   participantCharacters?: Map<string, Character>
   roleplayTemplate: { systemPrompt: string } | null
-  chatSettings: { cheapLLMSettings?: { embeddingProfileId?: string }; defaultTimestampConfig?: TimestampConfig | null; timezone?: string | null } | null
+  chatSettings: { cheapLLMSettings?: Record<string, unknown>; defaultTimestampConfig?: TimestampConfig | null; timezone?: string | null } | null
   toolInstructions?: string
   newUserMessage?: string
   isContinueMode: boolean
@@ -186,6 +188,78 @@ export async function loadAndProcessFiles(
 }
 
 /**
+ * Walk the tail of existingMessages and collect Lantern-image file IDs that
+ * the given character has not yet seen, so they can be loaded as vision
+ * content on the character's next LLM turn. A Lantern image is any image
+ * file ID attached to an ASSISTANT-role message (story background, avatar
+ * regeneration, or a `generate_image` tool invocation — all three pipelines
+ * write the announcement through postLanternImageNotification).
+ *
+ * The walk stops at the character's own most recent ASSISTANT message —
+ * anything older than that was already surfaced on a previous turn and
+ * must not be re-delivered. A `historyCutoff` (ISO timestamp) can be
+ * supplied for a joining character with no history access; images older
+ * than the cutoff are skipped even on the character's first turn.
+ *
+ * `lookback` caps how many ASSISTANT messages we scan before giving up
+ * (safety bound for very long chats).
+ *
+ * Returns file IDs in chronological order (oldest first), deduped.
+ *
+ * Exported for unit testing.
+ */
+export function collectLanternImageFileIdsForCharacter(
+  existingMessages: Array<{ type: string; role?: string; attachments?: string[] | null; participantId?: string | null; createdAt?: string }>,
+  characterParticipantId: string,
+  isMultiCharacter: boolean,
+  historyCutoff: string | null,
+  lookback: number,
+): string[] {
+  const collected: string[] = []
+  const seen = new Set<string>()
+  let scanned = 0
+  for (let i = existingMessages.length - 1; i >= 0 && scanned < lookback; i--) {
+    const msg = existingMessages[i]
+    if (msg.type !== 'message' || msg.role !== 'ASSISTANT') continue
+
+    const atts = msg.attachments
+    const hasAttachments = Array.isArray(atts) && atts.length > 0
+
+    // Detect the character's own previous ASSISTANT turn. Anything older than
+    // that was already delivered, so we stop the walk there.
+    //
+    // Multi-character chats set `participantId` on every character response,
+    // while Lantern notifications leave it null — a direct id match is enough.
+    //
+    // Single-character chats don't populate participantId on character
+    // responses, so we fall back to the structural signal: Lantern
+    // notifications always carry image attachments, character responses
+    // don't. An ASSISTANT message without attachments is therefore the
+    // character's own prior turn.
+    const isOwnPriorResponse = isMultiCharacter
+      ? msg.participantId === characterParticipantId
+      : !hasAttachments
+    if (isOwnPriorResponse) break
+
+    scanned++
+
+    if (!hasAttachments) continue
+
+    // History-access guard: a participant joining mid-chat without history
+    // access must not see images from before they joined.
+    if (historyCutoff && msg.createdAt && msg.createdAt < historyCutoff) continue
+
+    for (const fileId of atts!) {
+      if (typeof fileId === 'string' && !seen.has(fileId)) {
+        seen.add(fileId)
+        collected.push(fileId)
+      }
+    }
+  }
+  return collected.reverse()
+}
+
+/**
  * Build conversation messages for context
  */
 export function buildConversationMessages(
@@ -281,7 +355,7 @@ export function buildConversationMessages(
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -308,9 +382,25 @@ export async function buildMessageContext(
     uncensoredFallbackOptions,
   } = options
 
+  // System transparency override: opaque characters (systemTransparency != true)
+  // never see Staff (Lantern/Aurora/Librarian/Prospero/Host) messages in their
+  // LLM context, regardless of any chat- or project-level toggle. We strip them
+  // here so every downstream consumer (compression, attribution, attachment
+  // scan) operates on the same filtered view.
+  const filteredExistingMessages = character.systemTransparency === true
+    ? existingMessages
+    : existingMessages.filter(m => !m.systemSender)
+  if (filteredExistingMessages.length !== existingMessages.length) {
+    logger.debug('Filtered Staff (systemSender) messages out of opaque character context', {
+      characterId: character.id,
+      removedCount: existingMessages.length - filteredExistingMessages.length,
+      keptCount: filteredExistingMessages.length,
+    })
+  }
+
   // Build conversation messages
   const { conversationMessages, messagesWithParticipants } = buildConversationMessages(
-    existingMessages,
+    filteredExistingMessages,
     isMultiCharacter
   )
 
@@ -353,10 +443,10 @@ export async function buildMessageContext(
     existingMessages: conversationMessages,
     newUserMessage,
     roleplayTemplate,
-    embeddingProfileId: chatSettings?.cheapLLMSettings?.embeddingProfileId || undefined,
+    embeddingProfileId: undefined, // always use default embedding profile
     skipMemories: false,
-    maxMemories: 10,
-    minMemoryImportance: 0.3,
+    maxMemories: 18,
+    minMemoryImportance: 0.5,
     // Multi-character context building options
     respondingParticipant: isMultiCharacter ? characterParticipant : undefined,
     allParticipants: isMultiCharacter ? chat.participants : undefined,
@@ -410,13 +500,55 @@ export async function buildMessageContext(
       )
     : builtContext.messages
 
+  // Additionally surface image attachments from Lantern notifications
+  // (story background, avatar regeneration, or the generate_image tool).
+  // Without this, vision-capable providers would only see the announcement
+  // text but not the actual image. We piggy-back on the existing
+  // attachments-on-last-user-turn mechanism so non-vision providers still
+  // get the text fallback, and the collector scopes the set to images this
+  // character hasn't seen yet so they aren't re-delivered every turn.
+  const ASSISTANT_IMAGE_LOOKBACK = 6
+  let mergedAttachmentsToSend: unknown[] = attachmentsToSend
+  try {
+    // If this is a joining character without history access and they have
+    // not yet responded, clamp the walk to messages posted after they joined.
+    // Use the filtered set so opaque characters never reach Staff (Lantern et
+    // al.) image attachments either — symmetric with their text-side filter.
+    const hasPriorResponse = filteredExistingMessages.some(
+      m => m.type === 'message' && m.role === 'ASSISTANT' && m.participantId === characterParticipant.id
+    )
+    const historyCutoff = (isMultiCharacter && !characterParticipant.hasHistoryAccess && !hasPriorResponse)
+      ? (characterParticipant.createdAt ?? null)
+      : null
+
+    const recentAssistantImageFileIds = collectLanternImageFileIdsForCharacter(
+      filteredExistingMessages,
+      characterParticipant.id,
+      isMultiCharacter,
+      historyCutoff,
+      ASSISTANT_IMAGE_LOOKBACK,
+    )
+    if (recentAssistantImageFileIds.length > 0) {
+      const extra = await loadChatFilesForLLM(recentAssistantImageFileIds, {
+        provider: connectionProfile.provider,
+      })
+      if (extra.length > 0) {
+        mergedAttachmentsToSend = [...attachmentsToSend, ...extra]
+      }
+    }
+  } catch (err) {
+    logger.warn('Failed to load recent assistant image attachments for vision', {
+      error: getErrorMessage(err),
+    })
+  }
+
   // Prepare final messages for LLM
   const formattedMessages = formattedContextMessages.map((msg, idx) => {
-    if (idx === formattedContextMessages.length - 1 && msg.role === 'user' && attachmentsToSend.length > 0) {
+    if (idx === formattedContextMessages.length - 1 && msg.role === 'user' && mergedAttachmentsToSend.length > 0) {
       return {
         role: msg.role,
         content: msg.content,
-        attachments: attachmentsToSend,
+        attachments: mergedAttachmentsToSend,
         name: msg.name,
       }
     }
@@ -428,18 +560,41 @@ export async function buildMessageContext(
     }
   })
 
-  // In multi-character chats, append an assistant prefill message to anchor
-  // the model's response to the correct character identity. This forces the
-  // LLM to continue as the designated character rather than picking up
-  // another character's voice from the conversation flow.
-  // The [Name] prefix is already stripped by stripCharacterNamePrefix() downstream.
+  // In multi-character chats, anchor the model's response to the correct
+  // character identity. The [Name] prefix is stripped by
+  // stripCharacterNamePrefix() downstream.
   if (isMultiCharacter) {
-    formattedMessages.push({
-      role: 'assistant',
-      content: `[${character.name}]`,
-      thoughtSignature: undefined,
-      name: undefined,
-    })
+    const prefillSupported = modelSupportsPrefill(
+      connectionProfile.provider,
+      connectionProfile.modelName
+    )
+
+    if (prefillSupported) {
+      // Traditional approach: append an assistant prefill message to force
+      // the LLM to continue as the designated character.
+      formattedMessages.push({
+        role: 'assistant',
+        content: `[${character.name}]`,
+        thoughtSignature: undefined,
+        name: undefined,
+      })
+    } else {
+      // For models that don't support assistant prefill (e.g., Claude 4.6),
+      // add an explicit instruction to the system prompt instead.
+      logger.debug('Model does not support assistant prefill, using system prompt instruction', {
+        provider: connectionProfile.provider,
+        model: connectionProfile.modelName,
+        character: character.name,
+      })
+      const systemIdx = formattedMessages.findIndex(m => m.role === 'system')
+      if (systemIdx >= 0) {
+        formattedMessages[systemIdx] = {
+          ...formattedMessages[systemIdx],
+          content: formattedMessages[systemIdx].content +
+            `\n\nIMPORTANT: You are ${character.name}. Always begin your response with [${character.name}] to identify yourself.`,
+        }
+      }
+    }
   }
 
   return {

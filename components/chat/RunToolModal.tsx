@@ -63,9 +63,10 @@ export default function RunToolModal({
   // Stable identifier for the default character (avoids array ref in useEffect deps)
   const defaultCharacterId = activeCharacters[0]?.characterId || null
 
-  // Fetch tools when modal opens
+  // Fetch tools when modal opens and reset form state
   useEffect(() => {
     if (!isOpen) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on open + data fetch; parent renders unconditionally
     setLoading(true)
     setSelectedTool(null)
     setSearchQuery('')

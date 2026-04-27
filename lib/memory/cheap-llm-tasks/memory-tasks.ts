@@ -15,6 +15,20 @@ import type {
 } from './types'
 
 /**
+ * Hard ceiling on candidates returned from a single extraction call, regardless
+ * of the cheap-LLM profile's output-token budget. Applied both in the prompt
+ * (so the model is told the cap) and after parsing (as defense-in-depth when
+ * the model ignores the instruction).
+ */
+export const HARD_CANDIDATE_CAP = 5
+
+/** Resolves the per-call maxMemories from the token budget, clamped to the hard cap. */
+function resolveMaxMemories(resolvedMaxTokens: number | undefined): number {
+  const budgetDerived = Math.ceil((resolvedMaxTokens ?? 8000) / 8000)
+  return Math.min(HARD_CANDIDATE_CAP, Math.max(1, budgetDerived))
+}
+
+/**
  * Memory extraction prompt for user memories.
  * Returns a prompt instructing the LLM to extract an array of discrete facts.
  */
@@ -211,6 +225,7 @@ function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
         importance: typeof item.importance === 'number' ? item.importance : 0.5,
       }))
       .filter(m => m.significant)
+      .slice(0, HARD_CANDIDATE_CAP)
   } catch {
     // If JSON parsing fails, return empty array
     return []
@@ -244,7 +259,7 @@ export async function extractMemoryFromMessage(
   characterPronouns?: Pronouns | null,
   resolvedMaxTokens?: number
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
-  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 4000)
+  const maxMemories = resolveMaxMemories(resolvedMaxTokens)
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = userCharacterName ? `${userCharacterName} (the user)` : 'The user'
   const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
@@ -308,7 +323,7 @@ export async function extractCharacterMemoryFromMessage(
   characterPronouns?: Pronouns | null,
   resolvedMaxTokens?: number
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
-  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 4000)
+  const maxMemories = resolveMaxMemories(resolvedMaxTokens)
   // Use clear "X says:" format to help the model distinguish speakers
   const userLabel = userCharacterName ? `${userCharacterName} (the user)` : 'The user'
   const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
@@ -373,7 +388,7 @@ export async function extractInterCharacterMemoryFromMessage(
   characterBPronouns?: Pronouns | null,
   resolvedMaxTokens?: number
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
-  const maxMemories = Math.ceil((resolvedMaxTokens ?? 8000) / 4000)
+  const maxMemories = resolveMaxMemories(resolvedMaxTokens)
   const characterALabel = formatNameWithPronouns(characterAName, characterAPronouns)
   const characterBLabel = formatNameWithPronouns(characterBName, characterBPronouns)
 

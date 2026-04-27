@@ -2,6 +2,9 @@
  * Unit tests for LLM logging service
  */
 
+// llm-logging.service is mocked globally in jest.setup.ts; this suite tests the real implementation.
+jest.unmock('@/lib/services/llm-logging.service')
+
 import {
   isLoggingEnabled,
   logLLMCall,

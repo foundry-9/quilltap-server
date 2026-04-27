@@ -138,17 +138,6 @@ export async function finalizeMessageResponse({
     })
   }
 
-  if (usage && (usage.promptTokens || usage.completionTokens)) {
-    const costResult = await estimateMessageCost(
-      effectiveProfile.provider,
-      effectiveProfile.modelName,
-      usage.promptTokens || 0,
-      usage.completionTokens || 0,
-      userId
-    )
-    await trackMessageTokenUsage(chatId, effectiveProfile.id, usage, costResult.cost, costResult.source)
-  }
-
   const autoDetectRngInResponse = chatSettings?.autoDetectRng ?? true
   if (autoDetectRngInResponse && cleanedResponse) {
     const rngPatternsInResponse = detectAndConvertRngPatterns(cleanedResponse)
@@ -216,6 +205,28 @@ export async function finalizeMessageResponse({
     modelName: effectiveProfile.modelName,
     isSilentMessage: characterParticipant.status === 'silent' || undefined,
   }))
+
+  // Cost estimation + token tracking are intentionally fire-and-forget so a
+  // slow/unreachable pricing fetch never blocks the `done` event and leaves
+  // the client stuck on an interim status banner.
+  if (usage && (usage.promptTokens || usage.completionTokens)) {
+    void estimateMessageCost(
+      effectiveProfile.provider,
+      effectiveProfile.modelName,
+      usage.promptTokens || 0,
+      usage.completionTokens || 0,
+      userId
+    )
+      .then(costResult =>
+        trackMessageTokenUsage(chatId, effectiveProfile.id, usage, costResult.cost, costResult.source)
+      )
+      .catch(error => {
+        logger.warn('Background token tracking failed', {
+          chatId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+  }
 
   if (chatSettings) {
     const memoryChatSettings: MemoryChatSettings = {

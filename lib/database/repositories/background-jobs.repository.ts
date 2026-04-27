@@ -76,6 +76,29 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
+   * Find the N most-recently-updated jobs of a given type across all users.
+   * Used by the housekeeping scheduler to skip the startup tick when a
+   * recent scheduled sweep already completed.
+   */
+  async findRecentByType(type: BackgroundJobType, limit: number): Promise<BackgroundJob[]> {
+    return this.safeQuery(
+      async () => {
+        const results = await this.findByFilter(
+          { type } as TypedQueryFilter<BackgroundJob>,
+          {
+            sort: { updatedAt: -1 as any },
+            limit,
+          },
+        );
+        return results;
+      },
+      'Error finding recent background jobs by type',
+      { type, limit },
+      []
+    );
+  }
+
+  /**
    * Find jobs by user ID with optional status filter
    */
   async findByUserId(userId: string, status?: BackgroundJobStatus): Promise<BackgroundJob[]> {
@@ -149,7 +172,8 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
 
   /**
    * Claim the next available job atomically
-   * Uses findOneAndUpdate for concurrent-safe job claiming
+   * Uses findOneAndUpdate for concurrent-safe job claiming.
+   * Jobs are sorted by priority (highest first), then creation time (oldest first).
    */
   async claimNextJob(): Promise<BackgroundJob | null> {
     return this.safeQuery(
@@ -173,6 +197,7 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
           } as any,
           {
             returnDocument: 'after',
+            sort: { priority: -1, createdAt: 1 },
           }
         );
 
@@ -185,6 +210,36 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
         return validated;
       },
       'Error claiming next job',
+      {},
+      null
+    );
+  }
+
+  /**
+   * Find the earliest `scheduledAt` among retry-eligible jobs
+   * (PENDING or FAILED with attempts < maxAttempts). Used by the processor to
+   * arm a wake-up timer when the queue has no currently-claimable jobs but has
+   * retries scheduled for the future. Returns null if no such job exists.
+   */
+  async findNextScheduledAt(): Promise<string | null> {
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const results = await collection.find(
+          {
+            status: { $in: ['PENDING', 'FAILED'] },
+            $expr: { $lt: ['$attempts', '$maxAttempts'] },
+          } as TypedQueryFilter<BackgroundJob>,
+          {
+            sort: { scheduledAt: 1 },
+            limit: 1,
+          } as any
+        );
+        if (!results.length) return null;
+        const scheduledAt = (results[0] as { scheduledAt?: string }).scheduledAt;
+        return scheduledAt ?? null;
+      },
+      'Error finding next scheduled retry time',
       {},
       null
     );
@@ -514,6 +569,47 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
+   * Cancel all non-completed jobs of a given type.
+   * Used during re-embed to clear stale EMBEDDING_GENERATE jobs before
+   * enqueuing fresh ones.  Includes PROCESSING jobs which may be orphaned
+   * after a server restart.
+   */
+  async cancelByType(type: BackgroundJobType): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
+        const result = await collection.updateMany(
+          {
+            type,
+            status: { $in: ['PENDING', 'FAILED', 'PROCESSING'] },
+          } as TypedQueryFilter<BackgroundJob>,
+          {
+            $set: {
+              status: 'DEAD',
+              lastError: 'Superseded by new reindex',
+              updatedAt: now,
+            },
+          } as any
+        );
+
+        if (result.modifiedCount > 0) {
+          logger.info('Cancelled background jobs by type', {
+            context: 'BackgroundJobsRepository.cancelByType',
+            type,
+            cancelledCount: result.modifiedCount,
+          });
+        }
+
+        return result.modifiedCount;
+      },
+      'Error cancelling background jobs by type',
+      { type },
+      0
+    );
+  }
+
+  /**
    * Pause a pending or failed job
    */
   async pause(id: string): Promise<BackgroundJob | null> {
@@ -586,6 +682,46 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
    * Reset stuck processing jobs (for recovery after crash)
    * Jobs that have been processing for longer than timeout are reset to FAILED
    */
+  /**
+   * Kill ALL jobs in PROCESSING state on startup.
+   * No job can legitimately be mid-flight when the server has just started,
+   * so they are all orphans from a previous run.  Marking them DEAD avoids
+   * retrying stale work that may belong to an outdated embedding profile or
+   * model configuration.
+   */
+  async resetAllProcessingJobs(): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const now = this.getCurrentTimestamp();
+
+        const result = await collection.updateMany(
+          {
+            status: 'PROCESSING',
+          },
+          {
+            $set: {
+              status: 'DEAD',
+              lastError: 'Orphaned on startup — killed',
+              updatedAt: now,
+            },
+          } as any
+        );
+
+        if (result.modifiedCount > 0) {
+          logger.info('Killed orphaned PROCESSING jobs on startup', {
+            context: 'BackgroundJobsRepository.resetAllProcessingJobs',
+            count: result.modifiedCount,
+          });
+        }
+        return result.modifiedCount;
+      },
+      'Error resetting all processing jobs',
+      {},
+      0
+    );
+  }
+
   async resetStuckJobs(timeoutMinutes: number = 10): Promise<number> {
     return this.safeQuery(
       async () => {

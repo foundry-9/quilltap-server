@@ -40,7 +40,7 @@ interface ImageProfileFormProps {
 
 // Fallback providers when API is unavailable
 const FALLBACK_PROVIDERS: ImageProviderInfo[] = [
-  { value: 'OPENAI', label: 'OpenAI (DALL-E / GPT Image)', defaultModels: ['gpt-image-1', 'dall-e-3', 'dall-e-2'], apiKeyProvider: 'OPENAI' },
+  { value: 'OPENAI', label: 'OpenAI (DALL-E / GPT Image)', defaultModels: ['gpt-image-2', 'gpt-image-1', 'dall-e-3', 'dall-e-2'], apiKeyProvider: 'OPENAI' },
   { value: 'GROK', label: 'Grok (xAI)', defaultModels: ['grok-2-image'], apiKeyProvider: 'GROK' },
   { value: 'GOOGLE', label: 'Google Gemini', defaultModels: ['imagen-4.0-generate-001', 'imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'], apiKeyProvider: 'GOOGLE', legacyNames: ['GOOGLE_IMAGEN'] },
 ]
@@ -120,10 +120,11 @@ export function ImageProfileForm({
     if (!isFetchingProviders && formData.provider) {
       const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
       if (normalizedProvider !== formData.provider) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream imageProviders changes (parent renders unconditionally)
         setFormData(prev => ({ ...prev, provider: normalizedProvider }))
       }
     }
-  }, [isFetchingProviders, imageProviders]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isFetchingProviders, imageProviders, formData.provider])
 
   // Fetch available models when provider or API key changes
   useEffect(() => {

@@ -244,15 +244,21 @@ export function useExportData({
       })
 
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to create export')
+        // Error responses are JSON; successful export responses stream NDJSON.
+        let errorMessage = 'Failed to create export'
+        try {
+          const data = await response.json()
+          errorMessage = data.error || errorMessage
+        } catch {
+          // Response body wasn't JSON — fall through with the default message.
+        }
+        throw new Error(errorMessage)
       }
 
-      const exportData = await response.json()
-
-      // Trigger download
-      const dataStr = JSON.stringify(exportData, null, 2)
-      const dataBlob = new Blob([dataStr], { type: 'application/json' })
+      // Stream the response straight to a blob so we never hold the whole
+      // payload in a single JS string (the fix for the V8 512MB ceiling that
+      // crashed the old JSON path at ~14k memories).
+      const dataBlob = await response.blob()
       const filename = `quilltap-${state.entityType}-${new Date().toISOString().split('T')[0]}.qtap`
       await triggerDownload(dataBlob, filename)
 

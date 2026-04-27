@@ -41,6 +41,7 @@ import {
   formatInterCharacterMemoriesForContext,
   formatSummaryForContext,
   type DebugMemoryInfo,
+  type DebugInterCharacterMemoryInfo,
 } from './context/memory-injector'
 import {
   filterMessagesByHistoryAccess,
@@ -54,6 +55,10 @@ import {
   selectRecentMessages,
   type SelectableMessage,
 } from './context/message-selector'
+import {
+  findMentionedCharacterIds,
+  formatMentionedCharactersSection,
+} from './context/mentioned-characters'
 import {
   shouldApplyCompression,
   shouldApplyBudgetCompression,
@@ -151,6 +156,10 @@ export interface BuiltContext {
   warnings: string[]
   /** Debug info: the actual memories that were included */
   debugMemories?: Array<{ summary: string; importance: number; score: number; effectiveWeight: number }>
+  /** Debug info: the inter-character memories that were included (multi-character chats) */
+  debugInterCharacterMemories?: Array<{ aboutCharacterName: string; summary: string; importance: number }>
+  /** Debug info: the memory recap content injected on chat start / character join */
+  debugMemoryRecap?: string
   /** Debug info: the conversation summary that was included */
   debugSummary?: string
   /** Debug info: the system prompt that was built (may be compressed) */
@@ -339,8 +348,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     roleplayTemplate,
     embeddingProfileId,
     skipMemories = false,
-    maxMemories = 10,
-    minMemoryImportance = 0.3,
+    maxMemories = 18,
+    minMemoryImportance = 0.5,
     // Multi-character options (Phase 3)
     respondingParticipant,
     allParticipants,
@@ -425,6 +434,83 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
   }
 
+  // Build "Characters Mentioned" section: scan the conversation for references
+  // to characters that exist on the system but are not currently in the chat.
+  // Failures here must never break prompt assembly — log and skip on error.
+  let mentionedCharactersSection: string | undefined
+  try {
+    const repos = getRepositories()
+    const allUserCharacters = await repos.characters.findByUserId(userId)
+
+    // Build the set of character IDs to exclude from the candidate pool.
+    const excludedCharacterIds = new Set<string>()
+    excludedCharacterIds.add(character.id)
+    if (allParticipants) {
+      for (const participant of allParticipants) {
+        if (
+          participant.type === 'CHARACTER' &&
+          participant.characterId &&
+          participant.status !== 'removed'
+        ) {
+          excludedCharacterIds.add(participant.characterId)
+        }
+      }
+    }
+
+    // Also exclude the user's persona by name (no ID is exposed via options).
+    const userCharacterNameLower = userCharacter?.name?.trim().toLowerCase()
+
+    const candidates = allUserCharacters.filter(c => {
+      if (excludedCharacterIds.has(c.id)) return false
+      if (userCharacterNameLower && c.name.trim().toLowerCase() === userCharacterNameLower) {
+        return false
+      }
+      return true
+    })
+
+    if (candidates.length > 0) {
+      // Build the scan corpus: conversation summary plus every visible
+      // USER/ASSISTANT message in the chat history. Scanning the full
+      // history (rather than the post-compression window) lets us surface
+      // characters mentioned earlier in long conversations.
+      const visibleForScan = extractVisibleConversation(existingMessages)
+      const corpusParts: string[] = []
+      if (chat.contextSummary) corpusParts.push(chat.contextSummary)
+      for (const msg of visibleForScan) {
+        if (msg.content) corpusParts.push(msg.content)
+      }
+      const scanCorpus = corpusParts.join('\n')
+
+      const matchedIds = findMentionedCharacterIds(scanCorpus, candidates)
+      if (matchedIds.size > 0) {
+        const matched = candidates.filter(c => matchedIds.has(c.id))
+        const formatted = formatMentionedCharactersSection(matched)
+        if (formatted.section.length > 0) {
+          mentionedCharactersSection = formatted.section
+          logger.debug('[ContextManager] Mentioned characters section built', {
+            chatId: chat.id,
+            candidateCount: candidates.length,
+            matchedCount: matched.length,
+            includedCount: formatted.includedCount,
+            matchedNames: matched.map(c => c.name),
+            sectionTokens: estimateTokens(formatted.section, provider),
+          })
+        }
+      } else {
+        logger.debug('[ContextManager] No mentioned characters found', {
+          chatId: chat.id,
+          candidateCount: candidates.length,
+        })
+      }
+    }
+  } catch (error) {
+    logger.warn('[ContextManager] Failed to build mentioned-characters section', {
+      chatId: chat.id,
+      error: getErrorMessage(error),
+    })
+  }
+
+  const tSystemPromptStart = performance.now()
   const systemPrompt = buildSystemPrompt(
     character,
     userCharacter,
@@ -441,8 +527,17 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     options.chat.scenarioText ?? undefined,
     wardrobeContext,
     options.outfitChangeNotifications
+    // mentionedCharactersSection is appended AFTER truncation below so it
+    // always survives; the in-prompt position would otherwise be lopped off
+    // whenever the core system prompt exceeds its token budget.
   )
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
+  logger.debug('[ContextManager] buildSystemPrompt complete', {
+    chatId: chat.id,
+    durationMs: Math.round(performance.now() - tSystemPromptStart),
+    systemPromptChars: systemPrompt.length,
+    systemPromptTokens,
+  })
 
   // Log multi-character context info for debugging identity confusion
   if (isMultiCharacter && respondingParticipant) {
@@ -460,6 +555,14 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     warnings.push(`System prompt (${systemPromptTokens} tokens) exceeds budget (${budget.systemPromptBudget}). Truncating.`)
     finalSystemPrompt = truncateToTokenLimit(systemPrompt, budget.systemPromptBudget, provider)
   }
+
+  // Append "Characters Mentioned" after any truncation so it always survives,
+  // even when the core system prompt is over budget. The section's own length
+  // is bounded by formatMentionedCharactersSection's internal hard cap.
+  if (mentionedCharactersSection) {
+    finalSystemPrompt = `${finalSystemPrompt}\n\n${mentionedCharactersSection}`
+  }
+
   const finalSystemPromptTokens = estimateTokens(finalSystemPrompt, provider)
 
   // ============================================================================
@@ -475,11 +578,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     : null
 
   // Estimate total conversation tokens for budget check
+  const tTokenCountStart = performance.now()
   const visibleConversation = extractVisibleConversation(existingMessages)
   const conversationTokens = countMessagesTokens(
     visibleConversation.map(m => ({ role: m.role, content: m.content })),
     provider
   )
+  logger.debug('[ContextManager] Conversation token count complete', {
+    chatId: chat.id,
+    durationMs: Math.round(performance.now() - tTokenCountStart),
+    visibleMessageCount: visibleConversation.length,
+    conversationTokens,
+  })
 
   // Total estimated prompt = system prompt + conversation + a rough memory estimate
   // (Memories haven't been retrieved yet, but we use the budget allocation as an estimate)
@@ -703,7 +813,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         options.cheapLLMSelection,
         userId,
         chat.id,
-        options.uncensoredFallbackOptions
+        options.uncensoredFallbackOptions,
+        budgetInfo?.maxContext
       )
 
       if (recapResult.content) {
@@ -734,9 +845,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const memorySearchQuery = newUserMessage ||
     (existingMessages.length > 0 ? existingMessages[existingMessages.length - 1].content : '')
 
+  const tMemoryStart = performance.now()
+  let memoryPath: 'skipped' | 'pre-searched' | 'semantic-search' = 'skipped'
   if (!skipMemories && character.id) {
     if (options.preSearchedMemories && options.preSearchedMemories.length > 0) {
       // Use proactively recalled memories (skips internal search)
+      memoryPath = 'pre-searched'
       try {
         const formatted = formatMemoriesForContext(
           options.preSearchedMemories,
@@ -754,6 +868,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       }
     } else if (memorySearchQuery) {
       // Default: search using user message (or last message in continue mode)
+      memoryPath = 'semantic-search'
       try {
         const memoryResults = await searchMemoriesSemantic(
           character.id,
@@ -781,12 +896,22 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       }
     }
   }
+  logger.debug('[ContextManager] Memory retrieval + format complete', {
+    chatId: chat.id,
+    characterId: character.id,
+    durationMs: Math.round(performance.now() - tMemoryStart),
+    path: memoryPath,
+    memoriesIncluded,
+  })
 
   // 2b. Retrieve inter-character memories in multi-character chats
   let interCharacterMemoryContent = ''
   let interCharacterMemoryTokens = 0
   let interCharacterMemoriesIncluded = 0
+  let debugInterCharacterMemories: DebugInterCharacterMemoryInfo[] = []
 
+  const tInterStart = performance.now()
+  let interCharacterLoadedCount = 0
   if (!skipMemories && isMultiCharacter && character.id && participantCharacters && allParticipants) {
     try {
       const repos = getRepositories()
@@ -811,6 +936,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           character.id,
           otherCharacterIds
         )
+        interCharacterLoadedCount = interCharacterMemories.length
 
         // Use half the remaining memory budget for inter-character memories
         const interCharacterBudget = Math.floor((budget.memoryBudget - memoryTokens) / 2)
@@ -826,12 +952,22 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           interCharacterMemoryContent = formatted.content
           interCharacterMemoryTokens = formatted.tokenCount
           interCharacterMemoriesIncluded = formatted.memoriesUsed
+          debugInterCharacterMemories = formatted.debugMemories
 
         }
       }
     } catch (error) {
       warnings.push(`Failed to retrieve inter-character memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
+  }
+  if (isMultiCharacter) {
+    logger.debug('[ContextManager] Inter-character memory retrieval complete', {
+      chatId: chat.id,
+      characterId: character.id,
+      durationMs: Math.round(performance.now() - tInterStart),
+      loadedCount: interCharacterLoadedCount,
+      includedCount: interCharacterMemoriesIncluded,
+    })
   }
 
   // ============================================================================
@@ -1116,6 +1252,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     warnings,
     // Debug info for the debug panel
     debugMemories,
+    debugInterCharacterMemories: debugInterCharacterMemories.length > 0 ? debugInterCharacterMemories : undefined,
+    debugMemoryRecap: memoryRecapContent || undefined,
     debugSummary: chat.contextSummary || undefined,
     debugSystemPrompt: effectiveSystemPrompt,
     // Original uncompressed system prompt (for async pre-compression)

@@ -5,7 +5,7 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { TagEditor } from '@/components/tags/tag-editor'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { ModelSelector, type ModelInfo } from '../model-selector'
-import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
+import { getAttachmentSupportDescription, supportsMimeType } from '@/lib/llm/attachment-support'
 import { FormActions } from '@/components/ui/FormActions'
 import { MODEL_CLASSES, getModelClass } from '@/lib/llm/model-classes'
 import type { ApiKey, ProviderConfig, ProfileFormData, ConnectionProfile } from './types'
@@ -189,10 +189,15 @@ export function ProfileModal({
       form.setField('baseUrl', providerConfig.configRequirements.baseUrlDefault)
     }
 
-    // Auto-default allowToolUse based on provider capability (new profiles only)
+    // Auto-default allowToolUse and supportsImageUpload based on provider capability
+    // (new profiles only — don't clobber saved values on an existing profile).
     if (!profile?.id) {
       const supportsToolUse = providerConfig?.capabilities?.toolUse ?? false
       form.setField('allowToolUse', supportsToolUse)
+      form.setField(
+        'supportsImageUpload',
+        supportsMimeType(newProvider as any, 'image/jpeg', form.formData.baseUrl || undefined)
+      )
     }
   }
 
@@ -275,7 +280,7 @@ export function ProfileModal({
                   )}
                 </select>
                 <p className="qt-text-xs mt-1">
-                  File attachments: {getAttachmentSupportDescription(form.formData.provider as any, form.formData.baseUrl || undefined)}
+                  Non-image attachments: {getAttachmentSupportDescription(form.formData.provider as any, form.formData.baseUrl || undefined)}
                 </p>
               </div>
             </div>
@@ -579,6 +584,18 @@ export function ProfileModal({
                 />
                 <label htmlFor="allowToolUse" className="text-sm">
                   Allow tool use (overrides chat and project tool settings when disabled)
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="supportsImageUpload"
+                  checked={form.formData.supportsImageUpload}
+                  onChange={(e) => form.setField('supportsImageUpload', e.target.checked)}
+                  className="w-4 h-4 rounded"
+                />
+                <label htmlFor="supportsImageUpload" className="text-sm">
+                  Supports image attachments (vision input)
                 </label>
               </div>
               <div className="flex items-center gap-2">

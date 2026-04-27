@@ -10,7 +10,6 @@ import { MAX_THUMBNAIL_SIZE } from '@/lib/files/thumbnail-utils';
 import type { FileCategory } from '@/lib/schemas/file.types';
 
 export const FILE_POST_ACTIONS = [
-  'write',
   'upload',
   'generate-thumbnails',
   'cleanup-stale',
@@ -19,14 +18,6 @@ export const FILE_POST_ACTIONS = [
 ] as const;
 
 export type FilePostAction = typeof FILE_POST_ACTIONS[number];
-
-export const writeFileSchema = z.object({
-  filename: z.string().min(1).max(255),
-  content: z.string().max(1024 * 1024),
-  mimeType: z.string().prefault('text/plain'),
-  projectId: z.uuid().nullable().optional(),
-  folderPath: z.string().optional(),
-});
 
 export const MAX_BATCH_SIZE = 100;
 export const THUMBNAIL_CONCURRENCY = 3;
@@ -105,13 +96,6 @@ export function inferMimeType(filename: string, detectedMimeType?: string | null
   };
 
   return mimeMap[extension || ''] || 'application/octet-stream';
-}
-
-export async function ensureFileWritePermission(
-  ctx: AuthenticatedContext,
-  projectId: string | null
-): Promise<boolean> {
-  return ctx.repos.filePermissions.canWriteFile(ctx.user.id, projectId, undefined);
 }
 
 interface SaveFileEntryOptions {

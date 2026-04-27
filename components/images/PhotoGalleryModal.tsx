@@ -137,8 +137,10 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
     }
   }, [isOpen, mode, chatId, characterId, userCharacterId])
 
+  // Load gallery items when modal opens
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on open; parent renders unconditionally
       loadItems()
     }
   }, [isOpen, loadItems])
@@ -146,6 +148,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
   // Reset selected index when modal closes
   useEffect(() => {
     if (!isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on close; parent renders unconditionally
       setSelectedIndex(-1)
     }
   }, [isOpen])
@@ -287,7 +290,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="qt-dialog-header border-b qt-border-default">
-            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+            <h2 className="qt-heading-4 text-foreground">{title}</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleZoomOut}

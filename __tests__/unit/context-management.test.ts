@@ -453,6 +453,23 @@ describe('Context Manager', () => {
       const { tokenCount } = formatSummaryForContext(longSummary, 100, 'OPENAI')
       expect(tokenCount).toBeLessThanOrEqual(100)
     })
+
+    it('should truncate oversized summaries so content is shorter than the input — regression for dynamic-require bug', () => {
+      // Before fix(chat) ea152d27, formatSummaryForContext called
+      //   const { truncateToTokenLimit } = require('@/lib/tokens/token-counter')
+      // which silently returned undefined in the Next.js webpack ESM bundle,
+      // causing a TypeError mid-turn on any chat with accumulated summary text.
+      // This test exercises the truncation path and verifies that content is
+      // actually shortened, confirming truncateToTokenLimit is reachable.
+      const longSummary = 'word '.repeat(3000).trim() // ~3000 tokens
+      const { content, tokenCount } = formatSummaryForContext(longSummary, 200, 'OPENAI')
+      // The result must be shorter than the input
+      expect(content.length).toBeLessThan(longSummary.length)
+      // Token count must respect the budget
+      expect(tokenCount).toBeLessThanOrEqual(200)
+      // The header must still be present
+      expect(content).toContain('## Previous Conversation Summary')
+    })
   })
 
   describe('selectRecentMessages', () => {

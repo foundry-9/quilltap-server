@@ -6,12 +6,15 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { processMessageForMemoryAsync, processInterCharacterMemoryAsync } from '@/lib/memory'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
-import { createMemoryExtractionEvent } from '@/lib/services/system-events.service'
-import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
-import { enqueueChatDangerClassification, enqueueSceneStateTracking } from '@/lib/background-jobs/queue-service'
+import {
+  enqueueChatDangerClassification,
+  enqueueSceneStateTracking,
+  enqueueConversationRender,
+  enqueueMemoryExtraction,
+  enqueueInterCharacterMemory,
+} from '@/lib/background-jobs/queue-service'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ConnectionProfile, ChatParticipantBase, MessageEvent, CheapLLMSettings } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
@@ -52,71 +55,30 @@ export async function triggerMemoryExtraction(
     chatSettings: MemoryChatSettings
   }
 ): Promise<void> {
+  // Repos arg is kept for API compatibility with the synchronous signature;
+  // the worker re-resolves repositories itself.
+  void repos
   try {
-    const availableProfiles = await repos.connections.findByUserId(options.userId)
-
     if (!options.chatSettings.cheapLLMSettings) {
-
       return
     }
 
-    processMessageForMemoryAsync({
+    await enqueueMemoryExtraction(options.userId, {
+      chatId: options.chatId,
       characterId: options.characterId,
       characterName: options.characterName,
-      characterPronouns: options.characterPronouns,
+      characterPronouns: options.characterPronouns ?? undefined,
       userCharacterName: options.userCharacterName,
       userCharacterId: options.userCharacterId,
       allCharacterNames: options.allCharacterNames,
       allCharacterPronouns: options.allCharacterPronouns,
-      chatId: options.chatId,
       userMessage: options.userMessage,
       assistantMessage: options.assistantMessage,
       sourceMessageId: options.sourceMessageId,
-      userId: options.userId,
-      connectionProfile: options.connectionProfile,
-      cheapLLMSettings: options.chatSettings.cheapLLMSettings,
-      availableProfiles,
-      dangerSettings: options.chatSettings.dangerSettings,
-      isDangerousChat: options.chatSettings.isDangerousChat,
-    }, async (result) => {
-      // Store memory debug logs in the assistant message if available
-      if (result.debugLogs && result.debugLogs.length > 0 && options.sourceMessageId) {
-        try {
-          await repos.chats.updateMessage(
-            options.chatId,
-            options.sourceMessageId,
-            { debugMemoryLogs: result.debugLogs }
-          )
-        } catch (e) {
-          logger.error('Failed to store memory debug logs', {}, e as Error)
-        }
-      }
-
-      // Create system event for token tracking if tokens were used
-      if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {
-        try {
-          // Estimate cost for the memory extraction operation
-          const costResult = await estimateMessageCost(
-            options.connectionProfile.provider,
-            options.connectionProfile.modelName,
-            result.usage.promptTokens || 0,
-            result.usage.completionTokens || 0,
-            options.userId
-          )
-          await createMemoryExtractionEvent(
-            options.chatId,
-            result.usage,
-            options.connectionProfile.provider,
-            options.connectionProfile.modelName,
-            costResult.cost
-          )
-        } catch (e) {
-          logger.error('Failed to create memory extraction system event', {}, e as Error)
-        }
-      }
+      connectionProfileId: options.connectionProfile.id,
     })
   } catch (error) {
-    logger.error('Failed to trigger memory extraction', {}, error as Error)
+    logger.error('Failed to enqueue memory extraction', {}, error as Error)
   }
 }
 
@@ -139,13 +101,11 @@ export async function triggerInterCharacterMemory(
     participantCharacters: Map<string, Character>
   }
 ): Promise<void> {
+  void repos
   try {
     if (!options.chatSettings.cheapLLMSettings) {
-
       return
     }
-
-    const availableProfiles = await repos.connections.findByUserId(options.userId)
 
     // Get the last messages from other characters to form memories about them
     const otherCharacterMessages = options.existingMessages
@@ -175,25 +135,24 @@ export async function triggerInterCharacterMemory(
       const otherCharacter = options.participantCharacters.get(otherParticipant.characterId)
       if (!otherCharacter) continue
 
-      // Extract memory that this character has about the other character
-      processInterCharacterMemoryAsync({
-        observerCharacterId: options.character.id,
-        observerCharacterName: options.character.name,
-        observerCharacterPronouns: options.character.pronouns,
-        observerMessage: options.assistantMessage,
-        subjectCharacterId: otherCharacter.id,
-        subjectCharacterName: otherCharacter.name,
-        subjectCharacterPronouns: otherCharacter.pronouns,
-        subjectMessage: otherMsg.content,
-        chatId: options.chatId,
-        sourceMessageId: options.assistantMessageId,
-        userId: options.userId,
-        connectionProfile: options.connectionProfile,
-        cheapLLMSettings: options.chatSettings.cheapLLMSettings,
-        availableProfiles,
-        dangerSettings: options.chatSettings.dangerSettings,
-        isDangerousChat: options.chatSettings.isDangerousChat,
-      })
+      // Enqueue an inter-character memory job for this (observer, subject) pair.
+      try {
+        await enqueueInterCharacterMemory(options.userId, {
+          chatId: options.chatId,
+          observerCharacterId: options.character.id,
+          observerCharacterName: options.character.name,
+          observerCharacterPronouns: options.character.pronouns ?? undefined,
+          observerMessage: options.assistantMessage,
+          subjectCharacterId: otherCharacter.id,
+          subjectCharacterName: otherCharacter.name,
+          subjectCharacterPronouns: otherCharacter.pronouns ?? undefined,
+          subjectMessage: otherMsg.content,
+          sourceMessageId: options.assistantMessageId,
+          connectionProfileId: options.connectionProfile.id,
+        })
+      } catch (error) {
+        logger.error('Failed to enqueue inter-character memory', {}, error as Error)
+      }
     }
 
   } catch (error) {
@@ -236,11 +195,8 @@ export async function triggerUserControlledCharacterMemory(
 ): Promise<void> {
   try {
     if (!options.chatSettings.cheapLLMSettings) {
-
       return
     }
-
-    const availableProfiles = await repos.connections.findByUserId(options.userId)
 
     // Get cheap LLM profile for memory extraction
     // Priority: defaultCheapProfileId (if valid) > userDefinedProfileId (if valid)
@@ -264,15 +220,14 @@ export async function triggerUserControlledCharacterMemory(
     }
 
     if (!connectionProfile) {
-
       return
     }
 
     // The user-controlled character forms memories about what they said
-    // and how the other character responded
-    // From their perspective: they said something (userTypedMessage) and
-    // the other character responded (llmResponse)
-    processMessageForMemoryAsync({
+    // and how the other character responded. Enqueued to drain in the
+    // background so the response stream is not blocked.
+    await enqueueMemoryExtraction(options.userId, {
+      chatId: options.chatId,
       characterId: options.userControlledCharacter.id,
       characterName: options.userControlledCharacter.name,
       // The "user message" from this character's perspective is what the other character said
@@ -280,16 +235,8 @@ export async function triggerUserControlledCharacterMemory(
       // The "assistant message" is what this character said (their own words)
       assistantMessage: options.userTypedMessage,
       allCharacterNames: options.allCharacterNames,
-      chatId: options.chatId,
       sourceMessageId: options.llmResponseMessageId,
-      userId: options.userId,
-      connectionProfile,
-      cheapLLMSettings: options.chatSettings.cheapLLMSettings,
-      availableProfiles,
-      dangerSettings: options.chatSettings.dangerSettings,
-      isDangerousChat: options.chatSettings.isDangerousChat,
-    }, async (result) => {
-
+      connectionProfileId: connectionProfile.id,
     })
   } catch (error) {
     logger.error('Failed to trigger user-controlled character memory', {}, error as Error)
@@ -422,5 +369,27 @@ export async function triggerSceneStateTracking(
     })
   } catch (error) {
     logger.error('Failed to trigger scene state tracking', {}, error as Error)
+  }
+}
+
+/**
+ * Trigger conversation rendering (Scriptorium)
+ *
+ * Enqueues a background job to deterministically render the conversation
+ * to Markdown and update interchange chunks for embedding.
+ */
+export async function triggerConversationRender(
+  repos: ReturnType<typeof getRepositories>,
+  options: {
+    chatId: string
+    userId: string
+  }
+): Promise<void> {
+  try {
+    await enqueueConversationRender(options.userId, {
+      chatId: options.chatId,
+    })
+  } catch (error) {
+    logger.error('Failed to trigger conversation render', {}, error as Error)
   }
 }

@@ -51,6 +51,11 @@ describe('wardrobe tool handlers', () => {
       wardrobe: {
         findByCharacterId: jest.fn(),
         findById: jest.fn(),
+        // Displacement helpers use findByIdForCharacter; default to the same
+        // behaviour as findById so existing test mocks of findById carry over.
+        findByIdForCharacter: jest.fn((_charId: string, id: string) =>
+          repos.wardrobe.findById(id)
+        ),
         create: jest.fn(),
       },
       chats: {
@@ -236,6 +241,50 @@ describe('wardrobe tool handlers', () => {
     })
     expect(result.coverage_summary).toContain('Midnight Dress')
     expect(result.coverage_summary).toContain('barefoot')
+  })
+
+  it('equips a vault-only item via the overlay-aware lookup', async () => {
+    // Regression: vault-only wardrobe items (Markdown files in the character
+    // vault, no DB row) have stable derived UUIDs but raw findById returns
+    // null. The LLM tool handler must use findByIdForCharacter so vault items
+    // can be equipped from `update_outfit_item` tool calls.
+    const vaultItem = makeWardrobeItem({
+      id: 'c52b1e29-6a6b-84a6-8084-d5b1d0bf4d7d',
+      title: 'Black athletic shorts',
+      types: ['bottom'],
+    })
+
+    repos.wardrobe.findById.mockResolvedValue(null)
+    repos.wardrobe.findByIdForCharacter.mockImplementation(
+      async (charId: unknown, id: unknown) => {
+        if (charId === 'char-1' && id === vaultItem.id) return vaultItem
+        return null
+      }
+    )
+    repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
+      top: null,
+      bottom: vaultItem.id,
+      footwear: null,
+      accessories: null,
+    })
+
+    const result = await executeWardrobeUpdateOutfitTool(
+      { slot: 'bottom', item_id: vaultItem.id },
+      context
+    )
+
+    expect(result).toMatchObject({
+      success: true,
+      action: 'equipped',
+      slot: 'bottom',
+      item: { item_id: vaultItem.id, title: 'Black athletic shorts' },
+    })
+    expect(repos.wardrobe.findByIdForCharacter).toHaveBeenCalledWith(
+      'char-1',
+      vaultItem.id
+    )
+    // The handler must not have fallen back to the raw, overlay-blind lookup.
+    expect(repos.wardrobe.findById).not.toHaveBeenCalledWith(vaultItem.id)
   })
 
   it('rejects equipping an item into an incompatible slot', async () => {

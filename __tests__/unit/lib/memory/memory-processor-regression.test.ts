@@ -191,4 +191,160 @@ describe('processMessageForMemory regressions', () => {
       { userId: 'user-1' }
     )
   })
+
+  it('SKIP_NEAR_DUPLICATE does not add an ID to memoryIds or reinforcedMemoryIds', async () => {
+    mockExtractMemoryFromMessage.mockResolvedValue({
+      success: true,
+      result: [
+        {
+          significant: true,
+          content: 'User carries the compass everywhere.',
+          summary: 'User carries compass',
+          keywords: ['compass'],
+          importance: 0.7,
+        },
+      ],
+      usage: { promptTokens: 4, completionTokens: 1, totalTokens: 5 },
+    } as any)
+    mockCreateMemoryWithGate.mockReset()
+    mockCreateMemoryWithGate
+      .mockResolvedValueOnce({
+        action: 'SKIP_NEAR_DUPLICATE',
+        memory: { id: 'mem-existing', reinforcementCount: 5 },
+        similarity: 0.95,
+      } as any)
+
+    const result = await processMessageForMemory(baseContext)
+
+    expect(result.success).toBe(true)
+    expect(result.memoryIds).toEqual([])
+    expect(result.reinforcedMemoryIds).toEqual([])
+    expect(result.memoryCreated).toBe(false)
+    expect(result.memoryReinforced).toBe(false)
+    expect(result.debugLogs?.join('\n')).toContain('SKIPPED near-duplicate')
+  })
+
+  it('rate limit: skips extraction entirely when recent count >= maxPerHour', async () => {
+    const mockCountCreatedSince = jest.fn<any>().mockResolvedValue(25)
+
+    const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as {
+      getRepositories: jest.Mock
+    }
+    repositoriesMock.getRepositories.mockReturnValue({
+      memories: { countCreatedSince: mockCountCreatedSince },
+    })
+
+    const result = await processMessageForMemory({
+      ...baseContext,
+      memoryExtractionLimits: {
+        enabled: true,
+        maxPerHour: 20,
+        softStartFraction: 0.7,
+        softFloor: 0.7,
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.memoryCreated).toBe(false)
+    expect(result.memoryIds).toEqual([])
+    expect(mockExtractMemoryFromMessage).not.toHaveBeenCalled()
+    expect(result.debugLogs?.join('\n')).toContain('rate limit reached')
+  })
+
+  it('rate limit: in soft band, drops candidates below the floor', async () => {
+    const mockCountCreatedSince = jest.fn<any>().mockResolvedValue(15) // 75% of 20 = 15 > softStart(14)
+
+    const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as {
+      getRepositories: jest.Mock
+    }
+    repositoriesMock.getRepositories.mockReturnValue({
+      memories: { countCreatedSince: mockCountCreatedSince },
+    })
+
+    // Three candidates: two below floor, one above
+    mockExtractMemoryFromMessage.mockResolvedValue({
+      success: true,
+      result: [
+        { significant: true, content: 'low', summary: 'low', keywords: [], importance: 0.5 },
+        { significant: true, content: 'alsoLow', summary: 'alsoLow', keywords: [], importance: 0.6 },
+        { significant: true, content: 'high', summary: 'high', keywords: [], importance: 0.8 },
+      ],
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    } as any)
+    mockCreateMemoryWithGate.mockReset()
+    mockCreateMemoryWithGate.mockResolvedValue({ action: 'INSERT', memory: { id: 'mem-high' } } as any)
+
+    const result = await processMessageForMemory({
+      ...baseContext,
+      memoryExtractionLimits: {
+        enabled: true,
+        maxPerHour: 20,
+        softStartFraction: 0.7,
+        softFloor: 0.7,
+      },
+    })
+
+    expect(result.success).toBe(true)
+    // Only the single high-importance candidate should have been forwarded to createMemoryWithGate
+    // (across user + character passes, so expect at most 2 calls — one per pass)
+    const insertCalls = mockCreateMemoryWithGate.mock.calls.length
+    expect(insertCalls).toBeLessThanOrEqual(2)
+    expect(result.debugLogs?.join('\n')).toContain('Throttle dropped')
+    expect(result.debugLogs?.join('\n')).toContain('importance floor raised to 0.7')
+  })
+
+  it('rate limit: disabled is a no-op', async () => {
+    mockExtractMemoryFromMessage.mockResolvedValue({
+      success: true,
+      result: [
+        { significant: true, content: 'fact', summary: 'fact', keywords: [], importance: 0.4 },
+      ],
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    } as any)
+
+    const result = await processMessageForMemory({
+      ...baseContext,
+      memoryExtractionLimits: {
+        enabled: false,
+        maxPerHour: 1, // deliberately tiny; disabled=false means it shouldn't matter
+        softStartFraction: 0.7,
+        softFloor: 0.7,
+      },
+    })
+
+    expect(result.success).toBe(true)
+    // Extraction proceeded (createMemoryWithGate got called) even though "maxPerHour" is 1
+    expect(mockCreateMemoryWithGate).toHaveBeenCalled()
+  })
+
+  it('SKIP_EMBEDDING_FAILED does not add an ID and surfaces the failure in debug logs', async () => {
+    mockExtractMemoryFromMessage.mockResolvedValue({
+      success: true,
+      result: [
+        {
+          significant: true,
+          content: 'User likes jazz.',
+          summary: 'User likes jazz',
+          keywords: ['jazz'],
+          importance: 0.6,
+        },
+      ],
+      usage: { promptTokens: 3, completionTokens: 1, totalTokens: 4 },
+    } as any)
+    mockCreateMemoryWithGate.mockReset()
+    mockCreateMemoryWithGate
+      .mockResolvedValueOnce({
+        action: 'SKIP_EMBEDDING_FAILED',
+        memory: null,
+        reason: 'Embedding failed after retry: ECONNREFUSED',
+      } as any)
+
+    const result = await processMessageForMemory(baseContext)
+
+    expect(result.success).toBe(true)
+    expect(result.memoryIds).toEqual([])
+    expect(result.reinforcedMemoryIds).toEqual([])
+    expect(result.memoryCreated).toBe(false)
+    expect(result.debugLogs?.join('\n')).toContain('embedding generation failed after retry')
+  })
 })

@@ -26,7 +26,7 @@ export function WizardStepIndicator({ currentStep, completedSteps = [] }: Wizard
             <div className="flex flex-col items-center">
               <div
                 className={`
-                  flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors
+                  flex items-center justify-center w-8 h-8 rounded-full qt-label transition-colors
                   ${isActive
                     ? 'qt-bg-primary/10 ring-2 ring-[var(--color-primary)] qt-text-primary'
                     : isCompleted

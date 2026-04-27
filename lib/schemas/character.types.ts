@@ -40,6 +40,7 @@ export const CharacterScenarioSchema = z.object({
   id: UUIDSchema,
   title: z.string().min(1).max(200),
   content: z.string().min(1),
+  description: z.string().max(500).optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });
@@ -140,11 +141,33 @@ export const CharacterSchema = z.object({
   /** Default system prompt ID for chats with this character (null = use first/isDefault prompt) */
   defaultSystemPromptId: UUIDSchema.nullable().optional(),
 
+  /** Linked character document store (mountType='database', storeType='character'); null = not linked */
+  characterDocumentMountPointId: UUIDSchema.nullable().optional(),
+
+  /**
+   * When true, pronouns/aliases/title/firstMessage/talkativeness are read from
+   * the linked vault's properties.json instead of this row. Requires
+   * characterDocumentMountPointId to be set; writes still go to the DB.
+   */
+  readPropertiesFromDocumentStore: z.boolean().nullable().optional(),
+
   /** Whether this character can change their own outfit using wardrobe tools (null = enabled by default) */
   canDressThemselves: z.boolean().nullable().optional(),
 
   /** Whether this character can create new wardrobe items mid-conversation (null = enabled by default, requires tool use) */
   canCreateOutfits: z.boolean().nullable().optional(),
+
+  /**
+   * When true, this character may inspect and access "the Staff" of personified
+   * features — chat-level toggles for self_inventory, Staff messages
+   * (Lantern/Aurora/Librarian/Prospero/Host announcements), and any character
+   * vault (their own or peers') still apply. When null/false, the character
+   * cannot see Staff messages, the self_inventory tool is withheld, and every
+   * character vault (including their own) is hidden from doc_* tools — the
+   * character-level setting is a hard override on top of chat/project settings.
+   * Default: null (opaque).
+   */
+  systemTransparency: z.boolean().nullable().optional(),
 
   // Relationships
   partnerLinks: z.array(z.object({

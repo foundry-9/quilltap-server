@@ -96,6 +96,7 @@ export default function ToolPalette({
   // Fetch roleplay templates when palette opens
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch when isOpen becomes true + syncing selected template
       setSelectedTemplateId(roleplayTemplateId ?? null)
       fetch('/api/v1/roleplay-templates')
         .then(res => res.ok ? res.json() : [])

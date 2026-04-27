@@ -7,13 +7,19 @@
 import { z } from 'zod';
 import { enrichWithDefaultImage, enrichWithApiKey } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import type { ChatMetadata, ChatParticipantBase } from '@/lib/schemas/types';
+import type { ChatMetadata, ChatParticipantBase, ParticipantStatus } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   updateParticipantSchema,
   addParticipantSchema,
   chatUpdateRequestSchema,
 } from './schemas';
+import {
+  postHostAddAnnouncement,
+  postHostStatusChangeAnnouncement,
+  postHostRemoveAnnouncement,
+} from '@/lib/services/host-notifications/writer';
+import { postProsperoConnectionProfileChangeAnnouncement } from '@/lib/services/prospero-notifications/writer';
 
 type Repos = RepositoryContainer;
 
@@ -120,9 +126,32 @@ export async function handleParticipantUpdate(
     return { error: 'Chat not found', status: 404 };
   }
 
+  const oldParticipant = chat.participants.find((p) => p.id === participantId);
+  const oldConnectionProfileId = oldParticipant?.connectionProfileId ?? null;
+
   const result = await repos.chats.updateParticipant(chatId, participantId, participantData);
   if (!result) {
     return { error: 'Participant not found', status: 404 };
+  }
+
+  if (
+    participantData.connectionProfileId !== undefined &&
+    participantData.connectionProfileId !== oldConnectionProfileId &&
+    oldParticipant?.characterId
+  ) {
+    const character = await repos.characters.findById(oldParticipant.characterId);
+    if (character) {
+      const oldProfile = oldConnectionProfileId
+        ? await repos.connections.findById(oldConnectionProfileId)
+        : null;
+      const newProfile = await repos.connections.findById(participantData.connectionProfileId);
+      await postProsperoConnectionProfileChangeAnnouncement({
+        chatId,
+        characterName: character.name,
+        oldProfileLabel: oldProfile?.name ?? null,
+        newProfileLabel: newProfile?.name ?? null,
+      });
+    }
   }
 
   if (participantData.controlledBy !== undefined) {
@@ -169,6 +198,19 @@ export async function handleParticipantUpdate(
       const character = await repos.characters.findById(participant.characterId);
       if (character) {
         await recordStatusChangeEvent(chatId, character.name, oldStatus, newStatus, repos);
+        if (newStatus === 'removed') {
+          await postHostRemoveAnnouncement({ chatId, characterName: character.name });
+        } else if (
+          (oldStatus === 'active' || oldStatus === 'silent' || oldStatus === 'absent') &&
+          (newStatus === 'active' || newStatus === 'silent' || newStatus === 'absent')
+        ) {
+          await postHostStatusChangeAnnouncement({
+            chatId,
+            characterName: character.name,
+            oldStatus: oldStatus as ParticipantStatus,
+            newStatus,
+          });
+        }
       }
     }
   }
@@ -185,6 +227,12 @@ export async function handleParticipantUpdate(
       const character = await repos.characters.findById(participant.characterId);
       if (character) {
         await recordStatusChangeEvent(chatId, character.name, oldStatus, newStatus, repos);
+        await postHostStatusChangeAnnouncement({
+          chatId,
+          characterName: character.name,
+          oldStatus: oldStatus as ParticipantStatus,
+          newStatus: newStatus as ParticipantStatus,
+        });
       }
     }
   }
@@ -372,12 +420,30 @@ export async function processChatUpdates(
     );
     if ('error' in result) return result;
     updatedChat = result.chat;
+
+    if (validatedData.addParticipant.characterId) {
+      const addedCharacter = await repos.characters.findById(validatedData.addParticipant.characterId);
+      if (addedCharacter) {
+        await postHostAddAnnouncement({ chatId, character: addedCharacter });
+      }
+    }
   }
 
   if (validatedData.removeParticipantId) {
+    const removedParticipant = updatedChat.participants.find((p) => p.id === validatedData.removeParticipantId);
+    let removedCharacterName: string | null = null;
+    if (removedParticipant?.characterId) {
+      const character = await repos.characters.findById(removedParticipant.characterId);
+      if (character) removedCharacterName = character.name;
+    }
+
     const result = await handleRemoveParticipant(chatId, validatedData.removeParticipantId, repos);
     if ('error' in result) return result;
     updatedChat = result.chat;
+
+    if (removedCharacterName) {
+      await postHostRemoveAnnouncement({ chatId, characterName: removedCharacterName });
+    }
   }
 
   return { chat: updatedChat };

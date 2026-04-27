@@ -25,13 +25,14 @@ export function useImpersonation({
   const [activeTypingParticipantId, setActiveTypingParticipantId] = useState<string | null>(null)
   const [allLLMPauseTurnCount, setAllLLMPauseTurnCount] = useState(0)
 
-  // Initialize impersonation state from chat metadata
+  // Initialize/sync impersonation state from chat metadata
   useEffect(() => {
     const impersonatingIds = chat?.impersonatingParticipantIds
     const activeTypingId = chat?.activeTypingParticipantId
     const pauseTurnCount = chat?.allLLMPauseTurnCount
 
     if (impersonatingIds && impersonatingIds.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- user state must re-sync when chat prop changes (parent renders unconditionally)
       setImpersonatingParticipantIds(impersonatingIds)
       setActiveTypingParticipantId(activeTypingId ?? null)
     }

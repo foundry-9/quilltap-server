@@ -1,1 +1,0 @@
-export { useQuickChat } from './useQuickChat'

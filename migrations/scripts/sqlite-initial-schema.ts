@@ -74,6 +74,8 @@ export const SQLITE_TABLES = [
       "avatarOverrides" TEXT DEFAULT '[]',
       "physicalDescriptions" TEXT DEFAULT '[]',
       "clothingRecords" TEXT DEFAULT '[]',
+      "readPropertiesFromDocumentStore" INTEGER DEFAULT NULL,
+      "systemTransparency" INTEGER DEFAULT NULL,
       "createdAt" TEXT NOT NULL,
       "updatedAt" TEXT NOT NULL
     )`,
@@ -112,12 +114,92 @@ export const SQLITE_TABLES = [
       "showSystemEventsOverride" INTEGER,
       "requestFullContextOnNextMessage" INTEGER DEFAULT 0,
       "createdAt" TEXT NOT NULL,
-      "updatedAt" TEXT NOT NULL
+      "updatedAt" TEXT NOT NULL,
+      "renderedMarkdown" TEXT DEFAULT NULL,
+      "documentMode" TEXT DEFAULT 'normal',
+      "dividerPosition" INTEGER DEFAULT 45
     )`,
     indexes: [
       `CREATE INDEX IF NOT EXISTS "idx_chats_userId" ON "chats" ("userId")`,
       `CREATE INDEX IF NOT EXISTS "idx_chats_createdAt" ON "chats" ("createdAt" DESC)`,
       `CREATE INDEX IF NOT EXISTS "idx_chats_projectId" ON "chats" ("projectId")`,
+    ],
+  },
+  // Chat documents (Scriptorium Phase 3.5: document associations for Document Mode)
+  {
+    name: 'chat_documents',
+    sql: `CREATE TABLE IF NOT EXISTS "chat_documents" (
+      "id" TEXT PRIMARY KEY,
+      "chatId" TEXT NOT NULL,
+      "filePath" TEXT NOT NULL,
+      "scope" TEXT NOT NULL DEFAULT 'project',
+      "mountPoint" TEXT,
+      "displayTitle" TEXT,
+      "isActive" INTEGER DEFAULT 1,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_chat_documents_chatId" ON "chat_documents" ("chatId")`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_chat_documents_unique" ON "chat_documents" ("chatId", "filePath", "scope", "mountPoint")`,
+    ],
+  },
+  // Conversation annotations (Scriptorium: per-message annotations by characters)
+  {
+    name: 'conversation_annotations',
+    sql: `CREATE TABLE IF NOT EXISTS "conversation_annotations" (
+      "id" TEXT PRIMARY KEY,
+      "chatId" TEXT NOT NULL,
+      "messageIndex" INTEGER NOT NULL,
+      "sourceMessageId" TEXT,
+      "characterName" TEXT NOT NULL,
+      "content" TEXT NOT NULL,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL,
+      UNIQUE("chatId", "messageIndex", "characterName"),
+      FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_conversation_annotations_chatId" ON "conversation_annotations"("chatId")`,
+    ],
+  },
+  // Conversation chunks (Scriptorium: interchange-level rendered Markdown with embeddings)
+  {
+    name: 'conversation_chunks',
+    sql: `CREATE TABLE IF NOT EXISTS "conversation_chunks" (
+      "id" TEXT PRIMARY KEY,
+      "chatId" TEXT NOT NULL,
+      "interchangeIndex" INTEGER NOT NULL,
+      "content" TEXT NOT NULL,
+      "participantNames" TEXT DEFAULT '[]',
+      "messageIds" TEXT DEFAULT '[]',
+      "embedding" BLOB,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL,
+      UNIQUE("chatId", "interchangeIndex"),
+      FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_conversation_chunks_chatId" ON "conversation_chunks"("chatId")`,
+    ],
+  },
+  // Help docs (runtime-embedded help documentation)
+  {
+    name: 'help_docs',
+    sql: `CREATE TABLE IF NOT EXISTS "help_docs" (
+      "id" TEXT PRIMARY KEY,
+      "title" TEXT NOT NULL,
+      "path" TEXT NOT NULL UNIQUE,
+      "url" TEXT NOT NULL DEFAULT '',
+      "content" TEXT NOT NULL,
+      "contentHash" TEXT NOT NULL,
+      "embedding" BLOB,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_help_docs_path" ON "help_docs"("path")`,
+      `CREATE INDEX IF NOT EXISTS "idx_help_docs_url" ON "help_docs"("url")`,
     ],
   },
   // Chat messages - normalized table (one row per message)
@@ -234,6 +316,7 @@ export const SQLITE_TABLES = [
       "allowWebSearch" INTEGER DEFAULT 0,
       "useNativeWebSearch" INTEGER DEFAULT 0,
       "allowToolUse" INTEGER DEFAULT 1,
+      "supportsImageUpload" INTEGER DEFAULT 0,
       "tags" TEXT DEFAULT '[]',
       "totalTokens" INTEGER DEFAULT 0,
       "totalPromptTokens" INTEGER DEFAULT 0,
@@ -393,6 +476,8 @@ export const SQLITE_TABLES = [
       "sidebarWidth" INTEGER DEFAULT 256,
       "defaultTimestampConfig" TEXT DEFAULT '{}',
       "memoryCascadePreferences" TEXT DEFAULT '{}',
+      "autoHousekeepingSettings" TEXT DEFAULT '{"enabled":false,"perCharacterCap":2000,"perCharacterCapOverrides":{},"autoMergeSimilarThreshold":0.9,"mergeSimilar":false}',
+      "memoryExtractionLimits" TEXT DEFAULT '{"enabled":false,"maxPerHour":20,"softStartFraction":0.7,"softFloor":0.7}',
       "tokenDisplaySettings" TEXT DEFAULT '{}',
       "contextCompressionSettings" TEXT DEFAULT '{}',
       "llmLoggingSettings" TEXT DEFAULT '{}',

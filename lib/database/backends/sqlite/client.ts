@@ -10,6 +10,7 @@ import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { stopPeriodicCheckpoints, runShutdownCheckpoint } from './protection';
 import { closeLLMLogsSQLiteClient } from './llm-logs-client';
+import { closeMountIndexSQLiteClient } from './mount-index-client';
 import { releaseActiveInstanceLock } from './instance-lock';
 
 // ============================================================================
@@ -222,6 +223,7 @@ export function setupSQLiteShutdownHandlers(): void {
   shutdownHandlersRegistered = true;
 
   const handleShutdown = () => {
+    closeMountIndexSQLiteClient();
     closeLLMLogsSQLiteClient();
     closeSQLiteClient();
     releaseActiveInstanceLock();
@@ -240,6 +242,21 @@ export function setupSQLiteShutdownHandlers(): void {
   });
 
   process.on('unhandledRejection', (reason) => {
+    // Transient network errors from outbound fetch() calls (LLM providers,
+    // image APIs, etc.) can surface here if a stream body consumer doesn't
+    // catch them. These are recoverable — log and continue rather than
+    // taking the whole server down over a Cloudflare socket hiccup.
+    if (isRecoverableNetworkRejection(reason)) {
+      logger.warn('Unhandled network rejection (recovered, server kept alive)', {
+        reason: reason instanceof Error ? reason.message : String(reason),
+        code: (reason as NodeJS.ErrnoException | undefined)?.code,
+        cause: reason instanceof Error && reason.cause
+          ? (reason.cause instanceof Error ? reason.cause.message : String(reason.cause))
+          : undefined,
+      });
+      return;
+    }
+
     logger.error('Unhandled rejection, closing SQLite connection', {
       reason: reason instanceof Error ? reason.message : String(reason),
     });
@@ -247,6 +264,49 @@ export function setupSQLiteShutdownHandlers(): void {
     releaseActiveInstanceLock();
     process.exit(1);
   });
+}
+
+const RECOVERABLE_NETWORK_CODES = new Set([
+  'UND_ERR_SOCKET',
+  'UND_ERR_CLOSED',
+  'UND_ERR_ABORTED',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_REQ_CONTENT_LENGTH_MISMATCH',
+  'UND_ERR_RES_CONTENT_LENGTH_MISMATCH',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ECONNABORTED',
+  'EPIPE',
+  'ETIMEDOUT',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+]);
+
+function isRecoverableNetworkRejection(reason: unknown): boolean {
+  if (!(reason instanceof Error)) return false;
+
+  const code = (reason as NodeJS.ErrnoException).code;
+  if (code && RECOVERABLE_NETWORK_CODES.has(code)) return true;
+
+  const cause = (reason as Error & { cause?: unknown }).cause;
+  if (cause instanceof Error) {
+    const causeCode = (cause as NodeJS.ErrnoException).code;
+    if (causeCode && RECOVERABLE_NETWORK_CODES.has(causeCode)) return true;
+  }
+
+  // Undici throws `TypeError: terminated` when a streaming fetch body is
+  // cut off mid-flight. The error itself has no `code`, but its `cause`
+  // is usually a SocketError with UND_ERR_SOCKET (handled above). Match
+  // the bare message as a fallback for older undici versions.
+  if (reason.name === 'TypeError' && reason.message === 'terminated') {
+    return true;
+  }
+
+  return false;
 }
 
 // ============================================================================

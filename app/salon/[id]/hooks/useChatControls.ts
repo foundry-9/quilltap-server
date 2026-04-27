@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import useSWR from 'swr'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
@@ -57,7 +58,7 @@ export function useChatControls({
   const [documentEditingMode, setDocumentEditingMode] = useState(false)
   const [agentModeEnabled, setAgentModeEnabled] = useState<boolean | null>(null)
   const [storyBackgroundsEnabled, setStoryBackgroundsEnabled] = useState(false)
-  const [connectionProfiles, setConnectionProfiles] = useState<Array<{ id: string; name: string; provider?: string; modelName?: string }>>([])
+  const [allowCrossCharacterVaultReads, setAllowCrossCharacterVaultReads] = useState(false)
 
   // Refs
   const userStoppedStreamRef = useRef<boolean>(false)
@@ -67,6 +68,7 @@ export function useChatControls({
   const chatResolvedAgentModeEnabled = chat?.resolvedAgentModeEnabled
   useEffect(() => {
     if (chat) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setAgentModeEnabled(chatResolvedAgentModeEnabled ?? null)
     }
   }, [chat, chatResolvedAgentModeEnabled])
@@ -86,9 +88,18 @@ export function useChatControls({
   // Initialize documentEditingMode from chat data
   useEffect(() => {
     if (chat?.documentEditingMode !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setDocumentEditingMode(chat.documentEditingMode)
     }
   }, [chat?.documentEditingMode])
+
+  // Initialize allowCrossCharacterVaultReads from chat data
+  useEffect(() => {
+    if (chat?.allowCrossCharacterVaultReads !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by toggle handler
+      setAllowCrossCharacterVaultReads(chat.allowCrossCharacterVaultReads)
+    }
+  }, [chat?.allowCrossCharacterVaultReads])
 
   // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
   useEffect(() => {
@@ -98,25 +109,19 @@ export function useChatControls({
   }, [chat?.isPaused, isAllLLM, allLLMTurnCount])
 
   // Fetch connection profiles for participant sidebar dropdowns
-  useEffect(() => {
-    const fetchConnectionProfiles = async () => {
-      try {
-        const res = await fetch('/api/v1/connection-profiles')
-        if (res.ok) {
-          const data = await res.json()
-          setConnectionProfiles((data.profiles || []).map((p: { id: string; name: string; provider?: string; modelName?: string }) => ({
-            id: p.id,
-            name: p.name,
-            provider: p.provider,
-            modelName: p.modelName,
-          })))
-        }
-      } catch (error) {
-        console.error('Failed to fetch connection profiles for sidebar', { error: error instanceof Error ? error.message : String(error) })
-      }
-    }
-    fetchConnectionProfiles()
-  }, [])
+  const { data: profilesData } = useSWR<{ profiles: Array<{ id: string; name: string; provider?: string; modelName?: string }> }>(
+    '/api/v1/connection-profiles'
+  )
+
+  const connectionProfiles = useMemo(
+    () => profilesData?.profiles?.map((p) => ({
+      id: p.id,
+      name: p.name,
+      provider: p.provider,
+      modelName: p.modelName,
+    })) ?? [],
+    [profilesData]
+  )
 
   // Function to set pause state and persist to database
   const setPauseState = useCallback(async (paused: boolean) => {
@@ -147,6 +152,37 @@ export function useChatControls({
       showInfoToast('Auto-responses resumed')
     }
   }, [isPaused, setPauseState])
+
+  // Toggle cross-character vault reads and persist to database.
+  // When on, characters in this chat may read (read-only) other present
+  // participants' character vaults via the doc_* tools.
+  const handleToggleCrossCharacterVaultReads = useCallback(async () => {
+    const newValue = !allowCrossCharacterVaultReads
+    setAllowCrossCharacterVaultReads(newValue)
+
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { allowCrossCharacterVaultReads: newValue } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist cross-character vault reads', response.status)
+        setAllowCrossCharacterVaultReads(!newValue)
+        showErrorToast('Could not update shared-vault setting')
+        return
+      }
+      showInfoToast(
+        newValue
+          ? 'Shared vault reads enabled — characters may peek at each other’s dossiers'
+          : 'Shared vault reads disabled — each character is once more a closed book'
+      )
+    } catch (error) {
+      console.error('[Chat] Error persisting cross-character vault reads', error)
+      setAllowCrossCharacterVaultReads(!newValue)
+      showErrorToast('Could not update shared-vault setting')
+    }
+  }, [chatId, allowCrossCharacterVaultReads])
 
   // Toggle document editing mode and persist to database
   const handleToggleDocumentEditingMode = useCallback(async () => {
@@ -331,6 +367,35 @@ export function useChatControls({
     }
   }, [chatId, fetchChat])
 
+  // Handle system prompt change from participant sidebar
+  const handleSystemPromptChange = useCallback(async (
+    participantId: string,
+    promptId: string | null
+  ) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updateParticipant: {
+            participantId,
+            selectedSystemPromptId: promptId,
+          },
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to update system prompt')
+      }
+
+      showSuccessToast('System prompt updated')
+      await fetchChat()
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update system prompt')
+    }
+  }, [chatId, fetchChat])
+
   // Handle participant settings change
   const handleParticipantSettingsChange = useCallback(async (
     participantId: string,
@@ -372,6 +437,8 @@ export function useChatControls({
     documentEditingMode,
     agentModeEnabled,
     storyBackgroundsEnabled, setStoryBackgroundsEnabled,
+    allowCrossCharacterVaultReads,
+    handleToggleCrossCharacterVaultReads,
     connectionProfiles,
     userStoppedStreamRef,
     setPauseState,
@@ -384,6 +451,7 @@ export function useChatControls({
     handleOverrideDangerFlag,
     handleRemoveCharacter,
     handleConnectionProfileChange,
+    handleSystemPromptChange,
     handleParticipantSettingsChange,
     handleAllLLMContinue,
     handleAllLLMStop,

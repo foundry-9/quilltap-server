@@ -223,23 +223,21 @@ The AI has special tools for accessing project content:
 
 When chatting in a project, the AI can:
 
-- **Get Project Info** — Learn project name, description, and statistics
+- **Get Project Info** — Learn project name, description, character roster, counts, and the linked Scriptorium store
 - **Get Instructions** — Read the full project instructions
-- **List Files** — See what files are available
-- **Read File** — Access the content of a specific file
-- **Search Files** — Find relevant files using semantic search
+
+For listing, reading, and searching files, characters use the Scriptorium document tools (`doc_list_files`, `doc_read_file`, `doc_grep`) against the project's linked document store. See [Using Files with AI](files-with-ai.md) for the full picture.
 
 ### How It Works
 
 1. You ask a question that might need project context
-2. The AI decides to use the project info tool
-3. Tool retrieves relevant information
-4. AI incorporates it into the response
+2. The AI calls `project_info` for the overview and the `doc_*` tools for file content
+3. The AI incorporates what it finds into its response
 
 **Example:**
 - You: "What's the history of the Eldoria Kingdom?"
-- AI: Uses `search_files` to find lore documents
-- AI: Uses `read_file` to get the relevant content
+- AI: Uses `doc_grep` to find lore documents mentioning Eldoria
+- AI: Uses `doc_read_file` to pull the relevant passages
 - AI: Responds with information from your world bible
 
 ## Navigating Projects

@@ -73,9 +73,13 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
   }, [status])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
     loadTags()
   }, [loadTags])
 
+  // localStorage read must happen after hydration; a lazy useState initializer
+  // would cause an SSR mismatch (server renders with defaults, client with
+  // localStorage values).
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -83,6 +87,7 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
       if (raw) {
         const parsed = JSON.parse(raw)
         if (Array.isArray(parsed)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- see comment above
           setHiddenTagIds(new Set(parsed.filter((id) => typeof id === 'string')))
         }
       }

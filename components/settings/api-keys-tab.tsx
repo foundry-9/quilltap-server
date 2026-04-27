@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import useSWR from 'swr'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { useAutoAssociate } from '@/hooks/useAutoAssociate'
 import { fetchJson } from '@/lib/fetch-helpers'
-import SectionHeader from '@/components/ui/SectionHeader'
+import { getErrorMessage } from '@/lib/error-utils'
 import LoadingState from '@/components/ui/LoadingState'
 import ErrorAlert from '@/components/ui/ErrorAlert'
 import EmptyState from '@/components/ui/EmptyState'
@@ -25,7 +26,6 @@ interface ApiKey {
 }
 
 export default function ApiKeysTab() {
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
@@ -33,41 +33,18 @@ export default function ApiKeysTab() {
   const [testResults, setTestResults] = useState<{ [key: string]: string }>({})
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
-  // Load initial state
-  const loadKeys = useAsyncOperation<ApiKey[]>()
+  const { data, isLoading, error: loadError, mutate: mutateKeys } = useSWR<{ apiKeys: ApiKey[]; count: number }>(
+    '/api/v1/api-keys'
+  )
+  const apiKeys = data?.apiKeys ?? []
   const deleteKey = useAsyncOperation<void>()
   const testKey = useAsyncOperation<{ valid: boolean; error?: string }>()
   const triggerAutoAssociate = useAutoAssociate()
-
-  const fetchApiKeysData = async () => {
-    const result = await loadKeys.execute(async () => {
-      const response = await fetchJson<{ apiKeys: ApiKey[]; count: number }>('/api/v1/api-keys', {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
-      })
-
-      if (!response.ok) {
-        throw new Error(response.error || 'Failed to fetch API keys')
-      }
-
-      return response.data?.apiKeys || []
-    })
-
-    if (result) {
-      setApiKeys(result)
-    }
-  }
 
   // Trigger auto-association on mount (fire and forget)
   useEffect(() => {
     triggerAutoAssociate()
   }, [triggerAutoAssociate])
-
-  // Load API keys on mount
-  useEffect(() => {
-    fetchApiKeysData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const handleDeleteClick = (id: string) => {
     setDeleteConfirmId(id)
@@ -92,7 +69,7 @@ export default function ApiKeysTab() {
 
     if (result !== null) {
       setDeleteConfirmId(null)
-      await fetchApiKeysData()
+      await mutateKeys()
     }
   }
 
@@ -136,7 +113,7 @@ export default function ApiKeysTab() {
   }
 
   const handleModalSuccess = () => {
-    fetchApiKeysData()
+    mutateKeys()
   }
 
   const handleOpenExportDialog = () => {
@@ -156,11 +133,11 @@ export default function ApiKeysTab() {
   }
 
   const handleImportSuccess = () => {
-    fetchApiKeysData()
+    mutateKeys()
   }
 
   // Show loading state while fetching initial data
-  if (loadKeys.loading && apiKeys.length === 0) {
+  if (isLoading && apiKeys.length === 0) {
     return <LoadingState message="Loading API keys..." />
   }
 
@@ -169,10 +146,10 @@ export default function ApiKeysTab() {
   return (
     <div>
       {/* Main error state */}
-      {loadKeys.error && (
+      {loadError && (
         <ErrorAlert
-          message={loadKeys.error}
-          onRetry={fetchApiKeysData}
+          message={getErrorMessage(loadError, 'Failed to fetch API keys')}
+          onRetry={() => mutateKeys()}
           className="mb-4"
         />
       )}

@@ -12,11 +12,20 @@ const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
 global.fetch = mockFetch;
 
 
-// Helper to create mock File with working text() method
+// Helper to create mock File with working text() method. The hook peeks the
+// first 256 KB via file.slice(0, N).text() before falling back to file.text()
+// on legacy files, so the sliced Blob also needs a working .text() method.
 function createMockFile(content: string, name = 'export.qtap'): File {
   const file = new File([content], name, { type: 'application/json' });
-  // Override text() to return the content directly since Jest's File implementation may differ
   file.text = () => Promise.resolve(content);
+  const originalSlice = file.slice.bind(file);
+  file.slice = ((start?: number, end?: number, contentType?: string) => {
+    const sliced = originalSlice(start, end, contentType);
+    const slicedContent = content.slice(start ?? 0, end);
+    (sliced as unknown as { text: () => Promise<string> }).text = () =>
+      Promise.resolve(slicedContent);
+    return sliced;
+  }) as File['slice'];
   return file;
 }
 

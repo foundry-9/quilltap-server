@@ -26,6 +26,9 @@ export interface Character {
   npc?: boolean
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
+  characterDocumentMountPointId?: string | null
+  readPropertiesFromDocumentStore?: boolean | null
+  systemTransparency?: boolean | null
   defaultImage?: {
     id: string
     filepath: string
@@ -46,6 +49,8 @@ export interface CharacterFormData {
   systemPrompt: string
   avatarUrl: string
   defaultConnectionProfileId: string
+  readPropertiesFromDocumentStore: boolean
+  systemTransparency: boolean
 }
 
 export interface CharacterEditState {

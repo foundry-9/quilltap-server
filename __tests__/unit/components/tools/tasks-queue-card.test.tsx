@@ -5,6 +5,8 @@
 import { describe, it, expect, afterEach } from '@jest/globals'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import React from 'react'
+import { SWRConfig } from 'swr'
+import { swrFetcher } from '@/lib/swr-fetcher'
 import { TasksQueueCard } from '@/components/tools/tasks-queue-card'
 
 type QueueData = {
@@ -107,7 +109,11 @@ function mockQueueNetwork(queueResponses: QueueData[] = [defaultQueue]) {
 async function renderQueueCard(queueResponses?: QueueData[]) {
   const fetchMock = mockQueueNetwork(queueResponses)
   await act(async () => {
-    render(<TasksQueueCard />)
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, fetcher: swrFetcher }}>
+        <TasksQueueCard />
+      </SWRConfig>
+    )
   })
   return fetchMock
 }
@@ -126,10 +132,7 @@ describe('TasksQueueCard', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/system/tools?action=tasks-queue',
-      expect.objectContaining({
-        cache: 'no-store',
-      })
+      '/api/v1/system/tools?action=tasks-queue'
     )
   })
 

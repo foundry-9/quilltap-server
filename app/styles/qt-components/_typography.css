@@ -21,7 +21,7 @@
    * Use for: main page headers ("Settings", "Characters", welcome messages)
    */
   .qt-page-title {
-    @apply text-2xl font-bold tracking-tight;
+    @apply text-3xl font-semibold leading-tight;
     color: var(--color-foreground);
   }
 

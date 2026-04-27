@@ -19,7 +19,10 @@ import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 /** Minimal repository interfaces needed for displacement logic */
 export interface DisplacementRepos {
   wardrobe: {
-    findById(id: string): Promise<{ id: string; types: WardrobeItemType[] } | null>;
+    findByIdForCharacter(
+      characterId: string,
+      id: string,
+    ): Promise<{ id: string; types: WardrobeItemType[] } | null>;
   };
   chats: {
     getEquippedOutfitForCharacter(chatId: string, characterId: string): Promise<EquippedSlots | null>;
@@ -60,7 +63,7 @@ export async function equipWithDisplacement(
 
   // For each displaced item, clear ALL its type slots
   for (const displacedId of displacedItemIds) {
-    const displacedItem = await repos.wardrobe.findById(displacedId);
+    const displacedItem = await repos.wardrobe.findByIdForCharacter(characterId, displacedId);
     if (displacedItem) {
       for (const itemType of displacedItem.types) {
         // Only clear if still pointing to the displaced item
@@ -122,7 +125,7 @@ export async function unequipWithDisplacement(
   }
 
   // Look up the item to find all its type slots
-  const currentItem = await repos.wardrobe.findById(currentItemId);
+  const currentItem = await repos.wardrobe.findByIdForCharacter(characterId, currentItemId);
   if (currentItem) {
     for (const itemType of currentItem.types) {
       if (slots[itemType] === currentItemId) {

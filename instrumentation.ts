@@ -246,13 +246,14 @@ export async function register() {
           closeSQLite();
         } catch { /* ignore — module may not be loaded yet */ }
 
-        const { getSQLiteDatabasePath, getLLMLogsDatabasePath } = await import('./lib/paths');
+        const { getSQLiteDatabasePath, getLLMLogsDatabasePath, getMountIndexDatabasePath } = await import('./lib/paths');
         const { isDatabaseEncrypted } = await import('./lib/startup/db-encryption-state');
         const { convertDatabaseToEncrypted } = await import('./lib/startup/db-encryption-converter');
         const fsMod = await import('fs');
 
         const mainDbPath = getSQLiteDatabasePath();
         const llmLogsDbPath = getLLMLogsDatabasePath();
+        const mountIndexDbPath = getMountIndexDatabasePath();
         const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
 
         // Convert main database if it exists and is plaintext
@@ -295,6 +296,27 @@ export async function register() {
               error: convErr instanceof Error ? convErr.message : String(convErr),
             });
             // Non-fatal for LLM logs — they're expendable
+          }
+        }
+
+        // Convert mount index database if it exists and is plaintext
+        if (fsMod.default.existsSync(mountIndexDbPath) && !isDatabaseEncrypted(mountIndexDbPath)) {
+          logger.info('Phase -0.5b: Converting mount index database to encrypted format', {
+            context: 'instrumentation.register',
+            dbPath: mountIndexDbPath,
+          });
+
+          try {
+            convertDatabaseToEncrypted(mountIndexDbPath, pepper);
+            logger.info('Mount index database encryption conversion complete', {
+              context: 'instrumentation.register',
+            });
+          } catch (convErr) {
+            logger.warn('Mount index database encryption conversion failed — continuing', {
+              context: 'instrumentation.register',
+              error: convErr instanceof Error ? convErr.message : String(convErr),
+            });
+            // Non-fatal for mount index — it can be rebuilt
           }
         }
       }
@@ -496,11 +518,100 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.2: Character Vault Backfill (fire-and-forget)
+      // ================================================================
+      // For every Character that isn't already linked to a character
+      // document store, create a database-backed vault, scaffold the
+      // preset structure, and populate it with the character's current
+      // data. Idempotent — linked characters are skipped.
+      //
+      // Runs asynchronously so the sync SQLCipher writes (hundreds to
+      // thousands, depending on character count and prompt/scenario
+      // density) don't stall the event loop during startup. New vaults
+      // will be picked up on the next mount-point scan pass.
+      try {
+        const { backfillCharacterVaults } = await import('./lib/startup/backfill-character-vaults');
+        backfillCharacterVaults()
+          .then(async () => {
+            // Chained after backfill so newly created vaults (already in the
+            // new shape) aren't visited a second time for no reason.
+            const { migrateVaultPhysicalFiles } = await import(
+              './lib/startup/migrate-vault-physical-files'
+            );
+            await migrateVaultPhysicalFiles();
+
+            // One-time projection of every linked vault's wardrobe into the
+            // Wardrobe/<title>.md + Outfits/<name>.md folder layout, deleting
+            // the legacy wardrobe.json on the way out. Gated by an
+            // instance_settings flag so steady-state startups no-op.
+            const { refreshVaultWardrobe } = await import(
+              './lib/startup/refresh-vault-wardrobe'
+            );
+            await refreshVaultWardrobe();
+          })
+          .catch((backfillError) => {
+            logger.warn('Error during character vault backfill or physical-file migration', {
+              context: 'instrumentation.register',
+              error: backfillError instanceof Error ? backfillError.message : String(backfillError),
+            });
+          });
+      } catch (backfillImportError) {
+        logger.warn('Failed to import character vault backfill module', {
+          context: 'instrumentation.register',
+          error: backfillImportError instanceof Error ? backfillImportError.message : String(backfillImportError),
+        });
+      }
+
+      // ================================================================
+      // PHASE 3.3: Document Mount Point Scan (after filesystem ready)
+      // ================================================================
+      // Fire-and-forget: scan runs asynchronously so large vaults don't
+      // block server startup. Embedding jobs are enqueued during scan
+      // and processed by the background job processor after Phase 3.5.
+      try {
+        const { scanAllMountPoints } = await import('./lib/mount-index/scan-runner');
+        scanAllMountPoints().catch((scanError) => {
+          logger.warn('Document mount point scan failed', {
+            context: 'instrumentation.register',
+            error: scanError instanceof Error ? scanError.message : String(scanError),
+          });
+        });
+      } catch (mountScanError) {
+        logger.warn('Error initializing document mount point scanner, continuing startup', {
+          context: 'instrumentation.register',
+          error: mountScanError instanceof Error ? mountScanError.message : String(mountScanError),
+        });
+      }
+
+      // ================================================================
+      // PHASE 3.4: Ensure Project Scenario Infrastructure
+      // ================================================================
+      // For every project, make sure `officialMountPointId` is populated
+      // (creating a `Project Files: <name>` store if needed) and the
+      // `Scenarios/` folder exists inside it. Idempotent — steady-state
+      // boots are a no-op for healed projects. Synchronous so newly
+      // created stores are visible before the first request hits.
+      try {
+        const { ensureProjectScenariosForAllProjects } = await import(
+          './lib/startup/ensure-project-scenarios'
+        );
+        await ensureProjectScenariosForAllProjects();
+      } catch (ensureError) {
+        logger.warn('Error ensuring project scenario infrastructure, continuing startup', {
+          context: 'instrumentation.register',
+          error: ensureError instanceof Error ? ensureError.message : String(ensureError),
+        });
+      }
+
+      // ================================================================
       // PHASE 3.5: Start Background Schedulers (non-critical)
       // ================================================================
       try {
         const { scheduleCleanup } = await import('./lib/background-jobs/scheduled-cleanup');
         scheduleCleanup();
+
+        const { scheduleHousekeeping } = await import('./lib/background-jobs/scheduled-housekeeping');
+        scheduleHousekeeping();
 
         const { scheduleDangerScan } = await import('./lib/background-jobs/scheduled-danger-scan');
         await scheduleDangerScan();
@@ -509,7 +620,16 @@ export async function register() {
         const { startWatcher } = await import('./lib/file-storage/watcher');
         startWatcher();
 
-        logger.info('Background schedulers and filesystem watcher started', {
+        // Start mount point watchers for real-time Scriptorium re-indexing
+        const { startMountWatchers } = await import('./lib/mount-index/watcher');
+        startMountWatchers().catch((watcherError) => {
+          logger.warn('Mount point watchers failed to start', {
+            context: 'instrumentation.register',
+            error: watcherError instanceof Error ? watcherError.message : String(watcherError),
+          });
+        });
+
+        logger.info('Background schedulers and filesystem watchers started', {
           context: 'instrumentation.register',
         });
       } catch (schedulerError) {

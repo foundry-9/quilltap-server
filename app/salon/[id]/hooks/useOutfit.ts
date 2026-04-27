@@ -51,13 +51,18 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
 
   // Track which character wardrobes we've already fetched
   const fetchedWardrobesRef = useRef<Set<string>>(new Set())
+  // Mirror of wardrobeCache for reads inside callbacks. The state copy still
+  // drives renders; the ref keeps fetchWardrobeForCharacter's identity stable
+  // so effects depending on refreshOutfit don't cascade-refire every time a
+  // wardrobe fetch completes.
+  const wardrobeCacheRef = useRef<WardrobeCache>({})
 
   /**
    * Fetch wardrobe items for a single character and cache them.
    */
   const fetchWardrobeForCharacter = useCallback(async (characterId: string): Promise<WardrobeItemSummary[]> => {
     if (fetchedWardrobesRef.current.has(characterId)) {
-      return wardrobeCache[characterId] ?? []
+      return wardrobeCacheRef.current[characterId] ?? []
     }
 
     try {
@@ -88,13 +93,15 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
       }
 
       fetchedWardrobesRef.current.add(characterId)
-      setWardrobeCache(prev => ({ ...prev, [characterId]: personalItems }))
+      const next = { ...wardrobeCacheRef.current, [characterId]: personalItems }
+      wardrobeCacheRef.current = next
+      setWardrobeCache(next)
       return personalItems
     } catch (err) {
       console.error('[useOutfit] Error fetching wardrobe', { characterId, error: err })
       return []
     }
-  }, [wardrobeCache])
+  }, [])
 
   /**
    * Resolve item titles for equipped slots using the wardrobe cache.
@@ -125,7 +132,7 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
 
     setLoading(true)
     try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=outfit`)
+      const res = await fetch(`/api/v1/chats/${chatId}?action=outfit`, { cache: 'no-store' })
       if (!res.ok) {
         console.warn('[useOutfit] Failed to fetch outfit state', res.status)
         return null
@@ -163,8 +170,8 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
     } finally {
       setLoading(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- characterIds identity changes; content is stable after chat load
-  }, [chatId, characterIds.join(','), fetchWardrobeForCharacter, resolveItemDetails])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- characterIds content is stable after chat load; using array identity would cause unnecessary re-runs
+  }, [chatId, characterIds.length, fetchWardrobeForCharacter, resolveItemDetails])
 
   /**
    * Equip or unequip an item in a specific slot for a character.
@@ -227,6 +234,7 @@ export function useOutfit(chatId: string, characterIds: string[] = []) {
 
   // Fetch outfit state on mount
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
     refreshOutfit()
   }, [refreshOutfit])
 

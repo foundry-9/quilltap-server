@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
+import useSWR from 'swr'
 import type { LLMLog } from '@/lib/schemas/types'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
 
@@ -9,34 +10,14 @@ interface LLMLogsSectionProps {
 }
 
 export default function LLMLogsSection({ characterId }: LLMLogsSectionProps) {
-  const [logs, setLogs] = useState<LLMLog[]>([])
-  const [loading, setLoading] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [selectedLog, setSelectedLog] = useState<LLMLog | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const fetchLogs = useCallback(async () => {
-    if (!characterId || !isExpanded) return
-
-    try {
-      setLoading(true)
-      const res = await fetch(`/api/v1/llm-logs?characterId=${characterId}&limit=10`)
-      if (!res.ok) {
-        throw new Error('Failed to fetch logs')
-      }
-      const data = await res.json()
-      setLogs(data.logs || [])
-    } catch (error) {
-      console.error('Error fetching character LLM logs:', error)
-      setLogs([])
-    } finally {
-      setLoading(false)
-    }
-  }, [characterId, isExpanded])
-
-  useEffect(() => {
-    fetchLogs()
-  }, [fetchLogs])
+  const { data, isLoading } = useSWR<{ logs: LLMLog[] }>(
+    isExpanded ? `/api/v1/llm-logs?characterId=${characterId}&limit=10` : null
+  )
+  const logs = data?.logs ?? []
 
   const handleViewLog = (log: LLMLog) => {
     setSelectedLog(log)
@@ -84,7 +65,7 @@ export default function LLMLogsSection({ characterId }: LLMLogsSectionProps) {
 
       {isExpanded && (
         <div className="p-4">
-          {loading ? (
+          {isLoading ? (
             <div className="text-center py-4 qt-text-secondary">
               <svg className="animate-spin h-5 w-5 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

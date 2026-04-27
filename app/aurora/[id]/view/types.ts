@@ -43,6 +43,19 @@ export interface CharacterScenario {
   updatedAt: string
 }
 
+export interface CharacterPhysicalDescription {
+  id: string
+  name?: string | null
+  usageContext?: string | null
+  shortPrompt?: string | null
+  mediumPrompt?: string | null
+  longPrompt?: string | null
+  completePrompt?: string | null
+  fullDescription?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface Character {
   id: string
   name: string
@@ -53,6 +66,7 @@ export interface Character {
   firstMessage?: string | null
   exampleDialogues?: string | null
   systemPrompts?: CharacterSystemPrompt[]
+  physicalDescriptions?: CharacterPhysicalDescription[]
   avatarUrl?: string
   defaultImageId?: string
   defaultConnectionProfileId?: string
@@ -68,20 +82,14 @@ export interface Character {
   defaultSystemPromptId?: string | null
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string } | null
+  readPropertiesFromDocumentStore?: boolean | null
+  characterDocumentMountPointId?: string | null
   defaultImage?: {
     id: string
     filepath: string
     url?: string
   }
   tags?: string[]
-}
-
-export interface TemplateFields extends Record<string, string | null | undefined> {
-  description?: string | null
-  personality?: string | null
-  firstMessage?: string | null
-  exampleDialogues?: string | null
-  systemPrompt?: string | null
 }
 
 export interface TemplateCounts {

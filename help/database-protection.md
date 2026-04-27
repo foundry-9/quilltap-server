@@ -75,20 +75,21 @@ npx quilltap db --llm-logs --tables
 npx quilltap db --data-dir /path/to/data --tables
 ```
 
-## Two-Database Architecture
+## Three-Database Architecture
 
-Quilltap stores your data across two separate database files:
+Quilltap stores your data across three separate database files:
 
 - **`quilltap.db`** — Your characters, chats, messages, memories, projects, settings, and all other core data
 - **`quilltap-llm-logs.db`** — LLM request/response debug logs (the high-volume records that track every AI call)
+- **`quilltap-mount-index.db`** — The Scriptorium's indexed document chunks and embeddings for every document store, plus the full bytes of any **database-backed** store (Markdown and text documents plus uploaded blobs)
 
-This separation means that even if the debug logs database becomes corrupted, your characters, chats, and memories remain perfectly safe. If the logs database fails to open, Quilltap continues normally — you simply won't see LLM logs until the issue is resolved.
+This separation means that even if one database becomes corrupted, the others remain perfectly safe. The logs database and the mount-index database both fall back to a "degraded mode" on corruption — the feature they back goes quiet while the rest of Quilltap continues normally.
 
 ## What Runs Automatically
 
 ### Integrity Check on Startup
 
-Every time Quilltap starts, it runs a quick integrity check on both databases. If corruption is detected in the main database, you'll see a warning in the application logs. The app will still start so you can access your data and restore from a backup if needed. If corruption is detected in the LLM logs database, it enters "degraded mode" — logging is silently disabled but everything else works normally.
+Every time Quilltap starts, it runs a quick integrity check on all three databases. If corruption is detected in the main database, you'll see a warning in the application logs. The app will still start so you can access your data and restore from a backup if needed. If corruption is detected in the LLM logs database or the mount-index database, that database enters "degraded mode" — its feature goes quiet but everything else works normally.
 
 ### WAL Checkpoints
 
@@ -100,7 +101,7 @@ Quilltap uses SQLite's Write-Ahead Logging (WAL) mode for better performance. Th
 
 ### Physical Database Backups
 
-Quilltap creates a physical copy of both database files once per day. The check happens on startup — if the most recent backup is less than 24 hours old, the backup is skipped. These are stored in the `data/backups/` subdirectory of your data directory.
+Quilltap creates a physical copy of all three database files once per day. The check happens on startup — if the most recent backup of a given database is less than 24 hours old, that one is skipped. Backups are stored in the `data/backups/` subdirectory of your data directory. Every database — including the mount-index database where database-backed Scriptorium stores keep their bytes — is part of the sweep, so nothing of yours lives outside the backup policy.
 
 **Retention policy:**
 - All backups from the last 7 days are kept
@@ -134,6 +135,7 @@ Physical backups are stored under your data directory:
 Backup files are named with timestamps, for example:
 - Main database: `quilltap-2026-02-19T143022.db`
 - LLM logs database: `quilltap-llm-logs-2026-02-19T143022.db`
+- Mount-index database: `quilltap-mount-index-2026-02-19T143022.db`
 
 ## Restoring from a Physical Backup
 
@@ -147,6 +149,8 @@ If your main database becomes corrupted:
 6. Start Quilltap
 
 If only the LLM logs database is corrupted, you can either restore from a `quilltap-llm-logs-*.db` backup following the same steps (replacing `quilltap-llm-logs.db`), or simply delete the corrupted file — Quilltap will create a fresh one on next startup. You will lose historical LLM logs but no other data is affected.
+
+If the mount-index database is corrupted, restore from a `quilltap-mount-index-*.db` backup in the same manner (replacing `quilltap-mount-index.db` and deleting any sibling `.db-wal` / `.db-shm` files). Deleting the file rather than restoring is a last resort: you would lose all document-store indexes — and, for **database-backed** stores, the document bodies and blobs themselves. Filesystem-backed stores would recover on the next scan because their bytes live on disk.
 
 ## Physical Backups vs. Backup & Restore
 

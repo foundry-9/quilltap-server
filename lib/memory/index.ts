@@ -55,6 +55,7 @@ export {
   linkRelatedMemories,
   extractNovelDetails,
   calculateReinforcedImportance,
+  NEAR_DUPLICATE_THRESHOLD,
   MERGE_THRESHOLD,
   RELATED_THRESHOLD,
   type GateDecision,

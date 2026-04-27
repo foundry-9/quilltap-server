@@ -113,6 +113,8 @@ export const MessageEventSchema = z.object({
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage: z.boolean().nullable().optional(),
+  /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements. */
+  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host']).nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;
@@ -333,8 +335,14 @@ export const ChatMetadataSchema = z.object({
   /** Server-side turn queue for chained responses (JSON array of participant IDs) */
   turnQueue: z.string().default('[]'),
 
-  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
+
+  /** Document Mode layout state: normal (chat only), split (chat + document), focus (document only) */
+  documentMode: z.enum(['normal', 'split', 'focus']).default('normal'),
+
+  /** Divider position for split mode as percentage of main area width (20-80) */
+  dividerPosition: z.number().min(20).max(80).default(45),
 
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),
@@ -366,6 +374,13 @@ export const ChatMetadataSchema = z.object({
   /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
 
+  /**
+   * When true, characters in this chat may read (read-only) the character vaults
+   * belonging to other present participants via the `doc_*` tools. Writes remain
+   * scoped to the acting character's own vault. Defaults to false.
+   */
+  allowCrossCharacterVaultReads: z.boolean().default(false),
+
   /** Pending outfit change notifications keyed by characterId, cleared after delivery */
   pendingOutfitNotifications: JsonSchema.nullable().optional(),
 
@@ -389,6 +404,9 @@ export const ChatMetadataSchema = z.object({
   /** Image generation profile for this chat (shared by all participants) */
   imageProfileId: UUIDSchema.nullable().optional(),
 
+  /** When an image is generated in this chat, inject an assistant message announcing it (null = inherit from project/global) */
+  alertCharactersOfLanternImages: z.boolean().nullable().optional(),
+
   /** Whether this chat has been classified as dangerous (null = not yet classified) */
   isDangerousChat: z.boolean().nullable().optional(),
   /** Overall danger score for this chat (0-1), null = not yet classified */
@@ -402,6 +420,9 @@ export const ChatMetadataSchema = z.object({
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
+
+  /** Scriptorium: deterministic Markdown rendering of the full conversation */
+  renderedMarkdown: z.string().nullable().optional(),
 
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories } } */
   equippedOutfit: JsonSchema.nullable().optional(),
@@ -456,8 +477,14 @@ export const ChatMetadataBaseSchema = z.object({
   allLLMPauseTurnCount: z.number().default(0),
   /** Server-side turn queue for chained responses (JSON array of participant IDs) */
   turnQueue: z.string().default('[]'),
-  /** Whether document editing mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
+  /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
+
+  /** Document Mode layout state: normal (chat only), split (chat + document), focus (document only) */
+  documentMode: z.enum(['normal', 'split', 'focus']).default('normal'),
+
+  /** Divider position for split mode as percentage of main area width (20-80) */
+  dividerPosition: z.number().min(20).max(80).default(45),
 
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),
@@ -489,6 +516,9 @@ export const ChatMetadataBaseSchema = z.object({
   /** Flag to trigger tool change notification on next message (set when tool settings change) */
   forceToolsOnNextMessage: z.boolean().default(false),
 
+  /** When true, characters may read (read-only) the vaults of other present participants via doc_* tools */
+  allowCrossCharacterVaultReads: z.boolean().default(false),
+
   /** Pending outfit change notifications keyed by characterId, cleared after delivery */
   pendingOutfitNotifications: JsonSchema.nullable().optional(),
 
@@ -512,6 +542,9 @@ export const ChatMetadataBaseSchema = z.object({
   /** Image generation profile for this chat (shared by all participants) */
   imageProfileId: UUIDSchema.nullable().optional(),
 
+  /** When an image is generated in this chat, inject an assistant message announcing it (null = inherit from project/global) */
+  alertCharactersOfLanternImages: z.boolean().nullable().optional(),
+
   /** Whether this chat has been classified as dangerous (null = not yet classified) */
   isDangerousChat: z.boolean().nullable().optional(),
   /** Overall danger score for this chat (0-1), null = not yet classified */
@@ -525,6 +558,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
+
+  /** Scriptorium: deterministic Markdown rendering of the full conversation */
+  renderedMarkdown: z.string().nullable().optional(),
 
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories } } */
   equippedOutfit: JsonSchema.nullable().optional(),

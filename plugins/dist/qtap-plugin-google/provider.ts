@@ -76,6 +76,17 @@ function sanitizeSchemaForGoogle(schema: any): any {
       continue;
     }
 
+    // Google API requires uppercase Type strings
+    if (key === 'type') {
+      if (typeof value === 'string') {
+        sanitized[key] = value.toUpperCase();
+        continue;
+      } else if (Array.isArray(value)) {
+        sanitized[key] = value.map(v => typeof v === 'string' ? v.toUpperCase() : v);
+        continue;
+      }
+    }
+
     // Recursively sanitize nested objects
     if (value && typeof value === 'object') {
       sanitized[key] = sanitizeSchemaForGoogle(value);
@@ -105,11 +116,6 @@ export class GoogleProvider implements TextProvider {
       return true;
     }
 
-    // gemini-pro-latest resolves to Gemini 3
-    if (lowerName === 'gemini-pro-latest') {
-      return true;
-    }
-
     // Specific 2.5 models with thinking capabilities
     const thinkingModels = [
       'gemini-2.5-pro', // 2.5 Pro has thinking capabilities
@@ -129,16 +135,10 @@ export class GoogleProvider implements TextProvider {
       'gemini-2.5-flash-image', // Image generation model, no function calling
       'gemini-2.0-flash-exp-image-generation', // Experimental image model
       'imagen', // Imagen models don't support function calling
-      'gemini-pro-latest', // Resolves to Gemini 3, which doesn't support function calling
-      'gemini-flash-latest', // May resolve to a model without function calling
     ];
     const lowerName = modelName.toLowerCase();
     // Check explicit no-tools list
     if (noToolsModels.some(m => lowerName.includes(m.toLowerCase()))) {
-      return false;
-    }
-    // Gemini 3.x models don't support function calling
-    if (lowerName.includes('gemini-3')) {
       return false;
     }
     // Also disable for any model with "image" in the name that's not a vision model
@@ -465,7 +465,7 @@ export class GoogleProvider implements TextProvider {
   }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': getQuilltapUserAgent() } } });
 
     // Build tools configuration
     const tools: any[] = [];
@@ -567,7 +567,10 @@ export class GoogleProvider implements TextProvider {
           totalTokens: usage?.totalTokenCount ?? 0,
         },
         // Convert SDK response class to plain object for Zod validation
-        raw: JSON.parse(JSON.stringify(response)),
+        raw: {
+          ...JSON.parse(JSON.stringify(response)),
+          functionCalls: response.functionCalls ? response.functionCalls.map((fc: any) => ({ name: fc.name, args: fc.args })) : undefined,
+        },
         attachmentResults,
         thoughtSignature,
       };
@@ -582,7 +585,7 @@ export class GoogleProvider implements TextProvider {
   }
 
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
-    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': getQuilltapUserAgent() } } });
 
     // Build tools configuration
     const tools: any[] = [];
@@ -729,7 +732,7 @@ export class GoogleProvider implements TextProvider {
 
   async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': getQuilltapUserAgent() } } });
       // Try to generate simple content to validate the API key
       await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -744,7 +747,7 @@ export class GoogleProvider implements TextProvider {
 
   async getAvailableModels(apiKey: string): Promise<string[]> {
     try {
-      const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': getQuilltapUserAgent() } } });
 
       // Use the models.list() API to get available models dynamically
       const modelList: string[] = [];
@@ -819,7 +822,6 @@ export class GoogleProvider implements TextProvider {
             message: 'This is a thinking/reasoning model. Responses may take longer as the model reasons through complex problems.',
           },
         ],
-        missingCapabilities: ['function-calling'],
       };
     }
 
@@ -895,7 +897,6 @@ export class GoogleProvider implements TextProvider {
             message: 'This is Gemini 3 Pro, a thinking/reasoning model. Responses may take longer as the model reasons through complex problems.',
           },
         ],
-        missingCapabilities: ['function-calling'],
       };
     }
 

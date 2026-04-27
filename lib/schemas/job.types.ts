@@ -30,6 +30,9 @@ export const BackgroundJobTypeEnum = z.enum([
   'CHAT_DANGER_CLASSIFICATION', // Classify chat-level danger from context summary
   'SCENE_STATE_TRACKING', // Track scene state (location, character actions, appearance, clothing)
   'CHARACTER_AVATAR_GENERATION', // Generate character avatar based on equipped wardrobe items
+  'CONVERSATION_RENDER', // Deterministic Markdown rendering of conversation (Scriptorium)
+  'MEMORY_HOUSEKEEPING', // Prune / merge a character's memories against retention policy
+  'WARDROBE_OUTFIT_ANNOUNCEMENT', // Debounced Aurora announcement of outfit changes
 ]);
 export type BackgroundJobType = z.infer<typeof BackgroundJobTypeEnum>;
 

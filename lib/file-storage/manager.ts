@@ -40,6 +40,14 @@ interface UploadRawParams {
 
 import { createLogger } from '@/lib/logging/create-logger';
 import { getFilesDir } from '@/lib/paths';
+import {
+  getProjectDocumentStore,
+  writeProjectFileToMountStore,
+  isMountBlobStorageKey,
+  readMountBlob,
+  mountBlobExists,
+  deleteMountBlob,
+} from './project-store-bridge';
 
 const logger = createLogger('file-storage:manager');
 
@@ -277,6 +285,33 @@ class FileStorageManager {
       folderPath,
     } = params;
     try {
+      // When the project has a linked database-backed document store
+      // (established by the Stage 1 migration), route writes there instead of
+      // onto disk. A shim storageKey `mount-blob:{mountPointId}:{blobId}` is
+      // returned so downstream reads/deletes can tell the two storage modes
+      // apart.
+      if (projectId) {
+        const target = await getProjectDocumentStore(projectId);
+        if (target) {
+          const result = await writeProjectFileToMountStore({
+            projectId,
+            filename,
+            content,
+            contentType,
+            folderPath,
+          });
+          logger.info('File uploaded to project document store', {
+            filename,
+            projectId,
+            mountPointId: result.mountPointId,
+            blobId: result.blobId,
+            relativePath: result.relativePath,
+            size: result.sizeBytes,
+          });
+          return { storageKey: result.storageKey };
+        }
+      }
+
       const backend = await this.getBackend();
 
       // Generate storage key
@@ -335,6 +370,14 @@ class FileStorageManager {
         throw new Error('File has no storage key. Cannot download.');
       }
 
+      if (isMountBlobStorageKey(effectiveStorageKey)) {
+        const bytes = await readMountBlob(effectiveStorageKey);
+        if (!bytes) {
+          throw new Error(`Mount-blob not found for storageKey: ${effectiveStorageKey}`);
+        }
+        return bytes;
+      }
+
       const backend = await this.getBackend();
       const content = await backend.download(effectiveStorageKey);
 
@@ -366,6 +409,15 @@ class FileStorageManager {
       if (!effectiveStorageKey) {
         logger.warn('File has no storage key. Skipping deletion.', {
           fileId: file.id,
+        });
+        return;
+      }
+
+      if (isMountBlobStorageKey(effectiveStorageKey)) {
+        await deleteMountBlob(effectiveStorageKey);
+        logger.info('Mount-blob deleted successfully', {
+          fileId: file.id,
+          storageKey: effectiveStorageKey,
         });
         return;
       }
@@ -457,6 +509,13 @@ class FileStorageManager {
         throw new Error('File has no storage key. Cannot generate URL.');
       }
 
+      // Mount-blob keys are served by the same /api/v1/files/proxy route —
+      // that handler resolves the FileEntry by storageKey and re-dispatches
+      // through downloadFile(), which understands both storage modes.
+      if (isMountBlobStorageKey(effectiveStorageKey)) {
+        return `/api/v1/files/proxy/${encodeURIComponent(effectiveStorageKey)}`;
+      }
+
       const backend = await this.getBackend();
       const proxyUrl = backend.getProxyUrl(effectiveStorageKey);
       return proxyUrl;
@@ -490,6 +549,10 @@ class FileStorageManager {
         return false;
       }
 
+      if (isMountBlobStorageKey(effectiveStorageKey)) {
+        return await mountBlobExists(effectiveStorageKey);
+      }
+
       const backend = await this.getBackend();
       const exists = await backend.exists(effectiveStorageKey);
       return exists;
@@ -514,6 +577,9 @@ class FileStorageManager {
    */
   async storageKeyExists(storageKey: string): Promise<boolean> {
     try {
+      if (isMountBlobStorageKey(storageKey)) {
+        return await mountBlobExists(storageKey);
+      }
       const backend = await this.getBackend();
       return await backend.exists(storageKey);
     } catch (error) {

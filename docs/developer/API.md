@@ -1,6 +1,15 @@
 # Quilltap API Documentation
 
-Complete API reference for Quilltap v4.2+.
+API reference for Quilltap v4.3 and later.
+
+> **Freshness note (v4.3-dev):** The Scriptorium / Document Mode work and the Salon Staff (Librarian, Host, Concierge, Aurora, Lantern, Prospero) announcement system landed during 4.3-dev. The chat-actions list, the LLM-tools list, and the message schema below reflect those changes; older subsections may still describe earlier shapes verbatim. When in doubt, the source of truth is `app/api/v1/`, `lib/schemas/`, and `lib/tools/`. Notable additions since v4.2:
+>
+> - **Mount Points** (`/api/v1/mount-points`) — Scriptorium document-store CRUD, files/folders/blobs operations, and per-project linking
+> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `avatars`, `bulk`, `danger-classification`, `documents`, `memories`, `outfit`, `participants`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
+> - **New built-in LLM tools** — `doc_*` family (read/write/grep/list/move/copy/str_replace/focus/open/close/insert_text/update_heading/read_heading/read_frontmatter/update_frontmatter/create_folder/delete_folder/delete_file, plus blob variants), `self_inventory`, `state`, `whisper`, `read_conversation`, `submit_final_response`, `upsert_annotation`, `delete_annotation`, `create_wardrobe_item`, `update_outfit_item`. The unified search tool is now named `search` (was `search_memories`).
+> - **Retired tools** — `file_management` and the file-write-permission infrastructure are gone; many `project_info` actions were trimmed.
+> - **`systemSender` enum on messages** — `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`. See `lib/schemas/chat.types.ts`.
+> - **`systemTransparency` on characters** — per-character covenant toggle.
 
 ## Table of Contents
 
@@ -4010,16 +4019,16 @@ List all available LLM tools that can be enabled/disabled per chat.
       "available": true
     },
     {
-      "id": "search_memories",
-      "name": "Search Memories",
-      "description": "Search through character memories and past conversations",
+      "id": "search",
+      "name": "Search",
+      "description": "Search across the Scriptorium — character memories, past conversations, and document stores",
       "source": "built-in",
       "category": "memory",
       "available": true
     },
     {
-      "id": "search_web",
-      "name": "Search Web",
+      "id": "web_search",
+      "name": "Web Search",
       "description": "Search the web for current information",
       "source": "built-in",
       "category": "search",
@@ -4029,23 +4038,31 @@ List all available LLM tools that can be enabled/disabled per chat.
     {
       "id": "project_info",
       "name": "Project Info",
-      "description": "Access project information and files",
+      "description": "Access project information and files (trimmed actions in v4.3)",
       "source": "built-in",
       "category": "project",
       "available": false,
       "unavailableReason": "Chat must be associated with a project"
     },
     {
-      "id": "file_management",
-      "name": "File Management",
-      "description": "Read, write, and manage files in the file system",
+      "id": "doc_read_file",
+      "name": "Doc: Read File",
+      "description": "Read a file from a document store (Scriptorium)",
       "source": "built-in",
-      "category": "files",
+      "category": "documents",
       "available": true
     },
     {
-      "id": "search_help",
-      "name": "Search Help",
+      "id": "self_inventory",
+      "name": "Self Inventory",
+      "description": "Introspect character: loaded memories, wardrobe, vault access, current outfit",
+      "source": "built-in",
+      "category": "self",
+      "available": true
+    },
+    {
+      "id": "help_search",
+      "name": "Help Search",
       "description": "Search Quilltap help documentation for features, settings, and usage guidance",
       "source": "built-in",
       "category": "help",
@@ -4056,16 +4073,27 @@ List all available LLM tools that can be enabled/disabled per chat.
 }
 ```
 
-**Built-in Tools:**
+**Built-in Tools (v4.3):**
 
-| Tool ID | Name | Description | Context Requirements |
-|---------|------|-------------|---------------------|
-| `generate_image` | Generate Image | AI image generation | Requires image profile on character |
-| `search_memories` | Search Memories | Search character memories | Always available |
-| `search_web` | Search Web | Web search for current info | Requires web search enabled in connection profile |
-| `project_info` | Project Info | Access project files | Chat must be in a project |
-| `file_management` | File Management | File system operations | Always available |
-| `search_help` | Search Help | Search Quilltap documentation | Always available |
+The full list lives in `lib/tools/*-tool.ts`. Highlights:
+
+| Tool ID | Description | Context Requirements |
+|---------|-------------|---------------------|
+| `generate_image` | AI image generation (Lantern) | Requires image profile on character |
+| `search` | Unified search over memories, conversations, and Scriptorium documents (renamed from `search_memories`; the old name still works as a parser alias) | Always available |
+| `web_search` | Web search via the configured search provider plugin | Requires web search enabled in connection profile |
+| `help_search` / `help_navigate` / `help_settings` | Search and navigate the in-app help system | Always available |
+| `project_info` | Project file access (trimmed action set in v4.3) | Chat must be in a project |
+| `doc_read_file` / `doc_write_file` / `doc_str_replace` / `doc_grep` / `doc_list_files` / `doc_open_document` / `doc_close_document` / `doc_focus` / `doc_create_folder` / `doc_delete_folder` / `doc_delete_file` / `doc_move_file` / `doc_move_folder` / `doc_copy_file` / `doc_insert_text` / `doc_read_heading` / `doc_update_heading` / `doc_read_frontmatter` / `doc_update_frontmatter` / `doc_read_blob` / `doc_write_blob` / `doc_list_blobs` / `doc_delete_blob` | Document-store (Scriptorium) read/write tools — replaces the old `file_management` tool | Document store available; some require Document Mode |
+| `self_inventory` | Character introspection (loaded memories, wardrobe, vault access) | Always available |
+| `state` | Persistent chat state (Pascal: inventory, stats, counters) | Always available |
+| `rng` | Dice / coin / random rolls (Pascal) | Always available |
+| `whisper` | Send a private message to a specific character | Multi-character chats |
+| `read_conversation` | Read prior conversation history with filters | Always available |
+| `upsert_annotation` / `delete_annotation` | Manage conversation annotations | Always available |
+| `create_wardrobe_item` / `update_outfit_item` | Aurora wardrobe edits | Character context |
+| `submit_final_response` | Agent-mode wrap-up | Agent mode only |
+| `request_full_context` | Request full context expansion | Context compression enabled |
 
 **Notes:**
 - When `chatId` is provided, the response includes `available` and `unavailableReason` fields

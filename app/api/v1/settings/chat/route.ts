@@ -36,7 +36,8 @@ async function updateChatSettings(
   storyBackgroundsSettings?: unknown,
   contextCompressionSettings?: unknown,
   dangerousContentSettings?: unknown,
-  autoLockSettings?: unknown
+  autoLockSettings?: unknown,
+  compositionModeDefault?: boolean
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -158,6 +159,12 @@ async function updateChatSettings(
     const validatedAutoLockSettings = AutoLockSettingsSchema.parse(autoLockSettings)
     updateData.autoLockSettings = validatedAutoLockSettings
   }
+  if (typeof compositionModeDefault !== 'undefined') {
+    if (typeof compositionModeDefault !== 'boolean') {
+      throw new Error('Invalid compositionModeDefault value (must be boolean)')
+    }
+    updateData.compositionModeDefault = compositionModeDefault
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -218,6 +225,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       contextCompressionSettings,
       dangerousContentSettings,
       autoLockSettings,
+      compositionModeDefault,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -239,7 +247,8 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       storyBackgroundsSettings,
       contextCompressionSettings,
       dangerousContentSettings,
-      autoLockSettings
+      autoLockSettings,
+      compositionModeDefault
     )
 
     return successResponse(chatSettings)

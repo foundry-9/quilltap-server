@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import useSWR from 'swr'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -15,10 +16,9 @@ interface ReportInfo {
 }
 
 export function CapabilitiesReportCard() {
-  const [reports, setReports] = useState<ReportInfo[]>([])
-  const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadingReportId, setLoadingReportId] = useState<string | null>(null)
 
   // Dialog state
   const [showDialog, setShowDialog] = useState(false)
@@ -28,30 +28,10 @@ export function CapabilitiesReportCard() {
     content: string
   } | null>(null)
 
-  useEffect(() => {
-    fetchReports()
-  }, [])
-
-  const fetchReports = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await fetch('/api/v1/system/tools?action=capabilities-report-list', {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
-      })
-      if (!res.ok) throw new Error('Failed to fetch reports')
-      const data = await res.json()
-      setReports(data.reports || [])
-    } catch (err) {
-      if (err instanceof Error && err.message !== 'Failed to fetch reports') {
-        setError(err.message)
-      }
-      setReports([])
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { data, isLoading, error: loadError, mutate: mutateReports } = useSWR<{ reports: ReportInfo[] }>(
+    '/api/v1/system/tools?action=capabilities-report-list'
+  )
+  const reports = data?.reports ?? []
 
   const handleGenerateReport = async () => {
     try {
@@ -81,7 +61,7 @@ export function CapabilitiesReportCard() {
       setShowDialog(true)
 
       // Refresh the list
-      await fetchReports()
+      await mutateReports()
     } catch (err) {
       const errorMessage = getErrorMessage(err)
       setError(errorMessage)
@@ -94,7 +74,7 @@ export function CapabilitiesReportCard() {
 
   const handleViewReport = async (report: ReportInfo) => {
     try {
-      setLoading(true)
+      setLoadingReportId(report.id)
 
       const res = await fetch(`/api/v1/system/tools?action=capabilities-report-get&reportId=${report.id}`)
       if (!res.ok) throw new Error('Failed to load report')
@@ -111,7 +91,7 @@ export function CapabilitiesReportCard() {
       console.error('Failed to view report', { error: errorMessage })
       showErrorToast('Failed to load report')
     } finally {
-      setLoading(false)
+      setLoadingReportId(null)
     }
   }
 
@@ -131,7 +111,7 @@ export function CapabilitiesReportCard() {
       if (!res.ok) throw new Error('Failed to delete report')
 
       showSuccessToast('Report deleted')
-      await fetchReports()
+      await mutateReports()
     } catch (err) {
       const errorMessage = getErrorMessage(err)
       console.error('Failed to delete report', { error: errorMessage })
@@ -166,7 +146,7 @@ export function CapabilitiesReportCard() {
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-foreground mb-1">
+          <h2 className="qt-heading-2 text-foreground mb-1">
             Capabilities Report
           </h2>
           <p className="qt-text-small">
@@ -250,11 +230,11 @@ export function CapabilitiesReportCard() {
 
       {/* Previous Reports Section */}
       <div>
-        <h3 className="text-lg font-semibold text-foreground mb-3">
+        <h3 className="qt-heading-4 text-foreground mb-3">
           Previous Reports
         </h3>
 
-        {loading && !generating ? (
+        {isLoading && !generating ? (
           <div className="text-center py-6 qt-text-secondary">
             <svg
               className="animate-spin h-6 w-6 mx-auto mb-2"

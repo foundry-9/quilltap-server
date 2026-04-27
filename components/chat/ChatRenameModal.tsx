@@ -27,8 +27,9 @@ export default function ChatRenameModal({
   const [saving, setSaving] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
 
-  // Update local state when props change
+  // Sync local state when upstream props change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream <prop> changes (parent renders unconditionally)
     setTitle(currentTitle)
     setUseAutoRename(!initialIsManuallyRenamed)
   }, [currentTitle, initialIsManuallyRenamed])

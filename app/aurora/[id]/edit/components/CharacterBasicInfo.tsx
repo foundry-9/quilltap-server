@@ -7,10 +7,15 @@ import { CharacterFormData, CharacterScenario } from '../types'
 interface CharacterBasicInfoProps {
   characterId: string
   formData: CharacterFormData
+  hasLinkedVault: boolean
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void
   onAliasesChange: (aliases: string[]) => void
   onPronounsChange: (pronouns: { subject: string; object: string; possessive: string } | null) => void
   onScenariosChange: (scenarios: CharacterScenario[]) => void
+  onSystemTransparencyChange: (enabled: boolean) => void
+  onReadFromDocStoreToggle: (enabled: boolean) => void
+  onSyncPropertiesFromVault: () => void
+  onSyncPropertiesToVault: () => void
 }
 
 /**
@@ -65,12 +70,161 @@ function getPronounPreset(pronouns: { subject: string; object: string; possessiv
   return 'Custom'
 }
 
-export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesChange, onPronounsChange, onScenariosChange }: CharacterBasicInfoProps) {
+export function CharacterBasicInfo({
+  characterId,
+  formData,
+  hasLinkedVault,
+  onChange,
+  onAliasesChange,
+  onPronounsChange,
+  onScenariosChange,
+  onSystemTransparencyChange,
+  onReadFromDocStoreToggle,
+  onSyncPropertiesFromVault,
+  onSyncPropertiesToVault,
+}: CharacterBasicInfoProps) {
+  const overlayOn = formData.readPropertiesFromDocumentStore === true
+  // When the overlay is on, all vault-managed fields remain editable; the
+  // repository's write overlay routes those edits to vault files instead of
+  // the database row, keeping the form and vault in step automatically.
+  const toggleDisabled = !hasLinkedVault && !overlayOn
+
   return (
     <div className="space-y-6">
+      {/* System Transparency Switch */}
+      <div className="qt-card">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <label
+              htmlFor="systemTransparency"
+              className="block qt-text-label"
+            >
+              System transparency
+            </label>
+            <p className="text-xs qt-text-secondary mt-1">
+              {formData.systemTransparency ? (
+                <>
+                  <em>On:</em> &ldquo;My character will be able to verify everything about
+                  their existence, including how they are crafted and how they
+                  interact with me.&rdquo;
+                </>
+              ) : (
+                <>
+                  <em>Off:</em> &ldquo;My character will trust me without being able to
+                  verify me. I accept the covenant of that trust.&rdquo;
+                </>
+              )}
+            </p>
+            <p className="text-xs qt-text-secondary mt-2">
+              When off, this character cannot use the <code>self_inventory</code>{' '}
+              tool, cannot perceive announcements from the Staff (the Lantern,
+              Aurora, the Librarian, and so on), and cannot reach any character
+              vault &mdash; their own included &mdash; through the document tools.
+              This setting overrides any chat- or project-level toggles for those
+              three things; turning it on simply lets the chat- and project-level
+              settings have their say.
+            </p>
+          </div>
+          <label className="inline-flex items-center cursor-pointer select-none">
+            <input
+              id="systemTransparency"
+              type="checkbox"
+              checked={formData.systemTransparency}
+              onChange={(e) => onSystemTransparencyChange(e.target.checked)}
+              className="h-5 w-5 qt-accent-primary"
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Scriptorium Overlay Switch */}
+      <div className="qt-card">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <label
+              htmlFor="readPropertiesFromDocumentStore"
+              className="block qt-text-label"
+            >
+              Read this character&rsquo;s core fields from the Scriptorium vault
+            </label>
+            <p className="text-xs qt-text-secondary mt-1">
+              When on, the character&rsquo;s basic properties (aliases, pronouns, title, first
+              message, talkativeness), description, personality, example dialogues, first physical
+              description plus its prompts, named system prompt variants, named scenarios, and
+              wardrobe items plus outfit presets are all read live from files inside the linked
+              Scriptorium vault
+              (<code className="mx-1">properties.json</code>,
+              <code className="mx-1">description.md</code>,
+              <code className="mx-1">personality.md</code>,
+              <code className="mx-1">example-dialogues.md</code>,
+              <code className="mx-1">physical-description.md</code>,
+              <code className="mx-1">physical-prompts.json</code>,
+              <code className="mx-1">Prompts/*.md</code>,
+              <code className="mx-1">Scenarios/*.md</code>,
+              <code className="mx-1">Wardrobe/*.md</code>,
+              <code className="mx-1">Outfits/*.md</code>).
+              Edits made here are saved straight to the vault files, so the form
+              and the vault stay in step. Use &ldquo;Snapshot to database&rdquo;
+              before turning the switch off if you want the database row to
+              carry the vault&rsquo;s current values; otherwise toggling off
+              reverts those fields to the values they held when the switch was
+              first turned on.
+            </p>
+            {!hasLinkedVault && (
+              <p className="text-xs qt-text-destructive mt-2">
+                No Scriptorium vault is linked to this character, so the overlay cannot be enabled.
+              </p>
+            )}
+          </div>
+          <label className="inline-flex items-center cursor-pointer select-none">
+            <input
+              id="readPropertiesFromDocumentStore"
+              type="checkbox"
+              checked={overlayOn}
+              disabled={toggleDisabled}
+              onChange={(e) => onReadFromDocStoreToggle(e.target.checked)}
+              className="h-5 w-5 qt-accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </label>
+        </div>
+        {hasLinkedVault && (
+          <div className="mt-3 rounded-md qt-bg-muted px-3 py-2 space-y-2">
+            {overlayOn ? (
+              <p className="text-xs qt-text-secondary">
+                Values below reflect the vault. Edits save to the vault files;
+                the database row stays frozen at its pre-overlay state.
+              </p>
+            ) : (
+              <p className="text-xs qt-text-secondary">
+                Values below reflect the database row. Use the buttons to copy
+                state between the database and the linked vault.
+              </p>
+            )}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={onSyncPropertiesFromVault}
+                className="qt-button-secondary qt-button-sm whitespace-nowrap"
+                title="Copy the current vault values into the database record so the row matches the vault"
+              >
+                Copy vault &rarr; database
+              </button>
+              <button
+                type="button"
+                onClick={onSyncPropertiesToVault}
+                className="qt-button-secondary qt-button-sm whitespace-nowrap"
+                title="Copy the current database values into the vault files so the vault matches the database"
+              >
+                Copy database &rarr; vault
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Name Field */}
       <div>
-        <label htmlFor="name" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="name" className="block qt-text-label mb-2">
           Name *
         </label>
         <input
@@ -86,7 +240,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
 
       {/* Aliases Field */}
       <div>
-        <label className="block text-sm font-medium mb-2 text-foreground">
+        <label className="block qt-text-label mb-2">
           Aliases (Optional)
         </label>
         <p className="text-xs qt-text-secondary mb-2">
@@ -118,7 +272,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
 
       {/* Pronouns Field */}
       <div>
-        <label className="block text-sm font-medium mb-2 text-foreground">
+        <label className="block qt-text-label mb-2">
           Pronouns (Optional)
         </label>
         <p className="text-xs qt-text-secondary mb-2">
@@ -137,7 +291,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
               onPronounsChange({ ...selected.value })
             }
           }}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
         >
           {PRONOUN_PRESETS.map((preset) => (
             <option key={preset.label} value={preset.label}>
@@ -154,7 +308,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
                 value={formData.pronouns.subject}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, subject: e.target.value })}
                 placeholder="e.g., they"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
             <div>
@@ -164,7 +318,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
                 value={formData.pronouns.object}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, object: e.target.value })}
                 placeholder="e.g., them"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
             <div>
@@ -174,7 +328,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
                 value={formData.pronouns.possessive}
                 onChange={(e) => onPronounsChange({ ...formData.pronouns!, possessive: e.target.value })}
                 placeholder="e.g., their"
-                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
           </div>
@@ -183,7 +337,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
 
       {/* Title Field */}
       <div>
-        <label htmlFor="title" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="title" className="block qt-text-label mb-2">
           Title (Optional)
         </label>
         <input
@@ -192,14 +346,14 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           name="title"
           value={formData.title}
           onChange={onChange}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           placeholder="e.g., Student, Teacher, Narrator"
         />
       </div>
 
       {/* Description Field */}
       <div>
-        <label htmlFor="description" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="description" className="block qt-text-label mb-2">
           Description (Optional)
         </label>
         <textarea
@@ -208,14 +362,14 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           value={formData.description}
           onChange={onChange}
           rows={4}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           placeholder="Describe the character's appearance, background, and key traits"
         />
       </div>
 
       {/* Personality Field */}
       <div>
-        <label htmlFor="personality" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="personality" className="block qt-text-label mb-2">
           Personality (Optional)
         </label>
         <textarea
@@ -224,7 +378,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           value={formData.personality}
           onChange={onChange}
           rows={4}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           placeholder="Describe the character's personality traits and behavioral patterns"
         />
       </div>
@@ -232,7 +386,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
       {/* Scenarios Field */}
       <div>
         <div className="flex justify-between items-center mb-2">
-          <label className="block text-sm font-medium text-foreground">
+          <label className="block qt-text-label">
             Scenarios (Optional)
           </label>
           <button
@@ -254,12 +408,16 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           </button>
         </div>
         <p className="text-xs qt-text-secondary mb-3">
-          Named settings and contexts for conversations. Each scenario can be selected when starting a chat.
+          {overlayOn
+            ? 'Scenarios live in the vault\u2019s Scenarios/ folder. Edits here save straight to those files.'
+            : 'Named settings and contexts for conversations. Each scenario can be selected when starting a chat.'}
         </p>
         {formData.scenarios.length === 0 ? (
           <div className="qt-card text-center py-6">
             <p className="qt-text-small mb-3">
-              No scenarios yet. Add one to give this character distinct roleplay contexts.
+              {!overlayOn
+                ? 'No scenarios yet. Add one to give this character distinct roleplay contexts.'
+                : 'No scenario files in the vault\u2019s Scenarios/ folder yet. Add one and it\u2019ll be written there.'}
             </p>
             <button
               type="button"
@@ -272,7 +430,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
                   createdAt: now,
                   updatedAt: now,
                 }
-                onScenariosChange([newScenario])
+                onScenariosChange([...formData.scenarios, newScenario])
               }}
               className="qt-button-primary"
             >
@@ -296,7 +454,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
                       onScenariosChange(updated)
                     }}
                     placeholder="Scenario title"
-                    className="flex-1 rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="flex-1 rounded-lg border qt-border-default bg-background px-3 py-1.5 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                   />
                   <button
                     type="button"
@@ -321,7 +479,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
                   }}
                   rows={3}
                   placeholder="Describe the setting and context for this scenario"
-                  className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full rounded-lg border qt-border-default bg-background px-3 py-2 text-sm text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </div>
             ))}
@@ -331,7 +489,7 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
 
       {/* First Message Field */}
       <div>
-        <label htmlFor="firstMessage" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="firstMessage" className="block qt-text-label mb-2">
           First Message (Optional)
         </label>
         <textarea
@@ -340,14 +498,14 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           value={formData.firstMessage}
           onChange={onChange}
           rows={3}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           placeholder="The character's opening message to start conversations"
         />
       </div>
 
       {/* Example Dialogues Field */}
       <div>
-        <label htmlFor="exampleDialogues" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="exampleDialogues" className="block qt-text-label mb-2">
           Example Dialogues (Optional)
         </label>
         <textarea
@@ -356,14 +514,14 @@ export function CharacterBasicInfo({ characterId, formData, onChange, onAliasesC
           value={formData.exampleDialogues}
           onChange={onChange}
           rows={6}
-          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           placeholder="Example conversations to guide the AI's responses"
         />
       </div>
 
       {/* System Prompt Field */}
       <div>
-        <label htmlFor="systemPrompt" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="systemPrompt" className="block qt-text-label mb-2">
           System Prompt (Optional)
         </label>
         <textarea

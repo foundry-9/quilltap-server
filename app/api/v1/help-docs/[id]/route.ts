@@ -5,36 +5,12 @@
  */
 
 import { NextRequest } from 'next/server';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { successResponse, notFound, serverError } from '@/lib/api/responses';
 import { getHelpSearch } from '@/lib/help-search';
 
 const logger = createServiceLogger('HelpDocRoute');
-
-const HELP_BUNDLE_PATH = join(process.cwd(), 'public', 'help-bundle.msgpack.gz');
-
-/**
- * Ensure the help bundle is loaded
- */
-async function ensureHelpBundleLoaded(): Promise<void> {
-  const helpSearch = getHelpSearch();
-
-  if (helpSearch.isLoaded()) {
-    return;
-  }
-
-  try {
-    const buffer = await readFile(HELP_BUNDLE_PATH);
-    await helpSearch.loadFromBuffer(buffer);
-    logger.info('[HelpDoc] Help bundle loaded successfully');
-  } catch (error) {
-    logger.error('[HelpDoc] Failed to load help bundle', {}, error instanceof Error ? error : undefined);
-    throw new Error('Failed to load help bundle');
-  }
-}
 
 /**
  * Extract document ID from the URL pathname
@@ -51,10 +27,12 @@ export const GET = createAuthenticatedHandler(async (request: NextRequest, _cont
   try {
     const docId = extractDocumentId(request.nextUrl.pathname);
 
-    await ensureHelpBundleLoaded();
-
     const helpSearch = getHelpSearch();
-    const document = helpSearch.getDocument(docId);
+    if (!helpSearch.isLoaded()) {
+      await helpSearch.loadFromDatabase();
+    }
+
+    const document = await helpSearch.getDocument(docId);
 
     if (!document) {
       logger.warn('[HelpDoc] Document not found', { documentId: docId });
@@ -76,11 +54,6 @@ export const GET = createAuthenticatedHandler(async (request: NextRequest, _cont
       },
     });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Failed to load help bundle') {
-      logger.error('[HelpDoc] Error loading help bundle', {}, error);
-      return serverError('Failed to load help documents');
-    }
-
     logger.error('[HelpDoc] Error getting document', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to get help document');
   }

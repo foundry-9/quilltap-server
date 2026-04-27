@@ -20,6 +20,9 @@
  * - toggle-controlled-by - Toggle user/LLM control
  * - set-default-partner - Set default partner
  * - generate-external-prompt - Generate standalone system prompt for external tools
+ * - refresh-archive - Re-render and re-embed all conversations for this character
+ * - sync-properties-from-vault - Copy vault-managed fields from vault files into the DB row
+ * - sync-properties-to-vault - Copy the DB row's values out into the vault files (reverse of above)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -38,6 +41,12 @@ import { notFound, forbidden, badRequest, serverError } from '@/lib/api/response
 import { runCharacterOptimizer } from '@/lib/services/character-optimizer.service';
 import type { OptimizerProgressEvent } from '@/lib/services/character-optimizer.service';
 import { generateExternalPrompt } from '@/lib/services/external-prompt-generator.service';
+import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
+import {
+  readCharacterVaultManagedFields,
+  readCharacterVaultWardrobe,
+  writeCharacterVaultManagedFields,
+} from '@/lib/database/repositories/character-properties-overlay';
 
 // ============================================================================
 // Schemas
@@ -84,6 +93,12 @@ const updateCharacterSchema = z.object({
   defaultTimestampConfig: TimestampConfigSchema.nullable().optional(),
   defaultScenarioId: z.uuid().nullable().optional(),
   defaultSystemPromptId: z.uuid().nullable().optional(),
+  characterDocumentMountPointId: z.uuid()
+    .optional()
+    .or(z.literal('').transform(() => null))
+    .nullable(),
+  readPropertiesFromDocumentStore: z.boolean().nullable().optional(),
+  systemTransparency: z.boolean().nullable().optional(),
 });
 
 const avatarSchema = z.object({
@@ -109,6 +124,7 @@ const optimizeStreamSchema = z.object({
   useSemanticSearch: z.boolean().optional().default(true),
   sinceDate: z.string().nullable().optional().default(null),
   beforeDate: z.string().nullable().optional().default(null),
+  outputMode: z.enum(['apply', 'suggestions-file']).optional().default('apply'),
 });
 
 const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags'] as const;
@@ -123,7 +139,7 @@ const generateExternalPromptSchema = z.object({
   maxTokens: z.number().int().min(1000).max(20000),
 });
 
-const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt'] as const;
+const CHARACTER_POST_ACTIONS = ['favorite', 'avatar', 'add-tag', 'remove-tag', 'toggle-controlled-by', 'set-default-partner', 'optimize-stream', 'generate-external-prompt', 'refresh-archive', 'sync-properties-from-vault', 'sync-properties-to-vault'] as const;
 type CharacterPostAction = typeof CHARACTER_POST_ACTIONS[number];
 
 // ============================================================================
@@ -268,6 +284,16 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
             const messageCount = messages.filter((msg) => msg.type === 'message' && msg.role !== 'SYSTEM' && msg.role !== 'TOOL').length;
             const memoryCount = await repos.memories.countByChatId(chat.id);
 
+            // Scriptorium status: check rendered markdown and embedded chunks
+            const hasRenderedMarkdown = !!chat.renderedMarkdown;
+            let embeddedChunkCount = 0;
+            let totalChunkCount = 0;
+            if (hasRenderedMarkdown) {
+              const chunks = await repos.conversationChunks.findByChatId(chat.id);
+              totalChunkCount = chunks.length;
+              embeddedChunkCount = chunks.filter(c => c.embedding !== null && c.embedding !== undefined).length;
+            }
+
             const recentMessages = messages
               .filter((msg) => msg.type === 'message')
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -311,6 +337,9 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(async (req, 
                 messages: messageCount,
                 memories: memoryCount,
               },
+              scriptoriumStatus: hasRenderedMarkdown
+                ? (embeddedChunkCount >= totalChunkCount && totalChunkCount > 0 ? 'embedded' : 'rendered')
+                : 'none',
             };
           })
         );
@@ -474,7 +503,7 @@ async function handleOptimizeStream(
 ): Promise<NextResponse> {
 
   const body = await req.json();
-  const { connectionProfileId, maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate } = optimizeStreamSchema.parse(body);
+  const { connectionProfileId, maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate, outputMode } = optimizeStreamSchema.parse(body);
 
   logger.info('[Characters v1] Character optimizer starting (streaming)', {
     userId: user.id,
@@ -485,10 +514,11 @@ async function handleOptimizeStream(
     useSemanticSearch,
     sinceDate,
     beforeDate,
+    outputMode,
   });
 
   const encoder = new TextEncoder();
-  const optimizerOptions = { maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate };
+  const optimizerOptions = { maxMemories, searchQuery, useSemanticSearch, sinceDate, beforeDate, outputMode };
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -691,6 +721,205 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
       }
 
       return NextResponse.json({ prompt: result.prompt, tokensUsed: result.tokensUsed });
+    },
+
+    'sync-properties-from-vault': async () => {
+      try {
+        // Use the raw character so we see the canonical DB state, not the overlay.
+        const rawCharacter = await repos.characters.findByIdRaw(id);
+        if (!rawCharacter) {
+          return notFound('Character');
+        }
+        if (!rawCharacter.characterDocumentMountPointId) {
+          return badRequest('Character has no linked document-store vault to sync from');
+        }
+
+        const mountId = rawCharacter.characterDocumentMountPointId;
+        const existingPhysical = rawCharacter.physicalDescriptions ?? [];
+        const [snapshot, vaultWardrobe] = await Promise.all([
+          readCharacterVaultManagedFields(mountId, rawCharacter.id, existingPhysical),
+          readCharacterVaultWardrobe(mountId, rawCharacter.id),
+        ]);
+        const physicalSkippedNoPrimary = snapshot.physicalSkippedNoPrimary === true;
+        const { physicalSkippedNoPrimary: _omit, ...patch } = snapshot;
+
+        // Wardrobe syncs against separate tables (wardrobe_items,
+        // outfit_presets), not character-row columns, so it doesn't feed
+        // `patch`. When the vault file is valid we replace the character's
+        // active wardrobe wholesale — the same "vault is the list" semantics
+        // used for systemPrompts / scenarios above.
+        let wardrobeItemsWritten = 0;
+        let wardrobePresetsWritten = 0;
+        const wardrobeSynced = vaultWardrobe !== null;
+        if (vaultWardrobe) {
+          const existingItems = await repos.wardrobe.findByCharacterIdRaw(
+            rawCharacter.id,
+            true,
+          );
+          for (const item of existingItems) {
+            await repos.wardrobe.delete(item.id);
+          }
+          const existingPresets = await repos.outfitPresets.findByCharacterIdRaw(
+            rawCharacter.id,
+          );
+          for (const preset of existingPresets) {
+            await repos.outfitPresets.delete(preset.id);
+          }
+
+          for (const item of vaultWardrobe.items) {
+            await repos.wardrobe.create(
+              {
+                characterId: rawCharacter.id,
+                title: item.title,
+                description: item.description ?? null,
+                types: item.types,
+                appropriateness: item.appropriateness ?? null,
+                isDefault: item.isDefault,
+                migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
+                archivedAt: item.archivedAt ?? null,
+              },
+              { id: item.id, createdAt: item.createdAt, updatedAt: item.updatedAt },
+            );
+            wardrobeItemsWritten++;
+          }
+          for (const preset of vaultWardrobe.presets) {
+            await repos.outfitPresets.create(
+              {
+                characterId: rawCharacter.id,
+                name: preset.name,
+                description: preset.description ?? null,
+                slots: preset.slots,
+              },
+              {
+                id: preset.id,
+                createdAt: preset.createdAt,
+                updatedAt: preset.updatedAt,
+              },
+            );
+            wardrobePresetsWritten++;
+          }
+        }
+
+        if (Object.keys(patch).length === 0 && !wardrobeSynced) {
+          return badRequest(
+            "This character's vault has no valid overlay files to sync; nothing to do"
+          );
+        }
+
+        // updateRaw bypasses the write overlay; sync-back is the one path that
+        // intentionally writes managed fields straight to the DB row.
+        const updatedCharacter =
+          Object.keys(patch).length > 0
+            ? await repos.characters.updateRaw(id, patch)
+            : await repos.characters.findById(id);
+
+        logger.info('[Characters v1] Synced character properties from vault', {
+          characterId: id,
+          mountPointId: mountId,
+          syncedProperties: snapshot.aliases !== undefined,
+          syncedDescription: snapshot.description !== undefined,
+          syncedPersonality: snapshot.personality !== undefined,
+          syncedExampleDialogues: snapshot.exampleDialogues !== undefined,
+          syncedPhysical: snapshot.physicalDescriptions !== undefined,
+          physicalSkippedNoPrimary,
+          syncedSystemPromptCount: snapshot.systemPrompts?.length ?? 0,
+          syncedScenarioCount: snapshot.scenarios?.length ?? 0,
+          syncedWardrobe: wardrobeSynced,
+          wardrobeItemsWritten,
+          wardrobePresetsWritten,
+        });
+
+        return NextResponse.json({ character: updatedCharacter });
+      } catch (error) {
+        logger.error('[Characters v1] Error syncing properties from vault', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to sync properties from vault');
+      }
+    },
+
+    'sync-properties-to-vault': async () => {
+      try {
+        // Read the raw character so we project the canonical DB state into the
+        // vault, not values that would themselves be overlaid from vault files.
+        const rawCharacter = await repos.characters.findByIdRaw(id);
+        if (!rawCharacter) {
+          return notFound('Character');
+        }
+        if (!rawCharacter.characterDocumentMountPointId) {
+          return badRequest('Character has no linked document-store vault to sync to');
+        }
+
+        const mountId = rawCharacter.characterDocumentMountPointId;
+        const [wardrobeItems, outfitPresets] = await Promise.all([
+          repos.wardrobe.findByCharacterIdRaw(rawCharacter.id, true),
+          repos.outfitPresets.findByCharacterIdRaw(rawCharacter.id),
+        ]);
+
+        const writeResult = await writeCharacterVaultManagedFields(mountId, {
+          character: rawCharacter,
+          wardrobeItems,
+          outfitPresets,
+        });
+
+        logger.info('[Characters v1] Synced character properties to vault', {
+          characterId: id,
+          mountPointId: mountId,
+          singleFileWriteCount: writeResult.singleFileWriteCount,
+          systemPromptsWritten: writeResult.systemPromptsWritten,
+          scenariosWritten: writeResult.scenariosWritten,
+          wardrobeItemsWritten: writeResult.wardrobeItemsWritten,
+          outfitPresetsWritten: writeResult.outfitPresetsWritten,
+          physicalSkippedNoPrimary: writeResult.physicalSkippedNoPrimary,
+        });
+
+        // Return the overlaid character so the UI picks up vault-backed values
+        // immediately if the overlay switch happens to be on.
+        const refreshed = await repos.characters.findById(id);
+        return NextResponse.json({ character: refreshed });
+      } catch (error) {
+        logger.error('[Characters v1] Error syncing properties to vault', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to sync properties to vault');
+      }
+    },
+
+    'refresh-archive': async () => {
+      try {
+        // Find all chats this character participates in
+        const chats = await repos.chats.findByCharacterId(id);
+
+        if (chats.length === 0) {
+          return NextResponse.json({ queued: 0 });
+        }
+
+        let queued = 0;
+        for (const chat of chats) {
+          try {
+            await enqueueConversationRender(user.id, {
+              chatId: chat.id,
+              fullReembed: true,
+            });
+            queued++;
+          } catch (err) {
+            // Skip chats that already have a pending render job
+            logger.debug('[Characters v1] Skipped render enqueue (likely already pending)', {
+              characterId: id,
+              chatId: chat.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+
+        logger.info('[Characters v1] Conversation archive refresh queued', {
+          characterId: id,
+          userId: user.id,
+          totalChats: chats.length,
+          queued,
+        });
+
+        return NextResponse.json({ queued, total: chats.length });
+      } catch (error) {
+        logger.error('[Characters v1] Error refreshing conversation archive', { characterId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to refresh conversation archive');
+      }
     },
   };
 

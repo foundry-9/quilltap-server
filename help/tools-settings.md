@@ -167,7 +167,7 @@ If a tool you need is unavailable, the dialog shows the reason. Take the suggest
 
 **For Experimental/Unsafe Tasks:**
 
-- **Disable File Management** - If you're worried about file changes
+- **Disable the Document Editing tool group** - If you're worried about file changes (covers `doc_write_file`, `doc_str_replace`, `doc_delete_file`, and the rest of the writing `doc_*` tools)
 - **Disable Project Info** - If you want isolated chat sessions
 - **Test settings** - Use tool settings to safely test different configurations
 

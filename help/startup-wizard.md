@@ -328,7 +328,7 @@ Quilltap includes a built-in embedding system that works without any external se
 
 **Check if it's working:**
 
-1. Go to: the **Memory & Search** tab in Settings (`/settings?tab=memory`)
+1. Go to: the **Commonplace Book** tab in Settings (`/settings?tab=memory`)
 2. Look for a profile named "Built-in TF-IDF" or similar
 3. It should show as the default (star icon)
 
@@ -354,7 +354,7 @@ For more sophisticated semantic search, you can use external embedding services.
 
 **Using OpenAI Embeddings:**
 
-1. Go to: the **Memory & Search** tab in Settings (`/settings?tab=memory`)
+1. Go to: the **Commonplace Book** tab in Settings (`/settings?tab=memory`)
 2. Click **Add Profile**
 3. Select **OpenAI** as the provider
 4. Select your OpenAI API key

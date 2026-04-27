@@ -12,6 +12,7 @@ import { fromChatMessages } from '@openrouter/sdk/lib/chat-compat';
 import type { ChatMessages, OpenResponsesResult } from '@openrouter/sdk/models';
 import type {
   TextProvider,
+  LLMMessage,
   LLMParams,
   LLMResponse,
   StreamChunk,
@@ -43,36 +44,77 @@ interface OpenRouterProfileParams {
   topP?: number;
 }
 
+type OpenAIContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } };
+
+const SUPPORTED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
 export class OpenRouterProvider implements TextProvider {
-  readonly supportsFileAttachments = false; // Model-dependent, conservative default
-  readonly supportedMimeTypes: string[] = [];
+  readonly supportsFileAttachments = true;
+  readonly supportedMimeTypes: string[] = SUPPORTED_IMAGE_MIME_TYPES;
   readonly supportsWebSearch = true;
 
   /**
-   * Helper to collect attachment failures
-   * OpenRouter proxies to many models, file support is model-dependent
+   * Build the OpenAI Chat Completions content field for a message.
+   * Returns a plain string when there are no image attachments, or a
+   * content-parts array (text + image_url) for vision-model requests.
    */
-  private collectAttachmentFailures(params: LLMParams): {
+  private buildMessageContent(m: LLMMessage): string | OpenAIContentPart[] {
+    const images = (m.attachments ?? []).filter(
+      (a) => SUPPORTED_IMAGE_MIME_TYPES.includes(a.mimeType) && (a.data || a.url)
+    );
+    if (images.length === 0) return m.content;
+
+    const parts: OpenAIContentPart[] = [];
+    if (m.content) parts.push({ type: 'text', text: m.content });
+    for (const img of images) {
+      const url = img.url ?? `data:${img.mimeType};base64,${img.data}`;
+      parts.push({ type: 'image_url', image_url: { url } });
+    }
+    return parts;
+  }
+
+  /**
+   * Categorize attachments into sent (image attachments now formatted
+   * inline as content parts) and failed (everything else — non-image
+   * MIME types and image rows missing both data and url).
+   */
+  private collectAttachmentResults(params: LLMParams): {
     sent: string[];
     failed: { id: string; error: string }[];
   } {
+    const sent: string[] = [];
     const failed: { id: string; error: string }[] = [];
     for (const msg of params.messages) {
-      if (msg.attachments) {
-        for (const attachment of msg.attachments) {
+      for (const a of msg.attachments ?? []) {
+        if (SUPPORTED_IMAGE_MIME_TYPES.includes(a.mimeType)) {
+          if (a.data || a.url) {
+            sent.push(a.id);
+          } else {
+            failed.push({ id: a.id, error: 'Image attachment missing data and url' });
+          }
+        } else {
           failed.push({
-            id: attachment.id,
-            error:
-              'OpenRouter file attachment support depends on model (not yet implemented)',
+            id: a.id,
+            error: `OpenRouter ${a.mimeType} attachments are not yet implemented`,
           });
         }
       }
     }
-    return { sent: [], failed };
+    return { sent, failed };
+  }
+
+  private hasImageAttachments(params: LLMParams): boolean {
+    return params.messages.some((m) =>
+      (m.attachments ?? []).some(
+        (a) => SUPPORTED_IMAGE_MIME_TYPES.includes(a.mimeType) && (a.data || a.url)
+      )
+    );
   }
 
   async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    const attachmentResults = this.collectAttachmentFailures(params);
+    const attachmentResults = this.collectAttachmentResults(params);
 
     const client = new OpenRouter({
       apiKey,
@@ -80,7 +122,9 @@ export class OpenRouterProvider implements TextProvider {
       appTitle: getQuilltapUserAgent(),
     });
 
-    // Strip attachments from messages and convert to OpenRouter format
+    // Convert messages to OpenRouter format, formatting image attachments
+    // as inline content parts when present (OpenAI Chat Completions vision
+    // schema). Non-image attachments are surfaced via attachmentResults.failed.
     const messages = params.messages
       .filter(m => !(m.role === 'tool' && !m.toolCallId))
       .map((m) => {
@@ -96,7 +140,7 @@ export class OpenRouterProvider implements TextProvider {
         }
         return {
           role: m.role as 'system' | 'user' | 'assistant',
-          content: m.content,
+          content: this.buildMessageContent(m) as any,
         };
       });
 
@@ -196,7 +240,19 @@ export class OpenRouterProvider implements TextProvider {
     params: LLMParams,
     apiKey: string
   ): AsyncGenerator<StreamChunk> {
-    const attachmentResults = this.collectAttachmentFailures(params);
+    const attachmentResults = this.collectAttachmentResults(params);
+
+    // Tool-enabled and vision (image attachment) requests go through the
+    // direct Chat Completions fetch path, which matches the OpenAI schema
+    // OpenRouter expects for function calls and multimodal content parts.
+    // The SDK's callModel/OpenResponses path doesn't round-trip image_url
+    // parts reliably, so route those requests around it.
+    const hasTools = params.tools && params.tools.length > 0;
+    const hasImages = this.hasImageAttachments(params);
+    if (hasTools || hasImages) {
+      yield* this.streamViaChatCompletions(params, apiKey, attachmentResults);
+      return;
+    }
 
     const client = new OpenRouter({
       apiKey,
@@ -204,8 +260,7 @@ export class OpenRouterProvider implements TextProvider {
       appTitle: getQuilltapUserAgent(),
     });
 
-    // Convert messages to SDK format
-    // Tool messages and assistant messages with toolCalls are handled in streamWithTools
+    // Convert messages to SDK format for the no-tools, no-images path.
     const messages: ChatMessages[] = params.messages
       .filter(m => !(m.role === 'tool' && !m.toolCallId))
       .map((m) => {
@@ -236,16 +291,6 @@ export class OpenRouterProvider implements TextProvider {
       maxOutputTokens: params.maxTokens ?? 4096,
       topP: params.topP ?? 1,
     };
-
-    // Check if we have tools - if so, we need to use direct API call
-    // because the SDK's callModel expects Zod schemas for inputSchema
-    const hasTools = params.tools && params.tools.length > 0;
-
-    if (hasTools) {
-      // Use direct fetch for tool-enabled requests
-      yield* this.streamWithTools(params, apiKey, attachmentResults);
-      return;
-    }
 
     // Add web search tool if enabled
     if (params.webSearchEnabled) {
@@ -380,18 +425,20 @@ export class OpenRouterProvider implements TextProvider {
   }
 
   /**
-   * Stream with tools using direct API call
+   * Stream via the OpenAI Chat Completions endpoint using a direct fetch.
    *
-   * The OpenRouter SDK's callModel expects Zod schemas for tool inputSchema,
-   * but Quilltap provides tools with JSON Schema in parameters.
-   * This method bypasses the SDK and calls the OpenRouter API directly.
+   * The OpenRouter SDK's callModel expects Zod schemas for tool inputSchema
+   * (Quilltap provides JSON Schema) and the OpenResponses input format
+   * doesn't round-trip multimodal image_url parts reliably, so any request
+   * with tools or image attachments routes through here instead.
    */
-  private async *streamWithTools(
+  private async *streamViaChatCompletions(
     params: LLMParams,
     apiKey: string,
     attachmentResults: { sent: string[]; failed: { id: string; error: string }[] }
   ): AsyncGenerator<StreamChunk> {
-    // Build messages in OpenAI Chat Completions format
+    // Build messages in OpenAI Chat Completions format, formatting image
+    // attachments inline as content parts when present.
     const messages = params.messages
       .filter(m => !(m.role === 'tool' && !m.toolCallId))
       .map((m) => {
@@ -407,34 +454,36 @@ export class OpenRouterProvider implements TextProvider {
         }
         return {
           role: m.role,
-          content: m.content,
+          content: this.buildMessageContent(m) as any,
         };
       });
-
-    // Convert tools to OpenAI format
-    const tools = params.tools!.map((tool: any) => ({
-      type: 'function',
-      function: {
-        name: tool.function?.name || tool.name,
-        description: tool.function?.description || tool.description,
-        parameters: tool.function?.parameters || tool.parameters,
-      },
-    }));
 
     // Build request body
     const body: any = {
       model: params.model,
       messages,
-      tools,
-      tool_choice: 'auto',
       stream: true,
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 4096,
       top_p: params.topP ?? 1,
     };
 
+    // Convert tools to OpenAI format and attach if present
+    if (params.tools && params.tools.length > 0) {
+      body.tools = params.tools.map((tool: any) => ({
+        type: 'function',
+        function: {
+          name: tool.function?.name || tool.name,
+          description: tool.function?.description || tool.description,
+          parameters: tool.function?.parameters || tool.parameters,
+        },
+      }));
+      body.tool_choice = 'auto';
+    }
+
     // Add web search if enabled
     if (params.webSearchEnabled) {
+      body.tools = body.tools || [];
       body.tools.push({ type: 'web_search_preview' });
     }
 
@@ -460,7 +509,7 @@ export class OpenRouterProvider implements TextProvider {
       if (!response.ok) {
         const errorText = await response.text();
         logger.error('OpenRouter API error', {
-          context: 'OpenRouterProvider.streamWithTools',
+          context: 'OpenRouterProvider.streamViaChatCompletions',
           status: response.status,
           error: errorText,
         });
@@ -552,8 +601,8 @@ export class OpenRouterProvider implements TextProvider {
       };
 
     } catch (error) {
-      logger.error('Error in streamWithTools', {
-        context: 'OpenRouterProvider.streamWithTools',
+      logger.error('Error in streamViaChatCompletions', {
+        context: 'OpenRouterProvider.streamViaChatCompletions',
       }, error instanceof Error ? error : undefined);
       throw error;
     }

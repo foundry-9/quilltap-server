@@ -118,6 +118,8 @@ When you begin a new conversation, you will be asked how to handle the character
 - **Let Character Choose** --- The character examines the scenario and their own wardrobe, then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph), the character simply falls back to their default outfit with admirable composure.
 - **None** --- The character begins with no equipped outfit; what they wear (if anything) is left to the narrative
 
+If you have also chosen a **Play As** character to represent yourself in the conversation, that character appears in the outfit selector too --- so you may dress your own persona alongside the cast, sparing yourself the indignity of arriving at a gala in whatever you happened to be wearing at your last engagement.
+
 This ensures that every conversation starts with the appropriate sartorial context, whether your character is attending a gala or has just tumbled out of bed.
 
 ## How the Wardrobe Affects Image Generation
@@ -125,6 +127,12 @@ This ensures that every conversation starts with the appropriate sartorial conte
 When Quilltap generates images of a character --- whether through the Lantern background system or direct image generation --- it consults the currently equipped wardrobe items rather than any legacy clothing description. Each equipped item's description is fed to the image provider, so what the character is *actually wearing* in the conversation is what appears in the picture.
 
 If no wardrobe items are equipped, the system falls back gracefully to the character's legacy clothing description, so nothing breaks for characters who have not yet been fitted with a proper wardrobe.
+
+## Aurora's Wardrobe Announcements
+
+Whenever a character's outfit changes during a chat --- whether you yourself adjust a slot from the sidebar, gift a freshly-tailored garment with the equip-now option ticked, or the character themselves invokes the `update_outfit_item` tool --- Aurora will quietly take note. After a polite minute of stillness (long enough for you to fuss with all four slots without setting off a flurry of announcements), she steps in with a brief Markdown summary of the present ensemble, addressed to everyone at the table. The wait resets each time another change lands, so she only speaks once the dust has truly settled.
+
+These announcements appear as ordinary chat messages attributed to Aurora and are visible to every character in the conversation, ensuring nobody is left guessing about who is now wearing what.
 
 ## Per-Conversation Avatars
 
