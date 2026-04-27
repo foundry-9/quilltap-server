@@ -58,10 +58,6 @@ export default function DocumentChangeTracker({
   useEffect(() => {
     baselineBlockTextsRef.current = readBlockTexts(editor)
 
-    console.debug('[DocumentChangeTracker] Baseline captured', {
-      blockCount: baselineBlockTextsRef.current.length,
-    })
-
     // Baseline just changed — content matches, so no changed lines
     onChangedLines(new Set())
   }, [baselineContent, editor, onChangedLines])
@@ -94,12 +90,6 @@ export default function DocumentChangeTracker({
           }
         }
 
-        console.debug('[DocumentChangeTracker] Block diff complete', {
-          currentBlocks: blockTexts.length,
-          baselineBlocks: baselineTexts.length,
-          changedCount: changedSet.size,
-        })
-
         onChangedLines(changedSet)
 
         // Measure DOM positions after the read, using rAF to ensure DOM is up to date.
@@ -108,7 +98,6 @@ export default function DocumentChangeTracker({
         requestAnimationFrame(() => {
           const rootElement = editor.getRootElement()
           if (!rootElement) {
-            console.debug('[DocumentChangeTracker] No root element found for DOM measurement')
             return
           }
 
@@ -124,11 +113,6 @@ export default function DocumentChangeTracker({
           })
 
           const totalHeight = rootElement.scrollHeight
-
-          console.debug('[DocumentChangeTracker] DOM measurement complete', {
-            blockCount: positions.length,
-            totalHeight,
-          })
 
           onLinePositions(positions, totalHeight)
         })

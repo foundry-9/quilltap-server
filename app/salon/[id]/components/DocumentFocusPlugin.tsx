@@ -63,11 +63,6 @@ function applyHighlight(
       // Content-relative top for the gutter eye icon
       const contentTop = rangeRect.top - rootRect.top + rootEl.scrollTop
 
-      console.debug('[DocumentFocusPlugin] Highlight overlay placement', {
-        viewport: { top: rangeRect.top, left: rangeRect.left, width: rangeRect.width, height: rangeRect.height },
-        contentTop,
-      })
-
       // Skip if dimensions are invalid
       if (rangeRect.width <= 0 || rangeRect.height <= 0) {
         console.warn('[DocumentFocusPlugin] Range has zero dimensions — skipping overlay')
@@ -134,12 +129,10 @@ export default function DocumentFocusPlugin({
   const [editor] = useLexicalComposerContext()
 
   useEffect(() => {
-    console.debug('[DocumentFocusPlugin] useEffect fired', { focusRequest })
     if (!focusRequest) return
 
     // Handle clear_focus — reset attention line and clear the request
     if (focusRequest.clear_focus) {
-      console.debug('[DocumentFocusPlugin] Clearing focus')
       onFocusCleared()
       onFocusProcessed()
       return
@@ -243,13 +236,6 @@ export default function DocumentFocusPlugin({
       return
     }
 
-    console.debug('[DocumentFocusPlugin] Resolved target node', {
-      nodeKey: resolvedNodeKey,
-      anchor,
-      highlight,
-      line,
-    })
-
     // Scroll and highlight after a rAF so DOM is settled.
     // Use the resolved node key to get the DOM element — this is the single
     // canonical lookup that both scroll/eye and highlight consume.
@@ -276,7 +262,6 @@ export default function DocumentFocusPlugin({
         }
 
         if (resolvedTop !== null) {
-          console.debug('[DocumentFocusPlugin] Eye position resolved', { pixelTop: resolvedTop })
           onFocusResolved(resolvedTop)
         }
 
@@ -292,7 +277,6 @@ export default function DocumentFocusPlugin({
 
         // If no actual scrolling is needed, apply highlight immediately
         if (Math.abs(container.scrollTop - scrollTarget) < 1) {
-          console.debug('[DocumentFocusPlugin] No scroll needed, applying highlight immediately')
           container.scrollTo({ top: scrollTarget })
           applyHighlightAndResolve()
         } else {
@@ -316,7 +300,6 @@ export default function DocumentFocusPlugin({
             top: scrollTarget,
             behavior: 'smooth',
           })
-          console.debug('[DocumentFocusPlugin] Scrolled to block', { targetTop, containerHeight })
         }
       } else {
         console.warn('[DocumentFocusPlugin] Could not scroll — missing container or target element', {

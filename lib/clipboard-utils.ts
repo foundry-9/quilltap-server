@@ -95,17 +95,13 @@ export async function copyImageToClipboard(src: string): Promise<boolean> {
   try {
     const pngBlob = blob.type === 'image/png' ? blob : await convertToPngBlob(blob);
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
-    console.debug('[clipboard-utils] Copied image via Clipboard API', { src });
     return true;
-  } catch (browserErr) {
-    console.debug('[clipboard-utils] Clipboard API write failed, trying fallback', {
-      error: browserErr instanceof Error ? browserErr.message : String(browserErr),
-    });
+  } catch {
+    // fall through to Electron IPC fallback
   }
 
   // Fallback: Electron IPC path (native clipboard.writeImage via nativeImage)
   if (hasElectronClipboard()) {
-    console.debug('[clipboard-utils] Copying image via Electron IPC fallback', { src });
     const dataUrl = await blobToDataUrl(blob);
     return window.quilltap!.copyImageToClipboard(dataUrl);
   }

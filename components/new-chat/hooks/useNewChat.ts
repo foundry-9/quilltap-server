@@ -347,12 +347,6 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
         requestBody.outfitSelections = state.outfitSelections
       }
 
-      console.debug('[useNewChat] Creating chat', {
-        participantCount: participants.length,
-        hasProject: Boolean(project?.id),
-        hasScenario: Boolean(state.scenario || state.scenarioId),
-      })
-
       const res = await fetch('/api/v1/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

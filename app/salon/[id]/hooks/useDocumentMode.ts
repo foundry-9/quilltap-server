@@ -603,7 +603,6 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
 
   // Focus/attention helpers
   const handleDocFocus = useCallback((result: FocusRequest): void => {
-    console.debug('[useDocumentMode] handleDocFocus called', result)
     if (result.clear_focus) {
       setAttentionTop(null)
       setFocusRequest(null)
