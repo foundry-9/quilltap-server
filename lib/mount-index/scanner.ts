@@ -441,3 +441,112 @@ export async function scanMountPoint(mountPoint: DocMountPoint): Promise<ScanRes
 
   return result;
 }
+
+// ============================================================================
+// Filesystem helpers for API route handlers
+// (keeps fs access out of route files)
+// ============================================================================
+
+/**
+ * Walk a filesystem-backed mount and return every directory's relative path
+ * (POSIX-style, forward slashes). Respects `excludePatterns` so the picker
+ * matches what the scanner considers. Symlinks are skipped.
+ *
+ * @param basePath        - Absolute root path of the mount point
+ * @param excludePatterns - Patterns to exclude (same syntax as scanner)
+ * @param currentRelative - Internal recursion parameter; leave undefined on first call
+ * @returns Array of POSIX-style relative directory paths
+ */
+export async function listFilesystemFolders(
+  basePath: string,
+  excludePatterns: string[],
+  currentRelative = ''
+): Promise<string[]> {
+  const results: string[] = [];
+  const currentAbsolute = currentRelative
+    ? path.join(basePath, currentRelative)
+    : basePath;
+
+  let entries;
+  try {
+    entries = await fs.readdir(currentAbsolute, { withFileTypes: true });
+  } catch (err) {
+    logger.warn('Unable to read directory while listing mount folders', {
+      path: currentAbsolute,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return results;
+  }
+
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) continue;
+    if (!entry.isDirectory()) continue;
+
+    const relativeNative = currentRelative
+      ? path.join(currentRelative, entry.name)
+      : entry.name;
+
+    if (excludePatterns.some(pattern => matchesPattern(relativeNative, pattern))) {
+      continue;
+    }
+
+    const relativePosix = relativeNative.split(path.sep).join('/');
+    results.push(relativePosix);
+
+    const sub = await listFilesystemFolders(basePath, excludePatterns, relativeNative);
+    results.push(...sub);
+  }
+
+  return results;
+}
+
+/**
+ * Create a directory inside a filesystem-backed mount point, enforcing that
+ * the target stays within the mount's basePath (path-traversal guard).
+ *
+ * @param basePath    - Absolute root path of the mount point
+ * @param mountPointId - Used only for logging
+ * @param relativePath - POSIX-style relative path to create (must be safe)
+ * @throws Error if the resolved target escapes the mount root
+ */
+export async function createFilesystemFolder(
+  basePath: string,
+  mountPointId: string,
+  relativePath: string
+): Promise<void> {
+  const target = path.resolve(basePath, relativePath);
+  const baseResolved = path.resolve(basePath);
+  const baseWithSep = baseResolved.endsWith(path.sep) ? baseResolved : baseResolved + path.sep;
+
+  if (!(target === baseResolved || target.startsWith(baseWithSep))) {
+    logger.warn('Folder path escapes mount base — refusing to create', {
+      mountPointId,
+      relativePath,
+      basePath,
+    });
+    throw new Error('Folder path escapes mount point boundary');
+  }
+
+  await fs.mkdir(target, { recursive: true });
+
+  logger.debug('Filesystem folder created inside mount point', {
+    mountPointId,
+    relativePath,
+    absolutePath: target,
+  });
+}
+
+/**
+ * Verify that a filesystem path is accessible (readable/traversable).
+ * Returns `true` if accessible, `false` otherwise.
+ *
+ * @param basePath - Absolute path to check
+ */
+export async function verifyBasePath(basePath: string): Promise<boolean> {
+  try {
+    await fs.access(basePath);
+    return true;
+  } catch {
+    return false;
+  }
+}

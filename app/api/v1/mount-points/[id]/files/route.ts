@@ -4,63 +4,12 @@
  * GET /api/v1/mount-points/[id]/files - List indexed files for a mount point
  */
 
-import path from 'path';
-import fs from 'fs/promises';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/auth';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
-import { matchesPattern } from '@/lib/mount-index/scanner';
-
-/**
- * Walk a filesystem-backed mount and return every directory's relative path
- * (POSIX-style, forward slashes). Honors `excludePatterns` so the picker
- * matches what the scanner would consider. Symlinks are skipped, as in the
- * scanner.
- */
-async function listFilesystemFolders(
-  basePath: string,
-  excludePatterns: string[],
-  currentRelative = ''
-): Promise<string[]> {
-  const results: string[] = [];
-  const currentAbsolute = currentRelative
-    ? path.join(basePath, currentRelative)
-    : basePath;
-
-  let entries;
-  try {
-    entries = await fs.readdir(currentAbsolute, { withFileTypes: true });
-  } catch (err) {
-    logger.warn('[Mount Points v1] Unable to read directory while listing folders', {
-      path: currentAbsolute,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return results;
-  }
-
-  for (const entry of entries) {
-    if (entry.isSymbolicLink()) continue;
-    if (!entry.isDirectory()) continue;
-
-    const relativeNative = currentRelative
-      ? path.join(currentRelative, entry.name)
-      : entry.name;
-
-    if (excludePatterns.some(pattern => matchesPattern(relativeNative, pattern))) {
-      continue;
-    }
-
-    const relativePosix = relativeNative.split(path.sep).join('/');
-    results.push(relativePosix);
-
-    const sub = await listFilesystemFolders(basePath, excludePatterns, relativeNative);
-    results.push(...sub);
-  }
-
-  return results;
-}
+import { listFilesystemFolders } from '@/lib/mount-index/scanner';
 
 // ============================================================================
 // GET Handler

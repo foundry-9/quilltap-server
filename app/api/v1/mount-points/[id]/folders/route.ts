@@ -5,7 +5,6 @@
  */
 
 import path from 'path';
-import fs from 'fs/promises';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAuthenticatedParamsHandler } from '@/lib/api/middleware';
@@ -13,6 +12,7 @@ import type { RequestContext } from '@/lib/api/middleware/auth';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { createDatabaseFolder } from '@/lib/mount-index/database-store';
+import { createFilesystemFolder } from '@/lib/mount-index/scanner';
 
 const createFolderSchema = z.object({
   path: z.string().min(1).max(1024),
@@ -79,24 +79,18 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         return badRequest('Mount point has no base path configured');
       }
 
-      const target = path.resolve(baseDir, rel);
-      const baseResolved = path.resolve(baseDir);
-      const baseWithSep = baseResolved.endsWith(path.sep) ? baseResolved : baseResolved + path.sep;
-      if (!(target === baseResolved || target.startsWith(baseWithSep))) {
-        logger.warn('[Mount Points v1] Folder path escapes mount base', {
-          mountPointId: id,
-          relativePath: rel,
-          baseDir,
-        });
-        return badRequest('Folder path escapes mount point boundary');
+      try {
+        await createFilesystemFolder(baseDir, id, rel);
+      } catch (folderErr) {
+        if (folderErr instanceof Error && folderErr.message.includes('escapes')) {
+          return badRequest('Folder path escapes mount point boundary');
+        }
+        throw folderErr;
       }
-
-      await fs.mkdir(target, { recursive: true });
 
       logger.info('[Mount Points v1] Filesystem folder created', {
         mountPointId: id,
         path: rel,
-        absolutePath: target,
         userId: user.id,
       });
 

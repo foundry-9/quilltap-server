@@ -10,8 +10,8 @@ import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { created, serverError } from '@/lib/api/responses';
-import * as fs from 'fs/promises';
 import { attachMountPoint } from '@/lib/mount-index/watcher';
+import { verifyBasePath } from '@/lib/mount-index/scanner';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
 
 // ============================================================================
@@ -111,12 +111,12 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
   // or the blob API once the user starts writing.
   let warning: string | undefined;
   if (validatedData.mountType !== 'database') {
-    try {
-      await fs.access(validatedData.basePath);
+    const accessible = await verifyBasePath(validatedData.basePath);
+    if (accessible) {
       logger.debug('[Mount Points v1] Base path is accessible', {
         basePath: validatedData.basePath,
       });
-    } catch {
+    } else {
       warning = `Base path '${validatedData.basePath}' is not currently accessible. The mount point was created but scanning will fail until the path is available.`;
       logger.warn('[Mount Points v1] Base path not accessible', {
         basePath: validatedData.basePath,
