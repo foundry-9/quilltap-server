@@ -97,7 +97,7 @@ export function CharacterBasicInfo({
           <div className="flex-1">
             <label
               htmlFor="systemTransparency"
-              className="block text-sm font-medium text-foreground"
+              className="block qt-text-label"
             >
               System transparency
             </label>
@@ -143,7 +143,7 @@ export function CharacterBasicInfo({
           <div className="flex-1">
             <label
               htmlFor="readPropertiesFromDocumentStore"
-              className="block text-sm font-medium text-foreground"
+              className="block qt-text-label"
             >
               Read this character&rsquo;s core fields from the Scriptorium vault
             </label>
@@ -224,7 +224,7 @@ export function CharacterBasicInfo({
 
       {/* Name Field */}
       <div>
-        <label htmlFor="name" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="name" className="block qt-text-label mb-2">
           Name *
         </label>
         <input
@@ -240,7 +240,7 @@ export function CharacterBasicInfo({
 
       {/* Aliases Field */}
       <div>
-        <label className="block text-sm font-medium mb-2 text-foreground">
+        <label className="block qt-text-label mb-2">
           Aliases (Optional)
         </label>
         <p className="text-xs qt-text-secondary mb-2">
@@ -272,7 +272,7 @@ export function CharacterBasicInfo({
 
       {/* Pronouns Field */}
       <div>
-        <label className="block text-sm font-medium mb-2 text-foreground">
+        <label className="block qt-text-label mb-2">
           Pronouns (Optional)
         </label>
         <p className="text-xs qt-text-secondary mb-2">
@@ -337,7 +337,7 @@ export function CharacterBasicInfo({
 
       {/* Title Field */}
       <div>
-        <label htmlFor="title" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="title" className="block qt-text-label mb-2">
           Title (Optional)
         </label>
         <input
@@ -353,7 +353,7 @@ export function CharacterBasicInfo({
 
       {/* Description Field */}
       <div>
-        <label htmlFor="description" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="description" className="block qt-text-label mb-2">
           Description (Optional)
         </label>
         <textarea
@@ -369,7 +369,7 @@ export function CharacterBasicInfo({
 
       {/* Personality Field */}
       <div>
-        <label htmlFor="personality" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="personality" className="block qt-text-label mb-2">
           Personality (Optional)
         </label>
         <textarea
@@ -386,7 +386,7 @@ export function CharacterBasicInfo({
       {/* Scenarios Field */}
       <div>
         <div className="flex justify-between items-center mb-2">
-          <label className="block text-sm font-medium text-foreground">
+          <label className="block qt-text-label">
             Scenarios (Optional)
           </label>
           <button
@@ -489,7 +489,7 @@ export function CharacterBasicInfo({
 
       {/* First Message Field */}
       <div>
-        <label htmlFor="firstMessage" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="firstMessage" className="block qt-text-label mb-2">
           First Message (Optional)
         </label>
         <textarea
@@ -505,7 +505,7 @@ export function CharacterBasicInfo({
 
       {/* Example Dialogues Field */}
       <div>
-        <label htmlFor="exampleDialogues" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="exampleDialogues" className="block qt-text-label mb-2">
           Example Dialogues (Optional)
         </label>
         <textarea
@@ -521,7 +521,7 @@ export function CharacterBasicInfo({
 
       {/* System Prompt Field */}
       <div>
-        <label htmlFor="systemPrompt" className="block text-sm font-medium mb-2 text-foreground">
+        <label htmlFor="systemPrompt" className="block qt-text-label mb-2">
           System Prompt (Optional)
         </label>
         <textarea

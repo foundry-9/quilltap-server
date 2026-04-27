@@ -963,6 +963,19 @@
   }
 
   /**
+   * Size-name aliases — prefer the numbered variants above for precision
+   */
+  .qt-heading-lg {
+    @apply text-2xl font-semibold tracking-tight;
+    font-family: var(--qt-heading-font);
+  }
+
+  .qt-heading-sm {
+    @apply text-lg font-semibold;
+    font-family: var(--qt-heading-font);
+  }
+
+  /**
    * Text styles
    */
   .qt-text-lead {

@@ -257,7 +257,7 @@ export function CharacterOptimizerModal({
               {/* Filter section */}
               {profiles.length > 0 && (
                 <details className="qt-card">
-                  <summary className="px-4 py-3 cursor-pointer text-sm font-medium qt-label select-none">
+                  <summary className="px-4 py-3 cursor-pointer qt-label select-none">
                     Filter Memories
                   </summary>
                   <div className="px-4 pb-4 flex flex-col gap-4 border-t qt-border-default pt-3">

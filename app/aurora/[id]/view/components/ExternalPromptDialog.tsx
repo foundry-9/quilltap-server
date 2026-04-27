@@ -169,7 +169,7 @@ export function ExternalPromptDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md md:max-w-lg rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl max-h-[90vh] flex flex-col">
-        <h3 className="mb-4 text-lg font-semibold flex-shrink-0">
+        <h3 className="mb-4 qt-heading-4 flex-shrink-0">
           Generate External Prompt{characterName ? ` for ${characterName}` : ''}
         </h3>
 
@@ -325,7 +325,7 @@ export function ExternalPromptDialog({
           <button
             onClick={onCancel}
             disabled={generating}
-            className="rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm font-medium text-foreground qt-shadow-sm hover:qt-bg-muted disabled:opacity-50"
+            className="rounded-lg border qt-border-default qt-bg-card px-4 py-2 qt-label text-foreground qt-shadow-sm hover:qt-bg-muted disabled:opacity-50"
           >
             Cancel
           </button>

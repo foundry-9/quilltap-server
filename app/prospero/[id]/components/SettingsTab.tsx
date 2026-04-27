@@ -27,7 +27,7 @@ export function SettingsTab({
     <div className="max-w-2xl space-y-6">
       {/* Instructions */}
       <div>
-        <h3 className="text-lg font-medium mb-2">Project Instructions</h3>
+        <h3 className="qt-text-section mb-2">Project Instructions</h3>
         <p className="qt-text-small mb-3">
           These instructions are included in the system prompt for all conversations in this project.
         </p>

@@ -202,7 +202,7 @@ export default function ChatsPage() {
       `}</style>
 
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
-        <h1 className="text-3xl font-semibold leading-tight">Chats</h1>
+        <h1 className="qt-heading-1 leading-tight">Chats</h1>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setImportDialogOpen(true)}

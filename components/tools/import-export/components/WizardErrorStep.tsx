@@ -27,7 +27,7 @@ export function WizardErrorStep({ title, error }: WizardErrorStepProps) {
             />
           </svg>
         </div>
-        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+        <h3 className="qt-heading-4 text-foreground">{title}</h3>
       </div>
       {error && (
         <div className="p-3 qt-bg-destructive/10 border qt-border-destructive rounded-lg">

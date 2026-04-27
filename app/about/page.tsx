@@ -76,7 +76,7 @@ export default function AboutPage() {
 
       {/* About Section */}
       <div className="qt-card p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">What is <BrandName />?</h2>
+        <h2 className="qt-heading-3 mb-4">What is <BrandName />?</h2>
         <p className="qt-text-primary mb-4">
           <BrandName /> is a self-hosted AI workspace for writers, worldbuilders, roleplayers, and anyone who
           finds it deeply unsatisfying that their AI assistant forgets everything the moment they close a tab.
@@ -101,7 +101,7 @@ export default function AboutPage() {
 
       {/* Key Features */}
       <div className="qt-card p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Key Features</h2>
+        <h2 className="qt-heading-3 mb-4">Key Features</h2>
         <ul className="space-y-2 qt-text-primary">
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -168,7 +168,7 @@ export default function AboutPage() {
 
       {/* Tech Stack */}
       <div className="qt-card p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">The Machinery Behind the Curtain</h2>
+        <h2 className="qt-heading-3 mb-4">The Machinery Behind the Curtain</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 qt-text-primary">
           <div>
             <span className="font-medium">Runtime:</span> Node.js 22+
@@ -202,7 +202,7 @@ export default function AboutPage() {
 
       {/* Links */}
       <div className="qt-card p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Links</h2>
+        <h2 className="qt-heading-3 mb-4">Links</h2>
         <div className="flex flex-wrap gap-4">
           <a
             href="https://quilltap.ai"
@@ -273,7 +273,7 @@ export default function AboutPage() {
 
       {/* Author & Support */}
       <div className="qt-card p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Author &amp; Support</h2>
+        <h2 className="qt-heading-3 mb-4">Author &amp; Support</h2>
         <div className="qt-text-primary space-y-2">
           <p><span className="font-medium">Author:</span> Charles Sebold</p>
           <p>
@@ -293,7 +293,7 @@ export default function AboutPage() {
 
       {/* Acknowledgments */}
       <div className="qt-card p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Acknowledgments</h2>
+        <h2 className="qt-heading-3 mb-4">Acknowledgments</h2>
         <p className="qt-text-primary mb-4">
           <BrandName /> stands on the shoulders of these excellent open source projects, and is grateful for the view.
         </p>

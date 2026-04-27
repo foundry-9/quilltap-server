@@ -146,7 +146,7 @@ export function CapabilitiesReportCard() {
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-foreground mb-1">
+          <h2 className="qt-heading-2 text-foreground mb-1">
             Capabilities Report
           </h2>
           <p className="qt-text-small">
@@ -230,7 +230,7 @@ export function CapabilitiesReportCard() {
 
       {/* Previous Reports Section */}
       <div>
-        <h3 className="text-lg font-semibold text-foreground mb-3">
+        <h3 className="qt-heading-4 text-foreground mb-3">
           Previous Reports
         </h3>
 

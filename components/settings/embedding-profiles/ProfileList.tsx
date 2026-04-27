@@ -110,7 +110,7 @@ export function ProfileList({
       {refitSuccess && (
         <div className="qt-alert-success">
           <div className="flex items-center justify-between gap-4">
-            <p className="text-sm font-medium flex-1">{refitSuccess}</p>
+            <p className="qt-label flex-1">{refitSuccess}</p>
             <div className="flex items-center gap-2 flex-shrink-0">
               <Link href="/settings?tab=system" className="qt-button-ghost qt-button-sm">
                 View Tasks Queue

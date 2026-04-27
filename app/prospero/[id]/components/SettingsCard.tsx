@@ -87,7 +87,7 @@ export function SettingsCard({
           {/* Project State */}
           <div className="flex items-center justify-between p-3 rounded-lg qt-border qt-bg-surface">
             <div>
-              <h4 className="text-sm font-medium text-foreground">Project State</h4>
+              <h4 className="qt-label text-foreground">Project State</h4>
               <p className="qt-text-xs qt-text-secondary">
                 Persistent JSON data for games, inventory, and session tracking.
               </p>

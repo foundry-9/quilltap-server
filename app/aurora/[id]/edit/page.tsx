@@ -257,7 +257,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       <div className="mb-8">
         <button
           onClick={handleCancel}
-          className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
+          className="mb-4 inline-flex items-center qt-label text-primary transition hover:text-primary/80"
         >
           {isNpc ? '← Back to NPCs' : '← Back'}
         </button>
@@ -274,7 +274,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
               />
             ) : (
               <div className="flex h-20 w-20 items-center justify-center rounded-full qt-bg-muted">
-                <span className="text-3xl font-bold qt-text-secondary">
+                <span className="qt-heading-1 qt-text-secondary">
                   {character?.name?.charAt(0)?.toUpperCase() || '?'}
                 </span>
               </div>

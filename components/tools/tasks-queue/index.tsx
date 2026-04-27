@@ -61,7 +61,7 @@ export function TasksQueueCard() {
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-foreground mb-1">Tasks Queue</h2>
+          <h2 className="qt-heading-2 text-foreground mb-1">Tasks Queue</h2>
           <p className="qt-text-small">
             Background job queue for memory extraction and other LLM tasks
           </p>
@@ -106,19 +106,19 @@ export function TasksQueueCard() {
       {data && (
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="qt-card p-3 text-center">
-            <div className="text-2xl font-bold text-foreground">
+            <div className="qt-heading-2 text-foreground">
               {data.stats.activeTotal}
             </div>
             <div className="qt-text-xs">Active Jobs</div>
           </div>
           <div className="qt-card p-3 text-center">
-            <div className="text-2xl font-bold text-foreground">
+            <div className="qt-heading-2 text-foreground">
               ~{formatTokens(data.totalEstimatedTokens)}
             </div>
             <div className="qt-text-xs">Est. Tokens</div>
           </div>
           <div className="qt-card p-3 text-center">
-            <div className="text-2xl font-bold qt-text-success">
+            <div className="qt-heading-2 qt-text-success">
               {data.stats.completed}
             </div>
             <div className="qt-text-xs">Completed</div>
@@ -165,7 +165,7 @@ export function TasksQueueCard() {
 
       {/* Jobs List */}
       <div>
-        <h3 className="text-lg font-semibold text-foreground mb-3">Queue Items</h3>
+        <h3 className="qt-heading-4 text-foreground mb-3">Queue Items</h3>
 
         {loading && !data ? (
           <div className="text-center py-6 qt-text-secondary">

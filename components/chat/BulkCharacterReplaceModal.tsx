@@ -235,7 +235,7 @@ export default function BulkCharacterReplaceModal({
             <>
               {/* Source Participant */}
               <div className="space-y-2">
-                <label className="block text-sm font-medium">Re-attribute from:</label>
+                <label className="block qt-label">Re-attribute from:</label>
                 <select
                   value={sourceSelection}
                   onChange={(e) => setSourceSelection(e.target.value)}
@@ -256,7 +256,7 @@ export default function BulkCharacterReplaceModal({
 
               {/* Target Participant */}
               <div className="space-y-2">
-                <label className="block text-sm font-medium">Re-attribute to:</label>
+                <label className="block qt-label">Re-attribute to:</label>
                 <select
                   value={targetSelection}
                   onChange={(e) => setTargetSelection(e.target.value)}
@@ -274,7 +274,7 @@ export default function BulkCharacterReplaceModal({
 
               {/* Role Filter */}
               <div className="space-y-2">
-                <label className="block text-sm font-medium">Which messages?</label>
+                <label className="block qt-label">Which messages?</label>
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input

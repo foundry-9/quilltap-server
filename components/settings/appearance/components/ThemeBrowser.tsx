@@ -260,7 +260,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
         <button
           type="button"
           onClick={() => setIsExpanded((prev) => !prev)}
-          className="flex items-center gap-2 text-xl font-semibold text-foreground hover:text-foreground/80 transition-colors"
+          className="flex items-center gap-2 qt-heading-3 text-foreground hover:text-foreground/80 transition-colors"
         >
           <svg
             className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
@@ -414,7 +414,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
           {/* Sources section */}
           <div className="border-t qt-border-default pt-4 mt-4">
             <div className="flex items-center flex-wrap gap-2">
-              <span className="text-sm font-medium text-foreground">Sources:</span>
+              <span className="qt-text-label">Sources:</span>
 
               {isLoadingSources ? (
                 <div className="qt-spinner w-3 h-3" />
@@ -498,7 +498,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
               <div className="mt-3 p-4 rounded-lg border qt-border-default qt-bg-card space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">
+                    <label className="block qt-text-label mb-1">
                       Name
                     </label>
                     <input
@@ -510,7 +510,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">
+                    <label className="block qt-text-label mb-1">
                       URL
                     </label>
                     <input
@@ -523,7 +523,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
+                  <label className="block qt-text-label mb-1">
                     Public Key <span className="qt-text-secondary font-normal">(optional)</span>
                   </label>
                   <input
