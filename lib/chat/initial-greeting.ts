@@ -3,6 +3,7 @@
 
 import { createLLMProvider } from '@/lib/llm'
 import { logger } from '@/lib/logger'
+import { logLLMCall } from '@/lib/services/llm-logging.service'
 
 export interface ParticipantMemoryForGreeting {
   aboutCharacterName: string
@@ -29,6 +30,12 @@ export type GreetingRequest = {
   participantMemories?: ParticipantMemoryForGreeting[]
   /** Project context if chat is in a project */
   projectContext?: ProjectContextForGreeting | null
+  /** Pre-rendered "### Recent Conversations" block (from memory-recap) */
+  recentConversationsBlock?: string
+  /** For llm_logs */
+  userId?: string
+  chatId?: string
+  characterId?: string
 }
 
 /**
@@ -36,7 +43,8 @@ export type GreetingRequest = {
  */
 function buildContextSection(
   projectContext?: ProjectContextForGreeting | null,
-  participantMemories?: ParticipantMemoryForGreeting[]
+  participantMemories?: ParticipantMemoryForGreeting[],
+  recentConversationsBlock?: string
 ): string {
   const sections: string[] = []
 
@@ -74,6 +82,11 @@ function buildContextSection(
     sections.push(memoryParts.join('\n'))
   }
 
+  // Sibling to "What You Remember" — surfaces summaries of prior chats with this character
+  if (recentConversationsBlock) {
+    sections.push(recentConversationsBlock)
+  }
+
   return sections.join('\n\n')
 }
 
@@ -98,11 +111,15 @@ export async function generateGreetingMessage({
   topP,
   participantMemories,
   projectContext,
+  recentConversationsBlock,
+  userId,
+  chatId,
+  characterId,
 }: GreetingRequest): Promise<GreetingResult> {
   const providerClient = await createLLMProvider(provider, baseUrl || undefined)
 
   // Build enhanced system prompt with context sections
-  const contextSection = buildContextSection(projectContext, participantMemories)
+  const contextSection = buildContextSection(projectContext, participantMemories, recentConversationsBlock)
   const basePromptWithContext = contextSection
     ? `${systemPrompt}\n\n${contextSection}`
     : systemPrompt
@@ -117,19 +134,69 @@ export async function generateGreetingMessage({
     },
   ]
 
-  const response = await providerClient.sendMessage(
-    {
-      messages,
-      model: modelName,
-      temperature,
-      maxTokens: maxTokens ?? 160,
-      topP,
-    },
-    apiKey ?? ''
-  )
+  // Consume the provider's streaming endpoint so the greeting uses the same
+  // path as normal chat replies. The chunks are concatenated server-side;
+  // streaming them to the UI is a planned follow-up (see CHANGELOG v2.9.x).
+  const startTime = Date.now()
+  let accumulated = ''
+  let finalUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
+  let streamError: Error | undefined
+  try {
+    for await (const chunk of providerClient.streamMessage(
+      {
+        messages,
+        model: modelName,
+        temperature,
+        maxTokens,
+        topP,
+      },
+      apiKey ?? ''
+    )) {
+      if (chunk.content) {
+        accumulated += chunk.content
+      }
+      if (chunk.usage) {
+        finalUsage = {
+          promptTokens: chunk.usage.promptTokens ?? 0,
+          completionTokens: chunk.usage.completionTokens ?? 0,
+          totalTokens: chunk.usage.totalTokens ?? 0,
+        }
+      }
+    }
+  } catch (err) {
+    streamError = err instanceof Error ? err : new Error(String(err))
+    throw err
+  } finally {
+    const durationMs = Date.now() - startTime
+    if (userId) {
+      logLLMCall({
+        userId,
+        type: 'CHAT_MESSAGE',
+        chatId,
+        characterId,
+        provider,
+        modelName,
+        request: {
+          messages: messages.map(m => ({ role: m.role, content: m.content })),
+          ...(temperature !== undefined ? { temperature } : {}),
+          ...(maxTokens !== undefined ? { maxTokens } : {}),
+        },
+        response: {
+          content: accumulated,
+          ...(streamError ? { error: streamError.message } : {}),
+        },
+        usage: finalUsage,
+        durationMs,
+      }).catch(err => {
+        logger.warn('[Greeting Generation] Failed to log LLM call', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+    }
+  }
 
-  const trimmedContent = (response.content || '').trim()
-  const contentFilterDetected = !trimmedContent && !!response.usage && response.usage.completionTokens > 0
+  const trimmedContent = accumulated.trim()
+  const contentFilterDetected = !trimmedContent && !!finalUsage && finalUsage.completionTokens > 0
 
   if (contentFilterDetected) {
     logger.warn('[Greeting Generation] LLM returned empty content despite consuming tokens - likely content filter hit', {
@@ -137,8 +204,8 @@ export async function generateGreetingMessage({
       provider,
       model: modelName,
       characterName,
-      promptTokens: response.usage!.promptTokens,
-      completionTokens: response.usage!.completionTokens,
+      promptTokens: finalUsage!.promptTokens,
+      completionTokens: finalUsage!.completionTokens,
       hadProjectContext: !!projectContext,
       memoryCount: participantMemories?.length || 0,
     })

@@ -18,6 +18,14 @@ export interface FileInfo {
   fileStatus?: string
   createdAt: string
   updatedAt: string
+  /**
+   * When present, the file lives in a database-backed Scriptorium mount point
+   * (not the legacy files table). Thumbnail, preview, and delete calls route
+   * through /api/v1/mount-points/{mountPointId}/blobs/{relativePath} instead
+   * of /api/v1/files/{id}.
+   */
+  mountPointId?: string
+  relativePath?: string
 }
 
 export interface FolderInfo {

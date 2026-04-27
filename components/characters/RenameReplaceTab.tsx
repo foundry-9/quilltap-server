@@ -355,27 +355,27 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
           {/* Summary */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
             <div className="qt-bg-muted rounded p-3 text-center">
-              <div className="text-2xl font-bold qt-text-info">{preview.summary.characterFields}</div>
+              <div className="qt-heading-2 qt-text-info">{preview.summary.characterFields}</div>
               <div className="text-xs qt-text-muted">Character Fields</div>
             </div>
             <div className="qt-bg-muted rounded p-3 text-center">
-              <div className="text-2xl font-bold text-primary">{preview.summary.physicalDescriptions}</div>
+              <div className="qt-heading-2 text-primary">{preview.summary.physicalDescriptions}</div>
               <div className="text-xs qt-text-muted">Descriptions</div>
             </div>
             <div className="qt-bg-muted rounded p-3 text-center">
-              <div className="text-2xl font-bold qt-text-success">{preview.summary.memories}</div>
+              <div className="qt-heading-2 qt-text-success">{preview.summary.memories}</div>
               <div className="text-xs qt-text-muted">Memories</div>
             </div>
             <div className="qt-bg-muted rounded p-3 text-center">
-              <div className="text-2xl font-bold qt-text-warning">{preview.summary.chatTitles}</div>
+              <div className="qt-heading-2 qt-text-warning">{preview.summary.chatTitles}</div>
               <div className="text-xs qt-text-muted">Chat Titles</div>
             </div>
             <div className="qt-bg-muted rounded p-3 text-center">
-              <div className="text-2xl font-bold qt-text-destructive">{preview.summary.chatMessages}</div>
+              <div className="qt-heading-2 qt-text-destructive">{preview.summary.chatMessages}</div>
               <div className="text-xs qt-text-muted">Messages</div>
             </div>
             <div className="qt-bg-info/10 rounded p-3 text-center border qt-border-info">
-              <div className="text-2xl font-bold qt-text-info">{preview.summary.total}</div>
+              <div className="qt-heading-2 qt-text-info">{preview.summary.total}</div>
               <div className="text-xs qt-text-info font-medium">Total</div>
             </div>
           </div>

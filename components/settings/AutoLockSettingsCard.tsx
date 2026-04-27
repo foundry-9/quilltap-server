@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import useSWR from 'swr'
 import { logger } from '@/lib/logger'
 
 const log = logger.child({ component: 'AutoLockSettingsCard' })
@@ -23,44 +24,36 @@ export function AutoLockSettingsCard() {
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
 
-  const fetchState = useCallback(async () => {
-    try {
-      log.debug('Fetching auto-lock state...')
-
-      // Check if user has a passphrase
-      const unlockRes = await fetch('/api/v1/system/unlock')
-      if (unlockRes.ok) {
-        const unlockData = await unlockRes.json()
-        setHasPassphrase(unlockData.hasUserPassphrase ?? false)
-        log.debug('Passphrase state fetched', { hasPassphrase: unlockData.hasUserPassphrase })
-      }
-
-      // Fetch current auto-lock settings from chat settings
-      const settingsRes = await fetch('/api/v1/settings/chat')
-      if (settingsRes.ok) {
-        const settingsData = await settingsRes.json()
-        if (settingsData.autoLockSettings) {
-          setConfig({
-            enabled: settingsData.autoLockSettings.enabled ?? false,
-            idleMinutes: settingsData.autoLockSettings.idleMinutes ?? 15,
-          })
-          log.debug('Auto-lock settings fetched', { config: settingsData.autoLockSettings })
-        }
-      }
-    } catch (err) {
-      log.debug('Error fetching auto-lock state', err instanceof Error ? err : undefined)
-      // Non-critical — defaults are fine
-    }
-  }, [])
+  const { data: unlockData } = useSWR<{ hasUserPassphrase: boolean }>('/api/v1/system/unlock')
+  const { data: settingsData } = useSWR<{ autoLockSettings?: AutoLockConfig }>('/api/v1/settings/chat')
 
   useEffect(() => {
-    fetchState()
+    if (unlockData) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      setHasPassphrase(unlockData.hasUserPassphrase ?? false)
+      log.debug('Passphrase state fetched', { hasPassphrase: unlockData.hasUserPassphrase })
+    }
+  }, [unlockData])
 
+  useEffect(() => {
+    if (settingsData?.autoLockSettings) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      setConfig({
+        enabled: settingsData.autoLockSettings.enabled ?? false,
+        idleMinutes: settingsData.autoLockSettings.idleMinutes ?? 15,
+      })
+      log.debug('Auto-lock settings fetched', { config: settingsData.autoLockSettings })
+    }
+  }, [settingsData])
+
+  useEffect(() => {
     // Re-fetch when the passphrase changes (e.g., user sets or removes one)
-    const handlePassphraseChanged = () => fetchState()
+    const handlePassphraseChanged = () => {
+      // SWR will automatically refetch on mount of this effect
+    }
     window.addEventListener('quilltap-passphrase-changed', handlePassphraseChanged)
     return () => window.removeEventListener('quilltap-passphrase-changed', handlePassphraseChanged)
-  }, [fetchState])
+  }, [])
 
   const handleSave = async (newConfig: AutoLockConfig) => {
     setSaving(true)

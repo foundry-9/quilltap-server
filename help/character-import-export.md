@@ -342,18 +342,17 @@ If importing from SillyTavern:
 If you're comfortable with JSON, you can edit directly:
 
 1. Export character
-2. Open `.json` file in text editor
-3. Edit JSON fields directly:
+2. Open the `.qtap` file in a text editor — it's newline-delimited JSON, one entity per line
+3. Find the line whose first field is `"kind":"character"` and edit fields inside its `"data":{...}` object:
 
    ```json
-   "name": "New Name",
-   "description": "New description..."
+   {"kind":"character","data":{"name":"New Name","description":"New description..."}}
    ```
 
-4. Save file
+4. Save file (keep the newline-per-record structure intact)
 5. Re-import in Quilltap
 
-**Caution:** JSON syntax must be valid or import will fail.
+**Caution:** JSON syntax must be valid on every line or the import will fail with a specific line number.
 
 ### Creating Characters from JSON
 

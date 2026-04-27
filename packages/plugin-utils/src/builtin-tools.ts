@@ -13,23 +13,38 @@
  *
  * This set contains the function names of tools that are built into Quilltap:
  * - `generate_image` - AI image generation
- * - `search_memories` - Search character/chat memories
+ * - `search` - Search the Scriptorium (memories, conversations, backgrounds)
  * - `search_web` - Web search (when enabled)
  * - `project_info` - Get project metadata
- * - `file_management` - Read/write project files
  * - `request_full_context` - Request full context reload (context compression)
  * - `help_search` - Search Quilltap help documentation
  * - `help_settings` - Read Quilltap instance settings
  */
 export const BUILTIN_TOOL_NAMES = new Set([
   'generate_image',
-  'search_memories',
+  'search',
   'search_web',
   'project_info',
-  'file_management',
   'request_full_context',
   'help_search',
   'help_settings',
+  // Document editing tools (Scriptorium Phase 3.3)
+  'doc_read_file',
+  'doc_write_file',
+  'doc_str_replace',
+  'doc_insert_text',
+  'doc_grep',
+  'doc_list_files',
+  'doc_read_frontmatter',
+  'doc_update_frontmatter',
+  'doc_read_heading',
+  'doc_update_heading',
+  // Document file management tools (Scriptorium Phase 3.4)
+  'doc_move_file',
+  'doc_copy_file',
+  'doc_delete_file',
+  'doc_create_folder',
+  'doc_delete_folder',
 ]);
 
 /**

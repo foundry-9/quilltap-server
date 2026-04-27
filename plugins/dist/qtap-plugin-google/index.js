@@ -22850,6 +22850,7 @@ var Modality;
   Modality2["TEXT"] = "TEXT";
   Modality2["IMAGE"] = "IMAGE";
   Modality2["AUDIO"] = "AUDIO";
+  Modality2["VIDEO"] = "VIDEO";
 })(Modality || (Modality = {}));
 var ModelStage;
 (function(ModelStage2) {
@@ -23086,6 +23087,30 @@ var TurnCompleteReason;
   TurnCompleteReason2["MALFORMED_FUNCTION_CALL"] = "MALFORMED_FUNCTION_CALL";
   TurnCompleteReason2["RESPONSE_REJECTED"] = "RESPONSE_REJECTED";
   TurnCompleteReason2["NEED_MORE_INPUT"] = "NEED_MORE_INPUT";
+  TurnCompleteReason2["PROHIBITED_INPUT_CONTENT"] = "PROHIBITED_INPUT_CONTENT";
+  TurnCompleteReason2["IMAGE_PROHIBITED_INPUT_CONTENT"] = "IMAGE_PROHIBITED_INPUT_CONTENT";
+  TurnCompleteReason2["INPUT_TEXT_CONTAIN_PROMINENT_PERSON_PROHIBITED"] = "INPUT_TEXT_CONTAIN_PROMINENT_PERSON_PROHIBITED";
+  TurnCompleteReason2["INPUT_IMAGE_CELEBRITY"] = "INPUT_IMAGE_CELEBRITY";
+  TurnCompleteReason2["INPUT_IMAGE_PHOTO_REALISTIC_CHILD_PROHIBITED"] = "INPUT_IMAGE_PHOTO_REALISTIC_CHILD_PROHIBITED";
+  TurnCompleteReason2["INPUT_TEXT_NCII_PROHIBITED"] = "INPUT_TEXT_NCII_PROHIBITED";
+  TurnCompleteReason2["INPUT_OTHER"] = "INPUT_OTHER";
+  TurnCompleteReason2["INPUT_IP_PROHIBITED"] = "INPUT_IP_PROHIBITED";
+  TurnCompleteReason2["BLOCKLIST"] = "BLOCKLIST";
+  TurnCompleteReason2["UNSAFE_PROMPT_FOR_IMAGE_GENERATION"] = "UNSAFE_PROMPT_FOR_IMAGE_GENERATION";
+  TurnCompleteReason2["GENERATED_IMAGE_SAFETY"] = "GENERATED_IMAGE_SAFETY";
+  TurnCompleteReason2["GENERATED_CONTENT_SAFETY"] = "GENERATED_CONTENT_SAFETY";
+  TurnCompleteReason2["GENERATED_AUDIO_SAFETY"] = "GENERATED_AUDIO_SAFETY";
+  TurnCompleteReason2["GENERATED_VIDEO_SAFETY"] = "GENERATED_VIDEO_SAFETY";
+  TurnCompleteReason2["GENERATED_CONTENT_PROHIBITED"] = "GENERATED_CONTENT_PROHIBITED";
+  TurnCompleteReason2["GENERATED_CONTENT_BLOCKLIST"] = "GENERATED_CONTENT_BLOCKLIST";
+  TurnCompleteReason2["GENERATED_IMAGE_PROHIBITED"] = "GENERATED_IMAGE_PROHIBITED";
+  TurnCompleteReason2["GENERATED_IMAGE_CELEBRITY"] = "GENERATED_IMAGE_CELEBRITY";
+  TurnCompleteReason2["GENERATED_IMAGE_PROMINENT_PEOPLE_DETECTED_BY_REWRITER"] = "GENERATED_IMAGE_PROMINENT_PEOPLE_DETECTED_BY_REWRITER";
+  TurnCompleteReason2["GENERATED_IMAGE_IDENTIFIABLE_PEOPLE"] = "GENERATED_IMAGE_IDENTIFIABLE_PEOPLE";
+  TurnCompleteReason2["GENERATED_IMAGE_MINORS"] = "GENERATED_IMAGE_MINORS";
+  TurnCompleteReason2["OUTPUT_IMAGE_IP_PROHIBITED"] = "OUTPUT_IMAGE_IP_PROHIBITED";
+  TurnCompleteReason2["GENERATED_OTHER"] = "GENERATED_OTHER";
+  TurnCompleteReason2["MAX_REGENERATION_REACHED"] = "MAX_REGENERATION_REACHED";
 })(TurnCompleteReason || (TurnCompleteReason = {}));
 var MediaModality;
 (function(MediaModality2) {
@@ -24552,6 +24577,12 @@ function createBatchJobConfigToMldev(fromObject, parentObject) {
   if (getValueByPath(fromObject, ["dest"]) !== void 0) {
     throw new Error("dest parameter is not supported in Gemini API.");
   }
+  const fromWebhookConfig = getValueByPath(fromObject, [
+    "webhookConfig"
+  ]);
+  if (parentObject !== void 0 && fromWebhookConfig != null) {
+    setValueByPath(parentObject, ["batch", "webhookConfig"], fromWebhookConfig);
+  }
   return toObject;
 }
 function createBatchJobConfigToVertex(fromObject, parentObject) {
@@ -24563,6 +24594,9 @@ function createBatchJobConfigToVertex(fromObject, parentObject) {
   const fromDest = getValueByPath(fromObject, ["dest"]);
   if (parentObject !== void 0 && fromDest != null) {
     setValueByPath(parentObject, ["outputConfig"], batchJobDestinationToVertex(tBatchJobDestination(fromDest)));
+  }
+  if (getValueByPath(fromObject, ["webhookConfig"]) !== void 0) {
+    throw new Error("webhookConfig parameter is not supported in Vertex AI.");
   }
   return toObject;
 }
@@ -24722,6 +24756,12 @@ function embedContentConfigToMldev$1(fromObject, parentObject) {
   }
   if (getValueByPath(fromObject, ["autoTruncate"]) !== void 0) {
     throw new Error("autoTruncate parameter is not supported in Gemini API.");
+  }
+  if (getValueByPath(fromObject, ["documentOcr"]) !== void 0) {
+    throw new Error("documentOcr parameter is not supported in Gemini API.");
+  }
+  if (getValueByPath(fromObject, ["audioTrackExtraction"]) !== void 0) {
+    throw new Error("audioTrackExtraction parameter is not supported in Gemini API.");
   }
   return toObject;
 }
@@ -24888,7 +24928,7 @@ function generateContentConfigToMldev$1(apiClient, fromObject, parentObject) {
     let transformedList = fromSafetySettings;
     if (Array.isArray(transformedList)) {
       transformedList = transformedList.map((item) => {
-        return safetySettingToMldev$1(item);
+        return safetySettingToMldev$3(item);
       });
     }
     setValueByPath(parentObject, ["safetySettings"], transformedList);
@@ -25294,7 +25334,7 @@ function partToMldev$4(fromObject) {
   }
   return toObject;
 }
-function safetySettingToMldev$1(fromObject) {
+function safetySettingToMldev$3(fromObject) {
   const toObject = {};
   const fromCategory = getValueByPath(fromObject, ["category"]);
   if (fromCategory != null) {
@@ -28165,7 +28205,7 @@ function generationConfigToVertex$1(fromObject) {
   }
   const fromSpeechConfig = getValueByPath(fromObject, ["speechConfig"]);
   if (fromSpeechConfig != null) {
-    setValueByPath(toObject, ["speechConfig"], speechConfigToVertex$1(fromSpeechConfig));
+    setValueByPath(toObject, ["speechConfig"], fromSpeechConfig);
   }
   const fromStopSequences = getValueByPath(fromObject, [
     "stopSequences"
@@ -28339,6 +28379,22 @@ function liveConnectConfigToMldev$1(fromObject, parentObject) {
   if (getValueByPath(fromObject, ["explicitVadSignal"]) !== void 0) {
     throw new Error("explicitVadSignal parameter is not supported in Gemini API.");
   }
+  const fromAvatarConfig = getValueByPath(fromObject, ["avatarConfig"]);
+  if (parentObject !== void 0 && fromAvatarConfig != null) {
+    setValueByPath(parentObject, ["setup", "avatarConfig"], fromAvatarConfig);
+  }
+  const fromSafetySettings = getValueByPath(fromObject, [
+    "safetySettings"
+  ]);
+  if (parentObject !== void 0 && fromSafetySettings != null) {
+    let transformedList = fromSafetySettings;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return safetySettingToMldev$2(item);
+      });
+    }
+    setValueByPath(parentObject, ["setup", "safetySettings"], transformedList);
+  }
   return toObject;
 }
 function liveConnectConfigToVertex(fromObject, parentObject) {
@@ -28385,7 +28441,7 @@ function liveConnectConfigToVertex(fromObject, parentObject) {
   }
   const fromSpeechConfig = getValueByPath(fromObject, ["speechConfig"]);
   if (parentObject !== void 0 && fromSpeechConfig != null) {
-    setValueByPath(parentObject, ["setup", "generationConfig", "speechConfig"], speechConfigToVertex$1(tLiveSpeechConfig(fromSpeechConfig)));
+    setValueByPath(parentObject, ["setup", "generationConfig", "speechConfig"], tLiveSpeechConfig(fromSpeechConfig));
   }
   const fromThinkingConfig = getValueByPath(fromObject, [
     "thinkingConfig"
@@ -28454,6 +28510,22 @@ function liveConnectConfigToVertex(fromObject, parentObject) {
   ]);
   if (parentObject !== void 0 && fromExplicitVadSignal != null) {
     setValueByPath(parentObject, ["setup", "explicitVadSignal"], fromExplicitVadSignal);
+  }
+  const fromAvatarConfig = getValueByPath(fromObject, ["avatarConfig"]);
+  if (parentObject !== void 0 && fromAvatarConfig != null) {
+    setValueByPath(parentObject, ["setup", "avatarConfig"], fromAvatarConfig);
+  }
+  const fromSafetySettings = getValueByPath(fromObject, [
+    "safetySettings"
+  ]);
+  if (parentObject !== void 0 && fromSafetySettings != null) {
+    let transformedList = fromSafetySettings;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return item;
+      });
+    }
+    setValueByPath(parentObject, ["setup", "safetySettings"], transformedList);
   }
   return toObject;
 }
@@ -28645,22 +28717,6 @@ function liveServerMessageFromVertex(fromObject) {
   }
   return toObject;
 }
-function multiSpeakerVoiceConfigToVertex$1(fromObject) {
-  const toObject = {};
-  const fromSpeakerVoiceConfigs = getValueByPath(fromObject, [
-    "speakerVoiceConfigs"
-  ]);
-  if (fromSpeakerVoiceConfigs != null) {
-    let transformedList = fromSpeakerVoiceConfigs;
-    if (Array.isArray(transformedList)) {
-      transformedList = transformedList.map((item) => {
-        return speakerVoiceConfigToVertex$1(item);
-      });
-    }
-    setValueByPath(toObject, ["speakerVoiceConfigs"], transformedList);
-  }
-  return toObject;
-}
 function partToMldev$2(fromObject) {
   const toObject = {};
   const fromMediaResolution = getValueByPath(fromObject, [
@@ -28802,17 +28858,18 @@ function partToVertex$1(fromObject) {
   }
   return toObject;
 }
-function replicatedVoiceConfigToVertex$1(fromObject) {
+function safetySettingToMldev$2(fromObject) {
   const toObject = {};
-  const fromMimeType = getValueByPath(fromObject, ["mimeType"]);
-  if (fromMimeType != null) {
-    setValueByPath(toObject, ["mimeType"], fromMimeType);
+  const fromCategory = getValueByPath(fromObject, ["category"]);
+  if (fromCategory != null) {
+    setValueByPath(toObject, ["category"], fromCategory);
   }
-  const fromVoiceSampleAudio = getValueByPath(fromObject, [
-    "voiceSampleAudio"
-  ]);
-  if (fromVoiceSampleAudio != null) {
-    setValueByPath(toObject, ["voiceSampleAudio"], fromVoiceSampleAudio);
+  if (getValueByPath(fromObject, ["method"]) !== void 0) {
+    throw new Error("method parameter is not supported in Gemini API.");
+  }
+  const fromThreshold = getValueByPath(fromObject, ["threshold"]);
+  if (fromThreshold != null) {
+    setValueByPath(toObject, ["threshold"], fromThreshold);
   }
   return toObject;
 }
@@ -28824,36 +28881,6 @@ function sessionResumptionConfigToMldev$1(fromObject) {
   }
   if (getValueByPath(fromObject, ["transparent"]) !== void 0) {
     throw new Error("transparent parameter is not supported in Gemini API.");
-  }
-  return toObject;
-}
-function speakerVoiceConfigToVertex$1(fromObject) {
-  const toObject = {};
-  const fromSpeaker = getValueByPath(fromObject, ["speaker"]);
-  if (fromSpeaker != null) {
-    setValueByPath(toObject, ["speaker"], fromSpeaker);
-  }
-  const fromVoiceConfig = getValueByPath(fromObject, ["voiceConfig"]);
-  if (fromVoiceConfig != null) {
-    setValueByPath(toObject, ["voiceConfig"], voiceConfigToVertex$1(fromVoiceConfig));
-  }
-  return toObject;
-}
-function speechConfigToVertex$1(fromObject) {
-  const toObject = {};
-  const fromVoiceConfig = getValueByPath(fromObject, ["voiceConfig"]);
-  if (fromVoiceConfig != null) {
-    setValueByPath(toObject, ["voiceConfig"], voiceConfigToVertex$1(fromVoiceConfig));
-  }
-  const fromLanguageCode = getValueByPath(fromObject, ["languageCode"]);
-  if (fromLanguageCode != null) {
-    setValueByPath(toObject, ["languageCode"], fromLanguageCode);
-  }
-  const fromMultiSpeakerVoiceConfig = getValueByPath(fromObject, [
-    "multiSpeakerVoiceConfig"
-  ]);
-  if (fromMultiSpeakerVoiceConfig != null) {
-    setValueByPath(toObject, ["multiSpeakerVoiceConfig"], multiSpeakerVoiceConfigToVertex$1(fromMultiSpeakerVoiceConfig));
   }
   return toObject;
 }
@@ -29087,22 +29114,6 @@ function voiceActivityFromVertex(fromObject) {
   const fromVoiceActivityType = getValueByPath(fromObject, ["type"]);
   if (fromVoiceActivityType != null) {
     setValueByPath(toObject, ["voiceActivityType"], fromVoiceActivityType);
-  }
-  return toObject;
-}
-function voiceConfigToVertex$1(fromObject) {
-  const toObject = {};
-  const fromReplicatedVoiceConfig = getValueByPath(fromObject, [
-    "replicatedVoiceConfig"
-  ]);
-  if (fromReplicatedVoiceConfig != null) {
-    setValueByPath(toObject, ["replicatedVoiceConfig"], replicatedVoiceConfigToVertex$1(fromReplicatedVoiceConfig));
-  }
-  const fromPrebuiltVoiceConfig = getValueByPath(fromObject, [
-    "prebuiltVoiceConfig"
-  ]);
-  if (fromPrebuiltVoiceConfig != null) {
-    setValueByPath(toObject, ["prebuiltVoiceConfig"], fromPrebuiltVoiceConfig);
   }
   return toObject;
 }
@@ -29648,6 +29659,12 @@ function embedContentConfigToMldev(fromObject, parentObject, _rootObject) {
   if (getValueByPath(fromObject, ["autoTruncate"]) !== void 0) {
     throw new Error("autoTruncate parameter is not supported in Gemini API.");
   }
+  if (getValueByPath(fromObject, ["documentOcr"]) !== void 0) {
+    throw new Error("documentOcr parameter is not supported in Gemini API.");
+  }
+  if (getValueByPath(fromObject, ["audioTrackExtraction"]) !== void 0) {
+    throw new Error("audioTrackExtraction parameter is not supported in Gemini API.");
+  }
   return toObject;
 }
 function embedContentConfigToVertex(fromObject, parentObject, rootObject) {
@@ -29666,7 +29683,7 @@ function embedContentConfigToVertex(fromObject, parentObject, rootObject) {
   } else if (discriminatorTaskType === "EMBED_CONTENT") {
     const fromTaskType = getValueByPath(fromObject, ["taskType"]);
     if (parentObject !== void 0 && fromTaskType != null) {
-      setValueByPath(parentObject, ["taskType"], fromTaskType);
+      setValueByPath(parentObject, ["embedContentConfig", "taskType"], fromTaskType);
     }
   }
   let discriminatorTitle = getValueByPath(rootObject, [
@@ -29683,7 +29700,7 @@ function embedContentConfigToVertex(fromObject, parentObject, rootObject) {
   } else if (discriminatorTitle === "EMBED_CONTENT") {
     const fromTitle = getValueByPath(fromObject, ["title"]);
     if (parentObject !== void 0 && fromTitle != null) {
-      setValueByPath(parentObject, ["title"], fromTitle);
+      setValueByPath(parentObject, ["embedContentConfig", "title"], fromTitle);
     }
   }
   let discriminatorOutputDimensionality = getValueByPath(rootObject, [
@@ -29704,7 +29721,7 @@ function embedContentConfigToVertex(fromObject, parentObject, rootObject) {
       "outputDimensionality"
     ]);
     if (parentObject !== void 0 && fromOutputDimensionality != null) {
-      setValueByPath(parentObject, ["outputDimensionality"], fromOutputDimensionality);
+      setValueByPath(parentObject, ["embedContentConfig", "outputDimensionality"], fromOutputDimensionality);
     }
   }
   let discriminatorMimeType = getValueByPath(rootObject, [
@@ -29737,7 +29754,33 @@ function embedContentConfigToVertex(fromObject, parentObject, rootObject) {
       "autoTruncate"
     ]);
     if (parentObject !== void 0 && fromAutoTruncate != null) {
-      setValueByPath(parentObject, ["autoTruncate"], fromAutoTruncate);
+      setValueByPath(parentObject, ["embedContentConfig", "autoTruncate"], fromAutoTruncate);
+    }
+  }
+  let discriminatorDocumentOcr = getValueByPath(rootObject, [
+    "embeddingApiType"
+  ]);
+  if (discriminatorDocumentOcr === void 0) {
+    discriminatorDocumentOcr = "PREDICT";
+  }
+  if (discriminatorDocumentOcr === "EMBED_CONTENT") {
+    const fromDocumentOcr = getValueByPath(fromObject, ["documentOcr"]);
+    if (parentObject !== void 0 && fromDocumentOcr != null) {
+      setValueByPath(parentObject, ["embedContentConfig", "documentOcr"], fromDocumentOcr);
+    }
+  }
+  let discriminatorAudioTrackExtraction = getValueByPath(rootObject, [
+    "embeddingApiType"
+  ]);
+  if (discriminatorAudioTrackExtraction === void 0) {
+    discriminatorAudioTrackExtraction = "PREDICT";
+  }
+  if (discriminatorAudioTrackExtraction === "EMBED_CONTENT") {
+    const fromAudioTrackExtraction = getValueByPath(fromObject, [
+      "audioTrackExtraction"
+    ]);
+    if (parentObject !== void 0 && fromAudioTrackExtraction != null) {
+      setValueByPath(parentObject, ["embedContentConfig", "audioTrackExtraction"], fromAudioTrackExtraction);
     }
   }
   return toObject;
@@ -30079,7 +30122,7 @@ function generateContentConfigToMldev(apiClient, fromObject, parentObject, rootO
     let transformedList = fromSafetySettings;
     if (Array.isArray(transformedList)) {
       transformedList = transformedList.map((item) => {
-        return safetySettingToMldev(item);
+        return safetySettingToMldev$1(item);
       });
     }
     setValueByPath(parentObject, ["safetySettings"], transformedList);
@@ -30295,7 +30338,7 @@ function generateContentConfigToVertex(apiClient, fromObject, parentObject, root
   }
   const fromSpeechConfig = getValueByPath(fromObject, ["speechConfig"]);
   if (fromSpeechConfig != null) {
-    setValueByPath(toObject, ["speechConfig"], speechConfigToVertex(tSpeechConfig(fromSpeechConfig)));
+    setValueByPath(toObject, ["speechConfig"], tSpeechConfig(fromSpeechConfig));
   }
   const fromAudioTimestamp = getValueByPath(fromObject, [
     "audioTimestamp"
@@ -30802,6 +30845,12 @@ function generateVideosConfigToMldev(fromObject, parentObject, rootObject) {
   if (getValueByPath(fromObject, ["labels"]) !== void 0) {
     throw new Error("labels parameter is not supported in Gemini API.");
   }
+  const fromWebhookConfig = getValueByPath(fromObject, [
+    "webhookConfig"
+  ]);
+  if (parentObject !== void 0 && fromWebhookConfig != null) {
+    setValueByPath(parentObject, ["webhookConfig"], fromWebhookConfig);
+  }
   return toObject;
 }
 function generateVideosConfigToVertex(fromObject, parentObject, rootObject) {
@@ -30895,6 +30944,9 @@ function generateVideosConfigToVertex(fromObject, parentObject, rootObject) {
   const fromLabels = getValueByPath(fromObject, ["labels"]);
   if (parentObject !== void 0 && fromLabels != null) {
     setValueByPath(parentObject, ["labels"], fromLabels);
+  }
+  if (getValueByPath(fromObject, ["webhookConfig"]) !== void 0) {
+    throw new Error("webhookConfig parameter is not supported in Vertex AI.");
   }
   return toObject;
 }
@@ -31165,7 +31217,7 @@ function generatedVideoFromVertex(fromObject, rootObject) {
   }
   return toObject;
 }
-function generationConfigToVertex(fromObject, rootObject) {
+function generationConfigToVertex(fromObject, _rootObject) {
   const toObject = {};
   const fromModelSelectionConfig = getValueByPath(fromObject, [
     "modelSelectionConfig"
@@ -31261,7 +31313,7 @@ function generationConfigToVertex(fromObject, rootObject) {
   }
   const fromSpeechConfig = getValueByPath(fromObject, ["speechConfig"]);
   if (fromSpeechConfig != null) {
-    setValueByPath(toObject, ["speechConfig"], speechConfigToVertex(fromSpeechConfig));
+    setValueByPath(toObject, ["speechConfig"], fromSpeechConfig);
   }
   const fromStopSequences = getValueByPath(fromObject, [
     "stopSequences"
@@ -31716,22 +31768,6 @@ function modelFromVertex(fromObject, rootObject) {
   }
   return toObject;
 }
-function multiSpeakerVoiceConfigToVertex(fromObject, rootObject) {
-  const toObject = {};
-  const fromSpeakerVoiceConfigs = getValueByPath(fromObject, [
-    "speakerVoiceConfigs"
-  ]);
-  if (fromSpeakerVoiceConfigs != null) {
-    let transformedList = fromSpeakerVoiceConfigs;
-    if (Array.isArray(transformedList)) {
-      transformedList = transformedList.map((item) => {
-        return speakerVoiceConfigToVertex(item);
-      });
-    }
-    setValueByPath(toObject, ["speakerVoiceConfigs"], transformedList);
-  }
-  return toObject;
-}
 function partToMldev$1(fromObject, rootObject) {
   const toObject = {};
   const fromMediaResolution = getValueByPath(fromObject, [
@@ -32041,20 +32077,6 @@ function referenceImageAPIInternalToVertex(fromObject, rootObject) {
   }
   return toObject;
 }
-function replicatedVoiceConfigToVertex(fromObject, _rootObject) {
-  const toObject = {};
-  const fromMimeType = getValueByPath(fromObject, ["mimeType"]);
-  if (fromMimeType != null) {
-    setValueByPath(toObject, ["mimeType"], fromMimeType);
-  }
-  const fromVoiceSampleAudio = getValueByPath(fromObject, [
-    "voiceSampleAudio"
-  ]);
-  if (fromVoiceSampleAudio != null) {
-    setValueByPath(toObject, ["voiceSampleAudio"], fromVoiceSampleAudio);
-  }
-  return toObject;
-}
 function safetyAttributesFromMldev(fromObject, _rootObject) {
   const toObject = {};
   const fromCategories = getValueByPath(fromObject, [
@@ -32099,7 +32121,7 @@ function safetyAttributesFromVertex(fromObject, _rootObject) {
   }
   return toObject;
 }
-function safetySettingToMldev(fromObject, _rootObject) {
+function safetySettingToMldev$1(fromObject, _rootObject) {
   const toObject = {};
   const fromCategory = getValueByPath(fromObject, ["category"]);
   if (fromCategory != null) {
@@ -32201,36 +32223,6 @@ function segmentImageSourceToVertex(fromObject, parentObject, rootObject) {
   ]);
   if (parentObject !== void 0 && fromScribbleImage != null) {
     setValueByPath(parentObject, ["instances[0]", "scribble"], scribbleImageToVertex(fromScribbleImage));
-  }
-  return toObject;
-}
-function speakerVoiceConfigToVertex(fromObject, rootObject) {
-  const toObject = {};
-  const fromSpeaker = getValueByPath(fromObject, ["speaker"]);
-  if (fromSpeaker != null) {
-    setValueByPath(toObject, ["speaker"], fromSpeaker);
-  }
-  const fromVoiceConfig = getValueByPath(fromObject, ["voiceConfig"]);
-  if (fromVoiceConfig != null) {
-    setValueByPath(toObject, ["voiceConfig"], voiceConfigToVertex(fromVoiceConfig));
-  }
-  return toObject;
-}
-function speechConfigToVertex(fromObject, rootObject) {
-  const toObject = {};
-  const fromVoiceConfig = getValueByPath(fromObject, ["voiceConfig"]);
-  if (fromVoiceConfig != null) {
-    setValueByPath(toObject, ["voiceConfig"], voiceConfigToVertex(fromVoiceConfig));
-  }
-  const fromLanguageCode = getValueByPath(fromObject, ["languageCode"]);
-  if (fromLanguageCode != null) {
-    setValueByPath(toObject, ["languageCode"], fromLanguageCode);
-  }
-  const fromMultiSpeakerVoiceConfig = getValueByPath(fromObject, [
-    "multiSpeakerVoiceConfig"
-  ]);
-  if (fromMultiSpeakerVoiceConfig != null) {
-    setValueByPath(toObject, ["multiSpeakerVoiceConfig"], multiSpeakerVoiceConfigToVertex(fromMultiSpeakerVoiceConfig));
   }
   return toObject;
 }
@@ -32715,22 +32707,6 @@ function videoToVertex(fromObject, _rootObject) {
   }
   return toObject;
 }
-function voiceConfigToVertex(fromObject, rootObject) {
-  const toObject = {};
-  const fromReplicatedVoiceConfig = getValueByPath(fromObject, [
-    "replicatedVoiceConfig"
-  ]);
-  if (fromReplicatedVoiceConfig != null) {
-    setValueByPath(toObject, ["replicatedVoiceConfig"], replicatedVoiceConfigToVertex(fromReplicatedVoiceConfig));
-  }
-  const fromPrebuiltVoiceConfig = getValueByPath(fromObject, [
-    "prebuiltVoiceConfig"
-  ]);
-  if (fromPrebuiltVoiceConfig != null) {
-    setValueByPath(toObject, ["prebuiltVoiceConfig"], fromPrebuiltVoiceConfig);
-  }
-  return toObject;
-}
 function createFileSearchStoreConfigToMldev(fromObject, parentObject) {
   const toObject = {};
   const fromDisplayName = getValueByPath(fromObject, ["displayName"]);
@@ -32963,10 +32939,11 @@ var CONTENT_TYPE_HEADER = "Content-Type";
 var SERVER_TIMEOUT_HEADER = "X-Server-Timeout";
 var USER_AGENT_HEADER = "User-Agent";
 var GOOGLE_API_CLIENT_HEADER = "x-goog-api-client";
-var SDK_VERSION = "1.49.0";
+var SDK_VERSION = "1.50.1";
 var LIBRARY_LABEL = `google-genai-sdk/${SDK_VERSION}`;
 var VERTEX_AI_API_DEFAULT_VERSION = "v1beta1";
 var GOOGLE_AI_API_DEFAULT_VERSION = "v1beta";
+var MULTI_REGIONAL_LOCATIONS = /* @__PURE__ */ new Set(["us", "eu"]);
 var DEFAULT_RETRY_ATTEMPTS = 5;
 var DEFAULT_RETRY_HTTP_STATUS_CODES = [
   408,
@@ -33011,7 +32988,7 @@ var ApiClient = class {
         this.clientOptions.location = void 0;
       } else if (this.clientOptions.apiKey || this.clientOptions.location === "global") {
         initHttpOptions.baseUrl = "https://aiplatform.googleapis.com/";
-      } else if (this.clientOptions.project && this.clientOptions.location && this.clientOptions.location === "us") {
+      } else if (this.clientOptions.project && this.clientOptions.location && MULTI_REGIONAL_LOCATIONS.has(this.clientOptions.location)) {
         initHttpOptions.baseUrl = `https://aiplatform.${this.clientOptions.location}.rep.googleapis.com/`;
       } else if (this.clientOptions.project && this.clientOptions.location) {
         initHttpOptions.baseUrl = `https://${this.clientOptions.location}-aiplatform.googleapis.com/`;
@@ -34301,6 +34278,10 @@ var Models = class extends BaseModule {
     this.apiClient = apiClient;
     this.embedContent = async (params) => {
       if (!this.apiClient.isVertexAI()) {
+        const isGeminiEmbedding2Model = params.model.includes("gemini-embedding-2");
+        if (isGeminiEmbedding2Model) {
+          params.contents = tContents(params.contents);
+        }
         return await this.embedContentInternal(params);
       }
       const isVertexEmbedContentModel = params.model.includes("gemini") && params.model !== "gemini-embedding-001" || params.model.includes("maas");
@@ -36006,6 +35987,22 @@ function liveConnectConfigToMldev(fromObject, parentObject) {
   if (getValueByPath(fromObject, ["explicitVadSignal"]) !== void 0) {
     throw new Error("explicitVadSignal parameter is not supported in Gemini API.");
   }
+  const fromAvatarConfig = getValueByPath(fromObject, ["avatarConfig"]);
+  if (parentObject !== void 0 && fromAvatarConfig != null) {
+    setValueByPath(parentObject, ["setup", "avatarConfig"], fromAvatarConfig);
+  }
+  const fromSafetySettings = getValueByPath(fromObject, [
+    "safetySettings"
+  ]);
+  if (parentObject !== void 0 && fromSafetySettings != null) {
+    let transformedList = fromSafetySettings;
+    if (Array.isArray(transformedList)) {
+      transformedList = transformedList.map((item) => {
+        return safetySettingToMldev(item);
+      });
+    }
+    setValueByPath(parentObject, ["setup", "safetySettings"], transformedList);
+  }
   return toObject;
 }
 function liveConnectConstraintsToMldev(apiClient, fromObject) {
@@ -36089,6 +36086,21 @@ function partToMldev(fromObject) {
   const fromPartMetadata = getValueByPath(fromObject, ["partMetadata"]);
   if (fromPartMetadata != null) {
     setValueByPath(toObject, ["partMetadata"], fromPartMetadata);
+  }
+  return toObject;
+}
+function safetySettingToMldev(fromObject) {
+  const toObject = {};
+  const fromCategory = getValueByPath(fromObject, ["category"]);
+  if (fromCategory != null) {
+    setValueByPath(toObject, ["category"], fromCategory);
+  }
+  if (getValueByPath(fromObject, ["method"]) !== void 0) {
+    throw new Error("method parameter is not supported in Gemini API.");
+  }
+  const fromThreshold = getValueByPath(fromObject, ["threshold"]);
+  if (fromThreshold != null) {
+    setValueByPath(toObject, ["threshold"], fromThreshold);
   }
   return toObject;
 }
@@ -37245,6 +37257,60 @@ var BaseInteractions = class extends APIResource {
 BaseInteractions._key = Object.freeze(["interactions"]);
 var Interactions = class extends BaseInteractions {
 };
+var BaseWebhooks = class extends APIResource {
+  /**
+   * Creates a new Webhook.
+   */
+  create(params, options) {
+    const { api_version = this._client.apiVersion, webhook_id } = params, body = __rest(params, ["api_version", "webhook_id"]);
+    return this._client.post(path`/${api_version}/webhooks`, Object.assign({ query: { webhook_id }, body }, options));
+  }
+  /**
+   * Updates an existing Webhook.
+   */
+  update(id, params, options) {
+    const { api_version = this._client.apiVersion, update_mask } = params, body = __rest(params, ["api_version", "update_mask"]);
+    return this._client.patch(path`/${api_version}/webhooks/${id}`, Object.assign({ query: { update_mask }, body }, options));
+  }
+  /**
+   * Lists all Webhooks.
+   */
+  list(params = {}, options) {
+    const _a4 = params !== null && params !== void 0 ? params : {}, { api_version = this._client.apiVersion } = _a4, query = __rest(_a4, ["api_version"]);
+    return this._client.get(path`/${api_version}/webhooks`, Object.assign({ query }, options));
+  }
+  /**
+   * Deletes a Webhook.
+   */
+  delete(id, params = {}, options) {
+    const { api_version = this._client.apiVersion } = params !== null && params !== void 0 ? params : {};
+    return this._client.delete(path`/${api_version}/webhooks/${id}`, options);
+  }
+  /**
+   * Gets a specific Webhook.
+   */
+  get(id, params = {}, options) {
+    const { api_version = this._client.apiVersion } = params !== null && params !== void 0 ? params : {};
+    return this._client.get(path`/${api_version}/webhooks/${id}`, options);
+  }
+  /**
+   * Sends a ping event to a Webhook.
+   */
+  ping(id, params = void 0, options) {
+    const { api_version = this._client.apiVersion, body } = params !== null && params !== void 0 ? params : {};
+    return this._client.post(path`/${api_version}/webhooks/${id}:ping`, Object.assign({ body }, options));
+  }
+  /**
+   * Generates a new signing secret for a Webhook.
+   */
+  rotateSigningSecret(id, params = {}, options) {
+    const _a4 = params !== null && params !== void 0 ? params : {}, { api_version = this._client.apiVersion } = _a4, body = __rest(_a4, ["api_version"]);
+    return this._client.post(path`/${api_version}/webhooks/${id}:rotateSigningSecret`, Object.assign({ body }, options));
+  }
+};
+BaseWebhooks._key = Object.freeze(["webhooks"]);
+var Webhooks = class extends BaseWebhooks {
+};
 function concatBytes(buffers) {
   let length = 0;
   for (const buffer of buffers) {
@@ -37868,12 +37934,12 @@ var buildHeaders = (newHeaders) => {
   return { [brand_privateNullableHeaders]: true, values: targetHeaders, nulls: nullHeaders };
 };
 var readEnv = (env) => {
-  var _a4, _b, _c, _d, _e, _f;
+  var _a4, _b, _c, _d, _e;
   if (typeof globalThis.process !== "undefined") {
-    return (_c = (_b = (_a4 = globalThis.process.env) === null || _a4 === void 0 ? void 0 : _a4[env]) === null || _b === void 0 ? void 0 : _b.trim()) !== null && _c !== void 0 ? _c : void 0;
+    return ((_b = (_a4 = globalThis.process.env) === null || _a4 === void 0 ? void 0 : _a4[env]) === null || _b === void 0 ? void 0 : _b.trim()) || void 0;
   }
   if (typeof globalThis.Deno !== "undefined") {
-    return (_f = (_e = (_d = globalThis.Deno.env) === null || _d === void 0 ? void 0 : _d.get) === null || _e === void 0 ? void 0 : _e.call(_d, env)) === null || _f === void 0 ? void 0 : _f.trim();
+    return ((_e = (_d = (_c = globalThis.Deno.env) === null || _c === void 0 ? void 0 : _c.get) === null || _d === void 0 ? void 0 : _d.call(_c, env)) === null || _e === void 0 ? void 0 : _e.trim()) || void 0;
   }
   return void 0;
 };
@@ -38256,6 +38322,7 @@ var GeminiNextGenAPIClient = class extends BaseGeminiNextGenAPIClient {
   constructor() {
     super(...arguments);
     this.interactions = new Interactions(this);
+    this.webhooks = new Webhooks(this);
   }
 };
 _a = GeminiNextGenAPIClient;
@@ -38275,6 +38342,7 @@ GeminiNextGenAPIClient.PermissionDeniedError = PermissionDeniedError;
 GeminiNextGenAPIClient.UnprocessableEntityError = UnprocessableEntityError;
 GeminiNextGenAPIClient.toFile = toFile;
 GeminiNextGenAPIClient.Interactions = Interactions;
+GeminiNextGenAPIClient.Webhooks = Webhooks;
 var GOOGLE_API_KEY_HEADER = "x-goog-api-key";
 var REQUIRED_VERTEX_AI_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 var NodeAuth = class {
@@ -39916,27 +39984,39 @@ var NodeFiles = class extends Files {
 };
 var LANGUAGE_LABEL_PREFIX = "gl-node/";
 var GoogleGenAI = class {
-  get interactions() {
+  getNextGenClient() {
     var _a4;
+    const httpOpts = this.httpOptions;
+    if (this._nextGenClient === void 0) {
+      this._nextGenClient = new GeminiNextGenAPIClient({
+        baseURL: this.apiClient.getBaseUrl(),
+        apiKey: this.apiKey,
+        apiVersion: this.apiClient.getApiVersion(),
+        clientAdapter: this.apiClient,
+        defaultHeaders: this.apiClient.getDefaultHeaders(),
+        timeout: httpOpts === null || httpOpts === void 0 ? void 0 : httpOpts.timeout,
+        maxRetries: (_a4 = httpOpts === null || httpOpts === void 0 ? void 0 : httpOpts.retryOptions) === null || _a4 === void 0 ? void 0 : _a4.attempts
+      });
+    }
+    if (httpOpts === null || httpOpts === void 0 ? void 0 : httpOpts.extraBody) {
+      console.warn("GoogleGenAI.interactions: Client level httpOptions.extraBody is not supported by the interactions client and will be ignored.");
+    }
+    return this._nextGenClient;
+  }
+  get interactions() {
     if (this._interactions !== void 0) {
       return this._interactions;
     }
     console.warn("GoogleGenAI.interactions: Interactions usage is experimental and may change in future versions.");
-    const httpOpts = this.httpOptions;
-    if (httpOpts === null || httpOpts === void 0 ? void 0 : httpOpts.extraBody) {
-      console.warn("GoogleGenAI.interactions: Client level httpOptions.extraBody is not supported by the interactions client and will be ignored.");
-    }
-    const nextGenClient = new GeminiNextGenAPIClient({
-      baseURL: this.apiClient.getBaseUrl(),
-      apiKey: this.apiKey,
-      apiVersion: this.apiClient.getApiVersion(),
-      clientAdapter: this.apiClient,
-      defaultHeaders: this.apiClient.getDefaultHeaders(),
-      timeout: httpOpts === null || httpOpts === void 0 ? void 0 : httpOpts.timeout,
-      maxRetries: (_a4 = httpOpts === null || httpOpts === void 0 ? void 0 : httpOpts.retryOptions) === null || _a4 === void 0 ? void 0 : _a4.attempts
-    });
-    this._interactions = nextGenClient.interactions;
+    this._interactions = this.getNextGenClient().interactions;
     return this._interactions;
+  }
+  get webhooks() {
+    if (this._webhooks !== void 0) {
+      return this._webhooks;
+    }
+    this._webhooks = this.getNextGenClient().webhooks;
+    return this._webhooks;
   }
   constructor(options) {
     var _a4, _b, _c, _d, _e, _f;
@@ -46573,7 +46653,7 @@ var Videos = class extends APIResource2 {
 var _Webhooks_instances;
 var _Webhooks_validateSecret;
 var _Webhooks_getRequiredHeader;
-var Webhooks = class extends APIResource2 {
+var Webhooks2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
     _Webhooks_instances.add(this);
@@ -46685,7 +46765,7 @@ var OpenAI = class {
     this.fineTuning = new FineTuning(this);
     this.graders = new Graders2(this);
     this.vectorStores = new VectorStores(this);
-    this.webhooks = new Webhooks(this);
+    this.webhooks = new Webhooks2(this);
     this.beta = new Beta(this);
     this.batches = new Batches2(this);
     this.uploads = new Uploads(this);
@@ -47172,7 +47252,7 @@ OpenAI.Models = Models2;
 OpenAI.FineTuning = FineTuning;
 OpenAI.Graders = Graders2;
 OpenAI.VectorStores = VectorStores;
-OpenAI.Webhooks = Webhooks;
+OpenAI.Webhooks = Webhooks2;
 OpenAI.Beta = Beta;
 OpenAI.Batches = Batches2;
 OpenAI.Uploads = Uploads;
@@ -47333,6 +47413,15 @@ function sanitizeSchemaForGoogle(schema) {
     if (UNSUPPORTED_SCHEMA_FIELDS.includes(key)) {
       continue;
     }
+    if (key === "type") {
+      if (typeof value === "string") {
+        sanitized[key] = value.toUpperCase();
+        continue;
+      } else if (Array.isArray(value)) {
+        sanitized[key] = value.map((v) => typeof v === "string" ? v.toUpperCase() : v);
+        continue;
+      }
+    }
     if (value && typeof value === "object") {
       sanitized[key] = sanitizeSchemaForGoogle(value);
     } else {
@@ -47357,9 +47446,6 @@ var GoogleProvider = class {
     if (lowerName.includes("gemini-3") || lowerName.includes("gemini-3.")) {
       return true;
     }
-    if (lowerName === "gemini-pro-latest") {
-      return true;
-    }
     const thinkingModels = [
       "gemini-2.5-pro",
       // 2.5 Pro has thinking capabilities
@@ -47380,18 +47466,11 @@ var GoogleProvider = class {
       // Image generation model, no function calling
       "gemini-2.0-flash-exp-image-generation",
       // Experimental image model
-      "imagen",
+      "imagen"
       // Imagen models don't support function calling
-      "gemini-pro-latest",
-      // Resolves to Gemini 3, which doesn't support function calling
-      "gemini-flash-latest"
-      // May resolve to a model without function calling
     ];
     const lowerName = modelName.toLowerCase();
     if (noToolsModels.some((m2) => lowerName.includes(m2.toLowerCase()))) {
-      return false;
-    }
-    if (lowerName.includes("gemini-3")) {
       return false;
     }
     if (lowerName.includes("-image") && !lowerName.includes("vision")) {
@@ -47638,7 +47717,7 @@ var GoogleProvider = class {
     return { contents, systemInstruction, shouldDisableTools, attachmentResults: { sent, failed } };
   }
   async sendMessage(params, apiKey) {
-    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": getQuilltapUserAgent() } } });
     const tools = [];
     if (params.tools && params.tools.length > 0) {
       tools.push({
@@ -47715,7 +47794,10 @@ var GoogleProvider = class {
           totalTokens: usage?.totalTokenCount ?? 0
         },
         // Convert SDK response class to plain object for Zod validation
-        raw: JSON.parse(JSON.stringify(response)),
+        raw: {
+          ...JSON.parse(JSON.stringify(response)),
+          functionCalls: response.functionCalls ? response.functionCalls.map((fc) => ({ name: fc.name, args: fc.args })) : void 0
+        },
         attachmentResults,
         thoughtSignature
       };
@@ -47729,7 +47811,7 @@ var GoogleProvider = class {
     }
   }
   async *streamMessage(params, apiKey) {
-    const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": getQuilltapUserAgent() } } });
     const tools = [];
     if (params.tools && params.tools.length > 0) {
       tools.push({
@@ -47845,7 +47927,7 @@ var GoogleProvider = class {
   }
   async validateApiKey(apiKey) {
     try {
-      const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": getQuilltapUserAgent() } } });
       await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: "test"
@@ -47858,7 +47940,7 @@ var GoogleProvider = class {
   }
   async getAvailableModels(apiKey) {
     try {
-      const ai = new GoogleGenAI({ apiKey, userAgentExtra: getQuilltapUserAgent() });
+      const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": getQuilltapUserAgent() } } });
       const modelList = [];
       const pager = await ai.models.list();
       for await (const model of pager) {
@@ -47919,8 +48001,7 @@ var GoogleProvider = class {
             level: "info",
             message: "This is a thinking/reasoning model. Responses may take longer as the model reasons through complex problems."
           }
-        ],
-        missingCapabilities: ["function-calling"]
+        ]
       };
     }
     if (lowerModelId.includes("gemini-3") && lowerModelId.includes("image")) {
@@ -47985,8 +48066,7 @@ var GoogleProvider = class {
             level: "info",
             message: "This is Gemini 3 Pro, a thinking/reasoning model. Responses may take longer as the model reasons through complex problems."
           }
-        ],
-        missingCapabilities: ["function-calling"]
+        ]
       };
     }
     if (lowerModelId.includes("gemini-1.5")) {
@@ -48203,21 +48283,22 @@ var GoogleImagenProvider = class {
 // node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
 var TOOL_NAME_ALIASES = {
   // Direct mappings
-  "search_memories": "search_memories",
+  "search": "search",
   "generate_image": "generate_image",
   "search_web": "search_web",
-  // Memory tool aliases
-  "memory": "search_memories",
-  "memory_search": "search_memories",
-  "search_memory": "search_memories",
-  "memories": "search_memories",
+  // Memory/Search tool aliases
+  "memory": "search",
+  "memory_search": "search",
+  "search_memory": "search",
+  "memories": "search",
+  "search_memories": "search",
+  "search_scriptorium": "search",
   // Image tool aliases
   "image": "generate_image",
   "create_image": "generate_image",
   "image_generation": "generate_image",
   "gen_image": "generate_image",
   // Web search aliases
-  "search": "search_web",
   "web_search": "search_web",
   "websearch": "search_web",
   "web": "search_web",
@@ -48234,9 +48315,9 @@ function normalizeToolName(name) {
 }
 function convertToToolCallRequest(parsed) {
   switch (parsed.toolName) {
-    case "search_memories":
+    case "search":
       return {
-        name: "search_memories",
+        name: "search",
         arguments: {
           query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
           limit: parsed.arguments.limit
@@ -48634,6 +48715,12 @@ var plugin = {
    */
   parseToolCalls: (response) => {
     try {
+      if (response && response.functionCalls && Array.isArray(response.functionCalls)) {
+        return response.functionCalls.map((fc) => ({
+          name: fc.name,
+          arguments: fc.args || {}
+        }));
+      }
       const toolCalls = parseGoogleToolCalls(response);
       return toolCalls;
     } catch (error) {

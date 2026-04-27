@@ -214,23 +214,6 @@ export { FolderSchema } from './folder.types';
 export type { Folder, FolderInput } from './folder.types';
 
 // ============================================================================
-// FILE WRITE PERMISSION TYPES
-// ============================================================================
-export {
-  FileWritePermissionScopeEnum,
-  FileWritePermissionSchema,
-  CreateFileWritePermissionSchema,
-  UpdateFileWritePermissionSchema,
-} from './file-permissions.types';
-
-export type {
-  FileWritePermissionScope,
-  FileWritePermission,
-  CreateFileWritePermission,
-  UpdateFileWritePermission,
-} from './file-permissions.types';
-
-// ============================================================================
 // TAG TYPES
 // ============================================================================
 export {
@@ -286,6 +269,42 @@ export type {
   RoleplayTemplate,
   PromptTemplate,
 } from './template.types';
+
+// ============================================================================
+// SCRIPTORIUM TYPES
+// ============================================================================
+export {
+  ConversationAnnotationSchema,
+  ConversationAnnotationInputSchema,
+  ConversationChunkSchema,
+  ConversationChunkInputSchema,
+} from './scriptorium.types';
+
+export type {
+  ConversationAnnotation,
+  ConversationAnnotationInput,
+  ConversationChunk,
+  ConversationChunkInput,
+  InterchangeInfo,
+  RenderedConversation,
+} from './scriptorium.types';
+
+// ============================================================================
+// CHAT DOCUMENT TYPES (Scriptorium Phase 3.5)
+// ============================================================================
+export {
+  DocScopeSchema,
+  ChatDocumentSchema,
+  ChatDocumentInputSchema,
+  DocumentModeSchema,
+} from './chat-document.types';
+
+export type {
+  DocScope,
+  ChatDocument,
+  ChatDocumentInput,
+  DocumentMode,
+} from './chat-document.types';
 
 // ============================================================================
 // JOB TYPES
@@ -375,3 +394,32 @@ export type {
   EmbeddingStatus,
   EmbeddingStatusInput,
 } from './embedding-job.types';
+
+// ============================================================================
+// HELP DOC TYPES (runtime-embedded help documentation)
+// ============================================================================
+export {
+  HelpDocSchema,
+} from './help-doc.types';
+
+export type {
+  HelpDoc,
+  HelpDocInput,
+} from './help-doc.types';
+
+// ============================================================================
+// DOCUMENT MOUNT INDEX TYPES (Project Scriptorium Phase 3.2)
+// ============================================================================
+export {
+  DocMountPointSchema,
+  DocMountFileSchema,
+  DocMountChunkSchema,
+  ProjectDocMountLinkSchema,
+} from './mount-index.types';
+
+export type {
+  DocMountPoint,
+  DocMountFile,
+  DocMountChunk,
+  ProjectDocMountLink,
+} from './mount-index.types';

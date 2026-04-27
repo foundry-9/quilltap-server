@@ -118,9 +118,11 @@ export function useParticipants({
         avatarUrl: p.character.avatarUrl,
         talkativeness: p.character.talkativeness ?? 0.5,
         defaultImage: p.character.defaultImage,
+        systemPrompts: p.character.systemPrompts,
       } : null,
       // User-controlled characters use the same .character field as LLM characters
       connectionProfile: p.connectionProfile,
+      selectedSystemPromptId: p.selectedSystemPromptId ?? null,
     }))
   }, [chatParticipants])
 

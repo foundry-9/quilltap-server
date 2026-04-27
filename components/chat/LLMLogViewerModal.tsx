@@ -44,7 +44,7 @@ export default function LLMLogViewerModal({
   const renderRequestTab = () => (
     <div className="space-y-4">
       <div>
-        <h4 className="text-sm font-medium qt-text mb-2">Provider & Model</h4>
+        <h4 className="qt-label qt-text mb-2">Provider & Model</h4>
         <div className="qt-surface-alt p-3 rounded space-y-1">
           <div className="flex justify-between">
             <span className="qt-text-secondary">Provider:</span>
@@ -62,7 +62,7 @@ export default function LLMLogViewerModal({
       </div>
 
       <div>
-        <h4 className="text-sm font-medium qt-text mb-2">Request Configuration</h4>
+        <h4 className="qt-label qt-text mb-2">Request Configuration</h4>
         <div className="qt-surface-alt p-3 rounded space-y-1">
           <div className="flex justify-between">
             <span className="qt-text-secondary">Messages:</span>
@@ -92,7 +92,7 @@ export default function LLMLogViewerModal({
       </div>
 
       <div>
-        <h4 className="text-sm font-medium qt-text mb-2">Message Summary</h4>
+        <h4 className="qt-label qt-text mb-2">Message Summary</h4>
         <div className="space-y-2">
           {currentLog.request.messages.map((msg, idx) => (
             <div key={idx} className="qt-surface-alt p-2 rounded text-sm">
@@ -114,7 +114,7 @@ export default function LLMLogViewerModal({
 
       {currentLog.request.fullMessages && (
         <div>
-          <h4 className="text-sm font-medium qt-text mb-2">Full Messages (Verbose)</h4>
+          <h4 className="qt-label qt-text mb-2">Full Messages (Verbose)</h4>
           <pre className="font-mono text-xs whitespace-pre-wrap overflow-auto max-h-96 p-3 qt-surface-alt rounded">
             {formatJSON(currentLog.request.fullMessages)}
           </pre>
@@ -128,7 +128,7 @@ export default function LLMLogViewerModal({
     <div className="space-y-4">
       {currentLog.response.error && (
         <div className="p-3 qt-bg-destructive/10 border qt-border-destructive/20 rounded">
-          <h4 className="text-sm font-medium qt-text-destructive mb-1">Error</h4>
+          <h4 className="qt-label qt-text-destructive mb-1">Error</h4>
           <p className="text-sm qt-text">{currentLog.response.error}</p>
         </div>
       )}
@@ -140,7 +140,7 @@ export default function LLMLogViewerModal({
       )}
 
       <div>
-        <h4 className="text-sm font-medium qt-text mb-2">
+        <h4 className="qt-label qt-text mb-2">
           Content Preview ({currentLog.response.contentLength} chars)
         </h4>
         <pre className="font-mono text-xs whitespace-pre-wrap overflow-auto max-h-64 p-3 qt-surface-alt rounded">
@@ -151,7 +151,7 @@ export default function LLMLogViewerModal({
 
       {currentLog.response.fullContent && (
         <div>
-          <h4 className="text-sm font-medium qt-text mb-2">Full Content (Verbose)</h4>
+          <h4 className="qt-label qt-text mb-2">Full Content (Verbose)</h4>
           <pre className="font-mono text-xs whitespace-pre-wrap overflow-auto max-h-96 p-3 qt-surface-alt rounded">
             {currentLog.response.fullContent}
           </pre>
@@ -165,22 +165,22 @@ export default function LLMLogViewerModal({
     <div className="space-y-4">
       {currentLog.usage && (
         <div>
-          <h4 className="text-sm font-medium qt-text mb-2">Token Usage</h4>
+          <h4 className="qt-label qt-text mb-2">Token Usage</h4>
           <div className="qt-surface-alt p-4 rounded grid grid-cols-3 gap-4">
             <div className="text-center">
-              <p className="text-2xl font-bold qt-text">
+              <p className="qt-heading-2 qt-text">
                 {currentLog.usage.promptTokens.toLocaleString()}
               </p>
               <p className="text-xs qt-text-secondary mt-1">Prompt Tokens</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold qt-text">
+              <p className="qt-heading-2 qt-text">
                 {currentLog.usage.completionTokens.toLocaleString()}
               </p>
               <p className="text-xs qt-text-secondary mt-1">Completion Tokens</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold qt-text">
+              <p className="qt-heading-2 qt-text">
                 {currentLog.usage.totalTokens.toLocaleString()}
               </p>
               <p className="text-xs qt-text-secondary mt-1">Total Tokens</p>
@@ -191,7 +191,7 @@ export default function LLMLogViewerModal({
 
       {currentLog.cacheUsage && (
         <div>
-          <h4 className="text-sm font-medium qt-text mb-2">Cache Usage</h4>
+          <h4 className="qt-label qt-text mb-2">Cache Usage</h4>
           <div className="qt-surface-alt p-3 rounded space-y-2">
             {currentLog.cacheUsage.cacheCreationInputTokens !== undefined && (
               <div className="flex justify-between">
@@ -215,7 +215,7 @@ export default function LLMLogViewerModal({
 
       {currentLog.durationMs !== null && currentLog.durationMs !== undefined && (
         <div>
-          <h4 className="text-sm font-medium qt-text mb-2">Timing</h4>
+          <h4 className="qt-label qt-text mb-2">Timing</h4>
           <div className="qt-surface-alt p-3 rounded">
             <div className="flex justify-between">
               <span className="qt-text-secondary">Duration:</span>
@@ -277,7 +277,7 @@ export default function LLMLogViewerModal({
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+              className={`px-4 py-3 qt-label transition-colors border-b-2 ${
                 activeTab === tab
                   ? 'qt-border-primary qt-text'
                   : 'border-transparent qt-text-secondary hover:qt-text'

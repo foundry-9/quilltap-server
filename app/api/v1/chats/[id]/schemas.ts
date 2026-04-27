@@ -15,12 +15,15 @@ export const updateChatSchema = z.object({
   documentEditingMode: z.boolean().optional(),
   projectId: z.uuid().nullish(),
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shared by all participants)
+  alertCharactersOfLanternImages: z.boolean().nullish(),
+  allowCrossCharacterVaultReads: z.boolean().optional(),
 });
 
 export const updateParticipantSchema = z.object({
   participantId: z.uuid(),
   connectionProfileId: z.uuid().optional(),
   imageProfileId: z.uuid().nullish(),
+  selectedSystemPromptId: z.uuid().nullish(),
   displayOrder: z.number().optional(),
   isActive: z.boolean().optional(),  // Keep for backward compat
   status: z.enum(['active', 'silent', 'absent', 'removed']).optional(),  // New preferred field

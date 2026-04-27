@@ -18,6 +18,42 @@ import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { Memory } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 
+// Linear ramp: at maxContext ≤ 4K, show MIN entries (~half the budget). At ≥ 32K, show MAX.
+const RECENT_CONVERSATIONS_MIN = 5
+const RECENT_CONVERSATIONS_MAX = 20
+const RECENT_CONVERSATIONS_RAMP_MIN_TOKENS = 4000
+const RECENT_CONVERSATIONS_RAMP_MAX_TOKENS = 32000
+
+export function calculateRecentConversationsLimit(maxContext?: number | null): number {
+  if (maxContext == null) return RECENT_CONVERSATIONS_MAX
+  if (maxContext <= RECENT_CONVERSATIONS_RAMP_MIN_TOKENS) return RECENT_CONVERSATIONS_MIN
+  if (maxContext >= RECENT_CONVERSATIONS_RAMP_MAX_TOKENS) return RECENT_CONVERSATIONS_MAX
+  const ratio =
+    (maxContext - RECENT_CONVERSATIONS_RAMP_MIN_TOKENS) /
+    (RECENT_CONVERSATIONS_RAMP_MAX_TOKENS - RECENT_CONVERSATIONS_RAMP_MIN_TOKENS)
+  return Math.round(
+    RECENT_CONVERSATIONS_MIN + ratio * (RECENT_CONVERSATIONS_MAX - RECENT_CONVERSATIONS_MIN)
+  )
+}
+
+export async function buildRecentConversationsBlock(
+  characterId: string,
+  currentChatId: string | undefined,
+  limit: number
+): Promise<string> {
+  if (limit <= 0) return ''
+  const repos = getRepositories()
+  const eligible = await repos.chats.findRecentSummarizedByCharacter(characterId, {
+    limit,
+    excludeChatId: currentChatId,
+  })
+  if (eligible.length === 0) return ''
+  const entries = eligible
+    .map(c => `#### ${c.title} (\`${c.id}\`)\n${c.contextSummary}`)
+    .join('\n\n')
+  return `### Recent Conversations\n\n${entries}`
+}
+
 const recapLogger = logger.child({ module: 'MemoryRecap' })
 
 /**
@@ -50,8 +86,10 @@ export interface MemoryRecapResult {
  * @param characterName - The character's display name
  * @param selection - Cheap LLM selection for summarization
  * @param userId - User ID for API key access
- * @param chatId - Optional chat ID for logging
+ * @param chatId - Optional chat ID for logging (also excluded from the Recent Conversations block)
  * @param uncensoredFallback - Optional uncensored provider fallback for dangerous content
+ * @param maxContext - Connection profile's maxContext in tokens, used to scale how many
+ *   recent-conversation summaries to include (linear ramp 4K→5, 32K→20)
  * @returns MemoryRecapResult with the formatted recap content
  */
 export async function generateMemoryRecap(
@@ -60,7 +98,8 @@ export async function generateMemoryRecap(
   selection: CheapLLMSelection,
   userId: string,
   chatId?: string,
-  uncensoredFallback?: UncensoredFallbackOptions
+  uncensoredFallback?: UncensoredFallbackOptions,
+  maxContext?: number | null
 ): Promise<MemoryRecapResult> {
   const startTime = Date.now()
 
@@ -87,70 +126,82 @@ export async function generateMemoryRecap(
       total: totalCount,
     })
 
-    if (totalCount === 0) {
-      recapLogger.debug('No memories found for recap, skipping', { characterId })
-      return { content: '', memoriesUsed: 0 }
-    }
-
-    // Format memories with relative age labels for the summarization prompt
-    const now = new Date()
-    const formatTier = (memories: Memory[]) =>
-      memories.map(m => ({
-        summary: m.summary,
-        age: formatRelativeAge(m, now),
-      }))
-
-    const tieredWithAge = {
-      high: formatTier(tiered.high),
-      medium: formatTier(tiered.medium),
-      low: formatTier(tiered.low),
-    }
-
-    // Send to cheap LLM for summarization (with uncensored fallback for dangerous content)
-    const result = await summarizeMemoryRecap(
-      characterName,
-      tieredWithAge,
-      selection,
-      userId,
+    // Always try to fetch the recent-conversations block; it's independent of memories
+    const recentConversationsLimit = calculateRecentConversationsLimit(maxContext)
+    const recentConversationsBlock = await buildRecentConversationsBlock(
+      characterId,
       chatId,
-      uncensoredFallback
+      recentConversationsLimit
     )
 
+    let narrative = ''
+    let usage: MemoryRecapResult['usage'] | undefined
+
+    if (totalCount > 0) {
+      // Format memories with relative age labels for the summarization prompt
+      const now = new Date()
+      const formatTier = (memories: Memory[]) =>
+        memories.map(m => ({
+          summary: m.summary,
+          age: formatRelativeAge(m, now),
+        }))
+
+      const tieredWithAge = {
+        high: formatTier(tiered.high),
+        medium: formatTier(tiered.medium),
+        low: formatTier(tiered.low),
+      }
+
+      // Send to cheap LLM for summarization (with uncensored fallback for dangerous content)
+      const result = await summarizeMemoryRecap(
+        characterName,
+        tieredWithAge,
+        selection,
+        userId,
+        chatId,
+        uncensoredFallback
+      )
+
+      if (!result.success || !result.result) {
+        recapLogger.warn('Memory recap summarization failed', {
+          characterId,
+          error: result.error,
+        })
+      } else if (result.result.length > 0) {
+        narrative = result.result
+        usage = result.usage
+      } else {
+        recapLogger.debug('Memory recap returned empty (no meaningful memories)', { characterId })
+      }
+    }
+
+    if (!narrative && !recentConversationsBlock) {
+      recapLogger.debug('No memories or recent conversations found for recap, skipping', { characterId })
+      return { content: '', memoriesUsed: 0 }
+    }
+
+    const intro = `## What You Remember\nAs ${characterName}, here is what you recall from your experiences and past conversations:`
+    const sections = [intro]
+    if (narrative) sections.push(narrative)
+    if (recentConversationsBlock) sections.push(recentConversationsBlock)
+    const formattedContent = sections.join('\n\n')
+
     const elapsed = Date.now() - startTime
-
-    if (!result.success || !result.result) {
-      recapLogger.warn('Memory recap summarization failed', {
-        characterId,
-        error: result.error,
-        elapsed,
-      })
-      return { content: '', memoriesUsed: 0 }
-    }
-
-    if (result.result.length === 0) {
-      recapLogger.debug('Memory recap returned empty (no meaningful memories)', {
-        characterId,
-        elapsed,
-      })
-      return { content: '', memoriesUsed: 0 }
-    }
-
-    // Format the recap for injection into the system prompt
-    const formattedContent = `## What You Remember\nAs ${characterName}, here is what you recall from your experiences and past conversations:\n\n${result.result}`
 
     recapLogger.info('Memory recap generated', {
       characterId,
       characterName,
       memoriesUsed: totalCount,
-      recapLength: result.result.length,
+      narrativeLength: narrative.length,
+      hasRecentConversations: !!recentConversationsBlock,
       elapsed,
-      usage: result.usage,
+      usage,
     })
 
     return {
       content: formattedContent,
       memoriesUsed: totalCount,
-      usage: result.usage,
+      usage,
     }
   } catch (error) {
     const elapsed = Date.now() - startTime

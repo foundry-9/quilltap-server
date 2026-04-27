@@ -4,7 +4,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { ProfileCard as BaseProfileCard, ProfileCardBadge } from '@/components/ui/ProfileCard'
 import { TagBadge } from '@/components/tags/tag-badge'
 import { MissingApiKeyBadge } from '@/components/ui/MissingApiKeyBadge'
-import { getAttachmentSupportDescription } from '@/lib/llm/attachment-support'
+import { getProfileAttachmentSupportDescription } from '@/lib/llm/connection-profile-utils'
 import { getModelClass } from '@/lib/llm/model-classes'
 import { formatTokenCount } from '@/lib/utils/format-tokens'
 import type { ConnectionProfile } from './types'
@@ -121,7 +121,7 @@ function ProfileCardContent({
 
       {/* Attachment support description */}
       <p className="qt-text-xs mt-1">
-        {getAttachmentSupportDescription(profile.provider as any, profile.baseUrl ?? undefined)}
+        {getProfileAttachmentSupportDescription(profile as any)}
       </p>
 
       {/* Usage stats */}

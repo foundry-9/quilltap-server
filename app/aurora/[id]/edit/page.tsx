@@ -78,8 +78,12 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
     handleAliasesChange,
     handlePronounsChange,
     handleScenariosChange,
+    handleSystemTransparencyChange,
     handleSubmit,
     handleCancel,
+    handleReadFromDocStoreToggle,
+    handleSyncPropertiesFromVault,
+    handleSyncPropertiesToVault,
     setCharacterAvatar,
     getAvatarSrc,
     toggleAvatarSelector,
@@ -91,6 +95,26 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
   const [showWizard, setShowWizard] = useState(false)
   const [physicalDescriptionsRefreshKey, setPhysicalDescriptionsRefreshKey] = useState(0)
   const [wardrobeRefreshKey, setWardrobeRefreshKey] = useState(0)
+
+  // Wrap the sync-from-vault handler so the child lists that fetch their own
+  // data (physical descriptions, wardrobe items, outfit presets) re-query
+  // after the DB is updated. handleSyncPropertiesFromVault itself refetches
+  // the character row; these lists hang off refreshKey props instead.
+  const handleSyncPropertiesFromVaultAndRefreshLists = async () => {
+    await handleSyncPropertiesFromVault()
+    setPhysicalDescriptionsRefreshKey((prev) => prev + 1)
+    setWardrobeRefreshKey((prev) => prev + 1)
+  }
+
+  // The reverse direction doesn't change the DB, but when the overlay is on,
+  // the overlaid values the child lists read are derived from vault files;
+  // pushing DB→vault therefore needs the same refresh so lists reflect the
+  // freshly-written vault state.
+  const handleSyncPropertiesToVaultAndRefreshLists = async () => {
+    await handleSyncPropertiesToVault()
+    setPhysicalDescriptionsRefreshKey((prev) => prev + 1)
+    setWardrobeRefreshKey((prev) => prev + 1)
+  }
 
 
   // Handle applying wizard-generated data
@@ -233,7 +257,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
       <div className="mb-8">
         <button
           onClick={handleCancel}
-          className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
+          className="mb-4 inline-flex items-center qt-label text-primary transition hover:text-primary/80"
         >
           {isNpc ? '← Back to NPCs' : '← Back'}
         </button>
@@ -250,7 +274,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
               />
             ) : (
               <div className="flex h-20 w-20 items-center justify-center rounded-full qt-bg-muted">
-                <span className="text-3xl font-bold qt-text-secondary">
+                <span className="qt-heading-1 qt-text-secondary">
                   {character?.name?.charAt(0)?.toUpperCase() || '?'}
                 </span>
               </div>
@@ -299,7 +323,21 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
           {(activeTab: string) => {
             switch (activeTab) {
               case 'details':
-                return <CharacterBasicInfo characterId={id} formData={formData} onChange={handleChange} onAliasesChange={handleAliasesChange} onPronounsChange={handlePronounsChange} onScenariosChange={handleScenariosChange} />
+                return (
+                  <CharacterBasicInfo
+                    characterId={id}
+                    formData={formData}
+                    hasLinkedVault={!!character?.characterDocumentMountPointId}
+                    onChange={handleChange}
+                    onAliasesChange={handleAliasesChange}
+                    onPronounsChange={handlePronounsChange}
+                    onScenariosChange={handleScenariosChange}
+                    onSystemTransparencyChange={handleSystemTransparencyChange}
+                    onReadFromDocStoreToggle={handleReadFromDocStoreToggle}
+                    onSyncPropertiesFromVault={handleSyncPropertiesFromVaultAndRefreshLists}
+                    onSyncPropertiesToVault={handleSyncPropertiesToVaultAndRefreshLists}
+                  />
+                )
 
               case 'system-prompts':
                 return (

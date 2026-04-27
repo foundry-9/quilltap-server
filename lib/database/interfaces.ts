@@ -14,7 +14,7 @@ import { z } from 'zod';
 /**
  * Comparison operators for query filters
  */
-export type ComparisonOperator = '$eq' | '$ne' | '$gt' | '$gte' | '$lt' | '$lte' | '$in' | '$nin' | '$exists';
+export type ComparisonOperator = '$eq' | '$ne' | '$gt' | '$gte' | '$lt' | '$lte' | '$in' | '$nin' | '$exists' | '$like';
 
 /**
  * Logical operators for combining filters
@@ -35,6 +35,7 @@ export interface ComparisonCondition {
   $nin?: unknown[];
   $exists?: boolean;
   $regex?: RegExp | string;
+  $like?: string;
 }
 
 /**
@@ -274,7 +275,7 @@ export interface DatabaseCollection<T = unknown> {
   findOneAndUpdate(
     filter: TypedQueryFilter<T>,
     update: UpdateSpec<T>,
-    options?: { returnDocument?: 'before' | 'after'; upsert?: boolean }
+    options?: { returnDocument?: 'before' | 'after'; upsert?: boolean; sort?: SortSpec }
   ): Promise<T | null>;
 
   /**

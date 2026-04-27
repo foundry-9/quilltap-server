@@ -1,6 +1,6 @@
 # Quilltap Database Schema Reference (DDL)
 
-This document describes the two SQLite databases used by Quilltap, how to access them, and the complete schema of every table.
+This document describes the three SQLite databases used by Quilltap, how to access them, and the complete schema of every table.
 
 ## Database Overview
 
@@ -8,8 +8,9 @@ This document describes the two SQLite databases used by Quilltap, how to access
 |----------|----------|---------|
 | **Main** | `quilltap.db` | All application data: users, characters, chats, messages, projects, files, memories, settings, etc. |
 | **LLM Logs** | `quilltap-llm-logs.db` | LLM request/response debug data. Isolated so high-churn logging can't corrupt main data. |
+| **Mount Index** | `quilltap-mount-index.db` | Document mount point tracking: file inventory, checksums, text chunks, and embeddings for external document directories. |
 
-Both databases live in `<data-dir>/data/`. Alongside them:
+All three databases live in `<data-dir>/data/`. Alongside them:
 
 ```
 <data-dir>/data/
@@ -17,6 +18,8 @@ Both databases live in `<data-dir>/data/`. Alongside them:
 ├── quilltap.dbkey            # Encryption key file (main DB)
 ├── quilltap-llm-logs.db
 ├── quilltap-llm-logs.dbkey   # Encryption key file (LLM logs DB)
+├── quilltap-mount-index.db
+├── quilltap-mount-index.dbkey # Encryption key file (mount index DB)
 ├── quilltap.lock             # Instance lock (prevents dual-instance corruption)
 └── backups/                  # Physical backups
 ```
@@ -31,11 +34,11 @@ Both databases live in `<data-dir>/data/`. Alongside them:
 | Docker | `/app/quilltap/` |
 | Lima VM | `/data/quilltap/` (VirtioFS mount) |
 
-Override with `QUILLTAP_DATA_DIR` env var, `--data-dir` CLI flag, or `SQLITE_PATH` / `SQLITE_LLM_LOGS_PATH` for individual databases.
+Override with `QUILLTAP_DATA_DIR` env var, `--data-dir` CLI flag, or `SQLITE_PATH` / `SQLITE_LLM_LOGS_PATH` / `SQLITE_MOUNT_INDEX_PATH` for individual databases.
 
 ## Encryption
 
-Both databases are encrypted with **SQLCipher** (AES-256-CBC with HMAC-SHA512). The standard `sqlite3` CLI **cannot** open them.
+All three databases are encrypted with **SQLCipher** (AES-256-CBC with HMAC-SHA512). The standard `sqlite3` CLI **cannot** open them.
 
 ### How the key works
 
@@ -177,7 +180,10 @@ CREATE TABLE "characters" (
   "defaultScenarioId" TEXT DEFAULT NULL,
   "defaultSystemPromptId" TEXT DEFAULT NULL,
   "canDressThemselves" INTEGER DEFAULT NULL,
-  "canCreateOutfits" INTEGER DEFAULT NULL
+  "canCreateOutfits" INTEGER DEFAULT NULL,
+  "characterDocumentMountPointId" TEXT DEFAULT NULL,
+  "readPropertiesFromDocumentStore" INTEGER DEFAULT NULL,  -- when 1, pronouns/aliases/title/firstMessage/talkativeness are read from the linked vault's properties.json
+  "systemTransparency" INTEGER DEFAULT NULL  -- when 1 (true), this character may inspect "the Staff" — the chat-level toggles for self_inventory, Staff messages (Lantern/Aurora/Librarian/Prospero/Host), and character vaults still apply. When NULL or 0 (false), the character cannot see Staff messages, the self_inventory tool is withheld, and all character vaults (own + peers) are hidden from doc_* tools — a hard override on top of chat/project settings. Default NULL (opaque).
 );
 
 CREATE INDEX "idx_characters_createdAt" ON "characters" ("createdAt" DESC);
@@ -313,13 +319,18 @@ CREATE TABLE "chats" (
   "dangerClassifiedAtMessageCount" INTEGER DEFAULT NULL,
   "turnQueue" TEXT DEFAULT '[]',
   "sceneState" TEXT DEFAULT NULL,
+  "renderedMarkdown" TEXT DEFAULT NULL,
   "equippedOutfit" TEXT DEFAULT NULL,
   "pendingOutfitNotifications" TEXT DEFAULT NULL,
   "characterAvatars" TEXT DEFAULT NULL,
   "avatarGenerationEnabled" INTEGER DEFAULT NULL,
+  "alertCharactersOfLanternImages" INTEGER DEFAULT NULL,
   "chatType" TEXT DEFAULT 'salon',
   "helpPageUrl" TEXT DEFAULT NULL,
-  "scenarioText" TEXT DEFAULT NULL
+  "scenarioText" TEXT DEFAULT NULL,
+  "documentMode" TEXT DEFAULT 'normal',
+  "dividerPosition" INTEGER DEFAULT 45,
+  "allowCrossCharacterVaultReads" INTEGER DEFAULT 0
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");
@@ -327,6 +338,87 @@ CREATE INDEX "idx_chats_createdAt" ON "chats" ("createdAt" DESC);
 CREATE INDEX "idx_chats_projectId" ON "chats" ("projectId");
 CREATE INDEX "idx_chats_userId" ON "chats" ("userId");
 ```
+
+### chat_documents
+
+```sql
+CREATE TABLE "chat_documents" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "filePath" TEXT NOT NULL,
+  "scope" TEXT NOT NULL DEFAULT 'project',
+  "mountPoint" TEXT,
+  "displayTitle" TEXT,
+  "isActive" INTEGER DEFAULT 1,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
+CREATE INDEX "idx_chat_documents_chatId" ON "chat_documents" ("chatId");
+CREATE UNIQUE INDEX "idx_chat_documents_unique" ON "chat_documents" ("chatId", "filePath", "scope", "mountPoint");
+```
+
+### conversation_annotations
+
+```sql
+CREATE TABLE "conversation_annotations" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "messageIndex" INTEGER NOT NULL,
+  "sourceMessageId" TEXT,
+  "characterName" TEXT NOT NULL,
+  "content" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  UNIQUE("chatId", "messageIndex", "characterName"),
+  FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_conversation_annotations_chatId" ON "conversation_annotations"("chatId");
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| chatId | TEXT (UUID) | Chat this annotation belongs to |
+| messageIndex | INTEGER | 0-based message number in rendered output |
+| sourceMessageId | TEXT (UUID, nullable) | Original message UUID for resilience |
+| characterName | TEXT | Annotation author |
+| content | TEXT | Annotation text |
+| createdAt | TEXT (ISO 8601) | Creation timestamp |
+| updatedAt | TEXT (ISO 8601) | Last update timestamp |
+
+### conversation_chunks
+
+```sql
+CREATE TABLE "conversation_chunks" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "interchangeIndex" INTEGER NOT NULL,
+  "content" TEXT NOT NULL,
+  "participantNames" TEXT DEFAULT '[]',
+  "messageIds" TEXT DEFAULT '[]',
+  "embedding" BLOB,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  UNIQUE("chatId", "interchangeIndex"),
+  FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_conversation_chunks_chatId" ON "conversation_chunks"("chatId");
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| chatId | TEXT (UUID) | Chat this chunk belongs to |
+| interchangeIndex | INTEGER | 0-based interchange number |
+| content | TEXT | Rendered Markdown for this interchange |
+| participantNames | TEXT (JSON array) | Names of participants in this interchange |
+| messageIds | TEXT (JSON array) | Message UUIDs included in this interchange |
+| embedding | BLOB (nullable) | Float32 vector embedding (same format as memories.embedding) |
+| createdAt | TEXT (ISO 8601) | Creation timestamp |
+| updatedAt | TEXT (ISO 8601) | Last update timestamp |
 
 ### chat_messages
 
@@ -359,7 +451,8 @@ CREATE TABLE "chat_messages" (
   "renderedHtml" TEXT DEFAULT NULL,
   "dangerFlags" TEXT DEFAULT NULL,
   "targetParticipantIds" TEXT DEFAULT NULL,
-  "isSilentMessage" INTEGER DEFAULT NULL
+  "isSilentMessage" INTEGER DEFAULT NULL,
+  "systemSender" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");
@@ -383,6 +476,8 @@ CREATE TABLE "chat_settings" (
   "sidebarWidth" INTEGER DEFAULT 256,
   "defaultTimestampConfig" TEXT DEFAULT '{}',
   "memoryCascadePreferences" TEXT DEFAULT '{}',
+  "autoHousekeepingSettings" TEXT DEFAULT '{"enabled":false,"perCharacterCap":2000,"perCharacterCapOverrides":{},"autoMergeSimilarThreshold":0.9,"mergeSimilar":false}',
+  "memoryExtractionLimits" TEXT DEFAULT '{"enabled":false,"maxPerHour":20,"softStartFraction":0.7,"softFloor":0.7}',
   "tokenDisplaySettings" TEXT DEFAULT '{}',
   "contextCompressionSettings" TEXT DEFAULT '{}',
   "llmLoggingSettings" TEXT DEFAULT '{}',
@@ -393,6 +488,7 @@ CREATE TABLE "chat_settings" (
   "storyBackgroundsSettings" TEXT DEFAULT '{"enabled":false,"defaultImageProfileId":null}',
   "dangerousContentSettings" TEXT DEFAULT '{"mode":"OFF","threshold":0.7,"scanTextChat":true,"scanImagePrompts":true,"scanImageGeneration":false,"displayMode":"SHOW","showWarningBadges":true}',
   "autoLockSettings" TEXT DEFAULT '{"enabled":false,"idleMinutes":15}',
+  "compositionModeDefault" INTEGER DEFAULT 0,
   UNIQUE("userId")
 );
 
@@ -428,7 +524,8 @@ CREATE TABLE "connection_profiles" (
   "sortIndex" INTEGER DEFAULT 0,
   "modelClass" TEXT DEFAULT NULL,
   "maxContext" INTEGER DEFAULT NULL,
-  "maxTokens" INTEGER DEFAULT NULL
+  "maxTokens" INTEGER DEFAULT NULL,
+  "supportsImageUpload" INTEGER DEFAULT 0
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);
@@ -457,10 +554,12 @@ CREATE TABLE "projects" (
   "defaultAgentModeEnabled" INTEGER DEFAULT NULL,
   "defaultAvatarGenerationEnabled" INTEGER DEFAULT NULL,
   "defaultImageProfileId" TEXT DEFAULT NULL,
+  "defaultAlertCharactersOfLanternImages" INTEGER DEFAULT NULL,
   "storyBackgroundsEnabled" INTEGER DEFAULT NULL,
   "staticBackgroundImageId" TEXT DEFAULT NULL,
   "storyBackgroundImageId" TEXT DEFAULT NULL,
-  "backgroundDisplayMode" TEXT DEFAULT 'theme'
+  "backgroundDisplayMode" TEXT DEFAULT 'theme',
+  "officialMountPointId" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_projects_createdAt" ON "projects" ("createdAt" DESC);
@@ -523,25 +622,38 @@ CREATE INDEX "idx_folders_projectId" ON "folders" ("projectId");
 CREATE INDEX "idx_folders_userId" ON "folders" ("userId");
 ```
 
-### file_permissions
+### help_docs
+
+Stores help documentation synced from the `help/` directory on disk. Unlike the old pre-built MessagePack bundle, help docs are now stored in the database and embedded at runtime using the user's chosen embedding profile, allowing the embedding model to be swapped system-wide. Introduced in v2.15.0 (migration: `create-help-docs-table-v1`).
 
 ```sql
-CREATE TABLE "file_permissions" (
+CREATE TABLE "help_docs" (
   "id" TEXT PRIMARY KEY,
-  "userId" TEXT NOT NULL,
-  "scope" TEXT NOT NULL,
-  "fileId" TEXT,
-  "projectId" TEXT,
-  "grantedAt" TEXT NOT NULL,
-  "grantedInChatId" TEXT,
+  "title" TEXT NOT NULL,
+  "path" TEXT NOT NULL UNIQUE,
+  "url" TEXT NOT NULL DEFAULT '',
+  "content" TEXT NOT NULL,
+  "contentHash" TEXT NOT NULL,
+  "embedding" BLOB,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
 
-CREATE INDEX "idx_file_permissions_createdAt" ON "file_permissions" ("createdAt" DESC);
-CREATE INDEX "idx_file_permissions_scope" ON "file_permissions" ("scope");
-CREATE INDEX "idx_file_permissions_userId" ON "file_permissions" ("userId");
+CREATE INDEX "idx_help_docs_path" ON "help_docs" ("path");
+CREATE INDEX "idx_help_docs_url" ON "help_docs" ("url");
 ```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| title | TEXT | Document title (from first H1 or filename) |
+| path | TEXT | Relative path to Markdown file (e.g., `help/aurora.md`). Unique constraint. |
+| url | TEXT | URL route this doc is associated with (e.g., `/aurora`, `/settings?tab=chat`) |
+| content | TEXT | Full document content with frontmatter stripped |
+| contentHash | TEXT | SHA-256 hash of raw file content, used for change detection during sync |
+| embedding | BLOB (nullable) | Float32 embedding vector, generated at runtime using user's embedding profile |
+| createdAt | TEXT (ISO 8601) | Creation timestamp |
+| updatedAt | TEXT (ISO 8601) | Last update timestamp |
 
 ### memories
 
@@ -557,7 +669,7 @@ CREATE TABLE "memories" (
   "keywords" TEXT DEFAULT '[]',
   "tags" TEXT DEFAULT '[]',
   "importance" REAL DEFAULT 0.5,
-  "embedding" TEXT,
+  "embedding" BLOB,
   "source" TEXT DEFAULT 'MANUAL',
   "sourceMessageId" TEXT,
   "lastAccessedAt" TEXT,
@@ -916,10 +1028,184 @@ CREATE TABLE sqlite_stat4(tbl, idx, neq, nlt, ndlt, sample);
 
 ---
 
+## Mount Index Database Schema (`quilltap-mount-index.db`)
+
+This database uses the same encryption mechanism as the main database (same pepper, separate `.dbkey` file). Foreign keys are **enabled** (unlike the LLM logs DB).
+
+Tables are auto-created on first access by their respective repositories via `CREATE TABLE IF NOT EXISTS`.
+
+### doc_mount_points
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_points" (
+  "id" TEXT PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "basePath" TEXT NOT NULL DEFAULT '',
+  "mountType" TEXT NOT NULL DEFAULT 'filesystem',
+  "storeType" TEXT NOT NULL DEFAULT 'documents',
+  "includePatterns" TEXT NOT NULL DEFAULT '["*.md","*.txt","*.pdf","*.docx"]',
+  "excludePatterns" TEXT NOT NULL DEFAULT '[".git","node_modules",".obsidian",".trash"]',
+  "enabled" INTEGER NOT NULL DEFAULT 1,
+  "lastScannedAt" TEXT,
+  "scanStatus" TEXT NOT NULL DEFAULT 'idle',
+  "lastScanError" TEXT,
+  "conversionStatus" TEXT NOT NULL DEFAULT 'idle',
+  "conversionError" TEXT,
+  "fileCount" INTEGER NOT NULL DEFAULT 0,
+  "chunkCount" INTEGER NOT NULL DEFAULT 0,
+  "totalSizeBytes" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+```
+
+`mountType` is one of `'filesystem'`, `'obsidian'`, or `'database'`. For `'database'` stores the `basePath` column is empty — all document bytes live in `doc_mount_documents` and attached blobs in `doc_mount_blobs` within this same SQLCipher-encrypted database.
+
+`storeType` is one of `'documents'` (default — general notes, references, research) or `'character'` (character sheets and related Aurora material). It classifies the store's content orthogonally to `mountType` so downstream features can treat character stores differently from general-purpose document stores. The column is added by in-repo `ALTER TABLE` on first access for legacy databases that predate this feature.
+
+`conversionStatus` is one of `'idle'`, `'converting'`, `'deconverting'`, or `'error'`, and tracks the Convert / Deconvert action that moves a store between filesystem- and database-backed storage (see `POST /api/v1/mount-points/:id?action=convert` / `?action=deconvert`). Distinct from the file-level `doc_mount_files.conversionStatus`, which tracks pdf/docx→text extraction. `conversionError` holds the failure message when `conversionStatus = 'error'`. Both columns are added by in-repo `ALTER TABLE` on first access for legacy databases that predate this feature.
+
+### doc_mount_folders
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_folders" (
+  "id" TEXT PRIMARY KEY,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "parentId" TEXT,
+  "name" TEXT NOT NULL,
+  "path" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_folders_mp_parent_name"
+  ON "doc_mount_folders" ("mountPointId", COALESCE("parentId", ''), "name");
+CREATE INDEX IF NOT EXISTS "idx_doc_mount_folders_mp_path"
+  ON "doc_mount_folders" ("mountPointId", "path");
+```
+
+Folder rows are populated only for `database`-backed mount points. Filesystem-backed mounts continue to derive folder structure from the OS; their `folderId` columns on `doc_mount_files`/`doc_mount_documents` are always NULL. The unique index on (mountPointId, COALESCE(parentId, ''), name) enforces one folder per parent per name; the COALESCE is required because SQLite treats each NULL as distinct in UNIQUE constraints.
+
+### doc_mount_files
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_files" (
+  "id" TEXT PRIMARY KEY,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "relativePath" TEXT NOT NULL,
+  "fileName" TEXT NOT NULL,
+  "fileType" TEXT NOT NULL,
+  "sha256" TEXT NOT NULL,
+  "fileSizeBytes" INTEGER NOT NULL,
+  "lastModified" TEXT NOT NULL,
+  "source" TEXT NOT NULL DEFAULT 'filesystem',
+  "folderId" TEXT,
+  "conversionStatus" TEXT NOT NULL DEFAULT 'pending',
+  "conversionError" TEXT,
+  "plainTextLength" INTEGER,
+  "chunkCount" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+```
+
+`fileType` is one of `'pdf'`, `'docx'`, `'markdown'`, `'txt'`, `'json'`, `'jsonl'`, or `'blob'`. `'blob'` is the catch-all for arbitrary binaries stored via the upload endpoint that have no extracted text representation (images, audio, archives, etc.) — their bytes live in `doc_mount_blobs` and the mirror row exists so the tree, listing, and delete paths treat them uniformly. `'pdf'` and `'docx'` blob-backed rows carry a non-null `plainTextLength` once their `doc_mount_blobs.extractedText` is populated.
+
+`source` is `'filesystem'` when the bytes live on disk (filesystem/obsidian mounts) or `'database'` when they live in `doc_mount_documents`. The column is added by `DocMountFilesRepository` on first access for legacy mount-index databases that predate database-backed stores. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores; filesystem-backed stores always leave it NULL. The column is added by in-repo `ALTER TABLE` on first access.
+
+### doc_mount_chunks
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_chunks" (
+  "id" TEXT PRIMARY KEY,
+  "fileId" TEXT NOT NULL REFERENCES "doc_mount_files"("id"),
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "chunkIndex" INTEGER NOT NULL,
+  "content" TEXT NOT NULL,
+  "tokenCount" INTEGER NOT NULL,
+  "headingContext" TEXT,
+  "embedding" BLOB,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+```
+
+The `embedding` column stores Float32 arrays as BLOBs (same format as `conversation_chunks.embedding`).
+
+### project_doc_mount_links
+
+```sql
+CREATE TABLE IF NOT EXISTS "project_doc_mount_links" (
+  "id" TEXT PRIMARY KEY,
+  "projectId" TEXT NOT NULL,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+```
+
+Note: `projectId` references the `projects` table in the main database. Cross-database foreign keys are not enforced by SQLite; referential integrity is maintained at the application layer.
+
+### doc_mount_documents
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_documents" (
+  "id" TEXT PRIMARY KEY,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "relativePath" TEXT NOT NULL,
+  "fileName" TEXT NOT NULL,
+  "fileType" TEXT NOT NULL,
+  "content" TEXT NOT NULL,
+  "contentSha256" TEXT NOT NULL,
+  "plainTextLength" INTEGER NOT NULL,
+  "folderId" TEXT,
+  "lastModified" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_documents_mp_path"
+  ON "doc_mount_documents" ("mountPointId", "relativePath");
+```
+
+Text content for database-backed mount points. Every row is mirrored in `doc_mount_files` (with `source='database'`) so existing scanning, search, and embedding paths treat it identically to on-disk files. `fileType` is one of `'markdown'`, `'txt'`, `'json'`, or `'jsonl'`. `folderId` is a nullable reference to `doc_mount_folders.id`, populated only for database-backed stores. The column is added by in-repo `ALTER TABLE` on first access.
+
+### doc_mount_blobs
+
+```sql
+CREATE TABLE IF NOT EXISTS "doc_mount_blobs" (
+  "id" TEXT PRIMARY KEY,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "relativePath" TEXT NOT NULL,
+  "originalFileName" TEXT NOT NULL,
+  "originalMimeType" TEXT NOT NULL,
+  "storedMimeType" TEXT NOT NULL,
+  "sizeBytes" INTEGER NOT NULL,
+  "sha256" TEXT NOT NULL,
+  "description" TEXT NOT NULL DEFAULT '',
+  "descriptionUpdatedAt" TEXT,
+  "extractedText" TEXT,
+  "extractedTextSha256" TEXT,
+  "extractionStatus" TEXT NOT NULL DEFAULT 'none',
+  "extractionError" TEXT,
+  "data" BLOB NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_blobs_mp_path"
+  ON "doc_mount_blobs" ("mountPointId", "relativePath");
+```
+
+Binary assets for **any** mount point type. Bitmap images are transcoded to WebP on upload using the `sharp` dependency; already-WebP uploads, SVG, and all other MIME types are stored as-is. `originalMimeType` preserves the uploaded format while `storedMimeType` is what `data` actually contains. `description` is user-supplied alt-text / transcript consumed by the embedding pipeline.
+
+`extractedText` is the plain-text representation of the blob's bytes, populated for PDF and DOCX uploads via the buffer-native converters. `extractedTextSha256` tracks drift between the text and what has been chunked. `extractionStatus` is one of `'none'` (no converter applies — images, arbitrary binaries), `'pending'` (conversion in progress), `'converted'` (text extracted successfully), `'failed'` (converter raised or returned empty), or `'skipped'` (conversion explicitly bypassed). `extractionError` stores the failure reason when `extractionStatus='failed'`. The four extraction columns are added by in-repo `ALTER TABLE` on first access, so upgrading instances pick them up transparently.
+
+Every database-backed blob is mirrored into `doc_mount_files` with `source='database'` and `fileType` set to `'pdf'` / `'docx'` (when `extractedText` is populated) or `'blob'` (arbitrary binary with no text). This keeps the tree, search, chunking, and embedding pipelines uniform across native-text documents and blobs. The mirror row's `sha256` and `fileSizeBytes` track the blob's original bytes; `plainTextLength` tracks the extracted text.
+
+---
+
 ## Notes
 
-- **No triggers or views** exist in either database.
-- **No foreign key constraints** are defined between tables (referential integrity is enforced at the application layer), except `tfidf_vocabularies.profileId → embedding_profiles.id` with `ON DELETE CASCADE`.
+- **No triggers or views** exist in any database.
+- **No foreign key constraints** are defined between tables (referential integrity is enforced at the application layer), except `tfidf_vocabularies.profileId → embedding_profiles.id`, `conversation_annotations.chatId → chats.id`, and `conversation_chunks.chatId → chats.id` with `ON DELETE CASCADE`.
 - All `TEXT DEFAULT '[]'` and `TEXT DEFAULT '{}'` columns store JSON. The application parses them with Zod schemas.
 - All IDs are UUIDs stored as TEXT.
 - All timestamps (`createdAt`, `updatedAt`) are ISO 8601 strings.
@@ -932,6 +1218,7 @@ CREATE TABLE sqlite_stat4(tbl, idx, neq, nlt, ndlt, sample);
 |------|---------|
 | `lib/database/backends/sqlite/client.ts` | Main DB connection, SQLCipher key, PRAGMAs |
 | `lib/database/backends/sqlite/llm-logs-client.ts` | LLM logs DB connection |
+| `lib/database/backends/sqlite/mount-index-client.ts` | Mount index DB connection |
 | `lib/database/backends/sqlite/backend.ts` | Backend lifecycle, initialization |
 | `lib/database/config.ts` | Config schema and path resolution |
 | `lib/database/manager.ts` | Singleton database manager |

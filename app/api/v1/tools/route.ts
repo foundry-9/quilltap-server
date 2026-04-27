@@ -23,15 +23,14 @@ import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler';
 import { isShellEnvironment } from '@/lib/paths';
 import {
   imageGenerationToolDefinition,
-  memorySearchToolDefinition,
   webSearchToolDefinition,
   projectInfoToolDefinition,
-  fileManagementToolDefinition,
   helpSearchToolDefinition,
   helpSettingsToolDefinition,
   helpNavigateToolDefinition,
   rngToolDefinition,
   stateToolDefinition,
+  selfInventoryToolDefinition,
   whisperToolDefinition,
   wardrobeListToolDefinition,
   wardrobeUpdateOutfitToolDefinition,
@@ -43,21 +42,41 @@ import {
   shellSudoSyncToolDefinition,
   shellCpHostToolDefinition,
 } from '@/lib/tools';
+import {
+  searchScriptoriumToolDefinition,
+} from '@/lib/tools/search-scriptorium-tool';
+import {
+  docReadFileTool,
+  docWriteFileTool,
+  docStrReplaceTool,
+  docInsertTextTool,
+  docGrepTool,
+  docListFilesTool,
+  docReadFrontmatterTool,
+  docUpdateFrontmatterTool,
+  docReadHeadingTool,
+  docUpdateHeadingTool,
+  docMoveFileTool,
+  docCopyFileTool,
+  docDeleteFileTool,
+  docCreateFolderTool,
+  docDeleteFolderTool,
+} from '@/lib/tools';
 
 /**
  * Map from built-in tool IDs to their OpenAI-format definitions (for schema inclusion)
  */
 const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<string, unknown> } }> = {
   generate_image: imageGenerationToolDefinition,
-  search_memories: memorySearchToolDefinition,
+  search: searchScriptoriumToolDefinition,
   search_web: webSearchToolDefinition,
   project_info: projectInfoToolDefinition,
-  file_management: fileManagementToolDefinition,
   help_search: helpSearchToolDefinition,
   help_settings: helpSettingsToolDefinition,
   help_navigate: helpNavigateToolDefinition,
   rng: rngToolDefinition,
   state: stateToolDefinition,
+  self_inventory: selfInventoryToolDefinition,
   whisper: whisperToolDefinition,
   chdir: shellChdirToolDefinition,
   exec_sync: shellExecSyncToolDefinition,
@@ -68,6 +87,21 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   list_wardrobe: wardrobeListToolDefinition,
   update_outfit_item: wardrobeUpdateOutfitToolDefinition,
   create_wardrobe_item: wardrobeCreateItemToolDefinition,
+  doc_read_file: docReadFileTool,
+  doc_write_file: docWriteFileTool,
+  doc_str_replace: docStrReplaceTool,
+  doc_insert_text: docInsertTextTool,
+  doc_grep: docGrepTool,
+  doc_list_files: docListFilesTool,
+  doc_read_frontmatter: docReadFrontmatterTool,
+  doc_update_frontmatter: docUpdateFrontmatterTool,
+  doc_read_heading: docReadHeadingTool,
+  doc_update_heading: docUpdateHeadingTool,
+  doc_move_file: docMoveFileTool,
+  doc_copy_file: docCopyFileTool,
+  doc_delete_file: docDeleteFileTool,
+  doc_create_folder: docCreateFolderTool,
+  doc_delete_folder: docDeleteFolderTool,
 };
 
 /**
@@ -82,11 +116,11 @@ const BUILT_IN_TOOLS = [
     category: 'media',
   },
   {
-    id: 'search_memories',
-    name: 'Search Memories',
-    description: 'Search through character memories and past conversations',
+    id: 'search',
+    name: 'Search',
+    description: 'Search through the Scriptorium (character memories, past conversations, and story backgrounds)',
     source: 'built-in' as const,
-    category: 'memory',
+    category: 'search',
   },
   {
     id: 'search_web',
@@ -101,13 +135,6 @@ const BUILT_IN_TOOLS = [
     description: 'Access project information and files',
     source: 'built-in' as const,
     category: 'project',
-  },
-  {
-    id: 'file_management',
-    name: 'File Management',
-    description: 'Read, write, and manage files in the file system',
-    source: 'built-in' as const,
-    category: 'files',
   },
   {
     id: 'help_search',
@@ -141,6 +168,13 @@ const BUILT_IN_TOOLS = [
     id: 'state',
     name: 'State Manager',
     description: 'Get, set, or delete persistent key-value state for the chat',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
+  {
+    id: 'self_inventory',
+    name: 'Self-Inventory',
+    description: 'Return an introspection report for the calling character: vault files, memory and chat stats, assembled system prompt, and last-turn LLM token usage',
     source: 'built-in' as const,
     category: 'utility',
   },
@@ -198,21 +232,128 @@ const BUILT_IN_TOOLS = [
     name: 'List Wardrobe',
     description: 'Retrieve wardrobe items and outfit presets for the current character',
     source: 'built-in' as const,
-    category: 'utility',
+    category: 'wardrobe',
   },
   {
     id: 'update_outfit_item',
     name: 'Update Outfit',
     description: 'Equip or remove a wardrobe item, or apply an outfit preset',
     source: 'built-in' as const,
-    category: 'utility',
+    category: 'wardrobe',
   },
   {
     id: 'create_wardrobe_item',
     name: 'Create Wardrobe Item',
     description: 'Create a new wardrobe item, optionally equip it, or gift it to another character',
     source: 'built-in' as const,
-    category: 'utility',
+    category: 'wardrobe',
+  },
+  // Document editing tools (Scriptorium Phase 3.3)
+  {
+    id: 'doc_read_file',
+    name: 'Read Document',
+    description: 'Read file contents from document stores or project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_write_file',
+    name: 'Write Document',
+    description: 'Write or create a file in document stores or project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_str_replace',
+    name: 'Find & Replace in Document',
+    description: 'Find and replace exact text in a file (unique match required)',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_insert_text',
+    name: 'Insert Text in Document',
+    description: 'Insert text at a specific position in a file',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_grep',
+    name: 'Search Documents',
+    description: 'Search for text across files in document stores and project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_list_files',
+    name: 'List Documents',
+    description: 'List files available in document stores and project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_read_frontmatter',
+    name: 'Read Frontmatter',
+    description: 'Read YAML frontmatter from a markdown file',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_update_frontmatter',
+    name: 'Update Frontmatter',
+    description: 'Update YAML frontmatter properties in a markdown file',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_read_heading',
+    name: 'Read Heading Section',
+    description: 'Read all content under a specific heading in a markdown file',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_update_heading',
+    name: 'Update Heading Section',
+    description: 'Replace content under a specific heading in a markdown file',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  // Document file management tools (Scriptorium Phase 3.4)
+  {
+    id: 'doc_move_file',
+    name: 'Move/Rename Document',
+    description: 'Move or rename a file in document stores or project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_copy_file',
+    name: 'Copy Document',
+    description: 'Copy a file from one document store to a different document store',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_delete_file',
+    name: 'Delete Document',
+    description: 'Permanently delete a file from document stores or project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_create_folder',
+    name: 'Create Folder',
+    description: 'Create a new folder in document stores or project files',
+    source: 'built-in' as const,
+    category: 'documents',
+  },
+  {
+    id: 'doc_delete_folder',
+    name: 'Delete Folder',
+    description: 'Delete an empty folder from document stores or project files',
+    source: 'built-in' as const,
+    category: 'documents',
   },
   // Note: request_full_context and submit_final_response are intentionally excluded
   // - request_full_context is a safety valve that should always be available
@@ -261,6 +402,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
     let chatContext: {
       hasImageProfile: boolean;
       hasProject: boolean;
+      hasDocumentStores: boolean;
       allowsWebSearch: boolean;
       isMultiCharacter: boolean;
       canDressThemselves: boolean;
@@ -313,7 +455,18 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
             }
           }
 
-          chatContext = { hasImageProfile, hasProject, allowsWebSearch, isMultiCharacter, canDressThemselves, canCreateOutfits };
+          // Check if project has linked document stores
+          let hasDocumentStores = false;
+          if (hasProject && chat.projectId) {
+            try {
+              const mountLinks = await repos.projectDocMountLinks.findByProjectId(chat.projectId);
+              hasDocumentStores = mountLinks.length > 0;
+            } catch {
+              // Non-critical, default to false
+            }
+          }
+
+          chatContext = { hasImageProfile, hasProject, hasDocumentStores, allowsWebSearch, isMultiCharacter, canDressThemselves, canCreateOutfits };
         }
       } catch (chatError) {
         logger.warn('[Tools v1] Failed to load chat for availability check', {
@@ -491,6 +644,28 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
             if (!chatContext.canCreateOutfits) {
               tool.available = false;
               tool.unavailableReason = 'Character does not have wardrobe item creation enabled';
+            }
+            break;
+          case 'doc_read_file':
+          case 'doc_write_file':
+          case 'doc_str_replace':
+          case 'doc_insert_text':
+          case 'doc_grep':
+          case 'doc_list_files':
+          case 'doc_read_frontmatter':
+          case 'doc_update_frontmatter':
+          case 'doc_read_heading':
+          case 'doc_update_heading':
+          case 'doc_move_file':
+          case 'doc_delete_file':
+          case 'doc_create_folder':
+          case 'doc_delete_folder':
+            if (!chatContext.hasProject) {
+              tool.available = false;
+              tool.unavailableReason = 'Chat must be associated with a project';
+            } else if (!chatContext.hasDocumentStores) {
+              tool.available = false;
+              tool.unavailableReason = 'Project must have linked document stores (configure in Project > The Scriptorium)';
             }
             break;
           case 'chdir':

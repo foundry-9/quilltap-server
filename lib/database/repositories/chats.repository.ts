@@ -169,6 +169,39 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 
   /**
+   * Find the N most-recent salon chats for a character that have a contextSummary,
+   * sorted by lastMessageAt descending. Used by the memory-recap "Recent Conversations"
+   * block. Filter, sort, and limit are all pushed to SQL.
+   *
+   * Note: the participants JSON-array filter is the bottleneck at scale (no index can
+   * cover it cheaply). If this is moved to a per-message hot path, consider denormalizing
+   * participants into a join table.
+   */
+  async findRecentSummarizedByCharacter(
+    characterId: string,
+    options: { limit: number; excludeChatId?: string }
+  ): Promise<ChatMetadata[]> {
+    return this.safeQuery(
+      async () => {
+        const filter: Record<string, unknown> = {
+          'participants.characterId': characterId,
+          contextSummary: { $exists: true },
+          chatType: { $ne: 'help' },
+        };
+        if (options.excludeChatId) {
+          filter.id = { $ne: options.excludeChatId };
+        }
+        return this.findByFilter(filter as TypedQueryFilter<ChatMetadata>, {
+          sort: { lastMessageAt: 'desc' },
+          limit: options.limit,
+        });
+      },
+      'Failed to find recent summarized chats by character',
+      { characterId, limit: options.limit }
+    );
+  }
+
+  /**
    * Find chats by user ID and chat type
    */
   async findByType(userId: string, chatType: 'salon' | 'help'): Promise<ChatMetadata[]> {

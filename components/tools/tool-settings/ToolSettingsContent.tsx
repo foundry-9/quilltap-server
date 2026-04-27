@@ -478,7 +478,7 @@ function SubgroupSection({
           className="flex items-center gap-2 flex-1 text-left"
         >
           <ChevronIcon className="w-3 h-3 qt-text-secondary shrink-0" />
-          <span className="text-sm font-medium text-foreground/80">{subgroup.displayName}</span>
+          <span className="qt-label text-foreground/80">{subgroup.displayName}</span>
           <span className="text-xs qt-text-secondary">({enabledCount}/{totalCount})</span>
         </button>
         <TriStateCheckbox

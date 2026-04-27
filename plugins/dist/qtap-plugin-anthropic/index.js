@@ -222,7 +222,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/@anthropic-ai/sdk/version.mjs
-var VERSION = "0.82.0";
+var VERSION = "0.88.0";
 
 // node_modules/@anthropic-ai/sdk/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -657,7 +657,7 @@ var Stream = class _Stream {
               throw e;
             }
           }
-          if (sse.event === "message_start" || sse.event === "message_delta" || sse.event === "message_stop" || sse.event === "content_block_start" || sse.event === "content_block_delta" || sse.event === "content_block_stop") {
+          if (sse.event === "message_start" || sse.event === "message_delta" || sse.event === "message_stop" || sse.event === "content_block_start" || sse.event === "content_block_delta" || sse.event === "content_block_stop" || sse.event === "message") {
             try {
               yield JSON.parse(sse.data);
             } catch (e) {
@@ -1097,17 +1097,10 @@ var PageCursor = class extends AbstractPage {
   constructor(client, response, body, options) {
     super(client, response, body, options);
     this.data = body.data || [];
-    this.has_more = body.has_more || false;
     this.next_page = body.next_page || null;
   }
   getPaginatedItems() {
     return this.data ?? [];
-  }
-  hasNextPage() {
-    if (this.has_more === false) {
-      return false;
-    }
-    return super.hasNextPage();
   }
   nextPageRequestOptions() {
     const cursor = this.next_page;
@@ -1328,49 +1321,6 @@ var buildHeaders = (newHeaders) => {
   return { [brand_privateNullableHeaders]: true, values: targetHeaders, nulls: nullHeaders };
 };
 
-// node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs
-var SDK_HELPER_SYMBOL = /* @__PURE__ */ Symbol("anthropic.sdk.stainlessHelper");
-function wasCreatedByStainlessHelper(value) {
-  return typeof value === "object" && value !== null && SDK_HELPER_SYMBOL in value;
-}
-function collectStainlessHelpers(tools, messages) {
-  const helpers = /* @__PURE__ */ new Set();
-  if (tools) {
-    for (const tool of tools) {
-      if (wasCreatedByStainlessHelper(tool)) {
-        helpers.add(tool[SDK_HELPER_SYMBOL]);
-      }
-    }
-  }
-  if (messages) {
-    for (const message of messages) {
-      if (wasCreatedByStainlessHelper(message)) {
-        helpers.add(message[SDK_HELPER_SYMBOL]);
-      }
-      if (Array.isArray(message.content)) {
-        for (const block of message.content) {
-          if (wasCreatedByStainlessHelper(block)) {
-            helpers.add(block[SDK_HELPER_SYMBOL]);
-          }
-        }
-      }
-    }
-  }
-  return Array.from(helpers);
-}
-function stainlessHelperHeader(tools, messages) {
-  const helpers = collectStainlessHelpers(tools, messages);
-  if (helpers.length === 0)
-    return {};
-  return { "x-stainless-helper": helpers.join(", ") };
-}
-function stainlessHelperHeaderFromFile(file) {
-  if (wasCreatedByStainlessHelper(file)) {
-    return { "x-stainless-helper": file[SDK_HELPER_SYMBOL] };
-  }
-  return {};
-}
-
 // node_modules/@anthropic-ai/sdk/internal/utils/path.mjs
 function encodeURIPath(str2) {
   return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
@@ -1425,6 +1375,183 @@ ${underline}`);
   return path4;
 };
 var path = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
+
+// node_modules/@anthropic-ai/sdk/resources/beta/environments.mjs
+var Environments = class extends APIResource {
+  /**
+   * Create a new environment with the specified configuration.
+   *
+   * @example
+   * ```ts
+   * const betaEnvironment =
+   *   await client.beta.environments.create({
+   *     name: 'python-data-analysis',
+   *   });
+   * ```
+   */
+  create(params, options) {
+    const { betas, ...body } = params;
+    return this._client.post("/v1/environments?beta=true", {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Retrieve a specific environment by ID.
+   *
+   * @example
+   * ```ts
+   * const betaEnvironment =
+   *   await client.beta.environments.retrieve(
+   *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
+   *   );
+   * ```
+   */
+  retrieve(environmentID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.get(path`/v1/environments/${environmentID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Update an existing environment's configuration.
+   *
+   * @example
+   * ```ts
+   * const betaEnvironment =
+   *   await client.beta.environments.update(
+   *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
+   *   );
+   * ```
+   */
+  update(environmentID, params, options) {
+    const { betas, ...body } = params;
+    return this._client.post(path`/v1/environments/${environmentID}?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * List environments with pagination support.
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const betaEnvironment of client.beta.environments.list()) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(params = {}, options) {
+    const { betas, ...query } = params ?? {};
+    return this._client.getAPIList("/v1/environments?beta=true", PageCursor, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Delete an environment by ID. Returns a confirmation of the deletion.
+   *
+   * @example
+   * ```ts
+   * const betaEnvironmentDeleteResponse =
+   *   await client.beta.environments.delete(
+   *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
+   *   );
+   * ```
+   */
+  delete(environmentID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.delete(path`/v1/environments/${environmentID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Archive an environment by ID. Archived environments cannot be used to create new
+   * sessions.
+   *
+   * @example
+   * ```ts
+   * const betaEnvironment =
+   *   await client.beta.environments.archive(
+   *     'env_011CZkZ9X2dpNyB7HsEFoRfW',
+   *   );
+   * ```
+   */
+  archive(environmentID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.post(path`/v1/environments/${environmentID}/archive?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+};
+
+// node_modules/@anthropic-ai/sdk/lib/stainless-helper-header.mjs
+var SDK_HELPER_SYMBOL = /* @__PURE__ */ Symbol("anthropic.sdk.stainlessHelper");
+function wasCreatedByStainlessHelper(value) {
+  return typeof value === "object" && value !== null && SDK_HELPER_SYMBOL in value;
+}
+function collectStainlessHelpers(tools, messages) {
+  const helpers = /* @__PURE__ */ new Set();
+  if (tools) {
+    for (const tool of tools) {
+      if (wasCreatedByStainlessHelper(tool)) {
+        helpers.add(tool[SDK_HELPER_SYMBOL]);
+      }
+    }
+  }
+  if (messages) {
+    for (const message of messages) {
+      if (wasCreatedByStainlessHelper(message)) {
+        helpers.add(message[SDK_HELPER_SYMBOL]);
+      }
+      if (Array.isArray(message.content)) {
+        for (const block of message.content) {
+          if (wasCreatedByStainlessHelper(block)) {
+            helpers.add(block[SDK_HELPER_SYMBOL]);
+          }
+        }
+      }
+    }
+  }
+  return Array.from(helpers);
+}
+function stainlessHelperHeader(tools, messages) {
+  const helpers = collectStainlessHelpers(tools, messages);
+  if (helpers.length === 0)
+    return {};
+  return { "x-stainless-helper": helpers.join(", ") };
+}
+function stainlessHelperHeaderFromFile(file) {
+  if (wasCreatedByStainlessHelper(file)) {
+    return { "x-stainless-helper": file[SDK_HELPER_SYMBOL] };
+  }
+  return {};
+}
 
 // node_modules/@anthropic-ai/sdk/resources/beta/files.mjs
 var Files = class extends APIResource {
@@ -1591,6 +1718,154 @@ var Models = class extends APIResource {
     });
   }
 };
+
+// node_modules/@anthropic-ai/sdk/resources/beta/agents/versions.mjs
+var Versions = class extends APIResource {
+  /**
+   * List Agent Versions
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const betaManagedAgentsAgent of client.beta.agents.versions.list(
+   *   'agent_011CZkYpogX7uDKUyvBTophP',
+   * )) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(agentID, params = {}, options) {
+    const { betas, ...query } = params ?? {};
+    return this._client.getAPIList(path`/v1/agents/${agentID}/versions?beta=true`, PageCursor, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+};
+
+// node_modules/@anthropic-ai/sdk/resources/beta/agents/agents.mjs
+var Agents = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.versions = new Versions(this._client);
+  }
+  /**
+   * Create Agent
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsAgent =
+   *   await client.beta.agents.create({
+   *     model: 'claude-sonnet-4-6',
+   *     name: 'My First Agent',
+   *   });
+   * ```
+   */
+  create(params, options) {
+    const { betas, ...body } = params;
+    return this._client.post("/v1/agents?beta=true", {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Get Agent
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsAgent =
+   *   await client.beta.agents.retrieve(
+   *     'agent_011CZkYpogX7uDKUyvBTophP',
+   *   );
+   * ```
+   */
+  retrieve(agentID, params = {}, options) {
+    const { betas, ...query } = params ?? {};
+    return this._client.get(path`/v1/agents/${agentID}?beta=true`, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Update Agent
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsAgent =
+   *   await client.beta.agents.update(
+   *     'agent_011CZkYpogX7uDKUyvBTophP',
+   *     { version: 1 },
+   *   );
+   * ```
+   */
+  update(agentID, params, options) {
+    const { betas, ...body } = params;
+    return this._client.post(path`/v1/agents/${agentID}?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * List Agents
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const betaManagedAgentsAgent of client.beta.agents.list()) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(params = {}, options) {
+    const { betas, ...query } = params ?? {};
+    return this._client.getAPIList("/v1/agents?beta=true", PageCursor, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Archive Agent
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsAgent =
+   *   await client.beta.agents.archive(
+   *     'agent_011CZkYpogX7uDKUyvBTophP',
+   *   );
+   * ```
+   */
+  archive(agentID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.post(path`/v1/agents/${agentID}/archive?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+};
+Agents.Versions = Versions;
 
 // node_modules/@anthropic-ai/sdk/internal/constants.mjs
 var MODEL_NONSTREAMING_TOKENS = {
@@ -2601,6 +2876,9 @@ var BetaToolRunner = class {
       headers: buildHeaders([{ "x-stainless-helper": helperValue }, options?.headers])
     }, "f");
     __classPrivateFieldSet(this, _BetaToolRunner_completion, promiseWithResolvers(), "f");
+    if (params.compactionControl?.enabled) {
+      console.warn('Anthropic: The `compactionControl` parameter is deprecated and will be removed in a future version. Use server-side compaction instead by passing `edits: [{ type: "compact_20260112" }]` in the params passed to `toolRunner()`. See https://platform.claude.com/docs/en/build-with-claude/compaction');
+    }
   }
   async *[(_BetaToolRunner_consumed = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_mutated = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_state = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_options = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_message = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_toolResponse = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_completion = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_iterationCount = /* @__PURE__ */ new WeakMap(), _BetaToolRunner_instances = /* @__PURE__ */ new WeakSet(), _BetaToolRunner_checkAndCompact = async function _BetaToolRunner_checkAndCompact2() {
     const compactionControl = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.compactionControl;
@@ -2651,7 +2929,8 @@ var BetaToolRunner = class {
       ],
       max_tokens: __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.max_tokens
     }, {
-      headers: { "x-stainless-helper": "compaction" }
+      signal: __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal,
+      headers: buildHeaders([__classPrivateFieldGet(this, _BetaToolRunner_options, "f").headers, { "x-stainless-helper": "compaction" }])
     });
     if (response.content[0]?.type !== "text") {
       throw new AnthropicError("Expected text response for compaction");
@@ -2734,6 +3013,13 @@ var BetaToolRunner = class {
     __classPrivateFieldSet(this, _BetaToolRunner_mutated, true, "f");
     __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, void 0, "f");
   }
+  setRequestOptions(optionsOrMutator) {
+    if (typeof optionsOrMutator === "function") {
+      __classPrivateFieldSet(this, _BetaToolRunner_options, optionsOrMutator(__classPrivateFieldGet(this, _BetaToolRunner_options, "f")), "f");
+    } else {
+      __classPrivateFieldSet(this, _BetaToolRunner_options, { ...__classPrivateFieldGet(this, _BetaToolRunner_options, "f"), ...optionsOrMutator }, "f");
+    }
+  }
   /**
    * Get the tool response for the last message from the assistant.
    * Avoids redundant tool executions by caching results.
@@ -2746,12 +3032,12 @@ var BetaToolRunner = class {
    *   console.log('Tool results:', toolResponse.content);
    * }
    */
-  async generateToolResponse() {
+  async generateToolResponse(signal = __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal) {
     const message = await __classPrivateFieldGet(this, _BetaToolRunner_message, "f") ?? this.params.messages.at(-1);
     if (!message) {
       return null;
     }
-    return __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_generateToolResponse).call(this, message);
+    return __classPrivateFieldGet(this, _BetaToolRunner_instances, "m", _BetaToolRunner_generateToolResponse).call(this, message, signal);
   }
   /**
    * Wait for the async iterator to complete. This works even if the async iterator hasn't yet started, and
@@ -2836,14 +3122,17 @@ var BetaToolRunner = class {
     return this.runUntilDone().then(onfulfilled, onrejected);
   }
 };
-_BetaToolRunner_generateToolResponse = async function _BetaToolRunner_generateToolResponse2(lastMessage) {
+_BetaToolRunner_generateToolResponse = async function _BetaToolRunner_generateToolResponse2(lastMessage, signal = __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal) {
   if (__classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f") !== void 0) {
     return __classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f");
   }
-  __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, generateToolResponse(__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params, lastMessage), "f");
+  __classPrivateFieldSet(this, _BetaToolRunner_toolResponse, generateToolResponse(__classPrivateFieldGet(this, _BetaToolRunner_state, "f").params, lastMessage, {
+    ...__classPrivateFieldGet(this, _BetaToolRunner_options, "f"),
+    signal
+  }), "f");
   return __classPrivateFieldGet(this, _BetaToolRunner_toolResponse, "f");
 };
-async function generateToolResponse(params, lastMessage = params.messages.at(-1)) {
+async function generateToolResponse(params, lastMessage = params.messages.at(-1), requestOptions) {
   if (!lastMessage || lastMessage.role !== "assistant" || !lastMessage.content || typeof lastMessage.content === "string") {
     return null;
   }
@@ -2866,7 +3155,10 @@ async function generateToolResponse(params, lastMessage = params.messages.at(-1)
       if ("parse" in tool && tool.parse) {
         input = tool.parse(input);
       }
-      const result = await tool.run(input);
+      const result = await tool.run(input, {
+        toolUseBlock: toolUse,
+        signal: requestOptions?.signal
+      });
       return {
         type: "tool_result",
         tool_use_id: toolUse.id,
@@ -3204,7 +3496,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
    * ```ts
    * const betaMessageTokensCount =
    *   await client.beta.messages.countTokens({
-   *     messages: [{ content: 'string', role: 'user' }],
+   *     messages: [{ content: 'Hello, world', role: 'user' }],
    *     model: 'claude-opus-4-6',
    *   });
    * ```
@@ -3245,8 +3537,358 @@ Messages.Batches = Batches;
 Messages.BetaToolRunner = BetaToolRunner;
 Messages.ToolError = ToolError;
 
+// node_modules/@anthropic-ai/sdk/resources/beta/sessions/events.mjs
+var Events = class extends APIResource {
+  /**
+   * List Events
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const betaManagedAgentsSessionEvent of client.beta.sessions.events.list(
+   *   'sesn_011CZkZAtmR3yMPDzynEDxu7',
+   * )) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(sessionID, params = {}, options) {
+    const { betas, ...query } = params ?? {};
+    return this._client.getAPIList(path`/v1/sessions/${sessionID}/events?beta=true`, PageCursor, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Send Events
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsSendSessionEvents =
+   *   await client.beta.sessions.events.send(
+   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+   *     {
+   *       events: [
+   *         {
+   *           content: [
+   *             {
+   *               text: 'Where is my order #1234?',
+   *               type: 'text',
+   *             },
+   *           ],
+   *           type: 'user.message',
+   *         },
+   *       ],
+   *     },
+   *   );
+   * ```
+   */
+  send(sessionID, params, options) {
+    const { betas, ...body } = params;
+    return this._client.post(path`/v1/sessions/${sessionID}/events?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Stream Events
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsStreamSessionEvents =
+   *   await client.beta.sessions.events.stream(
+   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+   *   );
+   * ```
+   */
+  stream(sessionID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.get(path`/v1/sessions/${sessionID}/events/stream?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ]),
+      stream: true
+    });
+  }
+};
+
+// node_modules/@anthropic-ai/sdk/resources/beta/sessions/resources.mjs
+var Resources = class extends APIResource {
+  /**
+   * Get Session Resource
+   *
+   * @example
+   * ```ts
+   * const resource =
+   *   await client.beta.sessions.resources.retrieve(
+   *     'sesrsc_011CZkZBJq5dWxk9fVLNcPht',
+   *     { session_id: 'sesn_011CZkZAtmR3yMPDzynEDxu7' },
+   *   );
+   * ```
+   */
+  retrieve(resourceID, params, options) {
+    const { session_id, betas } = params;
+    return this._client.get(path`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Update Session Resource
+   *
+   * @example
+   * ```ts
+   * const resource =
+   *   await client.beta.sessions.resources.update(
+   *     'sesrsc_011CZkZBJq5dWxk9fVLNcPht',
+   *     {
+   *       session_id: 'sesn_011CZkZAtmR3yMPDzynEDxu7',
+   *       authorization_token: 'ghp_exampletoken',
+   *     },
+   *   );
+   * ```
+   */
+  update(resourceID, params, options) {
+    const { session_id, betas, ...body } = params;
+    return this._client.post(path`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * List Session Resources
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const betaManagedAgentsSessionResource of client.beta.sessions.resources.list(
+   *   'sesn_011CZkZAtmR3yMPDzynEDxu7',
+   * )) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(sessionID, params = {}, options) {
+    const { betas, ...query } = params ?? {};
+    return this._client.getAPIList(path`/v1/sessions/${sessionID}/resources?beta=true`, PageCursor, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Delete Session Resource
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsDeleteSessionResource =
+   *   await client.beta.sessions.resources.delete(
+   *     'sesrsc_011CZkZBJq5dWxk9fVLNcPht',
+   *     { session_id: 'sesn_011CZkZAtmR3yMPDzynEDxu7' },
+   *   );
+   * ```
+   */
+  delete(resourceID, params, options) {
+    const { session_id, betas } = params;
+    return this._client.delete(path`/v1/sessions/${session_id}/resources/${resourceID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Add Session Resource
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsFileResource =
+   *   await client.beta.sessions.resources.add(
+   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+   *     {
+   *       file_id: 'file_011CNha8iCJcU1wXNR6q4V8w',
+   *       type: 'file',
+   *     },
+   *   );
+   * ```
+   */
+  add(sessionID, params, options) {
+    const { betas, ...body } = params;
+    return this._client.post(path`/v1/sessions/${sessionID}/resources?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+};
+
+// node_modules/@anthropic-ai/sdk/resources/beta/sessions/sessions.mjs
+var Sessions = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.events = new Events(this._client);
+    this.resources = new Resources(this._client);
+  }
+  /**
+   * Create Session
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsSession =
+   *   await client.beta.sessions.create({
+   *     agent: 'agent_011CZkYpogX7uDKUyvBTophP',
+   *     environment_id: 'env_011CZkZ9X2dpNyB7HsEFoRfW',
+   *   });
+   * ```
+   */
+  create(params, options) {
+    const { betas, ...body } = params;
+    return this._client.post("/v1/sessions?beta=true", {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Get Session
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsSession =
+   *   await client.beta.sessions.retrieve(
+   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+   *   );
+   * ```
+   */
+  retrieve(sessionID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.get(path`/v1/sessions/${sessionID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Update Session
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsSession =
+   *   await client.beta.sessions.update(
+   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+   *   );
+   * ```
+   */
+  update(sessionID, params, options) {
+    const { betas, ...body } = params;
+    return this._client.post(path`/v1/sessions/${sessionID}?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * List Sessions
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const betaManagedAgentsSession of client.beta.sessions.list()) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(params = {}, options) {
+    const { betas, ...query } = params ?? {};
+    return this._client.getAPIList("/v1/sessions?beta=true", PageCursor, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Delete Session
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsDeletedSession =
+   *   await client.beta.sessions.delete(
+   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+   *   );
+   * ```
+   */
+  delete(sessionID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.delete(path`/v1/sessions/${sessionID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Archive Session
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsSession =
+   *   await client.beta.sessions.archive(
+   *     'sesn_011CZkZAtmR3yMPDzynEDxu7',
+   *   );
+   * ```
+   */
+  archive(sessionID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.post(path`/v1/sessions/${sessionID}/archive?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+};
+Sessions.Events = Events;
+Sessions.Resources = Resources;
+
 // node_modules/@anthropic-ai/sdk/resources/beta/skills/versions.mjs
-var Versions = class extends APIResource {
+var Versions2 = class extends APIResource {
   /**
    * Create Skill Version
    *
@@ -3340,7 +3982,7 @@ var Versions = class extends APIResource {
 var Skills = class extends APIResource {
   constructor() {
     super(...arguments);
-    this.versions = new Versions(this._client);
+    this.versions = new Versions2(this._client);
   }
   /**
    * Create Skill
@@ -3420,7 +4062,292 @@ var Skills = class extends APIResource {
     });
   }
 };
-Skills.Versions = Versions;
+Skills.Versions = Versions2;
+
+// node_modules/@anthropic-ai/sdk/resources/beta/vaults/credentials.mjs
+var Credentials = class extends APIResource {
+  /**
+   * Create Credential
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsCredential =
+   *   await client.beta.vaults.credentials.create(
+   *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+   *     {
+   *       auth: {
+   *         token: 'bearer_exampletoken',
+   *         mcp_server_url:
+   *           'https://example-server.modelcontextprotocol.io/sse',
+   *         type: 'static_bearer',
+   *       },
+   *     },
+   *   );
+   * ```
+   */
+  create(vaultID, params, options) {
+    const { betas, ...body } = params;
+    return this._client.post(path`/v1/vaults/${vaultID}/credentials?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Get Credential
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsCredential =
+   *   await client.beta.vaults.credentials.retrieve(
+   *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
+   *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
+   *   );
+   * ```
+   */
+  retrieve(credentialID, params, options) {
+    const { vault_id, betas } = params;
+    return this._client.get(path`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Update Credential
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsCredential =
+   *   await client.beta.vaults.credentials.update(
+   *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
+   *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
+   *   );
+   * ```
+   */
+  update(credentialID, params, options) {
+    const { vault_id, betas, ...body } = params;
+    return this._client.post(path`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * List Credentials
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const betaManagedAgentsCredential of client.beta.vaults.credentials.list(
+   *   'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+   * )) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(vaultID, params = {}, options) {
+    const { betas, ...query } = params ?? {};
+    return this._client.getAPIList(path`/v1/vaults/${vaultID}/credentials?beta=true`, PageCursor, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Delete Credential
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsDeletedCredential =
+   *   await client.beta.vaults.credentials.delete(
+   *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
+   *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
+   *   );
+   * ```
+   */
+  delete(credentialID, params, options) {
+    const { vault_id, betas } = params;
+    return this._client.delete(path`/v1/vaults/${vault_id}/credentials/${credentialID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Archive Credential
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsCredential =
+   *   await client.beta.vaults.credentials.archive(
+   *     'vcrd_011CZkZEMt8gZan2iYOQfSkw',
+   *     { vault_id: 'vlt_011CZkZDLs7fYzm1hXNPeRjv' },
+   *   );
+   * ```
+   */
+  archive(credentialID, params, options) {
+    const { vault_id, betas } = params;
+    return this._client.post(path`/v1/vaults/${vault_id}/credentials/${credentialID}/archive?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+};
+
+// node_modules/@anthropic-ai/sdk/resources/beta/vaults/vaults.mjs
+var Vaults = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.credentials = new Credentials(this._client);
+  }
+  /**
+   * Create Vault
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsVault =
+   *   await client.beta.vaults.create({
+   *     display_name: 'Example vault',
+   *   });
+   * ```
+   */
+  create(params, options) {
+    const { betas, ...body } = params;
+    return this._client.post("/v1/vaults?beta=true", {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Get Vault
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsVault =
+   *   await client.beta.vaults.retrieve(
+   *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+   *   );
+   * ```
+   */
+  retrieve(vaultID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.get(path`/v1/vaults/${vaultID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Update Vault
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsVault =
+   *   await client.beta.vaults.update(
+   *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+   *   );
+   * ```
+   */
+  update(vaultID, params, options) {
+    const { betas, ...body } = params;
+    return this._client.post(path`/v1/vaults/${vaultID}?beta=true`, {
+      body,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * List Vaults
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const betaManagedAgentsVault of client.beta.vaults.list()) {
+   *   // ...
+   * }
+   * ```
+   */
+  list(params = {}, options) {
+    const { betas, ...query } = params ?? {};
+    return this._client.getAPIList("/v1/vaults?beta=true", PageCursor, {
+      query,
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Delete Vault
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsDeletedVault =
+   *   await client.beta.vaults.delete(
+   *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+   *   );
+   * ```
+   */
+  delete(vaultID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.delete(path`/v1/vaults/${vaultID}?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+  /**
+   * Archive Vault
+   *
+   * @example
+   * ```ts
+   * const betaManagedAgentsVault =
+   *   await client.beta.vaults.archive(
+   *     'vlt_011CZkZDLs7fYzm1hXNPeRjv',
+   *   );
+   * ```
+   */
+  archive(vaultID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.post(path`/v1/vaults/${vaultID}/archive?beta=true`, {
+      ...options,
+      headers: buildHeaders([
+        { "anthropic-beta": [...betas ?? [], "managed-agents-2026-04-01"].toString() },
+        options?.headers
+      ])
+    });
+  }
+};
+Vaults.Credentials = Credentials;
 
 // node_modules/@anthropic-ai/sdk/resources/beta/beta.mjs
 var Beta = class extends APIResource {
@@ -3428,12 +4355,20 @@ var Beta = class extends APIResource {
     super(...arguments);
     this.models = new Models(this._client);
     this.messages = new Messages(this._client);
+    this.agents = new Agents(this._client);
+    this.environments = new Environments(this._client);
+    this.sessions = new Sessions(this._client);
+    this.vaults = new Vaults(this._client);
     this.files = new Files(this._client);
     this.skills = new Skills(this._client);
   }
 };
 Beta.Models = Models;
 Beta.Messages = Messages;
+Beta.Agents = Agents;
+Beta.Environments = Environments;
+Beta.Sessions = Sessions;
+Beta.Vaults = Vaults;
 Beta.Files = Files;
 Beta.Skills = Skills;
 
@@ -4332,7 +5267,7 @@ Please migrate to a newer model. Visit https://docs.anthropic.com/en/docs/resour
    * ```ts
    * const messageTokensCount =
    *   await client.messages.countTokens({
-   *     messages: [{ content: 'string', role: 'user' }],
+   *     messages: [{ content: 'Hello, world', role: 'user' }],
    *     model: 'claude-opus-4-6',
    *   });
    * ```
@@ -4399,10 +5334,10 @@ var Models2 = class extends APIResource {
 // node_modules/@anthropic-ai/sdk/internal/utils/env.mjs
 var readEnv = (env) => {
   if (typeof globalThis.process !== "undefined") {
-    return globalThis.process.env?.[env]?.trim() ?? void 0;
+    return globalThis.process.env?.[env]?.trim() || void 0;
   }
   if (typeof globalThis.Deno !== "undefined") {
-    return globalThis.Deno.env?.get?.(env)?.trim();
+    return globalThis.Deno.env?.get?.(env)?.trim() || void 0;
   }
   return void 0;
 };
@@ -8325,7 +9260,7 @@ var Assistants = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/beta/realtime/sessions.mjs
-var Sessions = class extends APIResource2 {
+var Sessions2 = class extends APIResource2 {
   /**
    * Create an ephemeral API token for use in client-side applications with the
    * Realtime API. Can be configured with the same session parameters as the
@@ -8380,15 +9315,15 @@ var TranscriptionSessions = class extends APIResource2 {
 var Realtime = class extends APIResource2 {
   constructor() {
     super(...arguments);
-    this.sessions = new Sessions(this._client);
+    this.sessions = new Sessions2(this._client);
     this.transcriptionSessions = new TranscriptionSessions(this._client);
   }
 };
-Realtime.Sessions = Sessions;
+Realtime.Sessions = Sessions2;
 Realtime.TranscriptionSessions = TranscriptionSessions;
 
 // ../../../node_modules/openai/resources/beta/chatkit/sessions.mjs
-var Sessions2 = class extends APIResource2 {
+var Sessions3 = class extends APIResource2 {
   /**
    * Create a ChatKit session.
    *
@@ -8500,11 +9435,11 @@ var Threads = class extends APIResource2 {
 var ChatKit = class extends APIResource2 {
   constructor() {
     super(...arguments);
-    this.sessions = new Sessions2(this._client);
+    this.sessions = new Sessions3(this._client);
     this.threads = new Threads(this._client);
   }
 };
-ChatKit.Sessions = Sessions2;
+ChatKit.Sessions = Sessions3;
 ChatKit.Threads = Threads;
 
 // ../../../node_modules/openai/resources/beta/threads/messages.mjs
@@ -10842,7 +11777,7 @@ var Content3 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/skills/versions/versions.mjs
-var Versions2 = class extends APIResource2 {
+var Versions3 = class extends APIResource2 {
   constructor() {
     super(...arguments);
     this.content = new Content3(this._client);
@@ -10877,14 +11812,14 @@ var Versions2 = class extends APIResource2 {
     return this._client.delete(path2`/skills/${skill_id}/versions/${version}`, options);
   }
 };
-Versions2.Content = Content3;
+Versions3.Content = Content3;
 
 // ../../../node_modules/openai/resources/skills/skills.mjs
 var Skills2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
     this.content = new Content2(this._client);
-    this.versions = new Versions2(this._client);
+    this.versions = new Versions3(this._client);
   }
   /**
    * Create a new skill.
@@ -10918,7 +11853,7 @@ var Skills2 = class extends APIResource2 {
   }
 };
 Skills2.Content = Content2;
-Skills2.Versions = Versions2;
+Skills2.Versions = Versions3;
 
 // ../../../node_modules/openai/resources/uploads/parts.mjs
 var Parts = class extends APIResource2 {
@@ -12558,6 +13493,8 @@ var AnthropicProvider = class {
         error instanceof Error ? error : void 0
       );
       const fallbackModels = [
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
         "claude-opus-4-5-20251101",
         "claude-sonnet-4-5-20250929",
         "claude-haiku-4-5-20251001",
@@ -12576,21 +13513,22 @@ var AnthropicProvider = class {
 // node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
 var TOOL_NAME_ALIASES = {
   // Direct mappings
-  "search_memories": "search_memories",
+  "search": "search",
   "generate_image": "generate_image",
   "search_web": "search_web",
-  // Memory tool aliases
-  "memory": "search_memories",
-  "memory_search": "search_memories",
-  "search_memory": "search_memories",
-  "memories": "search_memories",
+  // Memory/Search tool aliases
+  "memory": "search",
+  "memory_search": "search",
+  "search_memory": "search",
+  "memories": "search",
+  "search_memories": "search",
+  "search_scriptorium": "search",
   // Image tool aliases
   "image": "generate_image",
   "create_image": "generate_image",
   "image_generation": "generate_image",
   "gen_image": "generate_image",
   // Web search aliases
-  "search": "search_web",
   "web_search": "search_web",
   "websearch": "search_web",
   "web": "search_web",
@@ -12607,9 +13545,9 @@ function normalizeToolName(name) {
 }
 function convertToToolCallRequest(parsed) {
   switch (parsed.toolName) {
-    case "search_memories":
+    case "search":
       return {
-        name: "search_memories",
+        name: "search",
         arguments: {
           query: parsed.arguments.query || parsed.arguments.search || Object.values(parsed.arguments)[0] || "",
           limit: parsed.arguments.limit
@@ -12995,6 +13933,22 @@ var plugin = {
   getModelInfo: () => {
     return [
       {
+        id: "claude-opus-4-6",
+        name: "Claude Opus 4.6",
+        contextWindow: 2e5,
+        maxOutputTokens: 16e3,
+        supportsImages: true,
+        supportsTools: true
+      },
+      {
+        id: "claude-sonnet-4-6",
+        name: "Claude Sonnet 4.6",
+        contextWindow: 2e5,
+        maxOutputTokens: 16e3,
+        supportsImages: true,
+        supportsTools: true
+      },
+      {
         id: "claude-sonnet-4-5-20250929",
         name: "Claude Sonnet 4.5",
         contextWindow: 2e5,
@@ -13051,6 +14005,17 @@ var plugin = {
         supportsTools: true
       }
     ];
+  },
+  /**
+   * Check whether a model supports assistant message prefill.
+   * Claude 4.6 models dropped support for assistant prefill — ending the
+   * messages array with an assistant role message now returns a 400 error.
+   */
+  modelSupportsPrefill: (model) => {
+    if (/claude-(?:opus|sonnet|haiku)-4-6/.test(model)) {
+      return false;
+    }
+    return true;
   },
   /**
    * Render the Anthropic icon

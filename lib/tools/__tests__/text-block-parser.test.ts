@@ -142,9 +142,9 @@ describe('mapTextBlockToolName', () => {
   })
 
   it('maps memory aliases', () => {
-    expect(mapTextBlockToolName('MEMORY')).toBe('search_memories')
-    expect(mapTextBlockToolName('SEARCH_MEMORIES')).toBe('search_memories')
-    expect(mapTextBlockToolName('memories')).toBe('search_memories')
+    expect(mapTextBlockToolName('MEMORY')).toBe('search')
+    expect(mapTextBlockToolName('SEARCH_MEMORIES')).toBe('search')
+    expect(mapTextBlockToolName('memories')).toBe('search')
   })
 
   it('maps image aliases', () => {
@@ -154,7 +154,7 @@ describe('mapTextBlockToolName', () => {
   })
 
   it('maps search aliases', () => {
-    expect(mapTextBlockToolName('SEARCH')).toBe('search_web')
+    expect(mapTextBlockToolName('SEARCH')).toBe('search')
     expect(mapTextBlockToolName('SEARCH_WEB')).toBe('search_web')
     expect(mapTextBlockToolName('web_search')).toBe('search_web')
   })
@@ -198,7 +198,7 @@ describe('convertTextBlockToToolCallRequest', () => {
       endIndex: 0,
     })
 
-    expect(result.name).toBe('search_memories')
+    expect(result.name).toBe('search')
     expect(result.arguments.query).toBe('favorite food')
     expect(result.arguments.limit).toBe(5) // numeric conversion
   })
@@ -301,7 +301,7 @@ describe('stripTextBlockMarkers', () => {
   })
 
   it('strips multiple blocks', () => {
-    const response = 'A [[SEARCH_MEMORIES]]query[[/SEARCH_MEMORIES]] B [[RNG type="d6" /]] C'
+    const response = 'A [[SEARCH]]query[[/SEARCH]] B [[RNG type="d6" /]] C'
     expect(stripTextBlockMarkers(response)).toBe('A B C')
   })
 
@@ -339,6 +339,6 @@ describe('hasTextBlockMarkers', () => {
   })
 
   it('returns true for blocks without params', () => {
-    expect(hasTextBlockMarkers('[[SEARCH_MEMORIES]]food[[/SEARCH_MEMORIES]]')).toBe(true)
+    expect(hasTextBlockMarkers('[[SEARCH]]food[[/SEARCH]]')).toBe(true)
   })
 })

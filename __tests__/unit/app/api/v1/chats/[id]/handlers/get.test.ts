@@ -151,5 +151,26 @@ describe('chats [id] GET handler', () => {
     expect(body.chat.messages[0].role).toBe('ASSISTANT')
     expect(body.chat.messages[0].renderedHtml).toContain('<strong class="font-bold">important</strong>')
     expect(body.chat.messages[0].renderedHtml).toContain('<em class="italic">noted</em>')
+    expect(body.chat.documentMode).toBe('normal')
+    expect(body.chat.dividerPosition).toBe(45)
+  })
+
+  it('returns persisted document mode and divider position when set', async () => {
+    ctx.repos.chats.findById.mockResolvedValueOnce({
+      ...chatMetadata,
+      documentMode: 'focus',
+      dividerPosition: 30,
+    })
+
+    const req = {
+      nextUrl: new URL(`http://localhost:3000/api/v1/chats/${chatId}`),
+    } as any
+
+    const response = await handleGet(req, ctx, chatId)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.chat.documentMode).toBe('focus')
+    expect(body.chat.dividerPosition).toBe(30)
   })
 })

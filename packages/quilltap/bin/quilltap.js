@@ -5,6 +5,7 @@ const { fork, exec, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { getCacheDir, isCacheValid, ensureStandalone } = require('../lib/download-manager');
+const { resolveDataDir, promptPassphrase, loadDbKey } = require('../lib/db-helpers');
 
 const PACKAGE_DIR = path.resolve(__dirname, '..');
 
@@ -77,6 +78,7 @@ Usage: quilltap [options]
 Subcommands:
   db                            Query encrypted databases
   themes                        Manage theme bundles
+  docs                          Inspect, read, and export document mounts
 
 Options:
   -p, --port <number>     Port to listen on (default: 3000)
@@ -368,136 +370,9 @@ async function main() {
 }
 
 // ============================================================================
-// db subcommand — query encrypted databases directly
+// db subcommand helpers (resolveDataDir, promptPassphrase, loadDbKey) live in
+// ../lib/db-helpers.js so the docs subcommand can share them.
 // ============================================================================
-
-/**
- * Resolve the data directory using the same platform logic as lib/paths.ts.
- */
-function resolveDataDir(overrideDir) {
-  if (overrideDir) {
-    const resolved = overrideDir.startsWith('~')
-      ? path.join(require('os').homedir(), overrideDir.slice(1))
-      : overrideDir;
-    return path.join(resolved, 'data');
-  }
-  const os = require('os');
-  if (process.env.QUILLTAP_DATA_DIR) {
-    return path.join(process.env.QUILLTAP_DATA_DIR, 'data');
-  }
-  const home = os.homedir();
-  if (process.platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Quilltap', 'data');
-  if (process.platform === 'win32') return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Quilltap', 'data');
-  return path.join(home, '.quilltap', 'data');
-}
-
-/**
- * Prompt for a passphrase interactively with hidden input.
- * Returns a promise that resolves to the entered passphrase.
- */
-function promptPassphrase(prompt) {
-  return new Promise((resolve, reject) => {
-    const readline = require('readline');
-    if (!process.stdin.isTTY) {
-      reject(new Error('This database requires a passphrase. Use --passphrase <pass> or set QUILLTAP_DB_PASSPHRASE'));
-      return;
-    }
-    process.stdout.write(prompt || 'Passphrase: ');
-    const rl = readline.createInterface({ input: process.stdin, terminal: false });
-    // Disable echo by switching stdin to raw mode
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    let passphrase = '';
-    const onData = (ch) => {
-      const c = ch.toString();
-      if (c === '\n' || c === '\r' || c === '\u0004') {
-        // Enter or Ctrl+D — done
-        process.stdin.setRawMode(false);
-        process.stdin.removeListener('data', onData);
-        process.stdin.pause();
-        rl.close();
-        process.stdout.write('\n');
-        resolve(passphrase);
-      } else if (c === '\u0003') {
-        // Ctrl+C — abort
-        process.stdin.setRawMode(false);
-        process.stdin.removeListener('data', onData);
-        process.stdin.pause();
-        rl.close();
-        process.stdout.write('\n');
-        process.exit(130);
-      } else if (c === '\u007F' || c === '\b') {
-        // Backspace
-        if (passphrase.length > 0) {
-          passphrase = passphrase.slice(0, -1);
-        }
-      } else {
-        passphrase += c;
-      }
-    };
-    process.stdin.on('data', onData);
-  });
-}
-
-/**
- * Read and decrypt the .dbkey file to get the SQLCipher key.
- * If passphrase is needed and not provided, prompts interactively.
- */
-async function loadDbKey(dataDir, passphrase) {
-  const crypto = require('crypto');
-  const dbkeyPath = path.join(dataDir, 'quilltap.dbkey');
-  if (!fs.existsSync(dbkeyPath)) {
-    return null; // No .dbkey file — DB may be unencrypted
-  }
-
-  const data = JSON.parse(fs.readFileSync(dbkeyPath, 'utf8'));
-  const INTERNAL_PASSPHRASE = '__quilltap_no_passphrase__';
-
-  // Strip legacy hasPassphrase field if present
-  if ('hasPassphrase' in data) {
-    delete data.hasPassphrase;
-    fs.writeFileSync(dbkeyPath, JSON.stringify(data, null, 2), { mode: 0o600 });
-  }
-
-  // Helper to attempt decryption with a given passphrase
-  function tryDecrypt(pass) {
-    const salt = Buffer.from(data.salt, 'hex');
-    const key = crypto.pbkdf2Sync(pass, new Uint8Array(salt), data.kdfIterations, 32, data.kdfDigest);
-    const iv = Buffer.from(data.iv, 'hex');
-    const decipher = crypto.createDecipheriv(data.algorithm, new Uint8Array(key), new Uint8Array(iv));
-    decipher.setAuthTag(new Uint8Array(Buffer.from(data.authTag, 'hex')));
-    let plaintext = decipher.update(data.ciphertext, 'hex', 'utf8');
-    plaintext += decipher.final('utf8');
-
-    const hash = crypto.createHash('sha256').update(plaintext).digest('hex');
-    if (hash !== data.pepperHash) {
-      throw new Error('Pepper hash mismatch');
-    }
-    return plaintext;
-  }
-
-  // Try internal passphrase first (no user passphrase case)
-  try {
-    return tryDecrypt(INTERNAL_PASSPHRASE);
-  } catch {
-    // Internal passphrase failed — need user passphrase
-  }
-
-  // Check environment variable if no CLI passphrase provided
-  if (!passphrase && process.env.QUILLTAP_DB_PASSPHRASE) {
-    passphrase = process.env.QUILLTAP_DB_PASSPHRASE;
-  }
-
-  // Prompt interactively if still no passphrase
-  if (!passphrase) {
-    passphrase = await promptPassphrase('Database passphrase: ');
-    if (!passphrase) {
-      throw new Error('No passphrase provided');
-    }
-  }
-
-  return tryDecrypt(passphrase);
-}
 
 // ============================================================================
 // Instance Lock CLI Commands
@@ -787,6 +662,7 @@ Options:
   --count <table>       Show row count for a table
   --repl                Interactive SQL prompt
   --llm-logs            Target the LLM logs database
+  --mount-points        Target the document mount-index database
   --data-dir <path>     Override data directory
   --passphrase <pass>   Provide passphrase for encrypted .dbkey
   -h, --help            Show this help
@@ -806,6 +682,8 @@ Examples:
   quilltap db --count messages
   quilltap db --repl
   quilltap db --llm-logs --tables
+  quilltap db --mount-points --tables
+  quilltap db --mount-points "SELECT id, name FROM doc_mount_points"
   quilltap db --lock-status
   quilltap db --lock-clean
   QUILLTAP_DB_PASSPHRASE=secret quilltap db --tables
@@ -816,6 +694,7 @@ async function dbCommand(args) {
   let dataDirOverride = '';
   let passphrase = '';
   let useLlmLogs = false;
+  let useMountPoints = false;
   let showTables = false;
   let countTable = '';
   let repl = false;
@@ -831,6 +710,7 @@ async function dbCommand(args) {
       case '--data-dir': case '-d': dataDirOverride = args[++i]; break;
       case '--passphrase': passphrase = args[++i]; break;
       case '--llm-logs': useLlmLogs = true; break;
+      case '--mount-points': useMountPoints = true; break;
       case '--tables': showTables = true; break;
       case '--count': countTable = args[++i]; break;
       case '--repl': repl = true; break;
@@ -862,7 +742,15 @@ async function dbCommand(args) {
     return;
   }
 
-  const dbFilename = useLlmLogs ? 'quilltap-llm-logs.db' : 'quilltap.db';
+  if (useLlmLogs && useMountPoints) {
+    console.error('Error: --llm-logs and --mount-points are mutually exclusive');
+    process.exit(1);
+  }
+
+  let dbFilename;
+  if (useLlmLogs) dbFilename = 'quilltap-llm-logs.db';
+  else if (useMountPoints) dbFilename = 'quilltap-mount-index.db';
+  else dbFilename = 'quilltap.db';
   const dbPath = path.join(dataDir, dbFilename);
 
   if (!fs.existsSync(dbPath)) {
@@ -978,6 +866,9 @@ if (process.argv[2] === 'db') {
 } else if (process.argv[2] === 'themes') {
   const { themesCommand } = require('../lib/theme-commands');
   themesCommand(process.argv.slice(3));
+} else if (process.argv[2] === 'docs') {
+  const { docsCommand } = require('../lib/docs-commands');
+  docsCommand(process.argv.slice(3));
 } else {
   main();
 }

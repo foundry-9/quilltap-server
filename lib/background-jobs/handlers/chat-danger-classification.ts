@@ -17,6 +17,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { postConciergeDangerAnnouncement } from '@/lib/services/concierge-notifications/writer';
 import { createSystemEvent } from '@/lib/services/system-events.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { ChatDangerClassificationPayload } from '../queue-service';
@@ -171,6 +172,13 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     dangerClassifiedAt: now,
     dangerClassifiedAtMessageCount: finalMessageCount,
   });
+
+  // Sticky-true: the early-return at the top of this handler ensures we only
+  // reach this point when the chat newly transitions to dangerous, so the
+  // Concierge announces exactly once per chat.
+  if (result.isDangerous) {
+    await postConciergeDangerAnnouncement({ chatId: payload.chatId });
+  }
 
   logger.info('[ChatDangerClassification] Chat classified', {
     jobId: job.id,

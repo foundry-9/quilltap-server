@@ -5,7 +5,7 @@
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 import { renderHook, waitFor } from '@testing-library/react'
-import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
+import { useUserCharacterDisplayName, resetDisplayNameCache } from '@/hooks/usePersonaDisplayName'
 
 // Mock fetch
 global.fetch = jest.fn()
@@ -15,6 +15,7 @@ describe('useUserCharacterDisplayName', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    resetDisplayNameCache()
   })
 
   afterEach(() => {
@@ -268,7 +269,6 @@ describe('useUserCharacterDisplayName', () => {
     })
 
     it('should handle network errors', async () => {
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation()
       mockFetch.mockRejectedValue(new Error('Network error'))
 
       const { result } = renderHook(() => useUserCharacterDisplayName())
@@ -277,12 +277,11 @@ describe('useUserCharacterDisplayName', () => {
         expect(result.current.loading).toBe(false)
       })
 
-      expect(consoleWarnSpy).toHaveBeenCalled()
-      consoleWarnSpy.mockRestore()
+      // Should gracefully return empty disambiguation data
+      expect(result.current.needsDisambiguation('Alice')).toBe(false)
     })
 
     it('should handle non-200 responses', async () => {
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation()
       mockFetch.mockResolvedValue({
         ok: false,
         status: 500,
@@ -294,8 +293,8 @@ describe('useUserCharacterDisplayName', () => {
         expect(result.current.loading).toBe(false)
       })
 
-      expect(consoleWarnSpy).toHaveBeenCalled()
-      consoleWarnSpy.mockRestore()
+      // Should gracefully return empty disambiguation data
+      expect(result.current.needsDisambiguation('Alice')).toBe(false)
     })
   })
 

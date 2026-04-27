@@ -8,7 +8,6 @@ import {
   handleGenerateThumbnails,
   handleSync,
   handleUploadFile,
-  handleWriteFile,
 } from '../actions';
 import { FILE_POST_ACTIONS, type FilePostAction } from '../shared';
 
@@ -25,7 +24,6 @@ export async function handlePost(
   }
 
   const actionHandlers: Record<FilePostAction, () => Promise<NextResponse>> = {
-    write: () => handleWriteFile(request, ctx),
     upload: () => handleUploadFile(request, ctx),
     'generate-thumbnails': () => handleGenerateThumbnails(request, ctx),
     'cleanup-stale': () => handleCleanupStale(request, ctx),

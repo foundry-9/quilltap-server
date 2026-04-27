@@ -35,7 +35,8 @@ export type ExportEntityType =
   | 'image-profiles'
   | 'embedding-profiles'
   | 'tags'
-  | 'projects';
+  | 'projects'
+  | 'document-stores';
 
 // ============================================================================
 // EXPORT MANIFEST
@@ -67,6 +68,11 @@ export interface QuilltapExportCounts {
   tags?: number;
   memories?: number;
   projects?: number;
+  documentStores?: number;
+  documentStoreFolders?: number;
+  documentStoreDocuments?: number;
+  documentStoreBlobs?: number;
+  documentStoreProjectLinks?: number;
 }
 
 /**
@@ -222,6 +228,84 @@ export interface ProjectsExportData {
 }
 
 /**
+ * Document store / Scriptorium export data
+ *
+ * Portable representation of a set of document stores. For database-backed
+ * mount points the full content lives in `documents` (text) and `blobs`
+ * (base64-encoded bytes). For filesystem/obsidian mounts only the
+ * configuration round-trips — users keep the external files themselves.
+ *
+ * `basePath` is included as a courtesy but is instance-specific; importers
+ * should prompt the user to rebind it or drop the mount if the path cannot
+ * be located on the target machine.
+ */
+export interface ExportedDocumentStore {
+  id: string;
+  name: string;
+  basePath: string;
+  mountType: 'filesystem' | 'obsidian' | 'database';
+  storeType?: 'documents' | 'character';
+  includePatterns: string[];
+  excludePatterns: string[];
+  enabled: boolean;
+}
+
+export interface ExportedDocumentStoreFolder {
+  mountPointId: string;
+  parentId?: string | null;
+  name: string;
+  path: string;
+}
+
+export interface ExportedDocumentStoreDocument {
+  mountPointId: string;
+  relativePath: string;
+  fileName: string;
+  fileType: 'markdown' | 'txt' | 'json' | 'jsonl';
+  content: string;
+  contentSha256: string;
+  plainTextLength: number;
+  lastModified: string;
+  folderId?: string | null;
+}
+
+export interface ExportedDocumentStoreBlob {
+  mountPointId: string;
+  relativePath: string;
+  originalFileName: string;
+  originalMimeType: string;
+  storedMimeType: string;
+  sizeBytes: number;
+  sha256: string;
+  description: string;
+  descriptionUpdatedAt?: string | null;
+  /** Plain-text representation for pdf/docx uploads. Omitted for blobs with no converter. */
+  extractedText?: string | null;
+  extractedTextSha256?: string | null;
+  extractionStatus?: 'none' | 'pending' | 'converted' | 'failed' | 'skipped';
+  extractionError?: string | null;
+  /** Raw bytes, base64-encoded for JSON safety. */
+  dataBase64: string;
+}
+
+export interface ExportedProjectDocMountLink {
+  projectId: string;
+  mountPointId: string;
+}
+
+export interface DocumentStoresExportData {
+  mountPoints: ExportedDocumentStore[];
+  folders?: ExportedDocumentStoreFolder[];
+  documents: ExportedDocumentStoreDocument[];
+  blobs: ExportedDocumentStoreBlob[];
+  /**
+   * Project ↔ mount-point associations. Optional for backward
+   * compatibility with older .qtap files that predated this field.
+   */
+  projectLinks?: ExportedProjectDocMountLink[];
+}
+
+/**
  * Union of all possible export data structures
  */
 export type QuilltapExportData =
@@ -232,7 +316,8 @@ export type QuilltapExportData =
   | ImageProfilesExportData
   | EmbeddingProfilesExportData
   | TagsExportData
-  | ProjectsExportData;
+  | ProjectsExportData
+  | DocumentStoresExportData;
 
 /**
  * Complete export structure with manifest and data
@@ -244,6 +329,190 @@ export interface QuilltapExport {
   manifest: QuilltapExportManifest;
   data: QuilltapExportData;
 }
+
+// ============================================================================
+// NDJSON STREAMING FORMAT (qtap-ndjson v1)
+// ============================================================================
+
+/**
+ * NDJSON envelope — always the first line of a streaming .qtap file.
+ *
+ * Detection rule: a .qtap file whose first parseable JSON value is an object
+ * with `format === 'qtap-ndjson'` is streaming NDJSON. Anything else is
+ * legacy monolithic JSON and goes through the old parser.
+ */
+export interface QtapNdjsonEnvelope {
+  kind: '__envelope__';
+  format: 'qtap-ndjson';
+  version: 1;
+  manifest: QuilltapExportManifest;
+}
+
+/**
+ * NDJSON footer — optional final line carrying actual record counts so an
+ * importer can verify the stream wasn't truncated. `manifest.counts` on the
+ * envelope are best-effort and may be omitted for streaming; the footer is
+ * authoritative.
+ */
+export interface QtapNdjsonFooter {
+  kind: '__footer__';
+  counts: QuilltapExportCounts;
+}
+
+// One tagged record per line. `data` carries the entity payload; parent refs
+// use the exporting instance's (old) IDs and are remapped at import time.
+
+export interface QtapTagRecord {
+  kind: 'tag';
+  data: import('@/lib/schemas/types').Tag;
+}
+
+export interface QtapConnectionProfileRecord {
+  kind: 'connection_profile';
+  data: SanitizedConnectionProfile;
+}
+
+export interface QtapImageProfileRecord {
+  kind: 'image_profile';
+  data: SanitizedImageProfile;
+}
+
+export interface QtapEmbeddingProfileRecord {
+  kind: 'embedding_profile';
+  data: SanitizedEmbeddingProfile;
+}
+
+export interface QtapRoleplayTemplateRecord {
+  kind: 'roleplay_template';
+  data: ExportedRoleplayTemplate;
+}
+
+export interface QtapProjectRecord {
+  kind: 'project';
+  data: ExportedProject;
+}
+
+/**
+ * Character record carries the character row and resolved tag/persona names
+ * but NOT wardrobeItems or pluginData — those stream as separate records so
+ * large wardrobes don't blow up a single line.
+ */
+export interface QtapCharacterRecord {
+  kind: 'character';
+  data: Omit<ExportedCharacter, 'wardrobeItems' | 'pluginData'>;
+}
+
+export interface QtapWardrobeItemRecord {
+  kind: 'wardrobe_item';
+  characterId: string;
+  data: import('@/lib/schemas/wardrobe.types').WardrobeItem;
+}
+
+export interface QtapCharacterPluginDataRecord {
+  kind: 'character_plugin_data';
+  characterId: string;
+  pluginName: string;
+  data: unknown;
+}
+
+/**
+ * Chat record carries metadata + resolved participant info but NOT the
+ * messages — those stream as separate `chat_message` records so a chat with
+ * tens of thousands of messages doesn't hit the per-line ceiling.
+ */
+export interface QtapChatRecord {
+  kind: 'chat';
+  data: Omit<ExportedChat, 'messages'>;
+}
+
+export interface QtapChatMessageRecord {
+  kind: 'chat_message';
+  chatId: string;
+  data: import('@/lib/schemas/types').MessageEvent;
+}
+
+export interface QtapMemoryRecord {
+  kind: 'memory';
+  data: import('@/lib/schemas/types').Memory;
+}
+
+export interface QtapDocMountPointRecord {
+  kind: 'doc_mount_point';
+  data: ExportedDocumentStore;
+}
+
+export interface QtapDocMountFolderRecord {
+  kind: 'doc_mount_folder';
+  data: any;
+}
+
+export interface QtapDocMountDocumentRecord {
+  kind: 'doc_mount_document';
+  data: ExportedDocumentStoreDocument;
+}
+
+/**
+ * Blob metadata record, emitted once per blob *before* any data chunks.
+ * Carries the blob's identity and size so the importer can allocate /
+ * validate; the actual bytes arrive in one or more `doc_mount_blob_chunk`
+ * records keyed by the same (mountPointId, sha256) tuple.
+ */
+export interface QtapDocMountBlobRecord {
+  kind: 'doc_mount_blob';
+  data: Omit<ExportedDocumentStoreBlob, 'dataBase64'> & {
+    /** Total number of `doc_mount_blob_chunk` records that follow. */
+    chunkCount: number;
+  };
+}
+
+/**
+ * Blob byte chunk. Emitted in order right after its parent `doc_mount_blob`.
+ * Base64-encoded bytes are capped around 4 MB per chunk so we stay well below
+ * the per-line safety cap and V8 string limits on both sides.
+ */
+export interface QtapDocMountBlobChunkRecord {
+  kind: 'doc_mount_blob_chunk';
+  /** Parent blob identity (matches the preceding doc_mount_blob record). */
+  mountPointId: string;
+  sha256: string;
+  /** 0-based chunk index. */
+  index: number;
+  /** Total chunks for this blob (mirrors the parent's chunkCount). */
+  total: number;
+  /** Base64-encoded slice of the blob bytes for this chunk. */
+  dataBase64: string;
+}
+
+export interface QtapProjectDocMountLinkRecord {
+  kind: 'project_doc_mount_link';
+  data: ExportedProjectDocMountLink;
+}
+
+/**
+ * Discriminated union of every line that can appear in a streaming .qtap
+ * file. Consumers switch on `kind` to dispatch.
+ */
+export type QtapRecord =
+  | QtapNdjsonEnvelope
+  | QtapNdjsonFooter
+  | QtapTagRecord
+  | QtapConnectionProfileRecord
+  | QtapImageProfileRecord
+  | QtapEmbeddingProfileRecord
+  | QtapRoleplayTemplateRecord
+  | QtapProjectRecord
+  | QtapCharacterRecord
+  | QtapWardrobeItemRecord
+  | QtapCharacterPluginDataRecord
+  | QtapChatRecord
+  | QtapChatMessageRecord
+  | QtapMemoryRecord
+  | QtapDocMountPointRecord
+  | QtapDocMountFolderRecord
+  | QtapDocMountDocumentRecord
+  | QtapDocMountBlobRecord
+  | QtapDocMountBlobChunkRecord
+  | QtapProjectDocMountLinkRecord;
 
 // ============================================================================
 // EXPORT API TYPES

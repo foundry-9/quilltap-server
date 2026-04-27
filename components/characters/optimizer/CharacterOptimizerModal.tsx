@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { CharacterOptimizerModalProps, OptimizerFilterOptions } from './types';
+import type { CharacterOptimizerModalProps, OptimizerFilterOptions, OptimizerOutputMode } from './types';
 import { useCharacterOptimizer } from './hooks/useCharacterOptimizer';
 import { AnalysisSummary } from './components/AnalysisSummary';
 import { SuggestionCard } from './components/SuggestionCard';
@@ -78,6 +78,7 @@ export function CharacterOptimizerModal({
   characterName,
   profiles,
   defaultConnectionProfileId,
+  vaultAvailable = false,
   onClose,
   onApplied,
 }: CharacterOptimizerModalProps) {
@@ -91,6 +92,7 @@ export function CharacterOptimizerModal({
   const [useSemanticSearch, setUseSemanticSearch] = useState(true);
   const [sinceDate, setSinceDate] = useState('');
   const [beforeDate, setBeforeDate] = useState('');
+  const [saveToVault, setSaveToVault] = useState(false);
 
   // Handle escape key
   useEffect(() => {
@@ -118,7 +120,9 @@ export function CharacterOptimizerModal({
       sinceDate: sinceDate || null,
       beforeDate: beforeDate || null,
     };
-    await optimizer.startOptimization(characterId, selectedProfileId, filterOptions);
+    const outputMode: OptimizerOutputMode =
+      vaultAvailable && saveToVault ? 'suggestions-file' : 'apply';
+    await optimizer.startOptimization(characterId, selectedProfileId, filterOptions, outputMode);
   };
 
   const handleApply = async () => {
@@ -159,6 +163,7 @@ export function CharacterOptimizerModal({
               {optimizer.phase === 'progress' && 'The automata are consulting the memoirs…'}
               {optimizer.phase === 'review' && `Review ${optimizer.suggestions.length} proposed ${optimizer.suggestions.length === 1 ? 'amendment' : 'amendments'}`}
               {optimizer.phase === 'apply' && 'Confirm amendments for commission'}
+              {optimizer.phase === 'suggestions-file-written' && 'Suggestions inscribed in the vault'}
             </p>
           </div>
           <button
@@ -252,7 +257,7 @@ export function CharacterOptimizerModal({
               {/* Filter section */}
               {profiles.length > 0 && (
                 <details className="qt-card">
-                  <summary className="px-4 py-3 cursor-pointer text-sm font-medium qt-label select-none">
+                  <summary className="px-4 py-3 cursor-pointer qt-label select-none">
                     Filter Memories
                   </summary>
                   <div className="px-4 pb-4 flex flex-col gap-4 border-t qt-border-default pt-3">
@@ -311,6 +316,31 @@ export function CharacterOptimizerModal({
                   </div>
                 </details>
               )}
+
+              {/* Output mode — save suggestions to vault instead of applying */}
+              {profiles.length > 0 && vaultAvailable && (
+                <div className="qt-card p-4 flex flex-col gap-2">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="qt-checkbox mt-0.5"
+                      checked={saveToVault}
+                      onChange={(e) => setSaveToVault(e.target.checked)}
+                    />
+                    <span className="flex flex-col gap-1">
+                      <span className="qt-label text-sm">
+                        Save as suggestions in the vault (for later discussion)
+                      </span>
+                      <span className="qt-helper">
+                        In lieu of applying amendments directly, the proceedings shall be inscribed as a
+                        markdown dossier in the character&rsquo;s vault &mdash; at
+                        <code className="qt-code text-[11px] mx-1">Suggestions/refinement-&lt;timestamp&gt;.md</code>
+                        &mdash; so that author and character may review and debate the proposals at leisure before any are commissioned.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )}
             </div>
           )}
 
@@ -337,6 +367,15 @@ export function CharacterOptimizerModal({
                   />
                 ))}
               </div>
+
+              {optimizer.progressStep === 'generating' && optimizer.progressSubStep && (
+                <p className="qt-caption text-center">
+                  {optimizer.progressSubStep.label}
+                  {optimizer.progressSubStep.total > 1 && (
+                    <> &mdash; pass {optimizer.progressSubStep.index} of {optimizer.progressSubStep.total}</>
+                  )}
+                </p>
+              )}
 
               {optimizer.memoryCount > 0 && (
                 <p className="qt-caption text-center">
@@ -434,6 +473,30 @@ export function CharacterOptimizerModal({
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ===== SUGGESTIONS-FILE-WRITTEN PHASE ===== */}
+          {optimizer.phase === 'suggestions-file-written' && (
+            <div className="flex flex-col items-center gap-4 py-8 text-center">
+              <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center">
+                <svg className="w-8 h-8 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div className="flex flex-col gap-1">
+                <h3 className="qt-section-title">Suggestions Inscribed</h3>
+                <p className="qt-section-subtitle text-sm max-w-md">
+                  A dossier of {optimizer.suggestions.length}{' '}
+                  {optimizer.suggestions.length === 1 ? 'proposal has' : 'proposals have'} been deposited in {characterName}&rsquo;s vault. Author
+                  and character are invited to peruse, deliberate, and commission refinements in their own good time.
+                </p>
+                {optimizer.suggestionsFilePath && (
+                  <p className="qt-caption mt-2 font-mono text-xs break-all">
+                    {optimizer.suggestionsFilePath}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 

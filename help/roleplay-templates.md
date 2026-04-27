@@ -60,7 +60,7 @@ The default template provides:
 
 - Standard formatting for dialogue and actions
 - Clear distinction between dialogue ("speech") and actions (*actions*)
-- Support for out-of-character (OOC) comments ((comments))
+- Support for out-of-character (OOC) comments {{OOC: comments}}
 - Balanced structure for most roleplay styles
 
 ### Available Built-in Templates
@@ -317,7 +317,7 @@ Common elements to define:
 - **Actions** — How actions are marked (*action* or [action])
 - **Narration** — How narrative text is formatted (must be declared via narration delimiters)
 - **Thoughts** — How character thoughts are shown
-- **Out-of-Character** — How OOC comments appear ((comment))
+- **Out-of-Character** — How OOC comments appear {{OOC: comment}}
 - **Emphasis** — How **bold** and *italic* text should work
 
 ### Example Formatting Elements
@@ -326,7 +326,7 @@ Common elements to define:
 "Dialogue here" — Speech between quotes
 *Action here* — Actions in single asterisks
 [Narration here] — Narrative text in brackets
-((OOC here)) — Out-of-character in double parentheses
+{{OOC: comment here}} — Out-of-character in double braces
 ```
 
 ## Template Persistence

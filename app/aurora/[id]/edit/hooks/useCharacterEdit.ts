@@ -24,6 +24,8 @@ const INITIAL_FORM_DATA: CharacterFormData = {
   systemPrompt: '',
   avatarUrl: '',
   defaultConnectionProfileId: '',
+  readPropertiesFromDocumentStore: false,
+  systemTransparency: false,
 }
 
 /**
@@ -76,6 +78,8 @@ export function useCharacterEdit(id: string) {
           systemPrompt: char.systemPrompt || '',
           avatarUrl: char.avatarUrl || '',
           defaultConnectionProfileId: char.defaultConnectionProfileId || '',
+          readPropertiesFromDocumentStore: char.readPropertiesFromDocumentStore === true,
+          systemTransparency: char.systemTransparency === true,
         }
 
         return {
@@ -102,6 +106,7 @@ export function useCharacterEdit(id: string) {
    * Initial data loading effect
    */
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount + form initialization with loaded data
     fetchCharacter()
   }, [id, fetchCharacter])
 
@@ -151,6 +156,98 @@ export function useCharacterEdit(id: string) {
   }
 
   /**
+   * Handle systemTransparency toggle. Local state only; persists with the
+   * regular form save so the user can change their mind before committing.
+   */
+  const handleSystemTransparencyChange = (enabled: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      formData: { ...prev.formData, systemTransparency: enabled },
+    }))
+  }
+
+  /**
+   * Toggle the Scriptorium-overlay switch. Persists immediately so subsequent
+   * reads reflect the choice even if the user navigates away without saving
+   * other form edits.
+   */
+  const handleReadFromDocStoreToggle = async (enabled: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      formData: { ...prev.formData, readPropertiesFromDocumentStore: enabled },
+    }))
+    try {
+      const res = await fetch(`/api/v1/characters/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ readPropertiesFromDocumentStore: enabled }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to update switch')
+      }
+      showSuccessToast(enabled
+        ? 'Reading character properties from Scriptorium vault.'
+        : 'Reading character properties from the database.')
+      await fetchCharacter()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update switch'
+      showErrorToast(errorMsg)
+      // Revert local state on failure
+      setState((prev) => ({
+        ...prev,
+        formData: { ...prev.formData, readPropertiesFromDocumentStore: !enabled },
+      }))
+    }
+  }
+
+  /**
+   * Copy the character's vault properties.json values into the DB row.
+   * Only meaningful when the overlay switch is on and a vault is linked.
+   */
+  const handleSyncPropertiesFromVault = async () => {
+    try {
+      const res = await fetch(`/api/v1/characters/${id}?action=sync-properties-from-vault`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to sync properties from vault')
+      }
+      showSuccessToast('Synced properties from the vault into the character record.')
+      await fetchCharacter()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to sync properties from vault'
+      showErrorToast(errorMsg)
+    }
+  }
+
+  /**
+   * Copy the character's DB values out into the linked vault's files. The
+   * reverse of handleSyncPropertiesFromVault; useful after turning the overlay
+   * off and making DB-only edits that the vault hasn't seen, or for seeding a
+   * newly linked vault from the existing DB row.
+   */
+  const handleSyncPropertiesToVault = async () => {
+    try {
+      const res = await fetch(`/api/v1/characters/${id}?action=sync-properties-to-vault`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to sync properties to vault')
+      }
+      showSuccessToast('Synced properties from the character record into the vault.')
+      await fetchCharacter()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to sync properties to vault'
+      showErrorToast(errorMsg)
+    }
+  }
+
+  /**
    * Submit form and save character data
    */
   const handleSubmit = async (e: React.FormEvent): Promise<boolean> => {
@@ -158,7 +255,9 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({ ...prev, saving: true, error: null }))
 
     try {
-      // Update character fields
+      // Vault-managed fields are routed to vault files by the repository when
+      // the overlay is on, so the same payload works whether overlay is on or
+      // off. The repository's write overlay handles the routing.
       const res = await fetch(`/api/v1/characters/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -321,8 +420,12 @@ export function useCharacterEdit(id: string) {
     handleAliasesChange,
     handlePronounsChange,
     handleScenariosChange,
+    handleSystemTransparencyChange,
     handleSubmit,
     handleCancel,
+    handleReadFromDocStoreToggle,
+    handleSyncPropertiesFromVault,
+    handleSyncPropertiesToVault,
     setCharacterAvatar,
     getAvatarSrc,
     toggleUploadDialog,

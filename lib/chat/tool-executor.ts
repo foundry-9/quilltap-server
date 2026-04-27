@@ -10,10 +10,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import type { ToolExecutionContext as PluginToolContext } from '@/lib/plugins/interfaces/tool-plugin'
 import {
   executeImageGenerationTool,
-  executeMemorySearchTool,
-  formatMemorySearchResults,
   type ImageToolExecutionContext,
-  type MemorySearchToolContext,
 } from '@/lib/tools';
 import {
   executeWebSearchTool,
@@ -25,11 +22,6 @@ import {
   formatProjectInfoResults,
   type ProjectInfoToolContext,
 } from '@/lib/tools/handlers/project-info-handler';
-import {
-  executeFileManagementTool,
-  formatFileManagementResults,
-  type FileManagementToolContext,
-} from '@/lib/tools/handlers/file-management-handler';
 import {
   executeRequestFullContextTool,
   formatRequestFullContextResults,
@@ -61,6 +53,11 @@ import {
   type StateToolContext,
 } from '@/lib/tools/handlers/state-handler';
 import {
+  executeSelfInventoryTool,
+  formatSelfInventoryResults,
+  type SelfInventoryToolContext,
+} from '@/lib/tools/handlers/self-inventory-handler';
+import {
   executeSubmitFinalResponseTool,
   formatSubmitFinalResponseResults,
   type SubmitFinalResponseToolContext,
@@ -77,6 +74,13 @@ import {
   type ShellToolContext,
 } from '@/lib/tools/shell';
 import {
+  executeDocEditTool,
+  formatDocEditResults,
+  isDocEditTool,
+  DOC_EDIT_TOOL_NAMES,
+  type DocEditToolContext,
+} from '@/lib/tools/handlers/doc-edit-handler';
+import {
   executeWardrobeListTool,
   formatWardrobeListResults,
   type WardrobeListToolContext,
@@ -91,6 +95,26 @@ import {
   formatWardrobeCreateItemResults,
   type WardrobeCreateItemToolContext,
 } from '@/lib/tools/handlers/wardrobe-create-item-handler';
+import {
+  executeReadConversationTool,
+  formatReadConversationResults,
+  type ReadConversationToolContext,
+} from '@/lib/tools/handlers/read-conversation-handler';
+import {
+  executeSearchScriptoriumTool,
+  formatSearchScriptoriumResults,
+  type SearchScriptoriumToolContext,
+} from '@/lib/tools/handlers/search-scriptorium-handler';
+import {
+  executeUpsertAnnotationTool,
+  formatUpsertAnnotationResults,
+  type UpsertAnnotationToolContext,
+} from '@/lib/tools/handlers/upsert-annotation-handler';
+import {
+  executeDeleteAnnotationTool,
+  formatDeleteAnnotationResults,
+  type DeleteAnnotationToolContext,
+} from '@/lib/tools/handlers/delete-annotation-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -106,16 +130,6 @@ export interface ToolResult {
   error?: string;
   /** Human-readable error message with more details than the error code */
   message?: string;
-  /** For file_management: indicates permission is required for this write */
-  requiresPermission?: boolean;
-  /** Pending write details when requiresPermission is true */
-  pendingWrite?: {
-    filename: string;
-    content?: string;
-    mimeType?: string;
-    folderPath?: string;
-    projectId?: string | null;
-  };
   /** For sudo_sync: indicates user approval is required */
   requiresSudoApproval?: boolean;
   /** For sudo_sync: the pending command details */
@@ -135,6 +149,20 @@ export interface ToolResult {
 }
 
 /**
+ * Memory items that were loaded into the prompt for this turn. Populated by
+ * the orchestrator from the built context so tools like `self_inventory` can
+ * report the exact memory slate the LLM saw.
+ */
+export interface LoadedMemoriesContext {
+  /** Semantic-search memories rendered under `## Relevant Memories`. */
+  semantic?: Array<{ summary: string; importance: number; score: number; effectiveWeight: number }>;
+  /** Inter-character memories rendered under `## Memories About Other Characters`. */
+  interCharacter?: Array<{ aboutCharacterName: string; summary: string; importance: number }>;
+  /** Memory recap text injected on chat start or character join, if any. */
+  recap?: string;
+}
+
+/**
  * Extended context for tool execution
  */
 export interface ToolExecutionContext {
@@ -149,6 +177,8 @@ export interface ToolExecutionContext {
   projectId?: string;
   /** Browser User-Agent from the originating request (scrubbed of Electron/Quilltap tokens) */
   browserUserAgent?: string;
+  /** Memories loaded into this turn's prompt, for introspection tools. */
+  loadedMemories?: LoadedMemoriesContext;
 }
 
 /**
@@ -171,21 +201,26 @@ export async function executeToolCall(
  * Execute a tool call with full context
  */
 // Built-in tool names that are handled directly by this module
-// These should NOT be routed to the plugin registry
-const BUILT_IN_TOOLS = new Set([
+// These should NOT be routed to the plugin registry.
+// Doc-edit tools are sourced from DOC_EDIT_TOOL_NAMES (single source of truth).
+const BUILT_IN_TOOLS = new Set<string>([
   'generate_image',
-  'search_memories',
   'search_web',
   'project_info',
-  'file_management',
   'request_full_context',
   'help_search',
   'help_settings',
   'help_navigate',
   'rng',
   'state',
+  'self_inventory',
   'submit_final_response',
   'whisper',
+  // Scriptorium tools
+  'read_conversation',
+  'upsert_annotation',
+  'delete_annotation',
+  'search',
   // Wardrobe tools
   'list_wardrobe',
   'update_outfit_item',
@@ -197,6 +232,8 @@ const BUILT_IN_TOOLS = new Set([
   'async_result',
   'sudo_sync',
   'cp_host',
+  // Document editing / management / UI tools — Scriptorium Phase 3.3+
+  ...DOC_EDIT_TOOL_NAMES,
 ]);
 
 export async function executeToolCallWithContext(
@@ -328,44 +365,6 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle memory search
-    if (toolCall.name === 'search_memories') {
-      // If no character is configured, return error
-      if (!characterId) {
-        return {
-          toolName: 'search_memories',
-          success: false,
-          result: null,
-          error: 'Memory search requires a character context',
-        };
-      }
-
-      // Execute memory search tool
-      const memoryContext: MemorySearchToolContext = {
-        userId,
-        characterId,
-        embeddingProfileId,
-      };
-
-      const result = await executeMemorySearchTool(toolCall.arguments, memoryContext);
-
-      // Format results for LLM consumption
-      const formattedResult = result.success && result.memories
-        ? formatMemorySearchResults(result.memories)
-        : result.error || 'No memories found';
-
-      return {
-        toolName: 'search_memories',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          memories: result.memories,
-          totalFound: result.totalFound,
-          query: result.query,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
 
     // Handle web search
     if (toolCall.name === 'search_web') {
@@ -420,57 +419,6 @@ export async function executeToolCallWithContext(
 
       return {
         toolName: 'project_info',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          action: result.action,
-          data: result.data,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle file management
-    if (toolCall.name === 'file_management') {
-      // Execute file management tool
-      const fileContext: FileManagementToolContext = {
-        userId,
-        chatId,
-        projectId: context.projectId || null,
-        characterIds: characterId ? [characterId] : [],
-      };
-
-      const result = await executeFileManagementTool(toolCall.arguments, fileContext);
-
-      // Debug: Log the file management result structure
-      // Format results for LLM consumption
-      const formattedResult = formatFileManagementResults(result);
-
-      // Check if permission is required for write operations
-      if (result.requiresPermission) {
-        logger.info('File management requires permission, returning pendingWrite', {
-          filename: result.filename,
-          folderPath: result.folderPath,
-        });
-        const args = toolCall.arguments as Record<string, unknown>;
-        return {
-          toolName: 'file_management',
-          success: false,
-          result: null,
-          error: result.message || 'File write permission required',
-          requiresPermission: true,
-          pendingWrite: {
-            filename: result.filename || (args.filename as string) || 'unknown',
-            content: args.content as string | undefined,
-            mimeType: args.mimeType as string | undefined,
-            folderPath: result.folderPath || (args.targetFolderPath as string) || '/',
-            projectId: context.projectId || null,
-          },
-        };
-      }
-
-      return {
-        toolName: 'file_management',
         success: result.success,
         result: result.success ? {
           formattedText: formattedResult,
@@ -604,6 +552,50 @@ export async function executeToolCallWithContext(
       };
     }
 
+    // Handle self_inventory (character introspection)
+    if (toolCall.name === 'self_inventory') {
+      if (!characterId) {
+        return {
+          toolName: 'self_inventory',
+          success: false,
+          result: null,
+          error: 'self_inventory requires a character context',
+        };
+      }
+
+      const selfInventoryContext: SelfInventoryToolContext = {
+        userId,
+        chatId,
+        characterId,
+        callingParticipantId: context.callingParticipantId,
+        loadedMemories: context.loadedMemories,
+      };
+
+      const result = await executeSelfInventoryTool(toolCall.arguments, selfInventoryContext);
+      const formattedResult = formatSelfInventoryResults(result);
+
+      return {
+        toolName: 'self_inventory',
+        success: result.success,
+        result: result.success
+          ? {
+              formattedText: formattedResult,
+              quilltapVersion: result.quilltapVersion,
+              characterId: result.characterId,
+              characterName: result.characterName,
+              vault: result.vault,
+              vaultAccess: result.vaultAccess,
+              memory: result.memory,
+              loadedMemories: result.loadedMemories,
+              chats: result.chats,
+              prompt: result.prompt,
+              lastTurn: result.lastTurn,
+            }
+          : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
     // Handle state (persistent state management)
     if (toolCall.name === 'state') {
       // Execute state tool
@@ -708,6 +700,144 @@ export async function executeToolCallWithContext(
       };
     }
 
+    // Handle read_conversation (Scriptorium)
+    if (toolCall.name === 'read_conversation') {
+      const readContext: ReadConversationToolContext = {
+        userId,
+        chatId,
+        characterId,
+      };
+
+      const result = await executeReadConversationTool(toolCall.arguments, readContext);
+      const formattedResult = formatReadConversationResults(result);
+
+      return {
+        toolName: 'read_conversation',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          messageCount: result.messageCount,
+          interchangeCount: result.interchangeCount,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle upsert_annotation (Scriptorium)
+    if (toolCall.name === 'upsert_annotation') {
+      // Resolve character name from calling participant
+      let characterName = 'Unknown';
+      if (context.callingParticipantId) {
+        const repos = getRepositories();
+        const chat = await repos.chats.findById(chatId);
+        if (chat) {
+          const participant = chat.participants.find(p => p.id === context.callingParticipantId);
+          if (participant?.characterId) {
+            const character = await repos.characters.findById(participant.characterId);
+            if (character) {
+              characterName = character.name;
+            }
+          }
+        }
+      }
+
+      const annotationContext: UpsertAnnotationToolContext = {
+        userId,
+        chatId,
+        characterName,
+      };
+
+      const result = await executeUpsertAnnotationTool(toolCall.arguments, annotationContext);
+      const formattedResult = formatUpsertAnnotationResults(result);
+
+      return {
+        toolName: 'upsert_annotation',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          message_index: result.message_index,
+          character_name: result.character_name,
+          action: result.action,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle delete_annotation (Scriptorium)
+    if (toolCall.name === 'delete_annotation') {
+      // Resolve character name from calling participant (same as upsert)
+      let characterName = 'Unknown';
+      if (context.callingParticipantId) {
+        const repos = getRepositories();
+        const chat = await repos.chats.findById(chatId);
+        if (chat) {
+          const participant = chat.participants.find(p => p.id === context.callingParticipantId);
+          if (participant?.characterId) {
+            const character = await repos.characters.findById(participant.characterId);
+            if (character) {
+              characterName = character.name;
+            }
+          }
+        }
+      }
+
+      const deleteContext: DeleteAnnotationToolContext = {
+        userId,
+        chatId,
+        characterName,
+      };
+
+      const result = await executeDeleteAnnotationTool(toolCall.arguments, deleteContext);
+      const formattedResult = formatDeleteAnnotationResults(result);
+
+      return {
+        toolName: 'delete_annotation',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          message_index: result.message_index,
+          character_name: result.character_name,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle search (Scriptorium unified search)
+    if (toolCall.name === 'search') {
+      if (!characterId) {
+        return {
+          toolName: 'search',
+          success: false,
+          result: null,
+          error: 'Search requires a character context',
+        };
+      }
+
+      const searchContext: SearchScriptoriumToolContext = {
+        userId,
+        characterId,
+        embeddingProfileId,
+      };
+
+      const result = await executeSearchScriptoriumTool(toolCall.arguments, searchContext);
+
+      const formattedResult = result.success && result.results
+        ? formatSearchScriptoriumResults(result.results)
+        : result.error || 'No results found';
+
+      return {
+        toolName: 'search',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          results: result.results,
+          totalFound: result.totalFound,
+          query: result.query,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
     // Handle submit_final_response (agent mode completion)
     if (toolCall.name === 'submit_final_response') {
       // Execute submit final response tool
@@ -805,6 +935,28 @@ export async function executeToolCallWithContext(
         result: result.success ? {
           formattedText: formatShellResults(result),
           ...result.result,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle document editing tools (Scriptorium Phase 3.3)
+    if (isDocEditTool(toolCall.name)) {
+      const docEditContext: DocEditToolContext = {
+        userId,
+        chatId,
+        projectId: context.projectId,
+        characterId,
+      };
+
+      const result = await executeDocEditTool(toolCall.name, toolCall.arguments, docEditContext);
+
+      return {
+        toolName: toolCall.name,
+        success: result.success,
+        result: result.success ? {
+          formattedText: formatDocEditResults(toolCall.name, result),
+          ...(result.result && typeof result.result === 'object' ? result.result as Record<string, unknown> : {}),
         } : null,
         error: result.success ? undefined : result.error,
       };

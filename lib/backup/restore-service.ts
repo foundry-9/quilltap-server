@@ -19,7 +19,7 @@ import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
-import { getNpmPluginsDir } from '@/lib/paths';
+import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
 import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { UuidRemapper } from './uuid-remapper';
 import type {
@@ -38,7 +38,6 @@ import type {
   EmbeddingProfile,
   Memory,
   FileEntry,
-  FileWritePermission,
   Folder,
   ChatParticipantBase,
   PhysicalDescription,
@@ -49,6 +48,8 @@ import type {
   Project,
   LLMLog,
   PluginConfig,
+  CharacterPluginData,
+  ConversationAnnotation,
 } from '@/lib/schemas/types';
 import type { WardrobeItem, OutfitPreset } from '@/lib/schemas/wardrobe.types';
 
@@ -161,13 +162,14 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const pluginConfigs = await readJsonFileOptional<PluginConfig[]>(rootPath, 'data/plugin-configs.json', []);
     // Chat settings are optional for backwards compatibility with older backups
     const chatSettings = await readJsonFileOptional<ChatSettings[]>(rootPath, 'data/chat-settings.json', []);
-    // File write permissions are optional for backwards compatibility with older backups
-    const filePermissions = await readJsonFileOptional<FileWritePermission[]>(rootPath, 'data/file-permissions.json', []);
     // Folders are optional for backwards compatibility with older backups
     const folders = await readJsonFileOptional<Folder[]>(rootPath, 'data/folders.json', []);
     // Wardrobe items and outfit presets are optional for backwards compatibility
     const wardrobeItems = await readJsonFileOptional<WardrobeItem[]>(rootPath, 'data/wardrobe-items.json', []);
     const outfitPresets = await readJsonFileOptional<OutfitPreset[]>(rootPath, 'data/outfit-presets.json', []);
+    // Character plugin data and conversation annotations are optional for backwards compatibility
+    const characterPluginData = await readJsonFileOptional<CharacterPluginData[]>(rootPath, 'data/character-plugin-data.json', []);
+    const conversationAnnotations = await readJsonFileOptional<ConversationAnnotation[]>(rootPath, 'data/conversation-annotations.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
@@ -192,10 +194,11 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       llmLogs,
       pluginConfigs,
       chatSettings,
-      filePermissions,
       folders,
       wardrobeItems,
       outfitPresets,
+      characterPluginData,
+      conversationAnnotations,
     };
 
     return { data, extractDir, rootFolder };
@@ -290,11 +293,13 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       llmLogs: data.llmLogs.length,
       pluginConfigs: data.pluginConfigs?.length || 0,
       chatSettings: data.chatSettings?.length || 0,
-      filePermissions: data.filePermissions?.length || 0,
       folders: data.folders?.length || 0,
       wardrobeItems: data.wardrobeItems?.length || 0,
       outfitPresets: data.outfitPresets?.length || 0,
       npmPlugins: npmPluginCount,
+      characterPluginData: data.characterPluginData?.length || 0,
+      conversationAnnotations: data.conversationAnnotations?.length || 0,
+      userInstalledThemes: 0, // Counted after zip extraction; not shown in preview
       warnings: [],
     };
   } finally {
@@ -313,7 +318,7 @@ async function deleteUserData(userId: string): Promise<void> {
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, filePermissions, folders, wardrobeItems, outfitPresets] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, folders, wardrobeItems, outfitPresets] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -327,7 +332,6 @@ async function deleteUserData(userId: string): Promise<void> {
       repos.projects.findAll(),
       repos.llmLogs.findAll(10000), // High limit to get all user logs
       globalRepos.chatSettings.findByUserId(userId),
-      globalRepos.filePermissions.findByUserId(userId),
       globalRepos.folders.findByUserId(userId),
       globalRepos.wardrobe.findAll(),
       globalRepos.outfitPresets.findAll(),
@@ -354,7 +358,6 @@ async function deleteUserData(userId: string): Promise<void> {
     ...projects.map((p) => repos.projects.delete(p.id)),
     ...llmLogs.map((log) => repos.llmLogs.delete(log.id)),
     ...(chatSettings ? [globalRepos.chatSettings.delete(chatSettings.id)] : []),
-    ...filePermissions.map((fp) => globalRepos.filePermissions.delete(fp.id)),
     ...folders.map((f) => globalRepos.folders.delete(f.id)),
     ...wardrobeItems.map((w) => globalRepos.wardrobe.delete(w.id)),
     ...outfitPresets.map((o) => globalRepos.outfitPresets.delete(o.id)),
@@ -390,7 +393,6 @@ async function deleteUserData(userId: string): Promise<void> {
       projects: projects.length,
       llmLogs: llmLogs.length,
       chatSettings: chatSettings ? 1 : 0,
-      filePermissions: filePermissions.length,
       folders: folders.length,
       wardrobeItems: wardrobeItems.length,
       outfitPresets: outfitPresets.length,
@@ -762,7 +764,6 @@ function remapBackupData(
         ...remapped.cheapLLMSettings,
         ...(remapped.cheapLLMSettings.userDefinedProfileId ? { userDefinedProfileId: remapper.remap(remapped.cheapLLMSettings.userDefinedProfileId) } : {}),
         ...(remapped.cheapLLMSettings.defaultCheapProfileId ? { defaultCheapProfileId: remapper.remap(remapped.cheapLLMSettings.defaultCheapProfileId) } : {}),
-        ...(remapped.cheapLLMSettings.embeddingProfileId ? { embeddingProfileId: remapper.remap(remapped.cheapLLMSettings.embeddingProfileId) } : {}),
         ...(remapped.cheapLLMSettings.imagePromptProfileId ? { imagePromptProfileId: remapper.remap(remapped.cheapLLMSettings.imagePromptProfileId) } : {}),
       };
     }
@@ -783,12 +784,6 @@ function remapBackupData(
     }
     return remapped as ChatSettings;
   });
-
-  // Remap file write permissions
-  const remappedFilePermissions = (data.filePermissions || []).map((perm) => ({
-    ...remapper.remapFields(perm, ['id', 'fileId', 'projectId', 'grantedInChatId']),
-    userId: targetUserId,
-  })) as FileWritePermission[];
 
   // Remap folders
   const remappedFolders = (data.folders || []).map((folder) => ({
@@ -832,10 +827,15 @@ function remapBackupData(
     llmLogs: remappedLLMLogs,
     pluginConfigs: remappedPluginConfigs,
     chatSettings: remappedChatSettings,
-    filePermissions: remappedFilePermissions,
     folders: remappedFolders,
     wardrobeItems: remappedWardrobeItems,
     outfitPresets: remappedOutfitPresets,
+    characterPluginData: (data.characterPluginData || []).map((cpd) => ({
+      ...remapper.remapFields(cpd, ['id', 'characterId']),
+    })) as CharacterPluginData[],
+    conversationAnnotations: (data.conversationAnnotations || []).map((annotation) => ({
+      ...remapper.remapFields(annotation, ['id', 'chatId', 'sourceMessageId']),
+    })) as ConversationAnnotation[],
   };
 }
 
@@ -1121,20 +1121,7 @@ export async function restore(
       }
     }
 
-    // 17. File Write Permissions
-    let filePermissionsRestored = 0;
-    for (const permission of data.filePermissions || []) {
-      try {
-        const { id, createdAt, updatedAt, ...permData } = permission;
-        await globalRepos.filePermissions.create(permData, { id });
-        filePermissionsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore file permission: ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore file permission', { permissionId: permission.id, error });
-      }
-    }
-
-    // 18. Folders
+    // 17. Folders
     let foldersRestored = 0;
     for (const folder of data.folders || []) {
       try {
@@ -1173,7 +1160,33 @@ export async function restore(
       }
     }
 
-    // 21. NPM Plugins (copy from extracted dir to plugins/npm directory)
+    // 21. Character Plugin Data (depends on characters)
+    let characterPluginDataRestored = 0;
+    for (const cpd of data.characterPluginData || []) {
+      try {
+        const { id, createdAt, updatedAt, ...cpdData } = cpd;
+        await globalRepos.characterPluginData.create(cpdData, { id: cpd.id });
+        characterPluginDataRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore character plugin data for plugin "${cpd.pluginName}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore character plugin data', { cpdId: cpd.id, pluginName: cpd.pluginName, error });
+      }
+    }
+
+    // 22. Conversation Annotations (depends on chats)
+    let conversationAnnotationsRestored = 0;
+    for (const annotation of data.conversationAnnotations || []) {
+      try {
+        const { id, createdAt, updatedAt, ...annotationData } = annotation;
+        await globalRepos.conversationAnnotations.create(annotationData, { id: annotation.id });
+        conversationAnnotationsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore conversation annotation: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore conversation annotation', { annotationId: annotation.id, error });
+      }
+    }
+
+    // 23. NPM Plugins (copy from extracted dir to plugins/npm directory)
     let npmPluginsRestored = 0;
     const npmPluginsSrcDir = path.join(rootPath, 'plugins', 'npm');
 
@@ -1210,6 +1223,50 @@ export async function restore(
       moduleLogger.debug('No npm plugins directory in backup');
     }
 
+    // 24. User-installed theme bundles (copy from extracted dir to themes directory)
+    let userInstalledThemesRestored = 0;
+    const themesSrcDir = path.join(rootPath, 'themes');
+
+    try {
+      const themeEntries = await fs.promises.readdir(themesSrcDir, { withFileTypes: true });
+      const themesDir = getThemesDir();
+
+      // Ensure the themes directory exists
+      await fs.promises.mkdir(themesDir, { recursive: true });
+
+      for (const entry of themeEntries) {
+        if (entry.isDirectory() && entry.name !== '.cache') {
+          try {
+            const srcPath = path.join(themesSrcDir, entry.name);
+            const destPath = path.join(themesDir, entry.name);
+            await fs.promises.cp(srcPath, destPath, { recursive: true, force: true });
+            userInstalledThemesRestored++;
+            moduleLogger.debug('Restored theme bundle', { themeId: entry.name });
+          } catch (error) {
+            warnings.push(`Failed to restore theme bundle "${entry.name}": ${error instanceof Error ? error.message : String(error)}`);
+            moduleLogger.warn('Failed to restore theme bundle', { themeId: entry.name, error });
+          }
+        } else if (entry.isFile() && entry.name === 'themes-index.json') {
+          // Restore the themes index file
+          try {
+            const themesDir2 = getThemesDir();
+            await fs.promises.cp(path.join(themesSrcDir, 'themes-index.json'), path.join(themesDir2, 'themes-index.json'), { force: true });
+          } catch (error) {
+            moduleLogger.warn('Failed to restore themes-index.json', { error });
+          }
+        }
+      }
+
+      if (userInstalledThemesRestored > 0) {
+        moduleLogger.info('Restored user-installed theme bundles', {
+          count: userInstalledThemesRestored,
+        });
+      }
+    } catch {
+      // No themes directory in the backup — that's fine
+      moduleLogger.debug('No themes directory in backup');
+    }
+
     moduleLogger.info('All entities restored with preserved IDs - no reconciliation needed');
 
     const summary: RestoreSummary = {
@@ -1233,11 +1290,13 @@ export async function restore(
       llmLogs: llmLogsRestored,
       pluginConfigs: pluginConfigsRestored,
       chatSettings: chatSettingsRestored,
-      filePermissions: filePermissionsRestored,
       folders: foldersRestored,
       wardrobeItems: wardrobeItemsRestored,
       outfitPresets: outfitPresetsRestored,
       npmPlugins: npmPluginsRestored,
+      characterPluginData: characterPluginDataRestored,
+      conversationAnnotations: conversationAnnotationsRestored,
+      userInstalledThemes: userInstalledThemesRestored,
       warnings,
     };
 

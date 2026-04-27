@@ -1,22 +1,24 @@
 /**
  * Inter-Character Memory Extraction Job Handler
  *
- * Handles INTER_CHARACTER_MEMORY background jobs by extracting memories
- * that one character has learned about another character from their conversation.
+ * Handles INTER_CHARACTER_MEMORY background jobs. Delegates the actual work
+ * to processInterCharacterMemory in lib/memory/memory-processor so the
+ * inter-character path shares the Memory Gate's dedup, SKIP tiers, and rate
+ * limiting with the single-character path — previously this handler wrote
+ * memories directly, bypassing every gate improvement.
  */
 
-import { BackgroundJob } from '@/lib/schemas/types';
+import type { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { extractInterCharacterMemoryFromMessage } from '@/lib/memory/cheap-llm-tasks';
-import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
-import { resolveMaxTokens } from '@/lib/llm/model-context-data';
-import { logger } from '@/lib/logger';
+import {
+  processInterCharacterMemory,
+  type InterCharacterMemoryContext,
+} from '@/lib/memory/memory-processor';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import type { Pronouns } from '@/lib/schemas/character.types';
+import { logger } from '@/lib/logger';
 import type { InterCharacterMemoryPayload } from '../queue-service';
 
-/**
- * Handle an inter-character memory extraction job
- */
 export async function handleInterCharacterMemory(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as InterCharacterMemoryPayload;
   const repos = getRepositories();
@@ -33,104 +35,72 @@ export async function handleInterCharacterMemory(job: BackgroundJob): Promise<vo
     throw new Error(`Chat settings not found for user: ${job.userId}`);
   }
 
-  // Get available profiles for cheap LLM selection
+  // Get available profiles for user-defined strategy / uncensored fallback
   const availableProfiles = await repos.connections.findByUserId(job.userId);
 
-  // Convert settings to config (handle null -> undefined conversion)
-  const cheapLLMConfig: CheapLLMConfig = {
-    strategy: chatSettings.cheapLLMSettings.strategy,
-    userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId || undefined,
-    defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId || undefined,
-    fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
-  };
-
-  // Get cheap LLM selection
-  let cheapLLMSelection = getCheapLLMProvider(
-    connectionProfile,
-    cheapLLMConfig,
-    availableProfiles
-  );
-
-  // Load chat to check danger status
+  // Resolve dangerous-content settings so the processor's internal uncensored
+  // routing sees the same context the old inline handler used to.
+  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
   const chat = await repos.chats.findById(payload.chatId);
 
-  // For dangerous chats, use uncensored provider to avoid content refusals
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
-  if (chat?.isDangerousChat === true) {
-    cheapLLMSelection = resolveUncensoredCheapLLMSelection(
-      cheapLLMSelection,
-      true,
-      dangerSettings,
-      availableProfiles
-    );
-  }
-
-  // Build uncensored fallback options for empty-response retry
-  const uncensoredFallback = dangerSettings.mode !== 'OFF' ? {
-    dangerSettings,
+  const ctx: InterCharacterMemoryContext = {
+    observerCharacterId: payload.observerCharacterId,
+    observerCharacterName: payload.observerCharacterName,
+    observerCharacterPronouns: (payload.observerCharacterPronouns as Pronouns | null | undefined) ?? undefined,
+    observerMessage: payload.observerMessage,
+    subjectCharacterId: payload.subjectCharacterId,
+    subjectCharacterName: payload.subjectCharacterName,
+    subjectCharacterPronouns: (payload.subjectCharacterPronouns as Pronouns | null | undefined) ?? undefined,
+    subjectMessage: payload.subjectMessage,
+    chatId: payload.chatId,
+    sourceMessageId: payload.sourceMessageId,
+    userId: job.userId,
+    connectionProfile,
+    cheapLLMSettings: chatSettings.cheapLLMSettings,
     availableProfiles,
+    dangerSettings,
     isDangerousChat: chat?.isDangerousChat === true,
-  } : undefined;
+    memoryExtractionLimits: chatSettings.memoryExtractionLimits,
+  };
 
-  // Resolve max tokens for the cheap LLM profile
-  const resolvedMaxTokens = resolveMaxTokens(connectionProfile);
-
-  // Extract inter-character memories
-  const result = await extractInterCharacterMemoryFromMessage(
-    payload.observerCharacterName,
-    payload.observerMessage,
-    payload.subjectCharacterName,
-    payload.subjectMessage,
-    cheapLLMSelection,
-    job.userId,
-    uncensoredFallback,
-    payload.chatId,
-    undefined, // observerPronouns
-    undefined, // subjectPronouns
-    resolvedMaxTokens
-  );
+  const result = await processInterCharacterMemory(ctx);
 
   if (!result.success) {
-    logger.warn('[InterCharacterMemory] Extraction failed', {
+    logger.warn('[InterCharacterMemory] Processing did not succeed', {
       jobId: job.id,
       chatId: payload.chatId,
+      observerCharacterId: payload.observerCharacterId,
+      subjectCharacterId: payload.subjectCharacterId,
       error: result.error,
     });
     return;
   }
 
-  // If nothing significant was found, we're done
-  const candidates = result.result || [];
-  if (candidates.length === 0) {
-    return;
-  }
-
-  // Create memories for each significant candidate
-  // Inter-character memories are stored on the observer character about the subject character
-  for (const candidate of candidates) {
-    const importance = candidate.importance || 0.5;
-    const memory = await repos.memories.create({
-      characterId: payload.observerCharacterId,
-      content: candidate.content || '',
-      summary: candidate.summary || '',
-      keywords: candidate.keywords || [],
-      tags: [],
-      importance,
-      source: 'AUTO',
-      chatId: payload.chatId,
-      sourceMessageId: payload.sourceMessageId,
-      aboutCharacterId: payload.subjectCharacterId,
-      reinforcementCount: 1,
-      relatedMemoryIds: [],
-      reinforcedImportance: importance,
-    });
-
-    logger.info('[InterCharacterMemory] Memory created', {
+  if (result.memoryCreated) {
+    logger.info('[InterCharacterMemory] Memories created', {
       jobId: job.id,
-      memoryId: memory.id,
+      memoryIds: result.memoryIds,
+      count: result.memoryIds.length,
+      chatId: payload.chatId,
+      observerCharacterId: payload.observerCharacterId,
+      subjectCharacterId: payload.subjectCharacterId,
+      relatedMemoryIds: result.relatedMemoryIds,
+    });
+  } else if (result.memoryReinforced) {
+    logger.info('[InterCharacterMemory] Memories reinforced', {
+      jobId: job.id,
+      reinforcedMemoryIds: result.reinforcedMemoryIds,
+      count: result.reinforcedMemoryIds.length,
       chatId: payload.chatId,
       observerCharacterId: payload.observerCharacterId,
       subjectCharacterId: payload.subjectCharacterId,
     });
   }
+
+  // Note: debug logs from the processor are not persisted here. The
+  // single-character handler overwrites message.debugMemoryLogs on each run,
+  // which would race with this handler when multiple observers extract from
+  // the same source message. Preserving the pre-refactor behaviour of not
+  // persisting inter-character debug logs at all is intentional until a
+  // proper append/merge path exists.
 }

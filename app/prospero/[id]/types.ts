@@ -59,6 +59,14 @@ export interface ProjectFile {
   size: number
   category: string
   createdAt: string
+  /**
+   * Set when the file comes from the project's linked Scriptorium store
+   * instead of the legacy files table. Thumbnails and preview URLs for
+   * these files go through the mount-point blob endpoint rather than
+   * /api/v1/files/{id}.
+   */
+  mountPointId?: string
+  relativePath?: string
 }
 
 export type BackgroundDisplayMode = 'latest_chat' | 'project' | 'static' | 'theme'
@@ -72,6 +80,7 @@ export interface Project {
   defaultAgentModeEnabled?: boolean | null
   defaultAvatarGenerationEnabled?: boolean | null
   defaultImageProfileId?: string | null
+  defaultAlertCharactersOfLanternImages?: boolean | null
   color?: string | null
   icon?: string | null
   characterRoster: ProjectCharacter[]

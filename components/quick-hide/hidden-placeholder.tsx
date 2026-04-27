@@ -22,7 +22,7 @@ export function HiddenPlaceholder({ label }: HiddenPlaceholderProps) {
           />
         </svg>
         <div>
-          <p className="text-lg font-semibold text-foreground">Hidden</p>
+          <p className="qt-heading-4 text-foreground">Hidden</p>
           {label && (
             <p className="text-sm qt-text-secondary">
               {label}

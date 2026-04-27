@@ -1,19 +1,20 @@
 /**
  * Unit tests for Help Search Handler
  * Tests lib/tools/handlers/help-search-handler.ts
+ *
+ * The handler uses a DB-backed help search system:
+ * - generateEmbeddingForUser() for semantic search (uses user's embedding profile)
+ * - Falls back to keyword search when embedding fails
+ * - Loads help docs via helpSearch.loadFromDatabase()
+ *
+ * Mock strategy:
+ * - @/lib/repositories/factory is mocked globally by jest.setup.ts
+ * - @/lib/embedding/embedding-service is mocked globally by jest.setup.ts
+ * - @/lib/help/help-doc-sync is mocked in this file
+ * - All mocks are configured per-test in beforeEach via jest.Mock casting
  */
 
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals'
-import { gzipSync } from 'node:zlib'
-import { encode } from '@msgpack/msgpack'
-import type { HelpBundle } from '@/lib/help-search.types'
-
-// Mock fetch globally
-const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>
-global.fetch = mockFetch
-
-// Store original env
-const originalEnv = process.env
 
 // Mock the logger
 jest.mock('@/lib/logger', () => ({
@@ -31,59 +32,46 @@ jest.mock('@/lib/logger', () => ({
   },
 }))
 
-// Create a mock readFile function that we can control
-const mockReadFile = jest.fn()
-
-// Mock fs/promises - need to do this before importing the handler
-jest.mock('node:fs/promises', () => ({
-  readFile: (...args: unknown[]) => mockReadFile(...args),
+// Mock help-doc-sync
+jest.mock('@/lib/help/help-doc-sync', () => ({
+  ensureHelpDocsSynced: jest.fn().mockResolvedValue(undefined),
 }))
 
+// Note: @/lib/embedding/embedding-service is mocked globally by jest.setup.ts.
+// We configure the mock behavior in beforeEach via the imported jest.Mock references.
+
+// Import handler (which uses the mocked modules)
 import {
   HelpSearchError,
   executeHelpSearchTool,
   formatHelpSearchResults,
   type HelpSearchToolContext,
 } from '@/lib/tools/handlers/help-search-handler'
-import { HelpSearchResult } from '@/lib/tools/help-search-tool'
+import type { HelpSearchResult } from '@/lib/tools/help-search-tool'
 import { resetHelpSearch } from '@/lib/help-search'
 
-/**
- * Create a test bundle with sample documents
- */
-function createTestBundle(documentCount: number = 3, dimensions: number = 1536): HelpBundle {
-  const documents = []
-  for (let i = 0; i < documentCount; i++) {
-    // Create embeddings with different patterns for testing
-    const embedding = new Array(dimensions).fill(0.1)
-    embedding[i] = 1 // Make each document distinguishable
+// Import mocked modules — these are jest.fn() instances from jest.setup.ts
+import { getRepositories } from '@/lib/repositories/factory'
+import {
+  generateEmbeddingForUser,
+  extractSearchTerms,
+  textSimilarity,
+  cosineSimilarity,
+} from '@/lib/embedding/embedding-service'
 
-    documents.push({
-      id: `doc-${i}`,
-      title: `Help Document ${i}`,
-      path: `help/doc-${i}.md`,
-      url: `/test/doc-${i}`,
-      content: `This is the content of help document ${i}. It contains helpful information about topic ${i} and embedding profiles configuration.`,
-      embedding,
-    })
-  }
+// Cast to jest.Mock for type-safe mock method access
+const mockedGetRepositories = getRepositories as jest.Mock
+const mockedGenerateEmbeddingForUser = generateEmbeddingForUser as jest.Mock
+const mockedExtractSearchTerms = extractSearchTerms as jest.Mock
+const mockedTextSimilarity = textSimilarity as jest.Mock
+const mockedCosineSimilarity = cosineSimilarity as jest.Mock
 
-  return {
-    version: '2.0.0',
-    generated: new Date().toISOString(),
-    embeddingModel: 'text-embedding-3-small',
-    embeddingDimensions: dimensions,
-    documents,
-  }
-}
-
-/**
- * Compress a bundle to the expected format
- */
-function compressBundle(bundle: HelpBundle): Buffer {
-  const encoded = encode(bundle)
-  return gzipSync(Buffer.from(encoded))
-}
+// Test help doc data
+const mockHelpDocs = [
+  { id: 'doc-0', title: 'Help Document 0', path: 'help/doc-0.md', url: '/test/doc-0', content: 'This is the content of help document 0. It contains helpful information about topic 0 and embedding profiles configuration.', contentHash: 'h0', embedding: [1, 0, 0, 0], createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+  { id: 'doc-1', title: 'Help Document 1', path: 'help/doc-1.md', url: '/test/doc-1', content: 'This is the content of help document 1. It contains helpful information about topic 1 and embedding profiles configuration.', contentHash: 'h1', embedding: [0, 1, 0, 0], createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+  { id: 'doc-2', title: 'Help Document 2', path: 'help/doc-2.md', url: '/test/doc-2', content: 'This is the content of help document 2. It contains helpful information about topic 2 and embedding profiles configuration.', contentHash: 'h2', embedding: [0, 0, 1, 0], createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+]
 
 describe('HelpSearchError', () => {
   it('should create an error with message and code', () => {
@@ -119,14 +107,45 @@ describe('HelpSearchError', () => {
 
 describe('executeHelpSearchTool', () => {
   beforeEach(() => {
-    mockFetch.mockReset()
-    mockReadFile.mockReset()
     resetHelpSearch()
-    process.env = { ...originalEnv }
+
+    // Configure getRepositories mock
+    mockedGetRepositories.mockReturnValue({
+      helpDocs: {
+        findAll: jest.fn().mockResolvedValue(mockHelpDocs),
+        findAllWithEmbeddings: jest.fn().mockResolvedValue(mockHelpDocs),
+      },
+    })
+
+    // Configure embedding service mocks
+    mockedGenerateEmbeddingForUser.mockReset()
+    mockedGenerateEmbeddingForUser.mockResolvedValue({
+      embedding: [1, 0, 0, 0],
+      model: 'test-model',
+      dimensions: 4,
+      provider: 'TEST',
+    })
+
+    mockedExtractSearchTerms.mockReset()
+    mockedExtractSearchTerms.mockImplementation((query: string) => {
+      const words = query.toLowerCase().split(/\s+/).filter((w: string) => w.length > 2)
+      return { terms: words, phrases: [] }
+    })
+
+    mockedTextSimilarity.mockReset()
+    mockedTextSimilarity.mockReturnValue(0.5)
+
+    mockedCosineSimilarity.mockReset()
+    mockedCosineSimilarity.mockImplementation((a: number[], b: number[]) => {
+      let sum = 0
+      for (let i = 0; i < a.length && i < b.length; i++) {
+        sum += a[i] * b[i]
+      }
+      return sum
+    })
   })
 
   afterEach(() => {
-    process.env = originalEnv
     resetHelpSearch()
   })
 
@@ -236,35 +255,9 @@ describe('executeHelpSearchTool', () => {
     })
   })
 
-  describe('bundle loading', () => {
-    it('should return error when bundle file is missing and not loaded', async () => {
-      // Reset the singleton to clear any cached bundle
-      resetHelpSearch()
-      mockReadFile.mockRejectedValueOnce(new Error('ENOENT: no such file'))
-
-      const input = { query: 'test query' }
-      const context: HelpSearchToolContext = { userId: 'user-123' }
-
-      const result = await executeHelpSearchTool(input, context)
-
-      // The mock should be called - if the actual file exists, it may still succeed
-      // In that case, the test verifies the mock was properly configured
-      if (!result.success) {
-        expect(result.error).toContain('npm run build:help')
-      } else {
-        // If it succeeded, the actual file was read instead of the mock
-        // This is acceptable behavior in the test environment
-        expect(result.results).toBeDefined()
-      }
-    })
-  })
-
   describe('keyword fallback search', () => {
-    it('should use keyword search when no OPENAI_API_KEY is set', async () => {
-      delete process.env.OPENAI_API_KEY
-
-      const bundle = createTestBundle(3, 1536)
-      mockReadFile.mockResolvedValueOnce(compressBundle(bundle))
+    it('should use keyword search when generateEmbeddingForUser throws', async () => {
+      mockedGenerateEmbeddingForUser.mockRejectedValueOnce(new Error('No embedding profile configured'))
 
       const input = { query: 'embedding profiles configuration' }
       const context: HelpSearchToolContext = { userId: 'user-123' }
@@ -274,71 +267,39 @@ describe('executeHelpSearchTool', () => {
       expect(result.success).toBe(true)
       expect(result.results).toBeDefined()
       expect(Array.isArray(result.results)).toBe(true)
-      // No OpenAI API call should have been made
-      expect(mockFetch).not.toHaveBeenCalled()
+      // Should have called extractSearchTerms for keyword fallback
+      expect(mockedExtractSearchTerms).toHaveBeenCalled()
     })
 
     it('should return results matching keywords', async () => {
-      delete process.env.OPENAI_API_KEY
+      mockedGenerateEmbeddingForUser.mockRejectedValueOnce(new Error('No embedding profile'))
 
-      const bundle = createTestBundle(3, 1536)
-      mockReadFile.mockResolvedValueOnce(compressBundle(bundle))
-
-      const input = { query: 'document 0' }
+      const input = { query: 'document topic' }
       const context: HelpSearchToolContext = { userId: 'user-keyword' }
 
       const result = await executeHelpSearchTool(input, context)
 
       expect(result.success).toBe(true)
       expect(result.results).toBeDefined()
+      expect(mockedTextSimilarity).toHaveBeenCalled()
     })
   })
 
-  describe('semantic search with OpenAI', () => {
-    it('should use semantic search when OPENAI_API_KEY is set', async () => {
-      process.env.OPENAI_API_KEY = 'test-api-key'
-
-      const bundle = createTestBundle(3, 1536)
-      mockReadFile.mockResolvedValueOnce(compressBundle(bundle))
-
-      // Mock successful embedding response
-      const mockEmbedding = new Array(1536).fill(0.1)
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: [{ embedding: mockEmbedding }],
-        }),
-      } as Response)
-
+  describe('semantic search', () => {
+    it('should use semantic search when generateEmbeddingForUser succeeds', async () => {
       const input = { query: 'embedding profiles' }
       const context: HelpSearchToolContext = { userId: 'user-semantic' }
 
       const result = await executeHelpSearchTool(input, context)
 
       expect(result.success).toBe(true)
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.openai.com/v1/embeddings',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer test-api-key',
-          }),
-        })
-      )
+      expect(mockedGenerateEmbeddingForUser).toHaveBeenCalledWith('embedding profiles', 'user-semantic')
+      // cosineSimilarity is used in the search path
+      expect(mockedCosineSimilarity).toHaveBeenCalled()
     })
 
-    it('should fall back to keyword search on API error', async () => {
-      process.env.OPENAI_API_KEY = 'test-api-key'
-
-      const bundle = createTestBundle(3, 1536)
-      mockReadFile.mockResolvedValueOnce(compressBundle(bundle))
-
-      // Mock failed embedding response
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        statusText: 'Unauthorized',
-        json: async () => ({ error: { message: 'Invalid API key' } }),
-      } as Response)
+    it('should fall back to keyword search on embedding API error', async () => {
+      mockedGenerateEmbeddingForUser.mockRejectedValueOnce(new Error('API rate limit exceeded'))
 
       const input = { query: 'embedding profiles configuration' }
       const context: HelpSearchToolContext = { userId: 'user-fallback' }
@@ -348,16 +309,11 @@ describe('executeHelpSearchTool', () => {
       // Should still succeed using keyword fallback
       expect(result.success).toBe(true)
       expect(result.results).toBeDefined()
+      expect(mockedExtractSearchTerms).toHaveBeenCalled()
     })
 
     it('should fall back to keyword search on network error', async () => {
-      process.env.OPENAI_API_KEY = 'test-api-key'
-
-      const bundle = createTestBundle(3, 1536)
-      mockReadFile.mockResolvedValueOnce(compressBundle(bundle))
-
-      // Mock network error
-      mockFetch.mockRejectedValueOnce(new Error('Network error'))
+      mockedGenerateEmbeddingForUser.mockRejectedValueOnce(new Error('Network error'))
 
       const input = { query: 'embedding profiles' }
       const context: HelpSearchToolContext = { userId: 'user-network-error' }
@@ -367,16 +323,12 @@ describe('executeHelpSearchTool', () => {
       // Should still succeed using keyword fallback
       expect(result.success).toBe(true)
       expect(result.results).toBeDefined()
+      expect(mockedExtractSearchTerms).toHaveBeenCalled()
     })
   })
 
   describe('result limiting', () => {
     it('should use default limit of 3', async () => {
-      delete process.env.OPENAI_API_KEY
-
-      const bundle = createTestBundle(10, 1536)
-      mockReadFile.mockResolvedValueOnce(compressBundle(bundle))
-
       const input = { query: 'document' }
       const context: HelpSearchToolContext = { userId: 'user-default-limit' }
 
@@ -389,41 +341,31 @@ describe('executeHelpSearchTool', () => {
     })
 
     it('should respect custom limit', async () => {
-      delete process.env.OPENAI_API_KEY
-
-      const bundle = createTestBundle(10, 1536)
-      mockReadFile.mockResolvedValueOnce(compressBundle(bundle))
-
-      const input = { query: 'document', limit: 5 }
+      const input = { query: 'document', limit: 2 }
       const context: HelpSearchToolContext = { userId: 'user-custom-limit' }
 
       const result = await executeHelpSearchTool(input, context)
 
       expect(result.success).toBe(true)
       expect(result.results).toBeDefined()
-      expect(result.results!.length).toBeLessThanOrEqual(5)
+      expect(result.results!.length).toBeLessThanOrEqual(2)
     })
   })
 
   describe('error handling', () => {
     it('should handle unexpected errors gracefully', async () => {
-      // Reset the singleton to clear any cached bundle
-      resetHelpSearch()
-      mockReadFile.mockRejectedValueOnce(new Error('Unexpected error'))
+      // Make both semantic and keyword search fail
+      mockedGenerateEmbeddingForUser.mockRejectedValueOnce(new Error('Embedding failed'))
+      mockedExtractSearchTerms.mockImplementationOnce(() => { throw new Error('Unexpected error') })
 
       const input = { query: 'test query' }
       const context: HelpSearchToolContext = { userId: 'user-error' }
 
       const result = await executeHelpSearchTool(input, context)
 
-      // The mock should be called - if the actual file exists, it may still succeed
-      if (!result.success) {
-        expect(result.error).toBeDefined()
-        expect(result.query).toBe('test query')
-      } else {
-        // If it succeeded, the actual file was read instead of the mock
-        expect(result.results).toBeDefined()
-      }
+      expect(result.success).toBe(false)
+      expect(result.error).toBeDefined()
+      expect(result.query).toBe('test query')
     })
   })
 })

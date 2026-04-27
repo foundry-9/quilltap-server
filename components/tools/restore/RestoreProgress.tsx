@@ -20,7 +20,7 @@ function PreviewCard({
 }) {
   return (
     <div className="qt-bg-muted p-4 rounded-lg">
-      <p className="text-2xl font-bold text-foreground">{value}</p>
+      <p className="qt-heading-2 text-foreground">{value}</p>
       <p className="qt-text-xs mt-1">{label}</p>
     </div>
   )
@@ -91,7 +91,7 @@ export function RestoreProgress({
     return (
       <div className="space-y-4">
         <div className="qt-bg-success/20 border qt-border-success/30 rounded-lg p-4">
-          <p className="text-sm font-medium qt-text-success">
+          <p className="qt-label qt-text-success">
             Backup restored successfully!
           </p>
         </div>
@@ -110,7 +110,7 @@ export function RestoreProgress({
         {/* Warnings */}
         {restoreSummary.warnings && restoreSummary.warnings.length > 0 && (
           <div className="qt-bg-warning/20 border qt-border-warning/30 rounded-lg p-4">
-            <p className="text-sm font-medium qt-text-warning mb-2">
+            <p className="qt-label qt-text-warning mb-2">
               Warnings ({restoreSummary.warnings.length}):
             </p>
             <ul className="text-sm qt-text-warning space-y-1 max-h-40 overflow-y-auto">

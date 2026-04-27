@@ -110,6 +110,8 @@ export default function FileBrowserGrid({
               alt={file.originalFilename || file.filename || 'File'}
               size={thumbnailSize}
               className="rounded-lg flex-shrink-0"
+              mountPointId={file.mountPointId}
+              relativePath={file.relativePath}
             />
 
             {/* Filename - hard wrapped */}

@@ -8,7 +8,9 @@
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
+import { getVectorStoreManager } from '@/lib/embedding/vector-store';
+import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-indices.repository';
+import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { logger } from '@/lib/logger';
 import type { EmbeddingGeneratePayload } from '../queue-service';
 
@@ -19,7 +21,19 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
   const payload = job.payload as unknown as EmbeddingGeneratePayload;
   const repos = getRepositories();
 
-  // Currently only MEMORY is supported
+  // Route to entity-specific handler
+  if (payload.entityType === 'HELP_DOC') {
+    return handleHelpDocEmbedding(job, payload, repos);
+  }
+
+  if (payload.entityType === 'CONVERSATION_CHUNK') {
+    return handleConversationChunkEmbedding(job, payload, repos);
+  }
+
+  if (payload.entityType === 'MOUNT_CHUNK') {
+    return handleMountChunkEmbedding(job, payload, repos);
+  }
+
   if (payload.entityType !== 'MEMORY') {
     throw new Error(`Unsupported entity type: ${payload.entityType}`);
   }
@@ -58,17 +72,26 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
       { embedding: embeddingResult.embedding }
     );
 
-    // Add to vector store
-    const vectorStore = await getCharacterVectorStore(memory.characterId);
-    if (vectorStore.hasVector(memory.id)) {
-      await vectorStore.updateVector(memory.id, embeddingResult.embedding);
+    // Write directly to the database instead of loading the full in-memory
+    // vector store. Loading the store for a character with thousands of entries
+    // (e.g. 12k+ vectors × 1536 dimensions) would consume hundreds of MB of
+    // heap just to insert one row.
+    const vectorRepo = getVectorIndicesRepository();
+    const exists = await vectorRepo.entryExists(memory.id);
+    if (exists) {
+      await vectorRepo.updateEntryEmbedding(memory.id, embeddingResult.embedding);
     } else {
-      await vectorStore.addVector(memory.id, embeddingResult.embedding, {
-        memoryId: memory.id,
+      await vectorRepo.addEntry({
+        id: memory.id,
         characterId: memory.characterId,
+        embedding: embeddingResult.embedding,
       });
     }
-    await vectorStore.save();
+    await vectorRepo.saveMeta(memory.characterId, embeddingResult.dimensions);
+
+    // Invalidate the cached in-memory store for this character so the next
+    // search operation reloads fresh data from the database.
+    getVectorStoreManager().unloadStore(memory.characterId);
 
     // Mark status as embedded
     await repos.embeddingStatus.markAsEmbedded(
@@ -99,6 +122,216 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
       context: 'handleEmbeddingGenerate',
       jobId: job.id,
       memoryId: payload.entityId,
+      error: errorMessage,
+    });
+
+    throw error;
+  }
+}
+
+/**
+ * Handle embedding generation for a conversation chunk (Scriptorium)
+ * Uses the same embedding infrastructure as memories but stores
+ * the embedding directly on the chunk row (Float32 BLOB, same format).
+ */
+async function handleConversationChunkEmbedding(
+  job: BackgroundJob,
+  payload: EmbeddingGeneratePayload,
+  repos: ReturnType<typeof getRepositories>
+): Promise<void> {
+  const chunk = await repos.conversationChunks.findById(payload.entityId);
+  if (!chunk) {
+    logger.warn('[EmbeddingGenerate] Conversation chunk not found', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: payload.entityId,
+      chatId: payload.chatId,
+    });
+    return;
+  }
+
+  try {
+    const embeddingResult = await generateEmbeddingForUser(
+      chunk.content,
+      job.userId,
+      payload.profileId
+    );
+
+    // Store embedding directly on the chunk (same Float32 BLOB format as memories)
+    await repos.conversationChunks.updateEmbedding(chunk.id, embeddingResult.embedding);
+
+    await repos.embeddingStatus.markAsEmbedded(
+      'CONVERSATION_CHUNK',
+      payload.entityId,
+      payload.profileId
+    );
+
+    logger.info('[EmbeddingGenerate] Conversation chunk embedding generated', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: chunk.id,
+      chatId: payload.chatId,
+      interchangeIndex: chunk.interchangeIndex,
+      dimensions: embeddingResult.dimensions,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    await repos.embeddingStatus.markAsFailed(
+      'CONVERSATION_CHUNK',
+      payload.entityId,
+      payload.profileId,
+      errorMessage
+    );
+
+    logger.error('[EmbeddingGenerate] Failed to generate conversation chunk embedding', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: payload.entityId,
+      chatId: payload.chatId,
+      error: errorMessage,
+    });
+
+    throw error;
+  }
+}
+
+/**
+ * Handle embedding generation for a help document.
+ * Uses the same embedding infrastructure as memories but stores
+ * the embedding directly on the help doc row (Float32 BLOB, same format).
+ */
+async function handleHelpDocEmbedding(
+  job: BackgroundJob,
+  payload: EmbeddingGeneratePayload,
+  repos: ReturnType<typeof getRepositories>
+): Promise<void> {
+  const doc = await repos.helpDocs.findById(payload.entityId);
+  if (!doc) {
+    logger.warn('[EmbeddingGenerate] Help doc not found', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      docId: payload.entityId,
+    });
+    await repos.embeddingStatus.markAsFailed(
+      'HELP_DOC',
+      payload.entityId,
+      payload.profileId,
+      'Help doc not found'
+    );
+    return;
+  }
+
+  try {
+    const textToEmbed = `${doc.title}\n\n${doc.content}`;
+    const embeddingResult = await generateEmbeddingForUser(
+      textToEmbed,
+      job.userId,
+      payload.profileId
+    );
+
+    await repos.helpDocs.updateEmbedding(doc.id, embeddingResult.embedding);
+
+    await repos.embeddingStatus.markAsEmbedded(
+      'HELP_DOC',
+      payload.entityId,
+      payload.profileId
+    );
+
+    logger.info('[EmbeddingGenerate] Help doc embedding generated', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      docId: doc.id,
+      title: doc.title,
+      dimensions: embeddingResult.dimensions,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    await repos.embeddingStatus.markAsFailed(
+      'HELP_DOC',
+      payload.entityId,
+      payload.profileId,
+      errorMessage
+    );
+
+    logger.error('[EmbeddingGenerate] Failed to generate help doc embedding', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      docId: payload.entityId,
+      error: errorMessage,
+    });
+
+    throw error;
+  }
+}
+
+/**
+ * Handle embedding generation for a document mount chunk.
+ * Uses the same embedding infrastructure as conversation chunks but stores
+ * the embedding on the mount chunk row in the mount index database.
+ */
+async function handleMountChunkEmbedding(
+  job: BackgroundJob,
+  payload: EmbeddingGeneratePayload,
+  repos: ReturnType<typeof getRepositories>
+): Promise<void> {
+  const chunk = await repos.docMountChunks.findById(payload.entityId);
+  if (!chunk) {
+    logger.warn('[EmbeddingGenerate] Mount chunk not found', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: payload.entityId,
+    });
+    await repos.embeddingStatus.markAsFailed(
+      'MOUNT_CHUNK',
+      payload.entityId,
+      payload.profileId,
+      'Mount chunk not found'
+    );
+    return;
+  }
+
+  try {
+    const embeddingResult = await generateEmbeddingForUser(
+      chunk.content,
+      job.userId,
+      payload.profileId
+    );
+
+    await repos.docMountChunks.updateEmbedding(chunk.id, embeddingResult.embedding);
+
+    // Invalidate the in-memory cache for this mount point so the next
+    // document search reloads fresh chunks.
+    invalidateMountPoint(chunk.mountPointId);
+
+    await repos.embeddingStatus.markAsEmbedded(
+      'MOUNT_CHUNK',
+      payload.entityId,
+      payload.profileId
+    );
+
+    logger.info('[EmbeddingGenerate] Mount chunk embedding generated', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: chunk.id,
+      mountPointId: chunk.mountPointId,
+      dimensions: embeddingResult.dimensions,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    await repos.embeddingStatus.markAsFailed(
+      'MOUNT_CHUNK',
+      payload.entityId,
+      payload.profileId,
+      errorMessage
+    );
+
+    logger.error('[EmbeddingGenerate] Failed to generate mount chunk embedding', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      chunkId: payload.entityId,
       error: errorMessage,
     });
 

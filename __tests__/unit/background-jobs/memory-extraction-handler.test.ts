@@ -2,14 +2,20 @@ import { handleMemoryExtraction } from '@/lib/background-jobs/handlers/memory-ex
 import { getRepositories } from '@/lib/repositories/factory';
 import { processMessageForMemory } from '@/lib/memory/memory-processor';
 
-jest.mock('@/lib/logger', () => ({
-  logger: {
+jest.mock('@/lib/logger', () => {
+  const childLogger = {
     debug: jest.fn(),
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
-  },
-}));
+  };
+  return {
+    logger: {
+      ...childLogger,
+      child: jest.fn(() => childLogger),
+    },
+  };
+});
 
 jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
@@ -17,6 +23,18 @@ jest.mock('@/lib/repositories/factory', () => ({
 
 jest.mock('@/lib/memory/memory-processor', () => ({
   processMessageForMemory: jest.fn(),
+}));
+
+jest.mock('@/lib/services/system-events.service', () => ({
+  createMemoryExtractionEvent: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('@/lib/services/cost-estimation.service', () => ({
+  estimateMessageCost: jest.fn().mockResolvedValue({ cost: 0, source: 'estimate' }),
+}));
+
+jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
+  resolveDangerousContentSettings: jest.fn(() => ({ settings: { mode: 'OFF' } })),
 }));
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>;
@@ -32,6 +50,7 @@ type MockRepositories = {
   };
   chats: {
     updateMessage: jest.Mock;
+    findById: jest.Mock;
   };
 };
 
@@ -50,6 +69,7 @@ beforeEach(() => {
     },
     chats: {
       updateMessage: jest.fn().mockResolvedValue(undefined),
+      findById: jest.fn().mockResolvedValue({ id: 'chat-1', isDangerousChat: false }),
     },
   };
 

@@ -51,6 +51,15 @@ export function useSearchReplace(
   // Debounce timer ref
   const previewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Track the latest initialScope without churning callback identities.
+  // Callers commonly pass an inline object literal (`{ type: 'chat', chatId }`),
+  // so the reference changes every parent render. Reading through a ref keeps
+  // `reset` stable so the close-modal effect in SearchReplaceModal doesn't loop.
+  const initialScopeRef = useRef(initialScope);
+  useEffect(() => {
+    initialScopeRef.current = initialScope;
+  }, [initialScope]);
+
 
   // Fetch preview when search text changes (debounced)
   const fetchPreview = useCallback(async () => {
@@ -181,8 +190,9 @@ export function useSearchReplace(
 
   // Reset
   const reset = useCallback(() => {
-    setCurrentStep(initialScope ? 'search' : 'scope');
-    setScope(initialScope || null);
+    const initial = initialScopeRef.current;
+    setCurrentStep(initial ? 'search' : 'scope');
+    setScope(initial || null);
     setSearchText('');
     setReplaceText('');
     setIncludeMessages(true);
@@ -195,7 +205,7 @@ export function useSearchReplace(
     setExecutionPhase('');
     setResult(null);
     setError(null);
-  }, [initialScope]);
+  }, []);
 
   // Computed values
   const canProceed = (() => {

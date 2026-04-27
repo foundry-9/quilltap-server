@@ -14,6 +14,7 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { triggerUrlDownload } from '@/lib/download-utils'
 import { FileInfo } from '../../types'
+import { buildMountBlobUrl } from '../../mountBlobUrl'
 
 interface FileAssociation {
   characters: { id: string; name: string; usage: string }[]
@@ -64,17 +65,22 @@ export function useFileActions({
   // Files can always be moved - to a project, between projects, or back to general files
   const canMoveToProject = true
 
+  const isMountBlob = !!file.mountPointId && !!file.relativePath
+
   const handleDownload = useCallback(async () => {
     try {
       const filename = file.originalFilename || file.filename || 'download'
-      await triggerUrlDownload(`/api/v1/files/${file.id}`, filename)
+      const url = isMountBlob && file.mountPointId && file.relativePath
+        ? buildMountBlobUrl(file.mountPointId, file.relativePath)
+        : `/api/v1/files/${file.id}`
+      await triggerUrlDownload(url, filename)
       showSuccessToast('Download started')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to download file'
       console.error('[useFileActions] Download failed', { fileId: file.id, error: message })
       showErrorToast(message)
     }
-  }, [file])
+  }, [file, isMountBlob])
 
   const handleDelete = useCallback(async () => {
     const confirmed = await showConfirmation('Are you sure you want to delete this file? This cannot be undone.')
@@ -85,8 +91,10 @@ export function useFileActions({
     setIsDeleting(true)
 
     try {
-      // No longer using force=true - respect associations
-      const response = await fetch(`/api/v1/files/${file.id}`, {
+      const deleteUrl = isMountBlob && file.mountPointId && file.relativePath
+        ? buildMountBlobUrl(file.mountPointId, file.relativePath)
+        : `/api/v1/files/${file.id}`
+      const response = await fetch(deleteUrl, {
         method: 'DELETE',
       })
 
@@ -96,8 +104,9 @@ export function useFileActions({
         showSuccessToast('File deleted')
         onDelete?.(file.id)
         onClose?.()
-      } else if (data.details?.code === 'FILE_HAS_ASSOCIATIONS') {
-        // File has associations - show confirmation dialog
+      } else if (!isMountBlob && data.details?.code === 'FILE_HAS_ASSOCIATIONS') {
+        // File has associations - show confirmation dialog. Mount-blob deletes
+        // have no association check (the legacy files table isn't involved).
         setPendingDelete({
           fileId: file.id,
           associations: data.details.associations,
@@ -115,7 +124,7 @@ export function useFileActions({
     } finally {
       setIsDeleting(false)
     }
-  }, [file, onDelete, onClose])
+  }, [file, isMountBlob, onDelete, onClose])
 
   const handleMoveToProject = useCallback(() => {
     onMoveToProject?.(file.id)

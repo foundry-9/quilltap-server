@@ -13,6 +13,7 @@ import {
   getDataDir,
   getSQLiteDatabasePath,
   getLLMLogsDatabasePath,
+  getMountIndexDatabasePath,
   isDockerEnvironment,
 } from '@/lib/paths';
 
@@ -163,6 +164,34 @@ export function loadLLMLogsConfig(): SQLiteConfig {
       ? parseInt(process.env.SQLITE_BUSY_TIMEOUT, 10)
       : undefined,
     foreignKeys: false, // No FK constraints for the logs DB
+    synchronous: process.env.SQLITE_SYNCHRONOUS || undefined,
+    cacheSize: process.env.SQLITE_CACHE_SIZE
+      ? parseInt(process.env.SQLITE_CACHE_SIZE, 10)
+      : undefined,
+  });
+}
+
+/**
+ * Load SQLite configuration for the dedicated mount index database.
+ *
+ * Uses SQLITE_MOUNT_INDEX_PATH env var or the default path from lib/paths.ts.
+ * Same defaults as the main DB — foreign keys are enabled since the mount
+ * index has inter-table relationships (chunks → files → mount points).
+ */
+export function loadMountIndexConfig(): SQLiteConfig {
+  const dbPath = process.env.SQLITE_MOUNT_INDEX_PATH || getMountIndexDatabasePath();
+
+  // Ensure the parent directory exists
+  const dbDir = path.dirname(dbPath);
+  ensureDataDirectoryExists(dbDir);
+
+  return SQLiteConfigSchema.parse({
+    path: dbPath,
+    walMode: process.env.SQLITE_WAL_MODE !== 'false',
+    busyTimeout: process.env.SQLITE_BUSY_TIMEOUT
+      ? parseInt(process.env.SQLITE_BUSY_TIMEOUT, 10)
+      : undefined,
+    foreignKeys: true, // FK constraints enabled for mount index
     synchronous: process.env.SQLITE_SYNCHRONOUS || undefined,
     cacheSize: process.env.SQLITE_CACHE_SIZE
       ? parseInt(process.env.SQLITE_CACHE_SIZE, 10)

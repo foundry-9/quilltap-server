@@ -27,7 +27,18 @@ export interface OptimizerSuggestion {
   memoryExcerpts: string[];
 }
 
-export type OptimizerPhase = 'preflight' | 'progress' | 'review' | 'apply';
+export type OptimizerPhase = 'preflight' | 'progress' | 'review' | 'apply' | 'suggestions-file-written';
+
+export type OptimizerOutputMode = 'apply' | 'suggestions-file';
+
+export type OptimizerSubStepKind = 'general' | 'scenario' | 'systemPrompt' | 'newItems';
+
+export interface OptimizerSubStep {
+  kind: OptimizerSubStepKind;
+  label: string;
+  index: number;
+  total: number;
+}
 
 export type SuggestionDecision = 'accepted' | 'rejected' | 'edited';
 
@@ -56,6 +67,12 @@ export interface CharacterOptimizerModalProps {
   characterName: string;
   profiles: OptimizerConnectionProfile[];
   defaultConnectionProfileId?: string;
+  /**
+   * True when the character is linked to a document-store vault and has
+   * readPropertiesFromDocumentStore enabled. Gates the "save suggestions to
+   * the vault instead of applying" option.
+   */
+  vaultAvailable?: boolean;
   onClose: () => void;
   onApplied: () => void;
 }

@@ -14,6 +14,8 @@ interface StreamingMessageProps {
   /** Optional dialogue detection for paragraph-level styling */
   dialogueDetection?: DialogueDetection | null
   shouldShowAvatars: boolean
+  /** Whether the Concierge has flagged this chat as dangerous */
+  isDangerousChat?: boolean
 }
 
 export function StreamingMessage({
@@ -24,13 +26,14 @@ export function StreamingMessage({
   renderingPatterns,
   dialogueDetection,
   shouldShowAvatars,
+  isDangerousChat = false,
 }: StreamingMessageProps) {
   if (!waitingForResponse && !streaming) return null
 
   return (
     <div className="qt-chat-message-row qt-chat-message-row-assistant">
       {shouldShowAvatars && (
-        <div className="flex-shrink-0 qt-chat-desktop-avatar">
+        <div className={`flex-shrink-0 qt-chat-desktop-avatar${isDangerousChat ? ' qt-chat-avatar-dangerous' : ''}`}>
           <Avatar
             name={respondingCharacter?.name || 'AI'}
             title={null}

@@ -30,12 +30,20 @@ export interface MemoryExtractionPayload {
   chatId: string;
   characterId: string;
   characterName: string;
+  /** Character pronouns (JSON-serialised structure or null). */
+  characterPronouns?: unknown;
   userMessage: string;
   assistantMessage: string;
   sourceMessageId: string;
   connectionProfileId: string;
+  /** User character name (for "X says:" labelling in extraction prompts) */
+  userCharacterName?: string;
   /** User character ID - who the memory is about (the user-controlled character) */
   userCharacterId?: string;
+  /** All character names in a multi-character chat (for clear identity context) */
+  allCharacterNames?: string[];
+  /** Map of character name -> pronouns for multi-character chats */
+  allCharacterPronouns?: Record<string, unknown>;
 }
 
 /**
@@ -45,9 +53,11 @@ export interface InterCharacterMemoryPayload {
   chatId: string;
   observerCharacterId: string;
   observerCharacterName: string;
+  observerCharacterPronouns?: unknown;
   observerMessage: string;
   subjectCharacterId: string;
   subjectCharacterName: string;
+  subjectCharacterPronouns?: unknown;
   subjectMessage: string;
   sourceMessageId: string;
   connectionProfileId: string;
@@ -85,13 +95,15 @@ export interface LLMLogCleanupPayload {
  */
 export interface EmbeddingGeneratePayload {
   /** Type of entity being embedded */
-  entityType: 'MEMORY';
-  /** ID of the entity (memory ID) */
+  entityType: 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC' | 'MOUNT_CHUNK';
+  /** ID of the entity (memory ID, conversation chunk ID, or help doc ID) */
   entityId: string;
   /** ID of the character (for memories) */
   characterId?: string;
   /** ID of the embedding profile to use */
   profileId: string;
+  /** Chat ID (for conversation chunks) */
+  chatId?: string;
 }
 
 /**
@@ -154,6 +166,42 @@ export interface ChatDangerClassificationPayload {
 export interface ChatDangerClassificationEnqueueResult {
   jobId: string;
   isNew: boolean;
+}
+
+/**
+ * Payload for conversation render job (Scriptorium)
+ */
+export interface ConversationRenderPayload {
+  chatId: string;
+  /** If true, embed all interchange chunks (not just the newest). Used for on-demand re-render. */
+  fullReembed?: boolean;
+}
+
+/**
+ * Result of enqueueing a conversation render job
+ */
+export interface ConversationRenderEnqueueResult {
+  jobId: string;
+  isNew: boolean;
+}
+
+/**
+ * Payload for memory-housekeeping job.
+ * Leave every field undefined to fall back to the per-user autoHousekeepingSettings.
+ */
+export interface MemoryHousekeepingPayload {
+  /** Character to housekeep. If omitted, handler sweeps every character owned by userId. */
+  characterId?: string;
+  /** Override the per-character cap (otherwise uses the user's autoHousekeepingSettings). */
+  maxMemories?: number;
+  /** Override the merge-similar threshold. */
+  mergeThreshold?: number;
+  /** Override whether to merge semantically similar memories. */
+  mergeSimilar?: boolean;
+  /** Dry run — preview deletions without applying. Default false. */
+  dryRun?: boolean;
+  /** Why the job was enqueued (for debug logs). */
+  reason?: 'watermark' | 'scheduled' | 'manual';
 }
 
 /**
@@ -240,6 +288,39 @@ export async function enqueueSceneStateTracking(
 }
 
 /**
+ * Enqueue a conversation render job (Scriptorium)
+ * Skips if there's already a pending/processing job for the same chat
+ */
+export async function enqueueConversationRender(
+  userId: string,
+  payload: ConversationRenderPayload,
+  options?: EnqueueJobOptions
+): Promise<ConversationRenderEnqueueResult> {
+  const repos = getRepositories();
+
+  // Check for existing pending/processing render jobs for this chat
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existingJob = pendingJobs.find(job => job.type === 'CONVERSATION_RENDER');
+
+  if (existingJob) {
+    logger.info('[ConversationRender] Reusing existing pending job for chat', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      existingJobId: existingJob.id,
+      existingStatus: existingJob.status,
+    });
+    return { jobId: existingJob.id, isNew: false };
+  }
+
+  const jobId = await enqueueJob(userId, 'CONVERSATION_RENDER', payload as unknown as Record<string, unknown>, {
+    // Lower priority than interactive tasks
+    priority: options?.priority ?? -1,
+    ...options,
+  });
+  return { jobId, isNew: true };
+}
+
+/**
  * Message pair for batch memory extraction
  */
 export interface MessagePair {
@@ -295,6 +376,57 @@ export async function enqueueMemoryExtraction(
 }
 
 /**
+ * Enqueue a memory-housekeeping job for a character (or all characters of a user).
+ *
+ * Dedupes: if there's already a PENDING or PROCESSING MEMORY_HOUSEKEEPING job
+ * for the same (userId, characterId) pair, this is a no-op returning the
+ * existing job ID.
+ */
+export async function enqueueMemoryHousekeeping(
+  userId: string,
+  payload: MemoryHousekeepingPayload = {},
+  options?: EnqueueJobOptions
+): Promise<string> {
+  const repos = getRepositories();
+
+  // De-dupe against in-flight jobs for the same (userId, characterId)
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'MEMORY_HOUSEKEEPING') return false;
+      const existingCharId = (j.payload as Record<string, unknown>).characterId;
+      return existingCharId === payload.characterId;
+    });
+    if (existing) {
+      logger.debug('[Housekeeping] Skipping enqueue — job already in-flight', {
+        jobId: existing.id,
+        userId,
+        characterId: payload.characterId ?? '(all)',
+      });
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[Housekeeping] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through to enqueue anyway — double work is better than none.
+  }
+
+  // Housekeeping is retry-hostile: each retry re-runs the whole sweep from
+  // scratch, and a single sweep on a character with tens of thousands of
+  // memories can burn minutes of main-thread time. The daily scheduler
+  // re-enqueues anyway, so we cap attempts at 1 and let failures wait for
+  // the next natural pass rather than thrashing.
+  return enqueueJob(
+    userId,
+    'MEMORY_HOUSEKEEPING',
+    payload as unknown as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
+}
+
+/**
  * Enqueue an inter-character memory extraction job
  */
 export async function enqueueInterCharacterMemory(
@@ -347,8 +479,23 @@ export interface EmbeddingGenerateEnqueueResult {
 }
 
 /**
+ * Default priorities for embedding entity types.
+ * Chat-related embeddings (memories, conversation chunks) run before
+ * batch operations (document mount chunks, help docs) so that chat
+ * responsiveness is never blocked by background indexing.
+ */
+const EMBEDDING_ENTITY_PRIORITIES: Record<EmbeddingGeneratePayload['entityType'], number> = {
+  MEMORY: 10,
+  CONVERSATION_CHUNK: 10,
+  HELP_DOC: 0,
+  MOUNT_CHUNK: 0,
+};
+
+/**
  * Enqueue an embedding generate job
- * Skips if there's already a pending/processing job for the same entity
+ * Skips if there's already a pending/processing job for the same entity.
+ * Priority defaults based on entity type: chat-related types (MEMORY,
+ * CONVERSATION_CHUNK) get higher priority than batch types.
  */
 export async function enqueueEmbeddingGenerate(
   userId: string,
@@ -365,7 +512,11 @@ export async function enqueueEmbeddingGenerate(
     return { jobId: existingJob.id, isNew: false };
   }
 
-  const jobId = await enqueueJob(userId, 'EMBEDDING_GENERATE', payload as unknown as Record<string, unknown>, options);
+  const priority = options?.priority ?? EMBEDDING_ENTITY_PRIORITIES[payload.entityType] ?? 0;
+  const jobId = await enqueueJob(userId, 'EMBEDDING_GENERATE', payload as unknown as Record<string, unknown>, {
+    ...options,
+    priority,
+  });
   return { jobId, isNew: true };
 }
 
@@ -578,6 +729,75 @@ export async function enqueueCharacterAvatarGeneration(
     chatId: payload.chatId,
     characterId: payload.characterId,
     jobId,
+  });
+
+  return { jobId, isNew: true };
+}
+
+/**
+ * Payload for wardrobe outfit announcement job
+ */
+export interface WardrobeOutfitAnnouncementPayload {
+  /** Chat where the outfit change occurred */
+  chatId: string;
+  /** Character whose outfit changed */
+  characterId: string;
+}
+
+/**
+ * Debounce window for outfit announcements. Each new wardrobe change for the
+ * same (chatId, characterId) pair pushes the existing pending job's
+ * scheduledAt forward by this much, so a flurry of slot edits collapses into
+ * a single announcement once the dust settles.
+ */
+const WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS = 60_000;
+
+/**
+ * Enqueue a wardrobe outfit announcement job, debounced per (chatId, characterId).
+ *
+ * If a pending job already exists for this pair, its scheduledAt is pushed
+ * forward by WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS rather than enqueuing a duplicate.
+ * The job, when it finally fires, reads the chat's current equipped outfit and
+ * posts an Aurora system message visible to everyone in the chat.
+ */
+export async function enqueueWardrobeOutfitAnnouncement(
+  userId: string,
+  payload: WardrobeOutfitAnnouncementPayload,
+): Promise<{ jobId: string; isNew: boolean }> {
+  const repos = getRepositories();
+  const scheduledAt = new Date(Date.now() + WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS);
+
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existing = pendingJobs.find(
+    job => job.type === 'WARDROBE_OUTFIT_ANNOUNCEMENT'
+      && (job.payload as unknown as WardrobeOutfitAnnouncementPayload).characterId === payload.characterId
+  );
+
+  if (existing) {
+    await repos.backgroundJobs.update(existing.id, { scheduledAt: scheduledAt.toISOString() });
+    logger.info('[WardrobeAnnouncement] Rescheduled pending announcement', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      characterId: payload.characterId,
+      jobId: existing.id,
+      newScheduledAt: scheduledAt.toISOString(),
+    });
+    return { jobId: existing.id, isNew: false };
+  }
+
+  const jobId = await enqueueJob(
+    userId,
+    'WARDROBE_OUTFIT_ANNOUNCEMENT',
+    payload as unknown as Record<string, unknown>,
+    { scheduledAt, priority: -1 }
+  );
+
+  logger.info('[WardrobeAnnouncement] Announcement job enqueued', {
+    context: 'background-jobs.queue',
+    chatId: payload.chatId,
+    characterId: payload.characterId,
+    jobId,
+    scheduledAt: scheduledAt.toISOString(),
   });
 
   return { jobId, isNew: true };

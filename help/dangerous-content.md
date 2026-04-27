@@ -145,6 +145,10 @@ In addition to per-message scanning, Quilltap can classify entire chats as dange
 
 Once a chat is classified as dangerous, it stays marked as dangerous permanently. This prevents the classification from flip-flopping as conversations evolve. Safe chats are re-checked whenever new messages are added (message count changes).
 
+### In-Chat Announcement
+
+When a chat is first marked as dangerous, the Concierge — one of "the Staff" — steps quietly to the table and posts a brief message of his own. Worded with deliberate discretion, it lets every character at the table (those who can see the Staff) know that the conversation, and any errands attending it, will henceforth be entrusted to a desk better suited to the matter. The announcement carries the Concierge's avatar and is part of the normal chat history; nothing further is required of the user.
+
 ### Optimizations for Permanently Dangerous Chats
 
 When a chat has been permanently classified as dangerous, Quilltap applies several optimizations to save tokens and avoid futile content refusals:

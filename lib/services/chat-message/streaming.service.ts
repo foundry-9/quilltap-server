@@ -142,7 +142,9 @@ export async function buildTools(
   /** Whether this character can dress themselves (enables list_wardrobe and update_outfit_item) */
   canDressThemselves?: boolean,
   /** Whether this character can create new outfits (enables create_wardrobe_item) */
-  canCreateOutfits?: boolean
+  canCreateOutfits?: boolean,
+  /** Whether document editing tools are enabled (project has linked document stores or files) */
+  documentEditingEnabled?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -200,7 +202,6 @@ export async function buildTools(
   let tools = await buildToolsForProvider(connectionProfile.provider, {
     imageGeneration: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
-    memorySearch: true,
     webSearch: connectionProfile.allowWebSearch,
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
@@ -213,6 +214,7 @@ export async function buildTools(
     wardrobeCreateItem: canCreateOutfits !== false,
     whisper: !!isMultiCharacter,
     shellInteractivity: isShellEnvironment(),
+    documentEditing: !!documentEditingEnabled,
     toolConfigs,
   })
 

@@ -357,6 +357,14 @@ export const plugin: TextProviderPlugin = {
    */
   parseToolCalls: (response: any): ToolCallRequest[] => {
     try {
+      // Prefer pre-extracted function calls from the provider wrapper if available
+      if (response && response.functionCalls && Array.isArray(response.functionCalls)) {
+        return response.functionCalls.map((fc: any) => ({
+          name: fc.name,
+          arguments: fc.args || {},
+        }));
+      }
+
       const toolCalls = parseGoogleToolCalls(response);
       return toolCalls;
     } catch (error) {

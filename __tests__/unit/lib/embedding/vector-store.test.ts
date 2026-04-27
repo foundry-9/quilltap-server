@@ -407,6 +407,78 @@ describe('CharacterVectorStore', () => {
       expect(entries.map(e => e.id).sort()).toEqual(['v1', 'v2'])
     })
   })
+
+  describe('search heap/linear parity', () => {
+    // Guards the bounded top-K heap path introduced to stop big-character
+    // semantic searches from pinning the main thread. Heap and linear paths
+    // must return identical (id, score) tuples for the same query — the
+    // heap is a performance rewrite of the same contract.
+    it('returns identical top-K for heap and linear paths on a 5000-entry store', async () => {
+      const store = new CharacterVectorStore('char-parity')
+      const dim = 8
+      const n = 5000
+
+      // Deterministic pseudorandom unit vectors — no Math.random so the
+      // failure mode is reproducible.
+      let seed = 0xdeadbeef
+      const next = () => {
+        seed = (seed * 1103515245 + 12345) >>> 0
+        return (seed & 0x7fffffff) / 0x7fffffff
+      }
+      const randomUnit = () => {
+        const v = new Array(dim)
+        let sum = 0
+        for (let i = 0; i < dim; i++) { v[i] = next() - 0.5; sum += v[i] * v[i] }
+        const norm = Math.sqrt(sum)
+        for (let i = 0; i < dim; i++) v[i] /= norm
+        return v
+      }
+
+      for (let i = 0; i < n; i++) {
+        await store.addVector(`v${i}`, randomUnit(), makeMetadata({ memoryId: `v${i}` }))
+      }
+
+      const query = randomUnit()
+      const limit = 20
+
+      // The public search() picks the heap path here (n=5000 > 1000 and
+      // limit*4=80 < n). Compare against the private linear path directly.
+      const heapResults = store.search(query, limit)
+      const linearResults = (store as unknown as {
+        searchLinear: (q: number[], l: number, f?: (m: VectorMetadata) => boolean) => {
+          score: number
+        }[]
+      }).searchLinear(query, limit)
+
+      // The score sequence must match exactly — both paths return top-K by
+      // score, descending. Tie-break order between entries with identical
+      // scores is not contractually stable (and doesn't matter for ranking
+      // semantics), so we don't compare ids.
+      expect(heapResults).toHaveLength(limit)
+      expect(heapResults.map(r => r.score)).toEqual(linearResults.map(r => r.score))
+      // Descending property
+      for (let i = 1; i < heapResults.length; i++) {
+        expect(heapResults[i - 1].score).toBeGreaterThanOrEqual(heapResults[i].score)
+      }
+    })
+
+    it('falls back to linear path for small corpora', async () => {
+      const store = new CharacterVectorStore('char-small')
+      for (let i = 0; i < 50; i++) {
+        await store.addVector(
+          `v${i}`,
+          [Math.cos(i), Math.sin(i)],
+          makeMetadata({ memoryId: `v${i}` }),
+        )
+      }
+      const results = store.search([1, 0], 5)
+      expect(results).toHaveLength(5)
+      // Descending by score
+      for (let i = 1; i < results.length; i++) {
+        expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score)
+      }
+    })
+  })
 })
 
 describe('VectorStoreManager', () => {

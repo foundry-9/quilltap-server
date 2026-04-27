@@ -29,8 +29,11 @@ import { badRequest, notFound, serverError } from '@/lib/api/responses';
 import { deleteAllUserData, previewDeleteAllUserData } from '@/lib/backup/restore-service';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { startProcessor, stopProcessor, getProcessorStatus } from '@/lib/background-jobs/processor';
-import { createExport, previewExport } from '@/lib/export/quilltap-export-service';
+import { previewExport } from '@/lib/export/quilltap-export-service';
+import { createNdjsonStream, QTAP_NDJSON_CONTENT_TYPE } from '@/lib/export/ndjson-writer';
 import { previewImport, executeImport, type QuilltapExport, type ConflictStrategy } from '@/lib/import/quilltap-import-service';
+import { peekFormat, readNdjsonLines, collectLegacyJson } from '@/lib/import/ndjson-reader';
+import { assembleExportFromStream } from '@/lib/import/quilltap-import-stream';
 import { generateAndSaveReport } from '@/lib/tools/capabilities-report';
 import { deduplicateAllMemories } from '@/lib/tools/memory-dedup';
 import { runAIImportStreaming } from '@/lib/services/ai-import.service';
@@ -90,8 +93,23 @@ function estimateTokensForJob(job: BackgroundJob): number {
     case 'TITLE_UPDATE': {
       return baseTokens + 300;
     }
-    case 'LLM_LOG_CLEANUP': {
-      // No LLM tokens needed for cleanup
+    case 'CHAT_DANGER_CLASSIFICATION': {
+      return baseTokens + 1000;
+    }
+    case 'SCENE_STATE_TRACKING': {
+      return baseTokens + 800;
+    }
+    case 'LLM_LOG_CLEANUP':
+    case 'EMBEDDING_GENERATE':
+    case 'EMBEDDING_REFIT':
+    case 'EMBEDDING_REINDEX_ALL':
+    case 'CHARACTER_AVATAR_GENERATION':
+    case 'CONVERSATION_RENDER': {
+      // These jobs do not consume LLM text-generation tokens
+      return 0;
+    }
+    case 'STORY_BACKGROUND_GENERATION': {
+      // Image generation job — no LLM text tokens
       return 0;
     }
     default:
@@ -111,6 +129,9 @@ function getJobTypeName(type: string): string {
     EMBEDDING_REINDEX_ALL: 'Re-embed All Memories',
     STORY_BACKGROUND_GENERATION: 'Story Background',
     CHAT_DANGER_CLASSIFICATION: 'Danger Classification',
+    SCENE_STATE_TRACKING: 'Scene State Tracking',
+    CHARACTER_AVATAR_GENERATION: 'Avatar Generation',
+    CONVERSATION_RENDER: 'Conversation Render',
   };
   return typeNames[type] || type;
 }
@@ -261,6 +282,7 @@ async function handleTasksQueue(req: NextRequest, context: any) {
         failed: stats.failed,
         completed: stats.completed,
         dead: stats.dead,
+        paused: stats.paused,
         activeTotal: activeJobs.length,
       },
       jobs: jobDetails,
@@ -321,7 +343,7 @@ async function handleExport(req: NextRequest, context: any) {
     const body = await req.json();
     const { type, scope, selectedIds, includeMemories } = body;
 
-    logger.info('[System Tools v1] Creating export', {
+    logger.info('[System Tools v1] Creating export (NDJSON stream)', {
       userId: user.id,
       type,
       scope,
@@ -329,21 +351,23 @@ async function handleExport(req: NextRequest, context: any) {
       includeMemories: includeMemories || false,
     });
 
-    // Create export using the export service
-    const exportData = await createExport(user.id, {
+    const stream = createNdjsonStream(user.id, {
       type: type as ExportEntityType,
       scope: scope || 'all',
       selectedIds,
       includeMemories: includeMemories || false,
-    });const timestamp = new Date().toISOString().split('T')[0];
+    });
+
+    const timestamp = new Date().toISOString().split('T')[0];
     const sanitizedType = (type || 'data').replace(/_/g, '-');
     const filename = `quilltap-${sanitizedType}-${timestamp}.qtap`;
 
-    return new NextResponse(JSON.stringify(exportData, null, 2), {
+    return new NextResponse(stream, {
       status: 200,
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': QTAP_NDJSON_CONTENT_TYPE,
         'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'no-store',
       },
     });
   } catch (error) {
@@ -516,8 +540,42 @@ async function handleExportPreview(req: NextRequest, context: any) {
   }
 }
 
-// Max file size for imports: 100MB
-const MAX_IMPORT_FILE_SIZE = 100 * 1024 * 1024;
+/**
+ * Legacy monolithic .qtap files still get loaded into a single string for
+ * `JSON.parse` — we cap them at ~450 MB because V8's max string length is
+ * ~512 MB and we want headroom. Anything bigger must be re-exported from a
+ * Quilltap version that writes the streaming NDJSON format. NDJSON files
+ * have no whole-file cap (we only cap per-line size in the reader).
+ */
+const MAX_LEGACY_IMPORT_BYTES = 450 * 1024 * 1024;
+
+/**
+ * Load a `.qtap` upload as a `QuilltapExport`, detecting streaming NDJSON vs
+ * legacy monolithic JSON transparently. `input` may be either a `File`
+ * (multipart upload) or a `NextRequest` whose body is the raw `.qtap` bytes.
+ */
+async function loadQtapFromUpload(
+  input: { stream(): ReadableStream<Uint8Array> } | ReadableStream<Uint8Array>
+): Promise<QuilltapExport> {
+  const body: ReadableStream<Uint8Array> =
+    input instanceof ReadableStream ? input : input.stream();
+  const { format, stream } = await peekFormat(body);
+
+  if (format === 'ndjson') {
+    return assembleExportFromStream(readNdjsonLines(stream));
+  }
+
+  const text = await collectLegacyJson(stream, MAX_LEGACY_IMPORT_BYTES);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw new Error(
+      `Invalid JSON: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+  return parsed as QuilltapExport;
+}
 
 function validateExportFile(data: unknown): boolean {
   if (!data || typeof data !== 'object') {
@@ -542,7 +600,7 @@ async function handleImportPreview(req: NextRequest, context: any) {
 
   try {
     const contentType = req.headers.get('content-type') || '';
-    let exportData: unknown;
+    let exportData: QuilltapExport;
 
     logger.info('[System Tools v1] Processing import preview request', {
       userId: user.id,
@@ -550,7 +608,6 @@ async function handleImportPreview(req: NextRequest, context: any) {
     });
 
     if (contentType.includes('multipart/form-data')) {
-      // Handle FormData with file upload
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
 
@@ -559,45 +616,38 @@ async function handleImportPreview(req: NextRequest, context: any) {
         return badRequest('No file provided');
       }
 
-      if (file.size > MAX_IMPORT_FILE_SIZE) {
-        logger.warn('[System Tools v1] Import file too large', {
-          userId: user.id,
-          fileSize: file.size,
-          maxSize: MAX_IMPORT_FILE_SIZE,
-        });
-        return badRequest(`File too large (max ${Math.round(MAX_IMPORT_FILE_SIZE / 1024 / 1024)}MB)`);
-      }const text = await file.text();
       try {
-        exportData = JSON.parse(text);
-      } catch {
-        return badRequest('Invalid JSON: Failed to parse export file');
+        exportData = await loadQtapFromUpload(file);
+      } catch (err) {
+        logger.warn('[System Tools v1] Import preview file load failed', {
+          userId: user.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return badRequest(err instanceof Error ? err.message : 'Failed to read export file');
       }
     } else {
-      // Handle JSON body
+      // Legacy JSON-body path — kept for older clients. The frontend uploads
+      // via multipart for anything non-trivial.
       const body = await req.json();
-
       if (!body.exportData) {
         logger.warn('[System Tools v1] Import preview missing exportData', { userId: user.id });
         return badRequest('Missing required field: exportData');
       }
-
-      exportData = body.exportData;
+      exportData = body.exportData as QuilltapExport;
     }
 
-    // Validate export file
     if (!validateExportFile(exportData)) {
       logger.warn('[System Tools v1] Invalid export file format', { userId: user.id });
       return badRequest('Invalid export file format. Expected quilltap-export v1.0 format.');
     }
 
-    const exported = exportData as QuilltapExport;
-
     logger.info('[System Tools v1] Export file validated', {
       userId: user.id,
-      exportType: exported.manifest.exportType,
+      exportType: exportData.manifest.exportType,
     });
 
-    const preview = await previewImport(user.id, exported);return NextResponse.json(preview);
+    const preview = await previewImport(user.id, exportData);
+    return NextResponse.json(preview);
   } catch (error) {
     logger.error(
       '[System Tools v1] Import preview failed',
@@ -613,11 +663,10 @@ async function handleImportExecute(req: NextRequest, context: any) {
 
   try {
     const contentType = req.headers.get('content-type') || '';
-    let exportData: unknown;
+    let exportData: QuilltapExport | undefined;
     let options: { conflictStrategy?: string; importMemories?: boolean; selectedIds?: Record<string, string[]> } | undefined;
 
     if (contentType.includes('multipart/form-data')) {
-      // Handle FormData with file upload (avoids body size limits for large exports)
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
       const optionsStr = formData.get('options') as string | null;
@@ -627,20 +676,14 @@ async function handleImportExecute(req: NextRequest, context: any) {
         return badRequest('No file provided');
       }
 
-      if (file.size > MAX_IMPORT_FILE_SIZE) {
-        logger.warn('[System Tools v1] Import file too large', {
-          userId: user.id,
-          fileSize: file.size,
-          maxSize: MAX_IMPORT_FILE_SIZE,
-        });
-        return badRequest(`File too large (max ${Math.round(MAX_IMPORT_FILE_SIZE / 1024 / 1024)}MB)`);
-      }
-
-      const text = await file.text();
       try {
-        exportData = JSON.parse(text);
-      } catch {
-        return badRequest('Invalid JSON: Failed to parse export file');
+        exportData = await loadQtapFromUpload(file);
+      } catch (err) {
+        logger.warn('[System Tools v1] Import execute file load failed', {
+          userId: user.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return badRequest(err instanceof Error ? err.message : 'Failed to read export file');
       }
 
       if (optionsStr) {
@@ -651,9 +694,8 @@ async function handleImportExecute(req: NextRequest, context: any) {
         }
       }
     } else {
-      // Handle JSON body
       const body = await req.json();
-      exportData = body.exportData;
+      exportData = body.exportData as QuilltapExport | undefined;
       options = body.options;
     }
 
@@ -677,20 +719,18 @@ async function handleImportExecute(req: NextRequest, context: any) {
       return badRequest('Invalid conflictStrategy. Must be one of: skip, replace, overwrite, duplicate');
     }
 
-    const manifest = (exportData as Record<string, unknown>).manifest as Record<string, unknown>;
-
     // Map 'replace' to 'overwrite' for the import service (legacy compat)
     const mappedConflictStrategy: ConflictStrategy =
       conflictStrategy === 'replace' ? 'overwrite' : conflictStrategy as ConflictStrategy;
 
     logger.info('[System Tools v1] Starting import execution', {
       userId: user.id,
-      exportType: manifest.exportType,
+      exportType: exportData.manifest.exportType,
       conflictStrategy: mappedConflictStrategy,
       importMemories: importMemories || false,
     });
 
-    const result = await executeImport(user.id, exportData as QuilltapExport, {
+    const result = await executeImport(user.id, exportData, {
       conflictStrategy: mappedConflictStrategy,
       includeMemories: importMemories || false,
       includeRelatedEntities: false,

@@ -56,7 +56,6 @@ const TABLES_WITH_USER_ID = [
   'plugin_configs',
   'projects',
   'mount_points',
-  'file_permissions',
   'background_jobs',
   'llm_logs',
   'sync_instances',

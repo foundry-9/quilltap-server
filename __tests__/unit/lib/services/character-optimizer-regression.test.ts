@@ -4,19 +4,19 @@
  * Covers:
  * - BehavioralPattern with undefined/null frequency values
  * - Characters with no talkativeness data
- * - getSuggestionsPrompt resilience to malformed analysis data
+ * - Per-item suggestion prompts' resilience to malformed analysis data
  */
 
 import {
   buildCharacterContext,
-  getSuggestionsPrompt,
+  getGeneralFieldsSuggestionsPrompt,
 } from '@/lib/services/character-optimizer.service';
 import { createMockCharacter } from '../fixtures/test-factories';
 import type { OptimizerAnalysis, BehavioralPattern } from '@/lib/services/character-optimizer.service';
 
 describe('Character Optimizer regression', () => {
   describe('frequency handling in behavioral patterns', () => {
-    it('getSuggestionsPrompt handles undefined frequency without crashing', () => {
+    it('suggestion prompt handles undefined frequency without crashing', () => {
       const analysis: OptimizerAnalysis = {
         behavioralPatterns: [
           {
@@ -29,13 +29,13 @@ describe('Character Optimizer regression', () => {
       };
 
       // Must not throw — the prompt is built via JSON.stringify which handles undefined
-      expect(() => getSuggestionsPrompt(analysis)).not.toThrow();
-      const result = getSuggestionsPrompt(analysis);
+      expect(() => getGeneralFieldsSuggestionsPrompt(analysis)).not.toThrow();
+      const result = getGeneralFieldsSuggestionsPrompt(analysis);
       expect(result).toContain('Uses formal language');
       expect(result).toContain('The character is formal.');
     });
 
-    it('getSuggestionsPrompt handles null frequency without crashing', () => {
+    it('suggestion prompt handles null frequency without crashing', () => {
       const analysis: OptimizerAnalysis = {
         behavioralPatterns: [
           {
@@ -47,12 +47,12 @@ describe('Character Optimizer regression', () => {
         summary: 'The character is cryptic.',
       };
 
-      expect(() => getSuggestionsPrompt(analysis)).not.toThrow();
-      const result = getSuggestionsPrompt(analysis);
+      expect(() => getGeneralFieldsSuggestionsPrompt(analysis)).not.toThrow();
+      const result = getGeneralFieldsSuggestionsPrompt(analysis);
       expect(result).toContain('Speaks in riddles');
     });
 
-    it('getSuggestionsPrompt handles empty string frequency', () => {
+    it('suggestion prompt handles empty string frequency', () => {
       const analysis: OptimizerAnalysis = {
         behavioralPatterns: [
           {
@@ -64,10 +64,10 @@ describe('Character Optimizer regression', () => {
         summary: 'Nervous character.',
       };
 
-      expect(() => getSuggestionsPrompt(analysis)).not.toThrow();
+      expect(() => getGeneralFieldsSuggestionsPrompt(analysis)).not.toThrow();
     });
 
-    it('getSuggestionsPrompt handles mixed valid and undefined frequencies', () => {
+    it('suggestion prompt handles mixed valid and undefined frequencies', () => {
       const analysis: OptimizerAnalysis = {
         behavioralPatterns: [
           {
@@ -89,21 +89,21 @@ describe('Character Optimizer regression', () => {
         summary: 'An anxious and introverted character.',
       };
 
-      expect(() => getSuggestionsPrompt(analysis)).not.toThrow();
-      const result = getSuggestionsPrompt(analysis);
+      expect(() => getGeneralFieldsSuggestionsPrompt(analysis)).not.toThrow();
+      const result = getGeneralFieldsSuggestionsPrompt(analysis);
       expect(result).toContain('Speaks softly');
       expect(result).toContain('Fidgets with hands');
       expect(result).toContain('Avoids eye contact');
     });
 
-    it('getSuggestionsPrompt handles empty behavioralPatterns array', () => {
+    it('suggestion prompt handles empty behavioralPatterns array', () => {
       const analysis: OptimizerAnalysis = {
         behavioralPatterns: [],
         summary: 'No patterns detected.',
       };
 
-      expect(() => getSuggestionsPrompt(analysis)).not.toThrow();
-      const result = getSuggestionsPrompt(analysis);
+      expect(() => getGeneralFieldsSuggestionsPrompt(analysis)).not.toThrow();
+      const result = getGeneralFieldsSuggestionsPrompt(analysis);
       expect(result).toContain('No patterns detected.');
     });
   });

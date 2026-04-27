@@ -53,13 +53,6 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
 
   const required = useMemo(() => new Set(schema.required || []), [schema.required])
 
-  // Validate whenever values change
-  useEffect(() => {
-    const isValid = validateAll()
-    onValidChange(isValid)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [values, includedOptionals])
-
   const validateAll = useCallback((): boolean => {
     for (const key of required) {
       const val = values[key]
@@ -80,6 +73,13 @@ export default function JsonSchemaForm({ schema, values, onChange, onValidChange
     }
     return true
   }, [values, schema.properties, required, includedOptionals])
+
+  // Validate whenever values change
+  useEffect(() => {
+    const isValid = validateAll()
+    onValidChange(isValid)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [values, includedOptionals])
 
   const handleChange = useCallback((key: string, value: unknown) => {
     const newValues = { ...values, [key]: value }

@@ -45,7 +45,7 @@ const MEMORIES_PER_PAGE = 30
 
 export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const [memories, setMemories] = useState<Memory[]>([])
-  const [loading, setLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(true)
@@ -66,7 +66,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
   const fetchMemories = useCallback(async (pageNum: number, currentSearch: string, append: boolean = false) => {
     if (pageNum === 0) {
-      setLoading(true)
+      setIsLoading(true)
     } else {
       setLoadingMore(true)
     }
@@ -106,13 +106,14 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       console.error('MemoryList: Fetch failed', { error: errorMessage })
       setError(errorMessage)
     } finally {
-      setLoading(false)
+      setIsLoading(false)
       setLoadingMore(false)
     }
   }, [characterId, sortBy, sortOrder, sourceFilter])
 
   // Reset and refetch when filters change or refreshKey changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- page resets to 0 whenever the paginated query key changes
     setPage(0)
     fetchMemories(0, search, false)
   }, [fetchMemories, search, refreshKey])
@@ -131,7 +132,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
 
     observerRef.current = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+        if (entries[0].isIntersecting && hasMore && !isLoading && !loadingMore) {
           const nextPage = page + 1
           setPage(nextPage)
           fetchMemories(nextPage, search, true)
@@ -149,7 +150,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         observerRef.current.disconnect()
       }
     }
-  }, [hasMore, loading, loadingMore, page, search, fetchMemories])
+  }, [hasMore, isLoading, loadingMore, page, search, fetchMemories])
 
   const handleDelete = useCallback(async (id: string) => {
     const confirmed = await showConfirmation('Are you sure you want to delete this memory?')
@@ -202,7 +203,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
   }, [fetchMemories, search])
 
   // Show loading state when initially loading
-  if (loading && memories.length === 0) {
+  if (isLoading && memories.length === 0) {
     return <LoadingState message="Loading memories..." />
   }
 
@@ -273,7 +274,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
       )}
 
       {/* Empty State */}
-      {!loading && memories.length === 0 && (
+      {!isLoading && memories.length === 0 && (
         <EmptyState
           title={search ? 'No memories match your search' : 'No memories yet'}
           description={

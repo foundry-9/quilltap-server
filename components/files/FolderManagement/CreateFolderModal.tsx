@@ -32,14 +32,11 @@ export default function CreateFolderModal({
   // Reset and focus on open
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on open; parent renders unconditionally
       setFolderName('')
       setTimeout(() => inputRef.current?.focus(), 100)
     }
   }, [isOpen])
-
-  useEffect(() => {
-    // Modal opened
-  }, [currentFolder, projectId])
 
   const handleCreate = async () => {
     const trimmedName = folderName.trim()

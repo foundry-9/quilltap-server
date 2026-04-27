@@ -62,7 +62,7 @@ describe('Shell Tool Definitions', () => {
 
     it('should return false for non-shell tool names', () => {
       expect(isShellTool('generate_image')).toBe(false);
-      expect(isShellTool('search_memories')).toBe(false);
+      expect(isShellTool('search')).toBe(false);
       expect(isShellTool('rng')).toBe(false);
       expect(isShellTool('unknown_tool')).toBe(false);
       expect(isShellTool('')).toBe(false);

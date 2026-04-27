@@ -68,7 +68,7 @@ describe('tool-execution.service', () => {
             id: 'call_1',
             type: 'function',
             function: {
-              name: 'search_memories',
+              name: 'search',
               arguments: JSON.stringify({ query: 'memory' }),
             },
           },
@@ -84,14 +84,14 @@ describe('tool-execution.service', () => {
       }
 
       mockedDetectToolCalls.mockReturnValue([
-        { name: 'search_memories', arguments: { query: 'memory' } },
+        { name: 'search', arguments: { query: 'memory' } },
         { name: 'generate_image', arguments: { prompt: 'a cat' } },
       ])
 
       const result = detectToolCallsInResponse(response, 'OPENAI')
 
       expect(result).toHaveLength(2)
-      expect(result[0].name).toBe('search_memories')
+      expect(result[0].name).toBe('search')
       expect(result[1].name).toBe('generate_image')
     })
 
@@ -136,7 +136,7 @@ describe('tool-execution.service', () => {
       }
 
       mockedDetectToolCalls.mockReturnValue([
-        { name: 'search_memories', arguments: complexArgs },
+        { name: 'search', arguments: complexArgs },
       ])
 
       const result = detectToolCallsInResponse({}, 'OPENAI')

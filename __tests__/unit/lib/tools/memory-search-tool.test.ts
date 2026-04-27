@@ -10,7 +10,7 @@ import {
 
 describe('Memory Search Tool Definitions', () => {
   it('provides a universal tool definition with correct name', () => {
-    expect(memorySearchToolDefinition.function.name).toBe('search_memories')
+    expect(memorySearchToolDefinition.function.name).toBe('search')
     expect(memorySearchToolDefinition.function.parameters.properties.query).toBeDefined()
     expect(memorySearchToolDefinition.function.parameters.properties.limit.default).toBe(5)
   })

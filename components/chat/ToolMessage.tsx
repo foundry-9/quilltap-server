@@ -216,8 +216,8 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🎨',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
-    search_memories: {
-      displayName: 'Memory Search',
+    search: {
+      displayName: 'Search',
       icon: '🧠',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
@@ -229,11 +229,6 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
     project_info: {
       displayName: 'Project Info',
       icon: '📋',
-      bgColor: 'qt-bg-muted border qt-border-default',
-    },
-    file_management: {
-      displayName: 'File Management',
-      icon: '📁',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
     rng: {

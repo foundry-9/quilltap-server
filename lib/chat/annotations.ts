@@ -22,8 +22,10 @@ export type { TemplateDelimiter, AnnotationButton }
 export interface MarkdownFormatConfig {
   /** Label displayed on button (e.g., "B", "I", "H1") */
   label: string
+  /** Tooltip text for the button */
+  tooltip: string
   /** Unique type identifier */
-  type: 'bold' | 'italic' | 'h1' | 'h2' | 'h3' | 'ul' | 'ol'
+  type: 'bold' | 'italic' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'ul' | 'ol' | 'blockquote'
   /** Opening marker */
   prefix: string
   /** Closing marker (empty for line-start formats) */
@@ -36,13 +38,17 @@ export interface MarkdownFormatConfig {
  * Standard Markdown formatting buttons
  */
 export const MARKDOWN_FORMATS: MarkdownFormatConfig[] = [
-  { label: 'B', type: 'bold', prefix: '**', suffix: '**' },
-  { label: 'I', type: 'italic', prefix: '_', suffix: '_' },
-  { label: 'H1', type: 'h1', prefix: '# ', suffix: '', lineStart: true },
-  { label: 'H2', type: 'h2', prefix: '## ', suffix: '', lineStart: true },
-  { label: 'H3', type: 'h3', prefix: '### ', suffix: '', lineStart: true },
-  { label: 'UL', type: 'ul', prefix: '- ', suffix: '', lineStart: true },
-  { label: 'OL', type: 'ol', prefix: '1. ', suffix: '', lineStart: true },
+  { label: 'B', tooltip: 'Bold', type: 'bold', prefix: '**', suffix: '**' },
+  { label: 'I', tooltip: 'Italic', type: 'italic', prefix: '_', suffix: '_' },
+  { label: 'H1', tooltip: 'Heading 1', type: 'h1', prefix: '# ', suffix: '', lineStart: true },
+  { label: 'H2', tooltip: 'Heading 2', type: 'h2', prefix: '## ', suffix: '', lineStart: true },
+  { label: 'H3', tooltip: 'Heading 3', type: 'h3', prefix: '### ', suffix: '', lineStart: true },
+  { label: 'H4', tooltip: 'Heading 4', type: 'h4', prefix: '#### ', suffix: '', lineStart: true },
+  { label: 'H5', tooltip: 'Heading 5', type: 'h5', prefix: '##### ', suffix: '', lineStart: true },
+  { label: 'H6', tooltip: 'Heading 6', type: 'h6', prefix: '###### ', suffix: '', lineStart: true },
+  { label: '• …', tooltip: 'Unordered List', type: 'ul', prefix: '- ', suffix: '', lineStart: true },
+  { label: '1. …', tooltip: 'Ordered List', type: 'ol', prefix: '1. ', suffix: '', lineStart: true },
+  { label: '\u201C', tooltip: 'Blockquote', type: 'blockquote', prefix: '> ', suffix: '', lineStart: true },
 ]
 
 // ============================================================================

@@ -5,7 +5,8 @@
  * Displays a grid of images with optional filtering and selection
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import useSWR from 'swr';
 import { showConfirmation } from '@/lib/alert';
 import { showErrorToast } from '@/lib/toast';
 import DeletedImagePlaceholder from './DeletedImagePlaceholder';
@@ -36,38 +37,25 @@ interface ImageGalleryProps {
 }
 
 export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, className = '' }: ImageGalleryProps) {
-  const [images, setImages] = useState<ImageData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set());
 
+  // Build query string for SWR
+  const queryParams = new URLSearchParams();
+  if (tagType) queryParams.append('tagType', tagType);
+  if (tagId) queryParams.append('tagId', tagId);
+  const queryString = queryParams.toString();
+
+  // Fetch images via SWR
+  const { data: imageData, isLoading: loading, error: loadError, mutate: mutateImages } = useSWR<{ data: ImageData[] }>(
+    `/api/v1/images${queryString ? '?' + queryString : ''}`
+  );
+
+  const images = imageData?.data ?? [];
+  const error = loadError ? (loadError instanceof Error ? loadError.message : 'Failed to load images') : null;
+
   const loadImages = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const params = new URLSearchParams();
-      if (tagType) params.append('tagType', tagType);
-      if (tagId) params.append('tagId', tagId);
-
-      const response = await fetch(`/api/v1/images?${params.toString()}`);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to load images');
-      }
-
-      setImages(data.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load images');
-    } finally {
-      setLoading(false);
-    }
-  }, [tagType, tagId]);
-
-  useEffect(() => {
-    loadImages();
-  }, [loadImages]);
+    await mutateImages();
+  }, [mutateImages]);
 
   async function handleDeleteImage(imageId: string) {
     if (!(await showConfirmation('Permanently delete this image? This cannot be undone.'))) {

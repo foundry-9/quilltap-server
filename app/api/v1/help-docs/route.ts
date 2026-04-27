@@ -6,8 +6,6 @@
  */
 
 import { NextRequest } from 'next/server';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
@@ -16,37 +14,17 @@ import { getHelpSearch } from '@/lib/help-search';
 
 const logger = createServiceLogger('HelpDocsRoute');
 
-const HELP_BUNDLE_PATH = join(process.cwd(), 'public', 'help-bundle.msgpack.gz');
-
-/**
- * Ensure the help bundle is loaded
- */
-async function ensureHelpBundleLoaded(): Promise<void> {
-  const helpSearch = getHelpSearch();
-
-  if (helpSearch.isLoaded()) {
-    return;
-  }
-
-  try {
-    const buffer = await readFile(HELP_BUNDLE_PATH);
-    await helpSearch.loadFromBuffer(buffer);
-    logger.info('[HelpDocs] Help bundle loaded successfully');
-  } catch (error) {
-    logger.error('[HelpDocs] Failed to load help bundle', {}, error instanceof Error ? error : undefined);
-    throw new Error('Failed to load help bundle');
-  }
-}
-
 /**
  * Handle GET /api/v1/help-docs - List all help documents
  */
 async function handleList(_request: NextRequest, _context: AuthenticatedContext) {
   try {
-    await ensureHelpBundleLoaded();
-
     const helpSearch = getHelpSearch();
-    const documents = helpSearch.listDocuments();
+    if (!helpSearch.isLoaded()) {
+      await helpSearch.loadFromDatabase();
+    }
+
+    const documents = await helpSearch.listDocuments();
 
     logger.info('[HelpDocs] Listed help documents', { documentCount: documents.length });
 

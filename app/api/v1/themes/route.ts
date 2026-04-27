@@ -14,24 +14,15 @@
  */
 
 import { NextRequest } from 'next/server';
-import { themeRegistry } from '@/lib/themes/theme-registry';
-import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup/plugin-initialization';
 import { logger } from '@/lib/logger';
 import { successResponse, badRequest, serverError, created } from '@/lib/api/responses';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
-import { installThemeBundle, installThemeBundleFromUrl, loadInstalledBundles } from '@/lib/themes/bundle-loader';
-import {
-  getSources,
-  addSource,
-  removeSource,
-  refreshAllRegistries,
-  searchThemes,
-  installFromRegistry,
-  checkForUpdates,
-} from '@/lib/themes/registry-client';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import os from 'node:os';
+// Dynamic imports prevent Turbopack from tracing the extensive filesystem
+// operations in the plugin/theme systems into the NFT list
+const getPluginInit = () => import('@/lib/startup/plugin-initialization');
+const getThemeRegistry = () => import('@/lib/themes/theme-registry');
+const getBundleLoader = () => import('@/lib/themes/bundle-loader');
+const getRegistryClient = () => import('@/lib/themes/registry-client');
 
 const THEME_GET_ACTIONS = ['registry', 'registry-sources', 'updates'] as const;
 type ThemeGetAction = typeof THEME_GET_ACTIONS[number];
@@ -39,6 +30,7 @@ const THEME_POST_ACTIONS = ['install', 'install-from-url', 'add-source', 'remove
 type ThemePostAction = typeof THEME_POST_ACTIONS[number];
 
 async function ensureInitialized() {
+  const { isPluginSystemInitialized, initializePlugins } = await getPluginInit();
   if (!isPluginSystemInitialized()) {
     logger.info('Plugin system not initialized, initializing now', {
       context: 'themes-api',
@@ -88,6 +80,7 @@ export async function GET(request: NextRequest) {
  * Default GET: list installed themes
  */
 async function handleGetThemes() {
+  const { themeRegistry } = await getThemeRegistry();
   const themes = themeRegistry.getThemeList();
   const stats = themeRegistry.getStats();
   return successResponse({
@@ -107,6 +100,7 @@ async function handleGetRegistry(request: NextRequest) {
   const query = request.nextUrl.searchParams.get('q') || '';
 
   // searchThemes uses cached indexes (with 1-hour TTL), returning all if query is empty
+  const { searchThemes } = await getRegistryClient();
   const themes = await searchThemes(query);
 
   return successResponse({ themes });
@@ -116,6 +110,7 @@ async function handleGetRegistry(request: NextRequest) {
  * GET ?action=registry-sources — list configured registries
  */
 async function handleGetRegistrySources() {
+  const { getSources } = await getRegistryClient();
   const sources = await getSources();
   return successResponse({ sources });
 }
@@ -124,6 +119,7 @@ async function handleGetRegistrySources() {
  * GET ?action=updates — check for available theme updates
  */
 async function handleGetUpdates() {
+  const { checkForUpdates } = await getRegistryClient();
   const updates = await checkForUpdates();
   return successResponse({ updates });
 }
@@ -196,6 +192,12 @@ async function handleInstall(request: NextRequest) {
     return badRequest('No "theme" file field in form data');
   }
 
+  // Dynamic imports to avoid Turbopack tracing fs operations
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const os = await import('node:os');
+  const { installThemeBundle, loadInstalledBundles } = await getBundleLoader();
+
   // Write to temp file
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qtap-theme-upload-'));
   const tempFile = path.join(tempDir, file.name || 'theme.qtap-theme');
@@ -211,6 +213,7 @@ async function handleInstall(request: NextRequest) {
     }
 
     // Hot-load the newly installed theme into the registry
+    const { themeRegistry } = await getThemeRegistry();
     const bundles = await loadInstalledBundles();
     const newBundle = bundles.find(b => b.manifest.id === result.themeId);
     if (newBundle) {
@@ -250,6 +253,7 @@ async function handleInstallFromUrl(request: NextRequest) {
     return badRequest('Invalid URL format');
   }
 
+  const { installThemeBundleFromUrl, loadInstalledBundles } = await getBundleLoader();
   const result = await installThemeBundleFromUrl(body.url);
 
   if (!result.success) {
@@ -257,6 +261,7 @@ async function handleInstallFromUrl(request: NextRequest) {
   }
 
   // Hot-load the newly installed theme into the registry
+  const { themeRegistry } = await getThemeRegistry();
   const bundles = await loadInstalledBundles();
   const newBundle = bundles.find(b => b.manifest.id === result.themeId);
   if (newBundle) {
@@ -297,6 +302,7 @@ async function handleAddSource(request: NextRequest) {
   }
 
   try {
+    const { addSource } = await getRegistryClient();
     const source = await addSource({
       name: body.name || new URL(body.url).hostname,
       url: body.url,
@@ -328,6 +334,7 @@ async function handleRemoveSource(request: NextRequest) {
     return badRequest('Missing or invalid "name" field');
   }
 
+  const { removeSource } = await getRegistryClient();
   const removed = await removeSource(body.name);
   if (!removed) {
     return badRequest(`Registry source "${body.name}" not found`);
@@ -341,6 +348,7 @@ async function handleRemoveSource(request: NextRequest) {
  * Refresh all registry indexes
  */
 async function handleRefresh() {
+  const { refreshAllRegistries } = await getRegistryClient();
   const themes = await refreshAllRegistries();
   return successResponse({
     message: `Refreshed registries, found ${themes.length} themes`,
@@ -367,6 +375,7 @@ async function handleInstallFromRegistryAction(request: NextRequest) {
     return badRequest('Missing or invalid "registryUrl" field');
   }
 
+  const { installFromRegistry } = await getRegistryClient();
   const result = await installFromRegistry(body.themeId, body.registryUrl);
 
   if (!result.success) {
@@ -374,6 +383,8 @@ async function handleInstallFromRegistryAction(request: NextRequest) {
   }
 
   // Hot-load the newly installed theme into the registry
+  const { themeRegistry } = await getThemeRegistry();
+  const { loadInstalledBundles } = await getBundleLoader();
   const bundles = await loadInstalledBundles();
   const newBundle = bundles.find(b => b.manifest.id === result.themeId);
   if (newBundle) {

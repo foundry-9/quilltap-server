@@ -5,6 +5,7 @@ import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { Message, MemoryCascadeAction, ChatSettings } from '../types'
+import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 
 /** Info returned when delete requires memory cascade confirmation */
 export interface MemoryCascadeConfirmation {
@@ -24,7 +25,7 @@ export function useMessageActions(
   viewSourceMessageIds: Set<string>,
   setInput: (value: string) => void,
   setAttachedFiles: (value: any[] | ((prev: any[]) => any[])) => void,
-  inputRef: React.RefObject<HTMLTextAreaElement>,
+  inputRef: React.RefObject<ComposerEditorHandle | null>,
   messagesEndRef: React.RefObject<HTMLDivElement>,
   chatSettings?: ChatSettings | null,
 ) {

@@ -299,7 +299,6 @@ All constants and defaults are defined in `types.ts`:
 - `DEFAULT_DANGEROUS_CONTENT_SETTINGS`
 - `AVATAR_MODES`: Array of available avatar display modes with labels
 - `AVATAR_STYLES`: Array of available avatar styles with preview symbols
-- `VISION_PROVIDERS`: Providers that support vision/image analysis
 - `MEMORY_CASCADE_ACTIONS`: Available memory cascade action options
 
 ## API Integration

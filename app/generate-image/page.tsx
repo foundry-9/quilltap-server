@@ -9,6 +9,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import useSWR from 'swr'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useClickOutside } from '@/hooks/useClickOutside'
@@ -42,23 +43,12 @@ export default function GenerateImagePage() {
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  const { data: charactersData, isLoading } = useSWR<{ characters: Array<{ id: string; name: string }> }>('/api/v1/characters')
+
   // Load all characters for placeholder insertion
   useEffect(() => {
-    loadAllEntities()
-  }, [])
-
-  const loadAllEntities = async () => {
-    try {
-      const charactersRes = await fetch('/api/v1/characters')
-
-      if (!charactersRes.ok) {
-        throw new Error('Failed to load characters')
-      }
-
-      const charactersData = await charactersRes.json()
-      const characters = charactersData.characters || []
-
-      const entities: EntityOption[] = characters.map((c: any) => ({
+    if (charactersData?.characters) {
+      const entities: EntityOption[] = charactersData.characters.map((c) => ({
         id: c.id,
         name: c.name,
         type: 'character' as const,
@@ -67,11 +57,10 @@ export default function GenerateImagePage() {
       // Sort alphabetically
       entities.sort((a, b) => a.name.localeCompare(b.name))
 
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setAllEntities(entities)
-    } catch (error) {
-      console.error('Error loading entities', { error: error instanceof Error ? error.message : String(error) })
     }
-  }
+  }, [charactersData])
 
   const insertPlaceholder = (text: string) => {
     const textarea = promptRef.current
@@ -174,7 +163,7 @@ export default function GenerateImagePage() {
     <div className="qt-page-container max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Generate Image</h1>
+        <h1 className="qt-heading-2 text-foreground">Generate Image</h1>
         <Link href="/" className="text-sm qt-text-secondary hover:text-foreground">
           &larr; Back to Home
         </Link>
@@ -185,7 +174,7 @@ export default function GenerateImagePage() {
         <div className="space-y-4">
           {/* Image Profile Selection */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
+            <label className="block qt-label text-foreground mb-2">
               Image Profile
             </label>
             <ImageProfilePicker
@@ -196,7 +185,7 @@ export default function GenerateImagePage() {
 
           {/* Prompt Input */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
+            <label className="block qt-label text-foreground mb-2">
               Prompt
             </label>
             <div className="relative">
@@ -264,7 +253,7 @@ export default function GenerateImagePage() {
 
           {/* Image Count */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
+            <label className="block qt-label text-foreground mb-2">
               Number of Images
             </label>
             <select
@@ -313,7 +302,7 @@ export default function GenerateImagePage() {
       {/* Generated Images Gallery */}
       {generatedImages.length > 0 && (
         <div className="qt-card p-6">
-          <h2 className="text-lg font-semibold text-foreground mb-4">
+          <h2 className="qt-heading-4 text-foreground mb-4">
             Generated Images ({generatedImages.length})
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -378,7 +367,7 @@ export default function GenerateImagePage() {
             <circle cx="8.5" cy="8.5" r="1.5" />
             <polyline points="21 15 16 10 5 21" />
           </svg>
-          <p className="text-lg font-medium">No images generated yet</p>
+          <p className="qt-text-section">No images generated yet</p>
           <p className="text-sm mt-1">Enter a prompt and click Generate to create your first image</p>
         </div>
       )}

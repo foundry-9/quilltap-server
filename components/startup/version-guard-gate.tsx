@@ -1,59 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
-interface VersionBlock {
-  currentVersion: string;
-  highestVersion: string;
-}
+import { useHealthCheck } from '@/hooks/useHealthCheck';
 
 /**
  * VersionGuardGate
  *
- * Client component that checks for version guard blocks on mount.
- * If the running Quilltap version is older than the version that last
- * touched the database, displays a full-screen error explaining why
- * the server cannot proceed.
- *
- * Polls /api/health periodically so it can dismiss itself if the
- * block somehow resolves (e.g., the server is restarted with a newer version).
+ * Client component that displays a full-screen error when the running
+ * Quilltap version is older than what last touched the database. Uses
+ * the shared health-check hook which fetches /api/health once on mount
+ * and only polls when a problem is detected.
  */
 export function VersionGuardGate() {
-  const [versionBlock, setVersionBlock] = useState<VersionBlock | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function checkHealth() {
-      try {
-        const res = await fetch('/api/health');
-        if (cancelled) return;
-
-        if (res.status === 409) {
-          const data = await res.json();
-          if (data.versionBlock) {
-            setVersionBlock(data.versionBlock);
-          }
-        } else if (versionBlock) {
-          // Block resolved
-          setVersionBlock(null);
-        }
-      } catch {
-        // Server not responding — don't show version block UI
-      }
-    }
-
-    checkHealth();
-
-    // Poll every 5 seconds so we detect resolution
-    const interval = setInterval(checkHealth, 5000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { versionBlock } = useHealthCheck();
 
   if (!versionBlock) return null;
 

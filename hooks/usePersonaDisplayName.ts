@@ -27,56 +27,88 @@ interface UseUserCharacterDisplayNameResult {
   loading: boolean
 }
 
+// ============================================================================
+// Module-level cache for character disambiguation data
+// Shared across all hook instances to avoid redundant API calls
+// (each ChatCard mounts this hook, so without caching N cards = N fetches)
+// ============================================================================
+
+let cachedDuplicateNames: Set<string> | null = null
+let cachePromise: Promise<Set<string>> | null = null
+
+/**
+ * Reset the module-level cache. Used by tests to ensure clean state between test cases.
+ */
+export function resetDisplayNameCache(): void {
+  cachedDuplicateNames = null
+  cachePromise = null
+}
+
+function fetchDuplicateNames(): Promise<Set<string>> {
+  // Return existing promise if fetch is in progress (dedup concurrent calls)
+  if (cachePromise) return cachePromise
+
+  // Return cached result if available
+  if (cachedDuplicateNames) return Promise.resolve(cachedDuplicateNames)
+
+  cachePromise = (async () => {
+    try {
+      const res = await fetch('/api/v1/characters?controlledBy=user')
+      if (!res.ok) {
+        return new Set<string>()
+      }
+
+      const data = await res.json()
+      const characters: UserCharacterBasic[] = Array.isArray(data) ? data : (data.characters || [])
+
+      // Count occurrences of each name
+      const nameCounts = new Map<string, number>()
+      for (const character of characters) {
+        const count = nameCounts.get(character.name) || 0
+        nameCounts.set(character.name, count + 1)
+      }
+
+      // Find names that appear more than once
+      const duplicates = new Set<string>()
+      for (const [name, count] of nameCounts) {
+        if (count > 1) {
+          duplicates.add(name)
+        }
+      }
+
+      cachedDuplicateNames = duplicates
+      return duplicates
+    } catch {
+      return new Set<string>()
+    } finally {
+      cachePromise = null
+    }
+  })()
+
+  return cachePromise
+}
+
 /**
  * Hook to format user-controlled character display names, showing titles only when needed for disambiguation.
  * Fetches the user's characters (controlledBy=user) and tracks which names have duplicates.
+ * Results are cached at module level so multiple ChatCard instances share a single API call.
  */
 export function useUserCharacterDisplayName(): UseUserCharacterDisplayNameResult {
-  const [duplicateNames, setDuplicateNames] = useState<Set<string>>(new Set())
-  const [loading, setLoading] = useState(true)
+  const [duplicateNames, setDuplicateNames] = useState<Set<string>>(cachedDuplicateNames ?? new Set())
+  const [loading, setLoading] = useState(cachedDuplicateNames === null)
 
   useEffect(() => {
-    const fetchCharacters = async () => {
-      try {
-        // Fetch only user-controlled characters
-        const res = await fetch('/api/v1/characters?controlledBy=user')
-        if (!res.ok) {
-          if (res.status === 401) {
-            return
-          }
-          throw new Error(`Failed to fetch characters: ${res.status}`)
-        }
+    // If already cached, initial state handles it — no fetch needed
+    if (cachedDuplicateNames) return
 
-        const data = await res.json()
-        // API returns array directly, not wrapped in { characters: [] }
-        const characters: UserCharacterBasic[] = Array.isArray(data) ? data : (data.characters || [])
-
-        // Count occurrences of each name
-        const nameCounts = new Map<string, number>()
-        for (const character of characters) {
-          const count = nameCounts.get(character.name) || 0
-          nameCounts.set(character.name, count + 1)
-        }
-
-        // Find names that appear more than once
-        const duplicates = new Set<string>()
-        for (const [name, count] of nameCounts) {
-          if (count > 1) {
-            duplicates.add(name)
-          }
-        }
-
-        setDuplicateNames(duplicates)
-      } catch (err) {
-        console.warn('Error fetching characters for display name disambiguation', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-      } finally {
+    let mounted = true
+    fetchDuplicateNames().then(result => {
+      if (mounted) {
+        setDuplicateNames(result)
         setLoading(false)
       }
-    }
-
-    fetchCharacters()
+    })
+    return () => { mounted = false }
   }, [])
 
   const needsDisambiguation = useCallback(

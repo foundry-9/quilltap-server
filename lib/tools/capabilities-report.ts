@@ -86,7 +86,6 @@ export interface EnhancedDatabaseStats {
   embeddingProfiles: number;
   promptTemplates: { total: number; builtIn: number; custom: number };
   roleplayTemplates: { total: number; builtIn: number; custom: number };
-  filePermissions: number;
 }
 
 export interface FolderStats {
@@ -1154,15 +1153,6 @@ async function collectEnhancedDatabaseStats(userId: string): Promise<{ stats: En
     moduleLogger.debug('Failed to count roleplay templates', { error: getErrorMessage(error) });
   }
 
-  // File permissions
-  let filePermissionCount = 0;
-  try {
-    const permissions = await globalRepos.filePermissions.findAll();
-    filePermissionCount = permissions.length;
-  } catch (error) {
-    moduleLogger.debug('Failed to count file permissions', { error: getErrorMessage(error) });
-  }
-
   const stats: EnhancedDatabaseStats = {
     characters: characters.length,
     favoriteCharacters,
@@ -1175,7 +1165,6 @@ async function collectEnhancedDatabaseStats(userId: string): Promise<{ stats: En
     embeddingProfiles: embeddingProfileCount,
     promptTemplates: promptTemplateStats,
     roleplayTemplates: roleplayTemplateStats,
-    filePermissions: filePermissionCount,
   };
 
   moduleLogger.info('Collected enhanced database statistics', { rawResult: stats });
@@ -1650,7 +1639,6 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
   lines.push(`| Embedding Profiles | ${data.databaseStats.embeddingProfiles} |`);
   lines.push(`| Prompt Templates | ${data.databaseStats.promptTemplates.total} (${data.databaseStats.promptTemplates.builtIn} built-in, ${data.databaseStats.promptTemplates.custom} custom) |`);
   lines.push(`| Roleplay Templates | ${data.databaseStats.roleplayTemplates.total} (${data.databaseStats.roleplayTemplates.builtIn} built-in, ${data.databaseStats.roleplayTemplates.custom} custom) |`);
-  lines.push(`| File Permissions | ${data.databaseStats.filePermissions} |`);
   lines.push('');
 
   // ========================================================================

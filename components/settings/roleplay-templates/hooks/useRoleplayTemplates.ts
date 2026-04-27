@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import useSWR from 'swr'
 import { RoleplayTemplate, TemplateFormData, DelimiterFormEntry, INITIAL_FORM_DATA } from '../types'
 import type { TemplateDelimiter } from '@/lib/schemas/template.types'
 
@@ -70,14 +71,9 @@ function formEntriesToDelimiters(entries: DelimiterFormEntry[]): TemplateDelimit
 }
 
 export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
-  const [templates, setTemplates] = useState<RoleplayTemplate[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-
-  // Default template state
-  const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null)
   const [defaultSaving, setDefaultSaving] = useState(false)
 
   // Modal state
@@ -91,40 +87,25 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
+  // Fetch templates and settings via SWR
+  const { data: templatesData, isLoading: loading, mutate: mutateTemplates } = useSWR<RoleplayTemplate[]>(
+    '/api/v1/roleplay-templates'
+  )
+  const { data: chatSettingsData } = useSWR<{ defaultRoleplayTemplateId?: string | null }>(
+    '/api/v1/settings/chat'
+  )
+
+  const templates = templatesData ?? []
+  const defaultTemplateId = chatSettingsData?.defaultRoleplayTemplateId ?? null
+
+  // Fetch helpers (backward compatibility)
   const fetchTemplates = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await fetch('/api/v1/roleplay-templates')
-      if (!res.ok) throw new Error('Failed to fetch templates')
-      const data = await res.json()
-      setTemplates(data)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'An error occurred'
-      setError(message)
-      console.error('Error fetching roleplay templates', { error: message })
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    await mutateTemplates()
+  }, [mutateTemplates])
 
   const fetchChatSettings = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/settings/chat')
-      if (!res.ok) throw new Error('Failed to fetch chat settings')
-      const data = await res.json()
-      setDefaultTemplateId(data.defaultRoleplayTemplateId || null)
-    } catch (err) {
-      console.error('Error fetching chat settings', {
-        error: err instanceof Error ? err.message : 'Unknown error',
-      })
-    }
+    // Settings already synced via SWR
   }, [])
-
-  useEffect(() => {
-    fetchTemplates()
-    fetchChatSettings()
-  }, [fetchTemplates, fetchChatSettings])
 
   const handleDefaultTemplateChange = async (templateId: string | null) => {
     try {
@@ -142,7 +123,6 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         throw new Error(data?.error || `Failed to update default template (${res.status})`)
       }
 
-      setDefaultTemplateId(templateId)
       setSuccess('Default template updated successfully')
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
@@ -213,10 +193,8 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
           throw new Error(data?.error || `Failed to update template (${res.status})`)
         }
 
-        const updated = await res.json()
-        setTemplates(prev =>
-          prev.map(t => t.id === updated.id ? updated : t)
-        )
+        await res.json()
+        await mutateTemplates()
         setSuccess('Template updated successfully')
       } else {
         // Create new template
@@ -232,7 +210,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         }
 
         const created = await res.json()
-        setTemplates(prev => [...prev, created])
+        await mutateTemplates()
         setSuccess('Template created successfully')
       }
 
@@ -261,7 +239,7 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
         throw new Error(data?.error || `Failed to delete template (${res.status})`)
       }
 
-      setTemplates(prev => prev.filter(t => t.id !== templateId))
+      await mutateTemplates()
       setSuccess('Template deleted successfully')
       setDeleteConfirm(null)
       setTimeout(() => setSuccess(null), 3000)

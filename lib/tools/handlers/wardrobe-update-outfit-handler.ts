@@ -13,11 +13,19 @@ import { EMPTY_EQUIPPED_SLOTS, buildCoverageSummary, WARDROBE_SLOT_TYPES } from 
 import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 
 export interface WardrobeUpdateOutfitToolContext {
   userId: string;
   chatId: string;
   characterId: string;
+}
+
+const NO_ITEM_SENTINELS = new Set(['none', 'null', '']);
+
+function normalizeNoItemSentinel(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return NO_ITEM_SENTINELS.has(value.trim().toLowerCase()) ? undefined : value;
 }
 
 export class WardrobeUpdateOutfitError extends Error {
@@ -63,7 +71,22 @@ export async function executeWardrobeUpdateOutfitTool(
       };
     }
 
-    const { slot, item_id, item_title, preset_id } = input;
+    const { slot, preset_id } = input;
+    // Normalize "no item" sentinels ("none", "null", "") to undefined so they
+    // route through the unequip path instead of failing an item lookup. LLMs
+    // commonly fill required-looking string fields with these placeholders.
+    const item_id = normalizeNoItemSentinel(input.item_id);
+    const item_title = normalizeNoItemSentinel(input.item_title);
+    if (input.item_id !== item_id || input.item_title !== item_title) {
+      logger.debug('Normalized no-item sentinel on update_outfit_item input', {
+        context: 'wardrobe-update-outfit-handler',
+        chatId: context.chatId,
+        characterId: context.characterId,
+        slot,
+        originalItemId: input.item_id,
+        originalItemTitle: input.item_title,
+      });
+    }
 
     // --- Preset application flow ---
     if (preset_id) {
@@ -97,11 +120,12 @@ export async function executeWardrobeUpdateOutfitTool(
         );
       }
 
-      // Check that none of the preset's items are archived
+      // Check that none of the preset's items are archived. Use the overlay-
+      // aware lookup so vault-only items (no DB row) resolve correctly.
       for (const slotKey of WARDROBE_SLOT_TYPES) {
         const itemId = preset.slots[slotKey];
         if (itemId) {
-          const item = await repos.wardrobe.findById(itemId);
+          const item = await repos.wardrobe.findByIdForCharacter(context.characterId, itemId);
           if (item?.archivedAt) {
             logger.warn('Preset references archived wardrobe item', {
               context: 'wardrobe-update-outfit-handler',
@@ -124,7 +148,7 @@ export async function executeWardrobeUpdateOutfitTool(
       for (const slotKey of WARDROBE_SLOT_TYPES) {
         const itemId = preset.slots[slotKey];
         if (itemId !== null && itemId !== undefined) {
-          const presetItem = await repos.wardrobe.findById(itemId);
+          const presetItem = await repos.wardrobe.findByIdForCharacter(context.characterId, itemId);
           if (presetItem) {
             await equipWithDisplacement(repos, context.chatId, context.characterId, presetItem);
           } else {
@@ -152,7 +176,7 @@ export async function executeWardrobeUpdateOutfitTool(
 
       // Load full current state after preset application
       const currentState = await loadCurrentState(repos, context);
-      const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
+      const coverageSummary = await buildCoverageSummaryFromState(repos, context.characterId, currentState);
 
       // Trigger avatar generation if enabled
       await triggerAvatarGenerationIfEnabled(repos, {
@@ -161,6 +185,8 @@ export async function executeWardrobeUpdateOutfitTool(
         characterId: context.characterId,
         callerContext: 'wardrobe-update-outfit-handler',
       });
+
+      await scheduleAnnouncement(context, 'preset');
 
       return {
         success: true,
@@ -178,9 +204,11 @@ export async function executeWardrobeUpdateOutfitTool(
       // --- Equip action ---
       let item: WardrobeItem | null = null;
 
-      // Look up item by ID first
+      // Look up item by ID first. Use the overlay-aware lookup so vault-only
+      // items (no DB row, UUID derived from the file path) resolve correctly,
+      // and so that archetypes (characterId == null) also resolve.
       if (item_id) {
-        item = await repos.wardrobe.findById(item_id);
+        item = await repos.wardrobe.findByIdForCharacter(context.characterId, item_id);
         logger.debug('Wardrobe item lookup by ID', {
           context: 'wardrobe-update-outfit-handler',
           itemId: item_id,
@@ -215,21 +243,6 @@ export async function executeWardrobeUpdateOutfitTool(
         });
         throw new WardrobeUpdateOutfitError(
           `Wardrobe item not found${item_id ? ` with ID "${item_id}"` : ''}${item_title ? ` with title "${item_title}"` : ''}`,
-          'NOT_FOUND'
-        );
-      }
-
-      // Validate item belongs to this character (or is an archetype with null characterId)
-      if (item.characterId != null && item.characterId !== context.characterId) {
-        logger.warn('Wardrobe item does not belong to character', {
-          context: 'wardrobe-update-outfit-handler',
-          userId: context.userId,
-          characterId: context.characterId,
-          itemCharacterId: item.characterId,
-          itemId: item.id,
-        });
-        throw new WardrobeUpdateOutfitError(
-          `Item "${item.title}" does not belong to this character`,
           'NOT_FOUND'
         );
       }
@@ -282,7 +295,7 @@ export async function executeWardrobeUpdateOutfitTool(
 
       // Load full current state after update
       const currentState = await loadCurrentState(repos, context);
-      const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
+      const coverageSummary = await buildCoverageSummaryFromState(repos, context.characterId, currentState);
 
       // Trigger avatar generation if enabled
       await triggerAvatarGenerationIfEnabled(repos, {
@@ -291,6 +304,8 @@ export async function executeWardrobeUpdateOutfitTool(
         characterId: context.characterId,
         callerContext: 'wardrobe-update-outfit-handler',
       });
+
+      await scheduleAnnouncement(context, slot);
 
       return {
         success: true,
@@ -314,7 +329,7 @@ export async function executeWardrobeUpdateOutfitTool(
 
       // Load full current state after update
       const currentState = await loadCurrentState(repos, context);
-      const coverageSummary = await buildCoverageSummaryFromState(repos, currentState);
+      const coverageSummary = await buildCoverageSummaryFromState(repos, context.characterId, currentState);
 
       // Trigger avatar generation if enabled
       await triggerAvatarGenerationIfEnabled(repos, {
@@ -323,6 +338,8 @@ export async function executeWardrobeUpdateOutfitTool(
         characterId: context.characterId,
         callerContext: 'wardrobe-update-outfit-handler',
       });
+
+      await scheduleAnnouncement(context, slot);
 
       return {
         success: true,
@@ -370,6 +387,31 @@ export async function executeWardrobeUpdateOutfitTool(
 }
 
 /**
+ * Best-effort schedule of the debounced Aurora outfit announcement.
+ * Failures are swallowed — the outfit change itself succeeded, the
+ * announcement is purely cosmetic.
+ */
+async function scheduleAnnouncement(
+  context: WardrobeUpdateOutfitToolContext,
+  slot: string,
+): Promise<void> {
+  try {
+    await enqueueWardrobeOutfitAnnouncement(context.userId, {
+      chatId: context.chatId,
+      characterId: context.characterId,
+    });
+  } catch (error) {
+    logger.warn('Failed to schedule wardrobe outfit announcement', {
+      context: 'wardrobe-update-outfit-handler',
+      chatId: context.chatId,
+      characterId: context.characterId,
+      slot,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
  * Load the current equipped outfit state for a character in a chat
  */
 async function loadCurrentState(
@@ -388,6 +430,7 @@ async function loadCurrentState(
  */
 async function buildCoverageSummaryFromState(
   repos: ReturnType<typeof getRepositories>,
+  characterId: string,
   slots: EquippedSlots
 ): Promise<string> {
   const items: Record<string, WardrobeItem | null> = {
@@ -400,7 +443,7 @@ async function buildCoverageSummaryFromState(
   for (const slotKey of ['top', 'bottom', 'footwear', 'accessories'] as const) {
     const itemId = slots[slotKey];
     if (itemId) {
-      items[slotKey] = await repos.wardrobe.findById(itemId);
+      items[slotKey] = await repos.wardrobe.findByIdForCharacter(characterId, itemId);
     }
   }
 

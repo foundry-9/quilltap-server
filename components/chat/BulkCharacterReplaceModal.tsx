@@ -77,11 +77,12 @@ export default function BulkCharacterReplaceModal({
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on open; parent renders unconditionally
       setSourceSelection('')
       setTargetSelection('')
       setRoleFilter('both')
     }
-  }, [isOpen, chatId, participants.length, messages.length, hasUnassignedMessages])
+  }, [isOpen])
 
   // Handle click outside to close
   useClickOutside(
@@ -126,6 +127,7 @@ export default function BulkCharacterReplaceModal({
   // Clear target when source changes (if target equals source)
   useEffect(() => {
     if (targetSelection && targetSelection === sourceSelection) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset fires only on open; parent renders unconditionally
       setTargetSelection('')
     }
   }, [sourceSelection, targetSelection])
@@ -233,7 +235,7 @@ export default function BulkCharacterReplaceModal({
             <>
               {/* Source Participant */}
               <div className="space-y-2">
-                <label className="block text-sm font-medium">Re-attribute from:</label>
+                <label className="block qt-label">Re-attribute from:</label>
                 <select
                   value={sourceSelection}
                   onChange={(e) => setSourceSelection(e.target.value)}
@@ -254,7 +256,7 @@ export default function BulkCharacterReplaceModal({
 
               {/* Target Participant */}
               <div className="space-y-2">
-                <label className="block text-sm font-medium">Re-attribute to:</label>
+                <label className="block qt-label">Re-attribute to:</label>
                 <select
                   value={targetSelection}
                   onChange={(e) => setTargetSelection(e.target.value)}
@@ -272,7 +274,7 @@ export default function BulkCharacterReplaceModal({
 
               {/* Role Filter */}
               <div className="space-y-2">
-                <label className="block text-sm font-medium">Which messages?</label>
+                <label className="block qt-label">Which messages?</label>
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input

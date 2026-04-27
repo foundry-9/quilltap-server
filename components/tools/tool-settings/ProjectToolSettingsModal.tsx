@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import useSWR from 'swr'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { ToolSettingsContent } from './ToolSettingsContent'
@@ -30,39 +31,20 @@ export function ProjectToolSettingsModal({
   disabledToolGroups,
   onSuccess,
 }: Readonly<ProjectToolSettingsModalProps>) {
-  const [availableTools, setAvailableTools] = useState<AvailableTool[]>([])
   const [localDisabledTools, setLocalDisabledTools] = useState<Set<string>>(new Set(disabledTools))
   const [localDisabledGroups, setLocalDisabledGroups] = useState<Set<string>>(new Set(disabledToolGroups))
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Fetch available tools when modal opens
-  useEffect(() => {
-    if (!isOpen) return
+  // Fetch available tools via SWR (gated by isOpen)
+  const { data: toolsData, isLoading: loading } = useSWR<{ tools: AvailableTool[] }>(
+    isOpen ? '/api/v1/tools' : null
+  )
 
-    const fetchTools = async () => {
-      setLoading(true)
-      try {
-        // Fetch tools without chatId - no availability info for project-level settings
-        const response = await fetch('/api/v1/tools')
-        if (!response.ok) {
-          throw new Error('Failed to fetch tools')
-        }
-        const data = await response.json()
-        setAvailableTools(data.tools || [])
-      } catch (error) {
-        showErrorToast('Failed to load available tools')
-        console.error('Error fetching tools:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchTools()
-  }, [isOpen])
+  const availableTools = toolsData?.tools ?? []
 
   // Reset local state when props change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- user-editable local state must re-sync when upstream disabledTools changes (parent renders unconditionally)
     setLocalDisabledTools(new Set(disabledTools))
     setLocalDisabledGroups(new Set(disabledToolGroups))
   }, [disabledTools, disabledToolGroups])

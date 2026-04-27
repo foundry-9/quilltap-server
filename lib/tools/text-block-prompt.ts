@@ -16,8 +16,8 @@ import { logger } from '@/lib/logger'
 export interface TextBlockPromptOptions {
   /** Enable whisper (private messaging) tool */
   whisper?: boolean
-  /** Enable memory search tool */
-  memorySearch?: boolean
+  /** Enable search tool */
+  search?: boolean
   /** Enable image generation tool */
   imageGeneration?: boolean
   /** Enable web search tool */
@@ -26,8 +26,6 @@ export interface TextBlockPromptOptions {
   state?: boolean
   /** Enable RNG/dice tool */
   rng?: boolean
-  /** Enable file management tool */
-  fileManagement?: boolean
   /** Enable project info tool */
   projectInfo?: boolean
   /** Enable help search tool */
@@ -63,13 +61,13 @@ Format: [[WHISPER to="character name"]]your private message[[/WHISPER]]
 Example: [[WHISPER to="Elena"]]I need to tell you something the others shouldn't hear.[[/WHISPER]]`)
   }
 
-  if (options.memorySearch !== false) {
+  if (options.search !== false) {
     toolDocs.push(`
-### Memory Search
-Search your memories for information about past conversations, preferences, or facts.
-Format: [[SEARCH_MEMORIES]]what to search for[[/SEARCH_MEMORIES]]
-Example: [[SEARCH_MEMORIES]]user's favorite food[[/SEARCH_MEMORIES]]
-Example: [[SEARCH_MEMORIES limit="3"]]what we discussed about the garden[[/SEARCH_MEMORIES]]`)
+### Search
+Search the Scriptorium for information about past conversations, preferences, or facts.
+Format: [[SEARCH]]what to search for[[/SEARCH]]
+Example: [[SEARCH]]user's favorite food[[/SEARCH]]
+Example: [[SEARCH limit="3"]]what we discussed about the garden[[/SEARCH]]`)
   }
 
   if (options.imageGeneration) {
@@ -106,22 +104,12 @@ Format: [[RNG type="d6" count="3" /]]
 Format: [[RNG type="number" min="1" max="100" /]]`)
   }
 
-  if (options.fileManagement) {
-    toolDocs.push(`
-### File Management
-Read, write, or list files in the project or chat.
-Format (list): [[FILE_MANAGEMENT action="list" scope="project" /]]
-Format (read): [[FILE_MANAGEMENT action="read" path="notes.txt" /]]
-Format (write): [[FILE_MANAGEMENT action="write" path="notes.txt"]]file content here[[/FILE_MANAGEMENT]]`)
-  }
-
   if (options.projectInfo) {
     toolDocs.push(`
 ### Project Info
-Get information about the current project — instructions, files, search.
-Format: [[PROJECT_INFO action="instructions" /]]
-Format: [[PROJECT_INFO action="list_files" /]]
-Format: [[PROJECT_INFO action="search_files"]]search query[[/PROJECT_INFO]]`)
+Get information about the current project — name, description, character roster, instructions.
+Format: [[PROJECT_INFO action="get_info" /]]
+Format: [[PROJECT_INFO action="get_instructions" /]]`)
   }
 
   if (options.helpSearch) {

@@ -34,6 +34,9 @@ const BACKUP_FILENAME_RE = /^quilltap-(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})(\d{
 /** Regex to parse LLM logs backup filenames: quilltap-llm-logs-YYYY-MM-DDTHHmmss.db */
 const LLM_LOGS_BACKUP_FILENAME_RE = /^quilltap-llm-logs-(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})(\d{2})\.db$/;
 
+/** Regex to parse mount index backup filenames: quilltap-mount-index-YYYY-MM-DDTHHmmss.db */
+const MOUNT_INDEX_BACKUP_FILENAME_RE = /^quilltap-mount-index-(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})(\d{2})\.db$/;
+
 /**
  * Generate a backup filename from the current timestamp.
  *
@@ -104,6 +107,47 @@ function generateLLMLogsBackupFilename(): string {
  */
 export function parseLLMLogsBackupFilename(filename: string): Date | null {
   const match = LLM_LOGS_BACKUP_FILENAME_RE.exec(filename);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute, second] = match;
+  return new Date(
+    parseInt(year, 10),
+    parseInt(month, 10) - 1,
+    parseInt(day, 10),
+    parseInt(hour, 10),
+    parseInt(minute, 10),
+    parseInt(second, 10),
+  );
+}
+
+/**
+ * Generate a backup filename for the mount index database.
+ *
+ * Format: quilltap-mount-index-YYYY-MM-DDTHHmmss.db
+ */
+function generateMountIndexBackupFilename(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const timestamp = [
+    now.getFullYear(),
+    '-', pad(now.getMonth() + 1),
+    '-', pad(now.getDate()),
+    'T',
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+    pad(now.getSeconds()),
+  ].join('');
+
+  return `quilltap-mount-index-${timestamp}.db`;
+}
+
+/**
+ * Parse a mount index backup filename into a Date.
+ *
+ * @returns Date if filename matches the expected format, null otherwise
+ */
+export function parseMountIndexBackupFilename(filename: string): Date | null {
+  const match = MOUNT_INDEX_BACKUP_FILENAME_RE.exec(filename);
   if (!match) return null;
 
   const [, year, month, day, hour, minute, second] = match;
@@ -311,6 +355,70 @@ export async function createLLMLogsPhysicalBackup(db: DatabaseType): Promise<str
 }
 
 // ============================================================================
+// Mount Index Physical Backup
+// ============================================================================
+
+/**
+ * Create a physical backup of the mount index database.
+ *
+ * Same approach as createPhysicalBackup (VACUUM INTO) but for
+ * quilltap-mount-index.db. This database holds the document-store indexes
+ * and — since v4.3 — the actual bytes of every database-backed document
+ * store, so it is part of the user's data and must be backed up.
+ *
+ * @param db - The better-sqlite3 database instance for the mount index DB
+ * @returns The path to the created backup file, or null on failure
+ */
+export async function createMountIndexPhysicalBackup(db: DatabaseType): Promise<string | null> {
+  if (!shouldCreateBackup(parseMountIndexBackupFilename, 'mount index')) {
+    return null;
+  }
+
+  const backupsDir = getBackupsDir();
+  const filename = generateMountIndexBackupFilename();
+  const backupPath = path.join(backupsDir, filename);
+
+  try {
+    if (!fs.existsSync(backupsDir)) {
+      fs.mkdirSync(backupsDir, { recursive: true });
+    }
+
+    moduleLogger.info('Starting mount index physical backup', {
+      destination: backupPath,
+    });
+
+    // Use VACUUM INTO for SQLCipher-compatible backups (see createPhysicalBackup)
+    db.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`);
+
+    const stat = fs.statSync(backupPath);
+    moduleLogger.info('Mount index physical backup created', {
+      path: backupPath,
+      sizeBytes: stat.size,
+    });
+
+    return backupPath;
+  } catch (error) {
+    moduleLogger.error('Mount index physical backup failed', {
+      destination: backupPath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    try {
+      if (fs.existsSync(backupPath)) {
+        fs.unlinkSync(backupPath);
+      }
+    } catch (cleanupError) {
+      moduleLogger.error('Failed to clean up partial mount index backup file', {
+        path: backupPath,
+        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+      });
+    }
+
+    return null;
+  }
+}
+
+// ============================================================================
 // Retention Policy
 // ============================================================================
 
@@ -323,7 +431,11 @@ export async function createLLMLogsPhysicalBackup(db: DatabaseType): Promise<str
  * - 1 per month for months 1-12
  * - 1 per year indefinitely
  *
- * Within each bucket, the most recent backup is kept.
+ * Within each weekly/monthly bucket, the OLDEST backup in range is kept so
+ * that it has the most runway to age into the next bucket on the following
+ * day's retention pass. Picking the newest caused a cascade where every
+ * weekly-bucket backup was replaced (and deleted) the day after it first
+ * entered the bucket, so nothing ever aged past ~8 days.
  */
 export async function applyRetentionPolicy(): Promise<void> {
   const backupsDir = getBackupsDir();
@@ -335,12 +447,23 @@ export async function applyRetentionPolicy(): Promise<void> {
 
     const files = fs.readdirSync(backupsDir);
 
-    // Collect main DB backups and LLM logs backups separately
+    // Collect each database's backups separately so retention buckets never
+    // cross-delete across databases.
     const backups: { filename: string; date: Date }[] = [];
     const llmLogsBackups: { filename: string; date: Date }[] = [];
+    const mountIndexBackups: { filename: string; date: Date }[] = [];
 
     for (const filename of files) {
-      // Check LLM logs pattern first (it's more specific)
+      // Check the more specific patterns first — the main "quilltap-…" regex
+      // would otherwise swallow quilltap-llm-logs-… and quilltap-mount-index-…
+      // filenames. Actually it won't, because the main regex requires a digit
+      // immediately after "quilltap-", but order-of-check is still cheapest.
+      const mountIndexDate = parseMountIndexBackupFilename(filename);
+      if (mountIndexDate) {
+        mountIndexBackups.push({ filename, date: mountIndexDate });
+        continue;
+      }
+
       const llmLogsDate = parseLLMLogsBackupFilename(filename);
       if (llmLogsDate) {
         llmLogsBackups.push({ filename, date: llmLogsDate });
@@ -353,10 +476,11 @@ export async function applyRetentionPolicy(): Promise<void> {
       }
     }
 
-    // Apply retention to both backup sets
+    // Apply retention to each backup set
     const allSets = [
       { label: 'main', items: backups },
       { label: 'llm-logs', items: llmLogsBackups },
+      { label: 'mount-index', items: mountIndexBackups },
     ];
 
     for (const { label, items } of allSets) {
@@ -379,12 +503,14 @@ export async function applyRetentionPolicy(): Promise<void> {
         }
       }
 
-      // Phase 2: Keep 1 per week for weeks 1-4 (days 7-28)
+      // Phase 2: Keep 1 per week for weeks 1-4 (days 7-28).
+      // Iterate oldest-first so the picked backup can age into the next bucket.
       for (let week = 1; week <= 4; week++) {
         const weekStart = 7 * week * msPerDay;
         const weekEnd = 7 * (week + 1) * msPerDay;
 
-        for (const backup of items) {
+        for (let i = items.length - 1; i >= 0; i--) {
+          const backup = items[i];
           const ageMs = now.getTime() - backup.date.getTime();
           if (ageMs >= weekStart && ageMs < weekEnd) {
             keep.add(backup.filename);
@@ -393,12 +519,14 @@ export async function applyRetentionPolicy(): Promise<void> {
         }
       }
 
-      // Phase 3: Keep 1 per month for months 1-12 (approx days 28-365)
+      // Phase 3: Keep 1 per month for months 1-12 (approx days 28-388).
+      // Iterate oldest-first for the same reason as Phase 2.
       for (let month = 1; month <= 12; month++) {
         const monthStart = (28 + (month - 1) * 30) * msPerDay;
         const monthEnd = (28 + month * 30) * msPerDay;
 
-        for (const backup of items) {
+        for (let i = items.length - 1; i >= 0; i--) {
+          const backup = items[i];
           const ageMs = now.getTime() - backup.date.getTime();
           if (ageMs >= monthStart && ageMs < monthEnd) {
             keep.add(backup.filename);

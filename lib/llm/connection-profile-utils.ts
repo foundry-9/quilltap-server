@@ -3,16 +3,57 @@
  *
  * Helper functions for working with connection profiles,
  * including attachment support information.
+ *
+ * Image support is resolved from the profile's own `supportsImageUpload`
+ * flag; non-image MIME types (PDF, text) still consult the per-provider
+ * capability map, since those vary little within a provider.
  */
 
 import { ConnectionProfile } from '@/lib/schemas/types'
 import {
   getSupportedMimeTypes,
-  supportsFileAttachments,
   supportsMimeType,
-  getSupportedFileTypes,
-  getAttachmentSupportDescription,
 } from './attachment-support'
+
+/**
+ * Effective supported MIME types for a profile.
+ * Images come from the per-profile flag; non-image types come from the
+ * provider capability map.
+ */
+function getProfileSupportedMimeTypes(profile: ConnectionProfile): string[] {
+  const providerTypes = getSupportedMimeTypes(profile.provider, profile.baseUrl ?? undefined)
+  const nonImageTypes = providerTypes.filter((t) => !t.startsWith('image/'))
+  const imageTypes = profile.supportsImageUpload
+    ? ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    : []
+  return [...imageTypes, ...nonImageTypes]
+}
+
+/**
+ * Human-readable description of attachment support for a profile, accounting
+ * for the per-profile image-upload flag in addition to provider capabilities.
+ */
+export function getProfileAttachmentSupportDescription(profile: ConnectionProfile): string {
+  const types = getProfileSupportedMimeTypes(profile)
+  if (types.length === 0) return 'No file attachments supported'
+
+  const parts: string[] = []
+  const images = types.filter((t) => t.startsWith('image/'))
+  if (images.length > 0) {
+    const formats = images.map((t) => t.replace('image/', '').toUpperCase())
+    parts.push(`Images (${formats.join(', ')})`)
+  }
+  if (types.includes('application/pdf')) parts.push('PDF documents')
+  const text = types.filter((t) => t.startsWith('text/'))
+  if (text.length > 0) {
+    const formats = text.map((t) => {
+      const f = t.replace('text/', '')
+      return f === 'plain' ? 'TXT' : f.toUpperCase()
+    })
+    parts.push(`Text files (${formats.join(', ')})`)
+  }
+  return parts.join(', ')
+}
 
 /**
  * Extended connection profile with attachment support information
@@ -53,19 +94,19 @@ export interface ConnectionProfileWithAttachmentSupport extends ConnectionProfil
 export function enrichConnectionProfileWithAttachmentSupport(
   profile: ConnectionProfile
 ): ConnectionProfileWithAttachmentSupport {
-  const supportedMimeTypes = getSupportedMimeTypes(profile.provider, profile.baseUrl ?? undefined)
-  const supportedFileTypes = getSupportedFileTypes(profile.provider, profile.baseUrl ?? undefined)
-  const attachmentSupportDescription = getAttachmentSupportDescription(
-    profile.provider,
-    profile.baseUrl ?? undefined
-  )
-
+  const supportedMimeTypes = getProfileSupportedMimeTypes(profile)
+  const supportedFileTypes = {
+    images: supportedMimeTypes.filter((t) => t.startsWith('image/')),
+    documents: supportedMimeTypes.filter((t) => t === 'application/pdf'),
+    text: supportedMimeTypes.filter((t) => t.startsWith('text/')),
+    all: supportedMimeTypes,
+  }
   return {
     ...profile,
     supportedMimeTypes,
     supportsFileAttachments: supportedMimeTypes.length > 0,
     supportedFileTypes,
-    attachmentSupportDescription,
+    attachmentSupportDescription: getProfileAttachmentSupportDescription(profile),
   }
 }
 
@@ -92,6 +133,9 @@ export function profileSupportsMimeType(
   profile: ConnectionProfile,
   mimeType: string
 ): boolean {
+  if (mimeType.startsWith('image/')) {
+    return profile.supportsImageUpload === true
+  }
   return supportsMimeType(profile.provider, mimeType, profile.baseUrl ?? undefined)
 }
 
@@ -104,9 +148,7 @@ export function profileSupportsMimeType(
 export function filterProfilesWithAttachmentSupport(
   profiles: ConnectionProfile[]
 ): ConnectionProfile[] {
-  return profiles.filter(profile =>
-    supportsFileAttachments(profile.provider, profile.baseUrl ?? undefined)
-  )
+  return profiles.filter(profile => getProfileSupportedMimeTypes(profile).length > 0)
 }
 
 /**
@@ -175,20 +217,20 @@ export function groupProfilesByAttachmentSupport(profiles: ConnectionProfile[]):
   const supportsNone: ConnectionProfile[] = []
 
   for (const profile of profiles) {
-    const fileTypes = getSupportedFileTypes(profile.provider, profile.baseUrl ?? undefined)
+    const supportedMimeTypes = getProfileSupportedMimeTypes(profile)
 
-    if (fileTypes.all.length === 0) {
+    if (supportedMimeTypes.length === 0) {
       supportsNone.push(profile)
     } else {
       supportsAny.push(profile)
 
-      if (fileTypes.images.length > 0) {
+      if (supportedMimeTypes.some((t) => t.startsWith('image/'))) {
         supportsImages.push(profile)
       }
-      if (fileTypes.documents.length > 0) {
+      if (supportedMimeTypes.some((t) => t === 'application/pdf')) {
         supportsDocuments.push(profile)
       }
-      if (fileTypes.text.length > 0) {
+      if (supportedMimeTypes.some((t) => t.startsWith('text/'))) {
         supportsText.push(profile)
       }
     }

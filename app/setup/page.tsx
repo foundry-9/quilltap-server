@@ -68,6 +68,7 @@ export default function SetupPage() {
   }, [navigateAfterSetup, router]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch triggered on mount; return signature contract predates useSWR migration
     checkState();
   }, [checkState]);
 

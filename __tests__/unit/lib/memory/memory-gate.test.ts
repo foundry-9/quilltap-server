@@ -14,6 +14,7 @@ import {
   extractNovelDetails,
   calculateReinforcedImportance,
   MERGE_THRESHOLD,
+  NEAR_DUPLICATE_THRESHOLD,
   RELATED_THRESHOLD,
   type GateDecision,
   type GateResult,
@@ -245,6 +246,29 @@ describe('Type structure verification', () => {
       expect(decision.relatedMemories[0].similarity).toBe(0.75)
       expect(decision.relatedMemories[1].memory.id).toBe('mem-2')
     })
+
+    it('SKIP_NEAR_DUPLICATE has existingMemory and similarity', () => {
+      const memory = makeMemory()
+      const decision: GateDecision = {
+        action: 'SKIP_NEAR_DUPLICATE',
+        existingMemory: memory,
+        similarity: 0.93,
+      }
+
+      expect(decision.action).toBe('SKIP_NEAR_DUPLICATE')
+      expect(decision.existingMemory).toBe(memory)
+      expect(decision.similarity).toBe(0.93)
+    })
+
+    it('SKIP_EMBEDDING_FAILED has a reason string', () => {
+      const decision: GateDecision = {
+        action: 'SKIP_EMBEDDING_FAILED',
+        reason: 'Embedding failed after retry: ECONNREFUSED',
+      }
+
+      expect(decision.action).toBe('SKIP_EMBEDDING_FAILED')
+      expect(decision.reason).toContain('ECONNREFUSED')
+    })
   })
 
   describe('GateResult', () => {
@@ -320,19 +344,49 @@ describe('Type structure verification', () => {
       expect(outcome.action).toBe('INSERT_RELATED')
       expect(outcome.relatedMemoryIds).toEqual(['mem-related-1'])
     })
+
+    it('supports SKIP_NEAR_DUPLICATE action with the absorbing memory and similarity', () => {
+      const memory = makeMemory()
+      const outcome: MemoryGateOutcome = {
+        memory,
+        action: 'SKIP_NEAR_DUPLICATE',
+        similarity: 0.95,
+      }
+
+      expect(outcome.action).toBe('SKIP_NEAR_DUPLICATE')
+      expect(outcome.similarity).toBe(0.95)
+      expect(outcome.memory).toBe(memory)
+    })
+
+    it('supports SKIP_EMBEDDING_FAILED action with null memory and reason', () => {
+      const outcome: MemoryGateOutcome = {
+        memory: null,
+        action: 'SKIP_EMBEDDING_FAILED',
+        reason: 'Embedding failed after retry: ECONNREFUSED',
+      }
+
+      expect(outcome.action).toBe('SKIP_EMBEDDING_FAILED')
+      expect(outcome.memory).toBeNull()
+      expect(outcome.reason).toContain('Embedding failed')
+    })
   })
 
   describe('Exported constants', () => {
-    it('MERGE_THRESHOLD is 0.80', () => {
-      expect(MERGE_THRESHOLD).toBe(0.80)
+    it('MERGE_THRESHOLD is 0.85', () => {
+      expect(MERGE_THRESHOLD).toBe(0.85)
+    })
+
+    it('NEAR_DUPLICATE_THRESHOLD is 0.90', () => {
+      expect(NEAR_DUPLICATE_THRESHOLD).toBe(0.90)
     })
 
     it('RELATED_THRESHOLD is 0.70', () => {
       expect(RELATED_THRESHOLD).toBe(0.70)
     })
 
-    it('MERGE_THRESHOLD is greater than RELATED_THRESHOLD', () => {
+    it('thresholds are ordered RELATED < MERGE < NEAR_DUPLICATE', () => {
       expect(MERGE_THRESHOLD).toBeGreaterThan(RELATED_THRESHOLD)
+      expect(NEAR_DUPLICATE_THRESHOLD).toBeGreaterThan(MERGE_THRESHOLD)
     })
   })
 })

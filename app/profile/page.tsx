@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import useSWR from 'swr'
+import { getErrorMessage } from '@/lib/error-utils'
 import {
   ProfileInfoSection,
   ProfileEditSection,
@@ -17,39 +18,14 @@ import {
  * - Profile settings (editable: name, email, avatar)
  */
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchProfile = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/user/profile')
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to load profile')
-      }
-
-      const data = await res.json()
-      const profile = data.profile || data
-      setProfile(profile)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load profile'
-      setError(message)
-      console.error('Failed to load profile', { error: message })
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchProfile()
-  }, [fetchProfile])
+  const { data, isLoading, error: loadError } = useSWR<{ profile: UserProfile } | UserProfile>('/api/v1/user/profile')
+  const profile = (data as any)?.profile || data || null
 
   const handleProfileUpdate = (updatedProfile: UserProfile) => {
-    setProfile(updatedProfile)
+    // Profile will be refreshed by SWR on next fetch
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="qt-page-container">
         <div className="flex items-center justify-center py-12">
@@ -59,11 +35,11 @@ export default function ProfilePage() {
     )
   }
 
-  if (error || !profile) {
+  if (loadError || !profile) {
     return (
       <div className="qt-page-container">
         <div className="qt-alert-error">
-          {error || 'Failed to load profile'}
+          {getErrorMessage(loadError, 'Failed to load profile')}
         </div>
         <Link href="/" className="qt-button qt-button-secondary mt-4 inline-block">
           Return to Home
@@ -78,7 +54,7 @@ export default function ProfilePage() {
       <div className="mb-8">
         <Link
           href="/"
-          className="mb-4 inline-flex items-center text-sm font-medium text-primary transition hover:text-primary/80"
+          className="mb-4 inline-flex items-center qt-label text-primary transition hover:text-primary/80"
         >
           ← Back to Home
         </Link>

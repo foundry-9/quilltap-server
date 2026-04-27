@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
+import useSWR from 'swr'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast } from '@/lib/toast'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
@@ -88,15 +89,26 @@ function transformChatToCardData(chat: Chat): ChatCardData {
 }
 
 export default function ChatsPage() {
-  const [chats, setChats] = useState<Chat[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
-  const [characters, setCharacters] = useState<Array<{ id: string; name: string; title?: string | null }>>([])
-  const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([])
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
   const { shouldHideByIds, hideDangerousChats } = useQuickHide()
+
+  const { data: chatsData, isLoading: chatsLoading, error: chatsError, mutate: mutateChats } = useSWR<{ chats: Chat[] }>('/api/v1/chats')
+  const { data: charactersData, isLoading: charactersLoading } = useSWR<{ characters: Array<{ id: string; name: string; title?: string | null }> }>('/api/v1/characters')
+  const { data: profilesData, isLoading: profilesLoading } = useSWR<{ profiles: Array<{ id: string; name: string }> }>('/api/v1/connection-profiles')
+
+  const chats = useMemo(() => chatsData?.chats ?? [], [chatsData])
+  const characters = useMemo(
+    () => (charactersData?.characters ?? []).map((c) => ({ id: c.id, name: c.name, title: c.title })),
+    [charactersData]
+  )
+  const profiles = useMemo(
+    () => (profilesData?.profiles ?? []).map((p) => ({ id: p.id, name: p.name })),
+    [profilesData]
+  )
+  const loading = chatsLoading || charactersLoading || profilesLoading
+  const error = chatsError ? (chatsError instanceof Error ? chatsError.message : 'An error occurred') : null
 
   const visibleChats = useMemo(
     () => chats.filter(chat => {
@@ -123,12 +135,6 @@ export default function ChatsPage() {
     [chats, shouldHideByIds, hideDangerousChats]
   )
 
-  useEffect(() => {
-    fetchChats()
-    fetchCharacters()
-    fetchProfiles()
-  }, [])
-
   // Auto-scroll and highlight imported chat
   useEffect(() => {
     if (highlightedChatId && importedChatRef.current) {
@@ -143,43 +149,6 @@ export default function ChatsPage() {
     }
   }, [highlightedChatId])
 
-  const fetchChats = async () => {
-    try {
-      const res = await fetch('/api/v1/chats')
-      if (!res.ok) throw new Error('Failed to fetch chats')
-      const data = await res.json()
-      setChats(data.chats)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchCharacters = async () => {
-    try {
-      const res = await fetch('/api/v1/characters')
-      if (res.ok) {
-        const data = await res.json()
-        setCharacters(data.characters.map((c: any) => ({ id: c.id, name: c.name, title: c.title })))
-      }
-    } catch (err) {
-      console.error('Failed to fetch characters:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }
-
-  const fetchProfiles = async () => {
-    try {
-      const res = await fetch('/api/v1/connection-profiles')
-      if (res.ok) {
-        const data = await res.json()
-        setProfiles((data.profiles || []).map((p: any) => ({ id: p.id, name: p.name })))
-      }
-    } catch (err) {
-      console.error('Failed to fetch profiles:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }
-
   const deleteChat = async (id: string) => {
     const confirmed = await showConfirmation('Are you sure you want to delete this chat?')
     if (!confirmed) return
@@ -187,8 +156,7 @@ export default function ChatsPage() {
     try {
       const res = await fetch(`/api/v1/chats/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed to delete chat')
-      setChats(chats.filter((c) => c.id !== id))
-
+      await mutateChats()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to delete chat')
     }
@@ -198,10 +166,6 @@ export default function ChatsPage() {
    * Handle import completion from the new wizard
    */
   const handleImportComplete = useCallback(async (chatId: string) => {
-    // Refetch all chats to get the newly imported one
-    await fetchChats()
-    // Also refetch characters in case new ones were created
-    await fetchCharacters()
     // Highlight the imported chat
     setHighlightedChatId(chatId)
     setImportDialogOpen(false)
@@ -238,7 +202,7 @@ export default function ChatsPage() {
       `}</style>
 
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
-        <h1 className="text-3xl font-semibold leading-tight">Chats</h1>
+        <h1 className="qt-heading-1 leading-tight">Chats</h1>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => setImportDialogOpen(true)}

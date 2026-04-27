@@ -11,6 +11,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
+import useSWR from 'swr'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -81,51 +82,45 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
 
   // ── Data fetching ──────────────────────────────────────────────────────
 
-  const fetchSources = useCallback(async () => {
-    setIsLoadingSources(true)
-    try {
-      const response = await fetch('/api/v1/themes?action=registry-sources')
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(result.error || 'Failed to fetch registry sources')
-      }
-      const result = await response.json()
-      setSources(result.sources ?? [])
-    } catch (err) {
-      setStatus({
-        message: err instanceof Error ? err.message : 'Failed to load registry sources',
-        type: 'error',
-      })
-    } finally {
-      setIsLoadingSources(false)
-    }
-  }, [])
+  const { data: sourcesData, isLoading: isLoadingSourcesData, mutate: mutateSources } = useSWR<{ sources: RegistrySource[] }>(
+    isExpanded ? '/api/v1/themes?action=registry-sources' : null
+  )
 
-  const fetchThemes = useCallback(async () => {
-    setIsLoadingThemes(true)
-    setThemesError(null)
-    try {
-      const response = await fetch('/api/v1/themes?action=registry')
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(result.error || 'Failed to fetch registry themes')
-      }
-      const result = await response.json()
-      setThemes(result.themes ?? [])
-    } catch (err) {
-      setThemesError(err instanceof Error ? err.message : 'Failed to load themes')
-    } finally {
-      setIsLoadingThemes(false)
-    }
-  }, [])
+  const { data: themesData, isLoading: isLoadingThemesData, error: themesLoadError, mutate: mutateThemes } = useSWR<{ themes: RegistryTheme[] }>(
+    isExpanded ? '/api/v1/themes?action=registry' : null
+  )
 
-  // Lazy load on expand
   useEffect(() => {
-    if (isExpanded) {
-      fetchSources()
-      fetchThemes()
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+    setIsLoadingSources(isLoadingSourcesData)
+  }, [isLoadingSourcesData])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+    setIsLoadingThemes(isLoadingThemesData)
+    if (themesLoadError) {
+      setThemesError(themesLoadError instanceof Error ? themesLoadError.message : 'Failed to load themes')
+    } else {
+      setThemesError(null)
     }
-  }, [isExpanded, fetchSources, fetchThemes])
+  }, [isLoadingThemesData, themesLoadError])
+
+  useEffect(() => {
+    if (sourcesData?.sources) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      setSources(sourcesData.sources)
+    }
+  }, [sourcesData])
+
+  useEffect(() => {
+    if (themesData?.themes) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      setThemes(themesData.themes)
+    }
+  }, [themesData])
+
+  const fetchSources = useCallback(() => mutateSources(), [mutateSources])
+  const fetchThemes = useCallback(() => mutateThemes(), [mutateThemes])
 
   // ── Actions ────────────────────────────────────────────────────────────
 
@@ -265,7 +260,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
         <button
           type="button"
           onClick={() => setIsExpanded((prev) => !prev)}
-          className="flex items-center gap-2 text-xl font-semibold text-foreground hover:text-foreground/80 transition-colors"
+          className="flex items-center gap-2 qt-heading-3 text-foreground hover:text-foreground/80 transition-colors"
         >
           <svg
             className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
@@ -419,7 +414,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
           {/* Sources section */}
           <div className="border-t qt-border-default pt-4 mt-4">
             <div className="flex items-center flex-wrap gap-2">
-              <span className="text-sm font-medium text-foreground">Sources:</span>
+              <span className="qt-text-label">Sources:</span>
 
               {isLoadingSources ? (
                 <div className="qt-spinner w-3 h-3" />
@@ -503,7 +498,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
               <div className="mt-3 p-4 rounded-lg border qt-border-default qt-bg-card space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">
+                    <label className="block qt-text-label mb-1">
                       Name
                     </label>
                     <input
@@ -515,7 +510,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-1">
+                    <label className="block qt-text-label mb-1">
                       URL
                     </label>
                     <input
@@ -528,7 +523,7 @@ export function ThemeBrowser({ onRefreshThemes }: ThemeBrowserProps) {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">
+                  <label className="block qt-text-label mb-1">
                     Public Key <span className="qt-text-secondary font-normal">(optional)</span>
                   </label>
                   <input

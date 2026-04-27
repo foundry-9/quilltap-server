@@ -17,10 +17,8 @@ import { getProvider, getImageProviderConstraints } from '@/lib/plugins/provider
 import { toolRegistry } from '@/lib/plugins/tool-registry';
 import {
   imageGenerationToolDefinition,
-  memorySearchToolDefinition,
   webSearchToolDefinition,
   projectInfoToolDefinition,
-  fileManagementToolDefinition,
   requestFullContextToolDefinition,
   submitFinalResponseToolDefinition,
   helpSearchToolDefinition,
@@ -28,9 +26,22 @@ import {
   helpNavigateToolDefinition,
   rngToolDefinition,
   stateToolDefinition,
+  selfInventoryToolDefinition,
   whisperToolDefinition,
   getAllShellToolDefinitions,
 } from '@/lib/tools';
+import {
+  readConversationToolDefinition,
+} from '@/lib/tools/read-conversation-tool';
+import {
+  upsertAnnotationToolDefinition,
+} from '@/lib/tools/upsert-annotation-tool';
+import {
+  deleteAnnotationToolDefinition,
+} from '@/lib/tools/delete-annotation-tool';
+import {
+  searchScriptoriumToolDefinition,
+} from '@/lib/tools/search-scriptorium-tool';
 import {
   wardrobeListToolDefinition,
 } from '@/lib/tools/wardrobe-list-tool';
@@ -40,6 +51,24 @@ import {
 import {
   wardrobeCreateItemToolDefinition,
 } from '@/lib/tools/wardrobe-create-item-tool';
+import { docReadFileTool } from '@/lib/tools/doc-read-file-tool';
+import { docWriteFileTool } from '@/lib/tools/doc-write-file-tool';
+import { docStrReplaceTool } from '@/lib/tools/doc-str-replace-tool';
+import { docInsertTextTool } from '@/lib/tools/doc-insert-text-tool';
+import { docGrepTool } from '@/lib/tools/doc-grep-tool';
+import { docListFilesTool } from '@/lib/tools/doc-list-files-tool';
+import { docReadFrontmatterTool } from '@/lib/tools/doc-read-frontmatter-tool';
+import { docUpdateFrontmatterTool } from '@/lib/tools/doc-update-frontmatter-tool';
+import { docReadHeadingTool } from '@/lib/tools/doc-read-heading-tool';
+import { docUpdateHeadingTool } from '@/lib/tools/doc-update-heading-tool';
+import { docMoveFileTool } from '@/lib/tools/doc-move-file-tool';
+import { docCopyFileTool } from '@/lib/tools/doc-copy-file-tool';
+import { docDeleteFileTool } from '@/lib/tools/doc-delete-file-tool';
+import { docCreateFolderTool } from '@/lib/tools/doc-create-folder-tool';
+import { docDeleteFolderTool } from '@/lib/tools/doc-delete-folder-tool';
+import { docOpenDocumentTool } from '@/lib/tools/doc-open-document-tool';
+import { docCloseDocumentTool } from '@/lib/tools/doc-close-document-tool';
+import { docFocusTool } from '@/lib/tools/doc-focus-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -127,17 +156,11 @@ export interface BuildToolsOptions {
   /** The image provider type (e.g., 'GROK', 'OPENAI') */
   imageProviderType?: string;
 
-  /** Whether to enable memory search tool */
-  memorySearch?: boolean;
-
   /** Whether to enable web search tool */
   webSearch?: boolean;
 
   /** Whether to enable project info tool */
   projectInfo?: boolean;
-
-  /** Whether to enable file management tool (always enabled by default) */
-  fileManagement?: boolean;
 
   /** Whether to enable request_full_context tool (enabled when context compression is active) */
   requestFullContext?: boolean;
@@ -175,6 +198,9 @@ export interface BuildToolsOptions {
   /** Whether to enable shell interactivity tools (only in VM/Docker environments) */
   shellInteractivity?: boolean;
 
+  /** Whether to enable document editing tools (Scriptorium Phase 3.3) */
+  documentEditing?: boolean;
+
   /** Whether to include tools from the tool registry (plugin tools) */
   includePluginTools?: boolean;
 
@@ -200,7 +226,6 @@ export interface BuildToolsOptions {
  * const tools = buildToolsForProvider('OPENAI', {
  *   imageGeneration: true,
  *   imageProviderType: 'OPENAI',
- *   memorySearch: true,
  *   webSearch: true,
  * });
  * ```
@@ -217,10 +242,8 @@ export async function buildToolsForProvider(
   logger_.debug('buildToolsForProvider called', {
     options: {
       imageGeneration: options.imageGeneration,
-      memorySearch: options.memorySearch,
       webSearch: options.webSearch,
       projectInfo: options.projectInfo,
-      fileManagement: options.fileManagement,
       requestFullContext: options.requestFullContext,
       agentMode: options.agentMode,
       helpSearch: options.helpSearch,
@@ -233,6 +256,7 @@ export async function buildToolsForProvider(
       wardrobeUpdateOutfit: options.wardrobeUpdateOutfit,
       wardrobeCreateItem: options.wardrobeCreateItem,
       shellInteractivity: options.shellInteractivity,
+      documentEditing: options.documentEditing,
       includePluginTools: options.includePluginTools,
     },
   });
@@ -251,11 +275,6 @@ export async function buildToolsForProvider(
     universalTools.push(imageTool);
   }
 
-  // Add memory search tool if enabled
-  if (options.memorySearch) {
-    universalTools.push(memorySearchToolDefinition as UniversalTool);
-  }
-
   // Add web search tool if enabled
   if (options.webSearch) {
     universalTools.push(webSearchToolDefinition as UniversalTool);
@@ -264,11 +283,6 @@ export async function buildToolsForProvider(
   // Add project info tool if enabled
   if (options.projectInfo) {
     universalTools.push(projectInfoToolDefinition as UniversalTool);
-  }
-
-  // Add file management tool if enabled (defaults to true when not specified)
-  if (options.fileManagement !== false) {
-    universalTools.push(fileManagementToolDefinition as UniversalTool);
   }
 
   // Add request_full_context tool if enabled (for context compression bypass)
@@ -301,6 +315,16 @@ export async function buildToolsForProvider(
     universalTools.push(stateToolDefinition as UniversalTool);
   }
 
+  // Self-inventory tool is always available to character participants —
+  // pure introspection, no side effects.
+  universalTools.push(selfInventoryToolDefinition as UniversalTool);
+
+  // Scriptorium tools (always enabled - conversation reading, annotations, and search)
+  universalTools.push(readConversationToolDefinition as UniversalTool);
+  universalTools.push(upsertAnnotationToolDefinition as UniversalTool);
+  universalTools.push(deleteAnnotationToolDefinition as UniversalTool);
+  universalTools.push(searchScriptoriumToolDefinition as UniversalTool);
+
   // Add whisper tool if enabled (multi-character chats only)
   if (options.whisper) {
     universalTools.push(whisperToolDefinition as UniversalTool);
@@ -320,6 +344,28 @@ export async function buildToolsForProvider(
   // Add submit_final_response tool if agent mode is enabled
   if (options.agentMode) {
     universalTools.push(submitFinalResponseToolDefinition as UniversalTool);
+  }
+
+  // Add document editing tools if enabled (Scriptorium Phase 3.3)
+  if (options.documentEditing) {
+    universalTools.push(docReadFileTool as UniversalTool);
+    universalTools.push(docWriteFileTool as UniversalTool);
+    universalTools.push(docStrReplaceTool as UniversalTool);
+    universalTools.push(docInsertTextTool as UniversalTool);
+    universalTools.push(docGrepTool as UniversalTool);
+    universalTools.push(docListFilesTool as UniversalTool);
+    universalTools.push(docReadFrontmatterTool as UniversalTool);
+    universalTools.push(docUpdateFrontmatterTool as UniversalTool);
+    universalTools.push(docReadHeadingTool as UniversalTool);
+    universalTools.push(docUpdateHeadingTool as UniversalTool);
+    universalTools.push(docMoveFileTool as UniversalTool);
+    universalTools.push(docCopyFileTool as UniversalTool);
+    universalTools.push(docDeleteFileTool as UniversalTool);
+    universalTools.push(docCreateFolderTool as UniversalTool);
+    universalTools.push(docDeleteFolderTool as UniversalTool);
+    universalTools.push(docOpenDocumentTool as UniversalTool);
+    universalTools.push(docCloseDocumentTool as UniversalTool);
+    universalTools.push(docFocusTool as UniversalTool);
   }
 
   // Add shell interactivity tools if enabled (only in VM/Docker environments)

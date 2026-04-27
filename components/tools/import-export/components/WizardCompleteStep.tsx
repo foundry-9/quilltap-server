@@ -34,7 +34,7 @@ export function WizardCompleteStep({
             />
           </svg>
         </div>
-        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+        <h3 className="qt-heading-4 text-foreground">{title}</h3>
         <p className="qt-text-small qt-text-secondary mt-2 text-center">
           {description}
         </p>

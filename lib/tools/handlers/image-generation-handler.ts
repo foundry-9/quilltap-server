@@ -41,6 +41,7 @@ import {
 import {
   resolveImageProviderForDangerousContent,
 } from '@/lib/services/dangerous-content/provider-routing.service';
+import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 
 /**
  * Execution context for image generation tool
@@ -68,6 +69,30 @@ export class ImageGenerationError extends Error {
 }
 
 /**
+ * Resolve the display name of the character/persona calling a tool, or return
+ * "the storyteller" when the user invoked it directly (no participantId).
+ */
+async function resolveRequesterName(
+  chatId: string | undefined,
+  callingParticipantId: string | undefined
+): Promise<string> {
+  if (!chatId || !callingParticipantId) {
+    return 'the storyteller';
+  }
+  try {
+    const repos = getRepositories();
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) return 'the storyteller';
+    const participant = chat.participants.find(p => p.id === callingParticipantId);
+    if (!participant?.characterId) return 'the storyteller';
+    const character = await repos.characters.findById(participant.characterId);
+    return character?.name || 'the storyteller';
+  } catch {
+    return 'the storyteller';
+  }
+}
+
+/**
  * Save generated image to storage and database
  */
 async function saveGeneratedImage(
@@ -75,6 +100,7 @@ async function saveGeneratedImage(
   mimeType: string,
   userId: string,
   chatId: string | undefined, // Now used to tag the image with the chat
+  callingParticipantId: string | undefined,
   metadata: {
     prompt: string;
     revisedPrompt?: string;
@@ -137,6 +163,15 @@ async function saveGeneratedImage(
 
     // Always use API route for S3-backed files
     const filepath = `/api/v1/files/${fileEntry.id}`;
+
+    if (chatId) {
+      const requesterName = await resolveRequesterName(chatId, callingParticipantId);
+      await postLanternImageNotification({
+        chatId,
+        fileId: fileEntry.id,
+        kind: { kind: 'character-image', requesterName },
+      });
+    }
 
     return {
       id: fileEntry.id,
@@ -252,7 +287,8 @@ async function generateImagesWithProvider(
   toolInput: ImageGenerationToolInput,
   imageProfile: any,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  callingParticipantId?: string
 ): Promise<GeneratedImageResult[]> {
   const provider = createImageProvider(imageProfile.provider);
 
@@ -325,7 +361,7 @@ async function generateImagesWithProvider(
   try {
     return await Promise.all(
       generationResponse.images.map((img) =>
-        saveGeneratedImage(img.data || img.b64Json || '', img.mimeType || 'image/png', userId, chatId, {
+        saveGeneratedImage(img.data || img.b64Json || '', img.mimeType || 'image/png', userId, chatId, callingParticipantId, {
           prompt: toolInput.prompt,
           revisedPrompt: img.revisedPrompt,
           model: imageProfile.modelName,
@@ -1046,7 +1082,8 @@ export async function executeImageGenerationTool(
       finalInput,
       finalProfile,
       context.userId,
-      context.chatId
+      context.chatId,
+      context.callingParticipantId
     );
 
     // 8. Return success response

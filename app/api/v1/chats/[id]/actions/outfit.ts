@@ -14,6 +14,7 @@ import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/o
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
+import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 
 const equipSlotSchema = z.object({
   characterId: z.string().min(1, 'characterId is required'),
@@ -65,13 +66,12 @@ export async function handleEquipSlot(
     let updatedSlots;
 
     if (itemId) {
-      // Equipping: verify the wardrobe item exists and belongs to this character
-      const item = await repos.wardrobe.findById(itemId);
+      // Equipping: verify the wardrobe item exists and belongs to this character.
+      // Use the per-character lookup so vault-only items (no DB row) resolve via
+      // the document-store overlay.
+      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId);
       if (!item) {
         return notFound('Wardrobe item');
-      }
-      if (item.characterId != null && item.characterId !== characterId) {
-        return badRequest('Wardrobe item does not belong to this character');
       }
       if (!item.types.includes(slot as typeof item.types[number])) {
         return badRequest(`Wardrobe item "${item.title}" does not cover the ${slot} slot`);
@@ -101,7 +101,7 @@ export async function handleEquipSlot(
     try {
       const equippedItemIds = Object.values(updatedSlots).filter(Boolean) as string[];
       const equippedItems = equippedItemIds.length > 0
-        ? await repos.wardrobe.findByIds(equippedItemIds)
+        ? await repos.wardrobe.findByIdsForCharacter(characterId, equippedItemIds)
         : [];
       const itemsMap = new Map(equippedItems.map(i => [i.id, i]));
 
@@ -144,6 +144,16 @@ export async function handleEquipSlot(
       characterId,
       callerContext: '[Chats v1] outfit-equip',
     });
+
+    // Schedule a debounced Aurora announcement (or push back the existing one)
+    try {
+      await enqueueWardrobeOutfitAnnouncement(ctx.user.id, { chatId, characterId });
+    } catch (announceError) {
+      logger.warn('[Chats v1] Failed to schedule outfit announcement', {
+        chatId, characterId,
+        error: announceError instanceof Error ? announceError.message : String(announceError),
+      });
+    }
 
     return NextResponse.json({ equippedSlots: updatedSlots });
   } catch (error) {

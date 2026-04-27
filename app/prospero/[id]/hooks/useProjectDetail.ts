@@ -27,6 +27,7 @@ interface UseProjectDetailReturn {
   handleSaveAvatarGeneration: (enabled: boolean | null) => Promise<void>
   handleSaveDefaultImageProfile: (profileId: string | null) => Promise<void>
   handleSaveBackgroundDisplayMode: (mode: BackgroundDisplayMode) => Promise<void>
+  handleSaveAlertCharactersOfLanternImages: (enabled: boolean | null) => Promise<void>
   handleRemoveCharacter: (characterId: string) => Promise<void>
 }
 
@@ -170,6 +171,30 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     }
   }, [projectId])
 
+  const handleSaveAlertCharactersOfLanternImages = useCallback(async (enabled: boolean | null) => {
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultAlertCharactersOfLanternImages: enabled }),
+      })
+
+      if (!res.ok) throw new Error('Failed to update Lantern image announcement setting')
+      const data = await res.json()
+      setProject(data.project)
+      const message = enabled === null
+        ? 'Lantern image announcements set to inherit from global'
+        : enabled
+          ? 'Lantern image announcements enabled by default for project'
+          : 'Lantern image announcements disabled by default for project'
+      showSuccessToast(message)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update Lantern image announcement setting'
+      console.error('useProjectDetail: save alertCharactersOfLanternImages error', errorMsg)
+      showErrorToast(errorMsg)
+    }
+  }, [projectId])
+
   const handleSaveBackgroundDisplayMode = useCallback(async (mode: BackgroundDisplayMode) => {
     try {
       const res = await fetch(`/api/v1/projects/${projectId}`, {
@@ -228,6 +253,7 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     handleSaveAvatarGeneration,
     handleSaveDefaultImageProfile,
     handleSaveBackgroundDisplayMode,
+    handleSaveAlertCharactersOfLanternImages,
     handleRemoveCharacter,
   }
 }

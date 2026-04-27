@@ -33,6 +33,7 @@
  * POST /api/v1/chats/[id]?action=equip - Equip/unequip wardrobe item in a slot
  * POST /api/v1/chats/[id]?action=toggle-avatar-generation - Toggle avatar generation
  * POST /api/v1/chats/[id]?action=regenerate-avatar - Regenerate character avatar
+ * POST /api/v1/chats/[id]?action=render-conversation - Queue Scriptorium render with full re-embed
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)
  */
 

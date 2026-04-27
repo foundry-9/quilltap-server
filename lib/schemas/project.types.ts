@@ -51,6 +51,18 @@ export const ProjectSchema = z.object({
   /** Default image generation profile for new chats in this project (null = inherit from character or global) */
   defaultImageProfileId: UUIDSchema.nullable().optional(),
 
+  /**
+   * The project's canonical "project-official" document store, used by the Files tab,
+   * the project_info / project-store-bridge write paths, and the per-project Scenarios
+   * folder. Backfilled from the legacy `Project Files: <name>` name-prefix convention
+   * by the v4.10 migration; auto-populated for new projects at creation time and on
+   * startup. Null only briefly during transitions (e.g. just after an import).
+   */
+  officialMountPointId: UUIDSchema.nullable().optional(),
+
+  /** When an image is generated (Lantern background, avatar, or character-invoked), inject an assistant message announcing it to characters (null = inherit from global, default false) */
+  defaultAlertCharactersOfLanternImages: z.boolean().nullable().optional(),
+
   /** Persistent JSON state for games, inventory, session data, etc. */
   state: JsonSchema.default({}),
 

@@ -212,6 +212,17 @@ function translateFieldFilter(
           }
           break;
 
+        case '$like': {
+          // Literal SQL LIKE pattern. Caller supplies `%` / `_` wildcards; the
+          // translator does not wrap or transform the value. Unlike `$regex`,
+          // this is safe for prefix/anchored matches (regex→LIKE conversion
+          // cannot represent anchors because the regex path always wraps the
+          // pattern in `%…%`).
+          clauses.push(`${columnExpr} LIKE ?`);
+          params.push(String(opValue));
+          break;
+        }
+
         case '$regex': {
           // SQLite LIKE with pattern conversion (limited regex support)
           // Extract pattern source if it's a RegExp object, otherwise use as string
@@ -457,6 +468,9 @@ export function translateUpdate(
         if (value === undefined) {
           setClauses.push(`"${field}" = ?`);
           params.push(null);
+        } else if (blobColumns.has(field) && value instanceof Float32Array) {
+          setClauses.push(`"${field}" = ?`);
+          params.push(value.length === 0 ? null : embeddingToBlob(value));
         } else if (blobColumns.has(field) && Array.isArray(value)) {
           // BLOB columns: convert number[] to Float32 BLOB
           setClauses.push(`"${field}" = ?`);
@@ -533,11 +547,14 @@ export function translateUpdate(
       if (value === undefined) {
         setClauses.push(`"${field}" = ?`);
         params.push(null);
+      } else if (blobColumns.has(field) && value instanceof Float32Array) {
+        setClauses.push(`"${field}" = ?`);
+        params.push(value.length === 0 ? null : embeddingToBlob(value));
       } else if (blobColumns.has(field) && Array.isArray(value)) {
         // BLOB columns: convert number[] to Float32 BLOB
         setClauses.push(`"${field}" = ?`);
         params.push(embeddingToBlob(value as number[]));
-      } else if (jsonColumns.has(field) || (typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date))) {
+      } else if (jsonColumns.has(field) || (typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Date) && !(value instanceof Float32Array))) {
         setClauses.push(`"${field}" = ?`);
         params.push(toJson(value));
       } else if (Array.isArray(value)) {

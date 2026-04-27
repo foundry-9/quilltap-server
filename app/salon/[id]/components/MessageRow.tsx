@@ -81,6 +81,8 @@ interface MessageRowProps {
   participantNames?: Record<string, string>
   /** Whether this message is a whisper being shown via "show all" and the user is not sender/target */
   isOverheardWhisper?: boolean
+  /** Whether the Concierge has flagged this chat as dangerous */
+  isDangerousChat?: boolean
 }
 
 function getImageAttachments(message: Message) {
@@ -134,6 +136,7 @@ function MessageRowInner({
   onReattribute,
   participantNames,
   isOverheardWhisper = false,
+  isDangerousChat = false,
 }: MessageRowProps) {
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
 
@@ -164,7 +167,7 @@ function MessageRowInner({
     >
       {/* Desktop avatar - assistant (left side) */}
       {message.role === 'ASSISTANT' && shouldShowAvatars && messageAvatar && (
-        <div className="flex-shrink-0 qt-chat-desktop-avatar">
+        <div className={`flex-shrink-0 qt-chat-desktop-avatar${isDangerousChat ? ' qt-chat-avatar-dangerous' : ''}`}>
           <Avatar
             name={messageAvatar.name}
             title={messageAvatar.title}
@@ -666,6 +669,9 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Whisper props
   if (prev.isOverheardWhisper !== next.isOverheardWhisper) return false
   if (prev.participantNames !== next.participantNames) return false
+
+  // Danger state
+  if (prev.isDangerousChat !== next.isDangerousChat) return false
 
   // Props are equal, skip re-render
   return true

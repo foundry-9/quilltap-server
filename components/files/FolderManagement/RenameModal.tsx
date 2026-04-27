@@ -44,6 +44,7 @@ export default function RenameModal(props: Readonly<RenameModalProps>) {
   // Reset and focus on open
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modal reset on open; parent renders unconditionally
       setNewName(currentName)
       setTimeout(() => {
         if (inputRef.current) {
@@ -53,10 +54,6 @@ export default function RenameModal(props: Readonly<RenameModalProps>) {
       }, 100)
     }
   }, [isOpen, currentName])
-
-  useEffect(() => {
-    // Component opened
-  }, [type, currentName, props])
 
   const handleRename = async () => {
     const trimmedName = newName.trim()

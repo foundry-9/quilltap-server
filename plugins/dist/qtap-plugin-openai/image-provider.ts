@@ -1,7 +1,7 @@
 /**
  * OpenAI Image Generation Provider Implementation for Quilltap Plugin
  *
- * Supports GPT-Image models (1.5, 1, 1-mini) and legacy DALL-E models
+ * Supports GPT-Image models (2, 1.5, 1, 1-mini) and legacy DALL-E models
  * Note: DALL-E 2 and DALL-E 3 are deprecated and will stop being supported on 05/12/2026
  * Handles model-specific parameter validation and normalization
  */
@@ -14,11 +14,8 @@ const logger = createPluginLogger('qtap-plugin-openai');
 
 export class OpenAIImageProvider implements ImageProvider {
   readonly provider = 'OPENAI';
-  readonly supportedModels = ['gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini', 'dall-e-3', 'dall-e-2'];
+  readonly supportedModels = ['gpt-image-2', 'gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini', 'dall-e-3', 'dall-e-2'];
 
-  /**
-   * Check if a model is a GPT-Image model (1.5, 1, or 1-mini)
-   */
   private isGptImageModel(model: string): boolean {
     return model.startsWith('gpt-image-');
   }

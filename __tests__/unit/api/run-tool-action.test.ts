@@ -82,7 +82,7 @@ describe('handleRunTool', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockExecuteToolCallWithContext.mockResolvedValue({
-      toolName: 'search_memories',
+      toolName: 'search',
       success: true,
       result: 'Found 3 memories',
     });
@@ -108,7 +108,7 @@ describe('handleRunTool', () => {
     });
 
     it('defaults arguments to empty object when not provided', async () => {
-      const req = createRequest({ toolName: 'search_memories' });
+      const req = createRequest({ toolName: 'search' });
       const ctx = createMockContext();
 
       const res = await handleRunTool(req, 'chat-123', ctx);
@@ -118,7 +118,7 @@ describe('handleRunTool', () => {
       expect(data.success).toBe(true);
 
       expect(mockExecuteToolCallWithContext).toHaveBeenCalledWith(
-        { name: 'search_memories', arguments: {} },
+        { name: 'search', arguments: {} },
         expect.any(Object)
       );
     });
@@ -160,7 +160,7 @@ describe('handleRunTool', () => {
 
   describe('chat lookup', () => {
     it('returns bad request when chat is not found', async () => {
-      const req = createRequest({ toolName: 'search_memories' });
+      const req = createRequest({ toolName: 'search' });
       const ctx = createMockContext({ chatData: null });
 
       const res = await handleRunTool(req, 'nonexistent-chat', ctx);
@@ -174,7 +174,7 @@ describe('handleRunTool', () => {
   describe('successful execution', () => {
     it('executes tool with correct context', async () => {
       const req = createRequest({
-        toolName: 'search_memories',
+        toolName: 'search',
         arguments: { query: 'hello' },
       });
       const ctx = createMockContext();
@@ -182,7 +182,7 @@ describe('handleRunTool', () => {
       await handleRunTool(req, 'chat-123', ctx);
 
       expect(mockExecuteToolCallWithContext).toHaveBeenCalledWith(
-        { name: 'search_memories', arguments: { query: 'hello' } },
+        { name: 'search', arguments: { query: 'hello' } },
         expect.objectContaining({
           chatId: 'chat-123',
           userId: 'user-1',
@@ -195,12 +195,12 @@ describe('handleRunTool', () => {
 
     it('returns success response with tool result', async () => {
       mockExecuteToolCallWithContext.mockResolvedValue({
-        toolName: 'search_memories',
+        toolName: 'search',
         success: true,
         result: 'Found 3 memories',
       });
 
-      const req = createRequest({ toolName: 'search_memories', arguments: {} });
+      const req = createRequest({ toolName: 'search', arguments: {} });
       const ctx = createMockContext();
 
       const res = await handleRunTool(req, 'chat-123', ctx);
@@ -208,19 +208,19 @@ describe('handleRunTool', () => {
 
       expect(res.status).toBe(200);
       expect(data.success).toBe(true);
-      expect(data.result.toolName).toBe('search_memories');
+      expect(data.result.toolName).toBe('search');
       expect(data.result.success).toBe(true);
       expect(data.result.result).toBe('Found 3 memories');
     });
 
     it('adds tool result message to chat', async () => {
       mockExecuteToolCallWithContext.mockResolvedValue({
-        toolName: 'search_memories',
+        toolName: 'search',
         success: true,
         result: 'Found memories',
       });
 
-      const req = createRequest({ toolName: 'search_memories', arguments: { query: 'test' } });
+      const req = createRequest({ toolName: 'search', arguments: { query: 'test' } });
       const ctx = createMockContext();
 
       await handleRunTool(req, 'chat-123', ctx);
@@ -236,7 +236,7 @@ describe('handleRunTool', () => {
       // Verify the message content contains tool info
       const addMessageCall = (ctx.repos.chats.addMessage as jest.Mock).mock.calls[0];
       const messageContent = JSON.parse(addMessageCall[1].content);
-      expect(messageContent.tool).toBe('search_memories');
+      expect(messageContent.tool).toBe('search');
       expect(messageContent.initiatedBy).toBe('user');
       expect(messageContent.success).toBe(true);
     });
@@ -281,7 +281,7 @@ describe('handleRunTool', () => {
         },
       });
 
-      const req = createRequest({ toolName: 'search_memories', arguments: {} });
+      const req = createRequest({ toolName: 'search', arguments: {} });
 
       const res = await handleRunTool(req, 'chat-123', ctx);
       const data = await res.json();
@@ -327,7 +327,7 @@ describe('handleRunTool', () => {
     it('throws when tool execution fails', async () => {
       mockExecuteToolCallWithContext.mockRejectedValue(new Error('Tool crashed'));
 
-      const req = createRequest({ toolName: 'search_memories', arguments: {} });
+      const req = createRequest({ toolName: 'search', arguments: {} });
       const ctx = createMockContext();
 
       await expect(handleRunTool(req, 'chat-123', ctx)).rejects.toThrow('Tool crashed');
@@ -346,13 +346,13 @@ describe('handleRunTool', () => {
 
     it('builds human-readable prompt description with arguments', async () => {
       mockExecuteToolCallWithContext.mockResolvedValue({
-        toolName: 'search_memories',
+        toolName: 'search',
         success: true,
         result: 'ok',
       });
 
       const req = createRequest({
-        toolName: 'search_memories',
+        toolName: 'search',
         arguments: { query: 'hello world', limit: 5 },
       });
       const ctx = createMockContext();
@@ -361,7 +361,7 @@ describe('handleRunTool', () => {
 
       const addMessageCall = (ctx.repos.chats.addMessage as jest.Mock).mock.calls[0];
       const messageContent = JSON.parse(addMessageCall[1].content);
-      expect(messageContent.prompt).toContain('search_memories');
+      expect(messageContent.prompt).toContain('search');
       expect(messageContent.prompt).toContain('query: hello world');
     });
   });

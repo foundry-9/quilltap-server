@@ -7,7 +7,8 @@
  * Shows existing folders and allows creating new ones.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
+import useSWR from 'swr'
 
 interface FolderInfo {
   path: string
@@ -45,108 +46,94 @@ export default function FolderPicker({
   disabled = false,
   className = '',
 }: Readonly<FolderPickerProps>) {
-  const [folders, setFolders] = useState<FolderInfo[]>([])
-  const [loading, setLoading] = useState(false)
   const [newFolderInput, setNewFolderInput] = useState('')
   const [showNewFolderInput, setShowNewFolderInput] = useState(false)
+  const [folders, setFolders] = useState<FolderInfo[]>([])
 
-  const fetchFolders = useCallback(async () => {
-    try {
-      setLoading(true)
-      const scope = projectId ? 'project' : 'general'
-      const filesUrl = projectId
-        ? `/api/v1/projects/${projectId}/files`
-        : '/api/v1/files?filter=general'
-      const foldersUrl = projectId
-        ? `/api/v1/files/folders?projectId=${projectId}`
-        : '/api/v1/files/folders'
+  const filesUrl = projectId
+    ? `/api/v1/projects/${projectId}/files`
+    : '/api/v1/files?filter=general'
+  const foldersUrl = projectId
+    ? `/api/v1/files/folders?projectId=${projectId}`
+    : '/api/v1/files/folders'
 
-      // Fetch files and DB folders in parallel
-      const [filesRes, foldersRes] = await Promise.all([
-        fetch(filesUrl),
-        fetch(foldersUrl),
-      ])
+  // Fetch files and folders via SWR
+  const { data: filesData, isLoading: filesLoading } = useSWR<{ files: Array<{ folderPath?: string }> }>(filesUrl)
+  const { data: foldersData, isLoading: foldersLoading, mutate: mutateFolders } = useSWR<{ folders: DbFolder[] }>(
+    foldersUrl
+  )
 
-      let files: { folderPath?: string }[] = []
-      let dbFolders: DbFolder[] = []
+  const loading = filesLoading || foldersLoading
+  const files = filesData?.files ?? []
+  const dbFolders = foldersData?.folders ?? []
 
-      if (filesRes.ok) {
-        const data = await filesRes.json()
-        files = data.files || []
-      }
+  // Build folder list from fetched data (and keep folders state in sync)
+  // We must use useMemo to avoid re-creating this on every render
+  const builtFolders = (() => {
+    const folderMap = new Map<string, FolderInfo>()
 
-      if (foldersRes.ok) {
-        const data = await foldersRes.json()
-        dbFolders = data.folders || []
-      }
+    // Always include root
+    folderMap.set('/', {
+      path: '/',
+      name: 'Root',
+      depth: 0,
+      fileCount: files.filter((f) => (f.folderPath || '/') === '/').length,
+      isDbFolder: false,
+    })
 
-      // Build folder map, starting with DB folders
-      const folderMap = new Map<string, FolderInfo>()
-
-      // Always include root
-      folderMap.set('/', {
-        path: '/',
-        name: 'Root',
-        depth: 0,
-        fileCount: files.filter((f) => (f.folderPath || '/') === '/').length,
-        isDbFolder: false,
+    // Add DB folders
+    for (const dbFolder of dbFolders) {
+      const parts = dbFolder.path.split('/').filter(Boolean)
+      const depth = parts.length
+      const fileCount = files.filter((f) => (f.folderPath || '/') === dbFolder.path).length
+      folderMap.set(dbFolder.path, {
+        path: dbFolder.path,
+        name: dbFolder.name,
+        depth,
+        fileCount,
+        id: dbFolder.id,
+        isDbFolder: true,
       })
-
-      // Add DB folders
-      for (const dbFolder of dbFolders) {
-        const parts = dbFolder.path.split('/').filter(Boolean)
-        const depth = parts.length
-        const fileCount = files.filter((f) => (f.folderPath || '/') === dbFolder.path).length
-        folderMap.set(dbFolder.path, {
-          path: dbFolder.path,
-          name: dbFolder.name,
-          depth,
-          fileCount,
-          id: dbFolder.id,
-          isDbFolder: true,
-        })
-      }
-
-      // Extract unique folder paths from files (for backwards compatibility)
-      for (const file of files) {
-        const path = file.folderPath || '/'
-        if (!folderMap.has(path)) {
-          const parts = path.split('/').filter(Boolean)
-          const name = parts.length === 0 ? 'Root' : parts[parts.length - 1]
-          const depth = parts.length
-          const fileCount = files.filter((f) => (f.folderPath || '/') === path).length
-          folderMap.set(path, { path, name, depth, fileCount, isDbFolder: false })
-        }
-        // Also add parent paths
-        const parts = path.split('/').filter(Boolean)
-        let current = '/'
-        for (const part of parts) {
-          current = current === '/' ? `/${part}/` : `${current}${part}/`
-          if (!folderMap.has(current)) {
-            const depth = current.split('/').filter(Boolean).length
-            const fileCount = files.filter((f) => (f.folderPath || '/') === current).length
-            folderMap.set(current, { path: current, name: part, depth, fileCount, isDbFolder: false })
-          }
-        }
-      }
-
-      // Convert to sorted array
-      const folderList: FolderInfo[] = Array.from(folderMap.values())
-        .sort((a, b) => a.path.localeCompare(b.path))
-
-      setFolders(folderList)
-    } catch (error) {
-      console.error('[FolderPicker] Failed to fetch folders', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-    } finally {
-      setLoading(false)
     }
-  }, [projectId])
 
-  useEffect(() => {
-    fetchFolders()
-  }, [fetchFolders])
+    // Extract unique folder paths from files (for backwards compatibility)
+    for (const file of files) {
+      const path = file.folderPath || '/'
+      if (!folderMap.has(path)) {
+        const parts = path.split('/').filter(Boolean)
+        const name = parts.length === 0 ? 'Root' : parts[parts.length - 1]
+        const depth = parts.length
+        const fileCount = files.filter((f) => (f.folderPath || '/') === path).length
+        folderMap.set(path, { path, name, depth, fileCount, isDbFolder: false })
+      }
+      // Also add parent paths
+      const parts = path.split('/').filter(Boolean)
+      let current = '/'
+      for (const part of parts) {
+        current = current === '/' ? `/${part}/` : `${current}${part}/`
+        if (!folderMap.has(current)) {
+          const depth = current.split('/').filter(Boolean).length
+          const fileCount = files.filter((f) => (f.folderPath || '/') === current).length
+          folderMap.set(current, { path: current, name: part, depth, fileCount, isDbFolder: false })
+        }
+      }
+    }
+
+    // Convert to sorted array
+    const result = Array.from(folderMap.values())
+      .sort((a, b) => a.path.localeCompare(b.path))
+
+    // Update state if not already updated
+    if (result.length > 0 && folders.length === 0) {
+      setFolders(result)
+    }
+    return result
+  })()
+
+  // Update folders state when data changes
+  const fetchFolders = useCallback(async () => {
+    await mutateFolders()
+  }, [mutateFolders])
 
   const handleCreateFolder = async () => {
     if (!newFolderInput.trim()) return
@@ -176,7 +163,7 @@ export default function FolderPicker({
       const folderPath = data.folder?.path || newPath
 
       // Refresh folder list to include the new folder
-      await fetchFolders()
+      setFolders(builtFolders)
 
       onChange(folderPath)
       setNewFolderInput('')

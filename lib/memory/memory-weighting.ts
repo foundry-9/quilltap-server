@@ -76,17 +76,6 @@ export function calculateEffectiveWeight(
   const minWeight = baseImportance * config.importanceFloor
   const effectiveWeight = Math.max(rawWeight, minWeight)
 
-  logger.debug('[MemoryWeighting] Calculated effective weight', {
-    memoryId: memory.id,
-    baseImportance: baseImportance.toFixed(3),
-    daysOld: daysOld.toFixed(1),
-    timeDecayFactor: timeDecayFactor.toFixed(4),
-    rawWeight: rawWeight.toFixed(4),
-    minWeight: minWeight.toFixed(4),
-    effectiveWeight: effectiveWeight.toFixed(4),
-    floorApplied: rawWeight < minWeight,
-  })
-
   return {
     effectiveWeight,
     rawWeight,
@@ -117,6 +106,140 @@ export function formatRelativeAge(memory: Memory, now: Date = new Date()): strin
   if (daysOld < 60) return 'last month'
   if (daysOld < 365) return `${Math.floor(daysOld / 30)} months ago`
   return `${Math.floor(daysOld / 365)} year${Math.floor(daysOld / 365) > 1 ? 's' : ''} ago`
+}
+
+/**
+ * Configuration for the housekeeping protection score.
+ *
+ * Distinct from retrieval ranking: protection decay runs on a longer half-life
+ * with a lower floor, and the score blends the LLM-derived content signal with
+ * usage evidence (reinforcement, graph degree, recency of access) so a memory's
+ * fate doesn't hinge on the LLM's one-shot importance guess.
+ */
+export interface ProtectionScoreConfig {
+  /** Content-score half-life in days. Default: 30. The original 365-day
+   * default protected fresh LLM-scored memories indefinitely on heavy
+   * characters (a 1-day-old memory at importance 0.7 scored ~0.70, well
+   * above the 0.5 threshold), so the cap-enforcement pass deleted zero
+   * rows on a 19.5k-memory character and pinned the main thread for
+   * 15 minutes per run. 30 days gives young memories ~40% content score
+   * after a month, letting the usage bonuses (reinforcement / graph / recent
+   * access) — not just the LLM's one-shot importance guess — decide what
+   * stays. */
+  contentHalfLifeDays: number
+  /** Minimum fraction of the content score that decay cannot erode past. Default: 0.10 */
+  contentFloor: number
+  /** Maximum bonus from reinforcement count (saturates via log2). Default: 0.25 */
+  maxReinforcementBonus: number
+  /** Per-reinforcement coefficient (applied to log2(count+1)). Default: 0.08 */
+  reinforcementCoeff: number
+  /** Maximum bonus from graph degree (related-memory links). Default: 0.10 */
+  maxGraphDegreeBonus: number
+  /** Per-link coefficient. Default: 0.025 */
+  graphDegreeCoeff: number
+  /** Bonus when lastAccessedAt is within the recency window. Default: 0.10 */
+  recentAccessBonus: number
+  /** Recent-access window in days. Default: 90 */
+  recentAccessWindowDays: number
+  /** Maximum contribution the content component alone can make to the
+   * protection score. Default: 0.40. Without this cap, an LLM-rated 0.7+
+   * memory scores above the 0.5 protection threshold on content alone —
+   * which, on a heavy character where 97% of memories are under a month
+   * old, means the cap-enforcement pass protects essentially everything.
+   * Capping content forces a memory to earn the remaining headroom from
+   * usage evidence (reinforcement count, graph degree, or recent access)
+   * to cross the threshold. Honors the blended-score design goal of
+   * "LLM opinion is one input among several, not a final verdict." */
+  maxContentContribution: number
+}
+
+export const DEFAULT_PROTECTION_CONFIG: ProtectionScoreConfig = {
+  contentHalfLifeDays: 30,
+  contentFloor: 0.10,
+  maxReinforcementBonus: 0.25,
+  reinforcementCoeff: 0.08,
+  maxGraphDegreeBonus: 0.10,
+  graphDegreeCoeff: 0.025,
+  recentAccessBonus: 0.10,
+  recentAccessWindowDays: 90,
+  maxContentContribution: 0.40,
+}
+
+export interface ProtectionScoreResult {
+  /** Final blended score in [0, 1]. Compare against a protection threshold. */
+  score: number
+  contentComponent: number
+  reinforcementBonus: number
+  graphDegreeBonus: number
+  recentAccessBonus: number
+  daysSinceRefTime: number
+}
+
+/**
+ * Calculate a blended protection score for the housekeeping gate.
+ *
+ * Combines four evidence streams:
+ *   1. Content score (LLM-derived importance), time-decayed with a low floor
+ *   2. Reinforcement count (log2-saturated — first few reinforcements matter most)
+ *   3. Graph degree (count of relatedMemoryIds — links imply centrality)
+ *   4. Recent access (binary bonus if accessed within the recency window)
+ *
+ * Time-decay reference point is max(createdAt, lastReinforcedAt): passive
+ * retrieval does NOT reset the clock, consistent with calculateEffectiveWeight.
+ */
+export function calculateProtectionScore(
+  memory: Memory,
+  config: ProtectionScoreConfig = DEFAULT_PROTECTION_CONFIG,
+  now: Date = new Date()
+): ProtectionScoreResult {
+  const baseImportance = memory.reinforcedImportance ?? memory.importance
+
+  const createdTime = new Date(memory.createdAt).getTime()
+  const reinforcedTime = memory.lastReinforcedAt
+    ? new Date(memory.lastReinforcedAt).getTime()
+    : 0
+  const referenceTime = Math.max(createdTime, reinforcedTime)
+  const daysSinceRefTime = Math.max(0, (now.getTime() - referenceTime) / 86400000)
+
+  const decay = Math.pow(0.5, daysSinceRefTime / config.contentHalfLifeDays)
+  const contentComponent = Math.min(
+    config.maxContentContribution,
+    baseImportance * Math.max(decay, config.contentFloor)
+  )
+
+  const reinforcementCount = memory.reinforcementCount ?? 1
+  const reinforcementBonus = Math.min(
+    config.maxReinforcementBonus,
+    Math.log2(reinforcementCount + 1) * config.reinforcementCoeff
+  )
+
+  const graphDegree = memory.relatedMemoryIds?.length ?? 0
+  const graphDegreeBonus = Math.min(
+    config.maxGraphDegreeBonus,
+    graphDegree * config.graphDegreeCoeff
+  )
+
+  let recentAccessBonus = 0
+  if (memory.lastAccessedAt) {
+    const daysSinceAccess = (now.getTime() - new Date(memory.lastAccessedAt).getTime()) / 86400000
+    if (daysSinceAccess < config.recentAccessWindowDays) {
+      recentAccessBonus = config.recentAccessBonus
+    }
+  }
+
+  const score = Math.min(
+    1,
+    contentComponent + reinforcementBonus + graphDegreeBonus + recentAccessBonus
+  )
+
+  return {
+    score,
+    contentComponent,
+    reinforcementBonus,
+    graphDegreeBonus,
+    recentAccessBonus,
+    daysSinceRefTime,
+  }
 }
 
 /**

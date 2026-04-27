@@ -122,7 +122,7 @@ export function AIWizardModal({
             {[1, 2, 3, 4].map((step) => (
               <div key={step} className="flex items-center">
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                  className={`w-8 h-8 rounded-full flex items-center justify-center qt-label transition-colors ${
                     step < wizard.currentStep
                       ? 'bg-primary text-primary-foreground'
                       : step === wizard.currentStep

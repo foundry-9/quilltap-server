@@ -99,6 +99,61 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * Stream a character's memories in fixed-size batches, sorted by id for a
+   * stable page boundary. Housekeeping uses this so that a character with
+   * tens of thousands of memories can yield to the event loop between pages
+   * instead of doing one ~19k-row Zod-validated read in a single synchronous
+   * chunk.
+   */
+  async *findByCharacterIdInBatches(
+    characterId: string,
+    batchSize: number,
+  ): AsyncGenerator<Memory[], void, unknown> {
+    if (batchSize <= 0) {
+      throw new Error('batchSize must be positive');
+    }
+    let skip = 0;
+    while (true) {
+      const batch = await this.safeQuery(
+        async () =>
+          this.findByFilter(
+            { characterId },
+            { limit: batchSize, skip, sort: { id: 1 } },
+          ),
+        'Error loading memory batch',
+        { characterId, skip, batchSize },
+        [],
+      );
+      if (batch.length === 0) return;
+      yield batch;
+      if (batch.length < batchSize) return;
+      skip += batchSize;
+    }
+  }
+
+  /**
+   * Find memories by a list of IDs. Missing IDs are silently dropped.
+   * @param ids Array of memory IDs
+   * @returns Promise<Memory[]> Array of memories matching any of the given IDs
+   */
+  async findByIds(ids: string[]): Promise<Memory[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    return this.safeQuery(
+      async () => {
+        const memories = await this.findByFilter({
+          id: { $in: ids },
+        } as TypedQueryFilter<Memory>);
+        return memories;
+      },
+      'Error finding memories by IDs',
+      { count: ids.length },
+      []
+    );
+  }
+
+  /**
    * Find memories for a character with pagination support.
    * Returns a page of memories and the total count matching the filter.
    *
@@ -548,6 +603,31 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * Bulk-update lastAccessedAt for a set of memories.
+   * Used by the semantic search return path so the recent-access signal in the
+   * blended protection score reflects actual usage. Character-scoped so a
+   * compromised id list can only affect that character's rows.
+   * Returns the number of rows updated.
+   */
+  async updateAccessTimeBulk(characterId: string, memoryIds: string[]): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        if (memoryIds.length === 0) {
+          return 0;
+        }
+        const now = this.getCurrentTimestamp();
+        return await this.updateMany(
+          { characterId, id: { $in: memoryIds } },
+          { lastAccessedAt: now },
+        );
+      },
+      'Error bulk-updating memory access times',
+      { characterId, count: memoryIds.length },
+      0,
+    );
+  }
+
+  /**
    * Count the number of memories for a character
    * @param characterId The character ID
    * @returns Promise<number> Number of memories for the character
@@ -561,6 +641,71 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       'Error counting memories for character',
       { characterId },
       0
+    );
+  }
+
+  /**
+   * Count memories created for a character at or after the given ISO timestamp.
+   * Used by the extraction rate-limiter.
+   * @param characterId The character ID
+   * @param since ISO-8601 timestamp; memories with createdAt >= since are counted
+   * @returns Promise<number> Number of matching memories
+   */
+  async countCreatedSince(characterId: string, since: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const count = await this.count({
+          characterId,
+          createdAt: { $gte: since },
+        } as TypedQueryFilter<Memory>);
+        return count;
+      },
+      'Error counting memories created since timestamp',
+      { characterId, since },
+      0
+    );
+  }
+
+  /**
+   * Count memories that are missing an embedding, optionally filtered by character.
+   * A memory is "missing" if its embedding column is null (the BLOB either
+   * never landed because the pre-PR-2 keyword-fallback gate wrote the row
+   * without one, or a subsequent re-embed failed).
+   */
+  async countWithoutEmbedding(characterId?: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const filter: TypedQueryFilter<Memory> = characterId
+          ? { characterId, embedding: null } as TypedQueryFilter<Memory>
+          : { embedding: null } as TypedQueryFilter<Memory>;
+        return await this.count(filter);
+      },
+      'Error counting memories without embedding',
+      { characterId },
+      0
+    );
+  }
+
+  /**
+   * Find memory IDs that are missing an embedding, optionally filtered by
+   * character. Returns at most `limit` IDs per call so the caller can batch
+   * the backfill through the background-job queue without overwhelming it.
+   */
+  async findIdsWithoutEmbedding(options: { characterId?: string; limit?: number } = {}): Promise<Array<{ id: string; characterId: string }>> {
+    return this.safeQuery(
+      async () => {
+        const filter: TypedQueryFilter<Memory> = options.characterId
+          ? { characterId: options.characterId, embedding: null } as TypedQueryFilter<Memory>
+          : { embedding: null } as TypedQueryFilter<Memory>;
+        const memories = await this.findByFilter(filter, {
+          sort: { createdAt: -1 as any },
+          limit: options.limit ?? 500,
+        });
+        return memories.map(m => ({ id: m.id, characterId: m.characterId }));
+      },
+      'Error finding memories without embedding',
+      { characterId: options.characterId, limit: options.limit },
+      []
     );
   }
 

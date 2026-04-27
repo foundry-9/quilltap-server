@@ -7,7 +7,7 @@ import { GalleryControls } from './GalleryControls'
 import { GalleryEmpty } from './GalleryEmpty'
 import { GalleryGrid } from './GalleryGrid'
 import { useGalleryData } from './hooks/useGalleryData'
-import type { EmbeddedPhotoGalleryProps } from './types'
+import type { EmbeddedPhotoGalleryProps, GalleryImage } from './types'
 
 const THUMBNAIL_SIZES = [80, 100, 120, 150, 180, 200]
 const DEFAULT_THUMBNAIL_INDEX = 2
@@ -106,7 +106,7 @@ export function EmbeddedPhotoGallery({
     setConfirmDelete(null)
     try {
       await handleDeleteImage(image, currentAvatarId, onAvatarChange)
-      setAllImages(prev => prev.filter(img => img.id !== image.id))
+      setAllImages((prev: GalleryImage[]) => prev.filter((img: GalleryImage) => img.id !== image.id))
     } finally {
       setDeletingImage(null)
     }

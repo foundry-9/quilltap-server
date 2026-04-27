@@ -24,7 +24,6 @@ import {
   isAllLLMChat,
 } from '@/lib/chat/turn-manager'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
-import { describeOutfit } from '@/lib/wardrobe/outfit-description'
 
 // Import extracted hooks
 import {
@@ -42,10 +41,10 @@ import {
   useChatControls,
   useSSEStreaming,
   useOutfit,
-  useOutfitNotification,
   type SwipeState,
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
+import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import {
   ChatComposer,
   VirtualizedMessageList,
@@ -54,6 +53,10 @@ import {
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
 import { GiftWardrobeItemModal } from '@/components/wardrobe/gift-wardrobe-item-modal'
+import SplitLayout from './components/SplitLayout'
+import DocumentPane from './components/DocumentPane'
+import DocumentPickerModal from './components/DocumentPickerModal'
+import { useDocumentMode, type FocusRequest } from './hooks/useDocumentMode'
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -66,6 +69,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const { fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount } = chatDataHook
 
   // --- Story background ---
+  // When the backdrop URL changes (active regeneration poll or passive SWR revalidation), refresh
+  // the chat so any Lantern announcement posted alongside the new backdrop lands in the UI without
+  // requiring the user to leave and return.
   const {
     backgroundUrl: storyBackgroundUrl,
     backgroundFileId: storyBackgroundFileId,
@@ -74,7 +80,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   } = useStoryBackground(
     id,
     chat?.projectId,
-    chatSettings?.storyBackgroundsSettings?.enabled ?? false
+    chatSettings?.storyBackgroundsSettings?.enabled ?? false,
+    () => { void fetchChat() }
   )
 
   // --- UI state that stays in page ---
@@ -99,7 +106,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // --- Refs ---
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const inputRef = useRef<ComposerEditorHandle>(null)
   const hasRestoredTurnStateRef = useRef<boolean>(false)
   const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
   const wasGeneratingRef = useRef(false)
@@ -160,7 +167,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         return
       }
       try {
-        const res = await fetch(`/api/v1/chats/${id}`)
+        const res = await fetch(`/api/v1/chats/${id}`, { cache: 'no-store' })
         if (!res.ok) return
         const data = await res.json()
         // Check the enriched participant avatar URL — this changes when avatarOverrides update
@@ -235,6 +242,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // --- Modal state hook ---
   const modals = useModalState()
+
+  // --- Document Mode hook (Scriptorium Phase 3.5) ---
+  // The Librarian announces document opens and saves as ASSISTANT-role system messages, so the
+  // user never loses their turn. The hook hands us the server-persisted message; we just append.
+  const appendLibrarianMessage = useCallback((message: Message) => {
+    setMessages(prev => {
+      if (prev.some(m => m.id === message.id)) return prev
+      return [...prev, message]
+    })
+  }, [setMessages])
+  const documentModeHook = useDocumentMode({
+    chatId: id,
+    chat,
+    onLibrarianMessage: appendLibrarianMessage,
+  })
+  const [showDocumentPicker, setShowDocumentPicker] = useState(false)
 
   // --- File attachments hook ---
   const fileHook = useFileAttachments(id, chat?.projectId)
@@ -335,12 +358,28 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     scrollOnUserMessage: () => scrollOnUserMessage(),
     scrollOnStreamComplete: () => scrollOnStreamComplete(),
     setAttachedFiles,
-    inputRef: inputRef as React.RefObject<HTMLTextAreaElement>,
-    setFileWriteApprovalState: modals.setFileWriteApprovalState,
+    inputRef: inputRef as React.RefObject<ComposerEditorHandle>,
     setSudoApprovalState: modals.setSudoApprovalState,
     setWorkspaceAcknowledgementState: modals.setWorkspaceAcknowledgementState,
     getFirstCharacterParticipant: participantsWithImpersonation.getFirstCharacterParticipant,
     setPauseState: chatControls.setPauseState,
+    onToolResult: (name, success, result) => {
+      // React to LLM opening/closing documents
+      if (success && (name === 'doc_open_document' || name === 'doc_close_document')) {
+        documentModeHook.reloadFromServer()
+      }
+      // React to LLM writing/moving/deleting files — any of these can invalidate
+      // the editor's cached content or mtime. reloadFromServer re-reads the
+      // active document (if still open) and refreshes state, keeping the next
+      // autosave from racing on a stale mtime or missing path.
+      if (success && (name === 'doc_write_file' || name === 'doc_move_file' || name === 'doc_delete_file')) {
+        documentModeHook.reloadFromServer()
+      }
+      // React to LLM focusing on document location
+      if (name === 'doc_focus' && success && result) {
+        documentModeHook.handleDocFocus(result as FocusRequest)
+      }
+    },
   })
 
   // Keep refs in sync with SSE streaming state
@@ -357,52 +396,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     [chat?.participants]
   )
   const outfit = useOutfit(id, participantCharacterIds)
-  const outfitNotification = useOutfitNotification(id)
 
-  // Refresh outfit state when a tool result comes back (generation completes)
-  // Invalidate wardrobe cache first since tools may have created/gifted new items
-  // Also detect tool-based outfit changes by comparing state before/after streaming
+  // Refresh outfit state when a tool result comes back (generation completes).
+  // Invalidate wardrobe cache first since tools may have created/gifted new items.
+  // The Aurora announcement of any tool-driven change is scheduled server-side
+  // by the wardrobe-update-outfit tool handler, so the client only needs to
+  // refresh its local view of the outfit.
   const wasGeneratingForOutfitRef = useRef(false)
-  const preStreamingOutfitRef = useRef<Record<string, Record<string, { title: string } | null>>>({})
   useEffect(() => {
     const isGenerating = sseStreaming.streaming || sseStreaming.waitingForResponse
-    if (!wasGeneratingForOutfitRef.current && isGenerating) {
-      // Streaming just started — snapshot current outfit state
-      const snapshot: Record<string, Record<string, { title: string } | null>> = {}
-      for (const [charId, charState] of Object.entries(outfit.outfitState)) {
-        snapshot[charId] = { ...charState.items }
-      }
-      preStreamingOutfitRef.current = snapshot
-    }
     if (wasGeneratingForOutfitRef.current && !isGenerating) {
       outfit.invalidateWardrobe()
-      outfit.refreshOutfit().then((newState) => {
-        if (!newState) return
-        // After refresh, compare outfit state to detect tool-based changes
-        const oldSnapshot = preStreamingOutfitRef.current
-        for (const [charId, charState] of Object.entries(newState)) {
-          const oldItems = oldSnapshot[charId]
-          if (!oldItems) continue
-          // Check if any slot changed
-          const changed = (['top', 'bottom', 'footwear', 'accessories'] as const).some(
-            slot => (oldItems[slot]?.title ?? null) !== (charState.items[slot]?.title ?? null)
-          )
-          if (changed) {
-            const participant = chat?.participants.find(p => p.character?.id === charId)
-            const charName = participant?.character?.name
-            if (charName) {
-              const outfitText = describeOutfit({
-                top: charState.items.top?.title ?? null,
-                bottom: charState.items.bottom?.title ?? null,
-                footwear: charState.items.footwear?.title ?? null,
-                accessories: charState.items.accessories?.title ?? null,
-              })
-              outfitNotification.addNotification(charName, 'clothing', outfitText)
-            }
-          }
-        }
-        preStreamingOutfitRef.current = {}
-      })
+      void outfit.refreshOutfit()
     }
     wasGeneratingForOutfitRef.current = isGenerating
   // eslint-disable-next-line react-hooks/exhaustive-deps -- outfit.refreshOutfit and invalidateWardrobe are stable (useCallback)
@@ -412,30 +417,21 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const handleEquipSlot = useCallback(async (participantId: string, slot: string, itemId: string | null) => {
     const participant = chat?.participants.find(p => p.id === participantId)
     const characterId = participant?.character?.id
-    const characterName = participant?.character?.name
     if (characterId) {
-      const newItems = await outfit.equipSlot(characterId, slot, itemId)
-      if (newItems && characterName) {
-        const outfitText = describeOutfit({
-          top: newItems.top?.title ?? null,
-          bottom: newItems.bottom?.title ?? null,
-          footwear: newItems.footwear?.title ?? null,
-          accessories: newItems.accessories?.title ?? null,
-        })
-        outfitNotification.addNotification(characterName, 'clothing', outfitText)
-      }
+      await outfit.equipSlot(characterId, slot, itemId)
       // If avatar generation is enabled, start polling for the auto-triggered avatar update
       if (chat?.avatarGenerationEnabled) {
         startAvatarPoll(characterId)
       }
     }
-  }, [chat?.participants, chat?.avatarGenerationEnabled, outfit, outfitNotification, startAvatarPoll])
+  }, [chat?.participants, chat?.avatarGenerationEnabled, outfit, startAvatarPoll])
 
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
     return visibleMessages[index]?.id ?? index
   }, [visibleMessages])
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- @tanstack/react-virtual exposes hooks the React Compiler can't analyse; safe to opt out of compiler optimisation here
   const virtualizer = useVirtualizer({
     count: visibleMessages.length,
     getScrollElement: () => messagesContainerRef.current,
@@ -473,7 +469,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     viewSourceMessageIds,
     setInput,
     setAttachedFiles,
-    inputRef as React.RefObject<HTMLTextAreaElement>,
+    inputRef as React.RefObject<ComposerEditorHandle>,
     messagesEndRef as React.RefObject<HTMLDivElement>,
     chatSettings,
   )
@@ -540,11 +536,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   // --- Sync storyBackgroundsEnabled ---
   const storyBackgroundsSettingsEnabled = chatSettings?.storyBackgroundsSettings?.enabled
+  const { setStoryBackgroundsEnabled } = chatControls
   useEffect(() => {
     if (chatSettings) {
-      chatControls.setStoryBackgroundsEnabled(storyBackgroundsSettingsEnabled ?? false)
+      setStoryBackgroundsEnabled(storyBackgroundsSettingsEnabled ?? false)
     }
-  }, [chatSettings, storyBackgroundsSettingsEnabled, chatControls])
+  }, [chatSettings, storyBackgroundsSettingsEnabled, setStoryBackgroundsEnabled])
 
   // --- Calculate turn state when messages change ---
   useEffect(() => {
@@ -622,19 +619,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const awaitingTagInfo = quickHideActive && isCurrentChat && !chatContext.tagsFetched
   const chatHidden = quickHideActive && isCurrentChat && chatContext.tagsFetched && shouldHideByIds(chatTags)
 
-  // --- Textarea helpers ---
-  const getTextareaMaxHeight = useCallback(() => {
-    if (typeof globalThis === 'undefined' || !globalThis.window) return 200
-    return globalThis.window.innerHeight / 3
-  }, [])
-
-  const resizeTextarea = useCallback((textarea: HTMLTextAreaElement) => {
-    textarea.style.height = '0'
-    const maxHeight = getTextareaMaxHeight()
-    const newHeight = Math.min(textarea.scrollHeight, maxHeight)
-    textarea.style.height = newHeight + 'px'
-  }, [getTextareaMaxHeight])
-
   // --- Initialization effects ---
   useEffect(() => {
     fetchChat()
@@ -676,27 +660,14 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     fetchTemplateData()
   }, [chat?.roleplayTemplateId])
 
-  // --- Textarea focus and resize effects ---
+  // --- Editor focus effect ---
   useEffect(() => {
     const timer = setTimeout(() => {
       inputRef.current?.focus()
       inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      if (inputRef.current) {
-        resizeTextarea(inputRef.current)
-      }
     }, 100)
     return () => clearTimeout(timer)
-  }, [resizeTextarea])
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (inputRef.current) {
-        resizeTextarea(inputRef.current)
-      }
-    }
-    globalThis.window?.addEventListener('resize', handleResize)
-    return () => globalThis.window?.removeEventListener('resize', handleResize)
-  }, [resizeTextarea])
+  }, [])
 
   // Focus textarea when generation completes + refresh LLM logs
   useEffect(() => {
@@ -711,6 +682,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     wasGeneratingRef.current = isGenerating
   // eslint-disable-next-line react-hooks/exhaustive-deps -- llmLogs.refreshLogs is stable (useCallback)
   }, [sseStreaming.streaming, sseStreaming.waitingForResponse, sseStreaming.sending, llmLogs.refreshLogs])
+
+  // Refetch document content after LLM response completes when a document is open.
+  // Always refetch rather than trying to detect doc_* edits — reading a file is cheap
+  // and this avoids race conditions with pendingToolCalls being cleared.
+  const wasGeneratingForDocRef = useRef(false)
+  useEffect(() => {
+    const isGenerating = sseStreaming.streaming || sseStreaming.waitingForResponse || sseStreaming.sending
+    if (wasGeneratingForDocRef.current && !isGenerating && documentModeHook.activeDocument) {
+      documentModeHook.handleLLMEditEnd()
+    }
+    wasGeneratingForDocRef.current = isGenerating
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- handleLLMEditEnd is stable (useCallback)
+  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, sseStreaming.sending, documentModeHook.activeDocument])
 
   // Keyboard shortcut: Cmd+Shift+L / Ctrl+Shift+L to toggle inspector
   const llmLoggingEnabled = chatSettings?.llmLoggingSettings?.enabled !== false
@@ -727,6 +711,46 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [llmLoggingEnabled, toggleInspector])
+
+  // Keyboard shortcuts for Document Mode (Scriptorium Phase 3.5)
+  useEffect(() => {
+    const handleDocKeyDown = (e: KeyboardEvent) => {
+      // Cmd+Shift+D / Ctrl+Shift+D: Toggle document mode (normal ↔ split)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'D') {
+        e.preventDefault()
+        if (documentModeHook.documentMode === 'normal') {
+          if (documentModeHook.activeDocument) {
+            // Re-open existing document in split mode
+            documentModeHook.toggleFocusMode()
+          } else {
+            // No document open — show picker
+            setShowDocumentPicker(true)
+          }
+        } else {
+          documentModeHook.closeDocument()
+        }
+        return
+      }
+
+      // Cmd+Shift+F / Ctrl+Shift+F: Toggle focus mode (split ↔ focus)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'F') {
+        if (documentModeHook.documentMode !== 'normal' && documentModeHook.activeDocument) {
+          e.preventDefault()
+          documentModeHook.toggleFocusMode()
+        }
+        return
+      }
+
+      // Escape: Exit focus mode to split
+      if (e.key === 'Escape' && documentModeHook.documentMode === 'focus') {
+        e.preventDefault()
+        documentModeHook.toggleFocusMode()
+      }
+    }
+
+    document.addEventListener('keydown', handleDocKeyDown)
+    return () => document.removeEventListener('keydown', handleDocKeyDown)
+  }, [documentModeHook])
 
   // --- Toolbar setup ---
   const { setLeftContent, setRightContent } = usePageToolbar()
@@ -809,6 +833,17 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               />
             </button>
           )}
+          {chat.isDangerousChat && (
+            <span
+              className="qt-danger-badge flex-shrink-0"
+              title={`The Concierge has flagged this chat${chat.dangerCategories?.length ? `: ${chat.dangerCategories.join(', ')}` : ''}`}
+            >
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+              Flagged
+            </span>
+          )}
           <span className="qt-text-primary truncate" title={chat.title}>
             {chat.title}
           </span>
@@ -819,7 +854,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
     return () => setLeftContent(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- llmCharacterKey is a stable string proxy for the llmCharacters array
-  }, [chat?.projectId, chat?.projectName, chat?.title, llmCharacterKey, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
+  }, [chat?.projectId, chat?.projectName, chat?.title, chat?.isDangerousChat, chat?.dangerCategories, llmCharacterKey, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
 
   // Set cost summary and inspector button in toolbar right section
   useEffect(() => {
@@ -879,6 +914,24 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [respondingParticipantId, chat?.participants, participantsWithImpersonation])
 
   const getMessageAvatar = useCallback((message: Message) => {
+    if (message.systemSender === 'lantern') {
+      return { name: 'The Lantern', title: null, avatarUrl: '/images/avatars/lantern-avatar.webp', defaultImage: null }
+    }
+    if (message.systemSender === 'aurora') {
+      return { name: 'Aurora', title: null, avatarUrl: '/images/avatars/aurora-avatar.webp', defaultImage: null }
+    }
+    if (message.systemSender === 'librarian') {
+      return { name: 'The Librarian', title: null, avatarUrl: '/images/avatars/librarian-avatar.webp', defaultImage: null }
+    }
+    if (message.systemSender === 'concierge') {
+      return { name: 'The Concierge', title: null, avatarUrl: '/images/avatars/concierge-avatar.webp', defaultImage: null }
+    }
+    if (message.systemSender === 'host') {
+      return { name: 'The Host', title: null, avatarUrl: '/images/avatars/host-avatar.webp', defaultImage: null }
+    }
+    if (message.systemSender === 'prospero') {
+      return { name: 'Prospero', title: null, avatarUrl: '/images/avatars/prospero-avatar.webp', defaultImage: null }
+    }
     if (message.participantId) {
       const participant = participantsWithImpersonation.getParticipantById(message.participantId)
       if (participant) {
@@ -914,6 +967,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       })
     }
   }, [messages, modals])
+
+  // Handle document open — opens the document; the server posts a Librarian announcement which
+  // the hook surfaces via onLibrarianMessage, so the user never loses their turn.
+  const handleOpenDocument = useCallback(async (params: Parameters<typeof documentModeHook.openDocument>[0]) => {
+    await documentModeHook.openDocument(params)
+  }, [documentModeHook])
 
   const handleReattributed = useCallback(async () => {
     const messageId = modals.reattributeDialogState?.messageId
@@ -984,27 +1043,57 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <div className="qt-chat-main">
-        {/* Whisper toggle - shown in multi-character chats */}
-        {participantsWithImpersonation.isMultiChar && (
-          <div className="flex items-center justify-end gap-2 px-4 py-1">
-            <span className="qt-text-secondary text-xs">All Whispers</span>
-            <button
-              onClick={() => setShowAllWhispers(!showAllWhispers)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
-              }`}
-              role="switch"
-              aria-checked={showAllWhispers}
-              title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
-                  showAllWhispers ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-        )}
+        <SplitLayout
+          mode={documentModeHook.documentMode}
+          dividerPosition={documentModeHook.dividerPosition}
+          onDividerPositionChange={documentModeHook.setDividerPosition}
+          chatContent={
+            <>
+              {/* Chat toggles - shown in multi-character chats */}
+              {participantsWithImpersonation.isMultiChar && (
+                <div className="flex items-center justify-end gap-4 px-4 py-1">
+                  <div className="flex items-center gap-2">
+                    <span className="qt-text-secondary text-xs">Shared Vaults</span>
+                    <button
+                      onClick={chatControls.handleToggleCrossCharacterVaultReads}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        chatControls.allowCrossCharacterVaultReads ? 'bg-primary' : 'qt-bg-muted'
+                      }`}
+                      role="switch"
+                      aria-checked={chatControls.allowCrossCharacterVaultReads}
+                      title={
+                        chatControls.allowCrossCharacterVaultReads
+                          ? 'Characters may read each other’s vaults (read-only). Click to lock.'
+                          : 'Each character’s vault is private. Click to let them peek at each other’s dossiers.'
+                      }
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+                          chatControls.allowCrossCharacterVaultReads ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="qt-text-secondary text-xs">All Whispers</span>
+                    <button
+                      onClick={() => setShowAllWhispers(!showAllWhispers)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        showAllWhispers ? 'bg-primary' : 'qt-bg-muted'
+                      }`}
+                      role="switch"
+                      aria-checked={showAllWhispers}
+                      title={showAllWhispers ? 'Hide private whispers' : 'Show all whispers'}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+                          showAllWhispers ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
 
         <VirtualizedMessageList
           messages={visibleMessages}
@@ -1043,16 +1132,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onViewLLMLogs={llmLogs.handleViewLLMLogs}
           pendingToolCalls={sseStreaming.pendingToolCalls}
           ephemeralMessages={ephemeralMessages}
-          fileWriteApprovalState={modals.fileWriteApprovalState}
-          setFileWriteApprovalState={modals.setFileWriteApprovalState}
-          chatId={id}
-          triggerContinueMode={sseStreaming.triggerContinueMode}
           getRespondingCharacter={getRespondingCharacter}
           shouldShowAvatars={shouldShowAvatars}
           getFirstCharacter={participantsWithImpersonation.getFirstCharacter}
           getMessageAvatar={getMessageAvatar}
           participantNames={participantNames}
           userParticipantIdSet={userParticipantIdSet}
+          isDangerousChat={chat?.isDangerousChat === true}
         />
 
         {/* Speaker Selector - shown when controlling multiple characters */}
@@ -1085,8 +1171,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           responseStatus={sseStreaming.responseStatus}
           toolPaletteOpen={modals.toolPaletteOpen}
           setToolPaletteOpen={modals.setToolPaletteOpen}
-          showPreview={modals.showPreview}
-          setShowPreview={modals.setShowPreview}
+          showSource={modals.showPreview}
+          setShowSource={modals.setShowPreview}
           uploadingFile={uploadingFile}
           toolExecutionStatus={sseStreaming.toolExecutionStatus}
           renderingPatterns={roleplayRenderingPatterns}
@@ -1098,6 +1184,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           roleplayTemplateId={chat?.roleplayTemplateId}
           documentEditingMode={chatControls.documentEditingMode}
           onToggleDocumentEditingMode={chatControls.handleToggleDocumentEditingMode}
+          onOpenDocumentClick={() => setShowDocumentPicker(true)}
+          isDocumentModeActive={documentModeHook.documentMode !== 'normal'}
           agentModeEnabled={chatControls.agentModeEnabled}
           onAgentModeToggle={chatControls.handleToggleAgentMode}
           storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}
@@ -1145,9 +1233,49 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           hideStopButton={modals.showParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
           narrationDelimiters={narrationDelimiters}
-          outfitNotificationHasPending={outfitNotification.hasPending}
-          outfitNotificationCount={outfitNotification.pendingCount}
-          onConsumeOutfitNotifications={outfitNotification.consumeNotifications}
+        />
+            </>
+          }
+          documentContent={
+            documentModeHook.activeDocument ? (
+              <DocumentPane
+                document={documentModeHook.activeDocument}
+                mode={documentModeHook.documentMode}
+                isDirty={documentModeHook.isDirty}
+                isSaving={documentModeHook.isSaving}
+                isLLMEditing={documentModeHook.isLLMEditing}
+                contentVersion={documentModeHook.contentVersion}
+                roleplayTemplateId={chat?.roleplayTemplateId}
+                attentionTop={documentModeHook.attentionTop}
+                baselineContent={documentModeHook.baselineContent}
+                getScrollPosition={documentModeHook.getScrollPosition}
+                setScrollPosition={documentModeHook.setScrollPosition}
+                onContentChange={documentModeHook.handleContentChange}
+                onBlur={documentModeHook.flushSave}
+                onTitleChange={documentModeHook.renameDocument}
+                onToggleFocusMode={documentModeHook.toggleFocusMode}
+                onCloseDocument={documentModeHook.closeDocument}
+                onDeleteDocument={documentModeHook.deleteDocument}
+                focusRequest={documentModeHook.focusRequest}
+                onFocusResolved={documentModeHook.setAttentionTop}
+                onFocusCleared={() => documentModeHook.setAttentionTop(null)}
+                onFocusProcessed={documentModeHook.clearFocusRequest}
+              />
+            ) : null
+          }
+        />
+
+        {/* Document Picker Modal */}
+        <DocumentPickerModal
+          isOpen={showDocumentPicker}
+          onClose={() => setShowDocumentPicker(false)}
+          chatId={id}
+          projectId={chat?.projectId}
+          projectName={chat?.projectName}
+          onSelectDocument={(params) => {
+            handleOpenDocument(params)
+            setShowDocumentPicker(false)
+          }}
         />
 
         {/* Modals */}
@@ -1192,8 +1320,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}
           reattributeDialogState={modals.reattributeDialogState}
           setReattributeDialogState={modals.setReattributeDialogState}
-          fileWriteApprovalState={modals.fileWriteApprovalState}
-          setFileWriteApprovalState={modals.setFileWriteApprovalState}
           sudoApprovalState={modals.sudoApprovalState}
           setSudoApprovalState={modals.setSudoApprovalState}
           workspaceAcknowledgementState={modals.workspaceAcknowledgementState}
@@ -1258,6 +1384,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onStopImpersonate={impersonation.handleStopImpersonation}
           connectionProfiles={chatControls.connectionProfiles}
           onConnectionProfileChange={chatControls.handleConnectionProfileChange}
+          onSystemPromptChange={chatControls.handleSystemPromptChange}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}
           outfitState={outfit.outfitState}
@@ -1266,6 +1393,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onEquipSlot={handleEquipSlot}
           onGiftItem={handleGiftItem}
           onRegenerateAvatar={chat?.avatarGenerationEnabled ? handleRegenerateAvatar : undefined}
+          isDangerousChat={chat?.isDangerousChat === true}
         />
       )}
 
@@ -1289,13 +1417,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           recipientName={giftTarget.name}
           chatId={id}
           onClose={() => setGiftTarget(null)}
-          onGifted={(giftInfo) => {
+          onGifted={() => {
             outfit.invalidateWardrobe(giftTarget.characterId)
-            if (giftInfo) {
-              const slotsText = giftInfo.types.map(t => `**${t}**`).join(', ')
-              const description = `- received **${giftInfo.title}** (${slotsText})${giftInfo.equipped ? ' — now wearing' : ''}\n`
-              outfitNotification.addNotification(giftTarget.name, 'wardrobe', description)
-            }
             setGiftTarget(null)
             outfit.refreshOutfit()
           }}

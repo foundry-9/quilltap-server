@@ -18,11 +18,12 @@ describe('Built-in Tool Names', () => {
       // Based on the plugin-utils built-in tools list
       const expectedTools = [
         'generate_image',
-        'search_memories',
+        'search',
         'search_web',
         'project_info',
-        'file_management',
         'request_full_context',
+        'help_search',
+        'help_settings',
       ];
 
       for (const tool of expectedTools) {
@@ -71,7 +72,12 @@ describe('Built-in Tool Names', () => {
 
     it('should contain at least 4 built-in tools', () => {
       const toolNames = getBuiltinToolNames();
-      expect(toolNames.size).toBeGreaterThanOrEqual(6);
+      expect(toolNames.size).toBeGreaterThanOrEqual(8);
+    });
+
+    it('should not include removed legacy tool names', () => {
+      const toolNames = getBuiltinToolNames();
+      expect(toolNames.has('search_memories')).toBe(false);
     });
   });
 
@@ -101,12 +107,12 @@ describe('Built-in Tool Names', () => {
 
     it('should support filtering a tool list by built-in names', () => {
       const toolNames = getBuiltinToolNames();
-      const allTools = ['generate_image', 'custom_tool', 'search_memories', 'another_tool'];
+      const allTools = ['generate_image', 'custom_tool', 'search', 'another_tool'];
 
       const shadowingTools = allTools.filter(tool => toolNames.has(tool));
       const customTools = allTools.filter(tool => !toolNames.has(tool));
 
-      expect(shadowingTools).toEqual(['generate_image', 'search_memories']);
+      expect(shadowingTools).toEqual(['generate_image', 'search']);
       expect(customTools).toEqual(['custom_tool', 'another_tool']);
     });
 
@@ -163,13 +169,13 @@ describe('Built-in Tool Names', () => {
       const mcpServerTools = [
         'generate_image', // This shadows a built-in
         'custom_search',  // This does not
-        'search_memories',     // This shadows a built-in
+        'search',     // This shadows a built-in
       ];
 
       const shadowingTools = mcpServerTools.filter(tool => toolNames.has(tool));
       expect(shadowingTools.length).toBe(2);
       expect(shadowingTools).toContain('generate_image');
-      expect(shadowingTools).toContain('search_memories');
+      expect(shadowingTools).toContain('search');
     });
 
     it('should handle large tool lists efficiently', () => {

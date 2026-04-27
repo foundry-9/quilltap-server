@@ -57,8 +57,6 @@ export const CheapLLMSettingsSchema = z.object({
   fallbackToLocal: z.boolean().default(true),
   /** Provider for generating embeddings */
   embeddingProvider: EmbeddingProviderEnum.default('OPENAI'),
-  /** Embedding profile ID to use for text embeddings */
-  embeddingProfileId: UUIDSchema.nullable().optional(),
   /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
   imagePromptProfileId: UUIDSchema.nullable().optional(),
 });
@@ -116,6 +114,56 @@ export const MemoryCascadePreferencesSchema = z.object({
 });
 
 export type MemoryCascadePreferences = z.infer<typeof MemoryCascadePreferencesSchema>;
+
+// ============================================================================
+// AUTO-HOUSEKEEPING SETTINGS (Commonplace Book)
+// ============================================================================
+
+/**
+ * Per-character cap override. When a characterId appears in the map, its cap
+ * replaces the global `perCharacterCap` for that character only.
+ */
+export const AutoHousekeepingCapOverrideSchema = z.record(z.string(), z.number().int().positive());
+export type AutoHousekeepingCapOverride = z.infer<typeof AutoHousekeepingCapOverrideSchema>;
+
+export const AutoHousekeepingSettingsSchema = z.object({
+  /** When true, housekeeping runs automatically (post-write watermark + scheduled sweep). Default off. */
+  enabled: z.boolean().default(false),
+  /** Global per-character memory cap. Housekeeping engages when count >= 80% of this. */
+  perCharacterCap: z.number().int().positive().default(2000),
+  /** Per-character cap overrides keyed by characterId. */
+  perCharacterCapOverrides: AutoHousekeepingCapOverrideSchema.default({}),
+  /** Similarity threshold for the optional merge-similar pass during housekeeping. */
+  autoMergeSimilarThreshold: z.number().min(0).max(1).default(0.90),
+  /** When true, housekeeping also merges semantically similar memories (on top of retention-policy deletions). */
+  mergeSimilar: z.boolean().default(false),
+});
+
+export type AutoHousekeepingSettings = z.infer<typeof AutoHousekeepingSettingsSchema>;
+
+// ============================================================================
+// MEMORY EXTRACTION RATE LIMITS (Commonplace Book)
+// ============================================================================
+
+/**
+ * Graduated importance floor is applied when a character's recent extraction
+ * volume approaches or exceeds the configured per-hour cap:
+ *   - Below `softStartFraction` of the cap: no filter (all significant candidates pass)
+ *   - Between `softStartFraction` and 1.0: only candidates with importance >= `softFloor` pass
+ *   - At or above 1.0: extraction is skipped entirely for this exchange
+ */
+export const MemoryExtractionLimitsSchema = z.object({
+  /** When true, the rate limiter is active. Off by default. */
+  enabled: z.boolean().default(false),
+  /** Maximum memories a single character may accrue per hour before the limiter engages. */
+  maxPerHour: z.number().int().positive().default(20),
+  /** Fraction of maxPerHour at which the graduated floor begins to apply (0–1). */
+  softStartFraction: z.number().min(0).max(1).default(0.7),
+  /** Importance floor applied to new candidates while in the graduated band. */
+  softFloor: z.number().min(0).max(1).default(0.7),
+});
+
+export type MemoryExtractionLimits = z.infer<typeof MemoryExtractionLimitsSchema>;
 
 // ============================================================================
 // TOKEN DISPLAY SETTINGS
@@ -263,6 +311,21 @@ export const ChatSettingsSchema = z.object({
     onMessageDelete: 'ASK_EVERY_TIME',
     onSwipeRegenerate: 'DELETE_MEMORIES',
   }),
+  /** Commonplace Book auto-housekeeping settings (off by default; user opts in from the Commonplace Book tab) */
+  autoHousekeepingSettings: AutoHousekeepingSettingsSchema.default({
+    enabled: false,
+    perCharacterCap: 2000,
+    perCharacterCapOverrides: {},
+    autoMergeSimilarThreshold: 0.90,
+    mergeSimilar: false,
+  }),
+  /** Per-hour extraction rate limit for the Commonplace Book (off by default) */
+  memoryExtractionLimits: MemoryExtractionLimitsSchema.default({
+    enabled: false,
+    maxPerHour: 20,
+    softStartFraction: 0.7,
+    softFloor: 0.7,
+  }),
   /** Token display settings for showing usage and costs */
   tokenDisplaySettings: TokenDisplaySettingsSchema.default({
     showPerMessageTokens: false,
@@ -286,6 +349,8 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically (default: true) */
   autoDetectRng: z.boolean().default(true),
+  /** Whether new chats start in composition mode (Enter = newline, Ctrl/Cmd+Enter = submit) by default */
+  compositionModeDefault: z.boolean().default(false),
   /** Agent mode settings for iterative tool use with self-correction */
   agentModeSettings: AgentModeSettingsSchema.default({
     maxTurns: 10,

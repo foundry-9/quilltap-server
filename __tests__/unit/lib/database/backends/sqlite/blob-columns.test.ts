@@ -31,11 +31,12 @@ describe('embeddingToBlob', () => {
 })
 
 describe('blobToEmbedding', () => {
-  it('converts a Buffer back to a number array', () => {
+  it('converts a Buffer back to a Float32Array', () => {
     const original = [1.0, 2.0, 3.0]
     const blob = embeddingToBlob(original)
     const result = blobToEmbedding(blob)
 
+    expect(result).toBeInstanceOf(Float32Array)
     expect(result).toHaveLength(3)
     expect(result[0]).toBeCloseTo(1.0, 5)
     expect(result[1]).toBeCloseTo(2.0, 5)
@@ -46,7 +47,8 @@ describe('blobToEmbedding', () => {
     const blob = Buffer.alloc(0)
     const result = blobToEmbedding(blob)
 
-    expect(result).toEqual([])
+    expect(result).toBeInstanceOf(Float32Array)
+    expect(result).toHaveLength(0)
   })
 })
 

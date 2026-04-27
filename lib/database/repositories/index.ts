@@ -19,7 +19,6 @@ export { ChatsRepository } from './chats.repository';
 export { ChatSettingsRepository } from './chat-settings.repository';
 export { ConnectionProfilesRepository } from './connection-profiles.repository';
 export { EmbeddingProfilesRepository } from './embedding-profiles.repository';
-export { FilePermissionsRepository } from './file-permissions.repository';
 export { FilesRepository } from './files.repository';
 export { FoldersRepository } from './folders.repository';
 export { ImageProfilesRepository } from './image-profiles.repository';
@@ -38,6 +37,17 @@ export { EmbeddingStatusRepository } from './embedding-status.repository';
 export { WardrobeRepository } from './wardrobe.repository';
 export { OutfitPresetsRepository } from './outfit-presets.repository';
 export { CharacterPluginDataRepository } from './character-plugin-data.repository';
+export { ConversationAnnotationsRepository } from './conversation-annotations.repository';
+export { ConversationChunksRepository } from './conversation-chunks.repository';
+export { HelpDocsRepository } from './help-docs.repository';
+export { DocMountPointsRepository } from './doc-mount-points.repository';
+export { DocMountFilesRepository } from './doc-mount-files.repository';
+export { DocMountFoldersRepository } from './doc-mount-folders.repository';
+export { DocMountChunksRepository } from './doc-mount-chunks.repository';
+export { DocMountDocumentsRepository } from './doc-mount-documents.repository';
+export { DocMountBlobsRepository } from './doc-mount-blobs.repository';
+export { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
+export { ChatDocumentsRepository } from './chat-documents.repository';
 
 // Import all repository classes for container
 import { BackgroundJobsRepository } from './background-jobs.repository';
@@ -46,7 +56,6 @@ import { ChatsRepository } from './chats.repository';
 import { ChatSettingsRepository } from './chat-settings.repository';
 import { ConnectionProfilesRepository } from './connection-profiles.repository';
 import { EmbeddingProfilesRepository } from './embedding-profiles.repository';
-import { FilePermissionsRepository } from './file-permissions.repository';
 import { FilesRepository } from './files.repository';
 import { FoldersRepository } from './folders.repository';
 import { ImageProfilesRepository } from './image-profiles.repository';
@@ -65,6 +74,17 @@ import { EmbeddingStatusRepository } from './embedding-status.repository';
 import { WardrobeRepository } from './wardrobe.repository';
 import { OutfitPresetsRepository } from './outfit-presets.repository';
 import { CharacterPluginDataRepository } from './character-plugin-data.repository';
+import { ConversationAnnotationsRepository } from './conversation-annotations.repository';
+import { ConversationChunksRepository } from './conversation-chunks.repository';
+import { HelpDocsRepository } from './help-docs.repository';
+import { DocMountPointsRepository } from './doc-mount-points.repository';
+import { DocMountFilesRepository } from './doc-mount-files.repository';
+import { DocMountFoldersRepository } from './doc-mount-folders.repository';
+import { DocMountChunksRepository } from './doc-mount-chunks.repository';
+import { DocMountDocumentsRepository } from './doc-mount-documents.repository';
+import { DocMountBlobsRepository } from './doc-mount-blobs.repository';
+import { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
+import { ChatDocumentsRepository } from './chat-documents.repository';
 
 /**
  * Container interface for all repository instances.
@@ -77,7 +97,6 @@ export interface RepositoryContainer {
   chatSettings: ChatSettingsRepository;
   connections: ConnectionProfilesRepository;
   embeddingProfiles: EmbeddingProfilesRepository;
-  filePermissions: FilePermissionsRepository;
   files: FilesRepository;
   folders: FoldersRepository;
   imageProfiles: ImageProfilesRepository;
@@ -97,6 +116,17 @@ export interface RepositoryContainer {
   wardrobe: WardrobeRepository;
   outfitPresets: OutfitPresetsRepository;
   characterPluginData: CharacterPluginDataRepository;
+  conversationAnnotations: ConversationAnnotationsRepository;
+  conversationChunks: ConversationChunksRepository;
+  helpDocs: HelpDocsRepository;
+  docMountPoints: DocMountPointsRepository;
+  docMountFiles: DocMountFilesRepository;
+  docMountFolders: DocMountFoldersRepository;
+  docMountChunks: DocMountChunksRepository;
+  docMountDocuments: DocMountDocumentsRepository;
+  docMountBlobs: DocMountBlobsRepository;
+  projectDocMountLinks: ProjectDocMountLinksRepository;
+  chatDocuments: ChatDocumentsRepository;
 }
 
 /**
@@ -121,7 +151,6 @@ export function createRepositories(): RepositoryContainer {
       chatSettings: new ChatSettingsRepository(),
       connections: new ConnectionProfilesRepository(),
       embeddingProfiles: new EmbeddingProfilesRepository(),
-      filePermissions: new FilePermissionsRepository(),
       files: filesRepo,
       folders: new FoldersRepository(),
       imageProfiles: new ImageProfilesRepository(),
@@ -141,6 +170,17 @@ export function createRepositories(): RepositoryContainer {
       wardrobe: new WardrobeRepository(),
       outfitPresets: new OutfitPresetsRepository(),
       characterPluginData: new CharacterPluginDataRepository(),
+      conversationAnnotations: new ConversationAnnotationsRepository(),
+      conversationChunks: new ConversationChunksRepository(),
+      helpDocs: new HelpDocsRepository(),
+      docMountPoints: new DocMountPointsRepository(),
+      docMountFiles: new DocMountFilesRepository(),
+      docMountFolders: new DocMountFoldersRepository(),
+      docMountChunks: new DocMountChunksRepository(),
+      docMountDocuments: new DocMountDocumentsRepository(),
+      docMountBlobs: new DocMountBlobsRepository(),
+      projectDocMountLinks: new ProjectDocMountLinksRepository(),
+      chatDocuments: new ChatDocumentsRepository(),
     };
     return repositories;
   } catch (error) {

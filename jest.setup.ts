@@ -314,11 +314,76 @@ jest.mock('@/lib/file-storage/manager', () => {
   }
 })
 
+// Mock LLM logging service — same SWC hoisting reason as below. Tests that need
+// to assert against logLLMCall do so via `jest.mocked(logLLMCall)`.
+jest.mock('@/lib/services/llm-logging.service', () => ({
+  logLLMCall: jest.fn().mockResolvedValue(null),
+  isLoggingEnabled: jest.fn().mockResolvedValue({ enabled: true, verboseMode: false, retentionDays: 30 }),
+  getLogsForMessage: jest.fn().mockResolvedValue([]),
+  getLogsForChat: jest.fn().mockResolvedValue([]),
+  getLogsForCharacter: jest.fn().mockResolvedValue([]),
+  messageHasLogs: jest.fn().mockResolvedValue(false),
+  getLogsForUser: jest.fn().mockResolvedValue([]),
+  getRecentLogs: jest.fn().mockResolvedValue([]),
+  countLogsForUser: jest.fn().mockResolvedValue(0),
+  getTotalTokenUsage: jest.fn().mockResolvedValue({ promptTokens: 0, completionTokens: 0, totalTokens: 0 }),
+  getLogsByType: jest.fn().mockResolvedValue([]),
+  cleanupOldLogs: jest.fn().mockResolvedValue(0),
+  deleteAllLogsForUser: jest.fn().mockResolvedValue(0),
+  getStandaloneLogs: jest.fn().mockResolvedValue([]),
+}))
+
+// Mock embedding service — required here because SWC's import hoisting prevents
+// test-level jest.mock from taking effect before ES imports resolve.
+// Tests that need the REAL embedding service (e.g. embedding-service.test.ts)
+// should use jest.unmock('@/lib/embedding/embedding-service') at the top.
+jest.mock('@/lib/embedding/embedding-service', () => ({
+  generateEmbeddingForUser: jest.fn().mockResolvedValue({
+    embedding: new Float32Array([0.1, 0.2, 0.3]),
+    model: 'test-model',
+    dimensions: 3,
+    provider: 'TEST',
+  }),
+  extractSearchTerms: jest.fn((query: string) => {
+    const words = query.toLowerCase().split(/\s+/).filter((w: string) => w.length > 2)
+    return { terms: words, phrases: [] }
+  }),
+  textSimilarity: jest.fn().mockReturnValue(0.5),
+  cosineSimilarity: jest.fn((a: ArrayLike<number>, b: ArrayLike<number>) => {
+    let sum = 0
+    for (let i = 0; i < a.length && i < b.length; i++) {
+      sum += a[i] * b[i]
+    }
+    return sum
+  }),
+  normalizeVector: jest.fn((v: Float32Array) => v),
+  isEmbeddingAvailable: jest.fn().mockResolvedValue(false),
+  EmbeddingError: class EmbeddingError extends Error {
+    constructor(message: string, public code: string = 'EMBEDDING_ERROR') {
+      super(message)
+      this.name = 'EmbeddingError'
+    }
+  },
+  generateEmbedding: jest.fn(),
+  getDefaultEmbeddingProfile: jest.fn().mockResolvedValue(null),
+  getEmbeddingProfile: jest.fn().mockResolvedValue(null),
+  getUserEmbeddingProfiles: jest.fn().mockResolvedValue([]),
+}))
+
 // Mock vector store for embedding operations
 jest.mock('@/lib/embedding/vector-store', () => ({
   getVectorStoreManager: jest.fn().mockReturnValue({
     deleteStore: jest.fn().mockResolvedValue(undefined),
     getStore: jest.fn().mockResolvedValue(null),
+  }),
+  getCharacterVectorStore: jest.fn().mockResolvedValue({
+    getAllEntries: jest.fn().mockReturnValue([]),
+    search: jest.fn().mockReturnValue([]),
+    addVector: jest.fn(),
+    updateVector: jest.fn(),
+    removeVector: jest.fn(),
+    hasVector: jest.fn().mockReturnValue(false),
+    save: jest.fn(),
   }),
   CharacterVectorStore: jest.fn().mockImplementation(() => ({
     addMemory: jest.fn().mockResolvedValue(undefined),

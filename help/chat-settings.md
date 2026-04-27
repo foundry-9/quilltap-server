@@ -16,6 +16,25 @@ Chat Settings control global behavior for all your chats in Quilltap, including 
 
 ## Understanding Chat Settings Sections
 
+### Composition Mode
+
+Decides whether each new chat is delivered to your blotter pre-poised for prose. When the toggle is enabled, every fresh chat opens in composition mode — Enter inserts a newline, and Ctrl/Cmd+Enter sends the message — which suits leisurely paragraphs, formatted scenes, and other unhurried correspondence. When disabled (the factory default), new chats open in chat mode, where Enter sends and Shift+Enter inserts a newline, in the brisk fashion of a telegram clerk.
+
+**Setting Options:**
+
+- **Start New Chats in Composition Mode** — A simple boolean. On: new chats begin in composition mode. Off: new chats begin in chat mode.
+
+**How to configure:**
+
+1. Tick or untick the box at the top of the Chat tab in Settings
+2. The change applies to chats created after the toggle, not to existing ones
+3. The composer's toolbar still lets you flip the mode for any individual chat at any time
+
+**When useful:**
+
+- You favor multi-paragraph messages and would rather not bump Shift each time
+- You're using Quilltap chiefly for long-form roleplay or co-writing rather than rapid-fire chat
+
 ### Avatar Settings
 
 Controls how your user avatar appears in chats.

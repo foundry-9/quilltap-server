@@ -20,14 +20,24 @@ import { logger } from '@/lib/logger'
 // Constants
 // =============================================================================
 
-/** Near-duplicate threshold — memories above this are reinforced, not duplicated */
-export const MERGE_THRESHOLD = 0.80
+/**
+ * Near-duplicate threshold — at or above this, the candidate is considered an
+ * exact-or-near-exact restatement of an existing memory and is skipped entirely
+ * (not even reinforced) so piles of identical rephrasings stop accumulating.
+ */
+export const NEAR_DUPLICATE_THRESHOLD = 0.90
 
-/** Related-but-distinct threshold — memories in this band get linked */
+/** Duplicate-enough threshold — memories above this are reinforced, not duplicated. */
+export const MERGE_THRESHOLD = 0.85
+
+/** Related-but-distinct threshold — memories in this band get linked. */
 export const RELATED_THRESHOLD = 0.70
 
 /** Top-K results to fetch from vector store during gate check */
 const GATE_TOP_K = 5
+
+/** Milliseconds to wait before retrying embedding generation once. */
+const EMBEDDING_RETRY_DELAY_MS = 500
 
 // =============================================================================
 // Types
@@ -37,18 +47,31 @@ export type GateDecision =
   | { action: 'INSERT' }
   | { action: 'REINFORCE'; existingMemory: Memory; similarity: number }
   | { action: 'INSERT_RELATED'; relatedMemories: { memory: Memory; similarity: number }[] }
+  | { action: 'SKIP_NEAR_DUPLICATE'; existingMemory: Memory; similarity: number }
+  | { action: 'SKIP_EMBEDDING_FAILED'; reason: string }
 
 export interface GateResult {
   decision: GateDecision
-  embedding: number[] | null
+  embedding: Float32Array | null
   debugInfo: string[]
 }
 
 export interface MemoryGateOutcome {
-  memory: Memory
-  action: 'INSERT' | 'REINFORCE' | 'INSERT_RELATED' | 'SKIP_GATE'
+  /** The memory affected by this outcome, or null for SKIP_EMBEDDING_FAILED. For SKIP_NEAR_DUPLICATE this is the existing memory that absorbed the observation. */
+  memory: Memory | null
+  action:
+    | 'INSERT'
+    | 'REINFORCE'
+    | 'INSERT_RELATED'
+    | 'SKIP_GATE'
+    | 'SKIP_NEAR_DUPLICATE'
+    | 'SKIP_EMBEDDING_FAILED'
   novelDetails?: string[]
   relatedMemoryIds?: string[]
+  /** Cosine similarity to the existing memory (for SKIP_NEAR_DUPLICATE). */
+  similarity?: number
+  /** Human-readable reason (for SKIP_EMBEDDING_FAILED). */
+  reason?: string
 }
 
 // =============================================================================
@@ -67,168 +90,126 @@ export function calculateReinforcedImportance(baseImportance: number, reinforcem
 // =============================================================================
 
 /**
- * Run the Memory Gate — decide whether to INSERT, REINFORCE, or INSERT_RELATED.
+ * Run the Memory Gate — decide whether to INSERT, REINFORCE, INSERT_RELATED,
+ * SKIP_NEAR_DUPLICATE, or SKIP_EMBEDDING_FAILED.
  *
- * 1. Generate embedding for candidate content.
+ * 1. Generate embedding for candidate content (one retry on failure).
  * 2. Search character's vector store for similar memories (top-K).
- * 3. Best match >= MERGE_THRESHOLD → REINFORCE.
- * 4. Any match in RELATED_THRESHOLD–MERGE_THRESHOLD → INSERT_RELATED.
- * 5. All below RELATED_THRESHOLD → INSERT.
- * 6. If embedding fails, fall back to keyword-based overlap.
+ * 3. Best match >= NEAR_DUPLICATE_THRESHOLD → SKIP_NEAR_DUPLICATE (no write).
+ * 4. Best match >= MERGE_THRESHOLD → REINFORCE.
+ * 5. Any match in RELATED_THRESHOLD–MERGE_THRESHOLD → INSERT_RELATED.
+ * 6. All below RELATED_THRESHOLD → INSERT.
+ * 7. If embedding fails after one retry → SKIP_EMBEDDING_FAILED (no write).
  */
 export async function runMemoryGate(
   characterId: string,
   candidateContent: string,
   candidateSummary: string,
-  candidateKeywords: string[],
+  _candidateKeywords: string[],
   userId: string,
   embeddingProfileId?: string
 ): Promise<GateResult> {
   const debugInfo: string[] = []
+  const embeddingText = `${candidateSummary}\n\n${candidateContent}`
 
-  // Try semantic gate first
+  let embeddingResult: Awaited<ReturnType<typeof generateEmbeddingForUser>>
   try {
-    const embeddingText = `${candidateSummary}\n\n${candidateContent}`
-    const embeddingResult = await generateEmbeddingForUser(
-      embeddingText,
-      userId,
-      embeddingProfileId
-    )
+    embeddingResult = await generateEmbeddingForUser(embeddingText, userId, embeddingProfileId)
+  } catch (firstError) {
+    const firstMsg = firstError instanceof EmbeddingError
+      ? firstError.message
+      : String(firstError)
+    debugInfo.push(`[Gate] Embedding attempt 1 failed (${firstMsg}); retrying in ${EMBEDDING_RETRY_DELAY_MS}ms`)
 
-    const embedding = embeddingResult.embedding
-    debugInfo.push(`[Gate] Generated embedding (${embedding.length} dimensions)`)
-
-    const vectorStore = await getCharacterVectorStore(characterId)
-    const results = vectorStore.search(embedding, GATE_TOP_K)
-
-    if (results.length === 0) {
-      debugInfo.push('[Gate] No existing memories in vector store → INSERT')
-      return { decision: { action: 'INSERT' }, embedding, debugInfo }
-    }
-
-    // Get full memory data for matched IDs
-    const repos = getRepositories()
-    const allMemories = await repos.memories.findByCharacterId(characterId)
-    const memoryMap = new Map(allMemories.map(m => [m.id, m]))
-
-    // Find best match
-    const bestResult = results[0]
-    const bestMemory = memoryMap.get(bestResult.id)
-
-    debugInfo.push(`[Gate] Best match: score=${bestResult.score.toFixed(3)}, id=${bestResult.id}`)
-
-    if (bestResult.score >= MERGE_THRESHOLD && bestMemory) {
-      debugInfo.push(`[Gate] Score >= ${MERGE_THRESHOLD} → REINFORCE`)
+    try {
+      await new Promise(resolve => setTimeout(resolve, EMBEDDING_RETRY_DELAY_MS))
+      embeddingResult = await generateEmbeddingForUser(embeddingText, userId, embeddingProfileId)
+      debugInfo.push('[Gate] Embedding retry succeeded')
+    } catch (secondError) {
+      const secondMsg = secondError instanceof EmbeddingError
+        ? secondError.message
+        : String(secondError)
+      const reason = `Embedding failed after retry: ${secondMsg}`
+      debugInfo.push(`[Gate] ${reason} → SKIP_EMBEDDING_FAILED`)
+      logger.warn('[MemoryGate] Skipping memory write — embedding generation failed after retry', {
+        characterId,
+        userId,
+        error: secondMsg,
+      })
       return {
-        decision: {
-          action: 'REINFORCE',
-          existingMemory: bestMemory,
-          similarity: bestResult.score,
-        },
-        embedding,
+        decision: { action: 'SKIP_EMBEDDING_FAILED', reason },
+        embedding: null,
         debugInfo,
       }
     }
+  }
 
-    // Check for related memories in the band
-    const relatedMatches = results
-      .filter(r => r.score >= RELATED_THRESHOLD && r.score < MERGE_THRESHOLD)
-      .map(r => ({ memory: memoryMap.get(r.id)!, similarity: r.score }))
-      .filter(r => r.memory)
+  const embedding = embeddingResult.embedding
+  debugInfo.push(`[Gate] Generated embedding (${embedding.length} dimensions)`)
 
-    if (relatedMatches.length > 0) {
-      debugInfo.push(`[Gate] ${relatedMatches.length} match(es) in ${RELATED_THRESHOLD}–${MERGE_THRESHOLD} band → INSERT_RELATED`)
-      return {
-        decision: { action: 'INSERT_RELATED', relatedMemories: relatedMatches },
-        embedding,
-        debugInfo,
-      }
-    }
+  const vectorStore = await getCharacterVectorStore(characterId)
+  const results = vectorStore.search(embedding, GATE_TOP_K)
 
-    debugInfo.push(`[Gate] All matches below ${RELATED_THRESHOLD} → INSERT`)
+  if (results.length === 0) {
+    debugInfo.push('[Gate] No existing memories in vector store → INSERT')
     return { decision: { action: 'INSERT' }, embedding, debugInfo }
-  } catch (error) {
-    // Embedding generation failed — fall back to keyword-based gate
-    if (error instanceof EmbeddingError) {
-      debugInfo.push(`[Gate] Embedding failed (${error.message}), falling back to keyword gate`)
-    } else {
-      debugInfo.push(`[Gate] Unexpected error, falling back to keyword gate: ${String(error)}`)
-    }
-
-    return keywordBasedGate(characterId, candidateContent, candidateKeywords, debugInfo)
-  }
-}
-
-// =============================================================================
-// Keyword Fallback Gate
-// =============================================================================
-
-/**
- * Keyword-based gate fallback when embeddings are unavailable.
- * - 70%+ keyword overlap → REINFORCE
- * - 50–70% overlap → INSERT_RELATED
- * - <50% → INSERT
- */
-async function keywordBasedGate(
-  characterId: string,
-  candidateContent: string,
-  candidateKeywords: string[],
-  debugInfo: string[]
-): Promise<GateResult> {
-  if (!candidateKeywords || candidateKeywords.length === 0) {
-    debugInfo.push('[Gate/keyword] No candidate keywords → INSERT')
-    return { decision: { action: 'INSERT' }, embedding: null, debugInfo }
   }
 
+  // Get full memory data for matched IDs (only the top-K, not the entire corpus)
   const repos = getRepositories()
-  const existingMemories = await repos.memories.findByKeywords(characterId, candidateKeywords)
+  const matchedIds = results.map(r => r.id)
+  const matchedMemories = await repos.memories.findByIds(matchedIds)
+  const memoryMap = new Map(matchedMemories.map(m => [m.id, m]))
 
-  if (existingMemories.length === 0) {
-    debugInfo.push('[Gate/keyword] No keyword matches → INSERT')
-    return { decision: { action: 'INSERT' }, embedding: null, debugInfo }
-  }
+  // Find best match
+  const bestResult = results[0]
+  const bestMemory = memoryMap.get(bestResult.id)
 
-  let bestOverlap = 0
-  let bestMemory: Memory | null = null
-  const relatedMemories: { memory: Memory; similarity: number }[] = []
+  debugInfo.push(`[Gate] Best match: score=${bestResult.score.toFixed(3)}, id=${bestResult.id}`)
 
-  for (const memory of existingMemories) {
-    const memoryContent = memory.content.toLowerCase()
-    const matchingKeywords = candidateKeywords.filter(
-      kw => memoryContent.includes(kw.toLowerCase())
-    )
-    const overlap = matchingKeywords.length / candidateKeywords.length
-
-    if (overlap > bestOverlap) {
-      bestOverlap = overlap
-      bestMemory = memory
-    }
-
-    if (overlap >= 0.5 && overlap < 0.7) {
-      relatedMemories.push({ memory, similarity: overlap })
-    }
-  }
-
-  if (bestOverlap >= 0.7 && bestMemory) {
-    debugInfo.push(`[Gate/keyword] ${(bestOverlap * 100).toFixed(0)}% keyword overlap → REINFORCE`)
+  if (bestResult.score >= NEAR_DUPLICATE_THRESHOLD && bestMemory) {
+    debugInfo.push(`[Gate] Score >= ${NEAR_DUPLICATE_THRESHOLD} → SKIP_NEAR_DUPLICATE`)
     return {
-      decision: { action: 'REINFORCE', existingMemory: bestMemory, similarity: bestOverlap },
-      embedding: null,
+      decision: {
+        action: 'SKIP_NEAR_DUPLICATE',
+        existingMemory: bestMemory,
+        similarity: bestResult.score,
+      },
+      embedding,
       debugInfo,
     }
   }
 
-  if (relatedMemories.length > 0) {
-    debugInfo.push(`[Gate/keyword] ${relatedMemories.length} match(es) in 50–70% band → INSERT_RELATED`)
+  if (bestResult.score >= MERGE_THRESHOLD && bestMemory) {
+    debugInfo.push(`[Gate] Score >= ${MERGE_THRESHOLD} → REINFORCE`)
     return {
-      decision: { action: 'INSERT_RELATED', relatedMemories },
-      embedding: null,
+      decision: {
+        action: 'REINFORCE',
+        existingMemory: bestMemory,
+        similarity: bestResult.score,
+      },
+      embedding,
       debugInfo,
     }
   }
 
-  debugInfo.push(`[Gate/keyword] Best overlap ${(bestOverlap * 100).toFixed(0)}% < 50% → INSERT`)
-  return { decision: { action: 'INSERT' }, embedding: null, debugInfo }
+  // Check for related memories in the band
+  const relatedMatches = results
+    .filter(r => r.score >= RELATED_THRESHOLD && r.score < MERGE_THRESHOLD)
+    .map(r => ({ memory: memoryMap.get(r.id)!, similarity: r.score }))
+    .filter(r => r.memory)
+
+  if (relatedMatches.length > 0) {
+    debugInfo.push(`[Gate] ${relatedMatches.length} match(es) in ${RELATED_THRESHOLD}–${MERGE_THRESHOLD} band → INSERT_RELATED`)
+    return {
+      decision: { action: 'INSERT_RELATED', relatedMemories: relatedMatches },
+      embedding,
+      debugInfo,
+    }
+  }
+
+  debugInfo.push(`[Gate] All matches below ${RELATED_THRESHOLD} → INSERT`)
+  return { decision: { action: 'INSERT' }, embedding, debugInfo }
 }
 
 // =============================================================================

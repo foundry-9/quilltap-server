@@ -14,8 +14,10 @@ export interface ApiKey {
 export interface EmbeddingModel {
   id: string
   name: string
-  dimensions: number
-  description: string
+  dimensions?: number
+  description?: string
+  /** Whether this model is installed on the server (from dynamic fetch) */
+  installed?: boolean
 }
 
 /**

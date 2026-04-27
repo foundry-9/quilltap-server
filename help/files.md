@@ -339,7 +339,7 @@ To remove an empty folder:
 
 ### AI Access to General Files
 
-The AI in your chats can access general files using the **File Management Tool**:
+The AI in your chats can access files through the **Scriptorium document tools** (`doc_list_files`, `doc_read_file`, `doc_grep`, `doc_write_file`, and friends). See [Using Files with AI](files-with-ai.md) for the full workflow:
 
 **What the AI can do:**
 

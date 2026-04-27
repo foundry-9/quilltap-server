@@ -181,10 +181,13 @@ export function getRecommendedContextAllocation(
 } {
   const totalLimit = getModelContextLimit(provider, modelName)
 
-  // Scale allocations as percentages of total context, with minimum floors
-  // System prompt gets up to 5% — enough for character identity, wardrobe,
-  // scenarios, tool instructions, and notifications
-  const systemPrompt = Math.max(1000, Math.floor(totalLimit * 0.05))
+  // Scale allocations as percentages of total context, with minimum floors.
+  // System prompt gets up to 20%: a fleshed-out character (description,
+  // personality, scenarios, system prompts, multi-character context,
+  // wardrobe, tool instructions, status reminders, mentioned-characters
+  // dossier) routinely runs 4–10k tokens, and the previous 5%/1000-floor
+  // budget caused recently-appended sections to be lopped off the end.
+  const systemPrompt = Math.max(4000, Math.floor(totalLimit * 0.20))
   const memories = Math.max(2000, Math.floor(totalLimit * 0.04))
   const conversationSummary = Math.max(1000, Math.floor(totalLimit * 0.02))
   const responseReserve = totalLimit >= 200000 ? 8192
@@ -227,8 +230,8 @@ export function shouldSummarizeConversation(
     return true
   }
 
-  // Or if we have more than 50 messages
-  if (messageCount > 50) {
+  // Or if we have more than 20 messages
+  if (messageCount > 20) {
     return true
   }
 

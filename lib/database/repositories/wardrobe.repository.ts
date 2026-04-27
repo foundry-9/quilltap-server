@@ -8,6 +8,7 @@
 import { logger } from '@/lib/logger';
 import { WardrobeItem, WardrobeItemSchema, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
+import { getOverlaidWardrobeItems, syncCharacterVaultWardrobe } from './character-properties-overlay';
 import { TypedQueryFilter } from '../interfaces';
 
 /**
@@ -52,11 +53,33 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Find all wardrobe items belonging to a specific character
+   * Find all wardrobe items belonging to a specific character. Honours the
+   * per-character document-store overlay: when the character's
+   * `readPropertiesFromDocumentStore` flag is on, items are sourced from the
+   * vault's `Wardrobe/*.md` files instead of the DB.
+   *
    * @param characterId The character ID
    * @param includeArchived When false (default), excludes items where archivedAt is not null
    */
   async findByCharacterId(characterId: string, includeArchived = false): Promise<WardrobeItem[]> {
+    return this.safeQuery(
+      () =>
+        getOverlaidWardrobeItems(
+          characterId,
+          () => this.findByCharacterIdRaw(characterId, includeArchived),
+          { includeArchived },
+        ),
+      'Error finding wardrobe items by character ID',
+      { characterId, includeArchived }
+    );
+  }
+
+  /**
+   * Raw DB-only variant of `findByCharacterId` that bypasses the document-store
+   * overlay. Used by the vault populator (to avoid reading the file it's about
+   * to write) and by export paths that need the canonical DB rows.
+   */
+  async findByCharacterIdRaw(characterId: string, includeArchived = false): Promise<WardrobeItem[]> {
     return this.safeQuery(
       async () => {
         const items = await this.findByFilter({ characterId } as TypedQueryFilter<WardrobeItem>);
@@ -65,19 +88,68 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
         }
         return items.filter((item) => !item.archivedAt);
       },
-      'Error finding wardrobe items by character ID',
+      'Error finding wardrobe items by character ID (raw)',
       { characterId, includeArchived }
+    );
+  }
+
+  /**
+   * Find a single wardrobe item wearable by a character. Honours the
+   * document-store overlay so vault-only items (which have no DB row) resolve,
+   * and falls back to a raw lookup so shared archetype items (characterId
+   * null) remain reachable. Includes archived items because callers in the
+   * equip path need an item's `types` even if it's been archived after the
+   * chat last loaded.
+   */
+  async findByIdForCharacter(characterId: string, id: string): Promise<WardrobeItem | null> {
+    return this.safeQuery(
+      async () => {
+        const items = await this.findByCharacterId(characterId, true);
+        const owned = items.find((item) => item.id === id);
+        if (owned) return owned;
+        const raw = await this._findById(id);
+        if (raw && raw.characterId == null) return raw;
+        return null;
+      },
+      'Error finding wardrobe item by character + id',
+      { characterId, wardrobeItemId: id }
+    );
+  }
+
+  /**
+   * Find multiple wardrobe items wearable by a character. Honours the
+   * document-store overlay and includes archetype items (characterId null)
+   * for any IDs not found in the character's own wardrobe.
+   */
+  async findByIdsForCharacter(characterId: string, ids: string[]): Promise<WardrobeItem[]> {
+    if (ids.length === 0) return [];
+    return this.safeQuery(
+      async () => {
+        const items = await this.findByCharacterId(characterId, true);
+        const found = new Map(items.filter((i) => ids.includes(i.id)).map((i) => [i.id, i]));
+        const missing = ids.filter((id) => !found.has(id));
+        if (missing.length > 0) {
+          const raw = await this.findByFilter({ id: { $in: missing } } as TypedQueryFilter<WardrobeItem>);
+          for (const item of raw) {
+            if (item.characterId == null) found.set(item.id, item);
+          }
+        }
+        return Array.from(found.values());
+      },
+      'Error finding wardrobe items by character + ids',
+      { characterId, idCount: ids.length }
     );
   }
 
   /**
    * Find wardrobe items for a character that include a specific type/slot.
    * Since types is stored as a JSON array, we fetch by characterId then filter in JS.
+   * Honours the document-store overlay via `findByCharacterId`.
    */
   async findByCharacterIdAndTypes(characterId: string, type: WardrobeItemType): Promise<WardrobeItem[]> {
     return this.safeQuery(
       async () => {
-        const items = await this.findByFilter({ characterId } as TypedQueryFilter<WardrobeItem>);
+        const items = await this.findByCharacterId(characterId);
         return items.filter((item) => item.types.includes(type));
       },
       'Error finding wardrobe items by character ID and type',
@@ -86,11 +158,21 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Find default wardrobe items for a character
+   * Find default wardrobe items for a character. Honours the document-store
+   * overlay.
    */
   async findDefaultsForCharacter(characterId: string): Promise<WardrobeItem[]> {
     return this.safeQuery(
-      () => this.findByFilter({ characterId, isDefault: true } as TypedQueryFilter<WardrobeItem>),
+      () =>
+        getOverlaidWardrobeItems(
+          characterId,
+          () =>
+            this.findByFilter({
+              characterId,
+              isDefault: true,
+            } as TypedQueryFilter<WardrobeItem>),
+          { defaultsOnly: true },
+        ),
       'Error finding default wardrobe items for character',
       { characterId }
     );
@@ -126,6 +208,7 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
 
         if (item) {
           logger.info('Wardrobe item archived', { wardrobeItemId: id, archivedAt: now });
+          await syncCharacterVaultWardrobe(item.characterId);
         }
 
         return item;
@@ -146,6 +229,7 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
 
         if (item) {
           logger.info('Wardrobe item unarchived', { wardrobeItemId: id });
+          await syncCharacterVaultWardrobe(item.characterId);
         }
 
         return item;
@@ -174,10 +258,49 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
           title: data.title,
         });
 
+        await syncCharacterVaultWardrobe(item.characterId);
+
         return item;
       },
       'Error creating wardrobe item',
       { characterId: data.characterId ?? null, title: data.title }
+    );
+  }
+
+  /**
+   * Insert a wardrobe item that originated from a character's vault, preserving
+   * its stable id and timestamps. Bypasses `syncCharacterVaultWardrobe` so the
+   * sync chain itself can promote vault-only items into the DB without
+   * recursing back into another sync.
+   *
+   * Why: the projection sweep in `projectArrayIntoVaultFolder` deletes any
+   * `Wardrobe/*.md` file not represented in the DB-derived list. Vault-only
+   * items (created by hand or via Document Mode, never written to the DB) get
+   * wiped out on the next sync. Promoting them to DB rows ahead of the
+   * projection makes the sweep see them as "managed" and leave them alone.
+   */
+  async createFromVault(item: WardrobeItem): Promise<WardrobeItem> {
+    return this.safeQuery(
+      () =>
+        this._create(
+          {
+            characterId: item.characterId ?? null,
+            title: item.title,
+            description: item.description ?? null,
+            types: item.types,
+            appropriateness: item.appropriateness ?? null,
+            isDefault: item.isDefault,
+            migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
+            archivedAt: item.archivedAt ?? null,
+          } as Omit<WardrobeItem, 'id' | 'createdAt' | 'updatedAt'>,
+          {
+            id: item.id,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+          },
+        ),
+      'Error ingesting vault-only wardrobe item into DB',
+      { wardrobeItemId: item.id, characterId: item.characterId ?? null, title: item.title },
     );
   }
 
@@ -197,6 +320,7 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
 
         if (item) {
           logger.info('Wardrobe item updated successfully', { wardrobeItemId: id });
+          await syncCharacterVaultWardrobe(item.characterId);
         }
 
         return item;
@@ -212,10 +336,16 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   async delete(id: string): Promise<boolean> {
     return this.safeQuery(
       async () => {
+        // Fetch first so we know whose vault to sync — once the row is gone
+        // there's nothing to look up.
+        const existing = await this._findById(id);
         const result = await this._delete(id);
 
         if (result) {
           logger.info('Wardrobe item deleted successfully', { wardrobeItemId: id });
+          if (existing?.characterId) {
+            await syncCharacterVaultWardrobe(existing.characterId);
+          }
         }
 
         return result;

@@ -252,7 +252,7 @@ export default function NewCharacterPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label htmlFor="name" className="block text-sm font-medium mb-2 text-foreground">
+          <label htmlFor="name" className="block qt-label mb-2 text-foreground">
             Name *
           </label>
           <input
@@ -267,7 +267,7 @@ export default function NewCharacterPage() {
         </div>
 
         <div>
-          <label htmlFor="title" className="block text-sm font-medium mb-2 text-foreground">
+          <label htmlFor="title" className="block qt-label mb-2 text-foreground">
             Title (Optional)
           </label>
           <input
@@ -282,7 +282,7 @@ export default function NewCharacterPage() {
         </div>
 
         <div>
-          <label htmlFor="description" className="block text-sm font-medium mb-2 text-foreground">
+          <label htmlFor="description" className="block qt-label mb-2 text-foreground">
             Description (Optional)
           </label>
           <textarea
@@ -297,7 +297,7 @@ export default function NewCharacterPage() {
         </div>
 
         <div>
-          <label htmlFor="personality" className="block text-sm font-medium mb-2 text-foreground">
+          <label htmlFor="personality" className="block qt-label mb-2 text-foreground">
             Personality (Optional)
           </label>
           <textarea
@@ -312,7 +312,7 @@ export default function NewCharacterPage() {
         </div>
 
         <div>
-          <label htmlFor="scenario" className="block text-sm font-medium mb-2 text-foreground">
+          <label htmlFor="scenario" className="block qt-label mb-2 text-foreground">
             Scenario (Optional)
           </label>
           <textarea
@@ -327,7 +327,7 @@ export default function NewCharacterPage() {
         </div>
 
         <div>
-          <label htmlFor="firstMessage" className="block text-sm font-medium mb-2 text-foreground">
+          <label htmlFor="firstMessage" className="block qt-label mb-2 text-foreground">
             First Message (Optional)
           </label>
           <textarea
@@ -342,7 +342,7 @@ export default function NewCharacterPage() {
         </div>
 
         <div>
-          <label htmlFor="exampleDialogues" className="block text-sm font-medium mb-2 text-foreground">
+          <label htmlFor="exampleDialogues" className="block qt-label mb-2 text-foreground">
             Example Dialogues (Optional)
           </label>
           <textarea
@@ -358,7 +358,7 @@ export default function NewCharacterPage() {
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label htmlFor="systemPrompt" className="block text-sm font-medium text-foreground">
+            <label htmlFor="systemPrompt" className="block qt-label text-foreground">
               System Prompt (Optional)
             </label>
             <button
@@ -381,7 +381,7 @@ export default function NewCharacterPage() {
         </div>
 
         <div>
-          <label htmlFor="avatarUrl" className="block text-sm font-medium mb-2 text-foreground">
+          <label htmlFor="avatarUrl" className="block qt-label mb-2 text-foreground">
             Avatar URL (Optional)
           </label>
           <input
@@ -396,7 +396,7 @@ export default function NewCharacterPage() {
         </div>
 
         <div>
-          <label htmlFor="defaultConnectionProfileId" className="block text-sm font-medium mb-2 text-foreground">
+          <label htmlFor="defaultConnectionProfileId" className="block qt-label mb-2 text-foreground">
             Default Connection Profile (Optional)
           </label>
           <select

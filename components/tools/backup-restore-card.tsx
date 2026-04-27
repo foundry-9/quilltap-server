@@ -13,7 +13,7 @@ export default function BackupRestoreCard() {
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-foreground mb-1">
+          <h2 className="qt-heading-2 text-foreground mb-1">
             Backup & Restore
           </h2>
           <p className="qt-text-small">
