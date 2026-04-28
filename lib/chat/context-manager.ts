@@ -79,6 +79,7 @@ import {
   shouldInjectTimestamp,
   calculateCurrentTimestamp,
 } from '@/lib/chat/timestamp-utils'
+import { getCompiledIdentityStack } from '@/lib/services/system-prompt-compiler/compiler'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 
@@ -469,6 +470,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   }
 
   const tSystemPromptStart = performance.now()
+  // Phase H: prefer the precompiled identity stack from
+  // chats.compiledIdentityStacks when present. Falls back to a fresh build
+  // inside `buildSystemPrompt` when missing or empty (legacy chats / cache
+  // miss after a character edit).
+  const precompiledIdentityStack = respondingParticipant
+    ? getCompiledIdentityStack(chat, respondingParticipant.id)
+    : null
   // mentionedCharactersSection is appended AFTER truncation below so it
   // always survives; the in-prompt position would otherwise be lopped off
   // whenever the core system prompt exceeds its token budget.
@@ -482,6 +490,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     isInitialMessage: options.isInitialMessage,
     timezone: options.timezone,
     scenarioText: options.chat.scenarioText ?? undefined,
+    precompiledIdentityStack,
   })
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
   logger.debug('[ContextManager] buildSystemPrompt complete', {

@@ -203,6 +203,8 @@ import { addCharacterSystemTransparencyFieldMigration } from './add-character-sy
 import { addProjectOfficialMountPointMigration } from './add-project-official-mount-point';
 // Add compositionModeDefault column to chat_settings
 import { addCompositionModeDefaultFieldMigration } from './add-composition-mode-default-field';
+// Add compiledIdentityStacks column to chats (Phase H system-prompt precompile)
+import { addCompiledIdentityStacksFieldMigration } from './add-compiled-identity-stacks-field';
 
 /**
  * All available migrations.
@@ -401,6 +403,8 @@ export const migrations: Migration[] = [
   addProjectOfficialMountPointMigration,
   // Add compositionModeDefault column to chat_settings
   addCompositionModeDefaultFieldMigration,
+  // Add compiledIdentityStacks column to chats (Phase H system-prompt precompile)
+  addCompiledIdentityStacksFieldMigration,
 ];
 
 export {
@@ -584,5 +588,7 @@ export {
   addProjectOfficialMountPointMigration,
   // Add compositionModeDefault column to chat_settings
   addCompositionModeDefaultFieldMigration,
+  // Add compiledIdentityStacks column to chats (Phase H system-prompt precompile)
+  addCompiledIdentityStacksFieldMigration,
 };
 

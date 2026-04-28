@@ -29,6 +29,100 @@ export interface OtherParticipantInfo {
 }
 
 /**
+ * Inputs that uniquely determine a character's static identity stack within a
+ * given chat. The stack is the bulk of the per-turn system prompt — identity
+ * preamble, base prompt, personality, aliases, pronouns, physical appearance,
+ * example dialogues — with `{{user}}` / `{{scenario}}` / `{{persona}}`
+ * resolved at compile time.
+ *
+ * Phase H caches the result of `buildIdentityStack` on
+ * `chats.compiledIdentityStacks` keyed by participantId, so the per-turn
+ * `buildSystemPrompt` can skip the rebuild work and the LLM provider sees a
+ * stable cache-friendly prefix.
+ */
+export interface BuildIdentityStackOptions {
+  character: Character
+  userCharacter?: { name: string; description: string } | null
+  selectedSystemPromptId?: string | null
+  scenarioText?: string | null
+}
+
+/**
+ * Build just the static character-identity portion of the system prompt,
+ * with chat-level template variables resolved. The result is suitable for
+ * caching across turns within a chat.
+ */
+export function buildIdentityStack(options: BuildIdentityStackOptions): string {
+  const { character, userCharacter, selectedSystemPromptId, scenarioText } = options
+  const parts: string[] = []
+
+  const templateContext: TemplateContext = {
+    char: character.name,
+    user: userCharacter?.name || 'User',
+    description: character.description || '',
+    personality: character.personality || '',
+    scenario: scenarioText || character.scenarios?.[0]?.content || '',
+    persona: userCharacter?.description || '',
+  }
+
+  // Identity preamble — anchors the LLM's identity from the very first tokens.
+  parts.push(processTemplate(
+    '## Character Identity\nYou are {{char}}. Everything that follows defines who you are and how you behave. Stay in character at all times.',
+    templateContext
+  ))
+
+  // Base system prompt — selected > default > nothing.
+  let systemPromptContent: string | null = null
+  if (selectedSystemPromptId && character.systemPrompts) {
+    const selectedPrompt = character.systemPrompts.find(p => p.id === selectedSystemPromptId)
+    if (selectedPrompt) {
+      systemPromptContent = selectedPrompt.content
+    }
+  }
+  if (!systemPromptContent && character.systemPrompts) {
+    const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
+    if (defaultPrompt) {
+      systemPromptContent = defaultPrompt.content
+    }
+  }
+  if (systemPromptContent) {
+    parts.push(processTemplate(systemPromptContent, templateContext))
+  }
+
+  if (character.personality) {
+    parts.push(`\n## Character Personality\n${processTemplate(character.personality, templateContext)}`)
+  }
+
+  if (character.aliases && character.aliases.length > 0) {
+    parts.push(`\n## Character Aliases\nThis character also goes by: ${character.aliases.join(', ')}\nOther characters and the user may refer to them by any of these names.`)
+  }
+
+  if (character.pronouns) {
+    parts.push(`\n## Character Pronouns\nThis character's pronouns are: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Always use these pronouns when referring to this character.`)
+  }
+
+  if (character.physicalDescriptions && character.physicalDescriptions.length > 0) {
+    const descriptionLines = character.physicalDescriptions.map(desc => {
+      const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : ''
+      const descText = desc.shortPrompt || desc.mediumPrompt || desc.longPrompt
+        || desc.completePrompt || desc.fullDescription || ''
+      if (!descText) return null
+      return `- "${desc.name}"${contextNote}: ${descText}`
+    }).filter(Boolean)
+
+    if (descriptionLines.length > 0) {
+      parts.push(`\n## Physical Appearance\n${descriptionLines.join('\n')}`)
+    }
+  }
+
+  if (character.exampleDialogues) {
+    parts.push(`\n## Example Dialogue Style\n${processTemplate(character.exampleDialogues, templateContext)}`)
+  }
+
+  return parts.join('\n\n').trim()
+}
+
+/**
  * Build the system prompt for a character.
  *
  * After the Phase A–G refactor, the per-turn system prompt only carries the
@@ -40,9 +134,10 @@ export interface OtherParticipantInfo {
  * wardrobe, outfit-change notices, conversation summary, memory tail,
  * timestamp — has been moved to Staff-authored whispers in the transcript.
  *
- * Templates are still processed: `{{char}}`, `{{user}}`, `{{scenario}}`,
- * `{{persona}}`, and (when `timestampConfig.autoPrepend` is false)
- * `{{timestamp}}` resolve from the same `templateContext`.
+ * Phase H: the static identity-stack portion may be supplied via
+ * `precompiledIdentityStack`; when present it replaces the rebuild. This is
+ * the cache-hit path. When absent, the stack is built fresh (read-through
+ * fallback) using the same `buildIdentityStack` helper.
  */
 export interface BuildSystemPromptOptions {
   character: Character
@@ -61,6 +156,8 @@ export interface BuildSystemPromptOptions {
   timezone?: string
   /** Scenario text used to feed the `{{scenario}}` template variable. */
   scenarioText?: string | null
+  /** Phase H: precompiled identity-stack from `chats.compiledIdentityStacks`. */
+  precompiledIdentityStack?: string | null
 }
 
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
@@ -74,10 +171,23 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     isInitialMessage,
     timezone,
     scenarioText,
+    precompiledIdentityStack,
   } = options
+
   const parts: string[] = []
 
-  // Build template context for {{char}}, {{user}}, etc. replacement
+  // Phase H: prefer the precompiled identity stack when supplied. Falls back
+  // to building fresh so the function is safe to call on chats that haven't
+  // had their stack compiled yet (legacy chats, missing key in the map).
+  const identityStack = precompiledIdentityStack
+    && precompiledIdentityStack.trim().length > 0
+    ? precompiledIdentityStack
+    : buildIdentityStack({ character, userCharacter, selectedSystemPromptId, scenarioText })
+
+  // Template context for the per-turn additions (roleplay template, tool
+  // instructions, tool reinforcement). The {{user}}/{{scenario}}/{{persona}}
+  // substitutions in the identity stack are already resolved by the time we
+  // get here (either via build-time compile or via the fallback path above).
   const templateContext: TemplateContext = {
     char: character.name,
     user: userCharacter?.name || 'User',
@@ -87,22 +197,10 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     persona: userCharacter?.description || '',
   }
 
-  // Identity preamble: establish who the character is from the very first tokens.
-  // This anchors the LLM's identity before any formatting, tool, or project instructions.
-  // The identity reinforcement at the end of the prompt bookends this.
-  parts.push(processTemplate(
-    '## Character Identity\nYou are {{char}}. Everything that follows defines who you are and how you behave. Stay in character at all times.',
-    templateContext
-  ))
-
-  // Phase D: outfit-change notices, current outfit, and available wardrobe
-  // are now Aurora-authored whispers in the chat transcript instead of
-  // system-prompt blocks.
-
-  // Phase G: when `timestampConfig.autoPrepend` is set, the timestamp is now
-  // delivered as a Host whisper from `lib/chat/context-manager.ts`. The
-  // `{{timestamp}}` template variable path remains for character/template
-  // content that wants to inline the time directly.
+  // Phase G: timestamp template variable path remains for character/template
+  // content that wants to inline the time directly. Only kicks in when
+  // timestampConfig.autoPrepend is false (the auto-prepend path is now a
+  // Host whisper).
   if (timestampConfig && shouldInjectTimestamp(timestampConfig, isInitialMessage ?? false)) {
     if (!timestampConfig.autoPrepend) {
       const timestamp = calculateCurrentTimestamp(timestampConfig, timezone)
@@ -110,106 +208,21 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     }
   }
 
-  // Roleplay template system prompt (formatting instructions) - prepended first
-  // Process templates to replace {{char}} and {{user}}
+  // Lead with the identity stack — bulk of the prompt, cache-friendly.
+  parts.push(identityStack)
+
+  // Roleplay template (chat-level formatting instructions).
   if (roleplayTemplate?.systemPrompt) {
-    const processedRoleplayPrompt = processTemplate(roleplayTemplate.systemPrompt, templateContext)
-
-    parts.push(processedRoleplayPrompt)
+    parts.push(processTemplate(roleplayTemplate.systemPrompt, templateContext))
   }
 
-  // Tool instructions (native tool rules or text-block tool instructions)
-  // Added after roleplay template so tool usage instructions are seen early
-  // Note: These typically don't contain {{char}}/{{user}} but process anyway for consistency
+  // Tool instructions (per-turn dynamic — varies with enabled tools, danger
+  // routing, provider tool support).
   if (toolInstructions) {
-    const processedToolInstructions = processTemplate(toolInstructions, templateContext)
-
-    parts.push(processedToolInstructions)
+    parts.push(processTemplate(toolInstructions, templateContext))
   }
 
-  // Phase E: project context is now emitted as Prospero whispers in the
-  // transcript (chat-start + cadence-based refresh in the orchestrator).
-
-  // Base system prompt - priority: selected prompt > default systemPrompt
-  // Check for selected system prompt from character's prompts array
-  let systemPromptContent: string | null = null
-
-  if (selectedSystemPromptId && character.systemPrompts) {
-    const selectedPrompt = character.systemPrompts.find(p => p.id === selectedSystemPromptId)
-    if (selectedPrompt) {
-      systemPromptContent = selectedPrompt.content
-
-    } else {
-
-    }
-  }
-
-  // Fall back to default prompt in array, then legacy systemPrompt field
-  if (!systemPromptContent && character.systemPrompts) {
-    const defaultPrompt = character.systemPrompts.find(p => p.isDefault)
-    if (defaultPrompt) {
-      systemPromptContent = defaultPrompt.content
-
-    }
-  }
-
-  if (systemPromptContent) {
-    // Process templates in the system prompt content
-    const processedSystemPrompt = processTemplate(systemPromptContent, templateContext)
-    parts.push(processedSystemPrompt)
-  } else {
-
-  }
-
-  // Character personality - process templates
-  if (character.personality) {
-    const processedPersonality = processTemplate(character.personality, templateContext)
-    parts.push(`\n## Character Personality\n${processedPersonality}`)
-  }
-
-  // Character aliases - let the LLM know about alternate names
-  if (character.aliases && character.aliases.length > 0) {
-    parts.push(`\n## Character Aliases\nThis character also goes by: ${character.aliases.join(', ')}\nOther characters and the user may refer to them by any of these names.`)
-  }
-
-  // Character pronouns - let the LLM know what pronouns to use
-  if (character.pronouns) {
-    parts.push(`\n## Character Pronouns\nThis character's pronouns are: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Always use these pronouns when referring to this character.`)
-  }
-
-  // Physical descriptions - appearance context for the LLM
-  if (character.physicalDescriptions && character.physicalDescriptions.length > 0) {
-    const descriptionLines = character.physicalDescriptions.map(desc => {
-      const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : '';
-      const descText = desc.shortPrompt || desc.mediumPrompt || desc.longPrompt
-        || desc.completePrompt || desc.fullDescription || '';
-      if (!descText) return null;
-      return `- "${desc.name}"${contextNote}: ${descText}`;
-    }).filter(Boolean);
-
-    if (descriptionLines.length > 0) {
-      parts.push(`\n## Physical Appearance\n${descriptionLines.join('\n')}`);
-    }
-  }
-
-  // Phase D: current outfit + available wardrobe moved to Aurora whispers
-  // (chat-start opening + debounced wardrobe announcement on equip/unequip).
-
-  // Scenario, user-character introduction, multi-character roster, own-status,
-  // silent-mode rule, and status-change notifications all moved to Host
-  // whispers in Phase C. They live in the transcript now, not the per-turn
-  // system prompt.
-
-  // Example dialogues for style reference - process templates
-  if (character.exampleDialogues) {
-    const processedDialogues = processTemplate(character.exampleDialogues, templateContext)
-    parts.push(`\n## Example Dialogue Style\n${processedDialogues}`)
-  }
-
-  // Character-voiced tool reinforcement (only when tools are available)
-  // Placed after character personality/scenario/dialogues so the LLM has full
-  // character context before being reminded to actually invoke tools in-character.
-  // Uses character's actual pronouns when available.
+  // Character-voiced tool reinforcement (only when tools are available).
   if (toolInstructions) {
     const subject = character.pronouns?.subject || 'they'
     const toolReinforcement = processTemplate(

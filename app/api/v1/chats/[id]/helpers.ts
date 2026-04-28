@@ -22,6 +22,10 @@ import {
   postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { postProsperoConnectionProfileChangeAnnouncement } from '@/lib/services/prospero-notifications/writer';
+import {
+  compileAllIdentityStacks,
+  compileIdentityStackForParticipant,
+} from '@/lib/services/system-prompt-compiler/compiler';
 
 type Repos = RepositoryContainer;
 
@@ -260,6 +264,32 @@ export async function handleParticipantUpdate(
 
   // Re-fetch to get the latest state after all updates
   const finalChat = await repos.chats.findById(chatId);
+
+  // Phase H: invalidate the precompiled identity stack when the participant's
+  // selected system prompt changes — that's a direct input to the stack
+  // build. Other updates (impersonation, status, etc.) don't change the stack
+  // for this participant, but a new user-controlled participant could affect
+  // {{user}}/{{persona}} for everyone, so when controlledBy flips we
+  // recompile all stacks. Failures are non-fatal (read-through fallback).
+  if (finalChat) {
+    try {
+      if (
+        participantData.selectedSystemPromptId !== undefined &&
+        oldParticipant?.selectedSystemPromptId !== participantData.selectedSystemPromptId
+      ) {
+        await compileIdentityStackForParticipant(finalChat, participantId);
+      }
+      if (participantData.controlledBy !== undefined) {
+        await compileAllIdentityStacks(finalChat);
+      }
+    } catch (error) {
+      logger.warn('[Chats v1] Failed to recompile identity stacks after participant update', {
+        chatId, participantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   return { chat: finalChat || result };
 }
 
@@ -423,6 +453,12 @@ export async function processChatUpdates(
 
     const result = await repos.chats.update(chatId, validatedData.chat);
     if (result) updatedChat = result;
+
+    // Phase H note: `chat.scenarioText` feeds the {{scenario}} template
+    // variable in the identity stack, so a change to it would normally
+    // require recompiling all stacks. The current updateChatSchema does not
+    // expose `scenarioText`, so there is no path to mutate it after
+    // creation; if one is added, also call `compileAllIdentityStacks` here.
   }
 
   if (validatedData.updateParticipant) {
@@ -447,23 +483,34 @@ export async function processChatUpdates(
       if (addedCharacter) {
         await postHostAddAnnouncement({ chatId, character: addedCharacter });
 
-        const joinScenario = validatedData.addParticipant.joinScenario;
-        const hasHistoryAccess = validatedData.addParticipant.hasHistoryAccess ?? false;
-        if (joinScenario && !hasHistoryAccess) {
-          const newParticipant = updatedChat.participants.find(
-            (p) =>
-              p.type === 'CHARACTER' &&
-              p.characterId === validatedData.addParticipant?.characterId &&
-              p.status !== 'removed',
-          );
-          if (newParticipant) {
-            await postHostJoinScenarioAnnouncement({
-              chatId,
-              characterName: addedCharacter.name,
-              targetParticipantId: newParticipant.id,
-              joinScenario,
+        const newParticipant = updatedChat.participants.find(
+          (p) =>
+            p.type === 'CHARACTER' &&
+            p.characterId === validatedData.addParticipant?.characterId &&
+            p.status !== 'removed',
+        );
+
+        // Phase H: compile the identity stack for the new participant.
+        if (newParticipant) {
+          try {
+            await compileIdentityStackForParticipant(updatedChat, newParticipant.id);
+          } catch (error) {
+            logger.warn('[Chats v1] Failed to compile identity stack for added participant', {
+              chatId, participantId: newParticipant.id,
+              error: error instanceof Error ? error.message : String(error),
             });
           }
+        }
+
+        const joinScenario = validatedData.addParticipant.joinScenario;
+        const hasHistoryAccess = validatedData.addParticipant.hasHistoryAccess ?? false;
+        if (joinScenario && !hasHistoryAccess && newParticipant) {
+          await postHostJoinScenarioAnnouncement({
+            chatId,
+            characterName: addedCharacter.name,
+            targetParticipantId: newParticipant.id,
+            joinScenario,
+          });
         }
       }
     }

@@ -25,6 +25,7 @@ import {
   postHostRemoveAnnouncement,
   postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
+import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
 
 /**
  * Start impersonating a participant
@@ -240,6 +241,17 @@ export async function handleAddParticipantAction(
 
       if (reactivatedCharacter) {
         await postHostAddAnnouncement({ chatId, character: reactivatedCharacter });
+
+        // Phase H: recompile the identity stack for the reactivated
+        // participant in case it had been dropped.
+        try {
+          await compileIdentityStackForParticipant(updatedChat, removedParticipant.id);
+        } catch (error) {
+          logger.warn('[Chats v1] Failed to compile identity stack for reactivated participant', {
+            chatId, participantId: removedParticipant.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       return NextResponse.json({ participant: enrichedParticipant, chat: updatedChat }, { status: 200 });
@@ -271,6 +283,18 @@ export async function handleAddParticipantAction(
 
   if (addedCharacter) {
     await postHostAddAnnouncement({ chatId, character: addedCharacter });
+
+    // Phase H: compile the identity stack for the new participant.
+    if (newParticipant) {
+      try {
+        await compileIdentityStackForParticipant(result.chat, newParticipant.id);
+      } catch (error) {
+        logger.warn('[Chats v1] Failed to compile identity stack for added participant', {
+          chatId, participantId: newParticipant.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     if (
       newParticipant &&

@@ -379,6 +379,46 @@ describe('Context Manager', () => {
       expect(prompt).toContain('Test Character must protect Jordan at all costs.')
       expect(prompt).not.toContain('Default prompt')
     })
+
+    it('uses precompiledIdentityStack verbatim and skips the rebuild', () => {
+      const prompt = buildSystemPrompt({
+        character: character as any,
+        precompiledIdentityStack: '## Frozen Identity\nThis is a precompiled stack.',
+      })
+      expect(prompt).toContain('## Frozen Identity')
+      expect(prompt).toContain('This is a precompiled stack.')
+      // The character's actual prompt content should NOT be rebuilt when a
+      // precompiled stack is supplied.
+      expect(prompt).not.toContain('You are a helpful assistant')
+      expect(prompt).not.toContain('Friendly and helpful')
+    })
+
+    it('falls back to a fresh build when precompiledIdentityStack is empty', () => {
+      const prompt = buildSystemPrompt({
+        character: character as any,
+        precompiledIdentityStack: '',
+      })
+      // Empty cache → rebuild. The character's prompt content is restored.
+      expect(prompt).toContain('You are a helpful assistant')
+      expect(prompt).toContain('Friendly and helpful')
+    })
+
+    it('appends roleplay template, tool instructions, and tool reinforcement after the identity stack', () => {
+      const prompt = buildSystemPrompt({
+        character: character as any,
+        precompiledIdentityStack: '## Frozen Identity\nstatic.',
+        roleplayTemplate: { systemPrompt: 'Format: bullet points.' },
+        toolInstructions: 'Tools available: foo, bar.',
+      })
+      const idx = prompt.indexOf('## Frozen Identity')
+      const rpIdx = prompt.indexOf('Format: bullet points.')
+      const toolIdx = prompt.indexOf('Tools available: foo, bar.')
+      expect(idx).toBeGreaterThanOrEqual(0)
+      expect(rpIdx).toBeGreaterThan(idx)
+      expect(toolIdx).toBeGreaterThan(rpIdx)
+      // Tool reinforcement uses character pronouns (defaults to 'they').
+      expect(prompt).toContain('they CALLS them')
+    })
   })
 
   describe('formatMemoriesForContext', () => {

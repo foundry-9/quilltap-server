@@ -52,6 +52,7 @@ import {
 } from '@/lib/services/host-notifications/writer';
 import { postOpeningOutfitWhisper } from '@/lib/services/aurora-notifications/writer';
 import { postProsperoProjectContextAnnouncement } from '@/lib/services/prospero-notifications/writer';
+import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 
 type Repos = RepositoryContainer;
 const CHAT_GET_ACTIONS = ['has-dangerous'] as const;
@@ -1045,6 +1046,19 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     logger.error('[Chats v1] Failed to apply outfit selections', {
       chatId: chat.id,
       error: getErrorMessage(error, 'Unknown outfit selection error'),
+    });
+  }
+
+  // Phase H: precompile the per-participant identity stack for the new chat
+  // so the per-turn buildSystemPrompt can hit the cache from the very first
+  // user message. Failure to compile is non-fatal — buildSystemPrompt's
+  // read-through fallback rebuilds fresh on miss.
+  try {
+    await compileAllIdentityStacks(chat);
+  } catch (error) {
+    logger.warn('[Chats v1] Failed to compile identity stacks at chat creation', {
+      chatId: chat.id,
+      error: getErrorMessage(error, 'Unknown error'),
     });
   }
 

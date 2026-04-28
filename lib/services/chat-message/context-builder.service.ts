@@ -461,7 +461,10 @@ export async function buildMessageContext(
     maxMemories: 18,
     minMemoryImportance: 0.5,
     // Multi-character context building options
-    respondingParticipant: isMultiCharacter ? characterParticipant : undefined,
+    // Phase H: pass the responding participant in both single- and multi-
+    // character chats so the system-prompt compiler cache can hit on
+    // single-char chats too.
+    respondingParticipant: characterParticipant,
     allParticipants: isMultiCharacter ? chat.participants : undefined,
     participantCharacters: isMultiCharacter ? participantCharacters : undefined,
     messagesWithParticipants: isMultiCharacter ? messagesWithParticipants : undefined,

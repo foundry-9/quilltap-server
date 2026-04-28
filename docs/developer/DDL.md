@@ -330,7 +330,8 @@ CREATE TABLE "chats" (
   "scenarioText" TEXT DEFAULT NULL,
   "documentMode" TEXT DEFAULT 'normal',
   "dividerPosition" INTEGER DEFAULT 45,
-  "allowCrossCharacterVaultReads" INTEGER DEFAULT 0
+  "allowCrossCharacterVaultReads" INTEGER DEFAULT 0,
+  "compiledIdentityStacks" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chats_chatType" ON "chats"("chatType");

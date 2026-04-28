@@ -438,6 +438,20 @@ export const ChatMetadataSchema = z.object({
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
 
+  /**
+   * Phase H: precompiled per-participant identity stack — the character-static
+   * portion of the system prompt (identity preamble, base prompt, personality,
+   * aliases, pronouns, physical descriptions, example dialogues), with
+   * templates ({{user}}, {{scenario}}, {{persona}}) resolved at compile time.
+   * Keyed by participantId. Recompiled at chat creation, on participant add,
+   * on selectedSystemPromptId change, and on chat.scenarioText change. Edits
+   * to the underlying character record do NOT auto-invalidate this field —
+   * users will need to manually rehydrate (or restart the chat) to pick them
+   * up. When missing for a participant, context-manager builds the stack
+   * fresh and uses it without persisting (read-through fallback).
+   */
+  compiledIdentityStacks: JsonSchema.nullable().optional(),
+
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).refine(
@@ -575,6 +589,20 @@ export const ChatMetadataBaseSchema = z.object({
   chatType: z.enum(['salon', 'help']).default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
+
+  /**
+   * Phase H: precompiled per-participant identity stack — the character-static
+   * portion of the system prompt (identity preamble, base prompt, personality,
+   * aliases, pronouns, physical descriptions, example dialogues), with
+   * templates ({{user}}, {{scenario}}, {{persona}}) resolved at compile time.
+   * Keyed by participantId. Recompiled at chat creation, on participant add,
+   * on selectedSystemPromptId change, and on chat.scenarioText change. Edits
+   * to the underlying character record do NOT auto-invalidate this field —
+   * users will need to manually rehydrate (or restart the chat) to pick them
+   * up. When missing for a participant, context-manager builds the stack
+   * fresh and uses it without persisting (read-through fallback).
+   */
+  compiledIdentityStacks: JsonSchema.nullable().optional(),
 
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
