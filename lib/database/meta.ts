@@ -52,9 +52,10 @@ function getMetaConnection(): DatabaseType | null {
       db.pragma(`key = "x'${keyHex}'"`);
     }
 
-    // Basic pragmas for safety
+    // Basic pragmas for safety. Use TRUNCATE journal mode (single file)
+    // rather than WAL to stay safe on cloud-synced data directories.
     db.pragma('foreign_keys = ON');
-    db.pragma('journal_mode = WAL');
+    db.pragma('journal_mode = TRUNCATE');
 
     return db;
   } catch (error) {

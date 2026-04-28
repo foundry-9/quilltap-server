@@ -81,7 +81,11 @@ function configurePragmas(db: DatabaseType, config: SQLiteConfig): void {
     db.pragma('foreign_keys = ON');
   }
 
-  // Set journal mode (WAL for better concurrency)
+  // Set journal mode. Defaults to a single-file mode (truncate) for safety
+  // on cloud-synced data directories; WAL is opt-in via SQLITE_WAL_MODE=true.
+  // SQLite automatically checkpoints any pre-existing WAL into the main
+  // database file when transitioning out of WAL mode, so this is safe to
+  // apply unconditionally to existing databases on upgrade.
   if (config.walMode) {
     db.pragma('journal_mode = WAL');
   } else {

@@ -98,8 +98,17 @@ describe('Database Configuration Module', () => {
       expect(config.path).toContain('quilltap.db');
     });
 
-    it('should parse SQLITE_WAL_MODE as true by default', async () => {
+    it('should default SQLITE_WAL_MODE to false (single-file journal for cloud-sync safety)', async () => {
       delete process.env.SQLITE_WAL_MODE;
+
+      const { loadSQLiteConfig } = await import('@/lib/database/config');
+      const config = loadSQLiteConfig();
+
+      expect(config.walMode).toBe(false);
+    });
+
+    it('should parse SQLITE_WAL_MODE=true as opt-in', async () => {
+      process.env.SQLITE_WAL_MODE = 'true';
 
       const { loadSQLiteConfig } = await import('@/lib/database/config');
       const config = loadSQLiteConfig();
@@ -107,7 +116,7 @@ describe('Database Configuration Module', () => {
       expect(config.walMode).toBe(true);
     });
 
-    it('should parse SQLITE_WAL_MODE=false', async () => {
+    it('should treat any non-"true" value of SQLITE_WAL_MODE as false', async () => {
       process.env.SQLITE_WAL_MODE = 'false';
 
       const { loadSQLiteConfig } = await import('@/lib/database/config');
