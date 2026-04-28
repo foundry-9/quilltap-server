@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Tool calls render as standalone bubbles attributed to the actor
+
+- **All TOOL rows are standalone.** `useChatData.groupToolsWithMessages` is removed; both character-initiated and user-initiated TOOL messages render as their own row in the salon timeline. The `Message.toolCalls` field, the embedded-tool render block in `MessageRow`, and the `embedded` prop on `ToolMessage` are removed as dead code.
+- **Character attribution.** `saveToolMessages` in `lib/services/chat-message/tool-execution.service.ts` now persists the responding character's `participantId` on TOOL rows; both call sites (`message-finalizer.service.ts` and `orchestrator.service.ts`) pass it through. `VirtualizedMessageList` resolves `headerAvatar` via `getMessageAvatar`, falling back to the most recent ASSISTANT row's participant when the TOOL message predates the participantId persistence change.
+- **Unified `ToolMessage` header.** `ToolMessage` now takes a single `headerAvatar` prop (replacing `systemAvatar`) and renders a consistent layout: the author avatar on the left, the author name (Prospero or the character) in the header, an `actor ran <tool>` line below it, and the existing collapsible Request/Response panes. For Prospero rows the actor is the operator (`toolData.operatorName`); for character rows the actor name matches the header and is suppressed below it to avoid duplication.
+
 #### User-initiated tool runs are Prospero bubbles
 
 - **Standalone Prospero rendering.** TOOL messages produced by the Run Tool modal are no longer visually grouped into the user's bubble. `useChatData.groupToolsWithMessages` only groups character-initiated TOOL messages under the preceding ASSISTANT message; user-initiated TOOL messages render as their own row.

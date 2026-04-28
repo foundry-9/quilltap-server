@@ -1914,7 +1914,8 @@ async function processMessage(
       userId,
       toolMessages,
       generatedImagePaths,
-      character.id
+      character.id,
+      characterParticipant.id
     )
 
     await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })

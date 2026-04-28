@@ -5,6 +5,7 @@ import { formatMessageTime } from '@/lib/format-time'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
 import { copyImageToClipboard } from '@/lib/clipboard-utils'
+import { getAvatarSrc } from '@/components/ui/Avatar'
 
 interface ToolMessageProps {
   readonly message: {
@@ -34,12 +35,15 @@ interface ToolMessageProps {
   }
   readonly onImageClick?: (filepath: string, filename: string, fileId: string) => void
   readonly onAttachmentDeleted?: (attachmentId: string) => void
-  /** Whether this tool message is embedded inside an assistant message */
-  readonly embedded?: boolean
-  /** Personified author for the standalone bubble (currently only Prospero
-   *  for user-initiated runs). When set, the avatar slot shows this image
-   *  and the header carries an operator attribution line. */
-  readonly systemAvatar?: { name: string; avatarUrl: string }
+  /** Author for the standalone bubble. Either Prospero (for user-initiated
+   *  runs, where the operator name lives in `toolData.operatorName`) or the
+   *  calling character. Resolved upstream by `getMessageAvatar`. When omitted
+   *  the avatar slot falls back to the tool's emoji. */
+  readonly headerAvatar?: {
+    name: string
+    avatarUrl?: string | null
+    defaultImage?: { id: string; filepath: string; url?: string } | null
+  } | null
 }
 
 interface ToolResult {
@@ -185,7 +189,7 @@ function formatResultContent(toolData: ToolResult): string {
   }
 }
 
-export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted, embedded = false, systemAvatar }: ToolMessageProps) {
+export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted, headerAvatar }: ToolMessageProps) {
   const [showRequest, setShowRequest] = useState(false)
   const [showResponse, setShowResponse] = useState(false)
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
@@ -207,9 +211,6 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       }
     }
   }, [message.content])
-
-  // Determine if character initiated this or user did
-  const showCharacterName = toolData.initiatedBy !== 'user' && character
 
   // Build wardrobe action summary (if applicable)
   const wardrobeSummary = useMemo(() => buildWardrobeActionSummary(toolData), [toolData])
@@ -354,202 +355,23 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   const requestPreview = getPreviewText(formatRequestContent(toolData))
   const responsePreview = getPreviewText(formatResultContent(toolData))
 
-  // Embedded layout - more compact, no avatar
-  if (embedded) {
-    return (
-      <div className="qt-chat-tool-embedded rounded-lg border qt-border-default qt-bg-muted/50 overflow-hidden">
-        {/* Wardrobe action notice — prominent summary above tool details */}
-        {wardrobeSummary && (
-          <div className="qt-chat-wardrobe-notice">
-            <div className="qt-chat-wardrobe-label">{wardrobeSummary.label}</div>
-            <div className="qt-chat-wardrobe-summary">
-              {wardrobeSummary.lines.map((line, i) => (
-                <div key={i}>{line}</div>
-              ))}
-            </div>
-          </div>
-        )}
-        {/* Tool header - compact */}
-        <div className="flex items-center gap-2 px-3 py-2 qt-bg-muted/30 border-b qt-border-default">
-          <span className="text-base">{info.icon}</span>
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            {showCharacterName && (
-              <span className="qt-text-label-xs truncate">
-                {character?.name} requested
-              </span>
-            )}
-            {toolData.initiatedBy === 'user' && (
-              <span className="qt-text-label-xs">
-                You requested
-              </span>
-            )}
-            <span className="font-medium text-sm text-foreground">
-              {info.displayName}
-            </span>
-          </div>
-          <span
-            className={`inline-block px-2 py-0.5 qt-text-label-xs rounded ${
-              toolData.success
-                ? 'qt-badge-success'
-                : 'qt-badge-destructive'
-            }`}
-          >
-            {toolData.success ? 'Success' : 'Failed'}
-          </span>
-          {toolData.provider && toolData.model && (
-            <span className="qt-text-label-xs qt-text-secondary hidden sm:inline">
-              {toolData.provider} {toolData.model}
-            </span>
-          )}
-        </div>
-
-        <div className="px-3 py-2 space-y-2">
-          {/* Tool Request collapsible */}
-          {(toolData.arguments || toolData.prompt) && (
-            <div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowRequest(!showRequest)}
-                  className="qt-text-label-xs hover:text-foreground transition-colors flex items-center gap-1"
-                  type="button"
-                >
-                  <span className="w-3 inline-block">{showRequest ? '▼' : '▶'}</span>
-                  <span>Request</span>
-                </button>
-                {!showRequest && (
-                  <span className="qt-text-xs qt-text-secondary truncate flex-1">
-                    {requestPreview}
-                  </span>
-                )}
-                <button
-                  onClick={handleCopyRequest}
-                  className="p-1 qt-text-secondary hover:text-foreground transition-colors"
-                  title="Copy request"
-                  type="button"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </button>
-              </div>
-              {showRequest && (
-                <div className="mt-2 bg-background rounded p-2 border qt-border-default">
-                  <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words">
-                    {formatRequestContent(toolData)}
-                  </pre>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Tool Response collapsible */}
-          {(toolData.result || (toolData.toolName === 'generate_image' && imageAttachments.length > 0)) && (
-            <div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowResponse(!showResponse)}
-                  className="qt-text-label-xs hover:text-foreground transition-colors flex items-center gap-1"
-                  type="button"
-                >
-                  <span className="w-3 inline-block">{showResponse ? '▼' : '▶'}</span>
-                  <span>Response</span>
-                </button>
-                {!showResponse && toolData.result && (
-                  <span className="qt-text-xs qt-text-secondary truncate flex-1">
-                    {responsePreview}
-                  </span>
-                )}
-                {!showResponse && toolData.toolName === 'generate_image' && imageAttachments.length > 0 && (
-                  <span className="qt-text-xs qt-text-secondary">
-                    {imageAttachments.length} image{imageAttachments.length > 1 ? 's' : ''}
-                  </span>
-                )}
-                {toolData.result && (
-                  <button
-                    onClick={handleCopyResponse}
-                    className="p-1 qt-text-secondary hover:text-foreground transition-colors"
-                    title="Copy response"
-                    type="button"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-              {showResponse && (
-                <div className="mt-2 bg-background rounded p-2 border qt-border-default">
-                  {/* Image thumbnails for generate_image */}
-                  {toolData.toolName === 'generate_image' && imageAttachments.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {imageAttachments.map((attachment) => (
-                        <div key={attachment.id} className="relative group/thumb">
-                          {missingImages.has(attachment.id) ? (
-                            <div className="w-16 h-16 flex items-center justify-center qt-bg-muted rounded">
-                              <svg className="w-6 h-6 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                            </div>
-                          ) : (
-                            <div className="relative">
-                              <button
-                                onClick={() => {
-                                  const normalizedPath = attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`
-                                  onImageClick?.(normalizedPath, attachment.filename, attachment.id)
-                                }}
-                                className="block rounded overflow-hidden border qt-border-default hover:qt-border-primary/50 transition-colors"
-                                type="button"
-                              >
-                                <img
-                                  src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
-                                  alt={attachment.filename}
-                                  className="w-16 h-16 object-cover"
-                                  onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
-                                />
-                              </button>
-                              <button
-                                onClick={() => handleCopyImage(attachment.filepath)}
-                                className="absolute -top-1 -right-1 p-1 bg-background border qt-border-default rounded qt-shadow-sm opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                                title="Copy image"
-                                type="button"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                </svg>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* Text result */}
-                  {toolData.result && (
-                    <pre className="text-xs text-foreground font-mono whitespace-pre-wrap break-words">
-                      {formatResultContent(toolData)}
-                    </pre>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
+  const headerAvatarSrc = headerAvatar ? getAvatarSrc(headerAvatar) : null
+  const isUserInitiated = toolData.initiatedBy === 'user'
+  const actorName = isUserInitiated
+    ? (toolData.operatorName || 'You')
+    : (headerAvatar?.name || character?.name || null)
 
   // Standalone layout - full width with avatar
   return (
     <div className="qt-chat-message-row-tool">
-      {/* Avatar slot — Prospero portrait when authored by a personified system
-          sender, otherwise the tool's emoji on a muted circle. */}
-      {systemAvatar ? (
+      {/* Avatar slot — author portrait (Prospero or calling character) when
+          known, otherwise the tool's emoji on a muted circle. */}
+      {headerAvatarSrc ? (
         <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden border qt-border-default">
           <img
-            src={systemAvatar.avatarUrl}
-            alt={systemAvatar.name}
+            src={headerAvatarSrc}
+            alt={headerAvatar?.name || ''}
             className="w-full h-full object-cover"
           />
         </div>
@@ -583,11 +405,11 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
           {/* Tool header */}
           <div className="flex items-center gap-2 mb-2">
             <div className="flex flex-col gap-1">
-              {systemAvatar ? (
+              {headerAvatar ? (
                 <>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm text-foreground">
-                      {systemAvatar.name}
+                      {headerAvatar.name}
                     </span>
                     {isWhisper && (
                       <span className="qt-text-label-xs italic qt-text-secondary">
@@ -596,20 +418,17 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                     )}
                   </div>
                   <div className="qt-text-label-xs">
-                    {toolData.operatorName || 'You'} ran{' '}
+                    {actorName && actorName !== headerAvatar.name
+                      ? `${actorName} ran `
+                      : 'ran '}
                     <span className="font-mono">{toolData.toolName}</span>
                   </div>
                 </>
               ) : (
                 <div className="flex items-center gap-2">
-                  {showCharacterName && (
+                  {actorName && (
                     <span className="qt-text-label-xs">
-                      {character?.name} requested
-                    </span>
-                  )}
-                  {toolData.initiatedBy === 'user' && !systemAvatar && (
-                    <span className="qt-text-label-xs">
-                      You requested
+                      {actorName} ran
                     </span>
                   )}
                   <span className="font-semibold text-sm text-foreground">

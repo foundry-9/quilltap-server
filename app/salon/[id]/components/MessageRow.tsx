@@ -3,7 +3,6 @@
 import { memo } from 'react'
 import Avatar, { getAvatarSrc } from '@/components/ui/Avatar'
 import LazyMessageContent from '@/components/chat/LazyMessageContent'
-import ToolMessage from '@/components/chat/ToolMessage'
 import { formatMessageTime } from '@/lib/format-time'
 import { TokenBadge } from '@/components/chat/TokenBadge'
 import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
@@ -225,20 +224,6 @@ function MessageRowInner({
               {isSilentMessage && !isWhisper && (
                 <div className="qt-chat-silent-label">
                   silent — inner thoughts and actions only
-                </div>
-              )}
-              {/* Embedded tool calls - shown at top of message */}
-              {message.toolCalls && message.toolCalls.length > 0 && (
-                <div className="mb-3 space-y-2">
-                  {message.toolCalls.map((toolMsg) => (
-                    <ToolMessage
-                      key={toolMsg.id}
-                      message={toolMsg}
-                      character={character}
-                      onImageClick={onImageClick}
-                      embedded
-                    />
-                  ))}
                 </div>
               )}
               <DangerContentWrapper displayMode={dangerDisplayMode}>
@@ -634,11 +619,6 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   const prevAttachments = prev.message.attachments || []
   const nextAttachments = next.message.attachments || []
   if (prevAttachments.length !== nextAttachments.length) return false
-
-  // Tool calls (check if array changed)
-  const prevToolCalls = prev.message.toolCalls || []
-  const nextToolCalls = next.message.toolCalls || []
-  if (prevToolCalls.length !== nextToolCalls.length) return false
 
   // Pre-rendered HTML
   if (prev.message.renderedHtml !== next.message.renderedHtml) return false

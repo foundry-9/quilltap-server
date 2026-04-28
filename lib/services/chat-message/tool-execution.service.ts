@@ -188,7 +188,8 @@ export async function saveToolMessages(
   _userId: string,
   toolMessages: ToolMessage[],
   generatedImagePaths: GeneratedImage[],
-  characterId?: string
+  characterId?: string,
+  participantId?: string
 ): Promise<{ firstToolMessageId: string | null; generatedImageIds: string[] }> {
   let firstToolMessageId: string | null = null
   const generatedImageIds: string[] = generatedImagePaths.map(img => img.id)
@@ -204,6 +205,7 @@ export async function saveToolMessages(
       id: toolMessageId,
       type: 'message' as const,
       role: 'TOOL' as const,
+      participantId: participantId ?? null,
       content: JSON.stringify({
         toolName: toolMsg.toolName,
         success: toolMsg.success,

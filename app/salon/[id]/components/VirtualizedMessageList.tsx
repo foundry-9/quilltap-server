@@ -165,11 +165,30 @@ export function VirtualizedMessageList({
             const showResendButton = messageActions.canResendMessage(message.id, messageIndex)
 
             if (message.role === 'TOOL') {
-              const avatarData = getMessageAvatar(message)
-              const systemAvatar =
-                message.systemSender && avatarData?.avatarUrl
-                  ? { name: avatarData.name, avatarUrl: avatarData.avatarUrl }
-                  : undefined
+              // Fall back to the most recent ASSISTANT message's participant
+              // when this row has no participantId itself — historical TOOL
+              // rows persisted before character attribution was added are
+              // identifiable by position only.
+              const messageForAvatar = message.systemSender || message.participantId
+                ? message
+                : (() => {
+                    for (let k = messageIndex - 1; k >= 0; k--) {
+                      const prev = messages[k]
+                      if (prev.role === 'ASSISTANT' && prev.participantId) {
+                        return { ...message, participantId: prev.participantId }
+                      }
+                      if (prev.role === 'USER') break
+                    }
+                    return message
+                  })()
+              const avatarData = getMessageAvatar(messageForAvatar)
+              const headerAvatar = avatarData
+                ? {
+                    name: avatarData.name,
+                    avatarUrl: avatarData.avatarUrl ?? null,
+                    defaultImage: avatarData.defaultImage ?? null,
+                  }
+                : null
               return (
                 <div
                   key={message.id}
@@ -185,8 +204,8 @@ export function VirtualizedMessageList({
                 >
                   <ToolMessage
                     message={message}
-                    character={getCharacterForMessage(message)}
-                    systemAvatar={systemAvatar}
+                    character={getCharacterForMessage(messageForAvatar)}
+                    headerAvatar={headerAvatar}
                     onImageClick={(filepath, filename, fileId) => {
                       onImageClick(filepath, filename, fileId)
                     }}

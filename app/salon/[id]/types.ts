@@ -23,8 +23,6 @@ export interface Message {
   completionTokens?: number | null
   /** Total tokens (promptTokens + completionTokens) */
   tokenCount?: number | null
-  /** Embedded tool messages that belong to this assistant message */
-  toolCalls?: Message[]
   /** Server-side pre-rendered HTML for simple messages (no tools, no attachments) */
   renderedHtml?: string | null
   /** Provider that generated this message (e.g., 'openai', 'anthropic') */

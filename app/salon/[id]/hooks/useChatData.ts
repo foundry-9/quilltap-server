@@ -9,72 +9,6 @@ export interface SwipeState {
   messages: Message[]
 }
 
-/**
- * Check if a TOOL message was initiated by the user
- */
-function isUserInitiatedTool(msg: Message): boolean {
-  try {
-    const parsed = JSON.parse(msg.content)
-    return parsed.initiatedBy === 'user'
-  } catch {
-    return false
-  }
-}
-
-/**
- * Groups character-initiated TOOL messages into the preceding ASSISTANT
- * message so they render embedded under the assistant bubble. User-initiated
- * TOOL messages stand on their own as Prospero bubbles and are not grouped.
- */
-function groupToolsWithMessages(messages: Message[]): Message[] {
-  const embeddedToolIds = new Set<string>()
-  const toolCallsForMessage = new Map<string, Message[]>()
-
-  // First pass: identify character-initiated tool calls that follow an
-  // ASSISTANT message and should embed into that assistant bubble.
-  for (let i = 0; i < messages.length; i++) {
-    const msg = messages[i]
-    if (msg.role !== 'ASSISTANT') continue
-
-    const characterToolCalls: Message[] = []
-    let j = i + 1
-    while (j < messages.length && messages[j].role === 'TOOL') {
-      if (!isUserInitiatedTool(messages[j])) {
-        characterToolCalls.push(messages[j])
-        embeddedToolIds.add(messages[j].id)
-      }
-      j++
-    }
-    if (characterToolCalls.length > 0) {
-      toolCallsForMessage.set(msg.id, characterToolCalls)
-    }
-  }
-
-  // Second pass: build result with embedded tools
-  const result: Message[] = []
-  for (const msg of messages) {
-    if (msg.role === 'TOOL') {
-      // Only include standalone TOOL messages (not embedded)
-      if (!embeddedToolIds.has(msg.id)) {
-        result.push(msg)
-      }
-    } else {
-      // Check if this message has embedded tool calls
-      const toolCalls = toolCallsForMessage.get(msg.id)
-      if (toolCalls && toolCalls.length > 0) {
-        result.push({
-          ...msg,
-          toolCalls,
-        })
-      } else {
-        result.push(msg)
-      }
-    }
-  }
-
-  return result
-}
-
 export function useChatData(chatId: string) {
   const [chat, setChat] = useState<Chat | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -143,10 +77,7 @@ export function useChatData(chatId: string) {
       // Sort by creation time
       displayMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 
-      // Group TOOL messages with their associated messages (ASSISTANT or USER)
-      const groupedMessages = groupToolsWithMessages(displayMessages)
-
-      setMessages(groupedMessages)
+      setMessages(displayMessages)
       setSwipeStates(newSwipeStates)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')

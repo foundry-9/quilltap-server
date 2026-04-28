@@ -389,7 +389,8 @@ export async function saveAssistantMessage(
       '',
       toolMessages,
       generatedImagePaths,
-      character.id
+      character.id,
+      characterParticipant.id
     )
   }
 
