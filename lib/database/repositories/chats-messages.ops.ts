@@ -47,7 +47,7 @@ export const ChatMessageRowSchema = z.object({
   dangerFlags: z.array(DangerFlagSchema).nullable().optional(),  // JSON array
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),  // JSON array — whisper targets
   isSilentMessage: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Whether message was generated while character was in silent mode (SQLite stores as 0/1)
-  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
+  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
   // For type='context-summary'
   context: z.string().nullable().optional(),
   // For type='system'

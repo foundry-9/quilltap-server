@@ -23,6 +23,8 @@ import { readDatabaseDocument } from '@/lib/mount-index/database-store';
 import type { MessageEvent } from '@/lib/schemas/types';
 import type { Character } from '@/lib/schemas/character.types';
 import type { ParticipantStatus } from '@/lib/schemas/chat.types';
+import type { OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder';
+import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter';
 
 export interface HostAddAnnouncement {
   chatId: string;
@@ -199,4 +201,230 @@ export async function postHostStatusChangeAnnouncement(
     newStatus: params.newStatus,
   });
   return postHostMessage(params.chatId, content, `status:${params.oldStatus}->${params.newStatus}`);
+}
+
+// ---------------------------------------------------------------------------
+// Phase C extensions: scenario, user character, multi-character context,
+// silent-mode entry/exit, join scenario. Build helpers + post functions.
+// These announce content that previously lived in the per-turn system prompt.
+// ---------------------------------------------------------------------------
+
+export function buildScenarioContent(scenarioText: string): string {
+  return [
+    'The Host sets the scene for the proceedings:',
+    '',
+    scenarioText.trim(),
+  ].join('\n');
+}
+
+export function buildUserCharacterContent(
+  userCharacterName: string,
+  userCharacterDescription: string | null | undefined,
+): string {
+  const desc = (userCharacterDescription ?? '').trim();
+  if (desc.length === 0) {
+    return `The Host introduces ${userCharacterName} to the assembled company — they will be the user's voice in this conversation.`;
+  }
+  return [
+    `The Host introduces ${userCharacterName}, who will be the user's voice in this conversation:`,
+    '',
+    desc,
+  ].join('\n');
+}
+
+export function buildMultiCharacterRosterContent(
+  respondingCharacterName: string,
+  others: OtherParticipantInfo[],
+): string {
+  const section = buildMultiCharacterContextSection(others, respondingCharacterName);
+  if (!section) {
+    return `The Host notes that, for the moment, ${respondingCharacterName} stands alone in the Salon.`;
+  }
+  return [
+    'The Host outlines the company present in the Salon:',
+    '',
+    section,
+  ].join('\n');
+}
+
+export function buildSilentModeEntryContent(characterName: string): string {
+  return [
+    `The Host whispers a private note to ${characterName} alone:`,
+    '',
+    'You have entered SILENT mode. You are present in the scene but MUST NOT speak out loud — no dialogue that others can hear. You may:',
+    '- Have inner thoughts and internal monologue (use *italics* or describe as thoughts)',
+    '- Take physical actions (gestures, movements, facial expressions)',
+    '- React emotionally or physically to what others say and do',
+    '',
+    'You MUST NOT:',
+    '- Speak any dialogue out loud',
+    '- Whisper, murmur, or make any vocal sounds others could hear',
+    '- Communicate verbally in any way',
+    '',
+    'This rule remains in force until the Host whispers that you are no longer silent.',
+  ].join('\n');
+}
+
+export function buildSilentModeExitContent(characterName: string): string {
+  return `The Host whispers a private note to ${characterName} alone: silence is lifted. You may speak aloud again.`;
+}
+
+export function buildJoinScenarioContent(
+  characterName: string,
+  joinScenario: string,
+): string {
+  return [
+    `The Host whispers a private note to ${characterName} alone, recounting how they came to be here:`,
+    '',
+    joinScenario.trim(),
+  ].join('\n');
+}
+
+async function postHostMessageWithTargets(
+  chatId: string,
+  content: string,
+  kindLabel: string,
+  targetParticipantIds: string[] | null,
+): Promise<MessageEvent | null> {
+  try {
+    const repos = getRepositories();
+
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      logger.debug('[HostNotification] Chat not found, skipping announcement', {
+        context: 'host-notifications',
+        chatId,
+        kindLabel,
+      });
+      return null;
+    }
+
+    const messageId = randomUUID();
+    const now = new Date().toISOString();
+
+    const message: MessageEvent = {
+      type: 'message',
+      id: messageId,
+      role: 'ASSISTANT',
+      content,
+      attachments: [],
+      createdAt: now,
+      participantId: null,
+      systemSender: 'host',
+      targetParticipantIds: targetParticipantIds && targetParticipantIds.length > 0 ? targetParticipantIds : null,
+    };
+
+    await repos.chats.addMessage(chatId, message);
+
+    logger.info('[HostNotification] Whisper posted', {
+      context: 'host-notifications',
+      chatId,
+      messageId,
+      kindLabel,
+      targets: targetParticipantIds,
+    });
+
+    return message;
+  } catch (error) {
+    logger.error('[HostNotification] Failed to post whisper', {
+      context: 'host-notifications',
+      chatId,
+      kindLabel,
+      error: getErrorMessage(error),
+    }, error as Error);
+    return null;
+  }
+}
+
+export interface HostScenarioAnnouncement {
+  chatId: string;
+  scenarioText: string;
+}
+
+export async function postHostScenarioAnnouncement(
+  params: HostScenarioAnnouncement,
+): Promise<MessageEvent | null> {
+  if (!params.scenarioText || params.scenarioText.trim().length === 0) return null;
+  return postHostMessageWithTargets(
+    params.chatId,
+    buildScenarioContent(params.scenarioText),
+    'scenario',
+    null,
+  );
+}
+
+export interface HostUserCharacterAnnouncement {
+  chatId: string;
+  userCharacterName: string;
+  userCharacterDescription?: string | null;
+}
+
+export async function postHostUserCharacterAnnouncement(
+  params: HostUserCharacterAnnouncement,
+): Promise<MessageEvent | null> {
+  return postHostMessageWithTargets(
+    params.chatId,
+    buildUserCharacterContent(params.userCharacterName, params.userCharacterDescription),
+    'user-character',
+    null,
+  );
+}
+
+export interface HostRosterAnnouncement {
+  chatId: string;
+  respondingCharacterName: string;
+  others: OtherParticipantInfo[];
+}
+
+export async function postHostRosterAnnouncement(
+  params: HostRosterAnnouncement,
+): Promise<MessageEvent | null> {
+  return postHostMessageWithTargets(
+    params.chatId,
+    buildMultiCharacterRosterContent(params.respondingCharacterName, params.others),
+    'roster',
+    null,
+  );
+}
+
+export interface HostSilentModeAnnouncement {
+  chatId: string;
+  characterName: string;
+  /** Participant ID of the character entering or exiting silent mode. */
+  targetParticipantId: string;
+  transition: 'enter' | 'exit';
+}
+
+export async function postHostSilentModeAnnouncement(
+  params: HostSilentModeAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = params.transition === 'enter'
+    ? buildSilentModeEntryContent(params.characterName)
+    : buildSilentModeExitContent(params.characterName);
+  return postHostMessageWithTargets(
+    params.chatId,
+    content,
+    `silent-mode:${params.transition}`,
+    [params.targetParticipantId],
+  );
+}
+
+export interface HostJoinScenarioAnnouncement {
+  chatId: string;
+  characterName: string;
+  /** Participant ID of the joining character (whisper is private to them). */
+  targetParticipantId: string;
+  joinScenario: string;
+}
+
+export async function postHostJoinScenarioAnnouncement(
+  params: HostJoinScenarioAnnouncement,
+): Promise<MessageEvent | null> {
+  if (!params.joinScenario || params.joinScenario.trim().length === 0) return null;
+  return postHostMessageWithTargets(
+    params.chatId,
+    buildJoinScenarioContent(params.characterName, params.joinScenario),
+    'join-scenario',
+    [params.targetParticipantId],
+  );
 }

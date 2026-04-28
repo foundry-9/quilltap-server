@@ -68,6 +68,11 @@ import {
   type ContextCompressionOptions,
   type ContextCompressionResult,
 } from './context/compression'
+import {
+  buildCommonplacePersonaWhisper,
+  buildCommonplaceLLMContext,
+  postCommonplaceWhisper,
+} from '@/lib/services/commonplace-notifications/writer'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 
@@ -1165,23 +1170,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // 8. Assemble final context
   const contextMessages: ContextMessage[] = []
 
-  // System prompt with injected memories and summary
+  // System prompt with injected summary (memories now ride as Commonplace Book whispers)
   // Use effective system prompt (possibly compressed)
   let fullSystemContent = effectiveSystemPrompt
-
-  // Memory recap: narrative summary of what the character remembers (chat start only)
-  // Placed after character notes but before per-message memories and identity lockdown
-  if (memoryRecapContent) {
-    fullSystemContent += '\n\n' + memoryRecapContent
-  }
-
-  if (memoryContent) {
-    fullSystemContent += '\n\n' + memoryContent
-  }
-
-  if (interCharacterMemoryContent) {
-    fullSystemContent += '\n\n' + interCharacterMemoryContent
-  }
 
   if (summaryContent) {
     fullSystemContent += '\n\n' + summaryContent
@@ -1214,6 +1205,32 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
   }
 
+  // Memory tail: persist a single consolidated Commonplace Book whisper to the
+  // transcript (visible in the salon UI with the Commonplace Book avatar) AND
+  // inline plain "you remember…" framing into the new user message body for
+  // this turn's LLM call. The Staff persona stays in the transcript; the LLM
+  // receives clean second-person recall, not meta-narrative.
+  const cmpbParts = {
+    recap: memoryRecapContent || undefined,
+    relevant: memoryContent || undefined,
+    interChar: interCharacterMemoryContent || undefined,
+  }
+  const personaWhisper = buildCommonplacePersonaWhisper(cmpbParts)
+  const llmRecallText = buildCommonplaceLLMContext(cmpbParts)
+
+  if (personaWhisper) {
+    // Persist the persona-voiced whisper. Targeted to the responding character
+    // in multi-character chats; untargeted in single-character (only one
+    // character anyway, so no privacy concern).
+    const targetParticipantId = isMultiCharacter ? respondingParticipant?.id ?? null : null
+    await postCommonplaceWhisper({
+      chatId: chat.id,
+      targetParticipantId,
+      content: personaWhisper,
+      kind: 'consolidated',
+    })
+  }
+
   // Add new user message (only if provided - not in continue mode)
   // In multi-character mode, include the user's character name
   if (newUserMessage) {
@@ -1222,9 +1239,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       newUserMsgName = findUserParticipantName(allParticipants, participantCharacters)
     }
 
+    const composedUserContent = llmRecallText
+      ? `${newUserMessage}\n\n---\n\n${llmRecallText}`
+      : newUserMessage
+
     contextMessages.push({
       role: 'user',
-      content: newUserMessage,
+      content: composedUserContent,
       name: newUserMsgName,
     })
   }

@@ -4,7 +4,14 @@
 
 ### 4.4-dev
 
-(empty — new development starts here)
+#### System Prompt Refactor (Phase A + B)
+
+Begun the move of dynamic state out of the per-turn system prompt and into Staff-authored ASSISTANT messages, so the system prompt can become a static, cache-friendly artifact and the chat transcript can become the single source of truth for state changes.
+
+- **New Staff persona — the Commonplace Book.** Added `commonplaceBook` to the `systemSender` enum in `lib/schemas/chat.types.ts`, `lib/database/repositories/chats-messages.ops.ts`, `app/salon/[id]/types.ts`, and `public/schemas/qtap-export.schema.json`. New writer module at `lib/services/commonplace-notifications/writer.ts` exports `postCommonplaceWhisper` (persistent path) and `voiceCommonplaceContent` (per-turn voicing helper). Avatar at `public/images/avatars/commonplace-book-avatar.webp` wired into `getMessageAvatar` in `app/salon/[id]/page.tsx`. No database migration needed — the `chat_messages.systemSender` column has no CHECK constraint.
+- **Memory tail moved out of the system prompt.** The memory recap, relevant memories, and inter-character memories used to be concatenated onto the system prompt. They are now persisted as a single consolidated Commonplace Book whisper per turn — voiced in the steampunk Quilltap style ("*The Commonplace Book lays open at your bookmark…*") — visible in the salon UI right after the user's message that triggered it, with the Commonplace Book avatar. For the LLM call, the same recall content is inlined into the new user message body in plain second-person framing ("You remember the following entries that bear on this moment: …") — no Staff persona, no meta-narrative, no consecutive-assistant alternation issue. Past Commonplace Book whispers are filtered out of `existingMessages` before context building (they live in the transcript for the user, but the LLM gets fresh recall each turn). The memories table remains the source of truth.
+- **System transparency filter no longer drops Staff messages.** For opaque characters (`systemTransparency !== true`), `lib/services/chat-message/context-builder.service.ts` now strips the `systemSender` attribution but keeps the message body, so the LLM still receives content (scenario, status, memory) as a generic assistant line. Previously, opaque characters lost the message entirely. The salon UI is unaffected — the human user always sees Staff-attributed messages with their avatars.
+- **Host writer extended (Phase C plumbing).** `lib/services/host-notifications/writer.ts` now exports build helpers and post functions for scenario, user-character introduction, multi-character roster, silent-mode entry/exit, and join-scenario whispers. The new post functions support `targetParticipantIds` for private whispers (e.g. silent-mode and join-scenario are private to the relevant character). Not yet wired at call sites — chat creation, participant change, and status change handlers will be updated in a follow-up; the corresponding system-prompt blocks remain in place for now so legacy chats keep their context.
 
 ### 4.3.1
 

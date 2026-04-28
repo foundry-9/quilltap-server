@@ -382,20 +382,40 @@ export async function buildMessageContext(
     uncensoredFallbackOptions,
   } = options
 
-  // System transparency override: opaque characters (systemTransparency != true)
-  // never see Staff (Lantern/Aurora/Librarian/Prospero/Host) messages in their
-  // LLM context, regardless of any chat- or project-level toggle. We strip them
-  // here so every downstream consumer (compression, attribution, attachment
-  // scan) operates on the same filtered view.
-  const filteredExistingMessages = character.systemTransparency === true
-    ? existingMessages
-    : existingMessages.filter(m => !m.systemSender)
-  if (filteredExistingMessages.length !== existingMessages.length) {
-    logger.debug('Filtered Staff (systemSender) messages out of opaque character context', {
+  // Drop persisted Commonplace Book whispers from LLM context. They live in
+  // the transcript for UI visibility, but recall is recomputed per turn and
+  // inlined into the new user message body — past whispers piling up across
+  // turns would just bloat the context window with stale recall. This filter
+  // applies regardless of system transparency.
+  const cmpbStrippedCount = existingMessages.filter(m => m.systemSender === 'commonplaceBook').length
+  const messagesWithoutCmpb = cmpbStrippedCount > 0
+    ? existingMessages.filter(m => m.systemSender !== 'commonplaceBook')
+    : existingMessages
+  if (cmpbStrippedCount > 0) {
+    logger.debug('Filtered Commonplace Book whispers out of LLM context', {
       characterId: character.id,
-      removedCount: existingMessages.length - filteredExistingMessages.length,
-      keptCount: filteredExistingMessages.length,
+      strippedCount: cmpbStrippedCount,
     })
+  }
+
+  // System transparency: opaque characters (systemTransparency != true) still
+  // need the *content* of remaining Staff (Lantern/Aurora/Librarian/Prospero/
+  // Host) messages — scenario, status, etc. drive the conversation forward —
+  // but they should not see the Staff *attribution*. For opaque characters we
+  // strip the systemSender field so the LLM reads these as generic assistant
+  // messages. The salon UI is unaffected (the human user always sees Staff-
+  // attributed messages with their avatars).
+  const filteredExistingMessages = character.systemTransparency === true
+    ? messagesWithoutCmpb
+    : messagesWithoutCmpb.map(m => m.systemSender ? { ...m, systemSender: null } : m)
+  if (character.systemTransparency !== true) {
+    const stripped = messagesWithoutCmpb.filter(m => m.systemSender).length
+    if (stripped > 0) {
+      logger.debug('Stripped Staff attribution from messages for opaque character', {
+        characterId: character.id,
+        strippedCount: stripped,
+      })
+    }
   }
 
   // Build conversation messages
