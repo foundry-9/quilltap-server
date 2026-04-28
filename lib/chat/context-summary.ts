@@ -17,6 +17,7 @@ import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { queueStoryBackgroundIfEnabled } from '@/lib/background-jobs/handlers/title-update'
+import { postLibrarianSummaryAnnouncement } from '@/lib/services/librarian-notifications/writer'
 
 /**
  * Calculates the number of interchanges in a chat
@@ -316,6 +317,15 @@ export async function generateContextSummary(
         createdAt: new Date().toISOString(),
       }
       await repos.chats.addMessage(chatId, summaryEvent)
+
+      // Phase F: deposit a Librarian whisper carrying the freshly-minted
+      // summary into the transcript. This replaces the per-turn `## Previous
+      // Conversation Summary` block in the system prompt — the LLM picks the
+      // summary up from conversation history instead.
+      await postLibrarianSummaryAnnouncement({
+        chatId,
+        summary: result.summary,
+      })
 
       // Create system event for context summary token tracking
       if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {

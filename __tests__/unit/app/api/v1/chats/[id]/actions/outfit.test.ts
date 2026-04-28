@@ -112,12 +112,10 @@ describe('chats [id] equip action — vault-overlay regression', () => {
       expect.objectContaining({ bottom: vaultItem.id })
     )
 
-    // Outfit-change notification must use the overlay-aware bulk lookup.
-    expect(ctx.repos.wardrobe.findByIdsForCharacter).toHaveBeenCalledWith(
-      'char-1',
-      [vaultItem.id]
-    )
-    expect(ctx.repos.wardrobe.findByIds).not.toHaveBeenCalled()
+    // Phase D: per-turn `pendingOutfitNotifications` flow has been retired in
+    // favour of the debounced Aurora announcement, so the equip handler no
+    // longer performs its own bulk wardrobe lookup. The overlay-aware lookup
+    // moved into the debounced job (`handleWardrobeOutfitAnnouncement`).
   })
 
   it('returns 404 when neither the overlay nor archetype lookup finds the item', async () => {

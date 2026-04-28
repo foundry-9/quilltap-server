@@ -33,8 +33,6 @@ import {
   buildOtherParticipantsInfo,
   buildIdentityReinforcement,
   type OtherParticipantInfo,
-  type ProjectContext,
-  type WardrobeContext,
 } from './context/system-prompt-builder'
 import {
   formatMemoriesForContext,
@@ -73,11 +71,19 @@ import {
   buildCommonplaceLLMContext,
   postCommonplaceWhisper,
 } from '@/lib/services/commonplace-notifications/writer'
+import {
+  postHostTimestampAnnouncement,
+  buildTimestampContent,
+} from '@/lib/services/host-notifications/writer'
+import {
+  shouldInjectTimestamp,
+  calculateCurrentTimestamp,
+} from '@/lib/chat/timestamp-utils'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 
 // Re-export types from extracted modules for backwards compatibility
-export type { OtherParticipantInfo, ProjectContext } from './context/system-prompt-builder'
+export type { OtherParticipantInfo } from './context/system-prompt-builder'
 export type { MessageWithParticipant } from './context/message-attribution'
 export type { SelectableMessage } from './context/message-selector'
 export type { ContextCompressionOptions, ContextCompressionResult } from './context/compression'
@@ -258,13 +264,6 @@ export interface BuildContextOptions {
   timezone?: string
 
   // ============================================================================
-  // Project Context
-  // ============================================================================
-
-  /** Project context to inject into system prompt (if chat is in a project) */
-  projectContext?: ProjectContext | null
-
-  // ============================================================================
   // Connection Profile (for budget-driven compression)
   // ============================================================================
 
@@ -362,8 +361,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     messagesWithParticipants,
     // Tool instructions (native tool rules or text-block tool instructions)
     toolInstructions,
-    // Project context
-    projectContext,
   } = options
 
   const warnings: string[] = []
@@ -391,53 +388,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Get the selectedSystemPromptId from the responding participant
   const selectedSystemPromptId = respondingParticipant?.selectedSystemPromptId
 
-  // Load wardrobe context for equipped outfit rendering (if available)
-  let wardrobeContext: WardrobeContext | undefined
-  try {
-    const repos = getRepositories()
-    const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chat.id, character.id)
-    if (equippedSlots) {
-      const equippedItemIds = Object.values(equippedSlots).filter(Boolean) as string[]
-      if (equippedItemIds.length > 0) {
-        const equippedItemsData = await repos.wardrobe.findByIds(equippedItemIds)
-        const equippedItemsMap = new Map(equippedItemsData.map(item => [item.id, item]))
-
-        const equippedItems: Record<string, { title: string; description?: string | null }> = {}
-        for (const [slot, itemId] of Object.entries(equippedSlots)) {
-          if (itemId) {
-            const item = equippedItemsMap.get(itemId)
-            if (item) {
-              equippedItems[slot] = { title: item.title, description: item.description }
-            }
-          }
-        }
-
-        const wardrobeItems = await repos.wardrobe.findByCharacterId(character.id)
-        wardrobeContext = {
-          equippedItems,
-          wardrobeItems: wardrobeItems.map(item => ({
-            id: item.id,
-            title: item.title,
-            types: item.types,
-            appropriateness: item.appropriateness,
-          })),
-        }
-
-        logger.debug('[ContextManager] Loaded wardrobe context for system prompt', {
-          characterId: character.id,
-          chatId: chat.id,
-          equippedSlotCount: Object.keys(equippedItems).length,
-          totalWardrobeItems: wardrobeItems.length,
-        })
-      }
-    }
-  } catch (error) {
-    logger.warn('[ContextManager] Failed to load wardrobe context', {
-      characterId: character.id,
-      chatId: chat.id,
-      error: getErrorMessage(error),
-    })
-  }
+  // Phase D: wardrobe context (current outfit + available items) is now
+  // delivered as Aurora whispers in the transcript, so the per-turn
+  // system-prompt loading of equipped outfits has been removed.
 
   // Build "Characters Mentioned" section: scan the conversation for references
   // to characters that exist on the system but are not currently in the chat.
@@ -516,26 +469,20 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   }
 
   const tSystemPromptStart = performance.now()
-  const systemPrompt = buildSystemPrompt(
+  // mentionedCharactersSection is appended AFTER truncation below so it
+  // always survives; the in-prompt position would otherwise be lopped off
+  // whenever the core system prompt exceeds its token budget.
+  const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,
-    otherParticipantsInfo,
     roleplayTemplate,
     toolInstructions,
     selectedSystemPromptId,
-    options.timestampConfig,
-    options.isInitialMessage,
-    projectContext,
-    options.timezone,
-    options.statusChangeNotifications,
-    respondingParticipant?.status as 'active' | 'silent' | 'absent' | 'removed' | undefined,
-    options.chat.scenarioText ?? undefined,
-    wardrobeContext,
-    options.outfitChangeNotifications
-    // mentionedCharactersSection is appended AFTER truncation below so it
-    // always survives; the in-prompt position would otherwise be lopped off
-    // whenever the core system prompt exceeds its token budget.
-  )
+    timestampConfig: options.timestampConfig,
+    isInitialMessage: options.isInitialMessage,
+    timezone: options.timezone,
+    scenarioText: options.chat.scenarioText ?? undefined,
+  })
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
   logger.debug('[ContextManager] buildSystemPrompt complete', {
     chatId: chat.id,
@@ -1076,19 +1023,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
 
-  // 3. Include conversation summary if available
-  let summaryContent = ''
-  let summaryTokens = 0
-
-  if (chat.contextSummary) {
-    const formatted = formatSummaryForContext(
-      chat.contextSummary,
-      budget.summaryBudget,
-      provider
-    )
-    summaryContent = formatted.content
-    summaryTokens = formatted.tokenCount
-  }
+  // 3. Conversation summary now rides as a Librarian whisper in the
+  // transcript (Phase F), so it no longer occupies its own system-prompt
+  // section. The chat-level `contextSummary` field is still maintained for
+  // other consumers (title generation, danger classification, etc.).
+  const summaryTokens = 0
 
   // 4. Calculate remaining budget for messages
   // Use effective (possibly compressed) system prompt tokens
@@ -1107,14 +1046,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // 5a-bis. Filter whisper messages not visible to this participant
     const whisperFiltered = filterWhisperMessages(filteredMessages, respondingParticipant.id)
 
-    // 5b. Prepend join scenario if participant has one and doesn't have history access
-    let joinScenarioContent = ''
-    if (!respondingParticipant.hasHistoryAccess && respondingParticipant.joinScenario) {
-      joinScenarioContent = respondingParticipant.joinScenario
-
-    }
-
-    // 5c. Attribute messages for the responding character's perspective
+    // 5b. Attribute messages for the responding character's perspective
+    // (Phase C: join-scenario context for participants without history access
+    // is now delivered as a Host whisper at the moment they join, not as a
+    // per-turn system-prompt insertion.)
     const attributedMessages = attributeMessagesForCharacter(
       whisperFiltered,
       respondingParticipant.id,
@@ -1130,12 +1065,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       participantId: msg.participantId,
       thoughtSignature: msg.thoughtSignature,
     }))
-
-    // Prepend join scenario to effective system prompt if present
-    if (joinScenarioContent) {
-      // Add join scenario to effective system prompt instead of as a separate message
-      effectiveSystemPrompt += `\n\n## How You Entered This Conversation\n${joinScenarioContent}`
-    }
   } else {
     // Single-character mode: use effective messages (possibly filtered by compression)
     messagesToProcess = effectiveMessages.map(msg => ({
@@ -1170,13 +1099,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // 8. Assemble final context
   const contextMessages: ContextMessage[] = []
 
-  // System prompt with injected summary (memories now ride as Commonplace Book whispers)
-  // Use effective system prompt (possibly compressed)
+  // System prompt — memories now ride as Commonplace Book whispers and
+  // conversation summary as a Librarian whisper. Use effective system prompt
+  // (possibly compressed).
   let fullSystemContent = effectiveSystemPrompt
-
-  if (summaryContent) {
-    fullSystemContent += '\n\n' + summaryContent
-  }
 
   // Identity reinforcement: append as the very last content in system prompt
   // so it's the closest instruction to where the LLM begins generating
@@ -1202,6 +1128,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       content: msg.content,
       thoughtSignature: msg.thoughtSignature,
       name: msg.name,
+    })
+  }
+
+  // Phase G: timestamp whisper. When `timestampConfig.autoPrepend` is set and
+  // the mode says to inject this turn (`START_ONLY` + isInitialMessage, or
+  // `EVERY_MESSAGE`), the Host narrates the current time. The whisper is
+  // persisted into the transcript (visible to the user with the Host avatar)
+  // and added to this turn's `contextMessages` so the LLM sees it without a
+  // one-turn lag. The `{{timestamp}}` template variable path is unaffected.
+  if (
+    options.timestampConfig?.autoPrepend &&
+    shouldInjectTimestamp(options.timestampConfig, options.isInitialMessage ?? false)
+  ) {
+    const timestamp = calculateCurrentTimestamp(options.timestampConfig, options.timezone)
+    await postHostTimestampAnnouncement({
+      chatId: chat.id,
+      formatted: timestamp.formatted,
+    })
+    contextMessages.push({
+      role: 'assistant',
+      content: buildTimestampContent(timestamp.formatted),
     })
   }
 

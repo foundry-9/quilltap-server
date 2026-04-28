@@ -23,6 +23,7 @@ import { isParticipantPresent } from '@/lib/schemas/types';
 import {
   postHostAddAnnouncement,
   postHostRemoveAnnouncement,
+  postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 
 /**
@@ -270,6 +271,19 @@ export async function handleAddParticipantAction(
 
   if (addedCharacter) {
     await postHostAddAnnouncement({ chatId, character: addedCharacter });
+
+    if (
+      newParticipant &&
+      validatedData.joinScenario &&
+      !(validatedData.hasHistoryAccess ?? false)
+    ) {
+      await postHostJoinScenarioAnnouncement({
+        chatId,
+        characterName: addedCharacter.name,
+        targetParticipantId: newParticipant.id,
+        joinScenario: validatedData.joinScenario,
+      });
+    }
   }
 
   return NextResponse.json({ participant: enrichedParticipant, chat: result.chat }, { status: 201 });

@@ -432,23 +432,15 @@ async function buildPromptSection(
     }
   }
 
-  const systemPrompt = buildSystemPrompt(
+  const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,
-    otherParticipants,
     roleplayTemplate,
-    undefined,
-    respondingParticipant.selectedSystemPromptId ?? null,
-    chat.timestampConfig ?? null,
-    false,
-    projectContext,
-    undefined,
-    undefined,
-    respondingParticipant.status,
-    chat.scenarioText ?? null,
-    undefined,
-    undefined
-  );
+    selectedSystemPromptId: respondingParticipant.selectedSystemPromptId ?? null,
+    timestampConfig: chat.timestampConfig ?? null,
+    isInitialMessage: false,
+    scenarioText: chat.scenarioText ?? null,
+  });
 
   const characterCount = systemPrompt.length;
   const approxTokens = Math.round(characterCount / 4);

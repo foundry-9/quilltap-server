@@ -18,6 +18,8 @@ import {
   postHostAddAnnouncement,
   postHostStatusChangeAnnouncement,
   postHostRemoveAnnouncement,
+  postHostSilentModeAnnouncement,
+  postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { postProsperoConnectionProfileChangeAnnouncement } from '@/lib/services/prospero-notifications/writer';
 
@@ -210,6 +212,25 @@ export async function handleParticipantUpdate(
             oldStatus: oldStatus as ParticipantStatus,
             newStatus,
           });
+
+          // Silent-mode whispers carry the full silent-mode rule directly to
+          // the affected character (private). Replaces the per-turn system
+          // prompt block.
+          if (newStatus === 'silent' && oldStatus !== 'silent') {
+            await postHostSilentModeAnnouncement({
+              chatId,
+              characterName: character.name,
+              targetParticipantId: participantId,
+              transition: 'enter',
+            });
+          } else if (oldStatus === 'silent' && newStatus !== 'silent') {
+            await postHostSilentModeAnnouncement({
+              chatId,
+              characterName: character.name,
+              targetParticipantId: participantId,
+              transition: 'exit',
+            });
+          }
         }
       }
     }
@@ -425,6 +446,25 @@ export async function processChatUpdates(
       const addedCharacter = await repos.characters.findById(validatedData.addParticipant.characterId);
       if (addedCharacter) {
         await postHostAddAnnouncement({ chatId, character: addedCharacter });
+
+        const joinScenario = validatedData.addParticipant.joinScenario;
+        const hasHistoryAccess = validatedData.addParticipant.hasHistoryAccess ?? false;
+        if (joinScenario && !hasHistoryAccess) {
+          const newParticipant = updatedChat.participants.find(
+            (p) =>
+              p.type === 'CHARACTER' &&
+              p.characterId === validatedData.addParticipant?.characterId &&
+              p.status !== 'removed',
+          );
+          if (newParticipant) {
+            await postHostJoinScenarioAnnouncement({
+              chatId,
+              characterName: addedCharacter.name,
+              targetParticipantId: newParticipant.id,
+              joinScenario,
+            });
+          }
+        }
       }
     }
   }

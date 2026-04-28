@@ -390,50 +390,11 @@ describe('chat-message-context.service', () => {
       expect(result.formattedMessages).toBeDefined()
     })
 
-    it('should pass project context to buildContext', async () => {
-      const buildContextMock = require('@/lib/chat/context-manager').buildContext
-
-      const chat = createMockChat({ id: 'chat-1', projectId: 'proj-1' })
-      const character = createMockCharacter({ id: 'char-1' })
-      const characterParticipant = createMockChatParticipant({
-        type: 'CHARACTER',
-        characterId: 'char-1',
-      })
-
-      const projectContext = {
-        projectId: 'proj-1',
-        name: 'Test Project',
-        description: 'A test project',
-        instructions: 'Be helpful',
-      }
-
-      const options = {
-        repos: mockRepos,
-        userId: 'user-1',
-        chat,
-        character,
-        characterParticipant,
-        connectionProfile: {
-          provider: 'openai',
-          modelName: 'gpt-4',
-        } as any,
-        persona: null,
-        isMultiCharacter: false,
-        roleplayTemplate: null,
-        chatSettings: null,
-        newUserMessage: 'Hello',
-        isContinueMode: false,
-        projectContext,
-      }
-
-      await buildMessageContext(options, [], [])
-
-      expect(buildContextMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectContext,
-        })
-      )
-    })
+    // Phase E + Phase I: project context no longer passes through the
+    // context-builder pipeline — it now ships exclusively as Prospero whispers
+    // (chat-start emit + cadence-based refresh in the orchestrator), so the
+    // `projectContext` option has been removed from buildMessageContext /
+    // buildContext.
 
     it('should pass compression settings to buildContext', async () => {
       const buildContextMock = require('@/lib/chat/context-manager').buildContext

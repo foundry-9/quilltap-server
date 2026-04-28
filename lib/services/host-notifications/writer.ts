@@ -428,3 +428,30 @@ export async function postHostJoinScenarioAnnouncement(
     [params.targetParticipantId],
   );
 }
+
+// ---------------------------------------------------------------------------
+// Phase G: timestamp whisper. Replaces the auto-prepend
+// `Current time: …` block in the per-turn system prompt. The Host narrates
+// the time as part of their scene-setting role.
+// ---------------------------------------------------------------------------
+
+export function buildTimestampContent(formatted: string): string {
+  return `The Host marks the time as ${formatted}.`;
+}
+
+export interface HostTimestampAnnouncement {
+  chatId: string;
+  formatted: string;
+}
+
+export async function postHostTimestampAnnouncement(
+  params: HostTimestampAnnouncement,
+): Promise<MessageEvent | null> {
+  if (!params.formatted || params.formatted.trim().length === 0) return null;
+  return postHostMessageWithTargets(
+    params.chatId,
+    buildTimestampContent(params.formatted),
+    'timestamp',
+    null,
+  );
+}

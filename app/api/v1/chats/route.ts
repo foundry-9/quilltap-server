@@ -45,6 +45,13 @@ import {
   type MultiCharacterImportOptions,
   type LegacyImportOptions,
 } from '@/lib/import/sillytavern-import-service';
+import {
+  postHostAddAnnouncement,
+  postHostScenarioAnnouncement,
+  postHostUserCharacterAnnouncement,
+} from '@/lib/services/host-notifications/writer';
+import { postOpeningOutfitWhisper } from '@/lib/services/aurora-notifications/writer';
+import { postProsperoProjectContextAnnouncement } from '@/lib/services/prospero-notifications/writer';
 
 type Repos = RepositoryContainer;
 const CHAT_GET_ACTIONS = ['has-dangerous'] as const;
@@ -385,7 +392,8 @@ async function createInitialMessages(
   participants: ChatParticipantBaseInput[],
   userId: string,
   repos: Repos,
-  projectId?: string | null
+  projectId?: string | null,
+  scenarioText?: string | null,
 ): Promise<void> {
   const systemMessage: ChatEvent = {
     type: 'message',
@@ -396,6 +404,117 @@ async function createInitialMessages(
     createdAt: new Date().toISOString(),
   };
   await repos.chats.addMessage(chatId, systemMessage);
+
+  // Phase E: emit Prospero project-context whisper at chat-start when a
+  // project is attached and has description/instructions. Replaces the
+  // per-turn `## Project Context` block previously injected via the system
+  // prompt. The cadence-based re-injection (every N messages) is handled by
+  // the orchestrator.
+  if (projectId) {
+    try {
+      const project = await repos.projects.findById(projectId);
+      if (project && (project.description || project.instructions)) {
+        await postProsperoProjectContextAnnouncement({
+          chatId,
+          project: {
+            name: project.name,
+            description: project.description,
+            instructions: project.instructions,
+          },
+        });
+      }
+    } catch (error) {
+      logger.warn('[Chats v1] Failed to post chat-start Prospero project-context whisper', {
+        chatId,
+        projectId,
+        error: getErrorMessage(error, 'Unknown error'),
+      });
+    }
+  }
+
+  // Phase C: emit Host whispers establishing the opening state — scenario,
+  // user-character intro, and (in multi-character chats) a welcome for each
+  // LLM-controlled character so the others learn about them. These replace
+  // the corresponding sections that previously lived in the per-turn system
+  // prompt.
+  if (scenarioText && scenarioText.trim().length > 0) {
+    await postHostScenarioAnnouncement({ chatId, scenarioText });
+  }
+
+  if (context.userCharacter) {
+    await postHostUserCharacterAnnouncement({
+      chatId,
+      userCharacterName: context.userCharacter.name,
+      userCharacterDescription: context.userCharacter.description ?? null,
+    });
+  }
+
+  const llmCharacterParticipants = participants.filter(
+    (p) => p.type === 'CHARACTER' && p.controlledBy !== 'user' && p.characterId,
+  );
+  if (llmCharacterParticipants.length > 1) {
+    for (const participant of llmCharacterParticipants) {
+      const character = await repos.characters.findById(participant.characterId as string);
+      if (character) {
+        await postHostAddAnnouncement({ chatId, character });
+      }
+    }
+  }
+
+  // Phase D: Aurora establishes how each LLM-controlled character is dressed
+  // at the opening of the chat. Replaces the per-turn `## Current Outfit` /
+  // `## Available Wardrobe` blocks. Outfit selection has already been applied
+  // by handleCreate before this runs, so equippedOutfit is populated.
+  for (const participant of llmCharacterParticipants) {
+    try {
+      const characterId = participant.characterId as string;
+      const character = await repos.characters.findById(characterId);
+      if (!character) continue;
+
+      const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
+      if (!equippedSlots) continue;
+
+      const equippedItemIds = Object.values(equippedSlots).filter(
+        (id): id is string => typeof id === 'string' && id.length > 0,
+      );
+      const equippedItemsData = equippedItemIds.length > 0
+        ? await repos.wardrobe.findByIds(equippedItemIds)
+        : [];
+      const equippedItemsMap = new Map(equippedItemsData.map((item) => [item.id, item]));
+
+      const titleFor = (slot: keyof typeof equippedSlots): string | null => {
+        const id = equippedSlots[slot];
+        if (!id) return null;
+        return equippedItemsMap.get(id)?.title ?? null;
+      };
+
+      const outfit = {
+        top: titleFor('top'),
+        bottom: titleFor('bottom'),
+        footwear: titleFor('footwear'),
+        accessories: titleFor('accessories'),
+      };
+
+      const allWardrobeItems = await repos.wardrobe.findByCharacterId(characterId);
+      const equippedIdSet = new Set(equippedItemIds);
+      const availableItems = allWardrobeItems
+        .filter((w) => !equippedIdSet.has(w.id))
+        .map((w) => ({ title: w.title }));
+
+      await postOpeningOutfitWhisper({
+        chatId,
+        characterName: character.name,
+        outfit,
+        availableItems,
+      });
+    } catch (error) {
+      logger.warn('[Chats v1] Failed to post opening outfit whisper', {
+        chatId,
+        characterId: participant.characterId,
+        error: getErrorMessage(error, 'Unknown error'),
+      });
+    }
+  }
 
   let firstMessageContent = (context.firstMessage || '').trim();
 
@@ -935,7 +1054,8 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     participantsWithTimestamps,
     user.id,
     repos,
-    validatedData.projectId || null
+    validatedData.projectId || null,
+    resolvedScenario || null,
   );
 
   const enrichedParticipants = await Promise.all(

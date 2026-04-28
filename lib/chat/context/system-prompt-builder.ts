@@ -6,25 +6,17 @@
  */
 
 import type { Character, ChatParticipantBase, TimestampConfig } from '@/lib/schemas/types'
-import { isParticipantPresent, type ParticipantStatus } from '@/lib/schemas/types'
-import { calculateCurrentTimestamp, shouldInjectTimestamp, formatTimestampForSystemPrompt } from '@/lib/chat/timestamp-utils'
-import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter'
+import { type ParticipantStatus } from '@/lib/schemas/types'
+import { calculateCurrentTimestamp, shouldInjectTimestamp } from '@/lib/chat/timestamp-utils'
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
-import { describeOutfit } from '@/lib/wardrobe/outfit-description'
 
 /**
- * Wardrobe context for system prompt rendering.
- * Renders slot-based "Current Outfit" and "Available Wardrobe" sections.
- */
-export interface WardrobeContext {
-  /** Currently equipped items, keyed by slot name (e.g. "top", "footwear") */
-  equippedItems: Record<string, { title: string; description?: string | null }>
-  /** All wardrobe items for this character (used to show non-equipped alternatives) */
-  wardrobeItems: Array<{ id: string; title: string; types: string[]; appropriateness?: string | null }>
-}
-
-/**
- * Other participant info for multi-character system prompts
+ * Other participant info for multi-character system prompts.
+ *
+ * Phase C moved the multi-character roster out of the system prompt and into
+ * Host whispers in the transcript, but this type is still consumed by the
+ * orchestrator → context-builder pipeline for non-prompt purposes (mentioned-
+ * characters scan, identity reinforcement names) so it stays exported.
  */
 export interface OtherParticipantInfo {
   name: string
@@ -37,49 +29,52 @@ export interface OtherParticipantInfo {
 }
 
 /**
- * Project context for system prompts
+ * Build the system prompt for a character.
+ *
+ * After the Phase A–G refactor, the per-turn system prompt only carries the
+ * character's identity stack (preamble, base prompt, personality, aliases,
+ * pronouns, physical appearance, example dialogue) plus the chat-level
+ * roleplay template, tool instructions, and tool reinforcement. Everything
+ * dynamic — scenario, user-character intro, multi-character roster, status,
+ * silent-mode rule, status-change notes, project context, current outfit /
+ * wardrobe, outfit-change notices, conversation summary, memory tail,
+ * timestamp — has been moved to Staff-authored whispers in the transcript.
+ *
+ * Templates are still processed: `{{char}}`, `{{user}}`, `{{scenario}}`,
+ * `{{persona}}`, and (when `timestampConfig.autoPrepend` is false)
+ * `{{timestamp}}` resolve from the same `templateContext`.
  */
-export interface ProjectContext {
-  name: string
-  description?: string | null
-  instructions?: string | null
+export interface BuildSystemPromptOptions {
+  character: Character
+  userCharacter?: { name: string; description: string } | null
+  /** Roleplay template to prepend (formatting instructions). */
+  roleplayTemplate?: { systemPrompt: string } | null
+  /** Tool instructions (native tool rules or text-block tool instructions). */
+  toolInstructions?: string
+  /** Selected system prompt ID from the character's `systemPrompts` array. */
+  selectedSystemPromptId?: string | null
+  /** Timestamp configuration. Used only for the `{{timestamp}}` template variable path. */
+  timestampConfig?: TimestampConfig | null
+  /** Whether this is the first message (for START_ONLY timestamp mode). */
+  isInitialMessage?: boolean
+  /** Resolved IANA timezone name for timestamp formatting. */
+  timezone?: string
+  /** Scenario text used to feed the `{{scenario}}` template variable. */
+  scenarioText?: string | null
 }
 
-/**
- * Build the system prompt for a character
- * Supports both single-character and multi-character scenarios
- * Processes {{char}}, {{user}}, and other template variables in all prompts
- */
-export function buildSystemPrompt(
-  character: Character,
-  userCharacter?: { name: string; description: string } | null,
-  /** For multi-character chats: info about other participants */
-  otherParticipants?: OtherParticipantInfo[],
-  /** Roleplay template to prepend (formatting instructions) */
-  roleplayTemplate?: { systemPrompt: string } | null,
-  /** Tool instructions (native tool rules or text-block tool instructions) */
-  toolInstructions?: string,
-  /** Selected system prompt ID from character's systemPrompts array */
-  selectedSystemPromptId?: string | null,
-  /** Timestamp configuration for injection */
-  timestampConfig?: TimestampConfig | null,
-  /** Whether this is the first message (for START_ONLY mode) */
-  isInitialMessage?: boolean,
-  /** Project context to include in system prompt */
-  projectContext?: ProjectContext | null,
-  /** Resolved IANA timezone name for timestamp formatting */
-  timezone?: string,
-  /** Status change notifications to include (e.g., "Alice is now silent") */
-  statusChangeNotifications?: string[],
-  /** The responding character's own participation status */
-  respondingCharacterStatus?: 'active' | 'silent' | 'absent' | 'removed',
-  /** Scenario text override (from chat-level scenario selection) */
-  scenarioText?: string | null,
-  /** Wardrobe context for slot-based outfit rendering */
-  wardrobeContext?: WardrobeContext | null,
-  /** Outfit change notifications from manual sidebar changes (separate from status changes for prominence) */
-  outfitChangeNotifications?: string[]
-): string {
+export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
+  const {
+    character,
+    userCharacter,
+    roleplayTemplate,
+    toolInstructions,
+    selectedSystemPromptId,
+    timestampConfig,
+    isInitialMessage,
+    timezone,
+    scenarioText,
+  } = options
   const parts: string[] = []
 
   // Build template context for {{char}}, {{user}}, etc. replacement
@@ -100,25 +95,17 @@ export function buildSystemPrompt(
     templateContext
   ))
 
-  // Outfit change notifications — placed immediately after identity for maximum prominence
-  // These must survive system prompt truncation, so they go early
-  if (outfitChangeNotifications && outfitChangeNotifications.length > 0) {
-    parts.push(
-      '## ⚠️ Outfit Change Notice\n' +
-      'IMPORTANT — The following outfit changes were just made. Acknowledge and incorporate these changes immediately:\n' +
-      outfitChangeNotifications.map(n => `- ${n}`).join('\n')
-    )
-  }
+  // Phase D: outfit-change notices, current outfit, and available wardrobe
+  // are now Aurora-authored whispers in the chat transcript instead of
+  // system-prompt blocks.
 
-  // Handle timestamp injection
+  // Phase G: when `timestampConfig.autoPrepend` is set, the timestamp is now
+  // delivered as a Host whisper from `lib/chat/context-manager.ts`. The
+  // `{{timestamp}}` template variable path remains for character/template
+  // content that wants to inline the time directly.
   if (timestampConfig && shouldInjectTimestamp(timestampConfig, isInitialMessage ?? false)) {
-    const timestamp = calculateCurrentTimestamp(timestampConfig, timezone)
-
-    if (timestampConfig.autoPrepend) {
-      // Add timestamp as the first part of the system prompt
-      parts.push(formatTimestampForSystemPrompt(timestamp, true))
-    } else {
-      // Add to template context for {{timestamp}} variable
+    if (!timestampConfig.autoPrepend) {
+      const timestamp = calculateCurrentTimestamp(timestampConfig, timezone)
       templateContext.timestamp = timestamp.formatted
     }
   }
@@ -140,22 +127,8 @@ export function buildSystemPrompt(
     parts.push(processedToolInstructions)
   }
 
-  // Project context (if chat is associated with a project)
-  // Added before character's system prompt so project instructions set the context
-  if (projectContext) {
-    const projectParts: string[] = [`## Project Context: ${projectContext.name}`]
-
-    if (projectContext.description) {
-      projectParts.push(projectContext.description)
-    }
-
-    if (projectContext.instructions) {
-      const processedInstructions = processTemplate(projectContext.instructions, templateContext)
-      projectParts.push(`\n### Project Instructions\n${processedInstructions}`)
-    }
-
-    parts.push(projectParts.join('\n'))
-  }
+  // Phase E: project context is now emitted as Prospero whispers in the
+  // transcript (chat-start + cadence-based refresh in the orchestrator).
 
   // Base system prompt - priority: selected prompt > default systemPrompt
   // Check for selected system prompt from character's prompts array
@@ -219,57 +192,13 @@ export function buildSystemPrompt(
     }
   }
 
-  // Wardrobe / clothing context for the LLM (slot-based wardrobe system)
-  if (wardrobeContext) {
-    const { equippedItems, wardrobeItems } = wardrobeContext
+  // Phase D: current outfit + available wardrobe moved to Aurora whispers
+  // (chat-start opening + debounced wardrobe announcement on equip/unequip).
 
-    // Current Outfit section — use canonical describeOutfit utility
-    const formatItem = (slot: string): string | null => {
-      const item = equippedItems[slot]
-      if (!item) return null
-      return item.description ? `${item.title} (${item.description})` : item.title
-    }
-    const outfitDescription = describeOutfit({
-      top: formatItem('top'),
-      bottom: formatItem('bottom'),
-      footwear: formatItem('footwear'),
-      accessories: formatItem('accessories'),
-    })
-    parts.push(`\n## Current Outfit\n${outfitDescription}`)
-
-    // Available Wardrobe section — non-equipped items, token-efficient
-    // Collect IDs of equipped items so we can exclude them
-    const equippedIds = new Set<string>()
-    for (const slot of Object.keys(equippedItems)) {
-      // Find the wardrobe item that matches the equipped title for this slot
-      const equipped = equippedItems[slot]
-      if (equipped) {
-        const match = wardrobeItems.find(w => w.title === equipped.title)
-        if (match) equippedIds.add(match.id)
-      }
-    }
-
-    const availableItems = wardrobeItems.filter(w => !equippedIds.has(w.id))
-    if (availableItems.length > 0) {
-      // Keep it compact — titles only, no descriptions, to minimize token usage
-      const displayItems = availableItems.slice(0, 15)
-      const availableLines = displayItems.map(item => `- ${item.title}`)
-      let section = `\n## Available Wardrobe\n${availableLines.join('\n')}`
-      if (availableItems.length > 15) {
-        section += `\n(and ${availableItems.length - 15} more items — use list_wardrobe to browse)`
-      }
-      parts.push(section)
-    }
-  }
-
-  // Scenario/setting - use first scenario in the array, process templates
-  // A scenario describes the environment, setting, and circumstances of the interaction —
-  // it provides context for where the conversation takes place without changing who the character is.
-  const scenarioContent = scenarioText || character.scenarios?.[0]?.content
-  if (scenarioContent) {
-    const processedScenario = processTemplate(scenarioContent, templateContext)
-    parts.push(`\n## Scenario\nThe following describes the setting and circumstances of this interaction. Stay in character as defined above — the scenario provides environmental context, not a change in personality.\n\n${processedScenario}`)
-  }
+  // Scenario, user-character introduction, multi-character roster, own-status,
+  // silent-mode rule, and status-change notifications all moved to Host
+  // whispers in Phase C. They live in the transcript now, not the per-turn
+  // system prompt.
 
   // Example dialogues for style reference - process templates
   if (character.exampleDialogues) {
@@ -288,53 +217,6 @@ export function buildSystemPrompt(
       templateContext
     )
     parts.push(toolReinforcement)
-  }
-
-  // User character information if provided (single-character mode)
-  // In multi-character mode, the user character is included in otherParticipants
-  if (userCharacter && (!otherParticipants || otherParticipants.length === 0)) {
-    parts.push(`\n## User Character\nYou are speaking with ${userCharacter.name}. ${userCharacter.description}`)
-  }
-
-  // Multi-character context section
-  if (otherParticipants && otherParticipants.length > 0) {
-    const multiCharSection = buildMultiCharacterContextSection(
-      otherParticipants,
-      character.name
-    )
-    if (multiCharSection) {
-      parts.push(multiCharSection)
-    }
-  }
-
-  // Your own status reminder — so the LLM always knows its participation mode
-  if (respondingCharacterStatus && otherParticipants && otherParticipants.length > 0) {
-    parts.push(`## Your Current Status\nYour participation status is: **${respondingCharacterStatus}**.`)
-  }
-
-  // Silent mode instructions for the responding character
-  if (respondingCharacterStatus === 'silent') {
-    parts.push(
-      '## Silent Mode Active\n' +
-      'You are currently in SILENT mode. You are present in the scene but MUST NOT speak out loud — ' +
-      'no dialogue that others can hear. You may:\n' +
-      '- Have inner thoughts and internal monologue (use *italics* or describe as thoughts)\n' +
-      '- Take physical actions (gestures, movements, facial expressions)\n' +
-      '- React emotionally or physically to what others say and do\n\n' +
-      'You MUST NOT:\n' +
-      '- Speak any dialogue out loud\n' +
-      '- Whisper, murmur, or make any vocal sounds others could hear\n' +
-      '- Communicate verbally in any way'
-    )
-  }
-
-  // Status change notifications
-  if (statusChangeNotifications && statusChangeNotifications.length > 0) {
-    parts.push(
-      '## Recent Status Changes\n' +
-      'The following changes have occurred since your last turn:\n' +
-      statusChangeNotifications.map(n => `- ${n}`).join('\n')
-    )
   }
 
   return parts.join('\n\n').trim()

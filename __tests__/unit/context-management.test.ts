@@ -306,39 +306,41 @@ describe('Context Manager', () => {
     }
 
     it('should build prompt from character data', () => {
-      const prompt = buildSystemPrompt(character as any)
+      const prompt = buildSystemPrompt({ character: character as any })
       expect(prompt).toContain('You are a helpful assistant')
       expect(prompt).toContain('Friendly and helpful')
     })
 
-    it('should include persona information', () => {
+    it('does not inline persona/user-character info into the system prompt (moved to Host whisper in Phase C)', () => {
       const persona = { name: 'John', description: 'A curious user' }
-      const prompt = buildSystemPrompt(character as any, persona)
-      expect(prompt).toContain('John')
-      expect(prompt).toContain('curious user')
+      const prompt = buildSystemPrompt({ character: character as any, userCharacter: persona })
+      expect(prompt).not.toContain('John')
+      expect(prompt).not.toContain('curious user')
     })
 
     it('processes template variables across roleplay and persona sections', () => {
       const persona = { name: 'Alex', description: 'A curious tester' }
       const roleplayTemplate = { systemPrompt: 'Stay in {{char}} mindset when talking to {{user}}.' }
       const toolInstructions = 'Tools should mention {{char}} assisting {{user}}.'
-      const prompt = buildSystemPrompt(
-        {
+      const prompt = buildSystemPrompt({
+        character: {
           ...character,
           personality: '{{char}} is thoughtful',
           scenarios: [{ id: 'test-scenario-id', title: 'Default', content: '{{char}} meets {{user}} under the stars', createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z' }],
           exampleDialogues: '{{char}}: Hello {{user}}',
         } as any,
-        persona,
-        undefined,
+        userCharacter: persona,
         roleplayTemplate,
-        toolInstructions
-      )
+        toolInstructions,
+      })
 
       expect(prompt).toContain('Stay in Test Character mindset when talking to Alex.')
       expect(prompt).toContain('Test Character is thoughtful')
-      expect(prompt).toContain('Test Character meets Alex under the stars')
       expect(prompt).toContain('Tools should mention Test Character assisting Alex.')
+      // Phase C: scenario text is no longer inlined into the system prompt — it
+      // ships as a Host whisper now — so 'meets Alex under the stars' will not
+      // appear here.
+      expect(prompt).not.toContain('meets Alex under the stars')
       expect(prompt).not.toContain('{{char}}')
       expect(prompt).not.toContain('{{user}}')
     })
@@ -367,14 +369,12 @@ describe('Context Manager', () => {
         ],
       }
 
-      const prompt = buildSystemPrompt(
-        multiPromptCharacter as any,
-        persona,
-        undefined,
-        null,
-        undefined,
-        'prompt-alt'
-      )
+      const prompt = buildSystemPrompt({
+        character: multiPromptCharacter as any,
+        userCharacter: persona,
+        roleplayTemplate: null,
+        selectedSystemPromptId: 'prompt-alt',
+      })
 
       expect(prompt).toContain('Test Character must protect Jordan at all costs.')
       expect(prompt).not.toContain('Default prompt')
@@ -919,7 +919,14 @@ describe('Context Manager', () => {
       })
 
       expect(repoMock.memories.findByCharacterAboutCharacters).toHaveBeenCalledWith('char-a', expect.arrayContaining(['char-b', 'char-user']))
-      expect(result.messages[0].content).toContain('## Memories About Other Characters')
+      // Phase B: inter-character memories now ride inline on the new user
+      // message body (plain "you also recall about the others present" framing
+      // for the LLM) rather than concatenated onto the system prompt. The
+      // Commonplace Book persona-voiced version is persisted separately.
+      const userMsg = result.messages[result.messages.length - 1]
+      expect(userMsg.role).toBe('user')
+      expect(userMsg.content).toContain('You also recall about the others present')
+      expect(userMsg.content).toContain('## Memories About Other Characters')
     })
   })
 

@@ -6,7 +6,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { buildContext, type MessageWithParticipant, type BuiltContext, type ProjectContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
+import { buildContext, type MessageWithParticipant, type BuiltContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
@@ -52,8 +52,6 @@ export interface BuildMessageContextOptions {
   toolInstructions?: string
   newUserMessage?: string
   isContinueMode: boolean
-  /** Project context if chat is in a project */
-  projectContext?: ProjectContext | null
   /** Context compression settings (if enabled) */
   contextCompressionSettings?: ContextCompressionSettings | null
   /** Cheap LLM selection for compression (required if compression is enabled) */
@@ -73,10 +71,6 @@ export interface BuildMessageContextOptions {
   generateMemoryRecap?: boolean
   /** Uncensored fallback options for memory recap in dangerous chats */
   uncensoredFallbackOptions?: UncensoredFallbackOptions
-  /** Status change notifications to include in prompt */
-  statusChangeNotifications?: string[]
-  /** Outfit change notifications from manual sidebar changes */
-  outfitChangeNotifications?: string[]
   /** Optional callback to emit status events during context building phases */
   onStatusChange?: (stage: string, message: string) => void
 }
@@ -371,7 +365,6 @@ export async function buildMessageContext(
     chatSettings,
     toolInstructions,
     newUserMessage,
-    projectContext,
     contextCompressionSettings,
     cheapLLMSelection,
     bypassCompression,
@@ -478,8 +471,6 @@ export async function buildMessageContext(
     timestampConfig,
     isInitialMessage,
     timezone,
-    // Project context
-    projectContext,
     // Connection profile (for budget-driven compression)
     connectionProfile,
     // Context compression
@@ -493,10 +484,6 @@ export async function buildMessageContext(
     // Memory recap (chat start or character join)
     generateMemoryRecap: shouldGenerateRecap,
     uncensoredFallbackOptions,
-    // Status change notifications
-    statusChangeNotifications: options.statusChangeNotifications,
-    // Outfit change notifications
-    outfitChangeNotifications: options.outfitChangeNotifications,
     // Status callback for streaming events
     onStatusChange: options.onStatusChange,
   })

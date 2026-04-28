@@ -105,3 +105,70 @@ export async function postProsperoConnectionProfileChangeAnnouncement(
   });
   return postProsperoMessage(params.chatId, content, 'connection-profile-change');
 }
+
+// ---------------------------------------------------------------------------
+// Phase E: Project context whispers. Replaces the per-turn `## Project
+// Context` system-prompt block. Fired at chat-start and at the configured
+// cadence (default every 5 messages — see
+// `chatSettings.contextCompressionSettings.projectContextReinjectInterval`).
+// ---------------------------------------------------------------------------
+
+export interface ProsperoProjectContext {
+  name: string;
+  description?: string | null;
+  instructions?: string | null;
+}
+
+export function buildProjectContextContent(project: ProsperoProjectContext): string {
+  const lines: string[] = [
+    `Prospero opens his ledger to the project at hand — *${project.name}* — and lays its particulars before you:`,
+    '',
+  ];
+  const description = project.description?.trim();
+  const instructions = project.instructions?.trim();
+
+  if (description) {
+    lines.push('**Project description:**');
+    lines.push('');
+    lines.push(description);
+  }
+
+  if (instructions) {
+    if (description) lines.push('');
+    lines.push('**Project instructions:**');
+    lines.push('');
+    lines.push(instructions);
+  }
+
+  return lines.join('\n').trimEnd();
+}
+
+export interface ProsperoProjectContextAnnouncement {
+  chatId: string;
+  project: ProsperoProjectContext;
+}
+
+export async function postProsperoProjectContextAnnouncement(
+  params: ProsperoProjectContextAnnouncement,
+): Promise<MessageEvent | null> {
+  const description = params.project.description?.trim();
+  const instructions = params.project.instructions?.trim();
+  if (!description && !instructions) {
+    logger.debug('[ProsperoNotification] No project description or instructions, skipping project-context whisper', {
+      context: 'prospero-notifications',
+      chatId: params.chatId,
+      projectName: params.project.name,
+    });
+    return null;
+  }
+
+  const content = buildProjectContextContent(params.project);
+  logger.debug('[ProsperoNotification] Posting project-context whisper', {
+    context: 'prospero-notifications',
+    chatId: params.chatId,
+    projectName: params.project.name,
+    hasDescription: Boolean(description),
+    hasInstructions: Boolean(instructions),
+  });
+  return postProsperoMessage(params.chatId, content, 'project-context');
+}

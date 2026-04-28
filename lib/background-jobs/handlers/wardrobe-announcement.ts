@@ -6,19 +6,17 @@
  * job is enqueued (and rescheduled) by enqueueWardrobeOutfitAnnouncement and
  * fires once the debounce window has elapsed without further activity.
  *
- * The announcement is visible to every participant in the chat
- * (participantId: null, systemSender: 'aurora') and replaces the old manual
- * "Notify" composer button.
+ * Phase D of the system-prompt refactor: this announcement is now the single
+ * source of truth for outfit state, replacing both the per-turn
+ * `## Current Outfit` / `## Available Wardrobe` system-prompt blocks and the
+ * `pendingOutfitNotifications` per-turn notice.
  */
 
-import { randomUUID } from 'node:crypto';
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errors';
-import { describeOutfit } from '@/lib/wardrobe/outfit-description';
-import type { MessageEvent } from '@/lib/schemas/types';
 import type { WardrobeOutfitAnnouncementPayload } from '../queue-service';
+import { postOutfitChangeWhisper } from '@/lib/services/aurora-notifications/writer';
 
 export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as WardrobeOutfitAnnouncementPayload;
@@ -63,52 +61,30 @@ export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Prom
   const equippedItems = equippedItemIds.length > 0
     ? await repos.wardrobe.findByIds(equippedItemIds)
     : [];
-  const itemsById = new Map(equippedItems.map(i => [i.id, i]));
+  const itemsById = new Map(equippedItems.map((i) => [i.id, i]));
   const titleFor = (slotId: string | null): string | null => {
     if (!slotId) return null;
     return itemsById.get(slotId)?.title ?? null;
   };
 
-  const outfitText = describeOutfit({
-    top: titleFor(slots.top),
-    bottom: titleFor(slots.bottom),
-    footwear: titleFor(slots.footwear),
-    accessories: titleFor(slots.accessories),
-  });
-
   const character = await repos.characters.findById(characterId);
   const charName = character?.name ?? 'A character';
 
-  const content =
-    `Aurora notes that ${charName}'s wardrobe has been duly attended to. ` +
-    `${charName} is presently turned out as follows:\n\n${outfitText}`;
+  const allWardrobeItems = await repos.wardrobe.findByCharacterId(characterId);
+  const equippedIdSet = new Set(equippedItemIds);
+  const availableItems = allWardrobeItems
+    .filter((w) => !equippedIdSet.has(w.id))
+    .map((w) => ({ title: w.title }));
 
-  const message: MessageEvent = {
-    type: 'message',
-    id: randomUUID(),
-    role: 'ASSISTANT',
-    content,
-    attachments: [],
-    createdAt: new Date().toISOString(),
-    participantId: null,
-    systemSender: 'aurora',
-  };
-
-  try {
-    await repos.chats.addMessage(chatId, message);
-    logger.info('[WardrobeAnnouncement] Announcement posted', {
-      context: 'background-jobs.wardrobe-announcement',
-      chatId,
-      characterId,
-      messageId: message.id,
-    });
-  } catch (error) {
-    logger.error('[WardrobeAnnouncement] Failed to post announcement', {
-      context: 'background-jobs.wardrobe-announcement',
-      chatId,
-      characterId,
-      error: getErrorMessage(error),
-    }, error as Error);
-    throw error;
-  }
+  await postOutfitChangeWhisper({
+    chatId,
+    characterName: charName,
+    outfit: {
+      top: titleFor(slots.top),
+      bottom: titleFor(slots.bottom),
+      footwear: titleFor(slots.footwear),
+      accessories: titleFor(slots.accessories),
+    },
+    availableItems,
+  });
 }

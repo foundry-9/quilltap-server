@@ -27,7 +27,7 @@ import {
   loadAndProcessFiles,
   buildMessageContext,
 } from './context-builder.service'
-import type { ProjectContext } from '@/lib/chat/context-manager'
+import { postProsperoProjectContextAnnouncement } from '@/lib/services/prospero-notifications/writer'
 import {
   processToolCalls,
   saveToolMessages,
@@ -437,26 +437,35 @@ async function processMessage(
   const existingMessages = await repos.chats.getMessages(chatId)
 
   // ============================================================================
-  // Project Context Injection
+  // Project Context Re-injection (Phase E: Prospero whisper)
   // ============================================================================
-  // Use project loaded earlier for agent mode resolution
-  let projectContext: ProjectContext | null = null
+  // The chat-start project-context whisper is posted by `createInitialMessages`
+  // when the chat is created. Here we handle the cadence-based refresh:
+  // every `projectContextReinjectInterval` messages we post a fresh Prospero
+  // project-context whisper into the transcript so the LLM keeps the project's
+  // description and instructions in mind. The `projectContext` parameter on the
+  // system-prompt builder is now unused; the system-prompt block was dropped
+  // along with this rewire.
 
   if (project && (project.description || project.instructions)) {
-    // Calculate if we should inject project context this message
-    // Default interval matches windowSize (5), can be configured to 0 to disable
     const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
     const messageCount = existingMessages.filter(m => m.type === 'message').length
 
-    // Inject on first message (count 0) or every N messages after that
-    // Using messageCount because the new user message hasn't been saved yet
-    const shouldInject = reinjectInterval > 0 && (messageCount === 0 || messageCount % reinjectInterval === 0)
+    // Skip messageCount === 0 — chat-start handles the initial emit. Cadence
+    // re-injects at multiples of N thereafter.
+    const shouldInject = reinjectInterval > 0 && messageCount > 0 && messageCount % reinjectInterval === 0
 
     if (shouldInject) {
-      projectContext = {
-        name: project.name,
-        description: project.description,
-        instructions: project.instructions,
+      const posted = await postProsperoProjectContextAnnouncement({
+        chatId,
+        project: {
+          name: project.name,
+          description: project.description,
+          instructions: project.instructions,
+        },
+      })
+      if (posted) {
+        existingMessages.push(posted)
       }
     }
   }
@@ -617,22 +626,9 @@ async function processMessage(
     await repos.chats.update(chatId, { forceToolsOnNextMessage: false })
   }
 
-  // Check for pending outfit change notifications (visible to ALL characters in the chat)
-  // These are set when a user manually changes a character's outfit via the sidebar
-  let outfitChangeNotifications: string[] = []
-  const pendingOutfitNotifications = chat.pendingOutfitNotifications as Record<string, string> | null
-  if (pendingOutfitNotifications && Object.keys(pendingOutfitNotifications).length > 0) {
-    outfitChangeNotifications = Object.values(pendingOutfitNotifications)
-    logger.info('[Orchestrator] Delivering pending outfit change notifications', {
-      context: 'wardrobe',
-      chatId,
-      characterId: character?.id,
-      notificationCount: outfitChangeNotifications.length,
-      notifications: outfitChangeNotifications,
-    })
-    // Clear all pending notifications — every character sees them on next turn
-    await repos.chats.update(chatId, { pendingOutfitNotifications: null })
-  }
+  // Phase D: outfit changes now ride as Aurora whispers in the transcript
+  // (see `handleWardrobeOutfitAnnouncement` and `postOutfitChangeWhisper`),
+  // so the per-turn `pendingOutfitNotifications` flush is no longer needed.
 
   // Check tool options
   const enabledToolOptions = determineEnabledToolOptions(
@@ -930,8 +926,6 @@ async function processMessage(
       toolInstructions,
       newUserMessage: finalUserMessageContent,
       isContinueMode,
-      // Project context (injected at configured interval)
-      projectContext,
       // Context compression options
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,
       cheapLLMSelection,
@@ -944,17 +938,6 @@ async function processMessage(
       // Memory recap: uncensored fallback for dangerous chats
       uncensoredFallbackOptions: (chat.isDangerousChat && dangerSettings && cheapLLMSelection)
         ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
-        : undefined,
-      // Extract status change notifications from recent system events
-      statusChangeNotifications: isMultiCharacter
-        ? existingMessages
-            .filter(m => m.type === 'system' && (m as Record<string, unknown>).systemEventType === 'STATUS_CHANGE')
-            .map(m => (m as Record<string, unknown>).description as string)
-            .filter(Boolean)
-        : undefined,
-      // Outfit change notifications (separate from status changes for prominence)
-      outfitChangeNotifications: outfitChangeNotifications.length > 0
-        ? outfitChangeNotifications
         : undefined,
       // Status callback for budget-driven compression phases
       onStatusChange: (stage: string, message: string) => {

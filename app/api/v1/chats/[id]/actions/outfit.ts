@@ -13,7 +13,6 @@ import type { AuthenticatedContext } from '@/lib/api/middleware';
 import { equipWithDisplacement, unequipWithDisplacement } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
-import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 
 const equipSlotSchema = z.object({
@@ -96,46 +95,11 @@ export async function handleEquipSlot(
       context: 'wardrobe',
     });
 
-    // Build outfit summary and store as pending notification for the character's next turn
-    logger.debug('[Chats v1] Building outfit change notification', { chatId, characterId, context: 'wardrobe' });
-    try {
-      const equippedItemIds = Object.values(updatedSlots).filter(Boolean) as string[];
-      const equippedItems = equippedItemIds.length > 0
-        ? await repos.wardrobe.findByIdsForCharacter(characterId, equippedItemIds)
-        : [];
-      const itemsMap = new Map(equippedItems.map(i => [i.id, i]));
-
-      const findTitle = (slotName: string): string | null => {
-        const slotItemId = updatedSlots[slotName as keyof typeof updatedSlots];
-        if (!slotItemId) return null;
-        return itemsMap.get(slotItemId)?.title ?? null;
-      };
-      const outfitText = describeOutfit({
-        top: findTitle('top'),
-        bottom: findTitle('bottom'),
-        footwear: findTitle('footwear'),
-        accessories: findTitle('accessories'),
-      });
-
-      // Look up character name for the notification
-      const character = await repos.characters.findById(characterId);
-      const charName = character?.name ?? 'A character';
-
-      // Store pending notification on the chat, keyed by characterId
-      // All characters in the chat will see this notification on their next turn
-      const chat = await repos.chats.findById(chatId);
-      const pending = (chat?.pendingOutfitNotifications as Record<string, string> | null) ?? {};
-      pending[characterId] = `${charName}'s outfit has been changed. ${charName} is now wearing: ${outfitText}`;
-      await repos.chats.update(chatId, { pendingOutfitNotifications: pending });
-      logger.info('[Chats v1] Stored outfit change notification', {
-        chatId, characterId, charName, notification: pending[characterId], context: 'wardrobe',
-      });
-    } catch (notifError) {
-      // Non-fatal — outfit change succeeded, notification is best-effort
-      logger.warn('[Chats v1] Failed to store outfit change notification', {
-        chatId, characterId, error: notifError instanceof Error ? notifError.message : String(notifError),
-      });
-    }
+    // Phase D: outfit-change context is now delivered via a debounced Aurora
+    // whisper (see `enqueueWardrobeOutfitAnnouncement` below). The previous
+    // per-turn `pendingOutfitNotifications` flow has been retired — the
+    // transcript-resident Aurora announcement is the single source of truth
+    // for both the user and the LLM.
 
     // Trigger avatar generation if enabled for this chat
     await triggerAvatarGenerationIfEnabled(repos, {
