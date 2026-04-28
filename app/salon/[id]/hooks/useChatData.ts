@@ -22,46 +22,31 @@ function isUserInitiatedTool(msg: Message): boolean {
 }
 
 /**
- * Groups TOOL messages with their associated message (ASSISTANT or USER).
- * - Character-initiated TOOL messages are embedded in the PRECEDING ASSISTANT message
- * - User-initiated TOOL messages are embedded in the FOLLOWING USER message
+ * Groups character-initiated TOOL messages into the preceding ASSISTANT
+ * message so they render embedded under the assistant bubble. User-initiated
+ * TOOL messages stand on their own as Prospero bubbles and are not grouped.
  */
 function groupToolsWithMessages(messages: Message[]): Message[] {
   const embeddedToolIds = new Set<string>()
   const toolCallsForMessage = new Map<string, Message[]>()
 
-  // First pass: identify which tools should be embedded and where
+  // First pass: identify character-initiated tool calls that follow an
+  // ASSISTANT message and should embed into that assistant bubble.
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]
+    if (msg.role !== 'ASSISTANT') continue
 
-    if (msg.role === 'USER') {
-      // Look backward to collect any immediately preceding user-initiated TOOL messages
-      const userToolCalls: Message[] = []
-      let j = i - 1
-      while (j >= 0 && messages[j].role === 'TOOL') {
-        if (isUserInitiatedTool(messages[j])) {
-          userToolCalls.unshift(messages[j]) // unshift to maintain order
-          embeddedToolIds.add(messages[j].id)
-        }
-        j--
+    const characterToolCalls: Message[] = []
+    let j = i + 1
+    while (j < messages.length && messages[j].role === 'TOOL') {
+      if (!isUserInitiatedTool(messages[j])) {
+        characterToolCalls.push(messages[j])
+        embeddedToolIds.add(messages[j].id)
       }
-      if (userToolCalls.length > 0) {
-        toolCallsForMessage.set(msg.id, userToolCalls)
-      }
-    } else if (msg.role === 'ASSISTANT') {
-      // Look ahead to collect any immediately following character-initiated TOOL messages
-      const characterToolCalls: Message[] = []
-      let j = i + 1
-      while (j < messages.length && messages[j].role === 'TOOL') {
-        if (!isUserInitiatedTool(messages[j])) {
-          characterToolCalls.push(messages[j])
-          embeddedToolIds.add(messages[j].id)
-        }
-        j++
-      }
-      if (characterToolCalls.length > 0) {
-        toolCallsForMessage.set(msg.id, characterToolCalls)
-      }
+      j++
+    }
+    if (characterToolCalls.length > 0) {
+      toolCallsForMessage.set(msg.id, characterToolCalls)
     }
   }
 

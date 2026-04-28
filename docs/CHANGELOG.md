@@ -4,6 +4,13 @@
 
 ### 4.4-dev
 
+#### User-initiated tool runs are Prospero bubbles
+
+- **Standalone Prospero rendering.** TOOL messages produced by the Run Tool modal are no longer visually grouped into the user's bubble. `useChatData.groupToolsWithMessages` only groups character-initiated TOOL messages under the preceding ASSISTANT message; user-initiated TOOL messages render as their own row.
+- **Prospero authorship.** `app/api/v1/chats/[id]/actions/run-tool.ts` now persists `systemSender: 'prospero'` on the TOOL message and embeds the operator's display name (`user.name || user.username`) in the JSON content. `VirtualizedMessageList` passes a `systemAvatar` prop to `ToolMessage`; the standalone layout swaps the muted tool-icon circle for the Prospero portrait and shows a "{operatorName} ran `{toolName}`" attribution under "Prospero". Existing collapsible Request/Response panes with individual copy buttons are unchanged.
+- **Private (whisper) toggle.** `RunToolModal` has a new "Private (whisper)" checkbox (default off). When checked, the API writes the operator's userId into `targetParticipantIds`. The userId is a UUID but never a participant ID, so the salon visibility filter at `app/salon/[id]/page.tsx` hides the bubble unless "show all whispers" is on, and `filterWhisperMessages` excludes it from every character's LLM context.
+- **Single-character context honors TOOL whispers.** `lib/services/chat-message/context-builder.service.ts` now drops TOOL messages with non-empty `targetParticipantIds` that don't include the responding character before building conversation messages, so private runs don't leak into single-character chats (multi-character mode already filtered via `filterWhisperMessages` in the context manager).
+
 #### Per-character Librarian summaries
 
 - **Summaries are now whispered, not broadcast.** The Librarian still regenerates `chat.contextSummary` at the same checkpoints (used by title generation, danger classification, story background, etc.), but the conversation-summary message in the transcript is now produced once per LLM-controlled CHARACTER participant and whispered privately to them via `targetParticipantIds`. Each character may have entered mid-chat or stepped away and back, so each gets a summary tailored to what they actually saw.

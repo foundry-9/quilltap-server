@@ -397,6 +397,7 @@ describe('RunToolModal', () => {
             toolName: 'search',
             arguments: { query: 'test-value' },
             characterId: 'char-abc',
+            private: false,
           }),
         })
       )

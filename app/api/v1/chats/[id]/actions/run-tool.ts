@@ -29,6 +29,10 @@ const runToolRequestSchema = z.object({
   toolName: z.string().min(1, 'Tool name is required'),
   arguments: z.record(z.string(), z.unknown()).default({}),
   characterId: z.string().optional(),
+  /** When true, the run is whispered: hidden from the salon UI by default
+   *  (only visible when "show all whispers" is on) and excluded from every
+   *  character's LLM context. */
+  private: z.boolean().default(false),
 });
 
 /**
@@ -97,15 +101,26 @@ export async function handleRunTool(
     ? `${validated.toolName}(${promptParts})`
     : validated.toolName;
 
-  // Add the result as a TOOL message to the chat
+  // Operator name shown in the Prospero attribution line ("Charles ran rng").
+  const operatorName = user.name || user.username;
+
+  // Add the result as a TOOL message to the chat, authored by Prospero. When
+  // private, target the operator's userId — it is a UUID but not a participant
+  // ID, so the salon visibility filter and `filterWhisperMessages` exclude
+  // every character context while the "show all whispers" toggle still reveals
+  // it to the operator.
   const toolResultMessage = await repos.chats.addMessage(chatId, {
     type: 'message',
     id: randomUUID(),
     role: 'TOOL',
+    systemSender: 'prospero',
+    targetParticipantIds: validated.private ? [user.id] : null,
     content: JSON.stringify({
       tool: validated.toolName,
       toolName: validated.toolName,
       initiatedBy: 'user',
+      operatorName,
+      private: validated.private,
       success: result.success,
       result: resultContent,
       error: result.error || undefined,
@@ -121,6 +136,7 @@ export async function handleRunTool(
     userId: user.id,
     toolName: validated.toolName,
     success: result.success,
+    private: validated.private,
   });
 
   return NextResponse.json({

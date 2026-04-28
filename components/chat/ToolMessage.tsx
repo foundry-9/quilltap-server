@@ -17,6 +17,8 @@ interface ToolMessageProps {
       filepath: string
       mimeType: string
     }>
+    /** Whisper targets — present on user-initiated runs flagged Private. */
+    targetParticipantIds?: string[] | null
   }
   readonly character?: {
     id: string
@@ -34,12 +36,20 @@ interface ToolMessageProps {
   readonly onAttachmentDeleted?: (attachmentId: string) => void
   /** Whether this tool message is embedded inside an assistant message */
   readonly embedded?: boolean
+  /** Personified author for the standalone bubble (currently only Prospero
+   *  for user-initiated runs). When set, the avatar slot shows this image
+   *  and the header carries an operator attribution line. */
+  readonly systemAvatar?: { name: string; avatarUrl: string }
 }
 
 interface ToolResult {
   tool?: string
   toolName?: string
   initiatedBy?: 'user' | 'character'
+  /** Display name for the operator on user-initiated runs (e.g., "Charles"). */
+  operatorName?: string
+  /** Whether this run was launched as a private whisper from Prospero. */
+  private?: boolean
   success?: boolean
   /** Result can be a string or object (for backwards compatibility with older RNG results) */
   result?: string | Record<string, unknown>
@@ -175,7 +185,7 @@ function formatResultContent(toolData: ToolResult): string {
   }
 }
 
-export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted, embedded = false }: ToolMessageProps) {
+export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted, embedded = false, systemAvatar }: ToolMessageProps) {
   const [showRequest, setShowRequest] = useState(false)
   const [showResponse, setShowResponse] = useState(false)
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
@@ -528,22 +538,34 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
     )
   }
 
+  const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
+
   // Standalone layout - full width with avatar
   return (
     <div className="qt-chat-message-row-tool">
-      {/* Tool icon avatar with tooltip */}
-      <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full qt-bg-muted text-lg relative group cursor-help">
-
-        {info.icon}
-        {toolData.provider && toolData.model && (
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50">
-            <div className="bg-foreground text-background text-xs px-2 py-1 rounded whitespace-nowrap">
-              {toolData.provider} {toolData.model}
+      {/* Avatar slot — Prospero portrait when authored by a personified system
+          sender, otherwise the tool's emoji on a muted circle. */}
+      {systemAvatar ? (
+        <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden border qt-border-default">
+          <img
+            src={systemAvatar.avatarUrl}
+            alt={systemAvatar.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : (
+        <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full qt-bg-muted text-lg relative group cursor-help">
+          {info.icon}
+          {toolData.provider && toolData.model && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50">
+              <div className="bg-foreground text-background text-xs px-2 py-1 rounded whitespace-nowrap">
+                {toolData.provider} {toolData.model}
+              </div>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-foreground"></div>
             </div>
-            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-foreground"></div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       <div className="flex-1 min-w-0 group relative">
         {/* Wardrobe action notice — prominent summary above tool details */}
@@ -561,21 +583,40 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
           {/* Tool header */}
           <div className="flex items-center gap-2 mb-2">
             <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                {showCharacterName && (
-                  <span className="qt-text-label-xs">
-                    {character?.name} requested
+              {systemAvatar ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm text-foreground">
+                      {systemAvatar.name}
+                    </span>
+                    {isWhisper && (
+                      <span className="qt-text-label-xs italic qt-text-secondary">
+                        whisper
+                      </span>
+                    )}
+                  </div>
+                  <div className="qt-text-label-xs">
+                    {toolData.operatorName || 'You'} ran{' '}
+                    <span className="font-mono">{toolData.toolName}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-2">
+                  {showCharacterName && (
+                    <span className="qt-text-label-xs">
+                      {character?.name} requested
+                    </span>
+                  )}
+                  {toolData.initiatedBy === 'user' && !systemAvatar && (
+                    <span className="qt-text-label-xs">
+                      You requested
+                    </span>
+                  )}
+                  <span className="font-semibold text-sm text-foreground">
+                    {info.displayName}
                   </span>
-                )}
-                {toolData.initiatedBy === 'user' && (
-                  <span className="qt-text-label-xs">
-                    You requested
-                  </span>
-                )}
-                <span className="font-semibold text-sm text-foreground">
-                  {info.displayName}
-                </span>
-              </div>
+                </div>
+              )}
             </div>
             <span
               className={`inline-block px-2 py-0.5 qt-text-label-xs rounded ml-auto ${

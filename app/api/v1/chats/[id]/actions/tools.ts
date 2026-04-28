@@ -26,19 +26,27 @@ const updateToolSettingsSchema = z.object({
 export async function handleAddToolResult(
   req: NextRequest,
   chatId: string,
-  { repos }: AuthenticatedContext
+  { user, repos }: AuthenticatedContext
 ): Promise<NextResponse> {
   const body = await req.json();
   const validated = toolResultSchema.parse(body);
 
-  // Create a TOOL message event
+  // User-initiated tool results render as Prospero-authored standalone bubbles
+  // in the salon UI; character-initiated results stay attached to the
+  // preceding ASSISTANT message and don't carry a Staff sender.
+  const isUserInitiated = validated.initiatedBy === 'user';
+  const operatorName = isUserInitiated ? (user.name || user.username) : undefined;
+
   const toolResultMessage = await repos.chats.addMessage(chatId, {
     type: 'message',
     id: randomUUID(),
     role: 'TOOL',
+    systemSender: isUserInitiated ? 'prospero' : null,
     content: JSON.stringify({
       tool: validated.tool,
+      toolName: validated.tool,
       initiatedBy: validated.initiatedBy,
+      operatorName,
       prompt: validated.prompt,
       result: validated.result,
       images: validated.images,

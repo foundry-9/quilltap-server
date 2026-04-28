@@ -166,7 +166,7 @@ Rules for adding or updating these assets:
   - `librarian` — Document Mode open/save/rename/delete announcements, plus character `doc_delete_file` / `doc_create_folder` / `doc_delete_folder` / `doc_copy_file` tool calls
   - `concierge` — dangerous-content classification announcements
   - `host` — Salon participation announcements (character add/remove/status change)
-  - `prospero` — agentic / tool-use announcements; currently fires when a participant's connection profile is changed via the Participants sidebar
+  - `prospero` — agentic / tool-use announcements; fires when a participant's connection profile is changed via the Participants sidebar, and authors the standalone bubble for any user-initiated tool run (the Run Tool modal). User-initiated runs may set `private: true`, which writes the operator's userId into `targetParticipantIds` so the Salon UI hides them by default and every character's LLM context excludes them.
   - `commonplaceBook` — memory recall whispers (memory recap, relevant memories, inter-character memories), targeted at the responding character via `targetParticipantIds`
 
 ## Claude-specific instructions

@@ -391,6 +391,23 @@ export async function buildMessageContext(
     })
   }
 
+  // Drop TOOL whispers the responding character isn't a target of. Operator-
+  // only Prospero runs (run-tool with `private: true`) target the userId, so
+  // no character participant ever matches and the message is filtered out of
+  // every context. Multi-character mode also runs `filterWhisperMessages`
+  // downstream — this filter just makes sure single-character context honors
+  // the same rule.
+  const respondingParticipantId = characterParticipant?.id
+  const messagesAfterWhisperFilter = respondingParticipantId
+    ? messagesWithoutCmpb.filter(m => {
+        if (m.role !== 'TOOL') return true
+        const targets = m.targetParticipantIds
+        if (!targets || targets.length === 0) return true
+        if (m.participantId === respondingParticipantId) return true
+        return targets.includes(respondingParticipantId)
+      })
+    : messagesWithoutCmpb
+
   // System transparency: opaque characters (systemTransparency != true) still
   // need the *content* of remaining Staff (Lantern/Aurora/Librarian/Prospero/
   // Host) messages — scenario, status, etc. drive the conversation forward —
@@ -399,10 +416,10 @@ export async function buildMessageContext(
   // messages. The salon UI is unaffected (the human user always sees Staff-
   // attributed messages with their avatars).
   const filteredExistingMessages = character.systemTransparency === true
-    ? messagesWithoutCmpb
-    : messagesWithoutCmpb.map(m => m.systemSender ? { ...m, systemSender: null } : m)
+    ? messagesAfterWhisperFilter
+    : messagesAfterWhisperFilter.map(m => m.systemSender ? { ...m, systemSender: null } : m)
   if (character.systemTransparency !== true) {
-    const stripped = messagesWithoutCmpb.filter(m => m.systemSender).length
+    const stripped = messagesAfterWhisperFilter.filter(m => m.systemSender).length
     if (stripped > 0) {
       logger.debug('Stripped Staff attribution from messages for opaque character', {
         characterId: character.id,

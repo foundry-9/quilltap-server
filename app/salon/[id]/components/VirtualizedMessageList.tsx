@@ -165,6 +165,11 @@ export function VirtualizedMessageList({
             const showResendButton = messageActions.canResendMessage(message.id, messageIndex)
 
             if (message.role === 'TOOL') {
+              const avatarData = getMessageAvatar(message)
+              const systemAvatar =
+                message.systemSender && avatarData?.avatarUrl
+                  ? { name: avatarData.name, avatarUrl: avatarData.avatarUrl }
+                  : undefined
               return (
                 <div
                   key={message.id}
@@ -181,6 +186,7 @@ export function VirtualizedMessageList({
                   <ToolMessage
                     message={message}
                     character={getCharacterForMessage(message)}
+                    systemAvatar={systemAvatar}
                     onImageClick={(filepath, filename, fileId) => {
                       onImageClick(filepath, filename, fileId)
                     }}
