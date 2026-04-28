@@ -115,6 +115,18 @@ export const MessageEventSchema = z.object({
   isSilentMessage: z.boolean().nullable().optional(),
   /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories). */
   systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook']).nullable().optional(),
+  /**
+   * Structured payload on Host announcements (`systemSender = 'host'`) of type
+   * add / remove / status-change. Carries the affected participant ID and the
+   * status they were transitioning to. Used by the per-character Librarian
+   * summary pipeline to compute presence windows. NULL on all other messages
+   * and on Host announcements that do not represent a status transition
+   * (scenario, roster, timestamp, silent-mode, join-scenario).
+   */
+  hostEvent: z.object({
+    participantId: UUIDSchema,
+    toStatus: z.enum(['active', 'silent', 'absent', 'removed']),
+  }).nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;

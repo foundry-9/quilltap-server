@@ -235,6 +235,12 @@ class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadat
     return this.baseRepo.clearMessages(chatId);
   }
 
+  async deleteMessagesByIds(chatId: string, messageIds: string[]): Promise<number> {
+    const chat = await this.findById(chatId);
+    if (!chat) throw new Error('Chat not found or access denied');
+    return this.baseRepo.deleteMessagesByIds(chatId, messageIds);
+  }
+
   async searchMessagesGlobal(
     searchText: string,
     limit?: number

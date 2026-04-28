@@ -11,13 +11,21 @@ import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/l
 import { updateContextSummary, summarizeChat, ChatMessage, generateTitleFromSummary, considerTitleUpdate, considerHelpChatTitleUpdate, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, shouldSummarizeConversation } from '@/lib/llm/model-context-data'
-import { Provider, ConnectionProfile, CheapLLMSettings } from '@/lib/schemas/types'
+import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, ChatMetadata, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { queueStoryBackgroundIfEnabled } from '@/lib/background-jobs/handlers/title-update'
-import { postLibrarianSummaryAnnouncement } from '@/lib/services/librarian-notifications/writer'
+import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
+import {
+  filterMessagesByHistoryAccess,
+  filterMessagesByPresenceWindows,
+  filterWhisperMessages,
+  computePresenceWindowsForParticipant,
+  type MessageWithParticipant,
+} from '@/lib/chat/context/message-attribution'
+import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 
 /**
  * Calculates the number of interchanges in a chat
@@ -318,14 +326,28 @@ export async function generateContextSummary(
       }
       await repos.chats.addMessage(chatId, summaryEvent)
 
-      // Phase F: deposit a Librarian whisper carrying the freshly-minted
-      // summary into the transcript. This replaces the per-turn `## Previous
-      // Conversation Summary` block in the system prompt — the LLM picks the
-      // summary up from conversation history instead.
-      await postLibrarianSummaryAnnouncement({
-        chatId,
-        summary: result.summary,
-      })
+      // Per-character Librarian summary whispers. Replaces the broadcast
+      // summary message: each LLM-controlled character receives a private
+      // summary tailored to what they were actually present for, since
+      // characters may have joined mid-stream or stepped away and back.
+      // Prior summary whispers to the same participant are swept first so
+      // each character only ever has the latest summary in their context.
+      try {
+        const refreshedChat = await repos.chats.findById(chatId)
+        if (refreshedChat) {
+          const allMessages = await repos.chats.getMessages(chatId)
+          await generatePerCharacterSummaryWhispers({
+            chat: refreshedChat,
+            allMessages,
+            globalSummary: result.summary,
+            cheapLLM,
+            userId,
+            chatId,
+          })
+        }
+      } catch (e) {
+        logger.error('[Context Summary] Failed to fan out per-character summary whispers:', { chatId }, e instanceof Error ? e : new Error(String(e)))
+      }
 
       // Create system event for context summary token tracking
       if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {
@@ -399,6 +421,375 @@ export async function generateContextSummary(
       wasGenerated: false,
     }
   }
+}
+
+/**
+ * Build the per-character message slice for a participant: the messages they
+ * actually saw, in chronological order.
+ *
+ * Pipeline:
+ *   1. type === 'message' (drop context-summary / system events)
+ *   2. history-access slice (skip messages before they joined unless
+ *      `hasHistoryAccess` is set)
+ *   3. presence-window slice (skip messages during periods they were 'absent'
+ *      / 'removed', based on Host status announcements). Skipped entirely
+ *      when `hasHistoryAccess` is set.
+ *   4. whisper filter (only public messages and whispers they're a sender or
+ *      target of)
+ */
+function buildVisibleMessagesForParticipant(
+  allMessages: ChatEvent[],
+  participant: ChatParticipantBase,
+): MessageEvent[] {
+  const messageEvents = allMessages.filter((m): m is MessageEvent => m.type === 'message')
+
+  const adapted: MessageWithParticipant[] = messageEvents.map(m => ({
+    role: m.role,
+    content: m.content,
+    id: m.id,
+    participantId: m.participantId ?? null,
+    createdAt: m.createdAt,
+    targetParticipantIds: m.targetParticipantIds ?? null,
+    hostEvent: m.hostEvent ?? null,
+  }))
+
+  let visible: MessageWithParticipant[] = adapted
+
+  if (!participant.hasHistoryAccess) {
+    visible = filterMessagesByHistoryAccess(visible, participant)
+    const windows = computePresenceWindowsForParticipant(adapted, participant)
+    visible = filterMessagesByPresenceWindows(visible, windows)
+  }
+
+  visible = filterWhisperMessages(visible, participant.id)
+
+  // Map back to MessageEvent records — we kept message IDs, so reattach.
+  const idsKept = new Set(visible.map(m => m.id).filter((id): id is string => Boolean(id)))
+  return messageEvents.filter(m => idsKept.has(m.id))
+}
+
+/**
+ * Reduce a participant's visible messages to the role-and-content shape the
+ * cheap-LLM summariser expects.
+ */
+function visibleConversation(visible: MessageEvent[]): ChatMessage[] {
+  return visible
+    .filter(m => m.role === 'USER' || m.role === 'ASSISTANT')
+    .map(m => ({ role: m.role.toLowerCase() as 'user' | 'assistant', content: m.content }))
+}
+
+interface GeneratePerCharacterSummariesParams {
+  chat: ChatMetadata
+  allMessages: ChatEvent[]
+  globalSummary: string
+  cheapLLM: CheapLLMSelection
+  userId: string
+  chatId: string
+}
+
+/**
+ * For each LLM-controlled CHARACTER participant who is still in the chat,
+ * produce a Librarian summary whisper tailored to what they actually saw —
+ * sweeping any prior summary whisper they had received first.
+ *
+ * When a participant's visible slice contains exactly the same messages that
+ * went into the global summary (the common single-character / always-present
+ * case), the global summary text is reused verbatim — no extra cheap-LLM
+ * call. When the slice differs, a fresh per-character summary is generated.
+ */
+export async function generatePerCharacterSummaryWhispers(
+  params: GeneratePerCharacterSummariesParams,
+): Promise<void> {
+  const { chat, allMessages, globalSummary, cheapLLM, userId, chatId } = params
+  const repos = getRepositories()
+
+  // Reference slice for "did the per-character filter remove anything?"
+  const globalSliceIds = allMessages
+    .filter((m): m is MessageEvent => m.type === 'message')
+    .filter(m => m.role === 'USER' || m.role === 'ASSISTANT')
+    .map(m => m.id)
+  const globalIdSet = new Set(globalSliceIds)
+
+  for (const participant of chat.participants) {
+    if (participant.type !== 'CHARACTER') continue
+    if (participant.controlledBy === 'user') continue
+    if (participant.status === 'removed') continue
+
+    try {
+      const visible = buildVisibleMessagesForParticipant(allMessages, participant)
+      const conv = visibleConversation(visible)
+
+      if (conv.length === 0) {
+        logger.debug('[Context Summary] No visible messages for participant — skipping summary whisper', {
+          chatId, participantId: participant.id,
+        })
+        continue
+      }
+
+      const visibleConvIds = visible
+        .filter(m => m.role === 'USER' || m.role === 'ASSISTANT')
+        .map(m => m.id)
+      const sameAsGlobal =
+        visibleConvIds.length === globalIdSet.size &&
+        visibleConvIds.every(id => globalIdSet.has(id))
+
+      let summaryText = globalSummary
+      if (!sameAsGlobal) {
+        logger.debug('[Context Summary] Generating tailored summary for participant', {
+          chatId, participantId: participant.id,
+          visibleCount: conv.length, globalCount: globalSliceIds.length,
+        })
+        const result = await summarizeChat(conv, cheapLLM, userId, chatId)
+        if (!result.success || !result.result) {
+          logger.warn('[Context Summary] Per-character summarize failed; skipping whisper', {
+            chatId, participantId: participant.id, error: result.error,
+          })
+          continue
+        }
+        summaryText = result.result
+
+        // Track cost for the extra cheap-LLM call.
+        if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {
+          try {
+            const costResult = await estimateMessageCost(
+              cheapLLM.provider,
+              cheapLLM.modelName,
+              result.usage.promptTokens,
+              result.usage.completionTokens,
+              userId,
+            )
+            await createContextSummaryEvent(
+              chatId,
+              result.usage,
+              cheapLLM.provider,
+              cheapLLM.modelName,
+              costResult.cost,
+            )
+          } catch (e) {
+            logger.error('[Context Summary] Failed to record per-character summary system event:', { chatId, participantId: participant.id }, e instanceof Error ? e : new Error(String(e)))
+          }
+        }
+      } else {
+        logger.debug('[Context Summary] Reusing global summary for participant (slice matches)', {
+          chatId, participantId: participant.id,
+        })
+      }
+
+      // Sweep prior Librarian summary whispers targeted exclusively at this
+      // participant. Identified by systemSender + content prefix + a single
+      // matching target. Old broadcast summaries (from before this refactor)
+      // are not swept — they were addressed to the whole room.
+      const priorSummaryIds = allMessages
+        .filter((m): m is MessageEvent => m.type === 'message')
+        .filter(m =>
+          m.systemSender === 'librarian' &&
+          Array.isArray(m.targetParticipantIds) &&
+          m.targetParticipantIds.length === 1 &&
+          m.targetParticipantIds[0] === participant.id &&
+          typeof m.content === 'string' &&
+          m.content.startsWith(SUMMARY_CONTENT_PREFIX),
+        )
+        .map(m => m.id)
+
+      if (priorSummaryIds.length > 0) {
+        const removed = await repos.chats.deleteMessagesByIds(chatId, priorSummaryIds)
+        logger.info('[Context Summary] Swept prior summary whispers for participant', {
+          chatId, participantId: participant.id, removed,
+        })
+      }
+
+      await postLibrarianSummaryAnnouncement({
+        chatId,
+        summary: summaryText,
+        targetParticipantIds: [participant.id],
+      })
+    } catch (e) {
+      logger.error('[Context Summary] Per-character summary whisper failed for participant', {
+        chatId, participantId: participant.id,
+      }, e instanceof Error ? e : new Error(String(e)))
+    }
+  }
+}
+
+/**
+ * Generate a catch-up Librarian summary whisper for a participant that just
+ * joined the chat with `hasHistoryAccess === true`. Since they can see all
+ * prior history, they need a summary right away rather than waiting for the
+ * next checkpoint to fire. No-op if there's not enough prior content to
+ * warrant summarising.
+ */
+export async function generateCatchUpSummaryForParticipant(
+  options: GenerateSummaryOptions & { participantId: string },
+): Promise<void> {
+  const { userId, chatId, connectionProfile, cheapLLMSettings, availableProfiles, participantId } = options
+  const repos = getRepositories()
+
+  try {
+    const chat = await repos.chats.findById(chatId)
+    if (!chat) return
+
+    const participant = chat.participants.find(p => p.id === participantId)
+    if (!participant || !participant.hasHistoryAccess) {
+      logger.debug('[Context Summary] Catch-up skipped — participant not found or has no history access', {
+        chatId, participantId,
+      })
+      return
+    }
+    if (participant.type !== 'CHARACTER' || participant.controlledBy === 'user') return
+
+    let cheapLLM = getCheapLLMProvider(
+      connectionProfile,
+      {
+        strategy: cheapLLMSettings.strategy,
+        userDefinedProfileId: cheapLLMSettings.userDefinedProfileId ?? undefined,
+        defaultCheapProfileId: cheapLLMSettings.defaultCheapProfileId ?? undefined,
+        fallbackToLocal: cheapLLMSettings.fallbackToLocal,
+      },
+      availableProfiles,
+    )
+    if (!cheapLLM) {
+      logger.warn('[Context Summary] Catch-up skipped — no cheap LLM available', { chatId, participantId })
+      return
+    }
+
+    if (chat.isDangerousChat === true) {
+      const chatSettingsForDanger = await repos.chatSettings.findByUserId(userId)
+      const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettingsForDanger)
+      cheapLLM = resolveUncensoredCheapLLMSelection(cheapLLM, true, dangerSettings, availableProfiles)
+    }
+
+    const allMessages = await repos.chats.getMessages(chatId)
+    const visible = buildVisibleMessagesForParticipant(allMessages, participant)
+    const conv = visibleConversation(visible)
+
+    // Need a meaningful amount of history to bother summarising — match the
+    // existing minimum interchange threshold for global summaries.
+    if (conv.length < 4) {
+      logger.debug('[Context Summary] Catch-up skipped — too little history to summarise', {
+        chatId, participantId, visibleCount: conv.length,
+      })
+      return
+    }
+
+    logger.info('[Context Summary] Generating catch-up summary for newly-joined participant', {
+      chatId, participantId, visibleCount: conv.length,
+    })
+
+    const result = await summarizeChat(conv, cheapLLM, userId, chatId)
+    if (!result.success || !result.result) {
+      logger.warn('[Context Summary] Catch-up summarize failed', {
+        chatId, participantId, error: result.error,
+      })
+      return
+    }
+
+    if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {
+      try {
+        const costResult = await estimateMessageCost(
+          cheapLLM.provider,
+          cheapLLM.modelName,
+          result.usage.promptTokens,
+          result.usage.completionTokens,
+          userId,
+        )
+        await createContextSummaryEvent(
+          chatId,
+          result.usage,
+          cheapLLM.provider,
+          cheapLLM.modelName,
+          costResult.cost,
+        )
+      } catch (e) {
+        logger.error('[Context Summary] Failed to record catch-up summary system event:', { chatId, participantId }, e instanceof Error ? e : new Error(String(e)))
+      }
+    }
+
+    await postLibrarianSummaryAnnouncement({
+      chatId,
+      summary: result.result,
+      targetParticipantIds: [participantId],
+    })
+  } catch (e) {
+    logger.error('[Context Summary] Catch-up summary failed', { chatId, participantId },
+      e instanceof Error ? e : new Error(String(e)))
+  }
+}
+
+/**
+ * Resolve cheap-LLM settings + available profiles + a connection profile and
+ * fire `generateCatchUpSummaryForParticipant` in the background. Non-blocking;
+ * any failure (no cheap LLM, no profile, etc.) is logged and swallowed.
+ *
+ * Called from the participant-add path when `hasHistoryAccess === true`, so
+ * the newly-joined character starts with a Librarian summary of what they're
+ * walking into rather than waiting for the next checkpoint to fire.
+ */
+export function triggerCatchUpSummaryAsync(params: {
+  chatId: string
+  userId: string
+  participantId: string
+}): void {
+  const { chatId, userId, participantId } = params
+
+  ;(async () => {
+    try {
+      const repos = getRepositories()
+
+      const chat = await repos.chats.findById(chatId)
+      if (!chat) return
+
+      const participant = chat.participants.find(p => p.id === participantId)
+      if (!participant?.hasHistoryAccess) return
+      if (participant.type !== 'CHARACTER' || participant.controlledBy === 'user') return
+
+      const chatSettings = await repos.chatSettings.findByUserId(userId)
+      if (!chatSettings?.cheapLLMSettings) {
+        logger.debug('[Context Summary] Catch-up skipped — no cheap LLM settings', { chatId, participantId })
+        return
+      }
+
+      // Pick a connection profile to feed `getCheapLLMProvider`. Prefer the
+      // joining participant's own profile; fall back to any other LLM
+      // participant's profile so the cheap-LLM resolver has something to
+      // anchor against.
+      let connectionProfileId = participant.connectionProfileId ?? null
+      if (!connectionProfileId) {
+        const otherLLM = chat.participants.find(
+          p => p.type === 'CHARACTER' && p.controlledBy !== 'user' && p.connectionProfileId,
+        )
+        connectionProfileId = otherLLM?.connectionProfileId ?? null
+      }
+      if (!connectionProfileId) {
+        logger.debug('[Context Summary] Catch-up skipped — no connection profile available', {
+          chatId, participantId,
+        })
+        return
+      }
+      const connectionProfile = await repos.connections.findById(connectionProfileId)
+      if (!connectionProfile) {
+        logger.debug('[Context Summary] Catch-up skipped — connection profile not found', {
+          chatId, participantId, connectionProfileId,
+        })
+        return
+      }
+
+      const availableProfiles = await repos.connections.findByUserId(userId)
+
+      await generateCatchUpSummaryForParticipant({
+        userId,
+        chatId,
+        connectionProfile,
+        cheapLLMSettings: chatSettings.cheapLLMSettings,
+        availableProfiles,
+        participantId,
+      })
+    } catch (e) {
+      logger.error('[Context Summary] triggerCatchUpSummaryAsync failed',
+        { chatId, participantId },
+        e instanceof Error ? e : new Error(String(e)),
+      )
+    }
+  })()
 }
 
 /**

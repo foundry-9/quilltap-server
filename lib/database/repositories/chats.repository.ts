@@ -429,6 +429,10 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     return this.messagesOps.clearMessages(chatId);
   }
 
+  async deleteMessagesByIds(chatId: string, messageIds: string[]): Promise<number> {
+    return this.messagesOps.deleteMessagesByIds(chatId, messageIds);
+  }
+
   // ============================================================================
   // SEARCH AND REPLACE OPERATIONS (delegated to ChatSearchReplaceOps)
   // ============================================================================

@@ -26,6 +26,7 @@ import {
   compileAllIdentityStacks,
   compileIdentityStackForParticipant,
 } from '@/lib/services/system-prompt-compiler/compiler';
+import { triggerCatchUpSummaryAsync } from '@/lib/chat/context-summary';
 
 type Repos = RepositoryContainer;
 
@@ -205,7 +206,7 @@ export async function handleParticipantUpdate(
       if (character) {
         await recordStatusChangeEvent(chatId, character.name, oldStatus, newStatus, repos);
         if (newStatus === 'removed') {
-          await postHostRemoveAnnouncement({ chatId, characterName: character.name });
+          await postHostRemoveAnnouncement({ chatId, characterName: character.name, participantId });
         } else if (
           (oldStatus === 'active' || oldStatus === 'silent' || oldStatus === 'absent') &&
           (newStatus === 'active' || newStatus === 'silent' || newStatus === 'absent')
@@ -213,6 +214,7 @@ export async function handleParticipantUpdate(
           await postHostStatusChangeAnnouncement({
             chatId,
             characterName: character.name,
+            participantId,
             oldStatus: oldStatus as ParticipantStatus,
             newStatus,
           });
@@ -255,6 +257,7 @@ export async function handleParticipantUpdate(
         await postHostStatusChangeAnnouncement({
           chatId,
           characterName: character.name,
+          participantId,
           oldStatus: oldStatus as ParticipantStatus,
           newStatus: newStatus as ParticipantStatus,
         });
@@ -481,14 +484,21 @@ export async function processChatUpdates(
     if (validatedData.addParticipant.characterId) {
       const addedCharacter = await repos.characters.findById(validatedData.addParticipant.characterId);
       if (addedCharacter) {
-        await postHostAddAnnouncement({ chatId, character: addedCharacter });
-
         const newParticipant = updatedChat.participants.find(
           (p) =>
             p.type === 'CHARACTER' &&
             p.characterId === validatedData.addParticipant?.characterId &&
             p.status !== 'removed',
         );
+
+        if (newParticipant) {
+          await postHostAddAnnouncement({
+            chatId,
+            character: addedCharacter,
+            participantId: newParticipant.id,
+            initialStatus: newParticipant.status,
+          });
+        }
 
         // Phase H: compile the identity stack for the new participant.
         if (newParticipant) {
@@ -512,6 +522,17 @@ export async function processChatUpdates(
             joinScenario,
           });
         }
+
+        // When a character joins with full history access, fan out a Librarian
+        // catch-up summary to them right away so they don't have to wait for
+        // the next checkpoint to receive any context.
+        if (hasHistoryAccess && newParticipant) {
+          triggerCatchUpSummaryAsync({
+            chatId,
+            userId,
+            participantId: newParticipant.id,
+          });
+        }
       }
     }
   }
@@ -529,7 +550,11 @@ export async function processChatUpdates(
     updatedChat = result.chat;
 
     if (removedCharacterName) {
-      await postHostRemoveAnnouncement({ chatId, characterName: removedCharacterName });
+      await postHostRemoveAnnouncement({
+        chatId,
+        characterName: removedCharacterName,
+        participantId: validatedData.removeParticipantId,
+      });
     }
   }
 

@@ -205,6 +205,8 @@ import { addProjectOfficialMountPointMigration } from './add-project-official-mo
 import { addCompositionModeDefaultFieldMigration } from './add-composition-mode-default-field';
 // Add compiledIdentityStacks column to chats (Phase H system-prompt precompile)
 import { addCompiledIdentityStacksFieldMigration } from './add-compiled-identity-stacks-field';
+// Add hostEvent column to chat_messages (per-character Librarian summaries)
+import { addHostEventFieldMigration } from './add-host-event-field';
 
 /**
  * All available migrations.
@@ -405,6 +407,8 @@ export const migrations: Migration[] = [
   addCompositionModeDefaultFieldMigration,
   // Add compiledIdentityStacks column to chats (Phase H system-prompt precompile)
   addCompiledIdentityStacksFieldMigration,
+  // Add hostEvent column to chat_messages (per-character Librarian summaries)
+  addHostEventFieldMigration,
 ];
 
 export {
@@ -590,5 +594,7 @@ export {
   addCompositionModeDefaultFieldMigration,
   // Add compiledIdentityStacks column to chats (Phase H system-prompt precompile)
   addCompiledIdentityStacksFieldMigration,
+  // Add hostEvent column to chat_messages (per-character Librarian summaries)
+  addHostEventFieldMigration,
 };
 

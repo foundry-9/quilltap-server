@@ -457,7 +457,12 @@ async function createInitialMessages(
     for (const participant of llmCharacterParticipants) {
       const character = await repos.characters.findById(participant.characterId as string);
       if (character) {
-        await postHostAddAnnouncement({ chatId, character });
+        await postHostAddAnnouncement({
+          chatId,
+          character,
+          participantId: participant.id,
+          initialStatus: participant.status,
+        });
       }
     }
   }

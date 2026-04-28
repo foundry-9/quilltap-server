@@ -29,16 +29,32 @@ import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter';
 export interface HostAddAnnouncement {
   chatId: string;
   character: Character;
+  /**
+   * Participant ID of the joining character. Used to tag the message with a
+   * `hostEvent` payload so the per-character Librarian summary pipeline can
+   * reconstruct presence windows.
+   */
+  participantId: string;
+  /**
+   * Initial participation status. Defaults to 'active' when omitted (matches
+   * `handleAddParticipant`'s default), but pass through explicitly when a
+   * caller adds a participant in a non-active state.
+   */
+  initialStatus?: ParticipantStatus;
 }
 
 export interface HostRemoveAnnouncement {
   chatId: string;
   characterName: string;
+  /** Participant ID of the leaving character. */
+  participantId: string;
 }
 
 export interface HostStatusChangeAnnouncement {
   chatId: string;
   characterName: string;
+  /** Participant ID of the character whose status changed. */
+  participantId: string;
   oldStatus: ParticipantStatus;
   newStatus: ParticipantStatus;
 }
@@ -109,6 +125,7 @@ async function postHostMessage(
   chatId: string,
   content: string,
   kindLabel: string,
+  hostEvent: { participantId: string; toStatus: ParticipantStatus } | null = null,
 ): Promise<MessageEvent | null> {
   try {
     const repos = getRepositories();
@@ -135,6 +152,7 @@ async function postHostMessage(
       createdAt: now,
       participantId: null,
       systemSender: 'host',
+      hostEvent,
     };
 
     await repos.chats.addMessage(chatId, message);
@@ -144,6 +162,7 @@ async function postHostMessage(
       chatId,
       messageId,
       kindLabel,
+      hostEvent,
     });
 
     return message;
@@ -162,15 +181,21 @@ export async function postHostAddAnnouncement(
   params: HostAddAnnouncement,
 ): Promise<MessageEvent | null> {
   const content = await buildAddContent(params.character);
+  const toStatus: ParticipantStatus = params.initialStatus ?? 'active';
   logger.debug('[HostNotification] Posting add announcement', {
     context: 'host-notifications',
     chatId: params.chatId,
     characterId: params.character.id,
     characterName: params.character.name,
+    participantId: params.participantId,
+    toStatus,
     hasAvatar: Boolean(params.character.avatarUrl),
     hasVault: Boolean(params.character.characterDocumentMountPointId),
   });
-  return postHostMessage(params.chatId, content, 'add');
+  return postHostMessage(params.chatId, content, 'add', {
+    participantId: params.participantId,
+    toStatus,
+  });
 }
 
 export async function postHostRemoveAnnouncement(
@@ -181,8 +206,12 @@ export async function postHostRemoveAnnouncement(
     context: 'host-notifications',
     chatId: params.chatId,
     characterName: params.characterName,
+    participantId: params.participantId,
   });
-  return postHostMessage(params.chatId, content, 'remove');
+  return postHostMessage(params.chatId, content, 'remove', {
+    participantId: params.participantId,
+    toStatus: 'removed',
+  });
 }
 
 export async function postHostStatusChangeAnnouncement(
@@ -197,10 +226,14 @@ export async function postHostStatusChangeAnnouncement(
     context: 'host-notifications',
     chatId: params.chatId,
     characterName: params.characterName,
+    participantId: params.participantId,
     oldStatus: params.oldStatus,
     newStatus: params.newStatus,
   });
-  return postHostMessage(params.chatId, content, `status:${params.oldStatus}->${params.newStatus}`);
+  return postHostMessage(params.chatId, content, `status:${params.oldStatus}->${params.newStatus}`, {
+    participantId: params.participantId,
+    toStatus: params.newStatus,
+  });
 }
 
 // ---------------------------------------------------------------------------

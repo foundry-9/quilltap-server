@@ -26,6 +26,7 @@ import {
   postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
+import { triggerCatchUpSummaryAsync } from '@/lib/chat/context-summary';
 
 /**
  * Start impersonating a participant
@@ -239,8 +240,13 @@ export async function handleAddParticipantAction(
         controlledBy,
       });
 
-      if (reactivatedCharacter) {
-        await postHostAddAnnouncement({ chatId, character: reactivatedCharacter });
+      if (reactivatedCharacter && reactivatedParticipant) {
+        await postHostAddAnnouncement({
+          chatId,
+          character: reactivatedCharacter,
+          participantId: reactivatedParticipant.id,
+          initialStatus: reactivatedParticipant.status,
+        });
 
         // Phase H: recompile the identity stack for the reactivated
         // participant in case it had been dropped.
@@ -281,8 +287,13 @@ export async function handleAddParticipantAction(
     controlledBy: validatedData.controlledBy || 'llm',
   });
 
-  if (addedCharacter) {
-    await postHostAddAnnouncement({ chatId, character: addedCharacter });
+  if (addedCharacter && newParticipant) {
+    await postHostAddAnnouncement({
+      chatId,
+      character: addedCharacter,
+      participantId: newParticipant.id,
+      initialStatus: newParticipant.status,
+    });
 
     // Phase H: compile the identity stack for the new participant.
     if (newParticipant) {
@@ -306,6 +317,17 @@ export async function handleAddParticipantAction(
         characterName: addedCharacter.name,
         targetParticipantId: newParticipant.id,
         joinScenario: validatedData.joinScenario,
+      });
+    }
+
+    // When a character joins with full history access, hand them a Librarian
+    // catch-up summary right away rather than making them wait for the next
+    // checkpoint to fire.
+    if (newParticipant && (validatedData.hasHistoryAccess ?? false)) {
+      triggerCatchUpSummaryAsync({
+        chatId,
+        userId: user.id,
+        participantId: newParticipant.id,
       });
     }
   }
@@ -443,7 +465,11 @@ export async function handleRemoveParticipantAction(
   });
 
   if (characterName !== 'Unknown') {
-    await postHostRemoveAnnouncement({ chatId, characterName });
+    await postHostRemoveAnnouncement({
+      chatId,
+      characterName,
+      participantId: validatedData.participantId,
+    });
   }
 
   return NextResponse.json({ success: true, chat: result.chat });

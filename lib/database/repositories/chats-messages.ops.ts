@@ -48,6 +48,11 @@ export const ChatMessageRowSchema = z.object({
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),  // JSON array — whisper targets
   isSilentMessage: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Whether message was generated while character was in silent mode (SQLite stores as 0/1)
   systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
+  // Structured payload on Host status announcements (add / remove / status-change). NULL on all other messages.
+  hostEvent: z.object({
+    participantId: UUIDSchema,
+    toStatus: z.enum(['active', 'silent', 'absent', 'removed']),
+  }).nullable().optional(),
   // For type='context-summary'
   context: z.string().nullable().optional(),
   // For type='system'
@@ -264,6 +269,64 @@ export class ChatMessagesOps {
       const messages = await this.getMessages(chatId);
       return messages.length;
     }, 'Failed to get message count for chat', { chatId }, 0);
+  }
+
+  /**
+   * Delete a specific set of messages from a chat by ID. Returns the number
+   * of messages actually removed. Used by the per-character Librarian
+   * summary pipeline to sweep prior summary whispers when a fresh one is
+   * about to be posted.
+   */
+  async deleteMessagesByIds(chatId: string, messageIds: string[]): Promise<number> {
+    if (messageIds.length === 0) return 0;
+
+    return safeQuery(async () => {
+      const messagesCollection = await this.ctx.getMessagesCollection();
+      const now = this.ctx.getCurrentTimestamp();
+      let removed = 0;
+
+      if (this.ctx.isSQLiteBackend()) {
+        for (const messageId of messageIds) {
+          const result = await messagesCollection.deleteOne({ id: messageId, chatId } as QueryFilter);
+          // deleteOne may return either a count or a boolean depending on backend
+          if (typeof result === 'number') {
+            removed += result;
+          } else if (result) {
+            removed += 1;
+          }
+        }
+      } else {
+        // Legacy data compatibility: rewrite embedded messages array
+        const existing = await this.getMessages(chatId);
+        const idSet = new Set(messageIds);
+        const remaining = existing.filter(m => !idSet.has(m.id));
+        removed = existing.length - remaining.length;
+        if (removed > 0) {
+          await messagesCollection.updateOne(
+            { chatId } as QueryFilter,
+            {
+              $set: {
+                messages: remaining,
+                updatedAt: now,
+              },
+            } as any,
+          );
+        }
+      }
+
+      if (removed > 0) {
+        const chat = await this.ctx.findById(chatId);
+        if (chat) {
+          const allMessages = await this.getMessages(chatId);
+          await this.ctx.update(chatId, {
+            messageCount: this.countVisibleMessages(allMessages),
+          } as Partial<ChatMetadata>);
+        }
+        logger.info('Messages deleted from chat', { chatId, removed, requested: messageIds.length });
+      }
+
+      return removed;
+    }, 'Failed to delete messages from chat', { chatId, count: messageIds.length }, 0);
   }
 
   /**
