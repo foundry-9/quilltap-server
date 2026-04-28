@@ -113,10 +113,120 @@ export async function postProsperoConnectionProfileChangeAnnouncement(
 // `chatSettings.contextCompressionSettings.projectContextReinjectInterval`).
 // ---------------------------------------------------------------------------
 
+export interface ProsperoDocumentStoreInfo {
+  /** Mount-point UUID — usable as the `mount_point` argument to any `doc_*` tool. */
+  id: string;
+  /** Display name — also accepted as the `mount_point` argument. */
+  name: string;
+  /** Backing storage kind. */
+  mountType: 'filesystem' | 'obsidian' | 'database';
+  /** Content classification. 'character' marks character-vault stores. */
+  storeType: 'documents' | 'character';
+  /** True when this is the project's canonical "project-official" store (addressable via `scope: "project"`). */
+  isOfficial: boolean;
+  /** When false, the store is disabled and tools will reject calls against it. */
+  enabled: boolean;
+}
+
 export interface ProsperoProjectContext {
   name: string;
   description?: string | null;
   instructions?: string | null;
+  /** Document stores linked to the project (official store first, then alphabetical). */
+  documentStores?: ProsperoDocumentStoreInfo[];
+}
+
+/**
+ * Fetch the project plus its linked document stores into a single context
+ * object suitable for `postProsperoProjectContextAnnouncement`. Returns null
+ * when the project does not exist; returns an empty `documentStores` array
+ * when nothing is linked or the mount index lookup fails.
+ */
+export async function loadProsperoProjectContext(
+  projectId: string,
+): Promise<ProsperoProjectContext | null> {
+  const repos = getRepositories();
+  const project = await repos.projects.findById(projectId);
+  if (!project) return null;
+
+  const documentStores = await loadLinkedDocumentStores(
+    projectId,
+    project.officialMountPointId ?? null,
+  );
+
+  return {
+    name: project.name,
+    description: project.description,
+    instructions: project.instructions,
+    documentStores,
+  };
+}
+
+async function loadLinkedDocumentStores(
+  projectId: string,
+  officialMountPointId: string | null,
+): Promise<ProsperoDocumentStoreInfo[]> {
+  const repos = getRepositories();
+  try {
+    const links = await repos.projectDocMountLinks.findByProjectId(projectId);
+    if (!links.length) return [];
+
+    const stores: ProsperoDocumentStoreInfo[] = [];
+    for (const link of links) {
+      const mp = await repos.docMountPoints.findById(link.mountPointId);
+      if (!mp) continue;
+      stores.push({
+        id: mp.id,
+        name: mp.name,
+        mountType: mp.mountType,
+        storeType: mp.storeType ?? 'documents',
+        isOfficial: officialMountPointId !== null && officialMountPointId === mp.id,
+        enabled: mp.enabled,
+      });
+    }
+
+    stores.sort((a, b) => {
+      if (a.isOfficial !== b.isOfficial) return a.isOfficial ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    return stores;
+  } catch (error) {
+    logger.warn('[ProsperoNotification] Failed to load linked document stores', {
+      context: 'prospero-notifications',
+      projectId,
+      error: getErrorMessage(error),
+    });
+    return [];
+  }
+}
+
+function buildDocumentStoresSection(stores: ProsperoDocumentStoreInfo[]): string[] {
+  if (!stores.length) return [];
+
+  const lines: string[] = ['**Document stores linked to this project:**', ''];
+  for (const store of stores) {
+    const tags: string[] = [];
+    if (store.isOfficial) tags.push('official project store');
+    tags.push(`${store.mountType}-backed`);
+    if (store.storeType === 'character') tags.push('character vault');
+    if (!store.enabled) tags.push('currently disabled');
+    const tagSuffix = ` *(${tags.join('; ')})*`;
+
+    const safeName = store.name.replace(/`/g, '\\`');
+    const namedRef = `use \`mount_point: "${safeName}"\` (ID \`${store.id}\` also works)`;
+    const refHint = store.isOfficial
+      ? `pass \`scope: "project"\` to address it directly, or ${namedRef}`
+      : namedRef.charAt(0).toUpperCase() + namedRef.slice(1);
+
+    lines.push(`- **${store.name}**${tagSuffix} — ${refHint}.`);
+  }
+  lines.push('');
+  lines.push(
+    'Pass any of those names (or IDs) as the `mount_point` argument on `doc_*` tools, ' +
+      'or as `source_mount_point` / `dest_mount_point` on `doc_copy_file`. The `path` ' +
+      'argument is the file\'s relative path within the chosen store.',
+  );
+  return lines;
 }
 
 export function buildProjectContextContent(project: ProsperoProjectContext): string {
@@ -126,6 +236,7 @@ export function buildProjectContextContent(project: ProsperoProjectContext): str
   ];
   const description = project.description?.trim();
   const instructions = project.instructions?.trim();
+  const stores = project.documentStores ?? [];
 
   if (description) {
     lines.push('**Project description:**');
@@ -138,6 +249,11 @@ export function buildProjectContextContent(project: ProsperoProjectContext): str
     lines.push('**Project instructions:**');
     lines.push('');
     lines.push(instructions);
+  }
+
+  if (stores.length) {
+    if (description || instructions) lines.push('');
+    lines.push(...buildDocumentStoresSection(stores));
   }
 
   return lines.join('\n').trimEnd();
@@ -153,8 +269,9 @@ export async function postProsperoProjectContextAnnouncement(
 ): Promise<MessageEvent | null> {
   const description = params.project.description?.trim();
   const instructions = params.project.instructions?.trim();
-  if (!description && !instructions) {
-    logger.debug('[ProsperoNotification] No project description or instructions, skipping project-context whisper', {
+  const storeCount = params.project.documentStores?.length ?? 0;
+  if (!description && !instructions && storeCount === 0) {
+    logger.debug('[ProsperoNotification] Nothing to whisper for project-context (no description, instructions, or linked stores)', {
       context: 'prospero-notifications',
       chatId: params.chatId,
       projectName: params.project.name,
@@ -169,6 +286,7 @@ export async function postProsperoProjectContextAnnouncement(
     projectName: params.project.name,
     hasDescription: Boolean(description),
     hasInstructions: Boolean(instructions),
+    documentStoreCount: storeCount,
   });
   return postProsperoMessage(params.chatId, content, 'project-context');
 }

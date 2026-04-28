@@ -27,7 +27,10 @@ import {
   loadAndProcessFiles,
   buildMessageContext,
 } from './context-builder.service'
-import { postProsperoProjectContextAnnouncement } from '@/lib/services/prospero-notifications/writer'
+import {
+  loadProsperoProjectContext,
+  postProsperoProjectContextAnnouncement,
+} from '@/lib/services/prospero-notifications/writer'
 import {
   processToolCalls,
   saveToolMessages,
@@ -447,7 +450,7 @@ async function processMessage(
   // system-prompt builder is now unused; the system-prompt block was dropped
   // along with this rewire.
 
-  if (project && (project.description || project.instructions)) {
+  if (project) {
     const reinjectInterval = contextCompressionSettings.projectContextReinjectInterval ?? 5
     const messageCount = existingMessages.filter(m => m.type === 'message').length
 
@@ -456,16 +459,15 @@ async function processMessage(
     const shouldInject = reinjectInterval > 0 && messageCount > 0 && messageCount % reinjectInterval === 0
 
     if (shouldInject) {
-      const posted = await postProsperoProjectContextAnnouncement({
-        chatId,
-        project: {
-          name: project.name,
-          description: project.description,
-          instructions: project.instructions,
-        },
-      })
-      if (posted) {
-        existingMessages.push(posted)
+      const projectContext = await loadProsperoProjectContext(project.id)
+      if (projectContext) {
+        const posted = await postProsperoProjectContextAnnouncement({
+          chatId,
+          project: projectContext,
+        })
+        if (posted) {
+          existingMessages.push(posted)
+        }
       }
     }
   }

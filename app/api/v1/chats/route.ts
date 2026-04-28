@@ -51,7 +51,10 @@ import {
   postHostUserCharacterAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { postOpeningOutfitWhisper } from '@/lib/services/aurora-notifications/writer';
-import { postProsperoProjectContextAnnouncement } from '@/lib/services/prospero-notifications/writer';
+import {
+  loadProsperoProjectContext,
+  postProsperoProjectContextAnnouncement,
+} from '@/lib/services/prospero-notifications/writer';
 import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 
 type Repos = RepositoryContainer;
@@ -413,16 +416,9 @@ async function createInitialMessages(
   // the orchestrator.
   if (projectId) {
     try {
-      const project = await repos.projects.findById(projectId);
-      if (project && (project.description || project.instructions)) {
-        await postProsperoProjectContextAnnouncement({
-          chatId,
-          project: {
-            name: project.name,
-            description: project.description,
-            instructions: project.instructions,
-          },
-        });
+      const projectContext = await loadProsperoProjectContext(projectId);
+      if (projectContext) {
+        await postProsperoProjectContextAnnouncement({ chatId, project: projectContext });
       }
     } catch (error) {
       logger.warn('[Chats v1] Failed to post chat-start Prospero project-context whisper', {
