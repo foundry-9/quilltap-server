@@ -102,9 +102,13 @@ export function convertDatabaseToEncrypted(dbPath: string, pepper: string): void
     log.debug('Encrypting working copy via PRAGMA rekey');
     db.pragma(`rekey = "x'${keyHex}'"`);
 
-    // Switch back to WAL journal mode (now encrypted)
-    log.debug('Restoring WAL journal mode');
-    db.pragma('journal_mode = WAL');
+    // Leave the converted database in TRUNCATE journal mode. The next normal
+    // app open will re-apply whatever mode is currently configured (default
+    // TRUNCATE; WAL only when SQLITE_WAL_MODE=true), but TRUNCATE is the safe
+    // resting state since cloud-synced data directories don't tolerate WAL
+    // auxiliary files well.
+    log.debug('Setting TRUNCATE journal mode on converted database');
+    db.pragma('journal_mode = TRUNCATE');
 
     // Step 5: Close
     db.close();
