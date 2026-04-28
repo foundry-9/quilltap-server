@@ -14,7 +14,7 @@ This skill accepts an optional argument: `all`. When no argument is provided, it
    - Split the prerelease portion on `.` to get the label (e.g. `dev`) and the number (e.g. `71`).
    - The grep pattern is `{base}-{label}` — e.g. `3.3.0-dev`.
 4. Find all tags matching that pattern: `git tag | grep '{base}-{label}'`
-   - **Default mode (no argument):** If there are zero or one matching tags, there is nothing to clean up. Report that and stop. Otherwise, find the latest one — the tag with the largest integer after `-{label}`. For example, given `3.3.0-dev.21`, `3.3.0-dev.45`, and `3.3.0-dev.73`, the latest is `3.3.0-dev.73`.
+   - **Default mode (no argument):** If there are zero or one matching tags, there is nothing to clean up. Report that and stop. Otherwise, find the latest one — the tag with the largest integer after `-{label}`. For example, given `3.3.0-dev.21`, `3.3.0-dev.45`, and `3.3.0-dev.73`, the latest is `3.3.0-dev.73`. Previous bases - for example, if the base was `3.2.0-dev.222` - should also be included in the sweep; consider those a dev version to delete as well.
    - **`all` mode:** If there are zero matching tags, there is nothing to clean up. Report that and stop. There is no "latest" to keep — all matching tags will be removed.
 5. Clean up dev GitHub releases:
    - List the existing pre-release and draft releases with this: `gh release list --json name,tagName,createdAt,isPrerelease,isDraft --jq '[.[] | select(.isPrerelease or .isDraft)]'`
