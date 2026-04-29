@@ -180,6 +180,20 @@ export class OutfitPresetsRepository extends AbstractBaseRepository<OutfitPreset
   }
 
   /**
+   * Delete an outfit preset without firing `syncCharacterVaultWardrobe`.
+   * Symmetric with `createFromVault` and `WardrobeRepository.deleteRaw`:
+   * used by the vault-to-DB sync path when wholesale rebuilding the
+   * preset rows for a character.
+   */
+  async deleteRaw(id: string): Promise<boolean> {
+    return this.safeQuery(
+      () => this._delete(id),
+      'Error deleting outfit preset (raw)',
+      { outfitPresetId: id, context: 'wardrobe' }
+    );
+  }
+
+  /**
    * Remove a wardrobe item from all presets that reference it.
    * When a wardrobe item is deleted, any preset slot pointing to that item
    * is set to null so the preset remains valid.

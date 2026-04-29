@@ -354,4 +354,21 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
       { wardrobeItemId: id }
     );
   }
+
+  /**
+   * Delete a wardrobe item without firing `syncCharacterVaultWardrobe`.
+   * Symmetric with `createFromVault`: used by the vault-to-DB sync path
+   * (`sync-properties-from-vault`) which rebuilds the row set in a tight
+   * delete-then-recreate loop. The standard `delete` would let each
+   * iteration's post-write sync re-promote the just-deleted vault file
+   * back into the DB, leaving the table populated and causing the
+   * subsequent recreate to hit a UNIQUE constraint on `id`.
+   */
+  async deleteRaw(id: string): Promise<boolean> {
+    return this.safeQuery(
+      () => this._delete(id),
+      'Error deleting wardrobe item (raw)',
+      { wardrobeItemId: id }
+    );
+  }
 }

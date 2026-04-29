@@ -4,6 +4,11 @@
 
 ### 4.4-dev
 
+#### Fix: sync-properties-from-vault hits UNIQUE constraint on rebuild
+
+- The `sync-properties-from-vault` action on `/api/v1/characters/[id]` rebuilds wardrobe items and outfit presets by deleting all existing rows and reinserting from vault files. It was using `repos.wardrobe.delete` / `repos.outfitPresets.delete` and `.create`, every one of which awaits `syncCharacterVaultWardrobe` as a post-write side effect. That sync calls `ingestVaultOnlyWardrobeIntoDb`, which sees the just-deleted item still on disk and promotes it back into the DB before the next iteration runs. The table never empties, and the recreate phase fails with `UNIQUE constraint failed: wardrobe_items.id`.
+- Fix: added `deleteRaw` to `WardrobeRepository` and `OutfitPresetsRepository` (mirrors the existing `createFromVault` / `findByCharacterIdRaw` bypass methods) and switched the route handler at `app/api/v1/characters/[id]/route.ts` to use `deleteRaw` for the wipe and `createFromVault` for the rebuild. Both bypass the sync chain so the loop runs to completion without re-ingesting itself.
+
 #### Collapsible Staff-message bars in the Salon
 
 - **New `systemKind` field.** Added a string column on `chat_messages` (Zod field on `MessageEventSchema` and `ChatMessageRowSchema`) carrying a stable kebab-case sub-classification of any Staff-authored message — e.g. `timestamp`, `project-context`, `memory-recap`, `tool-run`. Migration: `migrations/scripts/add-system-kind-field.ts` (`add-system-kind-field-v1`). Every writer now persists a `systemKind`: Lantern (`avatar` / `background` / `character-image`), Aurora (`opening-outfit` / `outfit-change`), Librarian (`opened-by-user`, `saved`, `renamed`, `summary`, etc.), Concierge (`danger`), Prospero (`connection-profile-change`, `project-context`, `tool-run`), Host (`add` / `remove` / `status-change` / `scenario` / `roster` / `timestamp` / `silent-mode-enter` / `silent-mode-exit` / `user-character` / `join-scenario`), Commonplace Book (`memory-recap` / `relevant-memories` / `inter-character-memories` / `consolidated`). Tool-run TOOL rows from `actions/tools.ts` and `actions/run-tool.ts` get `systemKind: 'tool-run'`.

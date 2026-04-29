@@ -752,50 +752,39 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
         let wardrobePresetsWritten = 0;
         const wardrobeSynced = vaultWardrobe !== null;
         if (vaultWardrobe) {
+          // Use the *Raw / FromVault repo methods throughout: the standard
+          // `delete` and `create` paths fire `syncCharacterVaultWardrobe` as a
+          // post-write side effect, which calls back into
+          // `ingestVaultOnlyWardrobeIntoDb` and re-promotes the vault file we
+          // just deleted (or are about to insert). On a multi-item rebuild the
+          // table never empties and the recreate phase hits
+          // `UNIQUE constraint failed: wardrobe_items.id`.
           const existingItems = await repos.wardrobe.findByCharacterIdRaw(
             rawCharacter.id,
             true,
           );
           for (const item of existingItems) {
-            await repos.wardrobe.delete(item.id);
+            await repos.wardrobe.deleteRaw(item.id);
           }
           const existingPresets = await repos.outfitPresets.findByCharacterIdRaw(
             rawCharacter.id,
           );
           for (const preset of existingPresets) {
-            await repos.outfitPresets.delete(preset.id);
+            await repos.outfitPresets.deleteRaw(preset.id);
           }
 
           for (const item of vaultWardrobe.items) {
-            await repos.wardrobe.create(
-              {
-                characterId: rawCharacter.id,
-                title: item.title,
-                description: item.description ?? null,
-                types: item.types,
-                appropriateness: item.appropriateness ?? null,
-                isDefault: item.isDefault,
-                migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
-                archivedAt: item.archivedAt ?? null,
-              },
-              { id: item.id, createdAt: item.createdAt, updatedAt: item.updatedAt },
-            );
+            await repos.wardrobe.createFromVault({
+              ...item,
+              characterId: rawCharacter.id,
+            });
             wardrobeItemsWritten++;
           }
           for (const preset of vaultWardrobe.presets) {
-            await repos.outfitPresets.create(
-              {
-                characterId: rawCharacter.id,
-                name: preset.name,
-                description: preset.description ?? null,
-                slots: preset.slots,
-              },
-              {
-                id: preset.id,
-                createdAt: preset.createdAt,
-                updatedAt: preset.updatedAt,
-              },
-            );
+            await repos.outfitPresets.createFromVault({
+              ...preset,
+              characterId: rawCharacter.id,
+            });
             wardrobePresetsWritten++;
           }
         }
