@@ -107,6 +107,32 @@ describe('buildCharacterContext', () => {
     expect(result).toContain('Formal Wear')
     expect(result).toContain('A tailored suit')
   })
+
+  it('includes identity when set', () => {
+    const character = createMockCharacter({ identity: 'A renowned alchemist of the northern court.' })
+    const result = buildCharacterContext(character)
+    expect(result).toContain('Identity:')
+    expect(result).toContain('A renowned alchemist of the northern court.')
+  })
+
+  it('shows (empty) for identity when null', () => {
+    const character = createMockCharacter({ identity: null })
+    const result = buildCharacterContext(character)
+    expect(result).toContain('Identity:')
+    expect(result).toContain('(empty)')
+  })
+
+  it('identity section appears before description section', () => {
+    const character = createMockCharacter({
+      identity: 'Public persona.',
+      description: 'Observed behaviour.',
+    })
+    const result = buildCharacterContext(character)
+    const identityIdx = result.indexOf('Identity:')
+    const descriptionIdx = result.indexOf('Description:')
+    expect(identityIdx).toBeGreaterThanOrEqual(0)
+    expect(descriptionIdx).toBeGreaterThan(identityIdx)
+  })
 })
 
 describe('buildMemoryContext', () => {
@@ -189,6 +215,13 @@ describe('getAnalysisPrompt', () => {
     expect(result).toContain('Emotional tendencies')
     expect(result).toContain('Relationship dynamics')
   })
+
+  it('includes vantage-point field labels for IDENTITY, DESCRIPTION, PERSONALITY', () => {
+    const result = getAnalysisPrompt()
+    expect(result).toContain('IDENTITY')
+    expect(result).toContain('DESCRIPTION')
+    expect(result).toContain('PERSONALITY')
+  })
 })
 
 describe('per-item suggestion prompts', () => {
@@ -216,6 +249,20 @@ describe('per-item suggestion prompts', () => {
       expect(result).toContain('exampleDialogues')
       expect(result).toContain('talkativeness')
       expect(result).toContain('0.1 and 1.0')
+    })
+
+    it('includes identity in the list of editable general fields', () => {
+      const result = getGeneralFieldsSuggestionsPrompt(mockAnalysis)
+      expect(result).toContain('identity')
+    })
+
+    it('contains field-semantics preamble with vantage-point rules', () => {
+      const result = getGeneralFieldsSuggestionsPrompt(mockAnalysis)
+      // The preamble distinguishes identity, description, and personality by
+      // who is observing (stranger, acquaintance, self).
+      expect(result).toContain('IDENTITY')
+      expect(result).toContain('DESCRIPTION')
+      expect(result).toContain('PERSONALITY')
     })
 
     it('contains significance score guidance', () => {
