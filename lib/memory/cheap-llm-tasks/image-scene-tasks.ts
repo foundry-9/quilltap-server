@@ -634,7 +634,8 @@ Update the scene state based on these new messages:`,
     'scene-state-tracking',
     chatId,
     undefined,
-    uncensoredFallback
+    uncensoredFallback,
+    4000
   )
 }
 

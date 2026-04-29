@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: scene state tracking truncated at 1000 completion tokens
+
+- `updateSceneState` in `lib/memory/cheap-llm-tasks/image-scene-tasks.ts` was calling `executeCheapLLMTask` without a `maxTokens` argument, so it inherited the cheap-LLM default of 1000 in `core-execution.ts`. Scenes with several characters and a non-trivial location description ran out of room mid-JSON, causing parse failures. Now passes `maxTokens: 4000` explicitly.
+
 #### AI Wizard + Summon From Lore: vantage-point field semantics
 
 - **Shared preamble.** Extracted `FIELD_SEMANTICS_PREAMBLE` into `lib/services/character-field-semantics.ts` so the character optimizer, the AI Wizard, and Summon From Lore all instruct the LLM with the same identity / description / personality / title definitions. The optimizer now imports the constant from the shared module.
