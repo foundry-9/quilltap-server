@@ -8,6 +8,7 @@
  * Nine vault targets participate, each independently:
  *
  *   - properties.json          — pronouns, aliases, title, firstMessage, talkativeness
+ *   - identity.md              — character.identity
  *   - description.md           — character.description
  *   - personality.md           — character.personality
  *   - example-dialogues.md     — character.exampleDialogues
@@ -147,6 +148,7 @@ const LegacyVaultWardrobeJsonSchema = z.object({
  * Mirrors `populateVaultWithCharacterData()` in character-vault.ts.
  */
 export const CHARACTER_PROPERTIES_JSON_PATH = 'properties.json';
+export const CHARACTER_IDENTITY_MD_PATH = 'identity.md';
 export const CHARACTER_DESCRIPTION_MD_PATH = 'description.md';
 export const CHARACTER_PERSONALITY_MD_PATH = 'personality.md';
 export const CHARACTER_EXAMPLE_DIALOGUES_MD_PATH = 'example-dialogues.md';
@@ -160,6 +162,7 @@ export { CHARACTER_WARDROBE_FOLDER, CHARACTER_OUTFITS_FOLDER };
 
 const SINGLE_FILE_OVERLAY_PATHS = [
   CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_IDENTITY_MD_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_PERSONALITY_MD_PATH,
   CHARACTER_EXAMPLE_DIALOGUES_MD_PATH,
@@ -182,7 +185,7 @@ export type CharacterVaultDescriptor =
   | {
       kind: 'markdown';
       vaultPath: string;
-      field: 'description' | 'personality' | 'exampleDialogues';
+      field: 'identity' | 'description' | 'personality' | 'exampleDialogues';
     }
   | { kind: 'physical-md'; vaultPath: string }
   | { kind: 'physical-json'; vaultPath: string }
@@ -192,6 +195,7 @@ export type CharacterVaultDescriptor =
 
 export const CHARACTER_VAULT_DESCRIPTORS: readonly CharacterVaultDescriptor[] = [
   { kind: 'properties-json', vaultPath: CHARACTER_PROPERTIES_JSON_PATH },
+  { kind: 'markdown', vaultPath: CHARACTER_IDENTITY_MD_PATH, field: 'identity' },
   { kind: 'markdown', vaultPath: CHARACTER_DESCRIPTION_MD_PATH, field: 'description' },
   { kind: 'markdown', vaultPath: CHARACTER_PERSONALITY_MD_PATH, field: 'personality' },
   { kind: 'markdown', vaultPath: CHARACTER_EXAMPLE_DIALOGUES_MD_PATH, field: 'exampleDialogues' },
@@ -206,6 +210,7 @@ export const CHARACTER_VAULT_DESCRIPTORS: readonly CharacterVaultDescriptor[] = 
 // physicalDescriptions[0] — the write overlay only patches index 0 and leaves
 // the rest of the array untouched on the DB row.
 export const MANAGED_FIELDS: ReadonlySet<keyof Character> = new Set<keyof Character>([
+  'identity',
   'description',
   'personality',
   'exampleDialogues',
@@ -827,6 +832,7 @@ export async function applyDocumentStoreOverlay(
   }
 
   const propsByMount = contentByMountByPath.get(CHARACTER_PROPERTIES_JSON_PATH)!;
+  const idByMount = contentByMountByPath.get(CHARACTER_IDENTITY_MD_PATH)!;
   const descByMount = contentByMountByPath.get(CHARACTER_DESCRIPTION_MD_PATH)!;
   const persByMount = contentByMountByPath.get(CHARACTER_PERSONALITY_MD_PATH)!;
   const dialoguesByMount = contentByMountByPath.get(CHARACTER_EXAMPLE_DIALOGUES_MD_PATH)!;
@@ -838,6 +844,7 @@ export async function applyDocumentStoreOverlay(
     candidateCount: candidates.length,
     mountPointCount: mountPointIds.length,
     propertiesJsonFoundCount: propsByMount.size,
+    identityMdFoundCount: idByMount.size,
     descriptionMdFoundCount: descByMount.size,
     personalityMdFoundCount: persByMount.size,
     exampleDialoguesMdFoundCount: dialoguesByMount.size,
@@ -873,6 +880,12 @@ export async function applyDocumentStoreOverlay(
             : {}),
         };
       }
+    }
+
+    // identity.md
+    const idRaw = idByMount.get(mountId);
+    if (idRaw !== undefined) {
+      out = { ...out, identity: markdownToNullable(idRaw) };
     }
 
     // description.md
@@ -1003,6 +1016,17 @@ export async function readCharacterVaultProperties(
   const content = await readVaultTextFile(mountPointId, CHARACTER_PROPERTIES_JSON_PATH, characterId);
   if (content === null) return null;
   return parseVaultProperties(content, characterId ?? mountPointId);
+}
+
+/**
+ * Read the raw markdown content of identity.md. Returns null if missing or
+ * if the read fails; returns the empty string if the file exists but is empty.
+ */
+export async function readCharacterVaultIdentity(
+  mountPointId: string,
+  characterId?: string,
+): Promise<string | null> {
+  return readVaultTextFile(mountPointId, CHARACTER_IDENTITY_MD_PATH, characterId);
 }
 
 /**
@@ -1677,6 +1701,9 @@ export async function writeCharacterVaultManagedFields(
       2,
     ),
   );
+  result.singleFileWriteCount++;
+
+  await writeDatabaseDocument(mountPointId, CHARACTER_IDENTITY_MD_PATH, character.identity ?? '');
   result.singleFileWriteCount++;
 
   await writeDatabaseDocument(mountPointId, CHARACTER_DESCRIPTION_MD_PATH, character.description ?? '');

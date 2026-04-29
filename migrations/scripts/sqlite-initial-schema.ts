@@ -50,6 +50,7 @@ export const SQLITE_TABLES = [
       "userId" TEXT NOT NULL,
       "name" TEXT NOT NULL,
       "title" TEXT,
+      "identity" TEXT,
       "description" TEXT,
       "personality" TEXT,
       "scenario" TEXT,

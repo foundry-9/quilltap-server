@@ -55,22 +55,29 @@ The Details tab contains all basic character information.
 
 **Title**
 
-- Subtitle or role
-- Optional field
-- Examples: "The Wanderer", "Head Chef", "Royal Advisor"
+- Your private label for the character — your own framing, not a public title. Think "the protagonist", "the rival", "the one who keeps borrowing the cat"
+- Optional, never shown to other characters
+- Examples: "the love interest", "the antagonist", "Aunt Edith's troublesome ward"
+
+**Identity**
+
+- The shallow first impression — what a stranger could know on sight or by reputation. Name, station, occupation, public reputation, the signifying outward facts
+- Useful for someone considering whether to hail the character across a crowded room. Never private mannerisms, never inner motivation
+- Examples: "Detective Sarah Jones, of the Yard, known for closing unclosable cases"; "Old Tom the baker, three doors down, makes the best cinnamon buns in Whitechapel"
 
 **Description**
 
-- Main character narrative
-- Click to edit
-- Can be lengthy
-- Supports multiple paragraphs
+- How acquaintances perceive the character — behaviour, mannerisms, frequent verbal patterns. Things an interlocutor notices
+- NOT physical appearance — that lives under Physical Descriptions. NOT internal monologue — that lives under Personality
+- Click to edit. Can be lengthy and supports multiple paragraphs
+- Example: "Speaks slowly, weighs every word twice. Tends to drum two fingers on the table when stalling for time."
 
 **Personality**
 
-- Character traits and characteristics
-- Edit to refine how they're perceived
-- Example: Add "Recently developed anxiety" to existing description
+- What the character knows about themselves — the internal driver of their speech and behaviour. Other characters don't see it unless she shares it
+- Distinct from Description (outward) and Identity (public surface). This is the inner life
+- Edit to refine the engine room behind the curtain
+- Example: "Believes she's never deserved any of what's happened to her, and operates on a slow, simmering resentment she'd never admit to"
 
 **Scenarios**
 
@@ -106,8 +113,9 @@ Each character carries a private vault in the Scriptorium — a small database-b
 | Vault file | What it replaces |
 |---|---|
 | `properties.json` | **pronouns**, **aliases**, **title**, **first message**, **talkativeness** |
-| `description.md` | **Description** (the general prose field) |
-| `personality.md` | **Personality** (the behavioral prose field) |
+| `identity.md` | **Identity** (the surface, outside-view prose field) |
+| `description.md` | **Description** (the acquaintance-view prose field) |
+| `personality.md` | **Personality** (the inward, self-knowledge prose field) |
 | `example-dialogues.md` | **Example Dialogues** (style samples for the LLM) |
 | `physical-description.md` | The **Full Description** of the character's first (default) physical description |
 | `physical-prompts.json` | The **short / medium / long / complete** prompts of the first (default) physical description (JSON with `short`, `medium`, `long`, `complete` keys) |

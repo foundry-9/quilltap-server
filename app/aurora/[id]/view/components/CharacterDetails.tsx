@@ -84,6 +84,21 @@ export function CharacterDetails({
 
       {/* Main Content with Template Highlighting */}
       <div className="space-y-6">
+        {character?.identity && (
+          <div>
+            <h2 className="qt-heading-4 text-foreground mb-2">
+              Identity
+            </h2>
+            <div className="qt-text-small">
+              <TemplateDisplay
+                content={character.identity}
+                characterName={character.name}
+                userCharacterName={defaultPartnerName}
+              />
+            </div>
+          </div>
+        )}
+
         {character?.description && (
           <div>
             <h2 className="qt-heading-4 text-foreground mb-2">

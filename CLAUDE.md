@@ -134,6 +134,17 @@ Legacy routes outside `/api/v1/` were removed in v2.8. Only `/api/v1/` routes ar
 
 This project is spelled "Quilltap", as in "quill" + "tap", **NOT** "Quilttap", as in "quilt" + "tap". There is a linting rule to keep you from using that word. Please, please, never call anything in this system "quilttap" because that is **WRONG.**
 
+### Character field semantics
+
+Quilltap distinguishes four character fields by *vantage point*. They are not interchangeable; do not collapse them.
+
+- **identity** — the most surface-level knowledge of the character, from outside. What strangers can know on sight or by reputation: name, station, occupation, public reputation. Shallow but useful for someone considering whether to approach. Never internal motivation or private mannerisms.
+- **description** — what someone talking to (or acquainted with) the character perceives. NOT physical appearance (that lives in `physicalDescriptions`). Behaviour, mannerisms, frequent verbal patterns. What an interlocutor notices, but not the character's internal monologue.
+- **personality** — what the character knows about themselves. The internal driver of speech and behaviour. Other characters don't see this unless the character shares it.
+- **title** — the user's or character's own private label/framing for them (e.g. "the protagonist", "the rival"). Not how others refer to them; not in scope for the optimizer to edit.
+
+The character optimizer enforces these vantage points when proposing edits. When writing about a character field anywhere (UI placeholder, help docs, prompts), align with these definitions.
+
 ### Feature Names
 
 - **The Concierge** - the dangerous content tracking/rerouting/hiding system — merged into Chat tab at `/settings?tab=chat`

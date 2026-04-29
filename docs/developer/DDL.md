@@ -146,9 +146,10 @@ CREATE TABLE "characters" (
   "id" TEXT PRIMARY KEY,
   "userId" TEXT NOT NULL,
   "name" TEXT NOT NULL,
-  "title" TEXT,
-  "description" TEXT,
-  "personality" TEXT,
+  "title" TEXT,                           -- The user's or character's own private label/framing (e.g. "the protagonist", "the rival"). Not how others refer to them.
+  "identity" TEXT,                        -- Surface-level public-knowledge view: name, station, occupation, reputation. What strangers know on sight.
+  "description" TEXT,                     -- Acquaintance-perceivable behaviour, mannerisms, verbal patterns. NOT physical (see physicalDescriptions).
+  "personality" TEXT,                     -- The character's own self-knowledge — internal driver of speech and behaviour.
   "scenario" TEXT,                        -- DEPRECATED: use scenarios instead
   "scenarios" TEXT DEFAULT '[]',          -- JSON array of { id, title, content, createdAt, updatedAt }
   "firstMessage" TEXT,
@@ -182,7 +183,7 @@ CREATE TABLE "characters" (
   "canDressThemselves" INTEGER DEFAULT NULL,
   "canCreateOutfits" INTEGER DEFAULT NULL,
   "characterDocumentMountPointId" TEXT DEFAULT NULL,
-  "readPropertiesFromDocumentStore" INTEGER DEFAULT NULL,  -- when 1, pronouns/aliases/title/firstMessage/talkativeness are read from the linked vault's properties.json
+  "readPropertiesFromDocumentStore" INTEGER DEFAULT NULL,  -- when 1, pronouns/aliases/title/firstMessage/talkativeness are read from the linked vault's properties.json; identity/description/personality/exampleDialogues are read from their respective .md files
   "systemTransparency" INTEGER DEFAULT NULL  -- when 1 (true), this character may inspect "the Staff" — the chat-level toggles for self_inventory, Staff messages (Lantern/Aurora/Librarian/Prospero/Host), and character vaults still apply. When NULL or 0 (false), the character cannot see Staff messages, the self_inventory tool is withheld, and all character vaults (own + peers) are hidden from doc_* tools — a hard override on top of chat/project settings. Default NULL (opaque).
 );
 

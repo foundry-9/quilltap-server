@@ -213,6 +213,8 @@ import { addSystemKindFieldMigration } from './add-system-kind-field';
 import { alignAboutCharacterIdMigration } from './align-about-character-id';
 // Re-run aboutCharacterId alignment with the holder-dominance tiebreaker
 import { alignAboutCharacterIdV2Migration } from './align-about-character-id-v2';
+// Add identity field to characters table
+import { addCharacterIdentityFieldMigration } from './add-character-identity-field';
 
 /**
  * All available migrations.
@@ -421,6 +423,8 @@ export const migrations: Migration[] = [
   alignAboutCharacterIdMigration,
   // v2: re-run with the holder-dominance tiebreaker
   alignAboutCharacterIdV2Migration,
+  // Add identity field to characters table
+  addCharacterIdentityFieldMigration,
 ];
 
 export {
@@ -614,5 +618,7 @@ export {
   alignAboutCharacterIdMigration,
   // v2: re-run with the holder-dominance tiebreaker
   alignAboutCharacterIdV2Migration,
+  // Add identity field to characters table
+  addCharacterIdentityFieldMigration,
 };
 

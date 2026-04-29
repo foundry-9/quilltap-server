@@ -51,6 +51,7 @@ export interface GeneratedWardrobeItem {
 export interface GeneratedCharacterData {
   name?: string
   title?: string
+  identity?: string
   description?: string
   personality?: string
   scenarios?: Array<{ title: string; content: string }> | string  // string when LLM returns unparseable JSON
@@ -130,6 +131,7 @@ export interface AIWizardRequest {
   characterName: string
   existingData?: {
     title?: string
+    identity?: string
     description?: string
     personality?: string
     scenarios?: Array<{ id: string; title: string; content: string }>
@@ -161,6 +163,7 @@ export interface AIWizardModalProps {
   characterName: string
   currentData: {
     title?: string
+    identity?: string
     description?: string
     personality?: string
     scenarios?: Array<{ id: string; title: string; content: string }>

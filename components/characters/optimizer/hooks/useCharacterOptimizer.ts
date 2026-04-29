@@ -325,6 +325,7 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
 
         // Separate simple fields from array sub-item fields
         const simpleFields = [
+          'identity',
           'description',
           'personality',
           'exampleDialogues',

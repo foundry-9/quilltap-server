@@ -435,6 +435,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
         characterName={character?.name || ''}
         currentData={{
           title: formData.title,
+          identity: formData.identity,
           description: formData.description,
           personality: formData.personality,
           scenarios: formData.scenarios,

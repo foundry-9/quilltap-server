@@ -968,9 +968,9 @@ describe('applyDocumentStoreOverlay — batching', () => {
     ];
 
     const result = await applyDocumentStoreOverlay(chars);
-    // 6 single-file overlay paths: properties.json, description.md, personality.md,
-    // example-dialogues.md, physical-description.md, physical-prompts.json
-    expect(findManyByMountPointsAndPath).toHaveBeenCalledTimes(6);
+    // 7 single-file overlay paths: properties.json, identity.md, description.md,
+    // personality.md, example-dialogues.md, physical-description.md, physical-prompts.json
+    expect(findManyByMountPointsAndPath).toHaveBeenCalledTimes(7);
     // 2 directory overlays: Prompts, Scenarios
     expect(findManyByMountPointsInFolder).toHaveBeenCalledTimes(2);
     expect(result[0].title).toBe('vault-a');
@@ -1346,7 +1346,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     });
 
     expect(result.physicalSkippedNoPrimary).toBe(false);
-    expect(result.singleFileWriteCount).toBe(6);
+    expect(result.singleFileWriteCount).toBe(7);
 
     const props = JSON.parse(getWrite(CHARACTER_PROPERTIES_JSON_PATH)!);
     expect(props).toEqual({
@@ -1401,7 +1401,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
     });
 
     expect(result.physicalSkippedNoPrimary).toBe(true);
-    expect(result.singleFileWriteCount).toBe(4);
+    expect(result.singleFileWriteCount).toBe(5);
 
     const props = JSON.parse(getWrite(CHARACTER_PROPERTIES_JSON_PATH)!);
     expect(props).toEqual({

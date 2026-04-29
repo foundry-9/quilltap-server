@@ -273,6 +273,7 @@
         "userId": { "$ref": "#/$defs/UUID" },
         "name": { "type": "string" },
         "title": { "type": "string" },
+        "identity": { "type": "string" },
         "description": { "type": "string" },
         "personality": { "type": "string" },
         "scenario": { "type": "string" },

@@ -57,7 +57,7 @@ The optimizer works through three stages, each reported with an animated progres
 
 The progress bar shows three segments — one per stage — that fill as each proceeds. An elapsed timer counts up below. When filters narrow the results, you'll see a message such as "142 memoirs matched; top 30 selected for analysis."
 
-During **Generating**, the optimizer makes *one focused pass per subject* rather than pooling everything into a single verdict. Each of the character's existing scenarios is considered on its own terms, as is each existing system prompt; a separate pass handles the general fields (description, personality, example dialogues, talkativeness), and a final pass asks whether any genuinely new scenarios or system prompts are warranted by the patterns the memoirs reveal. The modal shows a sub-step label such as "Scenario 2 of 5 — Tea Room" so you can see which subject is currently under consideration. This is more thorough (and, in candour, more costly in model calls) than a single sweeping pass, but it means per-scenario quirks are no longer averaged out across siblings.
+During **Generating**, the optimizer makes *one focused pass per subject* rather than pooling everything into a single verdict. Each of the character's existing scenarios is considered on its own terms, as is each existing system prompt; a separate pass handles the general fields (identity, description, personality, example dialogues, talkativeness), and a final pass asks whether any genuinely new scenarios or system prompts are warranted by the patterns the memoirs reveal. The modal shows a sub-step label such as "Scenario 2 of 5 — Tea Room" so you can see which subject is currently under consideration. This is more thorough (and, in candour, more costly in model calls) than a single sweeping pass, but it means per-scenario quirks are no longer averaged out across siblings.
 
 When the analysis completes, you'll see a summary of the behavioural patterns discovered.
 
@@ -101,16 +101,23 @@ Nothing is applied to the character in this mode — the dossier exists for the 
 
 The optimizer may propose changes to:
 
-- **Description** — The character's general description
-- **Personality** — Behavioral traits and interaction style
-- **Scenarios** — The optimizer may suggest updates to the content of existing named scenarios where the established description no longer reflects how the character actually behaves in that context, or propose an entirely new scenario with a title and content if the memories reveal a recurring setting not yet catalogued
+- **Identity** — The surface, public-knowledge view of the character: name, station, occupation, reputation. What strangers know on sight or by hearsay.
+- **Description** — How acquaintances perceive the character: behaviour, mannerisms, frequent verbal patterns. Not physical appearance, not internal monologue.
+- **Personality** — The character's own self-knowledge: the internal driver of speech and behaviour. Not visible to others unless shared.
+- **Scenarios** — Updates to the content of existing named scenarios where the established description no longer reflects how the character actually behaves in that context, or an entirely new scenario with a title and content if the memories reveal a recurring setting not yet catalogued
 - **Example Dialogues** — Sample conversations demonstrating voice
 - **System Prompts** — Individual named system prompts (modified, not created)
 - **Physical Descriptions** — Appearance descriptions at various detail levels
 - **Clothing Records** — Outfit and attire descriptions
 - **Talkativeness** — The character's verbosity setting
 
-The optimizer will **not** touch names, aliases, pronouns, first messages, or other structural fields.
+The optimizer will **not** touch names, aliases, pronouns, titles, first messages, or other structural fields.
+
+The optimizer enforces these vantage points strictly: it will not, for instance, slip a private mannerism into Identity, nor put public reputation into Personality. Each suggestion is sorted into the field whose vantage point matches the underlying memory.
+
+## What Counts as "About This Character"
+
+The optimizer only learns from memories *about the character themselves* — self-knowledge stored in their Commonplace Book. Memories the character holds about other participants (the user, other characters in a scene) are excluded, because letting another person's habits seep into a behavioural-pattern analysis would distort the character's own portrait. The strict cut also excludes a small legacy pile of unattributed memories from older Quilltap versions; if you find your candidate count surprisingly low, that may be why.
 
 ## Tips for Best Results
 

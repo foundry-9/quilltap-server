@@ -107,8 +107,33 @@ export const CharacterSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
   name: z.string(),
+  /**
+   * The user's or character's own private label/framing for this character —
+   * a tag like "the love interest", "the rival", "the protagonist". Not visible
+   * to other characters and not how strangers refer to them. Distinct from
+   * `identity` (public-facing) and `description` (acquaintance-facing).
+   */
   title: z.string().nullable().optional(),
+  /**
+   * The most surface-level knowledge of the character, from outside. What
+   * strangers can know on sight or by reputation — name, station, occupation,
+   * public reputation. Shallow but useful for someone considering whether to
+   * approach. Does NOT include private mannerisms, behaviour, or self-knowledge.
+   */
+  identity: z.string().nullable().optional(),
+  /**
+   * What someone talking to (or acquainted with) the character perceives. NOT
+   * physical appearance — that lives in `physicalDescriptions`. Behaviour,
+   * mannerisms, frequent verbal patterns. Things an interlocutor notices, but
+   * not the character's internal monologue or self-knowledge.
+   */
   description: z.string().nullable().optional(),
+  /**
+   * What the character knows about themselves. The internal driver of speech
+   * and behaviour. Other characters don't see this unless the character shares
+   * it. Distinct from `description` (outward-facing behaviour) and `identity`
+   * (public-facing surface knowledge).
+   */
   personality: z.string().nullable().optional(),
   scenarios: z.array(CharacterScenarioSchema).default([]),  // Named scenarios array
   firstMessage: z.string().nullable().optional(),

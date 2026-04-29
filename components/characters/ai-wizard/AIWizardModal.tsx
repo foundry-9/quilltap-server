@@ -22,6 +22,7 @@ interface AIWizardModalProps {
   characterName: string
   currentData: {
     title?: string
+    identity?: string
     description?: string
     personality?: string
     scenarios?: Array<{ id: string; title: string; content: string }>

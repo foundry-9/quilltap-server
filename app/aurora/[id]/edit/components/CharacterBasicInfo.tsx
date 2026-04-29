@@ -347,7 +347,23 @@ export function CharacterBasicInfo({
           value={formData.title}
           onChange={onChange}
           className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="e.g., Student, Teacher, Narrator"
+          placeholder="Your private label for this character — e.g., the protagonist, the rival, the love interest. Not how strangers refer to them."
+        />
+      </div>
+
+      {/* Identity Field */}
+      <div>
+        <label htmlFor="identity" className="block qt-text-label mb-2">
+          Identity (Optional)
+        </label>
+        <textarea
+          id="identity"
+          name="identity"
+          value={formData.identity}
+          onChange={onChange}
+          rows={3}
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          placeholder="What strangers know about the character on sight or by reputation — name, station, occupation, public reputation. The shallow first impression."
         />
       </div>
 
@@ -363,7 +379,7 @@ export function CharacterBasicInfo({
           onChange={onChange}
           rows={4}
           className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="Describe the character's appearance, background, and key traits"
+          placeholder="How acquaintances perceive the character — behaviour, mannerisms, verbal patterns. Not physical appearance."
         />
       </div>
 
@@ -379,7 +395,7 @@ export function CharacterBasicInfo({
           onChange={onChange}
           rows={4}
           className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          placeholder="Describe the character's personality traits and behavioral patterns"
+          placeholder="What the character knows about themselves. The internal driver of speech and behaviour. Other characters don't see it unless shared."
         />
       </div>
 

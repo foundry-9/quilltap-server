@@ -14,6 +14,7 @@ export interface Character {
   id: string
   name: string
   title?: string | null
+  identity?: string | null
   description?: string | null
   personality?: string | null
   scenarios?: CharacterScenario[]
@@ -41,6 +42,7 @@ export interface CharacterFormData {
   aliases: string[]
   pronouns: { subject: string; object: string; possessive: string } | null
   title: string
+  identity: string
   description: string
   personality: string
   scenarios: CharacterScenario[]

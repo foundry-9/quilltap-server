@@ -110,7 +110,7 @@ async function populateVaultWithCharacterData(
 ): Promise<void> {
   const repos = getRepositories();
 
-  await writeDatabaseDocument(mountPointId, 'identity.md', renderIdentityMarkdown(character));
+  await writeDatabaseDocument(mountPointId, 'identity.md', character.identity ?? '');
   await writeDatabaseDocument(mountPointId, 'description.md', character.description ?? '');
   await writeDatabaseDocument(mountPointId, 'personality.md', character.personality ?? '');
 
@@ -198,30 +198,6 @@ async function populateVaultWithCharacterData(
       content: buildScenarioFile(s),
     }),
   );
-}
-
-function renderIdentityMarkdown(c: Character): string {
-  const lines: string[] = [];
-  lines.push(`# ${c.name}`);
-  lines.push('');
-
-  const pronounSummary = c.pronouns
-    ? `${c.pronouns.subject}/${c.pronouns.object}/${c.pronouns.possessive}`
-    : null;
-  const headerBits = [pronounSummary, c.title].filter(
-    (bit): bit is string => typeof bit === 'string' && bit.length > 0,
-  );
-  if (headerBits.length > 0) {
-    lines.push(`_${headerBits.join(' — ')}_`);
-    lines.push('');
-  }
-
-  if (c.aliases && c.aliases.length > 0) {
-    lines.push(`**Aliases:** ${c.aliases.join(', ')}`);
-    lines.push('');
-  }
-
-  return lines.join('\n');
 }
 
 export function renderPhysicalPromptsJson(primary: PhysicalDescription | undefined): string {
