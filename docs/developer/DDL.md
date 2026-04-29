@@ -690,6 +690,14 @@ CREATE INDEX "idx_memories_createdAt" ON "memories" ("createdAt" DESC);
 CREATE INDEX "idx_memories_projectId" ON "memories" ("projectId");
 ```
 
+`aboutCharacterId` semantics: the character the memory is *about*. Three buckets are valid:
+
+- `aboutCharacterId === characterId` — self-referential memory (the holder's own knowledge of themselves; produced by the character-extraction pass in `lib/memory/memory-processor.ts`).
+- `aboutCharacterId !== characterId` — inter-character memory (the holder remembers something about another character — including a user-controlled persona, in which case `characters.controlledBy === 'user'` for the about-target).
+- `aboutCharacterId IS NULL` — legacy / ambiguous. New auto-extracted memories should not produce nulls; the `align-about-character-id-v1` migration (v4.4.0) backfilled existing nulls per the name-presence rule.
+
+`createMemoryWithGate` (the chokepoint for AUTO writes) applies a name-presence safety net before insert: when `aboutCharacterId` differs from the holder, the about-character's `name + aliases` (plus `user` / `the user` for `controlledBy: 'user'` characters) must appear in `summary + content`; otherwise `aboutCharacterId` is collapsed to the holder. Manual memories bypass the safety net.
+
 ### prompt_templates
 
 ```sql

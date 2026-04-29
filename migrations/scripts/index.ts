@@ -209,6 +209,10 @@ import { addCompiledIdentityStacksFieldMigration } from './add-compiled-identity
 import { addHostEventFieldMigration } from './add-host-event-field';
 // Add systemKind column to chat_messages (Salon collapsed-bar labels)
 import { addSystemKindFieldMigration } from './add-system-kind-field';
+// Backfill memories.aboutCharacterId via name-presence heuristic
+import { alignAboutCharacterIdMigration } from './align-about-character-id';
+// Re-run aboutCharacterId alignment with the holder-dominance tiebreaker
+import { alignAboutCharacterIdV2Migration } from './align-about-character-id-v2';
 
 /**
  * All available migrations.
@@ -413,6 +417,10 @@ export const migrations: Migration[] = [
   addHostEventFieldMigration,
   // Add systemKind column to chat_messages (Salon collapsed-bar labels)
   addSystemKindFieldMigration,
+  // Backfill memories.aboutCharacterId via name-presence heuristic
+  alignAboutCharacterIdMigration,
+  // v2: re-run with the holder-dominance tiebreaker
+  alignAboutCharacterIdV2Migration,
 ];
 
 export {
@@ -602,5 +610,9 @@ export {
   addHostEventFieldMigration,
   // Add systemKind column to chat_messages (Salon collapsed-bar labels)
   addSystemKindFieldMigration,
+  // Backfill memories.aboutCharacterId via name-presence heuristic
+  alignAboutCharacterIdMigration,
+  // v2: re-run with the holder-dominance tiebreaker
+  alignAboutCharacterIdV2Migration,
 };
 

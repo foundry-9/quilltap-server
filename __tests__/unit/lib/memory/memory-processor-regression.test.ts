@@ -29,6 +29,13 @@ jest.mock('@/lib/memory/memory-service', () => ({
   createMemoryWithGate: jest.fn(),
 }))
 
+// Pulled in transitively by memory-processor for the no-user-character whisper.
+// Mock at the module level so we don't drag in the entire host-notifications
+// stack (which depends on the database, repositories, etc.).
+jest.mock('@/lib/services/host-notifications/writer', () => ({
+  postHostNoUserCharacterAnnouncement: jest.fn().mockResolvedValue(null),
+}))
+
 const { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } = jest.requireMock('@/lib/llm/cheap-llm') as {
   getCheapLLMProvider: jest.Mock
   resolveUncensoredCheapLLMSelection: jest.Mock
@@ -60,6 +67,10 @@ const baseContext = {
   sourceMessageId: 'msg-1',
   sourceMessageTimestamp: '2026-04-01T12:34:56.000Z',
   userId: 'user-1',
+  // User-controlled character must be set so the user-memory extraction pass
+  // is allowed to fire; without it the pipeline now skips that pass entirely
+  // (and the regression test scenarios exercise both passes).
+  userCharacterId: 'user-char-1',
   connectionProfile: {
     id: 'profile-1',
     provider: 'OPENAI',
@@ -315,6 +326,90 @@ describe('processMessageForMemory regressions', () => {
     expect(result.success).toBe(true)
     // Extraction proceeded (createMemoryWithGate got called) even though "maxPerHour" is 1
     expect(mockCreateMemoryWithGate).toHaveBeenCalled()
+  })
+
+  it('skips USER memory extraction when no user-controlled character is attached', async () => {
+    // userCharacterId omitted → user-memory extraction must be bypassed entirely;
+    // only the character (self) extraction pass is allowed to fire.
+    const ctxNoUser = {
+      ...baseContext,
+      userCharacterId: undefined,
+    }
+    mockExtractCharacterMemoryFromMessage.mockResolvedValue({
+      success: true,
+      result: [
+        { significant: true, content: 'Avery feels protective.', summary: 'Avery is protective', keywords: [], importance: 0.6 },
+      ],
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    } as any)
+
+    const result = await processMessageForMemory(ctxNoUser)
+
+    expect(result.success).toBe(true)
+    expect(mockExtractMemoryFromMessage).not.toHaveBeenCalled()
+    expect(mockExtractCharacterMemoryFromMessage).toHaveBeenCalledTimes(1)
+    expect(result.debugLogs?.join('\n')).toContain('Skipped USER memory extraction')
+    // Self-memory pass goes through createMemoryWithGate with aboutCharacterId === characterId
+    expect(mockCreateMemoryWithGate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        characterId: 'char-1',
+        aboutCharacterId: 'char-1',
+      }),
+      { userId: 'user-1' },
+    )
+  })
+
+  it('character (self) extraction pass writes aboutCharacterId = characterId, not the user', async () => {
+    mockExtractMemoryFromMessage.mockResolvedValue({
+      success: true,
+      result: [],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    } as any)
+    mockExtractCharacterMemoryFromMessage.mockResolvedValue({
+      success: true,
+      result: [
+        { significant: true, content: 'Avery is steady in storms.', summary: 'Avery is steady', keywords: [], importance: 0.7 },
+      ],
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    } as any)
+
+    await processMessageForMemory(baseContext)
+
+    // The self-memory pass is what we changed — verify it now passes
+    // aboutCharacterId === characterId (self-reference) rather than the
+    // userCharacterId fallback the legacy helper used.
+    expect(mockCreateMemoryWithGate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        characterId: 'char-1',
+        aboutCharacterId: 'char-1',
+      }),
+      { userId: 'user-1' },
+    )
+  })
+
+  it('user extraction pass writes aboutCharacterId = userCharacterId', async () => {
+    mockExtractMemoryFromMessage.mockResolvedValue({
+      success: true,
+      result: [
+        { significant: true, content: 'User likes jazz.', summary: 'User likes jazz', keywords: ['jazz'], importance: 0.6 },
+      ],
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    } as any)
+    mockExtractCharacterMemoryFromMessage.mockResolvedValue({
+      success: true,
+      result: [],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    } as any)
+
+    await processMessageForMemory(baseContext)
+
+    expect(mockCreateMemoryWithGate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        characterId: 'char-1',
+        aboutCharacterId: 'user-char-1',
+      }),
+      { userId: 'user-1' },
+    )
   })
 
   it('SKIP_EMBEDDING_FAILED does not add an ID and surfaces the failure in debug logs', async () => {

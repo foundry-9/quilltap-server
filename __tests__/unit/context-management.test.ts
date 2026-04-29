@@ -460,7 +460,10 @@ describe('Context Manager', () => {
     it('should format memories with header', () => {
       const { content } = formatMemoriesForContext(mockMemories, 1000, 'OPENAI')
       expect(content).toContain('## Relevant Memories')
-      expect(content).toContain('prefers coffee')
+      // Whisper lines now carry the full memory.content (not summary), so we
+      // assert against the content body — "User likes coffee" — rather than
+      // the summary text.
+      expect(content).toContain('User likes coffee')
     })
 
     it('should return empty for no memories', () => {

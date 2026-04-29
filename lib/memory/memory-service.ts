@@ -20,6 +20,7 @@ import {
 import { calculateEffectiveWeight } from './memory-weighting'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
+import { resolveAboutCharacterId } from './about-character-resolution'
 export type { MemoryGateOutcome } from './memory-gate'
 
 /** Fraction of the per-character cap at which auto-housekeeping engages. */
@@ -86,6 +87,59 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
       characterId,
       error: error instanceof Error ? error.message : String(error),
     })
+  }
+}
+
+/**
+ * If the caller supplied an aboutCharacterId that points to someone other
+ * than the holder, verify that character's name or aliases actually appears
+ * in the memory text. If not, collapse aboutCharacterId to the holder so the
+ * memory is recorded as self-referential. Manual creations and inter-character
+ * memories where the subject is named in the text pass through unchanged.
+ */
+async function applyNamePresenceCheck(data: CreateMemoryOptions): Promise<CreateMemoryOptions> {
+  const proposed = data.aboutCharacterId
+  if (!proposed || proposed === data.characterId) {
+    return data
+  }
+  // Only second-guess AUTO-extracted attributions; MANUAL memories carry the
+  // user's deliberate choice of about-target and should pass through unchanged.
+  if (data.source && data.source !== 'AUTO') {
+    return data
+  }
+  try {
+    const repos = getRepositories()
+    const [aboutChar, holderChar] = await Promise.all([
+      repos.characters.findById(proposed),
+      repos.characters.findById(data.characterId),
+    ])
+    const text = `${data.summary || ''}\n${data.content || ''}`
+    const resolution = resolveAboutCharacterId({
+      holderCharacterId: data.characterId,
+      holderCharacter: holderChar ? { name: holderChar.name, aliases: holderChar.aliases } : null,
+      proposedAboutCharacterId: proposed,
+      proposedAboutCharacter: aboutChar
+        ? { name: aboutChar.name, aliases: aboutChar.aliases, controlledBy: aboutChar.controlledBy }
+        : null,
+      text,
+    })
+    if (resolution.flipped) {
+      logger.debug('[Memory] Name-presence flip: collapsed aboutCharacterId to holder (self-reference)', {
+        holderCharacterId: data.characterId,
+        proposedAboutCharacterId: proposed,
+        proposedAboutName: aboutChar?.name,
+      })
+      return { ...data, aboutCharacterId: data.characterId }
+    }
+    return data
+  } catch (error) {
+    // Never block a memory write on the safety-net lookup
+    logger.warn('[Memory] Name-presence check failed; using proposed aboutCharacterId unchanged', {
+      holderCharacterId: data.characterId,
+      proposedAboutCharacterId: proposed,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return data
   }
 }
 
@@ -177,6 +231,12 @@ export async function createMemoryWithGate(
   options: MemoryServiceOptions
 ): Promise<MemoryGateOutcome> {
   const repos = getRepositories()
+
+  // Name-presence safety net: if the caller proposes a non-self aboutCharacterId
+  // but that character's name (or aliases, or generic user aliases for user-
+  // controlled characters) doesn't appear in the memory text, the LLM almost
+  // certainly mis-attributed. Collapse to a self-reference on the holder.
+  data = await applyNamePresenceCheck(data)
 
   // If gate or embedding is skipped, use the direct creation flow
   if (options.skipGate || options.skipEmbedding) {

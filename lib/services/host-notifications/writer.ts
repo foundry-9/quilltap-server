@@ -496,3 +496,70 @@ export async function postHostTimestampAnnouncement(
     null,
   );
 }
+
+// ---------------------------------------------------------------------------
+// "No user character attached" advisory whisper.
+//
+// The auto-memory pipeline emits this whisper the first time it encounters a
+// chat with no resolvable user-controlled character. It is idempotent — once
+// posted, subsequent calls in the same chat are no-ops — so it appears at most
+// once per chat regardless of how many turns proceed in that state.
+// ---------------------------------------------------------------------------
+
+const HOST_KIND_NO_USER_CHARACTER = 'no-user-character';
+
+function buildNoUserCharacterContent(): string {
+  return [
+    'The Host clears their throat with the gentlest of coughs.',
+    '',
+    'No user-controlled character has been attached to this conversation, so the Commonplace Book cannot record what your characters come to know about *you* — only what they come to know about themselves.',
+    '',
+    'To begin gathering memories about the user, attach (or create) a user-controlled character via the Participants sidebar.',
+  ].join('\n');
+}
+
+export interface HostNoUserCharacterAnnouncement {
+  chatId: string;
+}
+
+/**
+ * Post the "no user-character attached" whisper, but only if no such whisper
+ * has already been posted to this chat. Designed to be called from the auto-
+ * memory pipeline, which fires once per turn — without this idempotence guard
+ * the chat would fill up with duplicates.
+ */
+export async function postHostNoUserCharacterAnnouncement(
+  params: HostNoUserCharacterAnnouncement,
+): Promise<MessageEvent | null> {
+  try {
+    const repos = getRepositories();
+    const chat = await repos.chats.findById(params.chatId);
+    if (!chat) return null;
+
+    const messages = (chat as { messages?: unknown[] }).messages ?? [];
+    const alreadyPosted = messages.some((m) => {
+      if (!m || typeof m !== 'object') return false;
+      const msg = m as { type?: unknown; systemSender?: unknown; systemKind?: unknown };
+      return (
+        msg.type === 'message' &&
+        msg.systemSender === 'host' &&
+        msg.systemKind === HOST_KIND_NO_USER_CHARACTER
+      );
+    });
+    if (alreadyPosted) return null;
+
+    return postHostMessageWithTargets(
+      params.chatId,
+      buildNoUserCharacterContent(),
+      HOST_KIND_NO_USER_CHARACTER,
+      null,
+    );
+  } catch (error) {
+    logger.warn('[HostNotification] No-user-character whisper skipped (non-fatal)', {
+      context: 'host-notifications',
+      chatId: params.chatId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}

@@ -81,9 +81,12 @@ export function formatMemoriesForContext(
   const now = new Date()
 
   for (const { memory, score, weight } of sortedMemories) {
-    // Use summary with relative age label for temporal context
+    // Use full content (not summary) so the whisper carries the same nuance the
+    // model formed at extraction time. Summary is the cache-friendly form for
+    // recap LLM inputs, but the per-line whisper has the budget for the body.
     const age = formatRelativeAge(memory, now)
-    const memoryLine = `- [${age}] ${memory.summary}`
+    const body = memory.content?.trim() || memory.summary
+    const memoryLine = `- [${age}] ${body}`
     const lineTokens = estimateTokens(memoryLine + '\n', provider)
 
     if (currentTokens + lineTokens > maxTokens) {
@@ -152,7 +155,8 @@ export function formatInterCharacterMemoriesForContext(
     const now = new Date()
     for (const { memory } of sortedMemories) {
       const age = formatRelativeAge(memory, now)
-      const memoryLine = `- About ${characterName}: [${age}] ${memory.summary}`
+      const body = memory.content?.trim() || memory.summary
+      const memoryLine = `- About ${characterName}: [${age}] ${body}`
       const lineTokens = estimateTokens(memoryLine + '\n', provider)
 
       if (currentTokens + lineTokens > maxTokens) {

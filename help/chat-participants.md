@@ -217,6 +217,8 @@ Whenever a character is added to the chat, removed from it, or switched between 
 
 Characters whose **System Transparency** is off do not see the Host's messages — the same Staff-filter rule that already hides Lantern, Aurora, Librarian, and Prospero announcements from opaque characters applies here too. You always see them.
 
+The Host also issues a one-time advisory whisper when a chat has no user-controlled character attached. Without one, the auto-memory pipeline cannot record what your characters come to know about *you* — only what they come to know about themselves — so the Host gently nudges you toward attaching or creating a user persona. The whisper appears at most once per chat; once acted upon (or once a user-controlled character has been added), it does not return.
+
 ### Announcements from Prospero
 
 When you reassign a participant to a different connection profile from the sidebar — swapping the LLM that drives a particular character — Prospero, master of the agentic and tool-using systems, steps forward and announces the change so the rest of the room is in on the news. The note records the participant's name, the new profile, and the one it replaced. Like the Host's announcements, Prospero's messages are filtered out of the conversation handed to characters whose **System Transparency** is off; you always see them.

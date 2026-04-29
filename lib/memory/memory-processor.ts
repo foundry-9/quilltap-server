@@ -17,6 +17,24 @@ import { createMemoryWithGate } from './memory-service'
 import type { MemoryGateOutcome } from './memory-gate'
 import { logger } from '@/lib/logger'
 import { formatNameWithPronouns } from './format-utils'
+import { postHostNoUserCharacterAnnouncement } from '@/lib/services/host-notifications/writer'
+
+/**
+ * Fire-and-forget Host whisper for chats with no user-controlled character.
+ * The whisper itself is idempotent (no duplicates per chat); this wrapper
+ * guards against the host-notification call ever bubbling up and breaking
+ * the memory-extraction pipeline.
+ */
+async function emitNoUserCharacterWhisper(chatId: string): Promise<void> {
+  try {
+    await postHostNoUserCharacterAnnouncement({ chatId })
+  } catch (error) {
+    logger.warn('[Memory] No-user-character whisper failed (non-fatal)', {
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
 
 /**
  * Resolve the per-extraction rate-limit state for a character.
@@ -238,17 +256,54 @@ function buildExtractionContext(ctx: MemoryExtractionContext): string {
 }
 
 /**
- * Creates a memory from an extraction candidate using the Memory Gate.
- * Returns the full gate outcome (action, novel details, related IDs).
+ * Creates a memory ABOUT THE USER from an extraction candidate using the
+ * Memory Gate. The gate's name-presence safety net may still collapse this
+ * to a self-reference if the user-character's name (or generic "user"
+ * aliases) doesn't appear in the text.
+ *
+ * Caller must ensure `ctx.userCharacterId` is set before invoking this
+ * helper — when no user-character has been resolved for the chat, the
+ * user-memory extraction pass is skipped entirely (we don't fabricate a
+ * `null`-targeted memory).
  */
-async function createMemoryFromCandidate(
+async function createUserMemoryFromCandidate(
   ctx: MemoryExtractionContext,
   candidate: MemoryCandidate
 ): Promise<MemoryGateOutcome> {
   return createMemoryWithGate(
     {
       characterId: ctx.characterId,
-      aboutCharacterId: ctx.userCharacterId || null,
+      aboutCharacterId: ctx.userCharacterId!,
+      chatId: ctx.chatId,
+      content: candidate.content || '',
+      summary: candidate.summary || '',
+      keywords: candidate.keywords || [],
+      importance: candidate.importance || 0.5,
+      source: 'AUTO',
+      sourceMessageId: ctx.sourceMessageId,
+      sourceMessageTimestamp: ctx.sourceMessageTimestamp,
+      tags: [],
+    },
+    {
+      userId: ctx.userId,
+    }
+  )
+}
+
+/**
+ * Creates a SELF-REFERENTIAL memory (the character about themselves) from
+ * an extraction candidate using the Memory Gate. `aboutCharacterId` is set
+ * to the holder character's id so these memories surface as the character's
+ * own self-knowledge, not as observations of the user.
+ */
+async function createSelfMemoryFromCandidate(
+  ctx: MemoryExtractionContext,
+  candidate: MemoryCandidate
+): Promise<MemoryGateOutcome> {
+  return createMemoryWithGate(
+    {
+      characterId: ctx.characterId,
+      aboutCharacterId: ctx.characterId,
       chatId: ctx.chatId,
       content: candidate.content || '',
       summary: candidate.summary || '',
@@ -360,21 +415,40 @@ export async function processMessageForMemory(
     // Resolve max tokens for the cheap LLM profile to determine memory limits
     const cheapMaxTokens = resolveMaxTokens(ctx.connectionProfile)
 
-    // Extract memories for both user and character
+    // Extract memories for both user and character. The user-memory pass is
+    // skipped entirely when no user-controlled character has been resolved
+    // for the chat — we will not fabricate a memory targeted at a phantom
+    // user (that's how the legacy null-aboutCharacterId pile got built up).
+    const skipUserExtraction = !ctx.userCharacterId
+    if (skipUserExtraction) {
+      debugLogs.push(
+        `[Memory] Skipped USER memory extraction for ${ctx.characterName} — ` +
+        `no user-controlled character is attached to this chat. Ask the operator ` +
+        `to add or create a user persona to start collecting memories about them.`
+      )
+      logger.warn(
+        '[Memory] No user-character resolved for chat; skipping user-memory extraction pass',
+        { characterId: ctx.characterId, chatId: ctx.chatId, userId: ctx.userId }
+      )
+      void emitNoUserCharacterWhisper(ctx.chatId)
+    }
+
     const [userMemoryResult, characterMemoryResult] = await Promise.all([
-      extractMemoryFromMessage(
-        ctx.userMessage,
-        ctx.assistantMessage,
-        extractionContext,
-        ctx.characterName,
-        ctx.userCharacterName,
-        selection,
-        ctx.userId,
-        uncensoredFallback,
-        ctx.chatId,
-        ctx.characterPronouns,
-        cheapMaxTokens
-      ),
+      skipUserExtraction
+        ? Promise.resolve({ success: true as const, result: [] as MemoryCandidate[], usage: undefined })
+        : extractMemoryFromMessage(
+          ctx.userMessage,
+          ctx.assistantMessage,
+          extractionContext,
+          ctx.characterName,
+          ctx.userCharacterName,
+          selection,
+          ctx.userId,
+          uncensoredFallback,
+          ctx.chatId,
+          ctx.characterPronouns,
+          cheapMaxTokens
+        ),
       extractCharacterMemoryFromMessage(
         ctx.userMessage,
         ctx.assistantMessage,
@@ -420,7 +494,7 @@ export async function processMessageForMemory(
 
       if (userCandidates.length > 0) {
         for (const candidate of userCandidates) {
-          const outcome = await createMemoryFromCandidate(ctx, candidate)
+          const outcome = await createUserMemoryFromCandidate(ctx, candidate)
 
           switch (outcome.action) {
             case 'SKIP_NEAR_DUPLICATE': {
@@ -511,7 +585,7 @@ export async function processMessageForMemory(
 
       if (charCandidates.length > 0) {
         for (const candidate of charCandidates) {
-          const outcome = await createMemoryFromCandidate(ctx, candidate)
+          const outcome = await createSelfMemoryFromCandidate(ctx, candidate)
 
           switch (outcome.action) {
             case 'SKIP_NEAR_DUPLICATE': {

@@ -78,17 +78,30 @@ Pipeline:
    Settings shape: `MemoryExtractionLimits` in `lib/schemas/settings.types.ts` (`enabled`, `maxPerHour`, `softCap`, `throttleFloor`). Currently API-only — no UI card.
 
 2. **Candidate generation** (two parallel cheap-LLM calls via `Promise.all`):
-   - `extractMemoryFromMessage()` — memories the character forms about the user
-   - `extractCharacterMemoryFromMessage()` — memories about the character's own experiences
+   - `extractMemoryFromMessage()` — memories the character forms about the user. **Skipped entirely** when `ctx.userCharacterId` is missing (no user-controlled character resolved); a one-time Host whisper (`systemKind: 'no-user-character'`) is posted to the chat from `postHostNoUserCharacterAnnouncement` to prompt the operator. This avoids the legacy null-attribution pile.
+   - `extractCharacterMemoryFromMessage()` — memories about the character's own experiences (self-referential)
    - For multi-character: `extractInterCharacterMemoryFromMessage()` also runs
 
    Candidate cap per call = `Math.ceil(maxTokens / 8000)` (previously `/4000` — halved in `b8f0d201`).
 
-3. **Per-candidate write path** — each candidate flows through `createMemoryWithGate()` in `lib/memory/memory-service.ts`, which invokes the Memory Gate (see §4.1).
+3. **Per-branch write helpers** in `memory-processor.ts` (replacing the legacy single `createMemoryFromCandidate` that wrote `aboutCharacterId: ctx.userCharacterId || null` for *both* branches):
+   - `createUserMemoryFromCandidate()` — `aboutCharacterId = ctx.userCharacterId`
+   - `createSelfMemoryFromCandidate()` — `aboutCharacterId = ctx.characterId` (true self-reference)
 
-### 2.3 Manual creation
+   Both flow into `createMemoryWithGate()` in `lib/memory/memory-service.ts`, which then invokes the Memory Gate (see §4.1).
 
-`POST /api/v1/memories` (and per-character routes) call `createMemoryWithEmbedding()` or `createMemoryWithGate()` with `source: 'MANUAL'`. Manual memories **bypass the gate's skip decisions** in housekeeping — `source === 'MANUAL'` is a hard override against deletion.
+### 2.3 Name-presence safety net (v1) + holder-dominance tiebreaker (v2)
+
+`createMemoryWithGate()` calls `applyNamePresenceCheck()` before insert. For AUTO memories with a non-self `aboutCharacterId`, it loads both the holder and the about-character and runs `resolveAboutCharacterId()` from `lib/memory/about-character-resolution.ts`. The resolver applies two rules:
+
+1. **Presence (v1):** the about-character's name + aliases (plus generic `user` / `the user` for `controlledBy: 'user'` characters) must appear in `summary + content`. Absent → flip to holder.
+2. **Dominance (v2):** when both holder and about-character are named, count word-boundary hits for each. If the holder is mentioned **strictly more often**, flip to holder. Ties go to the about-character (Q3 policy). Holder names exclude `user`/`the user` so generic aliases only count toward the about-character side.
+
+Manual memories (`source !== 'AUTO'`) bypass the safety net so explicit operator attributions are honoured. The shared helpers (`namesForAboutCharacter`, `namesForHolder`, `nameAppears`, `countNameOccurrences`, `resolveAboutCharacterId`) back both migrations (`align-about-character-id-v1` and `-v2`), so runtime and backfill apply identical rules.
+
+### 2.4 Manual creation
+
+`POST /api/v1/memories` (and per-character routes) call `createMemoryWithEmbedding()` or `createMemoryWithGate()` with `source: 'MANUAL'`. Manual memories **bypass the gate's skip decisions** in housekeeping — `source === 'MANUAL'` is a hard override against deletion — and they bypass the name-presence safety net so the operator's explicit attribution is preserved.
 
 ---
 
