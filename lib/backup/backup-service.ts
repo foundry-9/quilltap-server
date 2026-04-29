@@ -12,6 +12,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { promisify } from 'util';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
@@ -237,11 +239,42 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
 }
 
 /**
- * Writes a JSON file to the staging directory
+ * Writes a JSON file to the staging directory.
+ * Use only for small objects (e.g. the manifest); use writeJsonArrayFile for
+ * potentially large arrays so the encoded string never exceeds V8's max-string limit.
  */
 async function writeJsonFile(filePath: string, data: unknown): Promise<void> {
   await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
   await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+}
+
+/**
+ * Streams an array to disk as pretty-printed JSON, encoding one element at a time.
+ *
+ * Why: JSON.stringify returns a single string, and V8 caps strings at ~512 MB. With
+ * full-history llm_logs and chat_messages, the combined backup payload can exceed
+ * that limit and throw `RangeError: Invalid string length`. Streaming keeps each
+ * stringify call bounded to one row.
+ */
+async function writeJsonArrayFile<T>(filePath: string, items: readonly T[]): Promise<void> {
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  const out = fs.createWriteStream(filePath, { encoding: 'utf8' });
+
+  async function* chunks(): AsyncGenerator<string> {
+    if (items.length === 0) {
+      yield '[]\n';
+      return;
+    }
+    yield '[\n';
+    for (let i = 0; i < items.length; i++) {
+      const json = JSON.stringify(items[i], null, 2);
+      const indented = json.split('\n').map((line) => '  ' + line).join('\n');
+      yield i === items.length - 1 ? indented + '\n' : indented + ',\n';
+    }
+    yield ']\n';
+  }
+
+  await pipeline(Readable.from(chunks()), out);
 }
 
 /**
@@ -300,27 +333,29 @@ export async function createBackup(userId: string): Promise<{
     // Create staging directory structure
     await fs.promises.mkdir(path.join(stagingDir, 'data'), { recursive: true });
 
-    // Write data files sequentially to limit memory pressure
-    await writeJsonFile(path.join(stagingDir, 'data', 'characters.json'), data.characters);
-    await writeJsonFile(path.join(stagingDir, 'data', 'chats.json'), data.chats);
-    await writeJsonFile(path.join(stagingDir, 'data', 'tags.json'), data.tags);
-    await writeJsonFile(path.join(stagingDir, 'data', 'connection-profiles.json'), data.connectionProfiles);
-    await writeJsonFile(path.join(stagingDir, 'data', 'image-profiles.json'), data.imageProfiles);
-    await writeJsonFile(path.join(stagingDir, 'data', 'embedding-profiles.json'), data.embeddingProfiles);
-    await writeJsonFile(path.join(stagingDir, 'data', 'memories.json'), data.memories);
-    await writeJsonFile(path.join(stagingDir, 'data', 'files.json'), data.files);
-    await writeJsonFile(path.join(stagingDir, 'data', 'prompt-templates.json'), data.promptTemplates);
-    await writeJsonFile(path.join(stagingDir, 'data', 'roleplay-templates.json'), data.roleplayTemplates);
-    await writeJsonFile(path.join(stagingDir, 'data', 'provider-models.json'), data.providerModels);
-    await writeJsonFile(path.join(stagingDir, 'data', 'projects.json'), data.projects);
-    await writeJsonFile(path.join(stagingDir, 'data', 'llm-logs.json'), data.llmLogs);
-    await writeJsonFile(path.join(stagingDir, 'data', 'plugin-configs.json'), data.pluginConfigs || []);
-    await writeJsonFile(path.join(stagingDir, 'data', 'chat-settings.json'), data.chatSettings || []);
-    await writeJsonFile(path.join(stagingDir, 'data', 'folders.json'), data.folders || []);
-    await writeJsonFile(path.join(stagingDir, 'data', 'wardrobe-items.json'), data.wardrobeItems || []);
-    await writeJsonFile(path.join(stagingDir, 'data', 'outfit-presets.json'), data.outfitPresets || []);
-    await writeJsonFile(path.join(stagingDir, 'data', 'character-plugin-data.json'), data.characterPluginData || []);
-    await writeJsonFile(path.join(stagingDir, 'data', 'conversation-annotations.json'), data.conversationAnnotations || []);
+    // Write data files sequentially, streaming each array element to disk so the
+    // encoded payload (especially llm_logs and chat_messages) never exceeds V8's
+    // ~512 MB max-string limit.
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'characters.json'), data.characters);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'chats.json'), data.chats);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'tags.json'), data.tags);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'connection-profiles.json'), data.connectionProfiles);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'image-profiles.json'), data.imageProfiles);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'embedding-profiles.json'), data.embeddingProfiles);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'memories.json'), data.memories);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'files.json'), data.files);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'prompt-templates.json'), data.promptTemplates);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'roleplay-templates.json'), data.roleplayTemplates);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'provider-models.json'), data.providerModels);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'projects.json'), data.projects);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'llm-logs.json'), data.llmLogs);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'plugin-configs.json'), data.pluginConfigs || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'chat-settings.json'), data.chatSettings || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'folders.json'), data.folders || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'wardrobe-items.json'), data.wardrobeItems || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'outfit-presets.json'), data.outfitPresets || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'character-plugin-data.json'), data.characterPluginData || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'conversation-annotations.json'), data.conversationAnnotations || []);
 
     moduleLogger.debug('Wrote all JSON data files to staging directory');
 

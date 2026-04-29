@@ -4,6 +4,13 @@
 
 ### 4.4-dev
 
+#### Fix: backup + restore failed with "Invalid string length" on large instances
+
+- **Root cause (write side).** `writeJsonFile` in `lib/backup/backup-service.ts` called `JSON.stringify(data, null, 2)`, which returns a single string. With ~17k LLM-log rows totalling ~720 MB of `request`/`response` text, the encoded string exceeded V8's ~512 MB max-string limit and threw `RangeError: Invalid string length`. The route returned a generic 500 and the client logged `Backup creation failed {}`.
+- **Fix (write side).** Added `writeJsonArrayFile` that streams the array to disk via `Readable.from` + `pipeline`, encoding one element at a time so each `JSON.stringify` call stays bounded. All twenty data-array writes now use it; `writeJsonFile` is reserved for the small manifest. Output format is byte-identical to the previous pretty-printed JSON.
+- **Root cause (read side).** `readJsonFile` in `lib/backup/restore-service.ts` did `fs.readFile(path, 'utf8')` followed by `JSON.parse(content)`. Both steps materialize the whole file as one string, so a large `llm-logs.json` would throw `ERR_STRING_TOO_LONG` before parsing even started — making backups created on large instances impossible to import.
+- **Fix (read side).** Added `readJsonArrayFile`, a JSON-aware streaming scanner that reads the file in 1 MB chunks, tracks string/escape state and brace/bracket depth to find top-level element boundaries, and `JSON.parse`s one element at a time. Per-element memory stays bounded by individual row size (a few MB at most). All twenty data-array reads in `parseBackupZip` route through it (with a `readJsonArrayFileOptional` variant for back-compat optional files); `readJsonFile` is kept for the manifest. Smoke-checked against escaped quotes, `}`/`]` inside strings, nested objects, unicode, and multi-MB elements crossing chunk boundaries.
+
 #### Inter-character memory fetch: SQLite ranks and caps each partition
 
 - **Window function instead of unbounded fetch.** `MemoriesRepository.findByCharacterAboutCharacters` (`lib/database/repositories/memories.repository.ts`) now takes a required `limitPerCharacter` and runs a `ROW_NUMBER() OVER (PARTITION BY aboutCharacterId ORDER BY importance DESC, COALESCE(lastReinforcedAt, createdAt) DESC)` CTE through `rawQuery`. Each partition is ranked and capped server-side, so we decode a bounded number of rows per about-character instead of every matching memory. Hand-hydration handles the JSON-encoded array columns (`keywords`, `tags`, `relatedMemoryIds`) since the rawQuery path bypasses `SQLiteCollection.find`. The `embedding` BLOB rides through `MemorySchema.safeParse` directly.

@@ -110,11 +110,124 @@ async function extractZipToTemp(zipPath: string): Promise<{ extractDir: string; 
 /**
  * Reads and parses a JSON file from the extracted backup directory.
  * Returns the parsed data or throws if the file is required but missing.
+ *
+ * Use only for small documents (e.g. the manifest); use readJsonArrayFile for
+ * potentially large arrays so we never load the whole file into a single string.
  */
 async function readJsonFile<T>(basePath: string, relativePath: string): Promise<T> {
   const filePath = path.join(basePath, relativePath);
   const content = await fs.promises.readFile(filePath, 'utf8');
   return JSON.parse(content) as T;
+}
+
+/**
+ * Streams a JSON-array file from disk, parsing one element at a time.
+ *
+ * Why: `fs.readFile(..., 'utf8')` and `JSON.parse` both materialize the entire
+ * payload as a single string, and V8 caps strings at ~512 MB. With full-history
+ * llm_logs the encoded array can exceed that limit, so a naive read throws
+ * `ERR_STRING_TOO_LONG` or `RangeError: Invalid string length`.
+ *
+ * The scanner is JSON-aware (tracks string/escape state and brace/bracket depth)
+ * and assumes top-level elements are objects or arrays — which matches every array
+ * we write in `backup-service.ts`. It does not support top-level scalar elements.
+ *
+ * The resulting array still lives in memory; only the wire-format string is
+ * avoided. Per-element memory is bounded by individual row size (a few MB at most
+ * for our largest llm_logs entries).
+ */
+async function readJsonArrayFile<T>(basePath: string, relativePath: string): Promise<T[]> {
+  const filePath = path.join(basePath, relativePath);
+  const stream = fs.createReadStream(filePath, { encoding: 'utf8', highWaterMark: 1 << 20 });
+
+  const result: T[] = [];
+  let started = false;
+  let finished = false;
+  let inElement = false;
+  let elementBuf = '';
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  const isWs = (c: string) => c === ' ' || c === '\t' || c === '\n' || c === '\r';
+
+  for await (const chunk of stream as AsyncIterable<string>) {
+    for (let i = 0; i < chunk.length; i++) {
+      const c = chunk[i];
+
+      if (!started) {
+        if (c === '[') {
+          started = true;
+        } else if (!isWs(c)) {
+          throw new Error(`readJsonArrayFile: expected '[' at start of ${relativePath}, got ${JSON.stringify(c)}`);
+        }
+        continue;
+      }
+
+      if (finished) {
+        if (!isWs(c)) {
+          throw new Error(`readJsonArrayFile: unexpected character after array end in ${relativePath}: ${JSON.stringify(c)}`);
+        }
+        continue;
+      }
+
+      if (inElement) {
+        elementBuf += c;
+
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (inString) {
+          if (c === '\\') escape = true;
+          else if (c === '"') inString = false;
+          continue;
+        }
+        if (c === '"') {
+          inString = true;
+          continue;
+        }
+        if (c === '{' || c === '[') {
+          depth++;
+          continue;
+        }
+        if (c === '}' || c === ']') {
+          depth--;
+          if (depth === 0) {
+            result.push(JSON.parse(elementBuf) as T);
+            elementBuf = '';
+            inElement = false;
+          }
+        }
+        continue;
+      }
+
+      // Between elements: look for next element start or array close.
+      if (c === ']') {
+        finished = true;
+        continue;
+      }
+      if (c === ',' || isWs(c)) continue;
+
+      if (c !== '{' && c !== '[') {
+        throw new Error(
+          `readJsonArrayFile: only object/array elements supported at top level (${relativePath}), got ${JSON.stringify(c)}`
+        );
+      }
+      inElement = true;
+      elementBuf = c;
+      depth = 1;
+    }
+  }
+
+  if (!started) {
+    throw new Error(`readJsonArrayFile: empty file or no array in ${relativePath}`);
+  }
+  if (!finished) {
+    throw new Error(`readJsonArrayFile: unexpected end of input in ${relativePath}`);
+  }
+
+  return result;
 }
 
 /**
@@ -129,6 +242,24 @@ async function readJsonFileOptional<T>(basePath: string, relativePath: string, f
 }
 
 /**
+ * Streaming variant of readJsonFileOptional for arrays. Returns the fallback if
+ * the file is missing or unreadable; surfaces parse errors otherwise.
+ */
+async function readJsonArrayFileOptional<T>(
+  basePath: string,
+  relativePath: string,
+  fallback: T[]
+): Promise<T[]> {
+  const filePath = path.join(basePath, relativePath);
+  try {
+    await fs.promises.access(filePath);
+  } catch {
+    return fallback;
+  }
+  return readJsonArrayFile<T>(basePath, relativePath);
+}
+
+/**
  * Parses a backup ZIP file by extracting to disk and reading JSON data files.
  *
  * @param zipPath - Path to the backup ZIP file on disk
@@ -139,37 +270,38 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
   const rootPath = rootFolder ? path.join(extractDir, rootFolder) : extractDir;
 
   try {
-    // Read all data files from disk
+    // Read all data files from disk. Arrays go through readJsonArrayFile so a
+    // multi-hundred-MB llm-logs.json doesn't blow past V8's max-string limit.
     const manifest = await readJsonFile<BackupManifest>(rootPath, 'manifest.json');
-    const characters = await readJsonFile<Character[]>(rootPath, 'data/characters.json');
-    const chats = await readJsonFile<ChatWithMessages[]>(rootPath, 'data/chats.json');
-    const tags = await readJsonFile<Tag[]>(rootPath, 'data/tags.json');
-    const connectionProfiles = await readJsonFile<ConnectionProfile[]>(rootPath, 'data/connection-profiles.json');
-    const imageProfiles = await readJsonFile<ImageProfile[]>(rootPath, 'data/image-profiles.json');
-    const embeddingProfiles = await readJsonFile<EmbeddingProfile[]>(rootPath, 'data/embedding-profiles.json');
-    const memories = await readJsonFile<Memory[]>(rootPath, 'data/memories.json');
-    const files = await readJsonFile<FileEntry[]>(rootPath, 'data/files.json');
+    const characters = await readJsonArrayFile<Character>(rootPath, 'data/characters.json');
+    const chats = await readJsonArrayFile<ChatWithMessages>(rootPath, 'data/chats.json');
+    const tags = await readJsonArrayFile<Tag>(rootPath, 'data/tags.json');
+    const connectionProfiles = await readJsonArrayFile<ConnectionProfile>(rootPath, 'data/connection-profiles.json');
+    const imageProfiles = await readJsonArrayFile<ImageProfile>(rootPath, 'data/image-profiles.json');
+    const embeddingProfiles = await readJsonArrayFile<EmbeddingProfile>(rootPath, 'data/embedding-profiles.json');
+    const memories = await readJsonArrayFile<Memory>(rootPath, 'data/memories.json');
+    const files = await readJsonArrayFile<FileEntry>(rootPath, 'data/files.json');
     // Templates are optional for backwards compatibility with older backups
-    const promptTemplates = await readJsonFileOptional<PromptTemplate[]>(rootPath, 'data/prompt-templates.json', []);
-    const roleplayTemplates = await readJsonFileOptional<RoleplayTemplate[]>(rootPath, 'data/roleplay-templates.json', []);
+    const promptTemplates = await readJsonArrayFileOptional<PromptTemplate>(rootPath, 'data/prompt-templates.json', []);
+    const roleplayTemplates = await readJsonArrayFileOptional<RoleplayTemplate>(rootPath, 'data/roleplay-templates.json', []);
     // Provider models are optional for backwards compatibility with older backups
-    const providerModels = await readJsonFileOptional<ProviderModel[]>(rootPath, 'data/provider-models.json', []);
+    const providerModels = await readJsonArrayFileOptional<ProviderModel>(rootPath, 'data/provider-models.json', []);
     // Projects are optional for backwards compatibility with older backups
-    const projects = await readJsonFileOptional<Project[]>(rootPath, 'data/projects.json', []);
+    const projects = await readJsonArrayFileOptional<Project>(rootPath, 'data/projects.json', []);
     // LLM logs are optional for backwards compatibility with older backups
-    const llmLogs = await readJsonFileOptional<LLMLog[]>(rootPath, 'data/llm-logs.json', []);
+    const llmLogs = await readJsonArrayFileOptional<LLMLog>(rootPath, 'data/llm-logs.json', []);
     // Plugin configs are optional for backwards compatibility with older backups
-    const pluginConfigs = await readJsonFileOptional<PluginConfig[]>(rootPath, 'data/plugin-configs.json', []);
+    const pluginConfigs = await readJsonArrayFileOptional<PluginConfig>(rootPath, 'data/plugin-configs.json', []);
     // Chat settings are optional for backwards compatibility with older backups
-    const chatSettings = await readJsonFileOptional<ChatSettings[]>(rootPath, 'data/chat-settings.json', []);
+    const chatSettings = await readJsonArrayFileOptional<ChatSettings>(rootPath, 'data/chat-settings.json', []);
     // Folders are optional for backwards compatibility with older backups
-    const folders = await readJsonFileOptional<Folder[]>(rootPath, 'data/folders.json', []);
+    const folders = await readJsonArrayFileOptional<Folder>(rootPath, 'data/folders.json', []);
     // Wardrobe items and outfit presets are optional for backwards compatibility
-    const wardrobeItems = await readJsonFileOptional<WardrobeItem[]>(rootPath, 'data/wardrobe-items.json', []);
-    const outfitPresets = await readJsonFileOptional<OutfitPreset[]>(rootPath, 'data/outfit-presets.json', []);
+    const wardrobeItems = await readJsonArrayFileOptional<WardrobeItem>(rootPath, 'data/wardrobe-items.json', []);
+    const outfitPresets = await readJsonArrayFileOptional<OutfitPreset>(rootPath, 'data/outfit-presets.json', []);
     // Character plugin data and conversation annotations are optional for backwards compatibility
-    const characterPluginData = await readJsonFileOptional<CharacterPluginData[]>(rootPath, 'data/character-plugin-data.json', []);
-    const conversationAnnotations = await readJsonFileOptional<ConversationAnnotation[]>(rootPath, 'data/conversation-annotations.json', []);
+    const characterPluginData = await readJsonArrayFileOptional<CharacterPluginData>(rootPath, 'data/character-plugin-data.json', []);
+    const conversationAnnotations = await readJsonArrayFileOptional<ConversationAnnotation>(rootPath, 'data/conversation-annotations.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
