@@ -152,6 +152,9 @@ async function postHostMessage(
       createdAt: now,
       participantId: null,
       systemSender: 'host',
+      // Strip transition detail from status-change kindLabel so the persisted column
+      // carries a stable bucket label ("status-change") rather than "status:active->silent".
+      systemKind: kindLabel.startsWith('status:') ? 'status-change' : kindLabel,
       hostEvent,
     };
 
@@ -344,6 +347,11 @@ async function postHostMessageWithTargets(
       createdAt: now,
       participantId: null,
       systemSender: 'host',
+      // Normalise silent-mode kindLabels ("silent-mode:enter"/"silent-mode:exit")
+      // to the column-friendly form used by the Salon collapsed-bar UI.
+      systemKind: kindLabel.startsWith('silent-mode:')
+        ? `silent-mode-${kindLabel.split(':')[1]}`
+        : kindLabel,
       targetParticipantIds: targetParticipantIds && targetParticipantIds.length > 0 ? targetParticipantIds : null,
     };
 

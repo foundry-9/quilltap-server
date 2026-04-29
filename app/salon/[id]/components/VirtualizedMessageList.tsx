@@ -23,6 +23,10 @@ interface VirtualizedMessageListProps {
   editingMessageId: string | null
   editContent: string
   viewSourceMessageIds: Set<string>
+  /** IDs of system-author messages that the user has explicitly expanded */
+  expandedSystemMessageIds: Set<string>
+  /** Toggle expansion state for a system-author message */
+  onToggleSystemMessageExpanded: (messageId: string) => void
   swipeStates: Record<string, SwipeState>
   setSwipeStates: React.Dispatch<React.SetStateAction<Record<string, SwipeState>>>
   // Appearance
@@ -100,6 +104,8 @@ export function VirtualizedMessageList({
   editingMessageId,
   editContent,
   viewSourceMessageIds,
+  expandedSystemMessageIds,
+  onToggleSystemMessageExpanded,
   swipeStates,
   setSwipeStates,
   chatSettings,
@@ -236,6 +242,10 @@ export function VirtualizedMessageList({
                   isEditing={isEditing}
                   editContent={editContent}
                   viewSourceMessageIds={viewSourceMessageIds}
+                  isSystemMessageCollapsed={
+                    !!message.systemSender && !expandedSystemMessageIds.has(message.id)
+                  }
+                  onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
                   swipeState={swipeState}
                   showResendButton={showResendButton}
                   shouldShowAvatars={shouldShowAvatars()}

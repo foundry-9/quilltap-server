@@ -89,6 +89,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
   const [viewSourceMessageIds, setViewSourceMessageIds] = useState<Set<string>>(new Set())
+  const [expandedSystemMessageIds, setExpandedSystemMessageIds] = useState<Set<string>>(new Set())
+  const toggleSystemMessageExpanded = useCallback((messageId: string) => {
+    setExpandedSystemMessageIds(prev => {
+      const next = new Set(prev)
+      if (next.has(messageId)) {
+        next.delete(messageId)
+      } else {
+        next.add(messageId)
+      }
+      return next
+    })
+  }, [])
   const [roleplayTemplateName, setRoleplayTemplateName] = useState<string | null>(null)
   const [roleplayRenderingPatterns, setRoleplayRenderingPatterns] = useState<RenderingPattern[] | undefined>(undefined)
   const [roleplayDialogueDetection, setRoleplayDialogueDetection] = useState<DialogueDetection | null | undefined>(undefined)
@@ -1106,6 +1118,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           editingMessageId={editingMessageId}
           editContent={editContent}
           viewSourceMessageIds={viewSourceMessageIds}
+          expandedSystemMessageIds={expandedSystemMessageIds}
+          onToggleSystemMessageExpanded={toggleSystemMessageExpanded}
           swipeStates={swipeStates}
           setSwipeStates={setSwipeStates}
           chatSettings={chatSettings}

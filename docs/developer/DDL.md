@@ -454,7 +454,8 @@ CREATE TABLE "chat_messages" (
   "targetParticipantIds" TEXT DEFAULT NULL,
   "isSilentMessage" INTEGER DEFAULT NULL,
   "systemSender" TEXT DEFAULT NULL,
-  "hostEvent" TEXT DEFAULT NULL
+  "hostEvent" TEXT DEFAULT NULL,
+  "systemKind" TEXT DEFAULT NULL
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");

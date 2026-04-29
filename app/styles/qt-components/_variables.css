@@ -285,6 +285,13 @@
   --qt-chat-wardrobe-border: #c4a24e;
   --qt-chat-wardrobe-label-fg: #9a7d2e;
 
+  /* Chat: System-message collapsed bar — thin one-line summary for Staff-authored messages */
+  --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 70%, var(--color-muted) 30%);
+  --qt-chat-system-bar-fg: var(--color-muted-foreground);
+  --qt-chat-system-bar-border: var(--color-border);
+  --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, var(--color-muted) 45%);
+  --qt-chat-system-bar-sender-fg: var(--color-foreground);
+
   --qt-chat-composer-bg: var(--color-background);
   --qt-chat-composer-border: var(--color-border);
   --qt-chat-composer-radius: var(--radius-lg);
@@ -696,6 +703,10 @@
   --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #8a6d1b 40%);
   --qt-chat-wardrobe-border: #8a6d1b;
   --qt-chat-wardrobe-label-fg: #d4b65c;
+
+  /* Chat: System-message collapsed bar — dark mode */
+  --qt-chat-system-bar-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, var(--color-muted) 40%);
+  --qt-chat-system-bar-hover-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 45%, var(--color-muted) 55%);
 
   /* Response status — brighter indicators */
   --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 40%, transparent);

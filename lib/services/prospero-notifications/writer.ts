@@ -65,6 +65,7 @@ async function postProsperoMessage(
       createdAt: now,
       participantId: null,
       systemSender: 'prospero',
+      systemKind: kindLabel,
     };
 
     await repos.chats.addMessage(chatId, message);

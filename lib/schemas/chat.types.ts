@@ -116,6 +116,14 @@ export const MessageEventSchema = z.object({
   /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories). */
   systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook']).nullable().optional(),
   /**
+   * Sub-classification of a Staff-authored message — used by the Salon UI to
+   * label collapsed system-message bars (e.g. `timestamp`, `project-context`,
+   * `memory-recap`). Always paired with `systemSender`; null on
+   * participant-authored messages. Each writer chooses a stable kebab-case
+   * label per emission path.
+   */
+  systemKind: z.string().nullable().optional(),
+  /**
    * Structured payload on Host announcements (`systemSender = 'host'`) of type
    * add / remove / status-change. Carries the affected participant ID and the
    * status they were transitioning to. Used by the per-character Librarian

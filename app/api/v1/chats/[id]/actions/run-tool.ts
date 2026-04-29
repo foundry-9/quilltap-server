@@ -114,6 +114,7 @@ export async function handleRunTool(
     id: randomUUID(),
     role: 'TOOL',
     systemSender: 'prospero',
+    systemKind: 'tool-run',
     targetParticipantIds: validated.private ? [user.id] : null,
     content: JSON.stringify({
       tool: validated.toolName,

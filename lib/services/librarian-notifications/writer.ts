@@ -200,6 +200,7 @@ async function postLibrarianMessage(
       createdAt: now,
       participantId: null,
       systemSender: 'librarian',
+      systemKind: kindLabel,
       targetParticipantIds: targetParticipantIds && targetParticipantIds.length > 0 ? targetParticipantIds : null,
     };
 

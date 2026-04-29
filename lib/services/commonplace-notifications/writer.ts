@@ -162,6 +162,7 @@ export async function postCommonplaceWhisper(
       createdAt: now,
       participantId: null,
       systemSender: 'commonplaceBook',
+      systemKind: kind,
       targetParticipantIds: targetParticipantId ? [targetParticipantId] : null,
     };
 

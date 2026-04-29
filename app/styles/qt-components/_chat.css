@@ -138,6 +138,63 @@
   }
 
   /**
+   * Collapsed bar for Staff-authored ("systemSender") messages.
+   * Single-line summary: sender name · kind · timestamp · chevron.
+   * Click to expand into the regular message body.
+   */
+  .qt-chat-system-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    padding: 0.25rem 0.625rem;
+    margin: 0.125rem 0;
+    background: var(--qt-chat-system-bar-bg);
+    color: var(--qt-chat-system-bar-fg);
+    border: 1px solid var(--qt-chat-system-bar-border);
+    border-radius: var(--radius-sm, 0.25rem);
+    font-size: 0.75rem;
+    line-height: 1.2;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 120ms ease;
+  }
+
+  .qt-chat-system-bar:hover,
+  .qt-chat-system-bar:focus-visible {
+    background: var(--qt-chat-system-bar-hover-bg);
+    outline: none;
+  }
+
+  .qt-chat-system-bar-sender {
+    color: var(--qt-chat-system-bar-sender-fg);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .qt-chat-system-bar-kind {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-style: italic;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .qt-chat-system-bar-time {
+    color: var(--qt-chat-system-bar-fg);
+    opacity: 0.75;
+    white-space: nowrap;
+  }
+
+  .qt-chat-system-bar-chevron {
+    flex-shrink: 0;
+    width: 0.875rem;
+    height: 0.875rem;
+    opacity: 0.7;
+  }
+
+  /**
    * Message header - avatar, name, timestamp
    */
   .qt-chat-message-header {

@@ -8,6 +8,7 @@ import { TokenBadge } from '@/components/chat/TokenBadge'
 import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
 import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
+import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-message-labels'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -82,6 +83,10 @@ interface MessageRowProps {
   isOverheardWhisper?: boolean
   /** Whether the Concierge has flagged this chat as dangerous */
   isDangerousChat?: boolean
+  /** True for Staff-authored messages that should render as a thin collapsed bar */
+  isSystemMessageCollapsed?: boolean
+  /** Toggle the collapsed state of a system-authored message */
+  onToggleSystemMessageExpanded?: (messageId: string) => void
 }
 
 function getImageAttachments(message: Message) {
@@ -136,6 +141,8 @@ function MessageRowInner({
   participantNames,
   isOverheardWhisper = false,
   isDangerousChat = false,
+  isSystemMessageCollapsed = false,
+  onToggleSystemMessageExpanded,
 }: MessageRowProps) {
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
 
@@ -156,6 +163,40 @@ function MessageRowInner({
     ? dangerousContentSettings.displayMode
     : 'SHOW'
   const showDangerBadges = hasDangerFlags && dangerousContentSettings?.showWarningBadges !== false
+
+  if (isSystemMessageCollapsed && message.systemSender && onToggleSystemMessageExpanded) {
+    const senderName = getSystemSenderDisplayName(message.systemSender)
+    const kindLabel = getSystemKindDisplayLabel(message)
+    return (
+      <div
+        id={`message-${message.id}`}
+        data-message-id={message.id}
+        key={message.id}
+        className={messageRowClasses.join(' ')}
+      >
+        <button
+          type="button"
+          onClick={() => onToggleSystemMessageExpanded(message.id)}
+          className="qt-chat-system-bar"
+          aria-expanded={false}
+          aria-label={`Expand ${senderName}${kindLabel ? ` ${kindLabel}` : ''} message`}
+        >
+          <span className="qt-chat-system-bar-sender">{senderName}</span>
+          {kindLabel && <span className="qt-chat-system-bar-kind">{kindLabel}</span>}
+          <span className="qt-chat-system-bar-time">{formatMessageTime(message.createdAt)}</span>
+          <svg
+            className="qt-chat-system-bar-chevron"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -277,6 +318,19 @@ function MessageRowInner({
               {/* Action bar - shows action icons at bottom of message */}
               <div className="qt-chat-message-action-bar">
                 <div className="qt-chat-message-action-bar-icons">
+                  {/* Collapse (Staff-authored messages only) */}
+                  {message.systemSender && onToggleSystemMessageExpanded && (
+                    <button
+                      onClick={() => onToggleSystemMessageExpanded(message.id)}
+                      className="qt-chat-message-action-icon"
+                      title="Collapse this message"
+                      aria-label="Collapse this message"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                  )}
                   {/* Copy */}
                   <button
                     onClick={() => onCopyContent(message.content)}
@@ -652,6 +706,9 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
 
   // Danger state
   if (prev.isDangerousChat !== next.isDangerousChat) return false
+
+  // System-message collapse state
+  if (prev.isSystemMessageCollapsed !== next.isSystemMessageCollapsed) return false
 
   // Props are equal, skip re-render
   return true

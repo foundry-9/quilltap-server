@@ -42,6 +42,7 @@ export async function handleAddToolResult(
     id: randomUUID(),
     role: 'TOOL',
     systemSender: isUserInitiated ? 'prospero' : null,
+    systemKind: isUserInitiated ? 'tool-run' : null,
     content: JSON.stringify({
       tool: validated.tool,
       toolName: validated.tool,

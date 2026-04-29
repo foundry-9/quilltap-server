@@ -303,6 +303,7 @@ export async function handleGet(
             targetParticipantIds: event.targetParticipantIds || null,
             isSilentMessage: event.isSilentMessage || null,
             systemSender: event.systemSender || null,
+            systemKind: event.systemKind || null,
           };
         })
     ).then((results) => results.filter(Boolean));

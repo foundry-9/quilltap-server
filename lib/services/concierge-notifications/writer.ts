@@ -59,6 +59,7 @@ export async function postConciergeDangerAnnouncement(
       createdAt: now,
       participantId: null,
       systemSender: 'concierge',
+      systemKind: 'danger',
     };
 
     await repos.chats.addMessage(chatId, message);

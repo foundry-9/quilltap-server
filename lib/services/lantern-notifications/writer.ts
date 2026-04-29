@@ -114,6 +114,7 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       createdAt: now,
       participantId: null,
       systemSender: senderForKind(kind),
+      systemKind: kind.kind,
     };
 
     await repos.chats.addMessage(chatId, message);

@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Collapsible Staff-message bars in the Salon
+
+- **New `systemKind` field.** Added a string column on `chat_messages` (Zod field on `MessageEventSchema` and `ChatMessageRowSchema`) carrying a stable kebab-case sub-classification of any Staff-authored message — e.g. `timestamp`, `project-context`, `memory-recap`, `tool-run`. Migration: `migrations/scripts/add-system-kind-field.ts` (`add-system-kind-field-v1`). Every writer now persists a `systemKind`: Lantern (`avatar` / `background` / `character-image`), Aurora (`opening-outfit` / `outfit-change`), Librarian (`opened-by-user`, `saved`, `renamed`, `summary`, etc.), Concierge (`danger`), Prospero (`connection-profile-change`, `project-context`, `tool-run`), Host (`add` / `remove` / `status-change` / `scenario` / `roster` / `timestamp` / `silent-mode-enter` / `silent-mode-exit` / `user-character` / `join-scenario`), Commonplace Book (`memory-recap` / `relevant-memories` / `inter-character-memories` / `consolidated`). Tool-run TOOL rows from `actions/tools.ts` and `actions/run-tool.ts` get `systemKind: 'tool-run'`.
+- **Salon collapse UI.** Staff-authored assistant rows in the Salon now render as a thin one-line bar by default — sender display name, humanized kind label (e.g. "project information", "time"), timestamp, chevron — and expand to the full message on click. A new "collapse" chevron in the action bar reverses the state. Expansion state is tracked per-message in `expandedSystemMessageIds` on the Salon page and threaded through `VirtualizedMessageList` into `MessageRow`. Sender/kind labels live in `app/salon/[id]/components/system-message-labels.ts`. New `qt-chat-system-bar*` utility classes in `app/styles/qt-components/_chat.css` with light/dark tokens in `_variables.css`.
+- **Schema/export updates.** `public/schemas/qtap-export.schema.json` and `docs/developer/DDL.md` updated for the new column.
+
 #### Tool calls render as standalone bubbles attributed to the actor
 
 - **All TOOL rows are standalone.** `useChatData.groupToolsWithMessages` is removed; both character-initiated and user-initiated TOOL messages render as their own row in the salon timeline. The `Message.toolCalls` field, the embedded-tool render block in `MessageRow`, and the `embedded` prop on `ToolMessage` are removed as dead code.

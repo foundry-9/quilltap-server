@@ -48,6 +48,7 @@ export const ChatMessageRowSchema = z.object({
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),  // JSON array — whisper targets
   isSilentMessage: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Whether message was generated while character was in silent mode (SQLite stores as 0/1)
   systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
+  systemKind: z.string().nullable().optional(),  // Sub-classification of a Staff-authored message (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender.
   // Structured payload on Host status announcements (add / remove / status-change). NULL on all other messages.
   hostEvent: z.object({
     participantId: UUIDSchema,

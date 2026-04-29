@@ -207,6 +207,8 @@ import { addCompositionModeDefaultFieldMigration } from './add-composition-mode-
 import { addCompiledIdentityStacksFieldMigration } from './add-compiled-identity-stacks-field';
 // Add hostEvent column to chat_messages (per-character Librarian summaries)
 import { addHostEventFieldMigration } from './add-host-event-field';
+// Add systemKind column to chat_messages (Salon collapsed-bar labels)
+import { addSystemKindFieldMigration } from './add-system-kind-field';
 
 /**
  * All available migrations.
@@ -409,6 +411,8 @@ export const migrations: Migration[] = [
   addCompiledIdentityStacksFieldMigration,
   // Add hostEvent column to chat_messages (per-character Librarian summaries)
   addHostEventFieldMigration,
+  // Add systemKind column to chat_messages (Salon collapsed-bar labels)
+  addSystemKindFieldMigration,
 ];
 
 export {
@@ -596,5 +600,7 @@ export {
   addCompiledIdentityStacksFieldMigration,
   // Add hostEvent column to chat_messages (per-character Librarian summaries)
   addHostEventFieldMigration,
+  // Add systemKind column to chat_messages (Salon collapsed-bar labels)
+  addSystemKindFieldMigration,
 };
 

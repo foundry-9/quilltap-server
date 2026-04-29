@@ -138,6 +138,7 @@ async function postAuroraMessage(params: PostParams): Promise<MessageEvent | nul
       createdAt: new Date().toISOString(),
       participantId: null,
       systemSender: 'aurora',
+      systemKind: kind,
       targetParticipantIds: targetParticipantIds && targetParticipantIds.length > 0 ? targetParticipantIds : null,
     };
 
