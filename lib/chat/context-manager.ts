@@ -104,6 +104,14 @@ export {
   selectRecentMessages,
 }
 
+// Inter-character whisper sizing. Average formatted line on Friday's data
+// is ~40 tokens; the 3× buffer absorbs the gap between SQLite's importance
+// sort and the formatter's effective-weight re-rank, plus shorter-than-
+// average lines packing tighter than the budget assumes.
+const INTER_CHAR_AVG_LINE_TOKENS = 40
+const INTER_CHAR_LIMIT_BUFFER = 3
+const INTER_CHAR_LIMIT_FLOOR = 20
+
 /**
  * Message format expected by the context manager
  */
@@ -891,18 +899,30 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         }
       }
 
-      if (otherCharacterIds.length > 0) {
-        // Fetch memories this character has about other characters
+      // Half the remaining memory budget is reserved for inter-character whispers.
+      const interCharacterBudget = Math.floor((budget.memoryBudget - memoryTokens) / 2)
+
+      if (otherCharacterIds.length > 0 && interCharacterBudget > 0) {
+        // Size the per-character SQL LIMIT from the token budget. Average
+        // formatted line is ~40 tokens (172-char content + prefix); the 3×
+        // buffer absorbs (a) the formatter's effective-weight re-ranking
+        // diverging from raw importance order and (b) shorter-than-average
+        // lines packing more rows into the budget. Floor keeps tiny budgets
+        // from starving the fetch.
+        const maxEntries = Math.ceil(interCharacterBudget / INTER_CHAR_AVG_LINE_TOKENS)
+        const maxEntriesPerCharacter = Math.max(
+          INTER_CHAR_LIMIT_FLOOR,
+          Math.ceil(maxEntries / otherCharacterIds.length) * INTER_CHAR_LIMIT_BUFFER
+        )
+
         const interCharacterMemories = await repos.memories.findByCharacterAboutCharacters(
           character.id,
-          otherCharacterIds
+          otherCharacterIds,
+          maxEntriesPerCharacter,
         )
         interCharacterLoadedCount = interCharacterMemories.length
 
-        // Use half the remaining memory budget for inter-character memories
-        const interCharacterBudget = Math.floor((budget.memoryBudget - memoryTokens) / 2)
-
-        if (interCharacterMemories.length > 0 && interCharacterBudget > 0) {
+        if (interCharacterMemories.length > 0) {
           const formatted = formatInterCharacterMemoriesForContext(
             interCharacterMemories,
             otherCharacterNames,

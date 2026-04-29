@@ -785,9 +785,17 @@ export class SQLiteBackend implements DatabaseBackend {
     }
 
     try {
-      // Determine if this is a SELECT or modifying statement
+      // Determine if this is a row-returning statement. CTEs (`WITH ...`)
+      // and EXPLAINs are row-returning despite not starting with SELECT —
+      // routing them through `.run()` returns a RunResult, not rows, which
+      // any caller iterating the result will choke on.
       const trimmed = query.trim().toUpperCase();
-      if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA')) {
+      const isRowReturning =
+        trimmed.startsWith('SELECT') ||
+        trimmed.startsWith('PRAGMA') ||
+        trimmed.startsWith('WITH') ||
+        trimmed.startsWith('EXPLAIN');
+      if (isRowReturning) {
         return this.db.prepare(query).all(...params) as R;
       } else {
         return this.db.prepare(query).run(...params) as R;

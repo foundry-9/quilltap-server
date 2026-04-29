@@ -961,7 +961,11 @@ describe('Context Manager', () => {
         messagesWithParticipants,
       })
 
-      expect(repoMock.memories.findByCharacterAboutCharacters).toHaveBeenCalledWith('char-a', expect.arrayContaining(['char-b', 'char-user']))
+      expect(repoMock.memories.findByCharacterAboutCharacters).toHaveBeenCalledWith(
+        'char-a',
+        expect.arrayContaining(['char-b', 'char-user']),
+        expect.any(Number),
+      )
       // Phase B: inter-character memories now ride inline on the new user
       // message body (plain "you also recall about the others present" framing
       // for the LLM) rather than concatenated onto the system prompt. The

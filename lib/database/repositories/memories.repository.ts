@@ -12,7 +12,7 @@ import { Memory, MemorySchema } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
-import { registerBlobColumns } from '../manager';
+import { rawQuery, registerBlobColumns } from '../manager';
 
 /** Maximum allowed search query length to prevent ReDoS and excessive memory usage */
 const MAX_SEARCH_QUERY_LENGTH = 1000;
@@ -736,34 +736,81 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Find memories that a character has about any of the specified characters
-   * @param characterId The character who owns the memories
-   * @param aboutCharacterIds Array of character IDs the memories might be about
-   * @returns Promise<Memory[]> Array of memories about the specified characters
+   * Find memories a character has about any of the specified characters,
+   * capped per about-character via a window function so SQLite ranks and
+   * truncates each partition before returning rows.
+   *
+   * Sort key approximates {@link calculateEffectiveWeight}: raw importance
+   * dominates, with `lastReinforcedAt` (falling back to `createdAt`) breaking
+   * ties so a recently-reinforced memory beats a stale one of equal score.
+   *
+   * The caller (context-manager) sizes `limitPerCharacter` from the
+   * inter-character whisper budget plus a buffer; any further re-ranking by
+   * effective weight happens in JS over this much smaller set.
    */
   async findByCharacterAboutCharacters(
     characterId: string,
-    aboutCharacterIds: string[]
+    aboutCharacterIds: string[],
+    limitPerCharacter: number
   ): Promise<Memory[]> {
     return this.safeQuery(
       async () => {
-        if (aboutCharacterIds.length === 0) {
+        if (aboutCharacterIds.length === 0 || limitPerCharacter <= 0) {
           return [];
         }
 
-        const memories = await this.findByFilter(
-          {
-            characterId,
-            aboutCharacterId: { $in: aboutCharacterIds },
-          },
-          {
-            sort: { importance: -1, createdAt: -1 },
+        const placeholders = aboutCharacterIds.map(() => '?').join(', ');
+        const sql = `
+          WITH ranked AS (
+            SELECT *,
+              ROW_NUMBER() OVER (
+                PARTITION BY aboutCharacterId
+                ORDER BY importance DESC,
+                         COALESCE(lastReinforcedAt, createdAt) DESC
+              ) AS rn
+            FROM memories
+            WHERE characterId = ?
+              AND aboutCharacterId IN (${placeholders})
+          )
+          SELECT * FROM ranked WHERE rn <= ?
+        `;
+        const params: unknown[] = [characterId, ...aboutCharacterIds, limitPerCharacter];
+
+        const rows = await rawQuery<Record<string, unknown>[]>(sql, params);
+
+        const memories: Memory[] = [];
+        for (const row of rows) {
+          // rn is a synthetic column; strip it before validation
+          delete row.rn;
+
+          // Hydrate JSON-encoded array columns. SQLiteCollection does this for
+          // us via getCollection(); when we drop down to rawQuery to use the
+          // window function, we have to do it by hand.
+          for (const col of ['keywords', 'tags', 'relatedMemoryIds']) {
+            const val = row[col];
+            if (typeof val === 'string') {
+              try {
+                row[col] = JSON.parse(val);
+              } catch {
+                row[col] = [];
+              }
+            }
           }
-        );
+
+          const validation = MemorySchema.safeParse(row);
+          if (validation.success) {
+            memories.push(validation.data);
+          } else {
+            logger.warn('Memory failed validation in partition fetch', {
+              memoryId: row.id,
+              error: validation.error.message,
+            });
+          }
+        }
         return memories;
       },
       'Error finding memories about characters',
-      { characterId, aboutCharacterCount: aboutCharacterIds.length },
+      { characterId, aboutCharacterCount: aboutCharacterIds.length, limitPerCharacter },
       []
     );
   }
