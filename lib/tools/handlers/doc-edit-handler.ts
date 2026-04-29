@@ -401,6 +401,45 @@ async function buildWriteResolutionContext(
 }
 
 /**
+ * Look up the project's "project-official" mount point — the canonical
+ * `scope: 'project'` store. Returns null when the project has no
+ * officialMountPointId, the mount is missing, or it's disabled. Callers can
+ * then fall back to the legacy `<filesDir>/<projectId>/` walk for projects
+ * that haven't been migrated yet.
+ */
+interface OfficialProjectMount {
+  id: string;
+  name: string;
+  basePath: string;
+  mountType: 'filesystem' | 'obsidian' | 'database';
+}
+
+async function resolveOfficialProjectMount(
+  projectId: string | undefined
+): Promise<OfficialProjectMount | null> {
+  if (!projectId) return null;
+  try {
+    const repos = getRepositories();
+    const project = await repos.projects.findById(projectId);
+    if (!project?.officialMountPointId) return null;
+    const mp = await repos.docMountPoints.findById(project.officialMountPointId);
+    if (!mp || !mp.enabled) return null;
+    return {
+      id: mp.id,
+      name: mp.name,
+      basePath: mp.basePath,
+      mountType: mp.mountType,
+    };
+  } catch (err) {
+    logger.warn('Failed to resolve official project mount; treating project as un-migrated', {
+      projectId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/**
  * Trigger re-indexing and embedding for document store files after a write.
  */
 async function triggerReindexIfNeeded(resolved: ResolvedPath): Promise<void> {
@@ -993,14 +1032,24 @@ async function handleGrep(
   }
 
   // Search project files
+  //
+  // The document-store iteration above already covers the project's official
+  // mount (it's linked via project_doc_mount_links and surfaces through
+  // getAccessibleMountPoints). Falling through to walk the legacy on-disk
+  // directory would either duplicate matches or, post-migration, search a
+  // stale snapshot. We only walk the legacy fs for projects that haven't
+  // been migrated to a database-backed official store yet.
   if (!input.mount_point) {
-    const { getFilesDir } = await import('@/lib/paths');
-    const projectDir = path.join(getFilesDir(), context.projectId);
-    try {
-      await fs.access(projectDir);
-      await walkAndSearch(projectDir, '[project]');
-    } catch {
-      // Project dir doesn't exist, skip
+    const officialMount = await resolveOfficialProjectMount(context.projectId);
+    if (!officialMount) {
+      const { getFilesDir } = await import('@/lib/paths');
+      const projectDir = path.join(getFilesDir(), context.projectId);
+      try {
+        await fs.access(projectDir);
+        await walkAndSearch(projectDir, '[project]');
+      } catch {
+        // Project dir doesn't exist, skip
+      }
     }
   }
 
@@ -1149,10 +1198,45 @@ async function handleListFiles(
   }
 
   // List project files
+  //
+  // Once a project has been migrated to a database-backed official store,
+  // `scope: 'project'` is an alias for that mount (matches what Prospero
+  // advertises and what resolveProjectPath dispatches to). To avoid reading
+  // a stale on-disk directory from before the migration — or duplicating
+  // entries the document-store branch already emitted — we route through
+  // the official mount when one exists.
   if (shouldIncludeProject) {
-    const { getFilesDir } = await import('@/lib/paths');
-    const projectDir = path.join(getFilesDir(), context.projectId);
-    await collectFiles(projectDir, 'project', undefined, input.folder);
+    const officialMount = await resolveOfficialProjectMount(context.projectId);
+    if (officialMount) {
+      // When listing every scope (no input.scope filter) the document-store
+      // branch above has already enumerated this mount; only emit it again
+      // when scope was explicitly 'project' so the caller sees results.
+      if (input.scope === 'project') {
+        if (officialMount.mountType === 'database') {
+          const dbEntries = await listDatabaseFiles(
+            officialMount.id,
+            input.folder ? { folder: input.folder } : {}
+          );
+          for (const entry of dbEntries) {
+            if (input.pattern && !matchesGlob(entry.fileName, input.pattern)) continue;
+            files.push({
+              path: entry.relativePath,
+              mount_point: officialMount.name,
+              scope: 'project',
+              size: entry.fileSizeBytes,
+              modified: new Date(entry.lastModified).getTime(),
+              kind: entry.kind as 'file' | 'folder' | undefined,
+            });
+          }
+        } else if (officialMount.basePath) {
+          await collectFiles(officialMount.basePath, 'project', officialMount.name, input.folder);
+        }
+      }
+    } else {
+      const { getFilesDir } = await import('@/lib/paths');
+      const projectDir = path.join(getFilesDir(), context.projectId);
+      await collectFiles(projectDir, 'project', undefined, input.folder);
+    }
   }
 
   // List general files

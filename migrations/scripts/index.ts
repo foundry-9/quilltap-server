@@ -215,6 +215,8 @@ import { alignAboutCharacterIdMigration } from './align-about-character-id';
 import { alignAboutCharacterIdV2Migration } from './align-about-character-id-v2';
 // Add identity field to characters table
 import { addCharacterIdentityFieldMigration } from './add-character-identity-field';
+// Re-absorb leftover project files into database-backed official store
+import { reabsorbLeftoverProjectFilesMigration } from './reabsorb-leftover-project-files';
 
 /**
  * All available migrations.
@@ -425,6 +427,8 @@ export const migrations: Migration[] = [
   alignAboutCharacterIdV2Migration,
   // Add identity field to characters table
   addCharacterIdentityFieldMigration,
+  // Re-absorb leftover project files into database-backed official store
+  reabsorbLeftoverProjectFilesMigration,
 ];
 
 export {
@@ -620,5 +624,7 @@ export {
   alignAboutCharacterIdV2Migration,
   // Add identity field to characters table
   addCharacterIdentityFieldMigration,
+  // Re-absorb leftover project files into database-backed official store
+  reabsorbLeftoverProjectFilesMigration,
 };
 

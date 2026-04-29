@@ -352,7 +352,15 @@ async function resolveDocumentStorePath(
 }
 
 /**
- * Resolve a path within a project's file storage
+ * Resolve a path within a project's file storage.
+ *
+ * Projects own a "project-official" document store (see
+ * `projects.officialMountPointId` and the `convert-project-files-to-document-stores`
+ * migration). When set, `scope: 'project'` is just an alias for that mount —
+ * which is what Prospero advertises to the LLM. We dispatch through the mount
+ * point so reads/writes land in the same place the Scriptorium UI sees, and
+ * fall back to the legacy on-disk `<filesDir>/<projectId>/` layout only when
+ * no official mount has been provisioned yet.
  */
 async function resolveProjectPath(
   relativePath: string,
@@ -363,6 +371,61 @@ async function resolveProjectPath(
     throw new PathResolutionError(
       'Project ID is required for project scope',
       'MISSING_CONTEXT'
+    );
+  }
+
+  const repos = getRepositories();
+  const project = await repos.projects.findById(context.projectId);
+  const officialMountPointId = project?.officialMountPointId ?? null;
+
+  if (officialMountPointId) {
+    const mountPoint = await repos.docMountPoints.findById(officialMountPointId);
+    if (mountPoint && mountPoint.enabled) {
+      if (mountPoint.mountType === 'database') {
+        logger.debug(
+          `Resolved project path via official database mount: ${relativePath} (mount=${mountPoint.id})`
+        );
+        return {
+          absolutePath: '',
+          scope: 'project',
+          mountPointId: mountPoint.id,
+          mountPointName: mountPoint.name,
+          mountType: 'database',
+          basePath: '',
+          relativePath,
+        };
+      }
+
+      const baseDir = mountPoint.basePath;
+      const joinedPath = path.join(baseDir, relativePath);
+      const [realBase, realPath] = await Promise.all([
+        safeRealpath(baseDir),
+        safeRealpath(joinedPath),
+      ]);
+      if (!verifyPathIsWithinBase(realPath, realBase)) {
+        logger.warn(
+          `Path resolution escaped official project mount: ${relativePath} -> ${realPath} (base: ${realBase})`
+        );
+        throw new PathResolutionError(
+          `Path escapes project boundary`,
+          'TRAVERSAL_ATTEMPT'
+        );
+      }
+      logger.debug(
+        `Resolved project path via official ${mountPoint.mountType} mount: ${relativePath} -> ${realPath}`
+      );
+      return {
+        absolutePath: realPath,
+        scope: 'project',
+        mountPointId: mountPoint.id,
+        mountPointName: mountPoint.name,
+        mountType: mountPoint.mountType,
+        basePath: realBase,
+        relativePath,
+      };
+    }
+    logger.warn(
+      `Project ${context.projectId} has officialMountPointId=${officialMountPointId} but mount point is missing or disabled — falling back to legacy filesystem path`
     );
   }
 
@@ -385,7 +448,7 @@ async function resolveProjectPath(
     );
   }
 
-  logger.debug(`Resolved project path: ${relativePath} -> ${realPath}`);
+  logger.debug(`Resolved project path (legacy fs): ${relativePath} -> ${realPath}`);
 
   return {
     absolutePath: realPath,
