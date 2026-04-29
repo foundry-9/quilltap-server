@@ -23,6 +23,7 @@ import { describe, it, expect } from '@jest/globals'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { randomUUID } from 'crypto'
 import { Readable } from 'stream'
 import { pipeline } from 'stream/promises'
 
@@ -59,7 +60,7 @@ async function writeJsonArrayFile<T>(filePath: string, items: readonly T[]): Pro
 }
 
 async function writeAndRead<T>(items: readonly T[]): Promise<T[]> {
-  const tmpFile = path.join(os.tmpdir(), `quilltap-backup-streaming-test-${Date.now()}-${Math.random()}.json`)
+  const tmpFile = path.join(os.tmpdir(), `quilltap-backup-streaming-test-${randomUUID()}.json`)
   try {
     await writeJsonArrayFile(tmpFile, items)
     const raw = await fs.promises.readFile(tmpFile, 'utf8')
@@ -142,7 +143,7 @@ describe('backup JSON array streaming — format correctness', () => {
 
   it('output is identical to JSON.stringify for a two-element array', async () => {
     const items = [{ id: 'a', v: 1 }, { id: 'b', v: 2 }]
-    const tmpFile = path.join(os.tmpdir(), `quilltap-backup-compare-${Date.now()}.json`)
+    const tmpFile = path.join(os.tmpdir(), `quilltap-backup-compare-${randomUUID()}.json`)
     try {
       await writeJsonArrayFile(tmpFile, items)
       const streamed = await fs.promises.readFile(tmpFile, 'utf8')
