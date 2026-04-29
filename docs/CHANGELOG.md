@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Maintenance: dead-code cleanup from Knip
+
+- Unexported local-only types in `lib/help-guide/categories.ts` and `lib/file-storage/project-store-bridge.ts`.
+- Removed unused barrel re-exports from `components/wardrobe/index.ts`.
+- Refreshed `docs/developer/DEAD-CODE-REPORT.md` with the 2026-04-29 Knip findings and cleanup notes.
+
 #### Fix: scope:project diverged from the project's official document store
 
 - **Root cause.** `convert-project-files-to-document-stores-v1` (April 23) moved every project's on-disk file directory into a database-backed mount point and `add-project-official-mount-point-v1` (April 25) wrote that mount's id into `projects.officialMountPointId`. Prospero already advertises this mount as the canonical "project-official" store and tells the LLM that `scope: 'project'` is an alias for it. But `lib/doc-edit/path-resolver.ts:resolveProjectPath` was never updated — it kept resolving `scope: 'project'` to `<filesDir>/<projectId>/<path>` on disk. Every `doc_write_file({ scope: 'project' })`, `doc_create_folder`, etc. silently recreated the legacy directory and wrote into it, while Document Mode UI / the Scriptorium read from the database mount. Files written by Friday looked fine to `doc_list_files` (which also walked the legacy fs) but were invisible to the UI.

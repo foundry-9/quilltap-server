@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-04-27
+**Last Updated**: 2026-04-29
 **Tool Used**: knip
-**Codebase**: Quilltap v4.3.0-dev
+**Codebase**: Quilltap v4.4.0-dev.69
 
 ---
 
@@ -15,13 +15,13 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 | Unused Files | Cleaned up 2026-03-24 |
 | Migration Scripts | Deleted (migrations complete) |
 | Unused Dependencies | @quilltap/theme-storybook removed 2026-04-02; @aws-sdk/client-s3, svgo removed 2026-03-05; bcrypt, qrcode, ts-jest removed 2026-01-30 |
-| Unused Exported Types | ~100+ flagged; most are intentional plugin/barrel re-exports; some cleaned up 2026-04-27 |
+| Unused Exported Types | ~100+ flagged; most are intentional plugin/barrel re-exports; some cleaned up 2026-04-29 |
 | Unused Enum Members | 3 in ErrorCode (preserved for future use) |
 | Duplicate Exports | ~39 (named + default pattern, low priority) |
 
 ---
 
-## Current Findings (2026-04-27)
+## Current Findings (2026-04-29)
 
 ### Unused Exported Types
 
@@ -93,6 +93,26 @@ Knip flags ~39 components/modules that have both named and default exports. This
 Knip suggests removing `packages/**` and `plugins/**` from `knip.json` ignore list. These directories contain independently published npm packages and dynamically loaded plugins respectively, and must remain ignored.
 
 **Status**: No action needed. These are correctly configured false-positive exclusions.
+
+---
+
+## Cleanup Completed (2026-04-29)
+
+### Local-Only Types Unexported
+
+| Location | Item | Reason |
+|----------|------|--------|
+| `lib/help-guide/categories.ts` | `HelpCategory` | Only used to type `HELP_CATEGORIES` within the same file; no external consumer references it |
+| `lib/file-storage/project-store-bridge.ts` | `ProjectStoreTarget` | Only used as the local return type of `getProjectDocumentStore()` |
+| `lib/file-storage/project-store-bridge.ts` | `WriteProjectFileInput` | Only used as the local parameter type of `writeProjectFileToMountStore()` |
+| `lib/file-storage/project-store-bridge.ts` | `WriteProjectFileResult` | Only used as the local return type of `writeProjectFileToMountStore()` |
+
+### Barrel Exports Removed
+
+| Location | Item | Reason |
+|----------|------|--------|
+| `components/wardrobe/index.ts` | `GiftWardrobeItemModal` | Re-export was unused; consumers import the component directly from `gift-wardrobe-item-modal.tsx` |
+| `components/wardrobe/index.ts` | `ImportFromImageModal` | Re-export was unused; consumers import the component directly from `import-from-image-modal.tsx` |
 
 ---
 

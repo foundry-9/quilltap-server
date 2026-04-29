@@ -31,7 +31,7 @@ import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
 
 const STORAGE_KEY_PREFIX = 'mount-blob:';
 
-export interface ProjectStoreTarget {
+interface ProjectStoreTarget {
   mountPointId: string;
   mountPointName: string;
 }
@@ -100,7 +100,7 @@ export function buildMountBlobStorageKey(mountPointId: string, blobId: string): 
   return `${STORAGE_KEY_PREFIX}${mountPointId}:${blobId}`;
 }
 
-export interface WriteProjectFileInput {
+interface WriteProjectFileInput {
   projectId: string;
   filename: string;
   content: Buffer;
@@ -109,7 +109,7 @@ export interface WriteProjectFileInput {
   description?: string;
 }
 
-export interface WriteProjectFileResult {
+interface WriteProjectFileResult {
   storageKey: string;
   mountPointId: string;
   blobId: string;

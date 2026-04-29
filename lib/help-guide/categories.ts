@@ -6,7 +6,7 @@
  * context matching for auto-expanding the relevant category.
  */
 
-export interface HelpCategory {
+interface HelpCategory {
   id: string;
   label: string;
   documents: string[];
