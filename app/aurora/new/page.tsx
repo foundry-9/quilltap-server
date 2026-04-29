@@ -31,6 +31,7 @@ export default function NewCharacterPage() {
   const [formData, setFormData] = useState({
     name: '',
     title: '',
+    identity: '',
     description: '',
     personality: '',
     scenario: '',
@@ -47,6 +48,7 @@ export default function NewCharacterPage() {
       ...prev,
       ...(data.name && { name: data.name }),
       ...(data.title && { title: data.title }),
+      ...(data.identity && { identity: data.identity }),
       ...(data.description && { description: data.description }),
       ...(data.personality && { personality: data.personality }),
       ...(data.exampleDialogues && { exampleDialogues: data.exampleDialogues }),
@@ -277,7 +279,22 @@ export default function NewCharacterPage() {
             value={formData.title}
             onChange={handleChange}
             className="qt-input"
-            placeholder="e.g., The Wanderer, Knight of the Realm"
+            placeholder="Your private label for this character — e.g., the protagonist, the rival, the love interest. Not how strangers refer to them."
+          />
+        </div>
+
+        <div>
+          <label htmlFor="identity" className="block qt-label mb-2 text-foreground">
+            Identity (Optional)
+          </label>
+          <textarea
+            id="identity"
+            name="identity"
+            value={formData.identity}
+            onChange={handleChange}
+            rows={3}
+            className="qt-textarea"
+            placeholder="What strangers know about the character on sight or by reputation — name, station, occupation, public reputation. The shallow first impression."
           />
         </div>
 
@@ -292,7 +309,7 @@ export default function NewCharacterPage() {
             onChange={handleChange}
             rows={4}
             className="qt-textarea"
-            placeholder="Describe the character's appearance, background, and key traits"
+            placeholder="How acquaintances perceive the character — behaviour, mannerisms, frequent verbal patterns. Not physical appearance (that lives in physical descriptions)."
           />
         </div>
 
@@ -307,7 +324,7 @@ export default function NewCharacterPage() {
             onChange={handleChange}
             rows={4}
             className="qt-textarea"
-            placeholder="Describe the character's personality traits and behavioral patterns"
+            placeholder="What the character knows about themselves — inner drivers of speech and behaviour, motivations, beliefs."
           />
         </div>
 

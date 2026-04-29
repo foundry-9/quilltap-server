@@ -17,6 +17,7 @@ export type DescriptionSourceType = 'existing' | 'upload' | 'gallery' | 'documen
 export type GeneratableField =
   | 'name'
   | 'title'
+  | 'identity'
   | 'description'
   | 'personality'
   | 'scenarios'
@@ -226,6 +227,7 @@ export interface GenerationStepProps {
 export const FIELD_LABELS: Record<GeneratableField, string> = {
   name: 'Name',
   title: 'Title',
+  identity: 'Identity',
   description: 'Description',
   personality: 'Personality',
   scenarios: 'Scenarios',
@@ -238,8 +240,9 @@ export const FIELD_LABELS: Record<GeneratableField, string> = {
 export const FIELD_DESCRIPTIONS: Record<GeneratableField, string> = {
   name: 'The character\'s name',
   title: 'A short epithet or title (e.g., "The Wanderer")',
-  description: 'Character appearance, background, and key traits',
-  personality: 'Personality traits and behavioral patterns',
+  identity: 'Outside-view facts a stranger could know on sight: station, occupation, public reputation',
+  description: 'How acquaintances perceive the character: behaviour, mannerisms, verbal patterns (not appearance)',
+  personality: 'The character\'s own self-knowledge: inner drivers, motivations, beliefs',
   scenarios: 'Generate 2-3 named scenarios with distinct settings and contexts for interactions',
   exampleDialogues: 'Example conversations to guide AI responses',
   systemPrompt: 'Custom system instructions for AI roleplay',

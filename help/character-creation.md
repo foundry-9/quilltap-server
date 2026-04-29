@@ -183,12 +183,16 @@ If you want AI to generate content:
    - Check which fields AI should create:
      - ☐ Name (if not provided)
      - ☐ Title
-     - ☐ Personality
+     - ☐ Identity (outside view — what strangers know on sight)
+     - ☐ Description (acquaintance view — behaviour and mannerisms, not appearance)
+     - ☐ Personality (internal view — self-knowledge and inner drivers)
      - ☐ Scenarios
-     - ☐ First Message
      - ☐ Example Dialogues
      - ☐ System Prompt
+     - ☐ Physical Description (appearance only)
+     - ☐ Wardrobe Items
    - Leave others blank for manual entry
+   - The wizard treats Identity, Description, Personality, and Physical Description as four distinct vantage points — the same trait won't be repeated across them.
 8. **Step 4: Review and Generate**
    - AI generates selected content
    - Review generated text

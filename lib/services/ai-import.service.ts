@@ -16,6 +16,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { validateQtapExport } from '@/lib/validation/qtap-schema-validator';
+import { FIELD_SEMANTICS_PREAMBLE } from '@/lib/services/character-field-semantics';
 import { logger } from '@/lib/logger';
 import packageJson from '@/package.json';
 import type { ConnectionProfile } from '@/lib/schemas/types';
@@ -75,6 +76,7 @@ export interface AIImportStepResults {
   character_basics?: {
     name: string;
     title?: string;
+    identity?: string;
     description?: string;
     personality?: string;
     scenario?: string;
@@ -150,15 +152,18 @@ Respond with JSON:
 }`;
 }
 
-const CHARACTER_BASICS_PROMPT = `Extract or generate the character's basic information from the source material.
+export const CHARACTER_BASICS_PROMPT = `${FIELD_SEMANTICS_PREAMBLE}
+
+Extract or generate the character's basic information from the source material. Use the vantage-point rule above to decide what belongs in IDENTITY vs DESCRIPTION vs PERSONALITY. Do NOT put the same content under two different fields, and do NOT put physical appearance into DESCRIPTION — physical appearance is generated separately and lives in physicalDescriptions.
 
 Respond with JSON:
 {
   "name": "Character's full name",
   "title": "A short epithet or title (2-5 words, like 'The Wandering Scholar')",
-  "description": "A comprehensive 2-3 paragraph description covering appearance, background, and current situation. Write in third person, present tense.",
-  "personality": "1-2 paragraphs describing core traits, interaction style, emotional tendencies, and quirks. Write as behavioral instructions.",
-  "scenario": "1-2 paragraphs setting the default scene for interactions. Present tense, describing environment and relationship context."
+  "identity": "1-2 paragraphs of public-knowledge / outside-view facts only — name, station, occupation, public reputation, signifying outward facts a stranger could plausibly know without having spoken to the character. Never internal motivation, never private mannerisms, never physical appearance.",
+  "description": "1-2 paragraphs of what someone who has interacted with the character would notice — behaviour, mannerisms, frequent verbal patterns, conversational tics. NOT physical appearance (that lives in physicalDescriptions). NOT the character's private inner monologue. NOT the public-facing reputation that already lives in identity. Write in third person, present tense.",
+  "personality": "1-2 paragraphs of the character's own self-knowledge — inner drivers of speech and behaviour, motivations, beliefs, emotional tendencies, things only the character knows about themselves unless they choose to share them. Never put outward behaviour someone else would observe here, and never put public-facing identity facts.",
+  "scenario": "1-2 paragraphs setting the default scene for interactions. Present tense, describing environment and relationship context. The scenario is the stage, not the actor — do not restate personality or appearance here."
 }
 
 If the source material clearly provides information for a field, extract and adapt it. If not, generate appropriate content that fits the character.`;
@@ -495,7 +500,7 @@ function getSnippet(content: unknown, maxLength: number = 100): string {
 /**
  * Assemble a QuilltapExport from the generated step results
  */
-function assembleQtapExport(
+export function assembleQtapExport(
   stepResults: AIImportStepResults,
   includeMemories: boolean,
   includeChats: boolean,
@@ -516,6 +521,7 @@ function assembleQtapExport(
     userId,
     name: basics.name,
     title: basics.title || null,
+    identity: basics.identity || null,
     description: basics.description || null,
     personality: basics.personality || null,
     scenarios: basics.scenario ? [{

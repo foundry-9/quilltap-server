@@ -49,7 +49,7 @@ Watch the AI work through each extraction step:
 | Step | What It Does |
 |------|-------------|
 | Analyzing Source Material | Summarizes large source documents (only for long texts) |
-| Extracting Character Basics | Name, title, description, personality, and an initial scenario (title and content) |
+| Extracting Character Basics | Name, title, identity, description, personality, and an initial scenario (title and content) |
 | Generating Dialogue | First message and example dialogue exchanges |
 | Creating System Prompts | Instructions for AI roleplay behavior |
 | Describing Appearance | Physical descriptions at 5 detail levels for image generation |
@@ -74,6 +74,17 @@ Three actions are available:
 - **Import Character** — Imports the character into Quilltap immediately
 - **Add More & Regenerate** — Go back to Step 1 with existing material preserved, add new sources, and re-run generation. Only failed or missing steps re-run.
 - **Start Over** — Clear everything and begin fresh
+
+## Field Vantage Points
+
+Summon From Lore distinguishes four character fields by *vantage point*. The AI is instructed not to mix them up — the same trait should not appear in two fields.
+
+- **Identity** — outside view; what strangers know on sight or by reputation (name, station, occupation, public reputation). Never private mannerisms or appearance.
+- **Description** — acquaintance view; behaviour, mannerisms, frequent verbal patterns. Never physical appearance — that lives in physical descriptions.
+- **Personality** — internal view; the character's own self-knowledge, inner drivers, motivations, beliefs.
+- **Physical descriptions** — appearance only; generated as a separate step in five detail levels.
+
+If your source material describes a character's looks, those details flow into the physical descriptions, not into the description field.
 
 ## Tips
 

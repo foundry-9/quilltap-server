@@ -4,6 +4,15 @@
 
 ### 4.4-dev
 
+#### AI Wizard + Summon From Lore: vantage-point field semantics
+
+- **Shared preamble.** Extracted `FIELD_SEMANTICS_PREAMBLE` into `lib/services/character-field-semantics.ts` so the character optimizer, the AI Wizard, and Summon From Lore all instruct the LLM with the same identity / description / personality / title definitions. The optimizer now imports the constant from the shared module.
+- **AI Wizard prompts rewritten.** `lib/services/character-wizard.service.ts` adds an `identity` entry to `FIELD_PROMPTS`, rewrites `description` to drop "Physical appearance" (it now asks for behavior, mannerisms, and verbal patterns only — appearance is generated separately into `physicalDescription`), and tightens `personality` to the self-knowledge vantage point. Each of the three vantage-point prompts injects the shared preamble. `WizardRequest` now carries `identity` in `existingData` and `fieldsToGenerate`. `buildContextPrompt` surfaces existing identity and tells the LLM that any visual reference is for `physicalDescription` only — it must not bleed into identity / description / personality.
+- **Summon From Lore prompts rewritten.** `CHARACTER_BASICS_PROMPT` in `lib/services/ai-import.service.ts` adds an `identity` JSON key, restates the description / personality definitions in vantage-point terms, and prepends the shared preamble. `assembleQtapExport` writes `identity` onto the character object so the import path picks it up via `repos.characters.create({ ...charData })`.
+- **AI Wizard UI.** `components/characters/ai-wizard/types.ts` adds `identity` to `GeneratableField`, `FIELD_LABELS`, and `FIELD_DESCRIPTIONS`; `steps/FieldSelectionStep.tsx` slots the new checkbox between Title and Description; `hooks/useAIWizard.ts` lists identity in the available-fields default.
+- **Apply paths + new-character form.** `app/aurora/[id]/edit/page.tsx` applies generated `identity` alongside description/personality. `app/aurora/new/page.tsx` adds `identity` to `formData`, the wizard apply spread, and the form itself (new Identity textarea between Title and Description, and rewritten placeholder copy on Title / Description / Personality so they match the four-vantage-point definitions used elsewhere).
+- **Help docs.** `help/ai-character-import.md` adds a "Field Vantage Points" section and updates the basics-step row to mention identity; `help/character-creation.md` rewrites the AI Wizard field list to the new ordering and notes the four vantage points.
+
 #### Maintenance: dead-code cleanup from Knip
 
 - Unexported local-only types in `lib/help-guide/categories.ts` and `lib/file-storage/project-store-bridge.ts`.

@@ -124,6 +124,7 @@ export default function EditCharacterPage({ params }: { params: Promise<{ id: st
 
     if (data.name) fieldsToApply.push({ name: 'name', value: data.name })
     if (data.title) fieldsToApply.push({ name: 'title', value: data.title })
+    if (data.identity) fieldsToApply.push({ name: 'identity', value: data.identity })
     if (data.description) fieldsToApply.push({ name: 'description', value: data.description })
     if (data.personality) fieldsToApply.push({ name: 'personality', value: data.personality })
     if (data.exampleDialogues) fieldsToApply.push({ name: 'exampleDialogues', value: data.exampleDialogues })

@@ -15,6 +15,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logger } from '@/lib/logger';
 import { parseLLMJson } from '@/lib/services/ai-import.service';
+import { FIELD_SEMANTICS_PREAMBLE } from '@/lib/services/character-field-semantics';
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types';
 import type { FileAttachment } from '@/lib/llm/base';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -33,6 +34,7 @@ export interface WizardRequest {
   characterName: string;
   existingData?: {
     title?: string;
+    identity?: string;
     description?: string;
     personality?: string;
     scenarios?: Array<{ id: string; title: string; content: string }>;
@@ -43,6 +45,7 @@ export interface WizardRequest {
   fieldsToGenerate: (
     | 'name'
     | 'title'
+    | 'identity'
     | 'description'
     | 'personality'
     | 'scenarios'
@@ -94,7 +97,7 @@ export type WizardProgressCallback = (event: WizardProgressEvent) => void;
 // Prompt Templates
 // ============================================================================
 
-const FIELD_PROMPTS: Record<string, string> = {
+export const FIELD_PROMPTS: Record<string, string> = {
   name: `Generate a unique, memorable name for this character that fits the world and background context provided.
 The name should be:
 - Appropriate to the setting (fantasy, modern, sci-fi, etc.)
@@ -108,21 +111,38 @@ Examples: "The Wandering Scholar", "Knight of the Fallen Star", "Last of the Old
 
 Respond with ONLY the title, no quotes or explanation.`,
 
-  description: `Write a comprehensive description of this character in 2-3 paragraphs. Include:
-- Physical appearance (if visual reference available)
-- Background and history
-- Current situation/role
-- Notable traits or features
+  identity: `${FIELD_SEMANTICS_PREAMBLE}
 
-Write in third person, present tense. Be vivid and specific.`,
+Write the IDENTITY field for this character: 1-2 short paragraphs of public-knowledge / outside-view facts only — name, station, occupation, public reputation, signifying outward facts a stranger could plausibly know without having spoken to the character.
 
-  personality: `Describe this character's personality in 1-2 paragraphs. Include:
-- Core personality traits (3-5 dominant traits)
-- How they interact with others
-- Their emotional tendencies
-- Quirks or unique behavioral patterns
+Strict rules:
+- Never include internal motivation, beliefs, or self-knowledge (those belong in PERSONALITY).
+- Never include private mannerisms, verbal tics, or behaviour someone has to be acquainted with the character to notice (those belong in DESCRIPTION).
+- Never include physical appearance — that lives in physicalDescriptions and is generated separately.
 
-Write as instructions for how the character behaves, not as a story.`,
+Write in third person, present tense.`,
+
+  description: `${FIELD_SEMANTICS_PREAMBLE}
+
+Write the DESCRIPTION field for this character: 1-2 short paragraphs of what someone who has interacted with the character would notice — behaviour, mannerisms, frequent verbal patterns, conversational tics, the way they handle themselves around others.
+
+Strict rules:
+- Do NOT describe physical appearance. Physical appearance lives in physicalDescriptions and is generated separately. If a visual reference has been provided, ignore it for this field.
+- Do NOT restate the public-facing reputation that already belongs in IDENTITY.
+- Do NOT write the character's private inner monologue or self-knowledge — that belongs in PERSONALITY.
+
+Write in third person, present tense. Be vivid and specific about behaviour, not appearance.`,
+
+  personality: `${FIELD_SEMANTICS_PREAMBLE}
+
+Write the PERSONALITY field for this character: 1-2 short paragraphs of the character's own self-knowledge — the inner drivers of speech and behaviour, motivations, beliefs, emotional tendencies, the things only the character knows about themselves unless they choose to share them.
+
+Strict rules:
+- Never put outward behaviour someone else would observe here (that belongs in DESCRIPTION).
+- Never put public-facing identity facts here (those belong in IDENTITY).
+- Never describe physical appearance.
+
+Write as instructions for how the character behaves on the inside, not as a story.`,
 
   scenarios: `Generate 2-3 distinct scenarios for interactions with this character. Each scenario should have a short title and detailed content. Return as a JSON array: [{"title": "...", "content": "..."}]
 
@@ -258,6 +278,8 @@ ${background}
     context += `
 Visual Reference (from image analysis):
 ${imageDescription}
+
+Note: this visual reference describes the character's PHYSICAL APPEARANCE only. Use it for the physicalDescription field. Do NOT let it bleed into the identity, description, or personality fields — those fields are about facts, behaviour, and self-knowledge respectively, never appearance.
 `;
   }
 
@@ -271,6 +293,7 @@ ${documentContent}
   if (existingData) {
     const existingFields = [];
     if (existingData.title?.trim()) existingFields.push(`Title: ${existingData.title}`);
+    if (existingData.identity?.trim()) existingFields.push(`Identity: ${existingData.identity}`);
     if (existingData.description?.trim()) existingFields.push(`Description: ${existingData.description}`);
     if (existingData.personality?.trim()) existingFields.push(`Personality: ${existingData.personality}`);
     if (existingData.scenarios && existingData.scenarios.length > 0) {

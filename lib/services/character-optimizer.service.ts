@@ -17,6 +17,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { logger } from '@/lib/logger';
 import { rankMemoriesByWeight } from '@/lib/memory/memory-weighting';
 import { parseLLMJson, stripCodeFences } from '@/lib/services/ai-import.service';
+import { FIELD_SEMANTICS_PREAMBLE } from '@/lib/services/character-field-semantics';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
 import { isEmbeddingAvailable } from '@/lib/embedding/embedding-service';
@@ -218,13 +219,6 @@ export function buildMemoryContext(memories: Array<{ memory: Memory }>): string 
 
   return parts.join('\n');
 }
-
-const FIELD_SEMANTICS_PREAMBLE = `Quilltap distinguishes four character fields by *vantage point*. Use these definitions to label which field each pattern belongs to — they are not interchangeable.
-
-- IDENTITY — the most surface-level knowledge of the character, from outside. What strangers can know on sight or by reputation: name, station, occupation, public reputation, signifying outward facts. Never internal motivation, never private mannerisms.
-- DESCRIPTION — what someone talking to or acquainted with the character perceives. Behaviour, mannerisms, frequent verbal patterns. NOT physical appearance (that lives elsewhere) and NOT internal monologue.
-- PERSONALITY — what the character knows about themselves. The internal driver of speech and behavior. Other characters don't see this unless she shares it.
-- TITLE — the user's or character's own private label/framing for them. Not how others refer to them; not in scope for the optimizer to edit.`;
 
 /**
  * Get analysis prompt
