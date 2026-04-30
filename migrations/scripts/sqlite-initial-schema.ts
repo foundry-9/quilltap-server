@@ -105,6 +105,7 @@ export const SQLITE_TABLES = [
       "lastSummaryTurn" INTEGER DEFAULT 0,
       "lastSummaryTokens" INTEGER DEFAULT 0,
       "lastFullRebuildTurn" INTEGER DEFAULT 0,
+      "summaryAnchorMessageIds" TEXT DEFAULT '[]',
       "isPaused" INTEGER DEFAULT 0,
       "isManuallyRenamed" INTEGER DEFAULT 0,
       "impersonatingParticipantIds" TEXT DEFAULT '[]',

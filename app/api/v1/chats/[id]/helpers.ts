@@ -26,7 +26,6 @@ import {
   compileAllIdentityStacks,
   compileIdentityStackForParticipant,
 } from '@/lib/services/system-prompt-compiler/compiler';
-import { triggerCatchUpSummaryAsync } from '@/lib/chat/context-summary';
 
 type Repos = RepositoryContainer;
 
@@ -520,17 +519,6 @@ export async function processChatUpdates(
             characterName: addedCharacter.name,
             targetParticipantId: newParticipant.id,
             joinScenario,
-          });
-        }
-
-        // When a character joins with full history access, fan out a Librarian
-        // catch-up summary to them right away so they don't have to wait for
-        // the next checkpoint to receive any context.
-        if (hasHistoryAccess && newParticipant) {
-          triggerCatchUpSummaryAsync({
-            chatId,
-            userId,
-            participantId: newParticipant.id,
           });
         }
       }

@@ -223,6 +223,8 @@ import { addLLMLogsRequestHashesColumnMigration } from './add-llm-logs-request-h
 import { addSummarizationGateFieldsMigration } from './add-summarization-gate-fields';
 // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
 import { addSummaryAnchorFieldMigration } from './add-summary-anchor-field';
+// Add summaryAnchorMessageIds column to chats (edit-aware invalidation Phase 4)
+import { addSummaryAnchorMessageIdsFieldMigration } from './add-summary-anchor-message-ids-field';
 
 /**
  * All available migrations.
@@ -441,6 +443,8 @@ export const migrations: Migration[] = [
   addSummarizationGateFieldsMigration,
   // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
   addSummaryAnchorFieldMigration,
+  // Add summaryAnchorMessageIds column to chats (edit-aware invalidation Phase 4)
+  addSummaryAnchorMessageIdsFieldMigration,
 ];
 
 export {
@@ -644,5 +648,7 @@ export {
   addSummarizationGateFieldsMigration,
   // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
   addSummaryAnchorFieldMigration,
+  // Add summaryAnchorMessageIds column to chats (edit-aware invalidation Phase 4)
+  addSummaryAnchorMessageIdsFieldMigration,
 };
 

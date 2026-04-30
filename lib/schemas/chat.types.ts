@@ -380,6 +380,14 @@ export const ChatMetadataSchema = z.object({
   lastSummaryTokens: z.number().default(0),
   /** Interchange count when the last full-from-scratch rebuild happened. Drives T_hard. */
   lastFullRebuildTurn: z.number().default(0),
+  /**
+   * Phase 4: list of conversation message IDs (USER + ASSISTANT) that fed
+   * the current `contextSummary`. Used by the edit/delete invalidation hook
+   * to clear the summary only when a covered message changes — typo fixes
+   * on a message that arrived after the last summary leave the summary
+   * intact.
+   */
+  summaryAnchorMessageIds: z.array(UUIDSchema).default([]),
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
@@ -546,6 +554,8 @@ export const ChatMetadataBaseSchema = z.object({
   lastSummaryTurn: z.number().default(0),
   lastSummaryTokens: z.number().default(0),
   lastFullRebuildTurn: z.number().default(0),
+  /** Phase 4: message IDs covered by the current summary. See ChatMetadataSchema. */
+  summaryAnchorMessageIds: z.array(UUIDSchema).default([]),
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */

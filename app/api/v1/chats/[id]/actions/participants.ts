@@ -26,7 +26,6 @@ import {
   postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
-import { triggerCatchUpSummaryAsync } from '@/lib/chat/context-summary';
 
 /**
  * Start impersonating a participant
@@ -317,17 +316,6 @@ export async function handleAddParticipantAction(
         characterName: addedCharacter.name,
         targetParticipantId: newParticipant.id,
         joinScenario: validatedData.joinScenario,
-      });
-    }
-
-    // When a character joins with full history access, hand them a Librarian
-    // catch-up summary right away rather than making them wait for the next
-    // checkpoint to fire.
-    if (newParticipant && (validatedData.hasHistoryAccess ?? false)) {
-      triggerCatchUpSummaryAsync({
-        chatId,
-        userId: user.id,
-        participantId: newParticipant.id,
       });
     }
   }
