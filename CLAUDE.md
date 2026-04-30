@@ -193,7 +193,8 @@ Rules for adding or updating these assets:
   - Query with filter: `npx quilltap db "SELECT * FROM TABLENAME WHERE field = 'value';"`
   - Interactive REPL: `npx quilltap db --repl`
   - Query LLM logs DB: `npx quilltap db --llm-logs --tables`
-  - Custom data dir: `npx quilltap db --data-dir /path/to/data --tables`
+  - Custom data dir: `npx quilltap db --data-dir ~/iCloud/Quilltap/Friday --tables` — pass the **instance root**, not the `data/` subdirectory. The CLI appends `data/quilltap.db` itself, so `--data-dir ~/iCloud/Quilltap/Friday/data` will fail looking for `data/data/quilltap.db`.
+  - SQLite columns are **camelCase**, mirroring the Zod/TypeScript types (e.g. `createdAt`, `updatedAt`, `chatType`, `messageCount`, `projectId`) — not `snake_case`. When in doubt, `PRAGMA table_info(<table>);` or check [DDL.md](docs/developer/DDL.md).
   - All information about the databases, including schema and how to query them, can be found in [DDL.md](docs/developer/DDL.md).
 - This is built in Next.js 16+, so don't look in middleware.ts, but consider proxy.ts, for things you would expect there.
 - When creating or modifying API routes, always use the `/api/v1/` structure with action dispatch patterns. Don't create new routes outside `/api/v1/`. Use the middleware from `@/lib/api/middleware` and response helpers from `@/lib/api/responses`.

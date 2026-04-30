@@ -324,28 +324,26 @@ export async function applyContextCompression(
 }
 
 /**
- * Builds a system message containing compressed context
- * This is prepended to the messages when compression is applied
+ * Builds the compressed-history system block.
  *
- * @param compressedHistory - The compressed conversation history
- * @param compressedSystemPrompt - The compressed system prompt (or null to use full)
- * @param fullSystemPrompt - The full system prompt (used if compression failed)
- * @returns The assembled system message content
+ * Emitted as a *separate* system message after the persona prompt and identity
+ * reinforcement so the persona prompt's bytes stay stable across turns. Earlier
+ * versions concatenated this onto the persona prompt, which rehashed the
+ * cacheable system prefix every time the rolling summary refreshed and
+ * destroyed cache hit rates on Friday-style characters where compression
+ * actually fires.
+ *
+ * @param compressedHistory - The compressed conversation history (undefined when no compression)
+ * @returns The wrapped compressed-history block, or null when there's nothing to emit
  */
-export function buildCompressedSystemMessage(
+export function buildCompressedHistoryBlock(
   compressedHistory: string | undefined,
-  compressedSystemPrompt: string | undefined,
-  fullSystemPrompt: string
-): string {
-  // Always use the full system prompt — system prompt compression is disabled
-  // because each character has their own identity and it must not be compressed away
+): string | null {
   if (!compressedHistory) {
-    return fullSystemPrompt
+    return null
   }
 
-  return `${fullSystemPrompt}
-
-## Conversation Context (Compressed Summary of Earlier Messages)
+  return `## Conversation Context (Compressed Summary of Earlier Messages)
 
 The following is a summary of the earlier conversation. Recent messages follow this summary.
 

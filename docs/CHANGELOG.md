@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Fix: rolling summary no longer rehashes the persona system block
+
+`buildCompressedSystemMessage` in `lib/chat/context/compression.ts` was concatenating the rolling compressed-history summary onto the end of the full system prompt and returning a single string, which `assembleContext` in `lib/chat/context-manager.ts` then pushed as system block 1. Every async compression cycle (every 5–7 messages once compression warms up) produced a new summary text, which rehashed block 1 and invalidated the cacheable persona prefix on every provider — observed in the LLM logs as Friday's `systemBlock1Hash` flipping every turn (`ab5488e8` → `ce3ec8bf` → `387c3ada` → …) while Amy's stayed at a stable `550842358846b47a` because compression had not yet fired for her. Z.AI returned `cached_tokens: 0` on every Friday turn as a result. Fixed by replacing the function with `buildCompressedHistoryBlock`, which returns only the wrapped history (or null when no history). `assembleContext` now emits the compressed history as a separate system block 3 after the persona prompt and identity reinforcement, so blocks 1 and 2 stay byte-stable while the rolling summary churns in its own block. Test suite at `__tests__/unit/lib/chat/context/compression.test.ts` updated to match the new contract.
+
+#### Fix: Z.AI plugin now reports prompt-cache hits
+
+The Z.AI plugin (`@quilltap/qtap-plugin-z-ai` v1.1.3) was reading `usage.prompt_tokens / completion_tokens / total_tokens` from Z.AI's OpenAI-compat response and never extracting `usage.prompt_tokens_details.cached_tokens`. As a result every `chat_messages` row from Z.AI logged `cacheUsage: null`, making it impossible to tell whether GLM Context Caching was hitting. Fixed by extracting `cached_tokens` and emitting `cacheUsage: { cacheReadInputTokens, cachedTokens }` on both the sync and streaming response paths, matching the OpenAI plugin's contract. Plugin lives at `~/source/qtap-plugin-z-ai`; bumped to `1.1.3` and republished.
+
 #### Fix: Host re-announcing the same off-scene characters every turn
 
 `assembleContext` in `lib/chat/context-manager.ts` was passing `existingMessages` (the trimmed `{ role, content, id?, thoughtSignature? }` view used for LLM context) into `findIntroducedOffSceneCharacterIds`. That view is stripped of `systemSender`, `systemKind`, and `hostEvent`, so the dedupe filter never matched a prior Host announcement and every turn re-announced every mentioned off-scene character. Fixed by re-loading the full chat history via `repos.chats.getMessages(chat.id)` for the dedupe check; the LLM-context path is unchanged.

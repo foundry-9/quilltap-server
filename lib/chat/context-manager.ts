@@ -66,7 +66,7 @@ import {
   shouldApplyBudgetCompression,
   splitMessagesForCompression,
   applyContextCompression,
-  buildCompressedSystemMessage,
+  buildCompressedHistoryBlock,
   type ContextCompressionOptions,
   type ContextCompressionResult,
 } from './context/compression'
@@ -746,17 +746,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
 
-  // If using compressed context, replace system prompt and filter messages
-  let effectiveSystemPrompt = finalSystemPrompt
+  // If using compressed context, emit the rolling summary as its own system
+  // block (block 3) and filter messages down to the recent window. The persona
+  // prompt itself stays byte-identical across turns so block 1 keeps caching;
+  // the summary churns in its own block where churn is expected.
+  let compressedHistoryBlock: string | null = null
   let effectiveMessages = existingMessages
 
   if (useCompressedContext && compressionResult) {
-    // Build the compressed system message (includes compressed history)
-    effectiveSystemPrompt = buildCompressedSystemMessage(
-      compressionResult.compressedHistory,
-      undefined,  // System prompt compression disabled — always use fresh per-character prompt
-      finalSystemPrompt
-    )
+    compressedHistoryBlock = buildCompressedHistoryBlock(compressionResult.compressedHistory)
 
     // Only keep window messages (the ones that weren't compressed)
     // Extract visible messages first since we need the count for dynamic window sizing
@@ -810,10 +808,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
   }
 
-  // Update system prompt token count for compressed version
-  const effectiveSystemPromptTokens = useCompressedContext
-    ? estimateTokens(effectiveSystemPrompt, provider)
-    : finalSystemPromptTokens
+  // System-prompt token count = persona prompt (always) + compressed-history
+  // block (only when compression fired). The two are emitted as separate
+  // system messages so their cache lifetimes are decoupled.
+  const compressedHistoryBlockTokens = compressedHistoryBlock
+    ? estimateTokens(compressedHistoryBlock, provider)
+    : 0
+  const effectiveSystemPromptTokens = finalSystemPromptTokens + compressedHistoryBlockTokens
 
   // 1b. Generate memory recap on chat start or character join
   let memoryRecapContent = ''
@@ -1221,7 +1222,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // (Anthropic ephemeral cache, OpenAI automatic prefix cache, etc.).
   contextMessages.push({
     role: 'system',
-    content: effectiveSystemPrompt,
+    content: finalSystemPrompt,
     metadata: { isInjected: true },
   })
 
@@ -1237,6 +1238,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     content: identityReminder,
     metadata: { isInjected: true },
   })
+
+  // System block 3 — compressed-history rolling summary, only when budget
+  // compression fired. Lives in its own block so its churn (refreshed every
+  // few turns by the async compressor) does not invalidate the persona
+  // prefix that blocks 1 and 2 form.
+  if (compressedHistoryBlock) {
+    contextMessages.push({
+      role: 'system',
+      content: compressedHistoryBlock,
+      metadata: { isInjected: true },
+    })
+  }
 
   // Add selected conversation messages.
   // The first surviving Librarian summary whisper (after the running-summary
@@ -1361,7 +1374,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     debugInterCharacterMemories: debugInterCharacterMemories.length > 0 ? debugInterCharacterMemories : undefined,
     debugMemoryRecap: memoryRecapContent || undefined,
     debugSummary: chat.contextSummary || undefined,
-    debugSystemPrompt: effectiveSystemPrompt,
+    debugSystemPrompt: compressedHistoryBlock
+      ? `${finalSystemPrompt}\n\n${compressedHistoryBlock}`
+      : finalSystemPrompt,
     // Original uncompressed system prompt (for async pre-compression)
     originalSystemPrompt: finalSystemPrompt,
     // Compression info
