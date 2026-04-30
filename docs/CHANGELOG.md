@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Cheap-LLM token floor raised to 2048; compression tasks bumped to 4000
+
+`executeCheapLLMTask` in `lib/memory/cheap-llm-tasks/core-execution.ts` now floors `effectiveMaxTokens` at 2048 (`Math.max(maxTokens ?? 2048, 2048)`) instead of defaulting to 1000. Callers that don't pass an explicit `maxTokens` move from 1000 to 2048; callers that pass a value below 2048 are bumped up. The three compression tasks in `lib/memory/cheap-llm-tasks/compression-tasks.ts` (`compressConversationHistory`, `compressSystemPrompt`, `compressMemories`) now pass `maxTokens: 4000` explicitly so longer summaries are not truncated mid-output, matching the budget already used by `craftImagePrompt`, `craftStoryBackgroundPrompt`, and `updateSceneState`.
+
 #### Image prompt crafting raised to 4000-token output
 
 `craftImagePrompt` and `craftStoryBackgroundPrompt` (`lib/memory/cheap-llm-tasks/image-scene-tasks.ts`) were using the default 1000-token cap from `executeCheapLLMTask`, which truncated longer multi-character prompts mid-paragraph. Both bumped to 4000 tokens to match the budget already used by `updateSceneState`.

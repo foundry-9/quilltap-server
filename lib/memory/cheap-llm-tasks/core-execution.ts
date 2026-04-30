@@ -112,7 +112,7 @@ async function sendToProvider(
   )
 
   const profileKey = `${selection.provider}:${selection.modelName}`
-  const effectiveMaxTokens = maxTokens ?? 1000
+  const effectiveMaxTokens = Math.max(maxTokens ?? 2048, 2048)
 
   const logCall = (response: LLMResponse, temperature?: number) => {
     logLLMCall({

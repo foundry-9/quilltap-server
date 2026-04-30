@@ -163,7 +163,8 @@ export async function compressConversationHistory(
     'compress-conversation-history',
     chatId,
     undefined,
-    uncensoredFallback
+    uncensoredFallback,
+    4000
   )
 }
 
@@ -219,7 +220,8 @@ export async function compressSystemPrompt(
     'compress-system-prompt',
     chatId,
     undefined,
-    uncensoredFallback
+    uncensoredFallback,
+    4000
   )
 }
 
@@ -280,6 +282,7 @@ export async function compressMemories(
     'compress-memories',
     chatId,
     undefined,
-    uncensoredFallback
+    uncensoredFallback,
+    4000
   )
 }
