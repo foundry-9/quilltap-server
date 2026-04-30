@@ -24,42 +24,23 @@ export interface EnqueueJobOptions {
 }
 
 /**
- * Payload for memory extraction job
+ * Payload for per-turn memory extraction job.
+ *
+ * The handler rebuilds the TurnTranscript from chat state at execution time
+ * (the chat is the source of truth — pre-serialising the transcript into
+ * the job would just stale faster than the job drains). Dedup is keyed on
+ * (chatId, turnOpenerMessageId): the first response of a turn enqueues the
+ * job; subsequent responses in the same turn no-op against the existing
+ * pending job.
  */
 export interface MemoryExtractionPayload {
   chatId: string;
-  characterId: string;
-  characterName: string;
-  /** Character pronouns (JSON-serialised structure or null). */
-  characterPronouns?: unknown;
-  userMessage: string;
-  assistantMessage: string;
-  sourceMessageId: string;
-  connectionProfileId: string;
-  /** User character name (for "X says:" labelling in extraction prompts) */
-  userCharacterName?: string;
-  /** User character ID - who the memory is about (the user-controlled character) */
-  userCharacterId?: string;
-  /** All character names in a multi-character chat (for clear identity context) */
-  allCharacterNames?: string[];
-  /** Map of character name -> pronouns for multi-character chats */
-  allCharacterPronouns?: Record<string, unknown>;
-}
-
-/**
- * Payload for inter-character memory extraction job
- */
-export interface InterCharacterMemoryPayload {
-  chatId: string;
-  observerCharacterId: string;
-  observerCharacterName: string;
-  observerCharacterPronouns?: unknown;
-  observerMessage: string;
-  subjectCharacterId: string;
-  subjectCharacterName: string;
-  subjectCharacterPronouns?: unknown;
-  subjectMessage: string;
-  sourceMessageId: string;
+  /**
+   * USER message ID that opened this turn. May be null for greeting-only or
+   * continue/nudge turns where there's no fresh user input — the handler
+   * skips the user-pass and runs only the self / inter-character passes.
+   */
+  turnOpenerMessageId: string | null;
   connectionProfileId: string;
 }
 
@@ -321,16 +302,6 @@ export async function enqueueConversationRender(
 }
 
 /**
- * Message pair for batch memory extraction
- */
-export interface MessagePair {
-  userMessageId: string;
-  assistantMessageId: string;
-  userContent: string;
-  assistantContent: string;
-}
-
-/**
  * Enqueue a single background job
  */
 export async function enqueueJob(
@@ -365,13 +336,47 @@ export async function enqueueJob(
 }
 
 /**
- * Enqueue a memory extraction job
+ * Enqueue a per-turn memory extraction job.
+ *
+ * Dedupe: if a PENDING or PROCESSING MEMORY_EXTRACTION job already exists
+ * for the same (chatId, turnOpenerMessageId) pair, this is a no-op that
+ * returns the existing job ID. The first character to finalize in a multi-
+ * character turn creates the job; later characters' finalize calls fall
+ * through to dedup. Greeting / continue turns (where turnOpenerMessageId
+ * is null) dedupe on (chatId, null) so a single extraction job covers the
+ * greeting tail rather than producing one per assistant message.
  */
 export async function enqueueMemoryExtraction(
   userId: string,
   payload: MemoryExtractionPayload,
   options?: EnqueueJobOptions
 ): Promise<string> {
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'MEMORY_EXTRACTION') return false;
+      const existingPayload = j.payload as unknown as MemoryExtractionPayload;
+      return existingPayload.chatId === payload.chatId
+        && existingPayload.turnOpenerMessageId === payload.turnOpenerMessageId;
+    });
+    if (existing) {
+      logger.debug('[MemoryExtraction] Skipping enqueue — job already in-flight for turn', {
+        jobId: existing.id,
+        chatId: payload.chatId,
+        turnOpenerMessageId: payload.turnOpenerMessageId,
+      });
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[MemoryExtraction] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through and enqueue anyway.
+  }
+
   return enqueueJob(userId, 'MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
 }
 
@@ -424,17 +429,6 @@ export async function enqueueMemoryHousekeeping(
     payload as unknown as Record<string, unknown>,
     { ...options, maxAttempts: options?.maxAttempts ?? 1 },
   );
-}
-
-/**
- * Enqueue an inter-character memory extraction job
- */
-export async function enqueueInterCharacterMemory(
-  userId: string,
-  payload: InterCharacterMemoryPayload,
-  options?: EnqueueJobOptions
-): Promise<string> {
-  return enqueueJob(userId, 'INTER_CHARACTER_MEMORY', payload as unknown as Record<string, unknown>, options);
 }
 
 /**
@@ -592,36 +586,35 @@ export async function enqueueStoryBackgroundGeneration(
 }
 
 /**
- * Batch enqueue memory extraction jobs for an imported chat
- * Creates one job per message pair
+ * Batch enqueue per-turn memory extraction jobs.
+ *
+ * Used by the "queue memories for this entire chat" UI action and by the
+ * SillyTavern import path. Caller supplies one entry per turn (keyed by
+ * the USER message that opened it). The handler rebuilds the transcript
+ * from chat state at execution time, so this enqueue API doesn't need
+ * the per-turn message contents — only the turn-opener IDs.
  */
 export async function enqueueMemoryExtractionBatch(
   userId: string,
   chatId: string,
-  characterId: string,
-  characterName: string,
   connectionProfileId: string,
-  messagePairs: MessagePair[],
+  turnOpenerMessageIds: Array<string | null>,
   options?: EnqueueJobOptions
 ): Promise<string[]> {
-  if (messagePairs.length === 0) {
+  if (turnOpenerMessageIds.length === 0) {
     return [];
   }
 
   const repos = getRepositories();
   const now = new Date().toISOString();
 
-  const jobs = messagePairs.map((pair) => ({
+  const jobs = turnOpenerMessageIds.map((turnOpenerMessageId) => ({
     userId,
     type: 'MEMORY_EXTRACTION' as const,
     status: 'PENDING' as const,
     payload: {
       chatId,
-      characterId,
-      characterName,
-      userMessage: pair.userContent,
-      assistantMessage: pair.assistantContent,
-      sourceMessageId: pair.assistantMessageId,
+      turnOpenerMessageId,
       connectionProfileId,
     },
     priority: options?.priority ?? 0,
@@ -637,11 +630,9 @@ export async function enqueueMemoryExtractionBatch(
 
   logger.info('Memory extraction batch enqueued', {
     chatId,
-    characterId,
     jobCount: jobIds.length,
   });
 
-  // Auto-start the processor when jobs are enqueued
   if (jobIds.length > 0) {
     ensureProcessorRunning();
   }

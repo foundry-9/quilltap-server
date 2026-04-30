@@ -17,7 +17,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 
 // Import the module under test AFTER mocking
 import {
-  extractMemoryFromMessage,
+  extractUserMemoriesFromTurn,
   summarizeChat,
   titleChat,
   updateContextSummary,
@@ -26,6 +26,35 @@ import {
   type MemoryCandidate,
   type ChatMessage,
 } from '@/lib/memory/cheap-llm-tasks'
+import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript'
+
+/**
+ * Build a TurnTranscript fixture for the user-pass extraction tests.
+ * Single character + single user message — matches the shape the prior
+ * per-message tests exercised.
+ */
+function makeTurnTranscript(opts: {
+  userMessage: string | null
+  userCharacterName?: string
+  characterName: string
+  characterText: string
+}): TurnTranscript {
+  return {
+    turnOpenerMessageId: opts.userMessage === null ? null : 'turn-opener-id',
+    userMessage: opts.userMessage,
+    userCharacterId: opts.userCharacterName ? 'user-char-id' : undefined,
+    userCharacterName: opts.userCharacterName,
+    userCharacterPronouns: null,
+    characterSlices: [{
+      characterId: 'char-1',
+      characterName: opts.characterName,
+      characterPronouns: null,
+      text: opts.characterText,
+      contributingMessageIds: ['assistant-id-1'],
+    }],
+    latestAssistantMessageId: 'assistant-id-1',
+  }
+}
 
 // Mock provider instance
 const mockSendMessage = jest.fn()
@@ -94,7 +123,7 @@ describe('Cheap LLM Tasks Service', () => {
     })
   })
 
-  describe('extractMemoryFromMessage', () => {
+  describe('extractUserMemoriesFromTurn', () => {
     it('should extract a significant memory', async () => {
       const memoryResponse = {
         significant: true,
@@ -109,18 +138,16 @@ describe('Cheap LLM Tasks Service', () => {
         usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'I need to go feed my cat Whiskers',
-        'That sounds like a lovely cat! I hope Whiskers enjoys their meal.',
-        'PARTICIPANTS:\n- USER: John\n- CHARACTER: Luna',
-        'Luna',
-        'John',
-        testSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'I need to go feed my cat Whiskers',
+        userCharacterName: 'John',
+        characterName: 'Luna',
+        characterText: 'That sounds like a lovely cat! I hope Whiskers enjoys their meal.',
+      })
+
+      const result = await extractUserMemoriesFromTurn(transcript, testSelection, testUserId)
 
       expect(result.success).toBe(true)
-      // Result is now an array of significant candidates
       expect(result.result).toEqual([{
         significant: true,
         content: 'User mentioned they have a cat named Whiskers',
@@ -137,18 +164,15 @@ describe('Cheap LLM Tasks Service', () => {
         usage: { promptTokens: 50, completionTokens: 10, totalTokens: 60 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'Hello!',
-        'Hi there! How are you?',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: Luna',
-        'Luna',
-        undefined,
-        testSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hello!',
+        characterName: 'Luna',
+        characterText: 'Hi there! How are you?',
+      })
+
+      const result = await extractUserMemoriesFromTurn(transcript, testSelection, testUserId)
 
       expect(result.success).toBe(true)
-      // Non-significant candidates are filtered out, returning empty array
       expect(result.result).toEqual([])
     })
 
@@ -158,18 +182,15 @@ describe('Cheap LLM Tasks Service', () => {
         usage: { promptTokens: 50, completionTokens: 30, totalTokens: 80 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'Test message',
-        'Test response',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
-        testSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'Test message',
+        characterName: 'TestChar',
+        characterText: 'Test response',
+      })
+
+      const result = await extractUserMemoriesFromTurn(transcript, testSelection, testUserId)
 
       expect(result.success).toBe(true)
-      // Backward compat: single object wrapped in array, filtered to significant only
       expect(result.result).toHaveLength(1)
       expect(result.result?.[0]?.content).toBe('Test')
     })
@@ -180,18 +201,15 @@ describe('Cheap LLM Tasks Service', () => {
         usage: { promptTokens: 50, completionTokens: 10, totalTokens: 60 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'Test',
-        'Response',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
-        testSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'Test',
+        characterName: 'TestChar',
+        characterText: 'Response',
+      })
+
+      const result = await extractUserMemoriesFromTurn(transcript, testSelection, testUserId)
 
       expect(result.success).toBe(true)
-      // Malformed JSON returns empty array
       expect(result.result).toEqual([])
     })
 
@@ -201,15 +219,13 @@ describe('Cheap LLM Tasks Service', () => {
         usage: { promptTokens: 50, completionTokens: 10, totalTokens: 60 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'Hello',
-        'Hi',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
-        localSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hello',
+        characterName: 'TestChar',
+        characterText: 'Hi',
+      })
+
+      const result = await extractUserMemoriesFromTurn(transcript, localSelection, testUserId)
 
       expect(result.success).toBe(true)
       expect(createLLMProvider).toHaveBeenCalledWith('OLLAMA', 'http://localhost:11434')
@@ -218,22 +234,33 @@ describe('Cheap LLM Tasks Service', () => {
     it('should return error when no API key available', async () => {
       mockFindById.mockResolvedValue({ id: 'test-profile-id', apiKeyId: null })
 
-      const result = await extractMemoryFromMessage(
-        'Hello',
-        'Hi',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
-        testSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'Hello',
+        characterName: 'TestChar',
+        characterText: 'Hi',
+      })
+
+      const result = await extractUserMemoriesFromTurn(transcript, testSelection, testUserId)
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('No API key')
     })
 
+    it('returns an empty array (no LLM call) when the turn has no user message', async () => {
+      const transcript = makeTurnTranscript({
+        userMessage: null,
+        characterName: 'TestChar',
+        characterText: 'Greeting',
+      })
+
+      const result = await extractUserMemoriesFromTurn(transcript, testSelection, testUserId)
+
+      expect(result.success).toBe(true)
+      expect(result.result).toEqual([])
+      expect(mockSendMessage).not.toHaveBeenCalled()
+    })
+
     it('caps significant candidates at HARD_CANDIDATE_CAP when LLM overshoots', async () => {
-      // LLM returns 12 significant + 2 non-significant; parser must return only 5.
       const candidates = [
         ...Array.from({ length: 12 }, (_, i) => ({
           significant: true,
@@ -251,23 +278,23 @@ describe('Cheap LLM Tasks Service', () => {
         usage: { promptTokens: 100, completionTokens: 500, totalTokens: 600 },
       })
 
-      const result = await extractMemoryFromMessage(
-        'User message',
-        'Assistant message',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
+      const transcript = makeTurnTranscript({
+        userMessage: 'User message',
+        characterName: 'TestChar',
+        characterText: 'Assistant message',
+      })
+
+      const result = await extractUserMemoriesFromTurn(
+        transcript,
         testSelection,
         testUserId,
         undefined,
         undefined,
-        undefined,
-        128000 // large output budget would otherwise allow 16 candidates
+        128000, // large output budget would otherwise allow 16 candidates
       )
 
       expect(result.success).toBe(true)
-      expect(result.result).toHaveLength(5)
-      // All returned candidates are significant
+      expect(result.result).toHaveLength(3)
       expect(result.result?.every(c => c.significant)).toBe(true)
     })
   })
@@ -521,15 +548,13 @@ describe('Cheap LLM Tasks Service', () => {
     it('should handle LLM provider errors gracefully', async () => {
       mockSendMessage.mockRejectedValue(new Error('API rate limit exceeded'))
 
-      const result = await extractMemoryFromMessage(
-        'Test',
-        'Response',
-        'PARTICIPANTS:\n- USER: The human\n- CHARACTER: TestChar',
-        'TestChar',
-        undefined,
-        testSelection,
-        testUserId
-      )
+      const transcript = makeTurnTranscript({
+        userMessage: 'Test',
+        characterName: 'TestChar',
+        characterText: 'Response',
+      })
+
+      const result = await extractUserMemoriesFromTurn(transcript, testSelection, testUserId)
 
       expect(result.success).toBe(false)
       expect(result.error).toBe('API rate limit exceeded')

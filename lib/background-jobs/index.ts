@@ -4,34 +4,15 @@
  * Provides a database-backed queue system for processing cheap LLM tasks
  * in the background, one at a time to avoid rate limiting.
  *
- * Usage:
- *
- * // Enqueue a memory extraction job
- * await enqueueMemoryExtraction(userId, {
- *   chatId: '...',
- *   characterId: '...',
- *   characterName: '...',
- *   userMessage: '...',
- *   assistantMessage: '...',
- *   sourceMessageId: '...',
- *   connectionProfileId: '...',
- * });
- *
- * // Or batch enqueue for imports
- * await enqueueMemoryExtractionBatch(userId, chatId, characterId, characterName, profileId, pairs);
- *
- * // Start the processor (usually done automatically)
- * startProcessor();
- *
- * // Check queue status
- * const stats = await getQueueStats(userId);
+ * Memory extraction runs once per chat turn (not once per assistant
+ * message); jobs are dedup'd at enqueue time on (chatId,
+ * turnOpenerMessageId).
  */
 
 // Queue service - enqueueing jobs
 export {
   enqueueJob,
   enqueueMemoryExtraction,
-  enqueueInterCharacterMemory,
   enqueueContextSummary,
   enqueueTitleUpdate,
   enqueueLLMLogCleanup,
@@ -44,11 +25,9 @@ export {
   cleanupOldJobs,
   type EnqueueJobOptions,
   type MemoryExtractionPayload,
-  type InterCharacterMemoryPayload,
   type ContextSummaryPayload,
   type TitleUpdatePayload,
   type LLMLogCleanupPayload,
-  type MessagePair,
 } from './queue-service';
 
 // Processor - processing jobs

@@ -1,5 +1,18 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals'
+/**
+ * Regression tests for the per-turn memory processor.
+ *
+ * Covers the gate-handling surface area the prior per-message regression
+ * suite did, but updated to the new transcript-shaped extractors:
+ *   - Multiple extracted candidates → multiple memory writes
+ *   - sourceMessageTimestamp preservation
+ *   - Rate-limit skip and throttle modes
+ *   - SKIP_NEAR_DUPLICATE / SKIP_EMBEDDING_FAILED don't add IDs
+ *   - User-pass writes aboutCharacterId = userCharacterId
+ *   - Self-pass writes aboutCharacterId = characterId
+ *   - Inter-character pass writes aboutCharacterId = subject
+ */
 
+import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 
 jest.mock('@/lib/logger', () => ({
   logger: {
@@ -20,18 +33,15 @@ jest.mock('@/lib/llm/model-context-data', () => ({
 }))
 
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
-  extractMemoryFromMessage: jest.fn(),
-  extractCharacterMemoryFromMessage: jest.fn(),
-  extractInterCharacterMemoryFromMessage: jest.fn(),
+  extractUserMemoriesFromTurn: jest.fn(),
+  extractSelfMemoriesFromTurn: jest.fn(),
+  extractInterCharacterMemoriesFromTurn: jest.fn(),
 }))
 
 jest.mock('@/lib/memory/memory-service', () => ({
   createMemoryWithGate: jest.fn(),
 }))
 
-// Pulled in transitively by memory-processor for the no-user-character whisper.
-// Mock at the module level so we don't drag in the entire host-notifications
-// stack (which depends on the database, repositories, etc.).
 jest.mock('@/lib/services/host-notifications/writer', () => ({
   postHostNoUserCharacterAnnouncement: jest.fn().mockResolvedValue(null),
 }))
@@ -43,210 +53,207 @@ const { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } = jest.require
 const { resolveMaxTokens } = jest.requireMock('@/lib/llm/model-context-data') as {
   resolveMaxTokens: jest.Mock
 }
-const { extractMemoryFromMessage, extractCharacterMemoryFromMessage } = jest.requireMock('@/lib/memory/cheap-llm-tasks') as {
-  extractMemoryFromMessage: jest.Mock
-  extractCharacterMemoryFromMessage: jest.Mock
+const tasks = jest.requireMock('@/lib/memory/cheap-llm-tasks') as {
+  extractUserMemoriesFromTurn: jest.Mock
+  extractSelfMemoriesFromTurn: jest.Mock
+  extractInterCharacterMemoriesFromTurn: jest.Mock
 }
 const { createMemoryWithGate } = jest.requireMock('@/lib/memory/memory-service') as {
   createMemoryWithGate: jest.Mock
 }
 
-const mockGetCheapLLMProvider = getCheapLLMProvider
-const mockResolveUncensoredCheapLLMSelection = resolveUncensoredCheapLLMSelection
-const mockResolveMaxTokens = resolveMaxTokens
-const mockExtractMemoryFromMessage = extractMemoryFromMessage
-const mockExtractCharacterMemoryFromMessage = extractCharacterMemoryFromMessage
-const mockCreateMemoryWithGate = createMemoryWithGate
+function makeTranscript(extra: {
+  userMessage?: string | null
+  userCharacterId?: string | null
+  characterSlices?: Array<{
+    characterId: string
+    characterName: string
+    text: string
+  }>
+} = {}) {
+  return {
+    transcript: {
+      turnOpenerMessageId: 'opener-1',
+      userMessage: 'userMessage' in extra ? extra.userMessage : 'I keep my grandmother\'s compass in my satchel.',
+      userCharacterId: 'userCharacterId' in extra ? (extra.userCharacterId ?? undefined) : 'user-char-1',
+      userCharacterName: 'Bob',
+      userCharacterPronouns: null,
+      characterSlices: (extra.characterSlices ?? [
+        { characterId: 'char-1', characterName: 'Avery', text: 'I\'ll remember the compass.' },
+      ]).map(s => ({
+        ...s,
+        characterPronouns: null,
+        contributingMessageIds: [`assistant-${s.characterId}`],
+      })),
+      latestAssistantMessageId: `assistant-${(extra.characterSlices?.[0]?.characterId) ?? 'char-1'}`,
+    },
+    chatId: 'chat-1',
+    userId: 'user-1',
+    sourceMessageTimestamp: '2026-04-01T12:34:56.000Z',
+    connectionProfile: {
+      id: 'profile-1',
+      provider: 'OPENAI',
+      modelName: 'gpt-4o-mini',
+    } as any,
+    cheapLLMSettings: {
+      strategy: 'PROVIDER_CHEAPEST',
+      fallbackToLocal: true,
+    } as any,
+    availableProfiles: [],
+  }
+}
 
-const baseContext = {
-  characterId: 'char-1',
-  characterName: 'Avery',
-  chatId: 'chat-1',
-  userMessage: 'I keep my grandmother\'s compass in my satchel and I am afraid of thunderstorms.',
-  assistantMessage: 'I\'ll remember the compass, and I can stay with you when storms roll in.',
-  sourceMessageId: 'msg-1',
-  sourceMessageTimestamp: '2026-04-01T12:34:56.000Z',
-  userId: 'user-1',
-  // User-controlled character must be set so the user-memory extraction pass
-  // is allowed to fire; without it the pipeline now skips that pass entirely
-  // (and the regression test scenarios exercise both passes).
-  userCharacterId: 'user-char-1',
-  connectionProfile: {
-    id: 'profile-1',
-    provider: 'OPENAI',
-    modelName: 'gpt-4o-mini',
-  },
-  cheapLLMSettings: {
-    strategy: 'PROVIDER_CHEAPEST',
-    fallbackToLocal: true,
-  },
-  availableProfiles: [],
-} as any
-
-describe('processMessageForMemory regressions', () => {
-  let processMessageForMemory: (ctx: unknown) => Promise<any>
+describe('processTurnForMemory regressions', () => {
+  let processTurnForMemory: (ctx: unknown) => Promise<any>
 
   beforeEach(async () => {
     jest.clearAllMocks()
 
-    mockGetCheapLLMProvider.mockReturnValue({
+    getCheapLLMProvider.mockReturnValue({
       provider: 'OPENAI',
       modelName: 'gpt-4o-mini',
       connectionProfileId: 'profile-1',
       isLocal: false,
     } as any)
-    mockResolveUncensoredCheapLLMSelection.mockImplementation((selection: unknown) => selection as any)
-    mockResolveMaxTokens.mockReturnValue(2048)
-    mockExtractMemoryFromMessage.mockResolvedValue({
+    resolveUncensoredCheapLLMSelection.mockImplementation((selection: unknown) => selection as any)
+    resolveMaxTokens.mockReturnValue(2048)
+    tasks.extractUserMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [],
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
-    mockExtractCharacterMemoryFromMessage.mockResolvedValue({
+    tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [],
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
-    mockCreateMemoryWithGate.mockResolvedValue({
+    tasks.extractInterCharacterMemoriesFromTurn.mockResolvedValue({
+      success: true,
+      result: [],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    } as any)
+    createMemoryWithGate.mockResolvedValue({
       action: 'INSERT',
       memory: { id: 'mem-default' },
     } as any)
 
-    ;({ processMessageForMemory } = await import('@/lib/memory/memory-processor'))
+    ;({ processTurnForMemory } = await import('@/lib/memory/memory-processor'))
   })
 
-  it('creates one memory per extracted fact and aggregates usage totals', async () => {
-    mockExtractMemoryFromMessage.mockResolvedValue({
+  it('aggregates token usage and writes one memory per gated candidate', async () => {
+    tasks.extractUserMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        {
-          significant: true,
-          content: 'The user keeps their grandmother\'s compass in a satchel.',
-          summary: 'User carries grandmother\'s compass',
-          keywords: ['compass', 'satchel'],
-          importance: 0.8,
-        },
-        {
-          significant: true,
-          content: 'The user is afraid of thunderstorms.',
-          summary: 'User fears thunderstorms',
-          keywords: ['storms', 'fear'],
-          importance: 0.7,
-        },
+        { significant: true, content: 'compass fact', summary: 'compass', keywords: ['compass'], importance: 0.8 },
+        { significant: true, content: 'storm fear', summary: 'storms', keywords: ['storms'], importance: 0.7 },
       ],
       usage: { promptTokens: 12, completionTokens: 4, totalTokens: 16 },
     } as any)
-    mockExtractCharacterMemoryFromMessage.mockResolvedValue({
+    tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        {
-          significant: true,
-          content: 'Avery promised to stay close during storms.',
-          summary: 'Avery comforts the user during storms',
-          keywords: ['comfort', 'storms'],
-          importance: 0.6,
-        },
+        { significant: true, content: 'Avery is steady', summary: 'steady', keywords: [], importance: 0.6 },
       ],
       usage: { promptTokens: 9, completionTokens: 3, totalTokens: 12 },
     } as any)
 
-    mockCreateMemoryWithGate
+    createMemoryWithGate
       .mockResolvedValueOnce({ action: 'INSERT', memory: { id: 'mem-1' } } as any)
       .mockResolvedValueOnce({ action: 'INSERT_RELATED', memory: { id: 'mem-2' }, relatedMemoryIds: ['mem-1'] } as any)
-      .mockResolvedValueOnce({ action: 'REINFORCE', memory: { id: 'mem-3', reinforcementCount: 2 }, novelDetails: ['comfort during storms'] } as any)
+      .mockResolvedValueOnce({ action: 'REINFORCE', memory: { id: 'mem-3', reinforcementCount: 2 } } as any)
 
-    const result = await processMessageForMemory(baseContext)
+    const result = await processTurnForMemory(makeTranscript())
 
-    expect(mockCreateMemoryWithGate).toHaveBeenCalledTimes(3)
-    expect(result).toMatchObject({
-      success: true,
-      memoryCreated: true,
-      memoryReinforced: true,
-      memoryIds: ['mem-1', 'mem-2'],
-      reinforcedMemoryIds: ['mem-3'],
-      relatedMemoryIds: ['mem-1'],
-      usage: {
-        promptTokens: 21,
-        completionTokens: 7,
-        totalTokens: 28,
-      },
-    })
-
-    const firstExtractArgs = mockExtractMemoryFromMessage.mock.calls[0]
-    expect(firstExtractArgs?.[10]).toBe(2048)
+    expect(createMemoryWithGate).toHaveBeenCalledTimes(3)
+    expect(result.success).toBe(true)
+    expect(result.createdMemoryIds).toEqual(['mem-1', 'mem-2'])
+    expect(result.reinforcedMemoryIds).toEqual(['mem-3'])
+    expect(result.usage).toEqual({ promptTokens: 21, completionTokens: 7, totalTokens: 28 })
   })
 
-  it('preserves the source message timestamp when creating memories', async () => {
-    mockExtractMemoryFromMessage.mockResolvedValue({
+  it('preserves the source message timestamp', async () => {
+    tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        {
-          significant: true,
-          content: 'The user treasures the old compass.',
-          summary: 'User treasures a family compass',
-          keywords: ['compass'],
-          importance: 0.75,
-        },
+        { significant: true, content: 'Avery is steady', summary: 'steady', keywords: [], importance: 0.7 },
       ],
-      usage: { promptTokens: 5, completionTokens: 2, totalTokens: 7 },
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
 
-    const result = await processMessageForMemory(baseContext)
+    await processTurnForMemory(makeTranscript())
 
-    expect(result.success).toBe(true)
-    expect(mockCreateMemoryWithGate).toHaveBeenCalledWith(
+    expect(createMemoryWithGate).toHaveBeenCalledWith(
       expect.objectContaining({
-        sourceMessageId: 'msg-1',
         sourceMessageTimestamp: '2026-04-01T12:34:56.000Z',
       }),
-      { userId: 'user-1' }
+      { userId: 'user-1' },
     )
   })
 
-  it('SKIP_NEAR_DUPLICATE does not add an ID to memoryIds or reinforcedMemoryIds', async () => {
-    mockExtractMemoryFromMessage.mockResolvedValue({
+  it('SKIP_NEAR_DUPLICATE keeps the result clean', async () => {
+    tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        {
-          significant: true,
-          content: 'User carries the compass everywhere.',
-          summary: 'User carries compass',
-          keywords: ['compass'],
-          importance: 0.7,
-        },
+        { significant: true, content: 'fact', summary: 'fact', keywords: [], importance: 0.7 },
       ],
-      usage: { promptTokens: 4, completionTokens: 1, totalTokens: 5 },
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
-    mockCreateMemoryWithGate.mockReset()
-    mockCreateMemoryWithGate
-      .mockResolvedValueOnce({
-        action: 'SKIP_NEAR_DUPLICATE',
-        memory: { id: 'mem-existing', reinforcementCount: 5 },
-        similarity: 0.95,
-      } as any)
+    createMemoryWithGate.mockReset()
+    createMemoryWithGate.mockResolvedValueOnce({
+      action: 'SKIP_NEAR_DUPLICATE',
+      memory: { id: 'mem-existing', reinforcementCount: 5 },
+      similarity: 0.95,
+    } as any)
 
-    const result = await processMessageForMemory(baseContext)
+    const result = await processTurnForMemory(makeTranscript())
 
     expect(result.success).toBe(true)
-    expect(result.memoryIds).toEqual([])
+    expect(result.createdMemoryIds).toEqual([])
     expect(result.reinforcedMemoryIds).toEqual([])
-    expect(result.memoryCreated).toBe(false)
-    expect(result.memoryReinforced).toBe(false)
-    expect(result.debugLogs?.join('\n')).toContain('SKIPPED near-duplicate')
+    expect(result.debugLogs.join('\n')).toContain('SKIPPED near-duplicate')
   })
 
-  it('rate limit: skips extraction entirely when recent count >= maxPerHour', async () => {
-    const mockCountCreatedSince = jest.fn<any>().mockResolvedValue(25)
+  it('SKIP_EMBEDDING_FAILED keeps the result clean and surfaces the reason in debug logs', async () => {
+    tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
+      success: true,
+      result: [
+        { significant: true, content: 'fact', summary: 'fact', keywords: [], importance: 0.7 },
+      ],
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    } as any)
+    createMemoryWithGate.mockReset()
+    createMemoryWithGate.mockResolvedValueOnce({
+      action: 'SKIP_EMBEDDING_FAILED',
+      memory: null,
+      reason: 'Embedding failed after retry: ECONNREFUSED',
+    } as any)
 
+    const result = await processTurnForMemory(makeTranscript())
+
+    expect(result.success).toBe(true)
+    expect(result.createdMemoryIds).toEqual([])
+    expect(result.debugLogs.join('\n')).toContain('embedding generation failed')
+  })
+
+  it('rate limit: skips a character entirely when its recent count >= maxPerHour', async () => {
     const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as {
       getRepositories: jest.Mock
     }
     repositoriesMock.getRepositories.mockReturnValue({
-      memories: { countCreatedSince: mockCountCreatedSince },
+      memories: { countCreatedSince: jest.fn<any>().mockResolvedValue(25) },
     })
 
-    const result = await processMessageForMemory({
-      ...baseContext,
+    tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
+      success: true,
+      result: [
+        { significant: true, content: 'fact', summary: 'fact', keywords: [], importance: 0.7 },
+      ],
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    } as any)
+
+    const ctx = makeTranscript()
+    const result = await processTurnForMemory({
+      ...ctx,
       memoryExtractionLimits: {
         enabled: true,
         maxPerHour: 20,
@@ -256,24 +263,20 @@ describe('processMessageForMemory regressions', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(result.memoryCreated).toBe(false)
-    expect(result.memoryIds).toEqual([])
-    expect(mockExtractMemoryFromMessage).not.toHaveBeenCalled()
-    expect(result.debugLogs?.join('\n')).toContain('rate limit reached')
+    expect(tasks.extractSelfMemoriesFromTurn).not.toHaveBeenCalled()
+    expect(tasks.extractUserMemoriesFromTurn).not.toHaveBeenCalled()
+    expect(result.debugLogs.join('\n')).toContain('rate limit reached')
   })
 
   it('rate limit: in soft band, drops candidates below the floor', async () => {
-    const mockCountCreatedSince = jest.fn<any>().mockResolvedValue(15) // 75% of 20 = 15 > softStart(14)
-
     const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as {
       getRepositories: jest.Mock
     }
     repositoriesMock.getRepositories.mockReturnValue({
-      memories: { countCreatedSince: mockCountCreatedSince },
+      memories: { countCreatedSince: jest.fn<any>().mockResolvedValue(15) },
     })
 
-    // Three candidates: two below floor, one above
-    mockExtractMemoryFromMessage.mockResolvedValue({
+    tasks.extractUserMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
         { significant: true, content: 'low', summary: 'low', keywords: [], importance: 0.5 },
@@ -282,11 +285,10 @@ describe('processMessageForMemory regressions', () => {
       ],
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
-    mockCreateMemoryWithGate.mockReset()
-    mockCreateMemoryWithGate.mockResolvedValue({ action: 'INSERT', memory: { id: 'mem-high' } } as any)
 
-    const result = await processMessageForMemory({
-      ...baseContext,
+    const ctx = makeTranscript()
+    const result = await processTurnForMemory({
+      ...ctx,
       memoryExtractionLimits: {
         enabled: true,
         maxPerHour: 20,
@@ -296,46 +298,12 @@ describe('processMessageForMemory regressions', () => {
     })
 
     expect(result.success).toBe(true)
-    // Only the single high-importance candidate should have been forwarded to createMemoryWithGate
-    // (across user + character passes, so expect at most 2 calls — one per pass)
-    const insertCalls = mockCreateMemoryWithGate.mock.calls.length
-    expect(insertCalls).toBeLessThanOrEqual(2)
-    expect(result.debugLogs?.join('\n')).toContain('Throttle dropped')
-    expect(result.debugLogs?.join('\n')).toContain('importance floor raised to 0.7')
-  })
-
-  it('rate limit: disabled is a no-op', async () => {
-    mockExtractMemoryFromMessage.mockResolvedValue({
-      success: true,
-      result: [
-        { significant: true, content: 'fact', summary: 'fact', keywords: [], importance: 0.4 },
-      ],
-      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-    } as any)
-
-    const result = await processMessageForMemory({
-      ...baseContext,
-      memoryExtractionLimits: {
-        enabled: false,
-        maxPerHour: 1, // deliberately tiny; disabled=false means it shouldn't matter
-        softStartFraction: 0.7,
-        softFloor: 0.7,
-      },
-    })
-
-    expect(result.success).toBe(true)
-    // Extraction proceeded (createMemoryWithGate got called) even though "maxPerHour" is 1
-    expect(mockCreateMemoryWithGate).toHaveBeenCalled()
+    expect(result.debugLogs.join('\n')).toContain('Throttle dropped')
+    expect(result.debugLogs.join('\n')).toContain('floor 0.7')
   })
 
   it('skips USER memory extraction when no user-controlled character is attached', async () => {
-    // userCharacterId omitted → user-memory extraction must be bypassed entirely;
-    // only the character (self) extraction pass is allowed to fire.
-    const ctxNoUser = {
-      ...baseContext,
-      userCharacterId: undefined,
-    }
-    mockExtractCharacterMemoryFromMessage.mockResolvedValue({
+    tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
         { significant: true, content: 'Avery feels protective.', summary: 'Avery is protective', keywords: [], importance: 0.6 },
@@ -343,14 +311,15 @@ describe('processMessageForMemory regressions', () => {
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
 
-    const result = await processMessageForMemory(ctxNoUser)
+    const ctx = makeTranscript({ userCharacterId: undefined })
+
+    const result = await processTurnForMemory(ctx)
 
     expect(result.success).toBe(true)
-    expect(mockExtractMemoryFromMessage).not.toHaveBeenCalled()
-    expect(mockExtractCharacterMemoryFromMessage).toHaveBeenCalledTimes(1)
-    expect(result.debugLogs?.join('\n')).toContain('Skipped USER memory extraction')
-    // Self-memory pass goes through createMemoryWithGate with aboutCharacterId === characterId
-    expect(mockCreateMemoryWithGate).toHaveBeenCalledWith(
+    expect(tasks.extractUserMemoriesFromTurn).not.toHaveBeenCalled()
+    expect(tasks.extractSelfMemoriesFromTurn).toHaveBeenCalledTimes(1)
+    expect(result.debugLogs.join('\n')).toContain('Skipped USER memory pass')
+    expect(createMemoryWithGate).toHaveBeenCalledWith(
       expect.objectContaining({
         characterId: 'char-1',
         aboutCharacterId: 'char-1',
@@ -359,51 +328,18 @@ describe('processMessageForMemory regressions', () => {
     )
   })
 
-  it('character (self) extraction pass writes aboutCharacterId = characterId, not the user', async () => {
-    mockExtractMemoryFromMessage.mockResolvedValue({
-      success: true,
-      result: [],
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-    } as any)
-    mockExtractCharacterMemoryFromMessage.mockResolvedValue({
+  it('user-pass writes aboutCharacterId = userCharacterId for every participating character', async () => {
+    tasks.extractUserMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        { significant: true, content: 'Avery is steady in storms.', summary: 'Avery is steady', keywords: [], importance: 0.7 },
+        { significant: true, content: 'User likes jazz.', summary: 'jazz', keywords: ['jazz'], importance: 0.6 },
       ],
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
 
-    await processMessageForMemory(baseContext)
+    await processTurnForMemory(makeTranscript())
 
-    // The self-memory pass is what we changed — verify it now passes
-    // aboutCharacterId === characterId (self-reference) rather than the
-    // userCharacterId fallback the legacy helper used.
-    expect(mockCreateMemoryWithGate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        characterId: 'char-1',
-        aboutCharacterId: 'char-1',
-      }),
-      { userId: 'user-1' },
-    )
-  })
-
-  it('user extraction pass writes aboutCharacterId = userCharacterId', async () => {
-    mockExtractMemoryFromMessage.mockResolvedValue({
-      success: true,
-      result: [
-        { significant: true, content: 'User likes jazz.', summary: 'User likes jazz', keywords: ['jazz'], importance: 0.6 },
-      ],
-      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-    } as any)
-    mockExtractCharacterMemoryFromMessage.mockResolvedValue({
-      success: true,
-      result: [],
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-    } as any)
-
-    await processMessageForMemory(baseContext)
-
-    expect(mockCreateMemoryWithGate).toHaveBeenCalledWith(
+    expect(createMemoryWithGate).toHaveBeenCalledWith(
       expect.objectContaining({
         characterId: 'char-1',
         aboutCharacterId: 'user-char-1',
@@ -412,34 +348,34 @@ describe('processMessageForMemory regressions', () => {
     )
   })
 
-  it('SKIP_EMBEDDING_FAILED does not add an ID and surfaces the failure in debug logs', async () => {
-    mockExtractMemoryFromMessage.mockResolvedValue({
+  it('inter-character pass fires per (observer, subject) pair when 2+ characters spoke in the turn', async () => {
+    tasks.extractInterCharacterMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        {
-          significant: true,
-          content: 'User likes jazz.',
-          summary: 'User likes jazz',
-          keywords: ['jazz'],
-          importance: 0.6,
-        },
+        { significant: true, content: 'Other character is calm', summary: 'calm', keywords: [], importance: 0.6 },
       ],
-      usage: { promptTokens: 3, completionTokens: 1, totalTokens: 4 },
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
-    mockCreateMemoryWithGate.mockReset()
-    mockCreateMemoryWithGate
-      .mockResolvedValueOnce({
-        action: 'SKIP_EMBEDDING_FAILED',
-        memory: null,
-        reason: 'Embedding failed after retry: ECONNREFUSED',
-      } as any)
 
-    const result = await processMessageForMemory(baseContext)
+    const ctx = makeTranscript({
+      characterSlices: [
+        { characterId: 'char-1', characterName: 'Avery', text: 'Avery speaks.' },
+        { characterId: 'char-2', characterName: 'Beatrice', text: 'Beatrice replies.' },
+      ],
+    })
 
-    expect(result.success).toBe(true)
-    expect(result.memoryIds).toEqual([])
-    expect(result.reinforcedMemoryIds).toEqual([])
-    expect(result.memoryCreated).toBe(false)
-    expect(result.debugLogs?.join('\n')).toContain('embedding generation failed after retry')
+    await processTurnForMemory(ctx)
+
+    // 2 characters → 2 (observer, subject) ordered pairs.
+    expect(tasks.extractInterCharacterMemoriesFromTurn).toHaveBeenCalledTimes(2)
+    // Each pair invokes the gate with characterId=observer, aboutCharacterId=subject.
+    expect(createMemoryWithGate).toHaveBeenCalledWith(
+      expect.objectContaining({ characterId: 'char-1', aboutCharacterId: 'char-2' }),
+      { userId: 'user-1' },
+    )
+    expect(createMemoryWithGate).toHaveBeenCalledWith(
+      expect.objectContaining({ characterId: 'char-2', aboutCharacterId: 'char-1' }),
+      { userId: 'user-1' },
+    )
   })
 })

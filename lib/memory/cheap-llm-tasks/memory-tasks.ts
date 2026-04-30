@@ -4,7 +4,7 @@
 
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import type { Pronouns } from '@/lib/schemas/character.types'
+import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript'
 import { formatNameWithPronouns } from '../format-utils'
 import { executeCheapLLMTask } from './core-execution'
 import type {
@@ -20,7 +20,7 @@ import type {
  * (so the model is told the cap) and after parsing (as defense-in-depth when
  * the model ignores the instruction).
  */
-export const HARD_CANDIDATE_CAP = 5
+export const HARD_CANDIDATE_CAP = 3
 
 /** Resolves the per-call maxMemories from the token budget, clamped to the hard cap. */
 function resolveMaxMemories(resolvedMaxTokens: number | undefined): number {
@@ -233,36 +233,71 @@ function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
 }
 
 /**
- * Extracts potential memories about the USER from a message exchange.
- * Returns an array of significant memory candidates (may be empty).
- *
- * @param userMessage - The user's message
- * @param assistantMessage - The assistant's response
- * @param context - Additional context (participant list, etc.)
- * @param characterName - The name of the character responding
- * @param userCharacterName - The user character's name (optional)
- * @param selection - The cheap LLM provider selection
- * @param userId - The user ID for API key retrieval
- * @param resolvedMaxTokens - Resolved max output tokens for the cheap LLM profile
- * @returns An array of significant memory candidates
+ * Render the participant roster + joined transcript for inclusion in
+ * extraction prompts. Single shared formatter so the user-pass, self-pass
+ * and inter-character-pass all see byte-identical input prefixes.
  */
-export async function extractMemoryFromMessage(
-  userMessage: string,
-  assistantMessage: string,
-  context: string,
-  characterName: string,
-  userCharacterName: string | undefined,
+function renderTurnContext(transcript: TurnTranscript): string {
+  const roster: string[] = ['PARTICIPANTS IN THIS TURN:']
+  if (transcript.userCharacterName) {
+    roster.push(`- USER: ${transcript.userCharacterName} (the human participant)`)
+  } else if (transcript.userMessage !== null) {
+    roster.push('- USER: The human participant')
+  }
+
+  if (transcript.characterSlices.length === 1) {
+    const slice = transcript.characterSlices[0]
+    roster.push(
+      `- CHARACTER: ${formatNameWithPronouns(slice.characterName, slice.characterPronouns ?? null)} (an AI character)`
+    )
+  } else if (transcript.characterSlices.length > 1) {
+    roster.push('- CHARACTERS (AI characters in this chat):')
+    for (const slice of transcript.characterSlices) {
+      roster.push(
+        `  * ${formatNameWithPronouns(slice.characterName, slice.characterPronouns ?? null)}`
+      )
+    }
+  }
+
+  const transcriptSections: string[] = []
+  if (transcript.userMessage !== null) {
+    const userLabel = transcript.userCharacterName
+      ? `${transcript.userCharacterName} (the user)`
+      : 'The user'
+    transcriptSections.push(`${userLabel} says:\n"${transcript.userMessage}"`)
+  }
+  for (const slice of transcript.characterSlices) {
+    const characterLabel = `${formatNameWithPronouns(slice.characterName, slice.characterPronouns ?? null)} (the character)`
+    transcriptSections.push(`${characterLabel} says:\n"${slice.text}"`)
+  }
+
+  return `${roster.join('\n')}
+
+TURN TRANSCRIPT:
+
+${transcriptSections.join('\n\n')}`
+}
+
+/**
+ * Extract memories about the USER from a joined turn transcript.
+ *
+ * One call per turn (not one per character response), keyed off the user
+ * input that opened the turn. Returns an empty array when the transcript
+ * has no user message (greeting / continue / nudge turns).
+ */
+export async function extractUserMemoriesFromTurn(
+  transcript: TurnTranscript,
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
   chatId?: string,
-  characterPronouns?: Pronouns | null,
   resolvedMaxTokens?: number
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
+  if (transcript.userMessage === null) {
+    return { success: true, result: [], usage: undefined }
+  }
+
   const maxMemories = resolveMaxMemories(resolvedMaxTokens)
-  // Use clear "X says:" format to help the model distinguish speakers
-  const userLabel = userCharacterName ? `${userCharacterName} (the user)` : 'The user'
-  const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
 
   const messages: LLMMessage[] = [
     {
@@ -271,15 +306,7 @@ export async function extractMemoryFromMessage(
     },
     {
       role: 'user',
-      content: `${context}
-
-CONVERSATION TRANSCRIPT:
-
-${userLabel} says:
-"${userMessage}"
-
-${characterLabel} says:
-"${assistantMessage}"`,
+      content: renderTurnContext(transcript),
     },
   ]
 
@@ -297,36 +324,26 @@ ${characterLabel} says:
 }
 
 /**
- * Extracts potential memories about the CHARACTER from a message exchange.
- * Returns an array of significant memory candidates (may be empty).
- *
- * @param userMessage - The user's message
- * @param assistantMessage - The character's response
- * @param context - Additional context (participant list, etc.)
- * @param characterName - The character's name for context
- * @param userCharacterName - The user character's name (optional)
- * @param selection - The cheap LLM provider selection
- * @param userId - The user ID for API key retrieval
- * @param resolvedMaxTokens - Resolved max output tokens for the cheap LLM profile
- * @returns An array of significant memory candidates
+ * Extract self-revelatory memories about a single CHARACTER from the joined
+ * turn transcript. The prompt names the target character so the model
+ * focuses on that character's words/actions and ignores the others.
  */
-export async function extractCharacterMemoryFromMessage(
-  userMessage: string,
-  assistantMessage: string,
-  context: string,
-  characterName: string,
-  userCharacterName: string | undefined,
+export async function extractSelfMemoriesFromTurn(
+  transcript: TurnTranscript,
+  targetCharacterId: string,
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
   chatId?: string,
-  characterPronouns?: Pronouns | null,
   resolvedMaxTokens?: number
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
+  const target = transcript.characterSlices.find(s => s.characterId === targetCharacterId)
+  if (!target) {
+    return { success: true, result: [], usage: undefined }
+  }
+
   const maxMemories = resolveMaxMemories(resolvedMaxTokens)
-  // Use clear "X says:" format to help the model distinguish speakers
-  const userLabel = userCharacterName ? `${userCharacterName} (the user)` : 'The user'
-  const characterLabel = `${formatNameWithPronouns(characterName, characterPronouns)} (the character)`
+  const targetLabel = formatNameWithPronouns(target.characterName, target.characterPronouns ?? null)
 
   const messages: LLMMessage[] = [
     {
@@ -335,17 +352,9 @@ export async function extractCharacterMemoryFromMessage(
     },
     {
       role: 'user',
-      content: `${context}
+      content: `${renderTurnContext(transcript)}
 
-TARGET CHARACTER: ${formatNameWithPronouns(characterName, characterPronouns)}
-
-CONVERSATION TRANSCRIPT:
-
-${userLabel} says:
-"${userMessage}"
-
-${characterLabel} says:
-"${assistantMessage}"`,
+TARGET CHARACTER: ${targetLabel}`,
     },
   ]
 
@@ -363,34 +372,30 @@ ${characterLabel} says:
 }
 
 /**
- * Extracts potential memories that one character has about another character.
- * Returns an array of significant memory candidates (may be empty).
- *
- * @param characterAName - The character who will remember (the observer)
- * @param characterAMessage - What character A said
- * @param characterBName - The character being remembered (the subject)
- * @param characterBMessage - What character B said
- * @param selection - The cheap LLM provider selection
- * @param userId - The user ID for API key retrieval
- * @param resolvedMaxTokens - Resolved max output tokens for the cheap LLM profile
- * @returns An array of significant memory candidates
+ * Extract memories one CHARACTER (the observer) forms about another
+ * CHARACTER (the subject) from the joined turn transcript. The observer
+ * sees the entire turn — user input, their own contribution, and the
+ * subject's contribution — instead of the prior 2-message slice.
  */
-export async function extractInterCharacterMemoryFromMessage(
-  characterAName: string,
-  characterAMessage: string,
-  characterBName: string,
-  characterBMessage: string,
+export async function extractInterCharacterMemoriesFromTurn(
+  transcript: TurnTranscript,
+  observerCharacterId: string,
+  subjectCharacterId: string,
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
   chatId?: string,
-  characterAPronouns?: Pronouns | null,
-  characterBPronouns?: Pronouns | null,
   resolvedMaxTokens?: number
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
+  const observer = transcript.characterSlices.find(s => s.characterId === observerCharacterId)
+  const subject = transcript.characterSlices.find(s => s.characterId === subjectCharacterId)
+  if (!observer || !subject) {
+    return { success: true, result: [], usage: undefined }
+  }
+
   const maxMemories = resolveMaxMemories(resolvedMaxTokens)
-  const characterALabel = formatNameWithPronouns(characterAName, characterAPronouns)
-  const characterBLabel = formatNameWithPronouns(characterBName, characterBPronouns)
+  const observerLabel = formatNameWithPronouns(observer.characterName, observer.characterPronouns ?? null)
+  const subjectLabel = formatNameWithPronouns(subject.characterName, subject.characterPronouns ?? null)
 
   const messages: LLMMessage[] = [
     {
@@ -399,13 +404,12 @@ export async function extractInterCharacterMemoryFromMessage(
     },
     {
       role: 'user',
-      content: `Character A (the observer): ${characterALabel}
-Character B (the subject): ${characterBLabel}
+      content: `${renderTurnContext(transcript)}
 
-CONVERSATION:
-${characterALabel}: ${characterAMessage}
+OBSERVER (Character A): ${observerLabel}
+SUBJECT (Character B): ${subjectLabel}
 
-${characterBLabel}: ${characterBMessage}`,
+Extract what ${observerLabel} would remember about ${subjectLabel} based on this turn.`,
     },
   ]
 

@@ -1,8 +1,17 @@
 /**
  * Memory Trigger Service
  *
- * Handles async memory processing triggers after message completion.
- * Includes memory extraction, inter-character memory, and context summary checks.
+ * Per-turn extraction trigger plus the post-finalizer fan-out
+ * (context-summary check, danger classification, scene-state tracking,
+ * conversation render) that has always been keyed off chat turns.
+ *
+ * Memory extraction runs once per closed turn — the orchestrator detects
+ * the turn close via `turnInfo.isUsersTurn === true` on the finalizer's
+ * last character and calls `triggerTurnMemoryExtraction`. The trigger
+ * resolves the turn opener (the most recent non-system USER message),
+ * enqueues a single MEMORY_EXTRACTION job keyed on
+ * (chatId, turnOpenerMessageId), and lets the queue dedupe handle any
+ * accidental re-fires within the same turn.
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
@@ -13,18 +22,14 @@ import {
   enqueueSceneStateTracking,
   enqueueConversationRender,
   enqueueMemoryExtraction,
-  enqueueInterCharacterMemory,
 } from '@/lib/background-jobs/queue-service'
+import { findTurnOpenerMessageId } from './turn-transcript'
 import type { getRepositories } from '@/lib/repositories/factory'
-import type { Character, ConnectionProfile, ChatParticipantBase, MessageEvent, CheapLLMSettings } from '@/lib/schemas/types'
-import type { Pronouns } from '@/lib/schemas/character.types'
+import type { ConnectionProfile, MessageEvent, CheapLLMSettings } from '@/lib/schemas/types'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 
 const logger = createServiceLogger('MemoryTriggerService')
 
-/**
- * Chat settings for memory processing
- */
 export interface MemoryChatSettings {
   cheapLLMSettings?: CheapLLMSettings
   dangerSettings?: DangerousContentSettings
@@ -32,214 +37,46 @@ export interface MemoryChatSettings {
 }
 
 /**
- * Trigger memory extraction for a message
+ * Enqueue a per-turn memory extraction job for the closed turn.
+ *
+ * Caller must verify that the turn has actually closed (no more
+ * participants will speak before the user) before invoking this; the
+ * orchestrator does that via `turnInfo.isUsersTurn` on the last finalizer.
+ *
+ * The trigger pulls current chat history to find the turn opener (the
+ * most recent non-system USER message). When no qualifying user message
+ * exists (greeting-only chats, fresh chats), the trigger still enqueues
+ * a job with `turnOpenerMessageId: null` so self-pass extraction still
+ * runs against the assistant tail.
  */
-export async function triggerMemoryExtraction(
+export async function triggerTurnMemoryExtraction(
   repos: ReturnType<typeof getRepositories>,
   options: {
-    characterId: string
-    characterName: string
-    characterPronouns?: Pronouns | null
-    userCharacterName?: string
-    /** User character ID - who the memory is about (the user-controlled character) */
-    userCharacterId?: string
-    allCharacterNames?: string[]
-    /** Map of character name to pronouns for multi-character chats */
-    allCharacterPronouns?: Record<string, Pronouns | null>
     chatId: string
-    userMessage: string
-    assistantMessage: string
-    sourceMessageId: string
     userId: string
     connectionProfile: ConnectionProfile
     chatSettings: MemoryChatSettings
-  }
+  },
 ): Promise<void> {
-  // Repos arg is kept for API compatibility with the synchronous signature;
-  // the worker re-resolves repositories itself.
-  void repos
   try {
     if (!options.chatSettings.cheapLLMSettings) {
       return
     }
 
+    const messages = await repos.chats.getMessages(options.chatId)
+    const messageEvents = messages.filter(
+      (m): m is MessageEvent => m.type === 'message',
+    ) as unknown as MessageEvent[]
+
+    const turnOpenerMessageId = findTurnOpenerMessageId(messageEvents)
+
     await enqueueMemoryExtraction(options.userId, {
       chatId: options.chatId,
-      characterId: options.characterId,
-      characterName: options.characterName,
-      characterPronouns: options.characterPronouns ?? undefined,
-      userCharacterName: options.userCharacterName,
-      userCharacterId: options.userCharacterId,
-      allCharacterNames: options.allCharacterNames,
-      allCharacterPronouns: options.allCharacterPronouns,
-      userMessage: options.userMessage,
-      assistantMessage: options.assistantMessage,
-      sourceMessageId: options.sourceMessageId,
+      turnOpenerMessageId,
       connectionProfileId: options.connectionProfile.id,
     })
   } catch (error) {
-    logger.error('Failed to enqueue memory extraction', {}, error as Error)
-  }
-}
-
-/**
- * Trigger inter-character memory extraction for multi-character chats
- */
-export async function triggerInterCharacterMemory(
-  repos: ReturnType<typeof getRepositories>,
-  options: {
-    character: Character
-    characterParticipantId: string
-    assistantMessage: string
-    assistantMessageId: string
-    chatId: string
-    userId: string
-    connectionProfile: ConnectionProfile
-    chatSettings: MemoryChatSettings
-    existingMessages: MessageEvent[]
-    participants: ChatParticipantBase[]
-    participantCharacters: Map<string, Character>
-  }
-): Promise<void> {
-  void repos
-  try {
-    if (!options.chatSettings.cheapLLMSettings) {
-      return
-    }
-
-    // Get the last messages from other characters to form memories about them
-    const otherCharacterMessages = options.existingMessages
-      .filter(msg => msg.type === 'message')
-      .filter(msg => {
-        return msg.role === 'ASSISTANT' && msg.participantId && msg.participantId !== options.characterParticipantId
-      })
-      .filter(msg => {
-        // Skip whisper messages not involving this character
-        const targetIds = (msg as any).targetParticipantIds
-        if (targetIds && Array.isArray(targetIds) && targetIds.length > 0) {
-          // Only include if this character is the sender or target
-          return msg.participantId === options.characterParticipantId || targetIds.includes(options.characterParticipantId)
-        }
-        return true // Public message
-      })
-      .slice(-5) // Look at last 5 assistant messages from others
-
-    for (const otherMsg of otherCharacterMessages) {
-      const otherParticipantId = otherMsg.participantId
-      if (!otherParticipantId) continue
-
-      // Find the other participant and their character
-      const otherParticipant = options.participants.find(p => p.id === otherParticipantId)
-      if (!otherParticipant || otherParticipant.type !== 'CHARACTER' || !otherParticipant.characterId) continue
-
-      const otherCharacter = options.participantCharacters.get(otherParticipant.characterId)
-      if (!otherCharacter) continue
-
-      // Enqueue an inter-character memory job for this (observer, subject) pair.
-      try {
-        await enqueueInterCharacterMemory(options.userId, {
-          chatId: options.chatId,
-          observerCharacterId: options.character.id,
-          observerCharacterName: options.character.name,
-          observerCharacterPronouns: options.character.pronouns ?? undefined,
-          observerMessage: options.assistantMessage,
-          subjectCharacterId: otherCharacter.id,
-          subjectCharacterName: otherCharacter.name,
-          subjectCharacterPronouns: otherCharacter.pronouns ?? undefined,
-          subjectMessage: otherMsg.content,
-          sourceMessageId: options.assistantMessageId,
-          connectionProfileId: options.connectionProfile.id,
-        })
-      } catch (error) {
-        logger.error('Failed to enqueue inter-character memory', {}, error as Error)
-      }
-    }
-
-  } catch (error) {
-    logger.error('Failed to trigger inter-character memory extraction', {}, error as Error)
-  }
-}
-
-/**
- * Trigger memory extraction for a user-controlled/impersonated character
- *
- * When the user types as a character (via impersonation or user-controlled),
- * that character should also form memories about:
- * - What they "said" (the user's input as them)
- * - What other characters responded with
- *
- * This allows the character to have continuous memories even when
- * switching between user and LLM control.
- */
-export async function triggerUserControlledCharacterMemory(
-  repos: ReturnType<typeof getRepositories>,
-  options: {
-    /** The character the user was typing as */
-    userControlledCharacter: Character
-    /** Participant ID of the user-controlled character */
-    userControlledParticipantId: string
-    /** What the user typed as this character */
-    userTypedMessage: string
-    /** The LLM character that responded */
-    respondingCharacter: Character
-    /** What the LLM character said in response */
-    llmResponse: string
-    /** Message ID of the LLM response (for debug logs) */
-    llmResponseMessageId: string
-    chatId: string
-    userId: string
-    chatSettings: MemoryChatSettings
-    /** All character names for context */
-    allCharacterNames?: string[]
-  }
-): Promise<void> {
-  try {
-    if (!options.chatSettings.cheapLLMSettings) {
-      return
-    }
-
-    // Get cheap LLM profile for memory extraction
-    // Priority: defaultCheapProfileId (if valid) > userDefinedProfileId (if valid)
-    let connectionProfile = null
-    const cheapLLMSettings = options.chatSettings.cheapLLMSettings
-
-    // Try global default first (if set and valid)
-    if (cheapLLMSettings.defaultCheapProfileId) {
-      connectionProfile = await repos.connections.findById(cheapLLMSettings.defaultCheapProfileId)
-      if (!connectionProfile || connectionProfile.userId !== options.userId) {
-        connectionProfile = null // Invalid, try next
-      }
-    }
-
-    // Fall back to user-defined profile
-    if (!connectionProfile && cheapLLMSettings.strategy === 'USER_DEFINED' && cheapLLMSettings.userDefinedProfileId) {
-      connectionProfile = await repos.connections.findById(cheapLLMSettings.userDefinedProfileId)
-      if (!connectionProfile || connectionProfile.userId !== options.userId) {
-        connectionProfile = null
-      }
-    }
-
-    if (!connectionProfile) {
-      return
-    }
-
-    // The user-controlled character forms memories about what they said
-    // and how the other character responded. Enqueued to drain in the
-    // background so the response stream is not blocked.
-    await enqueueMemoryExtraction(options.userId, {
-      chatId: options.chatId,
-      characterId: options.userControlledCharacter.id,
-      characterName: options.userControlledCharacter.name,
-      // The "user message" from this character's perspective is what the other character said
-      userMessage: `${options.respondingCharacter.name}: ${options.llmResponse}`,
-      // The "assistant message" is what this character said (their own words)
-      assistantMessage: options.userTypedMessage,
-      allCharacterNames: options.allCharacterNames,
-      sourceMessageId: options.llmResponseMessageId,
-      connectionProfileId: connectionProfile.id,
-    })
-  } catch (error) {
-    logger.error('Failed to trigger user-controlled character memory', {}, error as Error)
+    logger.error('Failed to enqueue per-turn memory extraction', {}, error as Error)
   }
 }
 
@@ -331,7 +168,7 @@ export async function triggerChatDangerClassification(
     }
 
     // Enqueue the classification job
-    const result = await enqueueChatDangerClassification(options.userId, {
+    await enqueueChatDangerClassification(options.userId, {
       chatId: options.chatId,
       connectionProfileId: options.connectionProfile.id,
     })

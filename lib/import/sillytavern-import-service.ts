@@ -8,7 +8,7 @@
 import { importSTChat, type STChat } from '@/lib/sillytavern/chat'
 import { logger } from '@/lib/logger'
 import { generateContextSummaryAsync } from '@/lib/chat/context-summary'
-import { enqueueMemoryExtractionBatch, ensureProcessorRunning, type MessagePair } from '@/lib/background-jobs'
+import { enqueueMemoryExtractionBatch, ensureProcessorRunning } from '@/lib/background-jobs'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { SpeakerMapping } from '@/lib/sillytavern/multi-char-parser'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
@@ -615,53 +615,38 @@ async function queueMemoryExtractionJobs(
   participants: ChatParticipantBase[],
   repos: RepositoryContainer
 ): Promise<number> {
-  const firstCharacterParticipant = participants.find(
-    p => p.type === 'CHARACTER' && p.characterId
+  // Pull the connection-profile from any character participant so the
+  // per-turn handler has a cheap-LLM target. The first character with a
+  // configured profile is fine — every job uses the same profile.
+  const profileSource = participants.find(
+    p => p.type === 'CHARACTER' && p.characterId && p.connectionProfileId,
   )
-  if (!firstCharacterParticipant?.characterId || !firstCharacterParticipant.connectionProfileId) {
+  if (!profileSource?.connectionProfileId) {
     return 0
   }
 
-  const character = await repos.characters.findById(firstCharacterParticipant.characterId)
-  if (!character) return 0
-
   const allImportedMessages = await repos.chats.getMessages(chatId)
-  const messageList = allImportedMessages.filter(
-    (m): m is typeof m & { type: 'message'; role: 'USER' | 'ASSISTANT' } =>
-      m.type === 'message' && (m.role === 'USER' || m.role === 'ASSISTANT')
-  )
-
-  const messagePairs: MessagePair[] = []
-  for (let i = 0; i < messageList.length - 1; i++) {
-    const current = messageList[i]
-    const next = messageList[i + 1]
-
-    if (current.role === 'USER' && next.role === 'ASSISTANT') {
-      messagePairs.push({
-        userMessageId: current.id,
-        assistantMessageId: next.id,
-        userContent: current.content,
-        assistantContent: next.content,
-      })
-    }
+  const turnOpenerIds: string[] = []
+  for (const m of allImportedMessages) {
+    if (m.type !== 'message') continue
+    if (m.role !== 'USER') continue
+    if (m.systemSender) continue
+    turnOpenerIds.push(m.id)
   }
 
-  if (messagePairs.length === 0) return 0
+  if (turnOpenerIds.length === 0) return 0
 
-  importLogger.info('Queueing memory extraction jobs', {
+  importLogger.info('Queueing per-turn memory extraction jobs', {
     chatId,
-    characterId: character.id,
-    pairCount: messagePairs.length,
+    turnCount: turnOpenerIds.length,
   })
 
   const jobIds = await enqueueMemoryExtractionBatch(
     userId,
     chatId,
-    character.id,
-    character.name,
-    firstCharacterParticipant.connectionProfileId,
-    messagePairs,
-    { priority: 0 }
+    profileSource.connectionProfileId,
+    turnOpenerIds,
+    { priority: 0 },
   )
 
   ensureProcessorRunning()

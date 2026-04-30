@@ -47,7 +47,7 @@ import {
   buildForceFinalMessage,
 } from '@/lib/services/chat-message/agent-mode-resolver.service'
 import {
-  triggerMemoryExtraction,
+  triggerTurnMemoryExtraction,
   triggerContextSummaryCheck,
 } from '@/lib/services/chat-message/memory-trigger.service'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
@@ -612,7 +612,7 @@ async function triggerAsyncTasks(
   repos: ReturnType<typeof getRepositories>,
   chatId: string,
   userId: string,
-  chat: ChatMetadataBase,
+  _chat: ChatMetadataBase,
   firstParticipant: ChatMetadataBase['participants'][number]
 ): Promise<void> {
   try {
@@ -648,41 +648,20 @@ async function triggerAsyncTasks(
       })
     })
 
-    // Trigger memory extraction for the first participant's character
-    if (firstParticipant.characterId) {
-      const character = await repos.characters.findById(firstParticipant.characterId)
-      if (character) {
-        // Get the last user message and assistant message for memory extraction
-        const messages = await repos.chats.getMessages(chatId)
-        const recentMessages = messages.filter(m => m.type === 'message') as MessageEvent[]
-        const lastUserMsg = [...recentMessages].reverse().find(m => m.role === 'USER')
-        const lastAssistantMsg = [...recentMessages].reverse().find(
-          m => m.role === 'ASSISTANT' && m.participantId === firstParticipant.id
-        )
-
-        if (lastUserMsg && lastAssistantMsg) {
-          triggerMemoryExtraction(repos, {
-            characterId: character.id,
-            characterName: character.name,
-            characterPronouns: character.pronouns,
-            userCharacterName: (await repos.users.findById(userId))?.name || 'User',
-            chatId,
-            userMessage: lastUserMsg.content,
-            assistantMessage: lastAssistantMsg.content,
-            sourceMessageId: lastAssistantMsg.id,
-            userId,
-            connectionProfile,
-            chatSettings: { cheapLLMSettings: chatSettings.cheapLLMSettings },
-          }).catch(error => {
-            logger.warn('Failed to trigger memory extraction', {
-              chatId,
-              characterId: character.id,
-              error: error instanceof Error ? error.message : String(error),
-            })
-          })
-        }
-      }
-    }
+    // Per-turn memory extraction. The trigger reads chat state itself to
+    // resolve the turn opener, so we don't need to plumb the most recent
+    // user/assistant messages through here.
+    triggerTurnMemoryExtraction(repos, {
+      chatId,
+      userId,
+      connectionProfile,
+      chatSettings: { cheapLLMSettings: chatSettings.cheapLLMSettings },
+    }).catch(error => {
+      logger.warn('Failed to trigger memory extraction', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
   } catch (error) {
     logger.warn('Failed to trigger async tasks', {
       chatId,

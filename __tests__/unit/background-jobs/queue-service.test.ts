@@ -100,14 +100,12 @@ describe('enqueueJob', () => {
 });
 
 describe('enqueue helpers', () => {
-  it('enqueues memory extraction jobs and returns the job id', async () => {
+  it('enqueues a per-turn memory extraction job and returns the job id', async () => {
+    backgroundJobs.findByUserId = jest.fn().mockResolvedValue([]);
+
     const payload = {
       chatId: 'chat-1',
-      characterId: 'char-1',
-      characterName: 'Hero',
-      userMessage: 'Hi',
-      assistantMessage: 'Hello',
-      sourceMessageId: 'msg-1',
+      turnOpenerMessageId: 'user-msg-1',
       connectionProfileId: 'profile-1',
     };
 
@@ -122,34 +120,15 @@ describe('enqueueMemoryExtractionBatch', () => {
   const basePayload = {
     userId: 'user-1',
     chatId: 'chat-1',
-    characterId: 'char-1',
-    characterName: 'Hero',
     connectionProfileId: 'profile-1',
   };
 
-  it('creates a batch of jobs, mirroring each message pair payload', async () => {
-    const pairs = [
-      {
-        userMessageId: 'u-1',
-        assistantMessageId: 'a-1',
-        userContent: 'User message',
-        assistantContent: 'Assistant reply',
-      },
-      {
-        userMessageId: 'u-2',
-        assistantMessageId: 'a-2',
-        userContent: 'Another user message',
-        assistantContent: 'Second assistant reply',
-      },
-    ];
-
+  it('creates one MEMORY_EXTRACTION job per turn opener', async () => {
     const ids = await enqueueMemoryExtractionBatch(
       basePayload.userId,
       basePayload.chatId,
-      basePayload.characterId,
-      basePayload.characterName,
       basePayload.connectionProfileId,
-      pairs
+      ['user-msg-1', 'user-msg-2'],
     );
 
     expect(ids).toEqual(['job-1', 'job-2']);
@@ -159,27 +138,28 @@ describe('enqueueMemoryExtractionBatch', () => {
     expect(createdJobs[0]).toMatchObject({
       userId: basePayload.userId,
       type: 'MEMORY_EXTRACTION',
-      payload: expect.objectContaining({
+      payload: {
         chatId: basePayload.chatId,
-        characterId: basePayload.characterId,
-        characterName: basePayload.characterName,
-        userMessage: pairs[0].userContent,
-        assistantMessage: pairs[0].assistantContent,
-        sourceMessageId: pairs[0].assistantMessageId,
+        turnOpenerMessageId: 'user-msg-1',
         connectionProfileId: basePayload.connectionProfileId,
-      }),
+      },
+    });
+    expect(createdJobs[1]).toMatchObject({
+      payload: {
+        chatId: basePayload.chatId,
+        turnOpenerMessageId: 'user-msg-2',
+        connectionProfileId: basePayload.connectionProfileId,
+      },
     });
     expect(mockEnsureProcessorRunning).toHaveBeenCalledTimes(1);
   });
 
-  it('returns an empty array and skips processor startup when there are no pairs', async () => {
+  it('returns an empty array and skips processor startup when there are no turn openers', async () => {
     const ids = await enqueueMemoryExtractionBatch(
       basePayload.userId,
       basePayload.chatId,
-      basePayload.characterId,
-      basePayload.characterName,
       basePayload.connectionProfileId,
-      []
+      [],
     );
 
     expect(ids).toEqual([]);

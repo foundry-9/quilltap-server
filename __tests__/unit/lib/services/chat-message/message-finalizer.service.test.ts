@@ -34,9 +34,7 @@ jest.mock('@/lib/services/chat-message/streaming.service', () => ({
 }))
 
 jest.mock('@/lib/services/chat-message/memory-trigger.service', () => ({
-  triggerMemoryExtraction: jest.fn().mockResolvedValue(undefined),
-  triggerInterCharacterMemory: jest.fn().mockResolvedValue(undefined),
-  triggerUserControlledCharacterMemory: jest.fn().mockResolvedValue(undefined),
+  triggerTurnMemoryExtraction: jest.fn().mockResolvedValue(undefined),
   triggerContextSummaryCheck: jest.fn().mockResolvedValue(undefined),
   triggerChatDangerClassification: jest.fn().mockResolvedValue(undefined),
 }))
@@ -217,9 +215,89 @@ describe('message-finalizer.service', () => {
       provider: 'OPENAI',
       modelName: 'gpt-4.1',
     }))
-    expect(memoryTriggers.triggerMemoryExtraction).toHaveBeenCalled()
+    // Per-turn extraction fires only when the turn closes (next speaker is the user).
+    // The default selectNextSpeaker mock returns participant-2, so isUsersTurn is false
+    // and the extraction trigger should NOT fire on this finalize.
+    expect(memoryTriggers.triggerTurnMemoryExtraction).not.toHaveBeenCalled()
     expect(memoryTriggers.triggerContextSummaryCheck).toHaveBeenCalled()
     expect(memoryTriggers.triggerChatDangerClassification).toHaveBeenCalled()
+  })
+
+  it('finalizeMessageResponse fires per-turn memory extraction only when control returns to the user', async () => {
+    const turnManager = jest.requireMock('@/lib/chat/turn-manager') as {
+      selectNextSpeaker: jest.Mock
+    }
+    turnManager.selectNextSpeaker.mockReturnValueOnce({
+      nextSpeakerId: null,
+      reason: 'user-turn',
+      cycleComplete: true,
+    })
+
+    const repos = createMockRepos()
+    const controller = { enqueue: jest.fn() } as any
+    const encoder = new TextEncoder()
+
+    await finalizeMessageResponse({
+      repos: repos as any,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      chat: {
+        id: 'chat-1',
+        participants: [
+          { id: 'participant-1', characterId: 'char-1', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+        ],
+        isDangerousChat: false,
+      } as any,
+      character: { id: 'char-1', name: 'Alice', aliases: ['Al'], pronouns: null } as any,
+      characterParticipant: { id: 'participant-1', status: 'active' } as any,
+      userParticipantId: null,
+      isMultiCharacter: false,
+      isContinueMode: false,
+      generatedImagePaths: [],
+      toolMessages: [],
+      preGeneratedAssistantMessageId: 'assistant-3',
+      connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+      controller,
+      encoder,
+      streaming: {
+        fullResponse: 'BLOCK:Alice: closing line',
+        effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+        effectiveApiKey: 'sk-test',
+        usage: null,
+        cacheUsage: null,
+        attachmentResults: null,
+        rawResponse: { provider: 'raw' },
+        thoughtSignature: undefined,
+        hasStartedStreaming: true,
+      },
+      compression: {
+        existingMessages: [],
+        content: 'hello',
+        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        compressionEnabled: false,
+        cheapLLMSelection: null,
+        contextCompressionSettings: {
+          enabled: true,
+          windowSize: 5,
+          compressionTargetTokens: 800,
+          systemPromptTargetTokens: 1500,
+          projectContextReinjectInterval: 5,
+        },
+        allProfiles: [],
+      },
+      triggers: {
+        dangerSettings: { mode: 'OFF' } as any,
+        chatSettings: {
+          cheapLLMSettings: { strategy: 'USER_DEFINED' },
+          autoDetectRng: false,
+        } as any,
+        participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
+        resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
+        userCharacterId: undefined,
+      },
+    })
+
+    expect(memoryTriggers.triggerTurnMemoryExtraction).toHaveBeenCalled()
   })
 
   it('finalizeMessageResponse runs multi-character memory hooks and assistant RNG auto-detection', async () => {
@@ -299,7 +377,5 @@ describe('message-finalizer.service', () => {
     })
 
     expect(rngHandler.executeRngTool).toHaveBeenCalled()
-    expect(memoryTriggers.triggerInterCharacterMemory).toHaveBeenCalled()
-    expect(memoryTriggers.triggerUserControlledCharacterMemory).toHaveBeenCalled()
   })
 })

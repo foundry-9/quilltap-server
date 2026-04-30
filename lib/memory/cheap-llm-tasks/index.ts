@@ -23,9 +23,9 @@ export type {
 
 // Memory tasks
 export {
-  extractMemoryFromMessage,
-  extractCharacterMemoryFromMessage,
-  extractInterCharacterMemoryFromMessage,
+  extractUserMemoriesFromTurn,
+  extractSelfMemoriesFromTurn,
+  extractInterCharacterMemoriesFromTurn,
   batchExtractMemories,
   extractMemorySearchKeywords,
   summarizeMemoryRecap,
