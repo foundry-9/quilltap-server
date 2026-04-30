@@ -424,12 +424,16 @@
         "systemKind": { "type": ["string", "null"], "description": "Sub-classification of a Staff-authored message — used by the Salon UI to label collapsed system-message bars (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender." },
         "hostEvent": {
           "type": ["object", "null"],
-          "description": "Structured payload on Host announcements (systemSender = 'host') of type add / remove / status-change. Carries the affected participant ID and the status they were transitioning to. Used by the per-character Librarian summary pipeline to compute presence windows.",
+          "description": "Structured payload on Host announcements (systemSender = 'host'). Two shapes share this field: (a) presence transitions — { participantId, toStatus } — for add / remove / status-change; (b) off-scene character introductions — { introducedCharacterIds } — stamped by the off-scene Host announcer so the context builder can detect already-introduced characters. All fields optional; one or the other is set per announcement.",
           "properties": {
             "participantId": { "type": "string" },
-            "toStatus": { "type": "string", "enum": ["active", "silent", "absent", "removed"] }
-          },
-          "required": ["participantId", "toStatus"]
+            "toStatus": { "type": "string", "enum": ["active", "silent", "absent", "removed"] },
+            "introducedCharacterIds": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Workspace character IDs introduced by an off-scene-characters announcement."
+            }
+          }
         }
       }
     },

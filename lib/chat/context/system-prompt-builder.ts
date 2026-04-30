@@ -277,39 +277,24 @@ export function buildOtherParticipantsInfo(
 }
 
 /**
- * Build an identity reinforcement block to append at the very end of the system prompt.
- * This reminds the LLM which character it is playing and who it must NOT write for,
- * placed as close to the generation boundary as possible for maximum compliance.
+ * Build an identity reinforcement block emitted as a separate, fully-static
+ * system message. The text deliberately avoids naming individual participants
+ * — those join/leave the chat via Host announcements that already live in the
+ * conversation history, and every history message carries `name` attribution
+ * — so this block can sit downstream of a prompt-cache breakpoint without
+ * invalidating it on participant changes.
  */
 export function buildIdentityReinforcement(
   characterName: string,
-  userName: string = 'User',
-  otherParticipantNames?: string[]
 ): string {
-  const hasOtherParticipants = otherParticipantNames && otherParticipantNames.length > 0
+  // WHY static: any inline list of "other participants" is the kind of
+  // turn-variable content that bisects provider prompt caching. The model
+  // already knows who is in the scene from Host roster announcements and
+  // per-message name attribution; the reminder only needs to emphasise
+  // staying in {{char}}'s voice.
+  const template = `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for any other character. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.\nDo not prefix or label your response with your name (e.g., do not start with "[{{char}}]" or "{{char}}:"). Simply respond in character directly.`
 
-  // Build the "do not write for" list
-  let doNotWriteFor: string
-  if (hasOtherParticipants) {
-    // Multi-character: explicitly name other participants plus the user
-    const allOthers = [...otherParticipantNames, userName]
-    if (allOthers.length === 1) {
-      doNotWriteFor = allOthers[0]
-    } else {
-      const last = allOthers[allOthers.length - 1]
-      const rest = allOthers.slice(0, -1)
-      doNotWriteFor = `${rest.join(', ')}, ${last}, or any other character`
-    }
-  } else {
-    doNotWriteFor = `{{user}} or any other character`
-  }
-
-  const template = `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for ${doNotWriteFor}. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.\nDo not prefix or label your response with your name (e.g., do not start with "[{{char}}]" or "{{char}}:"). Simply respond in character directly.`
-
-  const result = processTemplate(template, {
+  return processTemplate(template, {
     char: characterName,
-    user: userName,
   })
-
-  return result
 }

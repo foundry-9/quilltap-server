@@ -25,8 +25,17 @@ export interface MessageWithParticipant {
   createdAt?: string
   /** Target participant IDs for whisper messages */
   targetParticipantIds?: string[] | null
-  /** Structured payload on Host status announcements; used to compute presence windows */
-  hostEvent?: { participantId: string; toStatus: ParticipantStatus } | null
+  /**
+   * Structured payload on Host announcements. For presence transitions both
+   * `participantId` and `toStatus` are set; for off-scene-character
+   * introductions only `introducedCharacterIds` is set. Presence tracking
+   * filters on the first shape and ignores the second.
+   */
+  hostEvent?: {
+    participantId?: string
+    toStatus?: ParticipantStatus
+    introducedCharacterIds?: string[]
+  } | null
 }
 
 /**
@@ -91,8 +100,14 @@ export function computePresenceWindowsForParticipant(
   participant: ChatParticipantBase,
 ): PresenceWindow[] {
   const events = messages
-    .filter(m => m.hostEvent && m.hostEvent.participantId === participant.id && m.createdAt)
-    .map(m => ({ at: m.createdAt as string, toStatus: m.hostEvent!.toStatus }))
+    .filter(
+      m =>
+        m.hostEvent &&
+        m.hostEvent.participantId === participant.id &&
+        m.hostEvent.toStatus !== undefined &&
+        m.createdAt,
+    )
+    .map(m => ({ at: m.createdAt as string, toStatus: m.hostEvent!.toStatus as ParticipantStatus }))
     .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
 
   const windows: PresenceWindow[] = []

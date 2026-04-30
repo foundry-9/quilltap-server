@@ -978,41 +978,37 @@ describe('Context Manager', () => {
   })
 
   describe('buildIdentityReinforcement', () => {
-    it('produces a single-character reminder with character and user names', () => {
-      const result = buildIdentityReinforcement('Artemis', 'Alex')
+    it('produces a reminder anchored on the character name', () => {
+      const result = buildIdentityReinforcement('Artemis')
       expect(result).toContain('## Identity Reminder')
       expect(result).toContain('You are Artemis.')
       expect(result).toContain('Respond only as Artemis.')
-      expect(result).toContain('Alex or any other character')
       expect(result).not.toContain('{{char}}')
       expect(result).not.toContain('{{user}}')
     })
 
-    it('defaults user name to "User" when not provided', () => {
+    it('uses a fully static "any other character" phrasing — no inline list', () => {
+      // The reminder is now emitted as a separate, fully-static second system
+      // message. It must NOT name individual participants (those used to live
+      // here as a comma-separated list and bisected provider prompt caching);
+      // participant attribution comes from Host roster announcements + each
+      // history message's `name` field instead.
       const result = buildIdentityReinforcement('Artemis')
-      expect(result).toContain('User or any other character')
+      expect(result).toContain('Do not write dialogue, actions, or thoughts for any other character.')
+      expect(result).not.toMatch(/Do not write dialogue.*?for [A-Z][a-z]+,/)
+    })
+
+    it('produces byte-identical output across calls for the same character', () => {
+      const a = buildIdentityReinforcement('Friday')
+      const b = buildIdentityReinforcement('Friday')
+      expect(a).toBe(b)
     })
 
     it('instructs LLM not to prefix response with character name', () => {
-      const result = buildIdentityReinforcement('Friday', 'Alex')
+      const result = buildIdentityReinforcement('Friday')
       expect(result).toContain('Do not prefix or label your response with your name')
       expect(result).toContain('[Friday]')
       expect(result).toContain('Friday:')
-    })
-
-    it('lists other participant names in multi-character mode', () => {
-      const result = buildIdentityReinforcement('Artemis', 'Alex', ['Luna', 'Orion'])
-      expect(result).toContain('Luna')
-      expect(result).toContain('Orion')
-      expect(result).toContain('Alex')
-      expect(result).toContain('You are Artemis.')
-    })
-
-    it('uses single-character format when otherParticipantNames is empty', () => {
-      const result = buildIdentityReinforcement('Artemis', 'Alex', [])
-      expect(result).toContain('Alex or any other character')
-      // Should not contain any participant name listing (no "Luna", "Orion", etc.)
-      expect(result).toContain('Do not write dialogue, actions, or thoughts for Alex or any other character.')
     })
   })
 })

@@ -55,7 +55,6 @@ import {
 } from './context/message-selector'
 import {
   findMentionedCharacterIds,
-  formatMentionedCharactersSection,
 } from './context/mentioned-characters'
 import {
   shouldApplyCompression,
@@ -74,6 +73,8 @@ import {
 import {
   postHostTimestampAnnouncement,
   buildTimestampContent,
+  postHostOffSceneCharactersAnnouncement,
+  findIntroducedOffSceneCharacterIds,
 } from '@/lib/services/host-notifications/writer'
 import {
   shouldInjectTimestamp,
@@ -401,10 +402,20 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // delivered as Aurora whispers in the transcript, so the per-turn
   // system-prompt loading of equipped outfits has been removed.
 
-  // Build "Characters Mentioned" section: scan the conversation for references
-  // to characters that exist on the system but are not currently in the chat.
+  // Off-scene character introductions: scan the conversation for workspace
+  // characters who are NOT current participants but get name-dropped in
+  // history. The first time each one is named, the Host introduces them with
+  // a public chat message — visible to the user, surfaced to every
+  // character's LLM context via normal history. Subsequent turns recall the
+  // particulars from history without re-injecting cards into the system
+  // prompt every turn (which used to bisect provider prompt caching).
+  //
+  // Idempotent per character: prior Host announcements stamp the introduced
+  // IDs onto `hostEvent.introducedCharacterIds`, so repeated mentions of
+  // already-introduced characters are no-ops.
+  //
   // Failures here must never break prompt assembly — log and skip on error.
-  let mentionedCharactersSection: string | undefined
+  let pendingOffSceneAnnouncement: { content: string } | null = null
   try {
     const repos = getRepositories()
     const allUserCharacters = await repos.characters.findByUserId(userId)
@@ -450,17 +461,46 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
       const matchedIds = findMentionedCharacterIds(scanCorpus, candidates)
       if (matchedIds.size > 0) {
-        const matched = candidates.filter(c => matchedIds.has(c.id))
-        const formatted = formatMentionedCharactersSection(matched)
-        if (formatted.section.length > 0) {
-          mentionedCharactersSection = formatted.section
-          logger.debug('[ContextManager] Mentioned characters section built', {
+        // Diff against characters already introduced by prior Host
+        // announcements in this chat — only newly-mentioned ones get a fresh
+        // intro.
+        const introducedIds = findIntroducedOffSceneCharacterIds(existingMessages)
+        const newcomerIds = new Set<string>()
+        for (const id of matchedIds) {
+          if (!introducedIds.has(id)) newcomerIds.add(id)
+        }
+
+        if (newcomerIds.size > 0) {
+          const newcomers = candidates.filter(c => newcomerIds.has(c.id))
+          const announcement = await postHostOffSceneCharactersAnnouncement({
             chatId: chat.id,
-            candidateCount: candidates.length,
-            matchedCount: matched.length,
-            includedCount: formatted.includedCount,
-            matchedNames: matched.map(c => c.name),
-            sectionTokens: estimateTokens(formatted.section, provider),
+            characters: newcomers.map(c => ({
+              id: c.id,
+              name: c.name,
+              aliases: c.aliases ?? undefined,
+              pronouns: c.pronouns ?? undefined,
+              description: c.description ?? undefined,
+            })),
+          })
+          if (announcement) {
+            // Surface the announcement to THIS turn's LLM context so the
+            // responding character sees the intro without a one-turn lag.
+            // (It's already persisted to the chat for future turns.)
+            pendingOffSceneAnnouncement = { content: announcement.content }
+            logger.debug('[ContextManager] Off-scene Host introduction posted', {
+              chatId: chat.id,
+              candidateCount: candidates.length,
+              matchedCount: matchedIds.size,
+              alreadyIntroducedCount: introducedIds.size,
+              newcomerCount: newcomers.length,
+              newcomerNames: newcomers.map(c => c.name),
+              contentTokens: estimateTokens(announcement.content, provider),
+            })
+          }
+        } else {
+          logger.debug('[ContextManager] All mentioned characters already introduced', {
+            chatId: chat.id,
+            matchedCount: matchedIds.size,
           })
         }
       } else {
@@ -471,7 +511,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       }
     }
   } catch (error) {
-    logger.warn('[ContextManager] Failed to build mentioned-characters section', {
+    logger.warn('[ContextManager] Failed to compute off-scene character introductions', {
       chatId: chat.id,
       error: getErrorMessage(error),
     })
@@ -485,9 +525,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const precompiledIdentityStack = respondingParticipant
     ? getCompiledIdentityStack(chat, respondingParticipant.id)
     : null
-  // mentionedCharactersSection is appended AFTER truncation below so it
-  // always survives; the in-prompt position would otherwise be lopped off
-  // whenever the core system prompt exceeds its token budget.
   const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,
@@ -525,12 +562,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     finalSystemPrompt = truncateToTokenLimit(systemPrompt, budget.systemPromptBudget, provider)
   }
 
-  // Append "Characters Mentioned" after any truncation so it always survives,
-  // even when the core system prompt is over budget. The section's own length
-  // is bounded by formatMentionedCharactersSection's internal hard cap.
-  if (mentionedCharactersSection) {
-    finalSystemPrompt = `${finalSystemPrompt}\n\n${mentionedCharactersSection}`
-  }
+  // Off-scene character cards are no longer spliced into the system prompt
+  // (they used to live here and broke prompt-cache prefixes whenever a new
+  // workspace character got name-dropped). They now ride as Host
+  // introductions in chat history; the per-turn announcement (when there's a
+  // newcomer) is appended to `pendingOffSceneAnnouncement` above and pushed
+  // into this turn's contextMessages alongside the timestamp whisper.
 
   const finalSystemPromptTokens = estimateTokens(finalSystemPrompt, provider)
 
@@ -1128,24 +1165,28 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // 8. Assemble final context
   const contextMessages: ContextMessage[] = []
 
-  // System prompt — memories now ride as Commonplace Book whispers and
-  // conversation summary as a Librarian whisper. Use effective system prompt
-  // (possibly compressed).
-  let fullSystemContent = effectiveSystemPrompt
-
-  // Identity reinforcement: append as the very last content in system prompt
-  // so it's the closest instruction to where the LLM begins generating
-  const otherParticipantNames = otherParticipantsInfo?.map(p => p.name)
-  const identityReminder = buildIdentityReinforcement(
-    character.name,
-    userCharacter?.name || 'User',
-    isMultiCharacter ? otherParticipantNames : undefined,
-  )
-  fullSystemContent += '\n\n' + identityReminder
-
+  // System block 1 — stable identity stack: character + roleplay template +
+  // tool prose. Memories ride as Commonplace Book whispers and conversation
+  // summary as a Librarian whisper, so they are NOT here. Across turns of the
+  // same character this content is byte-identical (modulo edits to the
+  // character) and forms the cacheable prefix for provider prompt caching
+  // (Anthropic ephemeral cache, OpenAI automatic prefix cache, etc.).
   contextMessages.push({
     role: 'system',
-    content: fullSystemContent,
+    content: effectiveSystemPrompt,
+    metadata: { isInjected: true },
+  })
+
+  // System block 2 — fully static identity reinforcement. Emitted as a
+  // separate system message so block 1 can be marked with a cache breakpoint
+  // without the reinforcement's content changes invalidating it. (The
+  // reinforcement no longer names individual participants — that list used
+  // to live here and bisected the cacheable region; participant attribution
+  // now comes from Host roster announcements + per-message `name` fields.)
+  const identityReminder = buildIdentityReinforcement(character.name)
+  contextMessages.push({
+    role: 'system',
+    content: identityReminder,
     metadata: { isInjected: true },
   })
 
@@ -1157,6 +1198,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       content: msg.content,
       thoughtSignature: msg.thoughtSignature,
       name: msg.name,
+    })
+  }
+
+  // Off-scene character introduction: when a workspace character is
+  // name-dropped for the first time in this chat, the Host posts a public
+  // introduction. The announcement is persisted to chat history (above) and
+  // surfaced to THIS turn's LLM context here so the responding character
+  // sees the intro without a one-turn lag.
+  if (pendingOffSceneAnnouncement) {
+    contextMessages.push({
+      role: 'assistant',
+      content: pendingOffSceneAnnouncement.content,
     })
   }
 

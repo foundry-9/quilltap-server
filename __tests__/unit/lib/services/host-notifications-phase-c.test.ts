@@ -50,6 +50,9 @@ import {
   buildSilentModeExitContent,
   buildJoinScenarioContent,
   buildTimestampContent,
+  buildOffSceneCharactersContent,
+  findIntroducedOffSceneCharacterIds,
+  postHostOffSceneCharactersAnnouncement,
   postHostNoUserCharacterAnnouncement,
 } from '@/lib/services/host-notifications/writer'
 import type { OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder'
@@ -335,5 +338,239 @@ describe('postHostNoUserCharacterAnnouncement', () => {
     expect(message.systemKind).toBe('no-user-character')
     expect(typeof message.content).toBe('string')
     expect((message.content as string).length).toBeGreaterThan(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Off-scene character introductions
+// ---------------------------------------------------------------------------
+
+describe('buildOffSceneCharactersContent', () => {
+  it('renders a single-character introduction with name, pronouns, and description', () => {
+    const result = buildOffSceneCharactersContent([
+      {
+        id: 'c-1',
+        name: 'Mochi',
+        pronouns: { subject: 'he', object: 'him', possessive: 'his' },
+        description: 'A grumpy gray cat.',
+      },
+    ])
+    expect(result).toContain('### Mochi')
+    expect(result).toContain('Pronouns: he/him/his')
+    expect(result).toContain('A grumpy gray cat.')
+    // Singular framing for one character.
+    expect(result).toContain('a person spoken of in this conversation')
+    expect(result).toContain('not presently in the Salon')
+  })
+
+  it('uses plural framing for multi-character introductions and sorts alphabetically', () => {
+    const result = buildOffSceneCharactersContent([
+      { id: 'c-2', name: 'Sunny', description: 'Engineer.' },
+      { id: 'c-1', name: 'Gary', description: 'Gardener.' },
+    ])
+    expect(result).toContain('certain persons spoken of in this conversation')
+    // Alphabetical ordering — Gary before Sunny.
+    const garyIdx = result.indexOf('### Gary')
+    const sunnyIdx = result.indexOf('### Sunny')
+    expect(garyIdx).toBeGreaterThan(-1)
+    expect(sunnyIdx).toBeGreaterThan(-1)
+    expect(garyIdx).toBeLessThan(sunnyIdx)
+  })
+
+  it('includes aliases when present and omits the field otherwise', () => {
+    const withAliases = buildOffSceneCharactersContent([
+      { id: 'c-1', name: 'Lorian', aliases: ['Teacher', 'Scholar'] },
+    ])
+    expect(withAliases).toContain('Aliases: Teacher, Scholar')
+
+    const noAliases = buildOffSceneCharactersContent([
+      { id: 'c-2', name: 'Riya' },
+    ])
+    expect(noAliases).not.toContain('Aliases:')
+  })
+
+  it('skips empty descriptions cleanly', () => {
+    const result = buildOffSceneCharactersContent([
+      { id: 'c-1', name: 'Mystery', description: '   ' },
+    ])
+    expect(result).toContain('### Mystery')
+    // Trimmed empty descriptions should not produce a stray newline-only block.
+    expect(result).not.toMatch(/### Mystery\n\n\n/)
+  })
+
+  it('produces byte-identical output across calls for the same character set (cache stability)', () => {
+    const chars = [
+      { id: 'c-1', name: 'Gary', description: 'Gardener.' },
+      { id: 'c-2', name: 'Sunny', description: 'Engineer.' },
+    ]
+    const a = buildOffSceneCharactersContent(chars)
+    const b = buildOffSceneCharactersContent([...chars].reverse())
+    expect(a).toBe(b)
+  })
+})
+
+describe('findIntroducedOffSceneCharacterIds', () => {
+  it('returns empty for messages with no off-scene host announcements', () => {
+    const result = findIntroducedOffSceneCharacterIds([
+      { type: 'message', role: 'USER', content: 'hello' },
+      { type: 'message', role: 'ASSISTANT', systemSender: 'host', systemKind: 'add', hostEvent: { participantId: 'p-1', toStatus: 'active' } },
+    ])
+    expect(result.size).toBe(0)
+  })
+
+  it('extracts character IDs from prior off-scene-characters host messages', () => {
+    const result = findIntroducedOffSceneCharacterIds([
+      {
+        type: 'message',
+        role: 'ASSISTANT',
+        systemSender: 'host',
+        systemKind: 'off-scene-characters',
+        hostEvent: { introducedCharacterIds: ['c-1', 'c-2'] },
+      },
+      {
+        type: 'message',
+        role: 'ASSISTANT',
+        systemSender: 'host',
+        systemKind: 'off-scene-characters',
+        hostEvent: { introducedCharacterIds: ['c-3'] },
+      },
+    ])
+    expect([...result].sort()).toEqual(['c-1', 'c-2', 'c-3'])
+  })
+
+  it('ignores messages whose hostEvent lacks introducedCharacterIds', () => {
+    const result = findIntroducedOffSceneCharacterIds([
+      {
+        type: 'message',
+        role: 'ASSISTANT',
+        systemSender: 'host',
+        systemKind: 'off-scene-characters',
+        hostEvent: { participantId: 'p-1', toStatus: 'active' }, // wrong shape
+      },
+      {
+        type: 'message',
+        role: 'ASSISTANT',
+        systemSender: 'host',
+        systemKind: 'off-scene-characters',
+        // hostEvent missing entirely
+      },
+    ])
+    expect(result.size).toBe(0)
+  })
+
+  it('tolerates malformed messages without throwing', () => {
+    expect(() =>
+      findIntroducedOffSceneCharacterIds([null, undefined, 'string', { type: 'message' }] as unknown[]),
+    ).not.toThrow()
+  })
+})
+
+describe('postHostOffSceneCharactersAnnouncement', () => {
+  const CHAT_ID = 'chat-offscene-1'
+
+  function makeAddMessage() {
+    return jest.fn().mockResolvedValue(undefined)
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('returns null without persisting when characters is empty', async () => {
+    const addMessage = makeAddMessage()
+    getRepositories.mockReturnValue({
+      chats: {
+        findById: jest.fn().mockResolvedValue({ id: CHAT_ID, messages: [], addMessage }),
+        addMessage,
+      },
+    } as unknown as ReturnType<typeof getRepositories>)
+
+    const result = await postHostOffSceneCharactersAnnouncement({
+      chatId: CHAT_ID,
+      characters: [],
+    })
+    expect(result).toBeNull()
+    expect(addMessage).not.toHaveBeenCalled()
+  })
+
+  it('persists a host message stamped with the introduced character IDs', async () => {
+    const addMessage = makeAddMessage()
+    getRepositories.mockReturnValue({
+      chats: {
+        findById: jest.fn().mockResolvedValue({ id: CHAT_ID, messages: [], addMessage }),
+        addMessage,
+      },
+    } as unknown as ReturnType<typeof getRepositories>)
+
+    const result = await postHostOffSceneCharactersAnnouncement({
+      chatId: CHAT_ID,
+      characters: [
+        { id: 'c-1', name: 'Gary', description: 'Gardener.' },
+        { id: 'c-2', name: 'Sunny', description: 'Engineer.' },
+      ],
+    })
+    expect(result).not.toBeNull()
+    expect(addMessage).toHaveBeenCalledTimes(1)
+    const [chatIdArg, message] = addMessage.mock.calls[0] as [string, Record<string, unknown>]
+    expect(chatIdArg).toBe(CHAT_ID)
+    expect(message.systemSender).toBe('host')
+    expect(message.systemKind).toBe('off-scene-characters')
+    expect((message.hostEvent as { introducedCharacterIds: string[] }).introducedCharacterIds).toEqual(['c-1', 'c-2'])
+    expect((message.content as string).length).toBeGreaterThan(0)
+  })
+
+  it('returns null gracefully when the chat is missing', async () => {
+    getRepositories.mockReturnValue({
+      chats: {
+        findById: jest.fn().mockResolvedValue(null),
+        addMessage: makeAddMessage(),
+      },
+    } as unknown as ReturnType<typeof getRepositories>)
+
+    const result = await postHostOffSceneCharactersAnnouncement({
+      chatId: 'missing-chat',
+      characters: [{ id: 'c-1', name: 'Gary' }],
+    })
+    expect(result).toBeNull()
+  })
+
+  it('returns null and does not throw when the repo call rejects (non-fatal)', async () => {
+    getRepositories.mockReturnValue({
+      chats: {
+        findById: jest.fn().mockRejectedValue(new Error('DB failure')),
+        addMessage: makeAddMessage(),
+      },
+    } as unknown as ReturnType<typeof getRepositories>)
+
+    const result = await postHostOffSceneCharactersAnnouncement({
+      chatId: CHAT_ID,
+      characters: [{ id: 'c-1', name: 'Gary' }],
+    })
+    expect(result).toBeNull()
+  })
+
+  it('round-trips with findIntroducedOffSceneCharacterIds — once persisted, the IDs become discoverable', async () => {
+    let storedMessage: Record<string, unknown> | null = null
+    const addMessage = jest.fn().mockImplementation(async (_chatId: string, msg: Record<string, unknown>) => {
+      storedMessage = msg
+    })
+    getRepositories.mockReturnValue({
+      chats: {
+        findById: jest.fn().mockResolvedValue({ id: CHAT_ID, messages: [], addMessage }),
+        addMessage,
+      },
+    } as unknown as ReturnType<typeof getRepositories>)
+
+    await postHostOffSceneCharactersAnnouncement({
+      chatId: CHAT_ID,
+      characters: [
+        { id: 'c-1', name: 'Gary' },
+        { id: 'c-2', name: 'Sunny' },
+      ],
+    })
+
+    expect(storedMessage).not.toBeNull()
+    const introduced = findIntroducedOffSceneCharacterIds([storedMessage as unknown])
+    expect([...introduced].sort()).toEqual(['c-1', 'c-2'])
   })
 })

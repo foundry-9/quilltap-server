@@ -91,50 +91,7 @@ export function findMentionedCharacterIds(
   return matched
 }
 
-/**
- * Render the "Characters Mentioned" system-prompt section for the given
- * characters. Includes every character in full — name, aliases, pronouns, and
- * the complete description — so the responding LLM has accurate grounding.
- * Returns an empty string when there is nothing to render so the caller can
- * simply skip the section.
- */
-export function formatMentionedCharactersSection(characters: Character[]): {
-  section: string
-  includedCount: number
-} {
-  if (characters.length === 0) {
-    return { section: '', includedCount: 0 }
-  }
-
-  // Render each character as a self-contained sub-block. Sort alphabetically
-  // for deterministic output (helps prompt caching).
-  const sorted = [...characters].sort((a, b) => a.name.localeCompare(b.name))
-
-  const renderEntry = (c: Character): string => {
-    const lines: string[] = [`### ${c.name}`]
-    if (c.aliases && c.aliases.length > 0) {
-      lines.push(`Aliases: ${c.aliases.join(', ')}`)
-    }
-    if (c.pronouns) {
-      lines.push(
-        `Pronouns: ${c.pronouns.subject}/${c.pronouns.object}/${c.pronouns.possessive}`
-      )
-    }
-    if (c.description) {
-      lines.push(c.description.trim())
-    }
-    return lines.join('\n')
-  }
-
-  const header =
-    '## Characters Mentioned\n' +
-    'The following characters exist in this workspace and are referenced ' +
-    'in the conversation, but are not currently in this chat. Use this ' +
-    'information for accurate references; do not bring them into the scene ' +
-    'unless invited.'
-
-  const entries = sorted.map(renderEntry)
-  const section = [header, ...entries].join('\n\n')
-
-  return { section, includedCount: entries.length }
-}
+// `formatMentionedCharactersSection` was removed: off-scene characters now
+// ride as Host introductions in chat history (see
+// `buildOffSceneCharactersContent` in lib/services/host-notifications/writer.ts)
+// rather than being spliced into the system prompt every turn.

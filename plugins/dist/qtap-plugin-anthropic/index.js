@@ -13237,7 +13237,7 @@ var AnthropicProvider = class {
       apiKey,
       defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
-    const systemMessage = params.messages.find((m) => m.role === "system");
+    const systemMessages = params.messages.filter((m) => m.role === "system" && typeof m.content === "string" && m.content.length > 0);
     const profileParams = params.profileParameters;
     const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false;
     const cacheStrategy = profileParams?.cacheStrategy || "system_and_long_context";
@@ -13251,15 +13251,25 @@ var AnthropicProvider = class {
       messages,
       max_tokens: params.maxTokens ?? 4096
     };
-    if (systemMessage?.content) {
+    if (systemMessages.length > 0) {
       if (cachingEnabled) {
-        requestParams.system = [{
-          type: "text",
-          text: systemMessage.content,
-          cache_control: this.buildCacheControl(cacheTTL)
-        }];
+        requestParams.system = systemMessages.map((m, i) => {
+          const block = {
+            type: "text",
+            text: m.content
+          };
+          if (i === 0) {
+            block.cache_control = this.buildCacheControl(cacheTTL);
+          }
+          return block;
+        });
+      } else if (systemMessages.length === 1) {
+        requestParams.system = systemMessages[0].content;
       } else {
-        requestParams.system = systemMessage.content;
+        requestParams.system = systemMessages.map((m) => ({
+          type: "text",
+          text: m.content
+        }));
       }
     }
     if (params.temperature !== void 0) {

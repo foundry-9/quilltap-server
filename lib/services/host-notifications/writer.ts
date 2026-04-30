@@ -498,6 +498,174 @@ export async function postHostTimestampAnnouncement(
 }
 
 // ---------------------------------------------------------------------------
+// Off-scene character introductions.
+//
+// When a workspace character — one who exists in the user's vault but is not
+// a participant in this Salon — gets named in the conversation, the Host
+// introduces them once. The introduction lands in the chat transcript as a
+// public Host message (visible to the user and surfaced to every character's
+// LLM context via normal history), so subsequent turns recall the character's
+// particulars without re-injecting them into the system prompt every turn.
+//
+// Idempotent per character ID: repeated calls for the same character are no-
+// ops. Callers compute the delta — characters named in this turn that have
+// never been introduced — and pass only that delta in.
+// ---------------------------------------------------------------------------
+
+const HOST_KIND_OFF_SCENE_CHARACTERS = 'off-scene-characters';
+
+interface OffSceneCharacterCard {
+  id: string;
+  name: string;
+  aliases?: string[];
+  pronouns?: { subject: string; object: string; possessive: string } | null;
+  description?: string | null;
+}
+
+/**
+ * Compose a Host announcement introducing one or more off-scene characters.
+ * Sorted alphabetically for deterministic, cache-friendly output.
+ */
+export function buildOffSceneCharactersContent(
+  characters: OffSceneCharacterCard[],
+): string {
+  const sorted = [...characters].sort((a, b) => a.name.localeCompare(b.name));
+
+  const renderCard = (c: OffSceneCharacterCard): string => {
+    const lines: string[] = [`### ${c.name}`];
+    if (c.aliases && c.aliases.length > 0) {
+      lines.push(`Aliases: ${c.aliases.join(', ')}`);
+    }
+    if (c.pronouns) {
+      lines.push(`Pronouns: ${c.pronouns.subject}/${c.pronouns.object}/${c.pronouns.possessive}`);
+    }
+    const desc = (c.description ?? '').trim();
+    if (desc.length > 0) {
+      lines.push(desc);
+    }
+    return lines.join('\n');
+  };
+
+  const intro =
+    sorted.length === 1
+      ? `The Host begs leave to introduce a person spoken of in this conversation but not presently in the Salon — for accurate reference only; not a summons to the scene.`
+      : `The Host begs leave to introduce certain persons spoken of in this conversation but not presently in the Salon — for accurate reference only; not a summons to the scene.`;
+
+  return [intro, '', ...sorted.map(renderCard)].join('\n\n');
+}
+
+/**
+ * Scan a chat's existing messages for prior Host off-scene-character
+ * introductions and return the set of character IDs that have already been
+ * introduced. Callers diff this against the freshly-detected mention set to
+ * compute the announcement delta.
+ *
+ * The scan looks at message metadata — specifically `systemSender === 'host'`
+ * with `systemKind === 'off-scene-characters'` — and reads the character IDs
+ * from the message's `hostEvent.introducedCharacterIds` field, which the
+ * announcement writer stamps at post time.
+ */
+export function findIntroducedOffSceneCharacterIds(
+  messages: ReadonlyArray<unknown>,
+): Set<string> {
+  const introduced = new Set<string>();
+  for (const m of messages) {
+    if (!m || typeof m !== 'object') continue;
+    const msg = m as {
+      type?: unknown;
+      systemSender?: unknown;
+      systemKind?: unknown;
+      hostEvent?: unknown;
+    };
+    if (
+      msg.type === 'message' &&
+      msg.systemSender === 'host' &&
+      msg.systemKind === HOST_KIND_OFF_SCENE_CHARACTERS &&
+      msg.hostEvent &&
+      typeof msg.hostEvent === 'object'
+    ) {
+      const ids = (msg.hostEvent as { introducedCharacterIds?: unknown }).introducedCharacterIds;
+      if (Array.isArray(ids)) {
+        for (const id of ids) {
+          if (typeof id === 'string') introduced.add(id);
+        }
+      }
+    }
+  }
+  return introduced;
+}
+
+export interface HostOffSceneCharactersAnnouncement {
+  chatId: string;
+  characters: OffSceneCharacterCard[];
+}
+
+/**
+ * Post a public Host announcement introducing the given off-scene characters.
+ * The character IDs are stamped into `hostEvent.introducedCharacterIds` so
+ * subsequent calls can detect already-introduced characters and skip them.
+ *
+ * Returns the persisted MessageEvent (so the caller can also surface it to
+ * this turn's LLM context without a one-turn lag), or null on failure / when
+ * the input is empty.
+ */
+export async function postHostOffSceneCharactersAnnouncement(
+  params: HostOffSceneCharactersAnnouncement,
+): Promise<MessageEvent | null> {
+  if (!params.characters || params.characters.length === 0) return null;
+
+  try {
+    const repos = getRepositories();
+
+    const chat = await repos.chats.findById(params.chatId);
+    if (!chat) {
+      logger.debug('[HostNotification] Chat not found, skipping off-scene introduction', {
+        context: 'host-notifications',
+        chatId: params.chatId,
+      });
+      return null;
+    }
+
+    const content = buildOffSceneCharactersContent(params.characters);
+    const messageId = randomUUID();
+    const now = new Date().toISOString();
+    const introducedCharacterIds = params.characters.map((c) => c.id);
+
+    const message: MessageEvent = {
+      type: 'message',
+      id: messageId,
+      role: 'ASSISTANT',
+      content,
+      attachments: [],
+      createdAt: now,
+      participantId: null,
+      systemSender: 'host',
+      systemKind: HOST_KIND_OFF_SCENE_CHARACTERS,
+      hostEvent: { introducedCharacterIds },
+    };
+
+    await repos.chats.addMessage(params.chatId, message);
+
+    logger.info('[HostNotification] Off-scene introduction posted', {
+      context: 'host-notifications',
+      chatId: params.chatId,
+      messageId,
+      introducedCharacterIds,
+      characterCount: params.characters.length,
+    });
+
+    return message;
+  } catch (error) {
+    logger.warn('[HostNotification] Off-scene introduction skipped (non-fatal)', {
+      context: 'host-notifications',
+      chatId: params.chatId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // "No user character attached" advisory whisper.
 //
 // The auto-memory pipeline emits this whisper the first time it encounters a

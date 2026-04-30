@@ -124,16 +124,29 @@ export const MessageEventSchema = z.object({
    */
   systemKind: z.string().nullable().optional(),
   /**
-   * Structured payload on Host announcements (`systemSender = 'host'`) of type
-   * add / remove / status-change. Carries the affected participant ID and the
-   * status they were transitioning to. Used by the per-character Librarian
-   * summary pipeline to compute presence windows. NULL on all other messages
-   * and on Host announcements that do not represent a status transition
-   * (scenario, roster, timestamp, silent-mode, join-scenario).
+   * Structured payload on Host announcements (`systemSender = 'host'`).
+   *
+   * Two shapes share this field today; both are optional and any combination
+   * is permitted, but in practice each announcement uses exactly one:
+   *
+   * - **Presence transitions** (`systemKind` = add / remove / status-change):
+   *   `participantId` + `toStatus` carry the affected participant and the
+   *   status they were transitioning to. Consumed by the per-character
+   *   Librarian summary pipeline to compute presence windows.
+   * - **Off-scene character introductions** (`systemKind` =
+   *   `off-scene-characters`): `introducedCharacterIds` carries the workspace
+   *   character IDs the Host introduced in this announcement. Consumed by the
+   *   context builder to skip re-introducing the same characters on later
+   *   turns.
+   *
+   * NULL on Host announcements with no structured payload (scenario, roster,
+   * timestamp, silent-mode, join-scenario, no-user-character) and on every
+   * non-Host message.
    */
   hostEvent: z.object({
-    participantId: UUIDSchema,
-    toStatus: z.enum(['active', 'silent', 'absent', 'removed']),
+    participantId: UUIDSchema.optional(),
+    toStatus: z.enum(['active', 'silent', 'absent', 'removed']).optional(),
+    introducedCharacterIds: z.array(UUIDSchema).optional(),
   }).nullable().optional(),
 });
 

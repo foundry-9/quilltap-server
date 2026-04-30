@@ -260,8 +260,11 @@ export class AnthropicProvider implements TextProvider {
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
     })
 
-    // Anthropic requires system message separate from messages array
-    const systemMessage = params.messages.find(m => m.role === 'system')
+    // Anthropic requires system messages separate from the messages array.
+    // Quilltap may emit multiple system messages (a stable identity stack
+    // followed by a static identity reminder); concatenate their contents
+    // into ordered text blocks below.
+    const systemMessages = params.messages.filter(m => m.role === 'system' && typeof m.content === 'string' && m.content.length > 0)
 
     // Extract profile parameters for cache control
     const profileParams = params.profileParameters as AnthropicProfileParams | undefined
@@ -281,20 +284,38 @@ export class AnthropicProvider implements TextProvider {
       max_tokens: params.maxTokens ?? 4096,
     }
 
-    // Handle system message with optional cache control
-    if (systemMessage?.content) {
+    // Handle system messages with optional cache control.
+    //
+    // When caching is enabled we emit one text block per Quilltap system
+    // message and place the cache breakpoint on the FIRST block (the stable
+    // identity stack — every byte before this checkpoint becomes the cached
+    // prefix). Subsequent system blocks (identity reminder, etc.) follow
+    // outside the cached prefix and don't invalidate it on edits.
+    //
+    // When caching is disabled and there's exactly one system message, we
+    // keep the simpler string form for backward-compatibility with logs and
+    // upstream tests.
+    if (systemMessages.length > 0) {
       if (cachingEnabled) {
-        // Use array format with cache_control for prompt caching
-        // This can reduce costs by 90% for repeated system prompts
-
-        requestParams.system = [{
-          type: 'text',
-          text: systemMessage.content,
-          cache_control: this.buildCacheControl(cacheTTL),
-        }]
+        requestParams.system = systemMessages.map((m, i) => {
+          const block: AnthropicContentBlock = {
+            type: 'text',
+            text: m.content as string,
+          }
+          if (i === 0) {
+            block.cache_control = this.buildCacheControl(cacheTTL)
+          }
+          return block
+        })
+      } else if (systemMessages.length === 1) {
+        requestParams.system = systemMessages[0].content as string
       } else {
-        // Standard string format
-        requestParams.system = systemMessage.content
+        // Multiple system messages without caching: still send as blocks so
+        // none get silently dropped.
+        requestParams.system = systemMessages.map(m => ({
+          type: 'text',
+          text: m.content as string,
+        }))
       }
     }
 

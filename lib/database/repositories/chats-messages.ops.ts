@@ -49,10 +49,16 @@ export const ChatMessageRowSchema = z.object({
   isSilentMessage: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Whether message was generated while character was in silent mode (SQLite stores as 0/1)
   systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
   systemKind: z.string().nullable().optional(),  // Sub-classification of a Staff-authored message (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender.
-  // Structured payload on Host status announcements (add / remove / status-change). NULL on all other messages.
+  // Structured payload on Host announcements. Two shapes share this field:
+  // (a) presence transitions — { participantId, toStatus } — for add/remove/
+  // status-change. (b) off-scene character introductions — { introducedCharacterIds }
+  // — stamped by the off-scene Host announcer so the context builder can
+  // detect already-introduced characters. All fields optional; NULL on
+  // announcements with no structured payload and on every non-Host message.
   hostEvent: z.object({
-    participantId: UUIDSchema,
-    toStatus: z.enum(['active', 'silent', 'absent', 'removed']),
+    participantId: UUIDSchema.optional(),
+    toStatus: z.enum(['active', 'silent', 'absent', 'removed']).optional(),
+    introducedCharacterIds: z.array(UUIDSchema).optional(),
   }).nullable().optional(),
   // For type='context-summary'
   context: z.string().nullable().optional(),
