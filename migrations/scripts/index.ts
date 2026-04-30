@@ -217,6 +217,8 @@ import { alignAboutCharacterIdV2Migration } from './align-about-character-id-v2'
 import { addCharacterIdentityFieldMigration } from './add-character-identity-field';
 // Re-absorb leftover project files into database-backed official store
 import { reabsorbLeftoverProjectFilesMigration } from './reabsorb-leftover-project-files';
+// Add requestHashes column to llm_logs (cache-stability instrumentation)
+import { addLLMLogsRequestHashesColumnMigration } from './add-llm-logs-request-hashes-column';
 
 /**
  * All available migrations.
@@ -429,6 +431,8 @@ export const migrations: Migration[] = [
   addCharacterIdentityFieldMigration,
   // Re-absorb leftover project files into database-backed official store
   reabsorbLeftoverProjectFilesMigration,
+  // Add requestHashes column to llm_logs (cache-stability instrumentation)
+  addLLMLogsRequestHashesColumnMigration,
 ];
 
 export {
@@ -626,5 +630,7 @@ export {
   addCharacterIdentityFieldMigration,
   // Re-absorb leftover project files into database-backed official store
   reabsorbLeftoverProjectFilesMigration,
+  // Add requestHashes column to llm_logs (cache-stability instrumentation)
+  addLLMLogsRequestHashesColumnMigration,
 };
 

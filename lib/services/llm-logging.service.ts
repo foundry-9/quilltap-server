@@ -16,6 +16,7 @@ import type {
   LLMLogResponseSummary,
   LLMLogTokenUsage,
   LLMLogCacheUsage,
+  LLMLogRequestHashes,
 } from '@/lib/schemas/types';
 import type { LLMLoggingSettings } from '@/lib/schemas/settings.types';
 
@@ -62,6 +63,7 @@ export interface LogLLMCallParams {
     cacheCreationInputTokens?: number;
     cacheReadInputTokens?: number;
   };
+  requestHashes?: LLMLogRequestHashes;
   durationMs?: number;
 }
 
@@ -182,6 +184,16 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
       };
     }
 
+    let requestHashes: LLMLogRequestHashes | null = null;
+    if (
+      params.requestHashes?.systemBlock1Hash !== undefined ||
+      params.requestHashes?.systemBlock2Hash !== undefined ||
+      params.requestHashes?.toolsArrayHash !== undefined ||
+      params.requestHashes?.historyTailHash !== undefined
+    ) {
+      requestHashes = { ...params.requestHashes };
+    }
+
     // Create the log entry
     const repos = getRepositories();
     const logEntry = await repos.llmLogs.create({
@@ -196,6 +208,7 @@ export async function logLLMCall(params: LogLLMCallParams): Promise<LLMLog | nul
       response: responseSummary,
       usage,
       cacheUsage,
+      requestHashes,
       durationMs: params.durationMs ?? null,
     });
     return logEntry;

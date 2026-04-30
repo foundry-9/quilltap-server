@@ -558,6 +558,11 @@ export class GoogleProvider implements TextProvider {
       // Extract thought signature for Gemini 3 thinking models
       const thoughtSignature = this.extractThoughtSignature(response);
 
+      const cachedTokens = usage?.cachedContentTokenCount
+      const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
+        ? { cacheReadInputTokens: cachedTokens, cachedTokens }
+        : undefined
+
       return {
         content: text,
         finishReason,
@@ -573,6 +578,7 @@ export class GoogleProvider implements TextProvider {
         },
         attachmentResults,
         thoughtSignature,
+        ...(cacheUsage ? { cacheUsage } : {}),
       };
     } catch (error) {
       logger.error('Error calling Google Gemini API', {
@@ -707,6 +713,11 @@ export class GoogleProvider implements TextProvider {
         finalContent = this.extractTextFromResponse(lastResponse, params.model);
       }
 
+      const cachedTokens = usage?.cachedContentTokenCount
+      const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
+        ? { cacheReadInputTokens: cachedTokens, cachedTokens }
+        : undefined
+
       yield {
         content: finalContent,
         done: true,
@@ -719,6 +730,7 @@ export class GoogleProvider implements TextProvider {
         // Convert SDK response class to plain object for Zod validation
         rawResponse: lastResponse ? JSON.parse(JSON.stringify(lastResponse)) : undefined,
         thoughtSignature,
+        ...(cacheUsage ? { cacheUsage } : {}),
       };
     } catch (error) {
       logger.error('Error streaming from Google Gemini API', {

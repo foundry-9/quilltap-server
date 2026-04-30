@@ -12,6 +12,8 @@ import { isShellEnvironment } from '@/lib/paths'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
+import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
+import { buildPromptCacheKey } from '@/lib/llm/cache-key'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
@@ -315,6 +317,11 @@ export async function* streamMessage(
   let lastUsage: { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined
   let lastCacheUsage: { cacheCreationInputTokens?: number; cacheReadInputTokens?: number } | undefined
 
+  const promptCacheKey = buildPromptCacheKey(chatId)
+  const profileParametersWithCache: Record<string, unknown> = promptCacheKey
+    ? { ...modelParams, promptCacheKey }
+    : modelParams
+
   for await (const chunk of provider.streamMessage(
     {
       messages: llmMessages,
@@ -324,7 +331,7 @@ export async function* streamMessage(
       topP: modelParams.topP as number | undefined,
       tools: tools.length > 0 ? tools : undefined,
       webSearchEnabled: useNativeWebSearch,
-      profileParameters: modelParams,
+      profileParameters: profileParametersWithCache,
       previousResponseId,
     },
     apiKey
@@ -351,6 +358,7 @@ export async function* streamMessage(
       // Log the LLM call if userId is provided
       if (userId) {
         const durationMs = Date.now() - startTime
+        const requestHashes = computeRequestPrefixHashes(llmMessages, tools.length > 0 ? tools : undefined)
 
         logLLMCall({
           userId,
@@ -375,6 +383,7 @@ export async function* streamMessage(
           },
           usage: lastUsage,
           cacheUsage: lastCacheUsage,
+          requestHashes,
           durationMs,
         }).catch(err => {
           logger.warn('Failed to log LLM call from streaming service', {

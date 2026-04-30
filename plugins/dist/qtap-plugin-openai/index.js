@@ -7296,6 +7296,11 @@ function isReasoningModel(model) {
   const modelLower = model.toLowerCase();
   return REASONING_MODEL_PREFIXES.some((prefix) => modelLower.startsWith(prefix));
 }
+var EXTENDED_RETENTION_MODEL_PREFIXES = ["gpt-5.1", "gpt-5.2", "gpt-5.5"];
+function supportsExtendedCacheRetention(model) {
+  const modelLower = model.toLowerCase();
+  return EXTENDED_RETENTION_MODEL_PREFIXES.some((prefix) => modelLower.startsWith(prefix));
+}
 var OpenAIProvider = class {
   constructor() {
     this.supportsFileAttachments = true;
@@ -7549,12 +7554,21 @@ var OpenAIProvider = class {
     if (textConfig) {
       requestParams.text = textConfig;
     }
+    const promptCacheKey = params.profileParameters?.promptCacheKey;
+    if (typeof promptCacheKey === "string" && promptCacheKey.length > 0) {
+      requestParams.prompt_cache_key = promptCacheKey;
+      if (supportsExtendedCacheRetention(params.model)) {
+        requestParams.prompt_cache_retention = "24h";
+      }
+    }
     return requestParams;
   }
   /**
    * Build LLMResponse from a Responses API response
    */
   buildLLMResponse(response, attachmentResults) {
+    const cachedTokens = response.usage?.input_tokens_details?.cached_tokens;
+    const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
     return {
       content: response.output_text,
       finishReason: this.getFinishReason(response),
@@ -7564,7 +7578,8 @@ var OpenAIProvider = class {
         totalTokens: response.usage?.total_tokens ?? 0
       },
       raw: this.buildRawResponse(response),
-      attachmentResults
+      attachmentResults,
+      ...cacheUsage ? { cacheUsage } : {}
     };
   }
   async sendMessage(params, apiKey) {
@@ -7661,6 +7676,8 @@ var OpenAIProvider = class {
     }
     if (finalResponse) {
       const raw = this.buildRawResponse(finalResponse);
+      const cachedTokens = finalResponse.usage?.input_tokens_details?.cached_tokens;
+      const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
       yield {
         content: "",
         done: true,
@@ -7670,7 +7687,8 @@ var OpenAIProvider = class {
           totalTokens: finalResponse.usage?.total_tokens ?? 0
         },
         attachmentResults,
-        rawResponse: raw
+        rawResponse: raw,
+        ...cacheUsage ? { cacheUsage } : {}
       };
     } else {
       logger.warn("Stream ended without response.completed event", {

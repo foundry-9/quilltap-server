@@ -32,6 +32,16 @@ function isReasoningModel(model: string): boolean {
   return REASONING_MODEL_PREFIXES.some(prefix => modelLower.startsWith(prefix));
 }
 
+// Models that support extended (24h) prompt-cache retention. gpt-5.3-chat-latest
+// is intentionally NOT in this list — extended retention is unsupported there
+// per the OpenAI docs. Adding it would yield a runtime API error.
+const EXTENDED_RETENTION_MODEL_PREFIXES = ['gpt-5.1', 'gpt-5.2', 'gpt-5.5'];
+
+function supportsExtendedCacheRetention(model: string): boolean {
+  const modelLower = model.toLowerCase();
+  return EXTENDED_RETENTION_MODEL_PREFIXES.some(prefix => modelLower.startsWith(prefix));
+}
+
 // SDK types for the Responses API
 type ResponsesInputItem = OpenAI.Responses.ResponseInputItem;
 type ResponsesTool = OpenAI.Responses.Tool;
@@ -350,6 +360,16 @@ export class OpenAIProvider implements TextProvider {
       requestParams.text = textConfig;
     }
 
+    // Pin sticky cache routing. Without prompt_cache_key, requests above
+    // ~15 RPM/key shard across machines and degrade hit rate.
+    const promptCacheKey = params.profileParameters?.promptCacheKey;
+    if (typeof promptCacheKey === 'string' && promptCacheKey.length > 0) {
+      requestParams.prompt_cache_key = promptCacheKey;
+      if (supportsExtendedCacheRetention(params.model)) {
+        requestParams.prompt_cache_retention = '24h';
+      }
+    }
+
     return requestParams as Omit<OpenAI.Responses.ResponseCreateParamsNonStreaming, 'stream'>;
   }
 
@@ -360,6 +380,10 @@ export class OpenAIProvider implements TextProvider {
     response: ResponsesResponse,
     attachmentResults: { sent: string[]; failed: { id: string; error: string }[] },
   ): LLMResponse {
+    const cachedTokens = response.usage?.input_tokens_details?.cached_tokens
+    const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
+      ? { cacheReadInputTokens: cachedTokens, cachedTokens }
+      : undefined
     return {
       content: response.output_text,
       finishReason: this.getFinishReason(response),
@@ -370,6 +394,7 @@ export class OpenAIProvider implements TextProvider {
       },
       raw: this.buildRawResponse(response),
       attachmentResults,
+      ...(cacheUsage ? { cacheUsage } : {}),
     };
   }
 
@@ -491,6 +516,10 @@ export class OpenAIProvider implements TextProvider {
     // Build final response
     if (finalResponse) {
       const raw = this.buildRawResponse(finalResponse);
+      const cachedTokens = finalResponse.usage?.input_tokens_details?.cached_tokens
+      const cacheUsage = cachedTokens !== undefined && cachedTokens > 0
+        ? { cacheReadInputTokens: cachedTokens, cachedTokens }
+        : undefined
 
       yield {
         content: '',
@@ -502,6 +531,7 @@ export class OpenAIProvider implements TextProvider {
         },
         attachmentResults,
         rawResponse: raw,
+        ...(cacheUsage ? { cacheUsage } : {}),
       };
     } else {
       logger.warn('Stream ended without response.completed event', {

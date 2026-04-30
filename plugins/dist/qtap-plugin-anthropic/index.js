@@ -13087,6 +13087,45 @@ var AnthropicProvider = class {
     }
     return { type: "ephemeral" };
   }
+  /**
+   * Place a second cache_control breakpoint mid-history when the conversation
+   * is long enough that the last-user-message breakpoint can fall outside
+   * Anthropic's 20-block lookback. The mid-history index is rounded down to
+   * the nearest multiple of MID_BREAKPOINT_STEP so the breakpoint stays at the
+   * same content block for several turns, avoiding cache rewrites every turn.
+   *
+   * Stepping at K=15: between 20–34 messages the breakpoint sits at index 0,
+   * between 35–49 at index 15, between 50–64 at index 30, etc.
+   */
+  applyMidHistoryBreakpoint(messages, ttl) {
+    const MIN_MESSAGES_FOR_MID_BREAKPOINT = 20;
+    const MID_BREAKPOINT_STEP = 15;
+    if (messages.length < MIN_MESSAGES_FOR_MID_BREAKPOINT) return;
+    const offsetFromTail = MID_BREAKPOINT_STEP;
+    const rawIndex = messages.length - offsetFromTail;
+    const steppedIndex = Math.floor(rawIndex / MID_BREAKPOINT_STEP) * MID_BREAKPOINT_STEP;
+    if (steppedIndex < 0 || steppedIndex >= messages.length) return;
+    const target = messages[steppedIndex];
+    const targetContent = target.content;
+    if (typeof targetContent === "string") {
+      messages[steppedIndex] = {
+        role: target.role,
+        content: [{
+          type: "text",
+          text: targetContent,
+          cache_control: this.buildCacheControl(ttl)
+        }]
+      };
+    } else if (Array.isArray(targetContent) && targetContent.length > 0) {
+      const lastBlock = targetContent[targetContent.length - 1];
+      const updatedContent = [...targetContent];
+      updatedContent[updatedContent.length - 1] = {
+        ...lastBlock,
+        cache_control: this.buildCacheControl(ttl)
+      };
+      messages[steppedIndex] = { ...target, content: updatedContent };
+    }
+  }
   formatMessagesWithAttachments(messages, cacheOptions) {
     const sent = [];
     const failed = [];
@@ -13246,6 +13285,9 @@ var AnthropicProvider = class {
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
     );
+    if (cachingEnabled) {
+      this.applyMidHistoryBreakpoint(messages, cacheTTL);
+    }
     const requestParams = {
       model: params.model,
       messages,
@@ -13317,7 +13359,7 @@ var AnthropicProvider = class {
       apiKey,
       defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
     });
-    const systemMessage = params.messages.find((m) => m.role === "system");
+    const systemMessages = params.messages.filter((m) => m.role === "system" && typeof m.content === "string" && m.content.length > 0);
     const profileParams = params.profileParameters;
     const cachingEnabled = profileParams?.enableCacheBreakpoints ?? false;
     const cacheStrategy = profileParams?.cacheStrategy || "system_and_long_context";
@@ -13326,21 +13368,34 @@ var AnthropicProvider = class {
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
     );
+    if (cachingEnabled) {
+      this.applyMidHistoryBreakpoint(messages, cacheTTL);
+    }
     const requestParams = {
       model: params.model,
       messages,
       max_tokens: params.maxTokens ?? 4096,
       stream: true
     };
-    if (systemMessage?.content) {
+    if (systemMessages.length > 0) {
       if (cachingEnabled) {
-        requestParams.system = [{
-          type: "text",
-          text: systemMessage.content,
-          cache_control: this.buildCacheControl(cacheTTL)
-        }];
+        requestParams.system = systemMessages.map((m, i) => {
+          const block = {
+            type: "text",
+            text: m.content
+          };
+          if (i === 0) {
+            block.cache_control = this.buildCacheControl(cacheTTL);
+          }
+          return block;
+        });
+      } else if (systemMessages.length === 1) {
+        requestParams.system = systemMessages[0].content;
       } else {
-        requestParams.system = systemMessage.content;
+        requestParams.system = systemMessages.map((m) => ({
+          type: "text",
+          text: m.content
+        }));
       }
     }
     if (params.temperature !== void 0) {

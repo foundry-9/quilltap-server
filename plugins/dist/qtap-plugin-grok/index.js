@@ -7522,6 +7522,10 @@ ${textContent}`
     if (params.stop) {
       requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
     }
+    const promptCacheKey = params.profileParameters?.promptCacheKey;
+    if (typeof promptCacheKey === "string" && promptCacheKey.length > 0) {
+      requestParams.prompt_cache_key = promptCacheKey;
+    }
     const tools = [];
     if (params.webSearchEnabled) {
       tools.push({ type: "web_search" });
@@ -7547,6 +7551,8 @@ ${textContent}`
     const text = this.extractTextFromResponse(response);
     const finishReason = this.getFinishReason(response);
     const raw = this.buildRawResponse(response);
+    const cachedTokens = response.usage?.input_tokens_details?.cached_tokens;
+    const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
     return {
       content: text,
       finishReason,
@@ -7556,7 +7562,8 @@ ${textContent}`
         totalTokens: response.usage?.total_tokens ?? 0
       },
       raw,
-      attachmentResults
+      attachmentResults,
+      ...cacheUsage ? { cacheUsage } : {}
     };
   }
   async *streamMessage(params, apiKey) {
@@ -7580,6 +7587,10 @@ ${textContent}`
     };
     if (params.stop) {
       requestParams.stop = Array.isArray(params.stop) ? params.stop : [params.stop];
+    }
+    const promptCacheKey = params.profileParameters?.promptCacheKey;
+    if (typeof promptCacheKey === "string" && promptCacheKey.length > 0) {
+      requestParams.prompt_cache_key = promptCacheKey;
     }
     const tools = [];
     if (params.webSearchEnabled) {
@@ -7608,6 +7619,8 @@ ${textContent}`
     }
     if (finalResponse) {
       const raw = this.buildRawResponse(finalResponse);
+      const cachedTokens = finalResponse.usage?.input_tokens_details?.cached_tokens;
+      const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
       yield {
         content: "",
         done: true,
@@ -7617,7 +7630,8 @@ ${textContent}`
           totalTokens: finalResponse.usage?.total_tokens ?? 0
         },
         attachmentResults,
-        rawResponse: raw
+        rawResponse: raw,
+        ...cacheUsage ? { cacheUsage } : {}
       };
     } else {
       logger.warn("Stream ended without response.completed event", {

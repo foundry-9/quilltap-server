@@ -1020,6 +1020,7 @@ CREATE TABLE "llm_logs" (
   "response" TEXT NOT NULL,
   "usage" TEXT,
   "cacheUsage" TEXT,
+  "requestHashes" TEXT,
   "durationMs" INTEGER,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL

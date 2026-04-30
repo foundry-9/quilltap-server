@@ -47785,6 +47785,8 @@ var GoogleProvider = class {
       const finishReason = response.candidates?.[0]?.finishReason ?? "STOP";
       const usage = response.usageMetadata;
       const thoughtSignature = this.extractThoughtSignature(response);
+      const cachedTokens = usage?.cachedContentTokenCount;
+      const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
       return {
         content: text,
         finishReason,
@@ -47799,7 +47801,8 @@ var GoogleProvider = class {
           functionCalls: response.functionCalls ? response.functionCalls.map((fc) => ({ name: fc.name, args: fc.args })) : void 0
         },
         attachmentResults,
-        thoughtSignature
+        thoughtSignature,
+        ...cacheUsage ? { cacheUsage } : {}
       };
     } catch (error) {
       logger.error("Error calling Google Gemini API", {
@@ -47903,6 +47906,8 @@ var GoogleProvider = class {
       if (isThinking && !totalStreamedContent && lastResponse) {
         finalContent = this.extractTextFromResponse(lastResponse, params.model);
       }
+      const cachedTokens = usage?.cachedContentTokenCount;
+      const cacheUsage = cachedTokens !== void 0 && cachedTokens > 0 ? { cacheReadInputTokens: cachedTokens, cachedTokens } : void 0;
       yield {
         content: finalContent,
         done: true,
@@ -47914,7 +47919,8 @@ var GoogleProvider = class {
         attachmentResults,
         // Convert SDK response class to plain object for Zod validation
         rawResponse: lastResponse ? JSON.parse(JSON.stringify(lastResponse)) : void 0,
-        thoughtSignature
+        thoughtSignature,
+        ...cacheUsage ? { cacheUsage } : {}
       };
     } catch (error) {
       logger.error("Error streaming from Google Gemini API", {

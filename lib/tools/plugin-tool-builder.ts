@@ -15,6 +15,7 @@
 import { logger } from '@/lib/logger';
 import { getProvider, getImageProviderConstraints } from '@/lib/plugins/provider-registry';
 import { toolRegistry } from '@/lib/plugins/tool-registry';
+import { canonicalizeUniversalTools } from '@/lib/tools/canonicalize';
 import {
   imageGenerationToolDefinition,
   webSearchToolDefinition,
@@ -390,10 +391,15 @@ export async function buildToolsForProvider(
     return [];
   }
 
+  // Canonicalize: sort alphabetically by name and stable-key JSON Schema.
+  // Required so the cacheable prefix at the front of every provider request
+  // is byte-stable across turns regardless of plugin registration order.
+  const canonicalTools = canonicalizeUniversalTools(universalTools);
+
   // Log the tools being built
   logger_.info('Built universal tools', {
-    count: universalTools.length,
-    toolNames: universalTools.map(t => t.function.name),
+    count: canonicalTools.length,
+    toolNames: canonicalTools.map(t => t.function.name),
   });
 
   // Step 2: Get the provider plugin from registry
@@ -404,14 +410,14 @@ export async function buildToolsForProvider(
       provider: providerName,
     });
     // Backwards compatibility: return tools in OpenAI format if provider not found
-    return universalTools;
+    return canonicalTools;
   }
 
   // Step 3 & 4: Check if plugin has formatTools() method
   if (plugin.formatTools && typeof plugin.formatTools === 'function') {
     try {
       // Call plugin's formatTools with the entire array of tools
-      const formattedTools = plugin.formatTools(universalTools, {
+      const formattedTools = plugin.formatTools(canonicalTools, {
         imageProviderType: options.imageProviderType,
       });
       return formattedTools;
@@ -421,7 +427,7 @@ export async function buildToolsForProvider(
       });
 
       // Step 5: Fallback to old behavior (return tools in OpenAI format)
-      return universalTools;
+      return canonicalTools;
     }
   }
 
@@ -431,5 +437,5 @@ export async function buildToolsForProvider(
     provider: providerName,
   });
 
-  return universalTools;
+  return canonicalTools;
 }

@@ -65,6 +65,55 @@ export class AnthropicProvider implements TextProvider {
     return { type: 'ephemeral' }
   }
 
+  /**
+   * Place a second cache_control breakpoint mid-history when the conversation
+   * is long enough that the last-user-message breakpoint can fall outside
+   * Anthropic's 20-block lookback. The mid-history index is rounded down to
+   * the nearest multiple of MID_BREAKPOINT_STEP so the breakpoint stays at the
+   * same content block for several turns, avoiding cache rewrites every turn.
+   *
+   * Stepping at K=15: between 20–34 messages the breakpoint sits at index 0,
+   * between 35–49 at index 15, between 50–64 at index 30, etc.
+   */
+  private applyMidHistoryBreakpoint(
+    messages: AnthropicMessage[],
+    ttl?: '5m' | '1h',
+  ): void {
+    const MIN_MESSAGES_FOR_MID_BREAKPOINT = 20
+    const MID_BREAKPOINT_STEP = 15
+
+    if (messages.length < MIN_MESSAGES_FOR_MID_BREAKPOINT) return
+
+    const offsetFromTail = MID_BREAKPOINT_STEP
+    const rawIndex = messages.length - offsetFromTail
+    const steppedIndex = Math.floor(rawIndex / MID_BREAKPOINT_STEP) * MID_BREAKPOINT_STEP
+    if (steppedIndex < 0 || steppedIndex >= messages.length) return
+
+    const target = messages[steppedIndex]
+    const targetContent = target.content
+
+    // For string-content messages, lift to a single-block array so we can
+    // attach cache_control. For block-array content, decorate the last block.
+    if (typeof targetContent === 'string') {
+      messages[steppedIndex] = {
+        role: target.role,
+        content: [{
+          type: 'text',
+          text: targetContent,
+          cache_control: this.buildCacheControl(ttl),
+        }],
+      }
+    } else if (Array.isArray(targetContent) && targetContent.length > 0) {
+      const lastBlock = targetContent[targetContent.length - 1]
+      const updatedContent = [...targetContent]
+      updatedContent[updatedContent.length - 1] = {
+        ...lastBlock,
+        cache_control: this.buildCacheControl(ttl),
+      } as AnthropicContentBlock
+      messages[steppedIndex] = { ...target, content: updatedContent }
+    }
+  }
+
   private formatMessagesWithAttachments(
     messages: LLMMessage[],
     cacheOptions?: { enableCaching: boolean; strategy: 'system_only' | 'system_and_long_context'; ttl?: '5m' | '1h' }
@@ -278,6 +327,12 @@ export class AnthropicProvider implements TextProvider {
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : undefined
     )
 
+    // Long conversations need a second mid-history breakpoint so the active
+    // breakpoint never falls outside Anthropic's 20-block lookback.
+    if (cachingEnabled) {
+      this.applyMidHistoryBreakpoint(messages, cacheTTL)
+    }
+
     const requestParams: any = {
       model: params.model,
       messages,
@@ -386,7 +441,10 @@ export class AnthropicProvider implements TextProvider {
       defaultHeaders: { 'User-Agent': getQuilltapUserAgent() },
     })
 
-    const systemMessage = params.messages.find(m => m.role === 'system')
+    // Quilltap may emit multiple system messages (a stable identity stack
+    // followed by a static identity reminder); collect all so block 2 is not
+    // silently dropped.
+    const systemMessages = params.messages.filter(m => m.role === 'system' && typeof m.content === 'string' && m.content.length > 0)
 
     // Extract profile parameters for cache control
     const profileParams = params.profileParameters as AnthropicProfileParams | undefined
@@ -400,6 +458,10 @@ export class AnthropicProvider implements TextProvider {
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : undefined
     )
 
+    if (cachingEnabled) {
+      this.applyMidHistoryBreakpoint(messages, cacheTTL)
+    }
+
     const requestParams: any = {
       model: params.model,
       messages,
@@ -407,19 +469,28 @@ export class AnthropicProvider implements TextProvider {
       stream: true,
     }
 
-    // Handle system message with optional cache control
-    if (systemMessage?.content) {
+    // Handle system messages with optional cache control. Mirrors the
+    // sendMessage path — emit one text block per Quilltap system message and
+    // place cache_control on the FIRST block when caching is enabled.
+    if (systemMessages.length > 0) {
       if (cachingEnabled) {
-        // Use array format with cache_control for prompt caching
-
-        requestParams.system = [{
-          type: 'text',
-          text: systemMessage.content,
-          cache_control: this.buildCacheControl(cacheTTL),
-        }]
+        requestParams.system = systemMessages.map((m, i) => {
+          const block: AnthropicContentBlock = {
+            type: 'text',
+            text: m.content as string,
+          }
+          if (i === 0) {
+            block.cache_control = this.buildCacheControl(cacheTTL)
+          }
+          return block
+        })
+      } else if (systemMessages.length === 1) {
+        requestParams.system = systemMessages[0].content as string
       } else {
-        // Standard string format
-        requestParams.system = systemMessage.content
+        requestParams.system = systemMessages.map(m => ({
+          type: 'text',
+          text: m.content as string,
+        }))
       }
     }
 
