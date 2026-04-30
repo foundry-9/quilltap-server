@@ -434,6 +434,14 @@
               "description": "Workspace character IDs introduced by an off-scene-characters announcement."
             }
           }
+        },
+        "summaryAnchor": {
+          "type": ["object", "null"],
+          "description": "Anchor tying a Staff-authored whisper (e.g. Librarian per-character summaries) to the compaction generation under which it was produced. The summarization pipeline sweeps anchors with stale generations on regen rather than relying on content-prefix matching.",
+          "required": ["compactionGeneration"],
+          "properties": {
+            "compactionGeneration": { "type": "integer", "minimum": 0 }
+          }
         }
       }
     },

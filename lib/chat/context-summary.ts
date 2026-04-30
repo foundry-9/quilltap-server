@@ -671,26 +671,34 @@ export async function generatePerCharacterSummaryWhispers(
         })
       }
 
-      // Sweep prior Librarian summary whispers targeted exclusively at this
-      // participant. Identified by systemSender + content prefix + a single
-      // matching target. Old broadcast summaries (from before this refactor)
-      // are not swept — they were addressed to the whole room.
+      // Phase 3c: anchor-based sweep. Each summary whisper is now stamped at
+      // write time with the compactionGeneration that produced it. On regen,
+      // only whispers from older generations (or unanchored legacy whispers)
+      // are removed. This eliminates the prior content-prefix heuristic and
+      // makes the sweep tolerant of mixed-generation boundaries.
+      const currentGeneration = chat.compactionGeneration ?? 0
       const priorSummaryIds = allMessages
         .filter((m): m is MessageEvent => m.type === 'message')
-        .filter(m =>
-          m.systemSender === 'librarian' &&
-          Array.isArray(m.targetParticipantIds) &&
-          m.targetParticipantIds.length === 1 &&
-          m.targetParticipantIds[0] === participant.id &&
-          typeof m.content === 'string' &&
-          m.content.startsWith(SUMMARY_CONTENT_PREFIX),
-        )
+        .filter(m => {
+          if (m.systemSender !== 'librarian') return false
+          if (!Array.isArray(m.targetParticipantIds)) return false
+          if (m.targetParticipantIds.length !== 1) return false
+          if (m.targetParticipantIds[0] !== participant.id) return false
+          // Match either anchored summary whispers from older generations or
+          // unanchored legacy whispers identified by content prefix. Future
+          // generations (anchor > current) are left in place defensively.
+          if (m.summaryAnchor) {
+            return m.summaryAnchor.compactionGeneration < currentGeneration
+          }
+          return typeof m.content === 'string' && m.content.startsWith(SUMMARY_CONTENT_PREFIX)
+        })
         .map(m => m.id)
 
       if (priorSummaryIds.length > 0) {
         const removed = await repos.chats.deleteMessagesByIds(chatId, priorSummaryIds)
         logger.info('[Context Summary] Swept prior summary whispers for participant', {
           chatId, participantId: participant.id, removed,
+          currentGeneration,
         })
       }
 
@@ -698,6 +706,7 @@ export async function generatePerCharacterSummaryWhispers(
         chatId,
         summary: summaryText,
         targetParticipantIds: [participant.id],
+        summaryAnchor: { compactionGeneration: currentGeneration },
       })
     } catch (e) {
       logger.error('[Context Summary] Per-character summary whisper failed for participant', {
@@ -804,6 +813,7 @@ export async function generateCatchUpSummaryForParticipant(
       chatId,
       summary: result.result,
       targetParticipantIds: [participantId],
+      summaryAnchor: { compactionGeneration: chat.compactionGeneration ?? 0 },
     })
   } catch (e) {
     logger.error('[Context Summary] Catch-up summary failed', { chatId, participantId },

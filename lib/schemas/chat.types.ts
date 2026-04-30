@@ -148,6 +148,21 @@ export const MessageEventSchema = z.object({
     toStatus: z.enum(['active', 'silent', 'absent', 'removed']).optional(),
     introducedCharacterIds: z.array(UUIDSchema).optional(),
   }).nullable().optional(),
+  /**
+   * Phase 3c: anchor tying a Staff-authored whisper to the compaction
+   * generation under which it was produced. Today this is set on Librarian
+   * per-character summary whispers so the summarization pipeline can sweep
+   * stale anchors deterministically when `compactionGeneration` bumps —
+   * instead of the prior content-prefix sweep, which couldn't distinguish
+   * whispers that legitimately span generation boundaries.
+   *
+   * NULL on whispers from before the anchoring change (and on every
+   * non-anchorable message). The sweep treats null as "older than current
+   * generation" so legacy whispers continue to be removed on regen.
+   */
+  summaryAnchor: z.object({
+    compactionGeneration: z.number(),
+  }).nullable().optional(),
 });
 
 export type MessageEvent = z.infer<typeof MessageEventSchema>;

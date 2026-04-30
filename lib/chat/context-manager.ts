@@ -38,9 +38,14 @@ import {
   formatMemoriesForContext,
   formatInterCharacterMemoriesForContext,
   formatSummaryForContext,
+  formatFrozenMemoryArchive,
+  formatDynamicMemoryHead,
+  DYNAMIC_HEAD_TOKEN_BUDGET,
+  DYNAMIC_HEAD_DEFAULT_SIZE,
   type DebugMemoryInfo,
   type DebugInterCharacterMemoryInfo,
 } from './context/memory-injector'
+import { getOrComputeFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import {
   filterMessagesByHistoryAccess,
   filterWhisperMessages,
@@ -228,8 +233,6 @@ export interface BuildContextOptions {
   embeddingProfileId?: string
   /** Skip memory retrieval */
   skipMemories?: boolean
-  /** Maximum memories to retrieve */
-  maxMemories?: number
   /** Minimum importance for memories */
   minMemoryImportance?: number
 
@@ -362,7 +365,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     roleplayTemplate,
     embeddingProfileId,
     skipMemories = false,
-    maxMemories = 18,
     minMemoryImportance = 0.5,
     // Multi-character options (Phase 3)
     respondingParticipant,
@@ -852,54 +854,67 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     (existingMessages.length > 0 ? existingMessages[existingMessages.length - 1].content : '')
 
   const tMemoryStart = performance.now()
-  let memoryPath: 'skipped' | 'pre-searched' | 'semantic-search' = 'skipped'
+  let memoryPath: 'skipped' | 'pre-searched' | 'two-pool' = 'skipped'
+  let frozenArchiveCount = 0
+  let dynamicHeadCount = 0
   if (!skipMemories && character.id) {
-    if (options.preSearchedMemories && options.preSearchedMemories.length > 0) {
-      // Use proactively recalled memories (skips internal search)
-      memoryPath = 'pre-searched'
-      try {
-        const formatted = formatMemoriesForContext(
-          options.preSearchedMemories,
-          budget.memoryBudget,
-          provider
+    try {
+      // Phase 3a/3b: two-pool architecture.
+      //
+      // The frozen archive (top-N by effective weight at the current
+      // compaction generation) is sorted by memory.id so its bytes are
+      // identical across turns within a generation — the prefix-cache prize.
+      // The dynamic head is the per-turn relevance ranking, capped at a
+      // small token budget; entries already in the archive are filtered out
+      // so the LLM doesn't see the same memory twice.
+      const compactionGen = chat.compactionGeneration ?? 0
+      const dynamicHeadBudget = Math.min(DYNAMIC_HEAD_TOKEN_BUDGET, budget.memoryBudget)
+      const archiveBudget = Math.max(0, budget.memoryBudget - dynamicHeadBudget)
+
+      const frozenArchive = await getOrComputeFrozenArchive(character.id, compactionGen)
+      const archiveFormatted = formatFrozenMemoryArchive(frozenArchive, archiveBudget, provider)
+      frozenArchiveCount = archiveFormatted.memoriesUsed
+
+      const archiveIds = new Set(frozenArchive.map(m => m.id))
+      let dynamicHeadResults: SemanticSearchResult[] = []
+
+      if (options.preSearchedMemories && options.preSearchedMemories.length > 0) {
+        memoryPath = 'pre-searched'
+        dynamicHeadResults = options.preSearchedMemories.filter(
+          r => !archiveIds.has(r.memory.id),
         )
-
-        memoryContent = formatted.content
-        memoryTokens = formatted.tokenCount
-        memoriesIncluded = formatted.memoriesUsed
-        debugMemories = formatted.debugMemories
-
-      } catch (error) {
-        warnings.push(`Failed to format pre-searched memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      }
-    } else if (memorySearchQuery) {
-      // Default: search using user message (or last message in continue mode)
-      memoryPath = 'semantic-search'
-      try {
+      } else if (memorySearchQuery) {
+        memoryPath = 'two-pool'
         const memoryResults = await searchMemoriesSemantic(
           character.id,
           memorySearchQuery,
           {
             userId,
             embeddingProfileId,
-            limit: maxMemories * 2, // Get more to filter
+            // Pull a few more than the head size so the archive-overlap filter
+            // still leaves enough candidates to fill the head.
+            limit: DYNAMIC_HEAD_DEFAULT_SIZE * 3,
             minImportance: minMemoryImportance,
-          }
+          },
         )
-
-        const formatted = formatMemoriesForContext(
-          memoryResults.slice(0, maxMemories),
-          budget.memoryBudget,
-          provider
-        )
-
-        memoryContent = formatted.content
-        memoryTokens = formatted.tokenCount
-        memoriesIncluded = formatted.memoriesUsed
-        debugMemories = formatted.debugMemories
-      } catch (error) {
-        warnings.push(`Failed to retrieve memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        dynamicHeadResults = memoryResults.filter(r => !archiveIds.has(r.memory.id))
       }
+
+      const headFormatted = formatDynamicMemoryHead(dynamicHeadResults, provider, {
+        maxTokens: dynamicHeadBudget,
+        maxEntries: DYNAMIC_HEAD_DEFAULT_SIZE,
+      })
+      dynamicHeadCount = headFormatted.memoriesUsed
+
+      const sections: string[] = []
+      if (archiveFormatted.content) sections.push(archiveFormatted.content)
+      if (headFormatted.content) sections.push(headFormatted.content)
+      memoryContent = sections.join('\n\n')
+      memoryTokens = archiveFormatted.tokenCount + headFormatted.tokenCount
+      memoriesIncluded = archiveFormatted.memoriesUsed + headFormatted.memoriesUsed
+      debugMemories = [...archiveFormatted.debugMemories, ...headFormatted.debugMemories]
+    } catch (error) {
+      warnings.push(`Failed to retrieve memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
   logger.debug('[ContextManager] Memory retrieval + format complete', {
@@ -908,6 +923,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     durationMs: Math.round(performance.now() - tMemoryStart),
     path: memoryPath,
     memoriesIncluded,
+    frozenArchiveCount,
+    dynamicHeadCount,
+    compactionGeneration: chat.compactionGeneration ?? 0,
   })
 
   // 2b. Retrieve inter-character memories in multi-character chats

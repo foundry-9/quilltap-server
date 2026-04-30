@@ -60,6 +60,12 @@ export const ChatMessageRowSchema = z.object({
     toStatus: z.enum(['active', 'silent', 'absent', 'removed']).optional(),
     introducedCharacterIds: z.array(UUIDSchema).optional(),
   }).nullable().optional(),
+  // Phase 3c: anchor tying a Staff-authored whisper to the compaction
+  // generation under which it was produced. Set on per-character Librarian
+  // summary whispers; null on every other message.
+  summaryAnchor: z.object({
+    compactionGeneration: z.number(),
+  }).nullable().optional(),
   // For type='context-summary'
   context: z.string().nullable().optional(),
   // For type='system'

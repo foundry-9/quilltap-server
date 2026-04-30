@@ -174,6 +174,7 @@ async function postLibrarianMessage(
   kindLabel: string,
   attachments: string[] = [],
   targetParticipantIds: string[] | null = null,
+  summaryAnchor: { compactionGeneration: number } | null = null,
 ): Promise<MessageEvent | null> {
   try {
     const repos = getRepositories();
@@ -202,6 +203,7 @@ async function postLibrarianMessage(
       systemSender: 'librarian',
       systemKind: kindLabel,
       targetParticipantIds: targetParticipantIds && targetParticipantIds.length > 0 ? targetParticipantIds : null,
+      summaryAnchor: summaryAnchor ?? null,
     };
 
     await repos.chats.addMessage(chatId, message);
@@ -401,6 +403,13 @@ export interface LibrarianSummaryAnnouncement {
    * sender and the listed participants.
    */
   targetParticipantIds?: string[] | null;
+  /**
+   * Phase 3c: anchor tying this whisper to the compaction generation under
+   * which it was produced. The summarisation pipeline sweeps stale anchors
+   * deterministically when `compactionGeneration` bumps. NULL is permitted
+   * for legacy callers; the sweep treats null as "older than current".
+   */
+  summaryAnchor?: { compactionGeneration: number } | null;
 }
 
 export function buildSummaryContent(summary: string): string {
@@ -434,5 +443,6 @@ export async function postLibrarianSummaryAnnouncement(
     'summary',
     [],
     params.targetParticipantIds ?? null,
+    params.summaryAnchor ?? null,
   );
 }

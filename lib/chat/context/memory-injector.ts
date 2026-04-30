@@ -10,6 +10,11 @@ import { estimateTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter
 import { calculateEffectiveWeight, formatRelativeAge } from '@/lib/memory/memory-weighting'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
 
+/** Phase 3b: hard cap on the dynamic-head rank instruction. */
+export const DYNAMIC_HEAD_TOKEN_BUDGET = 200
+/** Phase 3b: how many rank-instruction entries to attempt. */
+export const DYNAMIC_HEAD_DEFAULT_SIZE = 5
+
 /**
  * Debug info for included memories
  */
@@ -180,6 +185,134 @@ export function formatInterCharacterMemoriesForContext(
 
   return {
     content: memoryParts.join('\n'),
+    tokenCount: currentTokens,
+    memoriesUsed,
+    debugMemories,
+  }
+}
+
+/**
+ * Phase 3a: Format the frozen-archive memory pool for context.
+ *
+ * The archive is a stable per-generation slice (already sorted by `memory.id`
+ * by the caller — see `frozen-archive-cache.ts`). The output uses
+ * `memory.summary` rather than `memory.content` so the bytes stay compact and
+ * the cache prefix doesn't bloat. No per-turn re-ranking is performed: order
+ * follows the input array verbatim so prefix-cache bytes are byte-stable
+ * across turns within a generation.
+ */
+export function formatFrozenMemoryArchive(
+  memories: Memory[],
+  maxTokens: number,
+  provider: Provider,
+): FormattedMemoriesResult {
+  if (memories.length === 0) {
+    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
+  }
+
+  const header = '## Memory Anchors'
+  const memoryParts: string[] = [header]
+  let currentTokens = estimateTokens(`${header}\n`, provider)
+  let memoriesUsed = 0
+  const debugMemories: DebugMemoryInfo[] = []
+
+  for (const memory of memories) {
+    const summary = memory.summary?.trim() || memory.content?.trim() || ''
+    if (!summary) continue
+
+    const memoryLine = `- ${summary}`
+    const lineTokens = estimateTokens(`${memoryLine}\n`, provider)
+    if (currentTokens + lineTokens > maxTokens) {
+      break
+    }
+
+    memoryParts.push(memoryLine)
+    currentTokens += lineTokens
+    memoriesUsed++
+    debugMemories.push({
+      summary: memory.summary,
+      importance: memory.importance,
+      score: 0,
+      effectiveWeight: 0,
+    })
+  }
+
+  if (memoriesUsed === 0) {
+    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
+  }
+
+  return {
+    content: memoryParts.join('\n'),
+    tokenCount: currentTokens,
+    memoriesUsed,
+    debugMemories,
+  }
+}
+
+/**
+ * Phase 3b: Format a compact "dynamic head" rank instruction for the user-
+ * message tail. Hard-capped at `DYNAMIC_HEAD_TOKEN_BUDGET` tokens. Uses
+ * `memory.summary` (not full content) and a short id prefix so the LLM can
+ * cite the relevant entry without the prompt bloating per turn. Caller is
+ * expected to pre-filter out memories already present in the frozen archive.
+ */
+export function formatDynamicMemoryHead(
+  memories: SemanticSearchResult[],
+  provider: Provider,
+  options: { maxTokens?: number; maxEntries?: number } = {},
+): FormattedMemoriesResult {
+  const maxTokens = options.maxTokens ?? DYNAMIC_HEAD_TOKEN_BUDGET
+  const maxEntries = options.maxEntries ?? DYNAMIC_HEAD_DEFAULT_SIZE
+
+  if (memories.length === 0) {
+    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
+  }
+
+  const ranked = memories
+    .map(r => ({
+      ...r,
+      weight: r.effectiveWeight ?? calculateEffectiveWeight(r.memory).effectiveWeight,
+    }))
+    .sort((a, b) => {
+      const weightDiff = b.weight - a.weight
+      if (Math.abs(weightDiff) > 0.05) return weightDiff
+      return b.score - a.score
+    })
+    .slice(0, maxEntries)
+
+  const header = 'Most relevant memories for this turn:'
+  const entries: string[] = []
+  const debugMemories: DebugMemoryInfo[] = []
+  // Reserve token budget for the header + final newline.
+  let currentTokens = estimateTokens(`${header}\n`, provider)
+  let memoriesUsed = 0
+
+  for (const { memory, score, weight } of ranked) {
+    const summary = memory.summary?.trim() || memory.content?.trim() || ''
+    if (!summary) continue
+    const idTag = `[m_${memory.id.slice(0, 4)}]`
+    const entry = `${idTag} ${summary}`
+    const candidateTokens = estimateTokens(`${entry}\n`, provider)
+    if (currentTokens + candidateTokens > maxTokens) {
+      break
+    }
+    entries.push(entry)
+    currentTokens += candidateTokens
+    memoriesUsed++
+    debugMemories.push({
+      summary: memory.summary,
+      importance: memory.importance,
+      score,
+      effectiveWeight: weight,
+    })
+  }
+
+  if (memoriesUsed === 0) {
+    return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
+  }
+
+  return {
+    content: `${header}\n${entries.join('\n')}`,
     tokenCount: currentTokens,
     memoriesUsed,
     debugMemories,

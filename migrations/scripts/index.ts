@@ -221,6 +221,8 @@ import { reabsorbLeftoverProjectFilesMigration } from './reabsorb-leftover-proje
 import { addLLMLogsRequestHashesColumnMigration } from './add-llm-logs-request-hashes-column';
 // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
 import { addSummarizationGateFieldsMigration } from './add-summarization-gate-fields';
+// Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
+import { addSummaryAnchorFieldMigration } from './add-summary-anchor-field';
 
 /**
  * All available migrations.
@@ -437,6 +439,8 @@ export const migrations: Migration[] = [
   addLLMLogsRequestHashesColumnMigration,
   // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
   addSummarizationGateFieldsMigration,
+  // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
+  addSummaryAnchorFieldMigration,
 ];
 
 export {
@@ -638,5 +642,7 @@ export {
   addLLMLogsRequestHashesColumnMigration,
   // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
   addSummarizationGateFieldsMigration,
+  // Add summaryAnchor column to chat_messages (whisper anchoring Phase 3c)
+  addSummaryAnchorFieldMigration,
 };
 

@@ -235,6 +235,7 @@ export const SQLITE_TABLES = [
       "provider" TEXT,
       "modelName" TEXT,
       "estimatedCostUSD" REAL,
+      "summaryAnchor" TEXT DEFAULT NULL,
       "createdAt" TEXT NOT NULL
     )`,
     indexes: [
