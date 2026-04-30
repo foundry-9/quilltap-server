@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Image prompt crafting raised to 4000-token output
+
+`craftImagePrompt` and `craftStoryBackgroundPrompt` (`lib/memory/cheap-llm-tasks/image-scene-tasks.ts`) were using the default 1000-token cap from `executeCheapLLMTask`, which truncated longer multi-character prompts mid-paragraph. Both bumped to 4000 tokens to match the budget already used by `updateSceneState`.
+
 #### Rolling-window summary replaces full-history payload
 
 Replaces the gate-with-full-history approach from Phases 1-4 with a true rolling-window cadence: the chat-message LLM call now sees `[Librarian summary whisper] + [last 5–10 turns]` instead of the entire conversation. Older USER + character messages are dropped from the LLM context once a fold has covered them. The Phase 4 broadcast Librarian summary, edit-aware invalidation, and `compactionGeneration` plumbing all carry over unchanged.

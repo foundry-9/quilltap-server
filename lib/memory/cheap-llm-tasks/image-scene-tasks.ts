@@ -433,7 +433,10 @@ Create the final image prompt (maximize detail while staying under the limit):`,
       return prompt
     },
     'craft-image-prompt',
-    chatId
+    chatId,
+    undefined,
+    undefined,
+    4000
   )
 }
 
@@ -697,7 +700,10 @@ Create the atmospheric background prompt:`,
       return prompt
     },
     'craft-story-background-prompt',
-    chatId
+    chatId,
+    undefined,
+    undefined,
+    4000
   )
 }
 
