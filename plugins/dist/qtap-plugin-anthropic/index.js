@@ -13182,8 +13182,9 @@ var AnthropicProvider = class {
       }
       const role = msg.role === "user" ? "user" : "assistant";
       const isLastUserMessage = i === lastUserMessageIndex;
+      const honorMsgCacheControl = cacheOptions?.enableCaching === true && msg.cacheControl?.type === "ephemeral";
       if (!msg.attachments || msg.attachments.length === 0) {
-        if (isLastUserMessage) {
+        if (isLastUserMessage || honorMsgCacheControl) {
           formattedMessages.push({
             role,
             content: [{
@@ -13257,7 +13258,7 @@ var AnthropicProvider = class {
         }
         sent.push(attachment.id);
       }
-      if (isLastUserMessage && content.length > 0) {
+      if ((isLastUserMessage || honorMsgCacheControl) && content.length > 0) {
         const lastBlock = content[content.length - 1];
         content[content.length - 1] = {
           ...lastBlock,

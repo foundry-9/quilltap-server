@@ -81,6 +81,7 @@ import {
   postHostOffSceneCharactersAnnouncement,
   findIntroducedOffSceneCharacterIds,
 } from '@/lib/services/host-notifications/writer'
+import { SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
 import {
   shouldInjectTimestamp,
   calculateCurrentTimestamp,
@@ -134,6 +135,13 @@ export interface ContextMessage {
   thoughtSignature?: string | null
   /** Optional name for multi-character chats (provider-dependent support) */
   name?: string
+  /**
+   * Provider cache breakpoint marker. Set on the head Librarian summary
+   * whisper so providers that support per-message caching (Anthropic) can
+   * anchor a cache breakpoint there: system+tools stay hot across summary
+   * folds; only the summary-and-after re-prefills.
+   */
+  cacheControl?: { type: 'ephemeral' }
 }
 
 /**
@@ -1145,6 +1153,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     messagesToProcess = attributedMessages.map(msg => ({
       role: msg.role,
       content: msg.content,
+      id: msg.id,
       name: msg.name,
       participantId: msg.participantId,
       thoughtSignature: msg.thoughtSignature,
@@ -1157,6 +1166,24 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       id: msg.id,
       thoughtSignature: msg.thoughtSignature,
     }))
+  }
+
+  // Drop messages already absorbed into the running summary. The Librarian
+  // summary whisper survives: it is posted after the fold and its id is not
+  // in the anchor set, so the surviving tail begins with the most recent
+  // summary whisper followed by post-fold turns. Empty anchor set (fresh
+  // chat or post-invalidation) leaves messagesToProcess unchanged.
+  const summaryAnchorIds = chat.summaryAnchorMessageIds ?? []
+  if (summaryAnchorIds.length > 0) {
+    const anchorSet = new Set(summaryAnchorIds)
+    const before = messagesToProcess.length
+    messagesToProcess = messagesToProcess.filter(m => !m.id || !anchorSet.has(m.id))
+    logger.debug('[ContextManager] Dropped messages absorbed into running summary', {
+      chatId: chat.id,
+      droppedCount: before - messagesToProcess.length,
+      remainingCount: messagesToProcess.length,
+      anchorCount: summaryAnchorIds.length,
+    })
   }
 
   // 6. Select recent messages to fit budget
@@ -1208,15 +1235,23 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     metadata: { isInjected: true },
   })
 
-  // Add selected conversation messages
-  // In multi-character mode, preserve name attribution
+  // Add selected conversation messages.
+  // The first surviving Librarian summary whisper (after the running-summary
+  // fold drops earlier turns) gets a cache breakpoint so the system+tools
+  // prefix stays hot across fold events.
+  let summaryBreakpointPlaced = false
   for (const msg of selectedMessages) {
+    const isSummaryHead = !summaryBreakpointPlaced &&
+      typeof msg.content === 'string' &&
+      msg.content.startsWith(SUMMARY_CONTENT_PREFIX)
     contextMessages.push({
       role: msg.role.toLowerCase() as 'user' | 'assistant',
       content: msg.content,
       thoughtSignature: msg.thoughtSignature,
       name: msg.name,
+      cacheControl: isSummaryHead ? { type: 'ephemeral' } : undefined,
     })
+    if (isSummaryHead) summaryBreakpointPlaced = true
   }
 
   // Off-scene character introduction: when a workspace character is

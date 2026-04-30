@@ -254,6 +254,7 @@ export function attributeMessagesForCharacter(
     return {
       role,
       content: msg.content,
+      id: msg.id,
       name: participantName,
       participantId: msg.participantId || undefined,
       thoughtSignature: msg.thoughtSignature,

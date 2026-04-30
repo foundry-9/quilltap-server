@@ -43,7 +43,9 @@ export {
   generateTitleFromSummary,
   considerTitleUpdate,
   updateContextSummary,
+  foldChatSummary,
 } from './chat-tasks'
+export type { FoldSummaryInput } from './chat-tasks'
 
 // Image and scene tasks
 export {

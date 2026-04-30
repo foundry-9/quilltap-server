@@ -33,6 +33,7 @@ export interface StreamOptions {
     thoughtSignature?: string
     toolCallId?: string
     toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
+    cacheControl?: { type: 'ephemeral' }
   }>
   connectionProfile: ConnectionProfile
   apiKey: string
@@ -307,6 +308,7 @@ export async function* streamMessage(
     thoughtSignature: m.thoughtSignature,
     toolCallId: m.toolCallId,
     toolCalls: m.toolCalls,
+    cacheControl: m.cacheControl,
   })) as LLMMessage[]
 
   // Track timing and accumulated content

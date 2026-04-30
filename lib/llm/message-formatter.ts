@@ -106,6 +106,8 @@ export function formatDisplayName(name: string): string {
 export interface MultiCharacterMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
+  /** Source chat_message id (preserved from MessageWithParticipant) */
+  id?: string
   /** Name of the participant (character or user character) */
   name?: string
   /** Participant ID for tracking */

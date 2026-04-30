@@ -191,11 +191,15 @@ export class AnthropicProvider implements TextProvider {
       // Standard user/assistant message handling
       const role = msg.role === 'user' ? 'user' : 'assistant'
       const isLastUserMessage = i === lastUserMessageIndex
+      // Honor caller-supplied cacheControl (e.g., the running summary head)
+      // even when long-context strategy is off — gives the running-summary
+      // path a stable mid-array breakpoint independent of the last-user
+      // breakpoint.
+      const honorMsgCacheControl = cacheOptions?.enableCaching === true && msg.cacheControl?.type === 'ephemeral'
 
       // If no attachments, check if we need to add cache control
       if (!msg.attachments || msg.attachments.length === 0) {
-        // For system_and_long_context, add cache_control to the last user message
-        if (isLastUserMessage) {
+        if (isLastUserMessage || honorMsgCacheControl) {
           formattedMessages.push({
             role,
             content: [{
@@ -284,8 +288,9 @@ export class AnthropicProvider implements TextProvider {
         sent.push(attachment.id)
       }
 
-      // For system_and_long_context, add cache_control to the last content block of the last user message
-      if (isLastUserMessage && content.length > 0) {
+      // For system_and_long_context, add cache_control to the last content block of the last user message.
+      // Also honor caller-supplied cacheControl (running-summary head).
+      if ((isLastUserMessage || honorMsgCacheControl) && content.length > 0) {
         const lastBlock = content[content.length - 1]
         content[content.length - 1] = {
           ...lastBlock,

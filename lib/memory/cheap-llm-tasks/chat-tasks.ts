@@ -648,3 +648,68 @@ ${newMessagesText}`,
     chatId
   )
 }
+
+/**
+ * Rolling-window fold prompt. The model is told it is *editing* a prior
+ * summary by folding in the next batch of turns, with explicit
+ * carry-forward / drop / add verbs per section. The carry-forward framing
+ * conserves prior content and keeps drift bounded across many folds.
+ */
+const FOLD_SUMMARY_PROMPT = `You are updating an existing summary of an ongoing roleplay conversation.
+
+The summary tracks four sections:
+
+- Active threads: what is currently in motion. Carry forward anything still unresolved. Drop threads that have closed. Add new ones from the new turns.
+- Resolved decisions: things now locked. Carry forward all prior entries — these don't unresolve. Add anything new the characters have committed to.
+- Emotional state: where the room is right now, not the journey. Replace the prior Emotional state entirely with the current state.
+- Open questions: unanswered things in the air. Drop any the new turns answered. Carry forward the rest. Add new ones.
+
+Rewrite the four sections in plain prose. Be concise. Don't transcribe — synthesize. Use character names, not roles. Output only the four sections under their labels; no preamble, no closing remarks.`
+
+export interface FoldSummaryInput {
+  /** The previous running summary, or null when this is the first fold. */
+  priorSummary: string | null
+  /** New conversation turns to fold into the running summary. */
+  newTurns: ChatMessage[]
+}
+
+/**
+ * Fold a batch of new turns into the running summary. Frames the call as an
+ * update task with a four-section structure (Active threads / Resolved
+ * decisions / Emotional state / Open questions). Used by the rolling-window
+ * summarization cadence in `lib/chat/context-summary.ts`.
+ */
+export async function foldChatSummary(
+  input: FoldSummaryInput,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string,
+): Promise<CheapLLMTaskResult<string>> {
+  const newTurnsText = input.newTurns
+    .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+    .join('\n\n')
+
+  const priorSummaryBlock = input.priorSummary && input.priorSummary.trim().length > 0
+    ? input.priorSummary.trim()
+    : '(none — this is the first fold)'
+
+  const userContent = `# Prior summary
+${priorSummaryBlock}
+
+# New turns to fold in
+${newTurnsText}`
+
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: FOLD_SUMMARY_PROMPT },
+    { role: 'user', content: userContent },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): string => content.trim(),
+    'fold-chat-summary',
+    chatId,
+  )
+}
