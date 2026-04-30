@@ -473,8 +473,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       if (matchedIds.size > 0) {
         // Diff against characters already introduced by prior Host
         // announcements in this chat — only newly-mentioned ones get a fresh
-        // intro.
-        const introducedIds = findIntroducedOffSceneCharacterIds(existingMessages)
+        // intro. `existingMessages` is the trimmed role/content view used for
+        // LLM context and has already been stripped of systemSender/hostEvent,
+        // so re-load the full chat history from the repo to read those fields.
+        const fullChatMessages = await repos.chats.getMessages(chat.id)
+        const introducedIds = findIntroducedOffSceneCharacterIds(fullChatMessages)
         const newcomerIds = new Set<string>()
         for (const id of matchedIds) {
           if (!introducedIds.has(id)) newcomerIds.add(id)

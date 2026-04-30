@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Host re-announcing the same off-scene characters every turn
+
+`assembleContext` in `lib/chat/context-manager.ts` was passing `existingMessages` (the trimmed `{ role, content, id?, thoughtSignature? }` view used for LLM context) into `findIntroducedOffSceneCharacterIds`. That view is stripped of `systemSender`, `systemKind`, and `hostEvent`, so the dedupe filter never matched a prior Host announcement and every turn re-announced every mentioned off-scene character. Fixed by re-loading the full chat history via `repos.chats.getMessages(chat.id)` for the dedupe check; the LLM-context path is unchanged.
+
 #### Cheap-LLM token floor raised to 2048; compression tasks bumped to 4000
 
 `executeCheapLLMTask` in `lib/memory/cheap-llm-tasks/core-execution.ts` now floors `effectiveMaxTokens` at 2048 (`Math.max(maxTokens ?? 2048, 2048)`) instead of defaulting to 1000. Callers that don't pass an explicit `maxTokens` move from 1000 to 2048; callers that pass a value below 2048 are bumped up. The three compression tasks in `lib/memory/cheap-llm-tasks/compression-tasks.ts` (`compressConversationHistory`, `compressSystemPrompt`, `compressMemories`) now pass `maxTokens: 4000` explicitly so longer summaries are not truncated mid-output, matching the budget already used by `craftImagePrompt`, `craftStoryBackgroundPrompt`, and `updateSceneState`.
