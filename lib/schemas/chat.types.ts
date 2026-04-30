@@ -353,6 +353,18 @@ export const ChatMetadataSchema = z.object({
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
+  /**
+   * Monotonic counter bumped on every summarization fire (T_soft or T_hard).
+   * Used by Phase 3 to anchor memory pools and per-character whispers — when
+   * this number changes, downstream caches know to invalidate.
+   */
+  compactionGeneration: z.number().default(0),
+  /** Interchange count when the last summarization fire happened. Drives T_soft. */
+  lastSummaryTurn: z.number().default(0),
+  /** Rolling-buffer token count when the last summarization fire happened. Drives T_soft. */
+  lastSummaryTokens: z.number().default(0),
+  /** Interchange count when the last full-from-scratch rebuild happened. Drives T_hard. */
+  lastFullRebuildTurn: z.number().default(0),
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */
@@ -514,6 +526,11 @@ export const ChatMetadataBaseSchema = z.object({
   messageCount: z.number().default(0),
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
+  /** Triple-gate summarization tracking. See ChatMetadataSchema for details. */
+  compactionGeneration: z.number().default(0),
+  lastSummaryTurn: z.number().default(0),
+  lastSummaryTokens: z.number().default(0),
+  lastFullRebuildTurn: z.number().default(0),
   /** Whether auto-responses are paused in multi-character chats */
   isPaused: z.boolean().default(false),
   /** Whether the user has manually renamed this chat (disables auto-renaming) */

@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### LLM cost reduction Phase 2: triple-gate summarization
+
+Phase 2 of the cost-reduction plan. Replaces the per-checkpoint summarization trigger with a budget-driven triple-gate so most turns reuse the cached summary unchanged. Independent of any architectural redesign — just a smarter trigger. Title-checkpoint logic is unchanged and runs on its own clock.
+
+- **Triple-gate trigger.** New `evaluateSummarizationGate` in `lib/chat/context-summary.ts` returns `'skip' | 'soft' | 'hard'` based on three thresholds: `T_SOFT_TOKEN_THRESHOLD = 8000` (8K tokens added since last refresh), `T_SOFT_TURN_THRESHOLD = 8` (8 interchanges since last refresh), and `T_HARD_TURN_THRESHOLD = 50` (50 interchanges since last full rebuild). `T_promote` is intentionally deferred to Phase 4 since the layered-summary structure does not exist yet. Most turns return `'skip'` and reuse the existing `chat.contextSummary` unchanged. `checkAndGenerateSummaryIfNeeded` calls the gate after the (unchanged) title-checkpoint logic runs and uses `forceRegenerate: decision === 'hard'` so soft fires take the cheap incremental `updateContextSummary` path while hard fires reset accumulated recursive drift.
+- **Compaction-generation tracking.** Four new columns on `chats`: `compactionGeneration` (monotonic counter bumped on every fire — used by Phase 3 to anchor memory pools and per-character whispers), `lastSummaryTurn`, `lastSummaryTokens`, `lastFullRebuildTurn`. Schema in `lib/schemas/chat.types.ts` (added to both `ChatMetadataSchema` and `ChatMetadataBaseSchema`); migration `add-summarization-gate-fields-v1`; fresh-install DDL in `sqlite-initial-schema.ts`; DDL.md updated. `generateContextSummary` now writes all four fields when it persists a new summary.
+- **Removed redundant inner gate.** The previous `chatNeedsSummary` early-return inside `generateContextSummary` (which rejected updates on chats with < 100 messages) was incompatible with the upstream gate — the gate would decide to fire and `generateContextSummary` would short-circuit. Removed; the gate is the single decision point now. `chatNeedsSummary` is retained as an exported helper for any external caller that might still want it.
+- **Per-character whisper outcome metrics.** The "regenerate" vs "reuse global summary" decision in `generatePerCharacterSummaryWhispers` was logged at DEBUG level; promoted to INFO with a structured `whisperOutcome` field (`'regenerated' | 'reused'`) so reuse fraction is queryable without enabling debug logging. Validates Phase 4 ROI before committing to the redesign.
+- **Test coverage.** New `__tests__/unit/lib/chat/summarization-gate.test.ts` exercises the gate decision matrix (skip below threshold, soft on either threshold, hard on 50-turn ceiling, hard preferred over soft when both fire) plus a 50-turn simulation that asserts fire count drops from ~9 (old behavior) to 5–8 with at least one hard fire.
+
 #### LLM cost reduction Phase 1: cache observability + provider parity
 
 Phase 1 of the cost-reduction plan in `docs/developer/features/llm_api_costs_breakdown.md`. Closes provider-parity gaps in cache instrumentation, canonicalizes the tools array, and adds the cache-key parameters that providers need to keep cache hits from sharding across machines. No behavioral changes to chat output.

@@ -219,6 +219,8 @@ import { addCharacterIdentityFieldMigration } from './add-character-identity-fie
 import { reabsorbLeftoverProjectFilesMigration } from './reabsorb-leftover-project-files';
 // Add requestHashes column to llm_logs (cache-stability instrumentation)
 import { addLLMLogsRequestHashesColumnMigration } from './add-llm-logs-request-hashes-column';
+// Add summarization-gate tracking columns to chats (triple-gate Phase 2)
+import { addSummarizationGateFieldsMigration } from './add-summarization-gate-fields';
 
 /**
  * All available migrations.
@@ -433,6 +435,8 @@ export const migrations: Migration[] = [
   reabsorbLeftoverProjectFilesMigration,
   // Add requestHashes column to llm_logs (cache-stability instrumentation)
   addLLMLogsRequestHashesColumnMigration,
+  // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
+  addSummarizationGateFieldsMigration,
 ];
 
 export {
@@ -632,5 +636,7 @@ export {
   reabsorbLeftoverProjectFilesMigration,
   // Add requestHashes column to llm_logs (cache-stability instrumentation)
   addLLMLogsRequestHashesColumnMigration,
+  // Add summarization-gate tracking columns to chats (triple-gate Phase 2)
+  addSummarizationGateFieldsMigration,
 };
 

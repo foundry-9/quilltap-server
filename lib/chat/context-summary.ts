@@ -28,6 +28,82 @@ import {
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 
 /**
+ * Triple-gate summarization triggers (Phase 2 of LLM cost-reduction plan).
+ *
+ * The previous behaviour fired summarization at every title checkpoint
+ * (interchange counts 2, 3, 5, 7, 10, then every 10), eagerly recomputing
+ * from scratch and fanning out to per-character whispers each time. On a
+ * 84-turn session that produced ~252 summarization calls. The triple-gate
+ * replaces that with budget-driven thresholds:
+ *
+ *   - T_soft: refresh when EITHER 8K+ tokens have been added since the last
+ *     summary OR 8+ turns have passed. Updates the existing summary with
+ *     recent messages.
+ *   - T_promote: deferred to Phase 4 (layered-summary structure does not
+ *     exist yet); included as a no-op so call-sites don't drift.
+ *   - T_hard: full from-scratch rebuild every 50 turns (or sooner on drift
+ *     detection later). Resets accumulated recursive error.
+ *
+ * Most turns return 'skip' and reuse the cached summary unchanged.
+ */
+export const T_SOFT_TOKEN_THRESHOLD = 8000
+export const T_SOFT_TURN_THRESHOLD = 8
+export const T_HARD_TURN_THRESHOLD = 50
+
+export type SummarizationGateDecision = 'skip' | 'soft' | 'hard'
+
+export interface SummarizationGateInputs {
+  /** Current interchange count (output of calculateInterchangeCount). */
+  currentTurn: number
+  /** Total chat token estimate for current message set. */
+  currentTokens: number
+  /** From chat metadata. */
+  lastSummaryTurn: number
+  lastSummaryTokens: number
+  lastFullRebuildTurn: number
+  /** True if a contextSummary already exists on the chat. */
+  hasExistingSummary: boolean
+}
+
+/**
+ * Decide whether to skip, soft-refresh, or hard-rebuild the chat summary.
+ * Pure function — no side effects.
+ */
+export function evaluateSummarizationGate(
+  inputs: SummarizationGateInputs,
+): SummarizationGateDecision {
+  const { currentTurn, currentTokens, lastSummaryTurn, lastSummaryTokens, lastFullRebuildTurn, hasExistingSummary } = inputs
+
+  // Need a meaningful amount of conversation before any summary makes sense.
+  if (currentTurn < 2) return 'skip'
+
+  // First-time generation: a chat with no existing summary that has crossed
+  // the soft threshold should produce one. Treat as a soft fire so the
+  // updateContextSummary path is tried first; full rebuild is reserved for
+  // T_hard so the cheap-LLM cost stays bounded.
+  if (!hasExistingSummary) {
+    if (currentTurn >= T_SOFT_TURN_THRESHOLD || currentTokens >= T_SOFT_TOKEN_THRESHOLD) {
+      return 'soft'
+    }
+    return 'skip'
+  }
+
+  // T_hard wins over T_soft when both fire, because a fresh rebuild
+  // implicitly satisfies any soft refresh that was due.
+  if (currentTurn - lastFullRebuildTurn >= T_HARD_TURN_THRESHOLD) {
+    return 'hard'
+  }
+
+  const turnsSinceRefresh = currentTurn - lastSummaryTurn
+  const tokensSinceRefresh = currentTokens - lastSummaryTokens
+  if (turnsSinceRefresh >= T_SOFT_TURN_THRESHOLD || tokensSinceRefresh >= T_SOFT_TOKEN_THRESHOLD) {
+    return 'soft'
+  }
+
+  return 'skip'
+}
+
+/**
  * Calculates the number of interchanges in a chat
  * An interchange is one user message + one assistant response
  */
@@ -195,13 +271,11 @@ export async function generateContextSummary(
       return { success: false, error: 'Chat not found', wasGenerated: false }
     }
 
-    // Check if we need to generate (unless forced)
-    if (!forceRegenerate && chat.contextSummary) {
-      const needsCheck = await chatNeedsSummary(chatId, connectionProfile.provider, connectionProfile.modelName)
-      if (!needsCheck.needsSummary) {
-        return { success: true, summary: chat.contextSummary, wasGenerated: false }
-      }
-    }
+    // The gating decision lives upstream now — see evaluateSummarizationGate
+    // and checkAndGenerateSummaryIfNeeded. If a caller invokes this function
+    // directly without forceRegenerate, we still produce a summary; the
+    // incremental updateContextSummary path is selected automatically when
+    // chat.contextSummary already exists.
 
     // Get cheap LLM provider - convert null values to undefined for compatibility
     let cheapLLM = getCheapLLMProvider(
@@ -312,8 +386,28 @@ export async function generateContextSummary(
 
     // Save summary to chat
     if (result.success && result.summary) {
+      // Refresh chat to get current message + token state before updating
+      // tracking fields. The triple-gate uses these to decide whether to
+      // skip on subsequent turns.
+      const allChatMessages = await repos.chats.getMessages(chatId)
+      const currentTurn = calculateInterchangeCount(allChatMessages)
+      const conversationForCount = allChatMessages
+        .filter(msg => msg.type === 'message')
+        .filter(msg => {
+          const role = (msg as { role: string }).role
+          return role === 'USER' || role === 'ASSISTANT'
+        })
+        .map(msg => ({ role: (msg as { role: string }).role, content: (msg as { content: string }).content }))
+      const currentTokens = countMessagesTokens(conversationForCount, connectionProfile.provider)
+
+      const isFullRebuild = forceRegenerate || !chat.contextSummary
+
       await repos.chats.update(chatId, {
         contextSummary: result.summary,
+        compactionGeneration: (chat.compactionGeneration ?? 0) + 1,
+        lastSummaryTurn: currentTurn,
+        lastSummaryTokens: currentTokens,
+        ...(isFullRebuild ? { lastFullRebuildTurn: currentTurn } : {}),
         updatedAt: new Date().toISOString(),
       })
 
@@ -535,9 +629,10 @@ export async function generatePerCharacterSummaryWhispers(
 
       let summaryText = globalSummary
       if (!sameAsGlobal) {
-        logger.debug('[Context Summary] Generating tailored summary for participant', {
+        logger.info('[Context Summary] Per-character whisper: regenerating (slice differs from global)', {
           chatId, participantId: participant.id,
           visibleCount: conv.length, globalCount: globalSliceIds.length,
+          whisperOutcome: 'regenerated',
         })
         const result = await summarizeChat(conv, cheapLLM, userId, chatId)
         if (!result.success || !result.result) {
@@ -570,8 +665,9 @@ export async function generatePerCharacterSummaryWhispers(
           }
         }
       } else {
-        logger.debug('[Context Summary] Reusing global summary for participant (slice matches)', {
+        logger.info('[Context Summary] Per-character whisper: reused global summary', {
           chatId, participantId: participant.id,
+          whisperOutcome: 'reused',
         })
       }
 
@@ -1013,36 +1109,52 @@ export async function checkAndGenerateSummaryIfNeeded(
     })
   }
 
-  // Regenerate context summary on the same schedule as title/background checks,
-  // or when the token-based heuristic says we need one
-  if (isAtTitleCheckpoint && chat.contextSummary) {
-    // At a title checkpoint with an existing summary — force regeneration to keep
-    // the summary current (used by danger classification and story backgrounds)
-    logger.info(`[Context Summary] Regenerating summary at interchange ${currentInterchange} for chat ${chatId}`)
+  // Triple-gate summarization: replace the per-checkpoint trigger. The title
+  // path keeps its own checkpoint clock; this gate is for the summary alone.
+  const conversationForCount = allMessages
+    .filter(msg => msg.type === 'message')
+    .filter(msg => {
+      const role = (msg as { role: string }).role
+      return role === 'USER' || role === 'ASSISTANT'
+    })
+    .map(msg => ({ role: (msg as { role: string }).role, content: (msg as { content: string }).content }))
+  const currentTokens = countMessagesTokens(conversationForCount, provider)
+
+  const decision = evaluateSummarizationGate({
+    currentTurn: currentInterchange,
+    currentTokens,
+    lastSummaryTurn: chat.lastSummaryTurn ?? 0,
+    lastSummaryTokens: chat.lastSummaryTokens ?? 0,
+    lastFullRebuildTurn: chat.lastFullRebuildTurn ?? 0,
+    hasExistingSummary: !!chat.contextSummary,
+  })
+
+  if (decision !== 'skip') {
+    logger.info('[Context Summary] Gate fired', {
+      chatId,
+      decision,
+      currentInterchange,
+      currentTokens,
+      lastSummaryTurn: chat.lastSummaryTurn ?? 0,
+      lastSummaryTokens: chat.lastSummaryTokens ?? 0,
+      lastFullRebuildTurn: chat.lastFullRebuildTurn ?? 0,
+    })
     generateContextSummaryAsync({
       userId,
       chatId,
       connectionProfile,
       cheapLLMSettings,
       availableProfiles,
-      forceRegenerate: true,
+      forceRegenerate: decision === 'hard',
     })
   } else {
-    // Original token-count-based summary check (for first-time generation)
-    const needsCheck = await chatNeedsSummary(chatId, provider, modelName)
-
-    if (needsCheck.needsSummary) {
-      logger.info(`[Context Summary] Chat ${chatId} needs summary: ${needsCheck.reason}`)
-
-      // Generate in background to not block the response
-      generateContextSummaryAsync({
-        userId,
-        chatId,
-        connectionProfile,
-        cheapLLMSettings,
-        availableProfiles,
-      })
-    }
+    logger.debug('[Context Summary] Gate skipped', {
+      chatId,
+      currentInterchange,
+      currentTokens,
+      lastSummaryTurn: chat.lastSummaryTurn ?? 0,
+      lastSummaryTokens: chat.lastSummaryTokens ?? 0,
+    })
   }
 }
 
