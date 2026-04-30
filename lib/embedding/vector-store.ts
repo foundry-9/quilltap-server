@@ -551,6 +551,14 @@ export class VectorStoreManager {
   }
 
   /**
+   * Drop every cached store. Used after a corpus-wide rewrite (e.g. a
+   * Matryoshka re-apply) to ensure the next search loads fresh BLOBs.
+   */
+  unloadAll(): void {
+    this.stores.clear()
+  }
+
+  /**
    * Delete a character's vector index entirely
    */
   async deleteStore(characterId: string): Promise<boolean> {

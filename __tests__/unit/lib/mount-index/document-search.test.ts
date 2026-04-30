@@ -32,6 +32,9 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
     for (let i = 0; i < a.length && i < b.length; i++) sum += a[i] * b[i]
     return sum
   }),
+  // Pre-flight guard added in the Matryoshka truncation work — mock as a no-op
+  // for these tests; dimension mismatch isn't what they're exercising.
+  assertEmbeddingDimensionsMatch: jest.fn(),
 }))
 
 import { searchDocumentChunks } from '@/lib/mount-index/document-search'

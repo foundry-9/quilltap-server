@@ -28,6 +28,8 @@ export function ProfileList({
 }: ProfileListProps) {
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
   const [refitSuccess, setRefitSuccess] = useState<string | null>(null)
+  const [reapplyConfirming, setReapplyConfirming] = useState<string | null>(null)
+  const [reapplySuccess, setReapplySuccess] = useState<string | null>(null)
 
   const {
     loading: deleteLoading,
@@ -41,6 +43,13 @@ export function ProfileList({
     error: refitError,
     execute: executeRefit,
     clearError: clearRefitError,
+  } = useAsyncOperation<void>()
+
+  const {
+    loading: reapplyLoading,
+    error: reapplyError,
+    execute: executeReapply,
+    clearError: clearReapplyError,
   } = useAsyncOperation<void>()
 
   const handleDelete = async (id: string) => {
@@ -69,6 +78,25 @@ export function ProfileList({
       setRefitSuccess(profile.provider === 'BUILTIN'
         ? 'Vocabulary refit job queued. Help docs, memories, and conversations will be re-embedded. Track progress via the Emb badge.'
         : 'Re-embedding everything — help docs, memories, and conversations. Track progress via the Emb badge.'
+      )
+    })
+  }
+
+  const handleReapply = async (profile: EmbeddingProfile) => {
+    setReapplySuccess(null)
+    await executeReapply(async () => {
+      const result = await fetchJson(
+        `/api/v1/embedding-profiles/${profile.id}?action=reapply`,
+        { method: 'POST' }
+      )
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to trigger re-apply')
+      }
+      notifyQueueChange()
+      setReapplyConfirming(null)
+      setReapplySuccess(
+        `Matryoshka re-apply queued. Stored vectors will be sliced to ${profile.truncateToDimensions}d and renormalized. ` +
+        'A backup of each affected database is taken before any rewrite. Track progress via the Emb badge.'
       )
     })
   }
@@ -105,6 +133,33 @@ export function ProfileList({
           message={refitError}
           onRetry={clearRefitError}
         />
+      )}
+
+      {reapplyError && (
+        <ErrorAlert
+          message={reapplyError}
+          onRetry={clearReapplyError}
+        />
+      )}
+
+      {reapplySuccess && (
+        <div className="qt-alert-success">
+          <div className="flex items-center justify-between gap-4">
+            <p className="qt-label flex-1">{reapplySuccess}</p>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Link href="/settings?tab=system" className="qt-button-ghost qt-button-sm">
+                View Tasks Queue
+              </Link>
+              <button
+                type="button"
+                onClick={() => setReapplySuccess(null)}
+                className="qt-button-ghost qt-button-sm"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {refitSuccess && (
@@ -149,6 +204,12 @@ export function ProfileList({
           if (profile.dimensions) {
             metadata.push({ label: 'Dimensions', value: profile.dimensions.toString() })
           }
+          if (profile.truncateToDimensions) {
+            metadata.push({
+              label: 'Truncate to',
+              value: `${profile.truncateToDimensions} (Matryoshka)`,
+            })
+          }
           if (profile.apiKey) {
             metadata.push({ label: 'API Key', value: profile.apiKey.label })
           }
@@ -178,6 +239,19 @@ export function ProfileList({
             actions.push({
               label: profile.provider === 'BUILTIN' ? 'Refit Vocabulary' : 'Re-embed Everything',
               onClick: () => handleRefit(profile),
+              variant: 'secondary' as const,
+            })
+          }
+
+          // Add Matryoshka re-apply button for default profiles with truncation set.
+          // Two-step: first click asks for confirmation, second click runs the job.
+          if (profile.isDefault && profile.truncateToDimensions) {
+            const isConfirming = reapplyConfirming === profile.id
+            actions.push({
+              label: isConfirming
+                ? (reapplyLoading ? 'Queuing…' : `Confirm: slice to ${profile.truncateToDimensions}d`)
+                : 'Re-apply (Matryoshka)',
+              onClick: isConfirming ? () => handleReapply(profile) : () => setReapplyConfirming(profile.id),
               variant: 'secondary' as const,
             })
           }

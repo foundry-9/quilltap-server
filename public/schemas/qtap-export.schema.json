@@ -589,6 +589,14 @@
         "modelName": { "type": "string" },
         "baseUrl": { "type": ["string", "null"] },
         "dimensions": { "type": ["integer", "null"] },
+        "truncateToDimensions": {
+          "type": ["integer", "null"],
+          "description": "Matryoshka slice target — when set, raw provider vectors are sliced to this length before storage. Null means no truncation."
+        },
+        "normalizeL2": {
+          "type": "boolean",
+          "description": "Whether stored embeddings are L2-normalised. Defaults to true."
+        },
         "isDefault": { "type": "boolean" },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
         "createdAt": { "$ref": "#/$defs/Timestamp" },

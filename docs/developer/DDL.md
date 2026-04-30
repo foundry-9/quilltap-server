@@ -806,6 +806,8 @@ CREATE TABLE "embedding_profiles" (
   "baseUrl" TEXT,
   "modelName" TEXT NOT NULL,
   "dimensions" INTEGER,
+  "truncateToDimensions" INTEGER DEFAULT NULL,
+  "normalizeL2" INTEGER DEFAULT 1,
   "isDefault" INTEGER DEFAULT 0,
   "tags" TEXT DEFAULT '[]',
   "createdAt" TEXT NOT NULL,

@@ -142,8 +142,22 @@ export const EmbeddingProfileSchema = z.object({
   apiKeyId: UUIDSchema.nullable().optional(),
   baseUrl: z.string().nullable().optional(),
   modelName: z.string(),
-  /** Embedding dimension size (provider-specific) */
+  /** Embedding dimension size requested from the provider (provider-specific) */
   dimensions: z.number().nullable().optional(),
+  /**
+   * If set, the raw vector returned by the provider is sliced to this length
+   * before normalization. Intended for Matryoshka-trained models (e.g. Qwen3-
+   * Embedding) whose first N components are themselves a valid embedding at
+   * dimension N. When null, the vector is stored at whatever length the
+   * provider returned.
+   */
+  truncateToDimensions: z.number().int().positive().nullable().optional(),
+  /**
+   * When true (default), every embedding is L2-normalised before storage so
+   * cosine similarity reduces to a dot product. False is reserved for niche
+   * cases where downstream code wants raw magnitudes.
+   */
+  normalizeL2: z.boolean().default(true),
   isDefault: z.boolean().default(false),
   tags: z.array(UUIDSchema).default([]),
   createdAt: TimestampSchema,

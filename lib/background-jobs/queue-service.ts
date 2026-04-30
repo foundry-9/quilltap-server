@@ -106,6 +106,14 @@ export interface EmbeddingReindexAllPayload {
 }
 
 /**
+ * Payload for embedding re-apply-profile job (Matryoshka slice + renormalize)
+ */
+export interface EmbeddingReapplyProfilePayload {
+  /** ID of the embedding profile whose truncateToDimensions + normalizeL2 will be applied */
+  profileId: string;
+}
+
+/**
  * Payload for story background generation job
  */
 export interface StoryBackgroundGenerationPayload {
@@ -539,6 +547,23 @@ export async function enqueueEmbeddingReindexAll(
 ): Promise<string> {
   return enqueueJob(userId, 'EMBEDDING_REINDEX_ALL', payload as unknown as Record<string, unknown>, {
     // Reindex is lower priority
+    priority: options?.priority ?? -1,
+    ...options,
+  });
+}
+
+/**
+ * Enqueue an embedding re-apply-profile job (Matryoshka slice + renormalize).
+ * Pure local rewrite — no provider call. Use after editing a profile's
+ * truncateToDimensions to migrate the existing corpus.
+ */
+export async function enqueueEmbeddingReapplyProfile(
+  userId: string,
+  payload: EmbeddingReapplyProfilePayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  return enqueueJob(userId, 'EMBEDDING_REAPPLY_PROFILE', payload as unknown as Record<string, unknown>, {
+    // Re-apply runs once and is purely local; default priority -1 like reindex.
     priority: options?.priority ?? -1,
     ...options,
   });

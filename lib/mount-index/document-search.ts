@@ -8,7 +8,7 @@
  * @module mount-index/document-search
  */
 
-import { cosineSimilarity } from '@/lib/embedding/embedding-service'
+import { assertEmbeddingDimensionsMatch, cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { getRepositories } from '@/lib/repositories/factory'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { getChunksForMountPoints } from './mount-chunk-cache'
@@ -96,6 +96,13 @@ export async function searchDocumentChunks(
   }
 
   logger.debug('Loaded embedded document chunks for search', { chunkCount: allChunks.length })
+
+  // Pre-flight dimension guard: if the corpus and the query have drifted apart
+  // (e.g. the embedding profile's truncateToDimensions changed but the corpus
+  // hasn't been re-applied), surface a clear error before we iterate 65k rows
+  // and let cosineSimilarity throw on the first one.
+  const sampleStored = allChunks[0].embedding
+  assertEmbeddingDimensionsMatch(queryEmbedding, sampleStored, 'document chunk search')
 
   // Compute cosine similarity (dot product — vectors are unit-length) for each chunk
   const scored = allChunks

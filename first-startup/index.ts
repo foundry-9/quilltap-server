@@ -324,6 +324,8 @@ export function prepareSeedEmbeddingProfile(
     baseUrl: null,
     modelName: seedData.modelName,
     dimensions: seedData.dimensions ?? null,
+    truncateToDimensions: null,
+    normalizeL2: true,
     isDefault: seedData.isDefault,
     tags: [],
   };

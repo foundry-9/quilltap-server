@@ -124,7 +124,42 @@ To modify an existing profile:
    - API key (cloud providers)
    - Base URL (local providers)
    - Model selection
+   - **Dimensions** — what to ask the provider for. Honoured by OpenAI's `text-embedding-3-*`; ignored by Ollama (which always returns the model's native length).
+   - **Truncate output to (Matryoshka)** — a clever bit of mathematics, explained below.
+   - **Normalise to unit length** — keep this on unless you have a specific reason to disable it.
 4. Click **Save Changes**
+
+## Matryoshka Truncation & Unit Normalisation
+
+Some embedding models — Qwen3-Embedding most notably — are trained as a *Matryoshka representation*: the first N components of their full vector are themselves a perfectly valid embedding at dimension N. Take a 4096-dimension Qwen3 vector, keep only the first 1024 numbers, renormalise it, and you have a 1024-dimension embedding with very nearly the same retrieval quality as the full thing. A quarter of the storage. A quarter of the cosine work at search time.
+
+To take advantage of this, set **Truncate output to** in the embedding profile to your target dimension (1024 is a reasonable starting point for Qwen3). Whenever Quilltap embeds a piece of text — a memory, a document chunk, a conversation excerpt — the raw vector returned by the provider is sliced to that length and renormalised before it goes to disk. **Both** the corpus and any future search query go through the same slicing, so they line up perfectly.
+
+A few notes on when this applies and when it doesn't:
+
+- **Only enable for Matryoshka-trained models.** For models without that property (most notably the smaller OpenAI embeddings), slicing destroys information and search quality plummets. If you don't know whether your model is Matryoshka-trained, leave the field empty.
+- **Smaller is faster, with diminishing quality returns.** 1024 is virtually indistinguishable from 4096 on most corpora; 512 still works well; 256 begins to lose nuance. Test with your own data before going aggressive.
+- **Truncation does not change what the model is asked for.** If your provider honours a `dimensions` parameter (OpenAI does), set both — `dimensions` instructs the provider, `truncateToDimensions` is the local fallback if the provider returns more than you asked for.
+- **L2 normalisation defaults on.** Quilltap's cosine search assumes stored vectors are unit-length so it can skip the magnitude calculation. Disable normalisation only if you have a specific reason to want raw magnitudes.
+
+### Re-applying a Profile to the Existing Corpus
+
+Changing **Truncate output to** affects only *new* embeddings — your existing memories, document chunks, and conversation snippets remain at whatever length they were stored at. To bring the existing corpus into compliance:
+
+1. Make sure you've saved the new truncation value on the profile.
+2. From the profile list, click **Re-apply (Matryoshka)** on the default profile.
+3. Click again to confirm.
+
+Quilltap will queue a background job that:
+
+- Takes a `VACUUM INTO` backup of every affected database — `quilltap.bak-pre-truncation-<date>.db` next to the main database, and the same suffix on the mount-index database if document stores are involved. These are your rollback if anything goes sideways.
+- Walks every embedding-bearing table (`memories`, `vector_entries`, `conversation_chunks`, `help_docs`, and `doc_mount_chunks`).
+- For each stored vector longer than the target, slices the first N components, renormalises, and writes the result back inside a single transaction per table.
+- VACUUMs the source databases to reclaim freed space.
+
+The whole pass is a pure-local mathematical operation — no provider calls, no embedding charges, no downloads. On a typical corpus of a few thousand chunks it completes in seconds.
+
+The runner refuses to operate on vectors *shorter* than the target dimension (those would need to grow, which requires a real re-embedding). If you've gone the other way — increased the truncation target, or switched to a different model entirely — use **Re-embed Everything** instead, which calls the provider afresh for each piece of text.
 
 ## Deleting an Embedding Profile
 
@@ -361,6 +396,18 @@ Some installations support additional providers:
 - Create some memories/chats to index
 - Manually refresh vocabulary
 - Check embedding profile configuration
+
+### "Embedding dimension mismatch" error during search
+
+**Problem:** A search returns an error along the lines of *"query is 1024-d, stored is 4096-d"*.
+
+**Cause:** The active embedding profile's truncation setting differs from the dimension actually stored in the corpus. This happens when you change **Truncate output to** but haven't yet re-applied the profile.
+
+**Solution:**
+
+- Open the embedding profile and confirm the **Truncate output to** value is what you intended.
+- Click **Re-apply (Matryoshka)** on the default profile to migrate the stored corpus to the new dimension. Two clicks — the second confirms.
+- The job creates database backups before touching anything; you can find them next to the original `.db` files.
 
 ### Memory features not working
 

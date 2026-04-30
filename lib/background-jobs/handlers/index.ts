@@ -13,6 +13,7 @@ import { handleLLMLogCleanup } from './llm-log-cleanup';
 import { handleEmbeddingGenerate } from './embedding-generate';
 import { handleEmbeddingRefit } from './embedding-refit';
 import { handleEmbeddingReindexAll } from './embedding-reindex';
+import { handleEmbeddingReapplyProfile } from './embedding-reapply-profile';
 import { handleStoryBackgroundGeneration } from './story-background';
 import { handleChatDangerClassification } from './chat-danger-classification';
 import { handleSceneStateTracking } from './scene-state-tracking';
@@ -38,6 +39,7 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   EMBEDDING_GENERATE: handleEmbeddingGenerate,
   EMBEDDING_REFIT: handleEmbeddingRefit,
   EMBEDDING_REINDEX_ALL: handleEmbeddingReindexAll,
+  EMBEDDING_REAPPLY_PROFILE: handleEmbeddingReapplyProfile,
   STORY_BACKGROUND_GENERATION: handleStoryBackgroundGeneration,
   CHAT_DANGER_CLASSIFICATION: handleChatDangerClassification,
   SCENE_STATE_TRACKING: handleSceneStateTracking,
@@ -67,6 +69,7 @@ export { handleLLMLogCleanup };
 export { handleEmbeddingGenerate };
 export { handleEmbeddingRefit };
 export { handleEmbeddingReindexAll };
+export { handleEmbeddingReapplyProfile };
 export { handleStoryBackgroundGeneration };
 export { handleChatDangerClassification };
 export { handleSceneStateTracking };

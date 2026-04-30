@@ -45,6 +45,8 @@ export function ProfileForm({
     baseUrl: profile?.baseUrl || '',
     modelName: profile?.modelName || '',
     dimensions: profile?.dimensions?.toString() || '',
+    truncateToDimensions: profile?.truncateToDimensions?.toString() || '',
+    normalizeL2: profile?.normalizeL2 ?? true,
     isDefault: profile?.isDefault || false,
   })
 
@@ -77,6 +79,10 @@ export function ProfileForm({
         baseUrl: form.formData.baseUrl || undefined,
         modelName,
         dimensions: form.formData.dimensions ? parseInt(form.formData.dimensions) : undefined,
+        truncateToDimensions: form.formData.truncateToDimensions
+          ? parseInt(form.formData.truncateToDimensions)
+          : null,
+        normalizeL2: form.formData.normalizeL2,
         isDefault: form.formData.isDefault,
       }
 
@@ -137,6 +143,7 @@ export function ProfileForm({
     form.setField('apiKeyId', '')
     form.setField('modelName', '')
     form.setField('dimensions', '')
+    form.setField('truncateToDimensions', '')
   }
 
   // Filter API keys for selected provider
@@ -310,6 +317,47 @@ export function ProfileForm({
             <p className="mt-1 qt-text-xs">
               Leave empty to use the model&apos;s default dimensions
             </p>
+          </div>
+        )}
+
+        {/* Matryoshka truncation — applied locally after the provider returns */}
+        {!isBuiltin && (
+          <div>
+            <label className="qt-label mb-1">
+              Truncate output to (Matryoshka)
+            </label>
+            <input
+              type="text"
+              name="truncateToDimensions"
+              value={form.formData.truncateToDimensions}
+              onChange={form.handleChange}
+              className="qt-input"
+              placeholder="1024"
+              min="1"
+            />
+            <p className="mt-1 qt-text-xs">
+              For Matryoshka-trained models like Qwen3-Embedding, the first N components
+              of the vector are themselves a valid embedding at dimension N. Slicing
+              shrinks storage and speeds up search with negligible quality loss. Leave
+              empty to keep the provider&apos;s native length.
+            </p>
+          </div>
+        )}
+
+        {/* L2 normalisation — kept on by default; exposed for completeness */}
+        {!isBuiltin && (
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="normalizeL2"
+              name="normalizeL2"
+              checked={form.formData.normalizeL2}
+              onChange={form.handleChange}
+              className="h-4 w-4 text-primary focus:ring-ring border-input rounded"
+            />
+            <label htmlFor="normalizeL2" className="ml-2 block qt-text-label text-foreground">
+              Normalise to unit length (recommended)
+            </label>
           </div>
         )}
 

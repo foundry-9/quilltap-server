@@ -6,6 +6,7 @@
  * DELETE /api/v1/embedding-profiles/[id] - Delete a profile
  * POST /api/v1/embedding-profiles/[id]?action=refit - Manually trigger vocabulary refit (BUILTIN only)
  * POST /api/v1/embedding-profiles/[id]?action=reindex - Manually trigger re-embedding all memories
+ * POST /api/v1/embedding-profiles/[id]?action=reapply - Slice + renormalize stored vectors to match the profile's truncateToDimensions (Matryoshka, no provider call)
  */
 
 import { NextResponse } from 'next/server';
@@ -14,7 +15,11 @@ import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { notFound, badRequest, serverError, messageResponse, successResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { invalidateAllEmbeddings } from '@/lib/embedding/embedding-service';
-import { enqueueEmbeddingRefit, enqueueEmbeddingReindexAll } from '@/lib/background-jobs/queue-service';
+import {
+  enqueueEmbeddingRefit,
+  enqueueEmbeddingReindexAll,
+  enqueueEmbeddingReapplyProfile,
+} from '@/lib/background-jobs/queue-service';
 
 /**
  * GET /api/v1/embedding-profiles/[id]
@@ -58,7 +63,17 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       }
 
       const body = await req.json();
-      const { name, provider, apiKeyId, baseUrl, modelName, dimensions, isDefault } = body;
+      const {
+        name,
+        provider,
+        apiKeyId,
+        baseUrl,
+        modelName,
+        dimensions,
+        truncateToDimensions,
+        normalizeL2,
+        isDefault,
+      } = body;
 
       // Build update data
       const updateData: Record<string, unknown> = {};
@@ -119,6 +134,27 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
         } else {
           updateData.dimensions = dimensions;
         }
+      }
+
+      if (truncateToDimensions !== undefined) {
+        if (truncateToDimensions === null) {
+          updateData.truncateToDimensions = null;
+        } else if (
+          typeof truncateToDimensions !== 'number' ||
+          !Number.isInteger(truncateToDimensions) ||
+          truncateToDimensions <= 0
+        ) {
+          return badRequest('truncateToDimensions must be a positive integer');
+        } else {
+          updateData.truncateToDimensions = truncateToDimensions;
+        }
+      }
+
+      if (normalizeL2 !== undefined) {
+        if (typeof normalizeL2 !== 'boolean') {
+          return badRequest('normalizeL2 must be a boolean');
+        }
+        updateData.normalizeL2 = normalizeL2;
       }
 
       if (isDefault !== undefined) {
@@ -281,6 +317,41 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       } catch (error) {
         logger.error('[Embedding Profiles v1] Error triggering reindex', { profileId: id }, error instanceof Error ? error : undefined);
         return serverError('Failed to trigger reindex');
+      }
+    },
+
+    reapply: async (req, { user, repos }, { id }) => {
+      try {
+        const profile = await repos.embeddingProfiles.findById(id);
+
+        if (!profile) {
+          return notFound('Embedding profile');
+        }
+
+        if (!profile.truncateToDimensions) {
+          return badRequest(
+            'Profile has no truncateToDimensions set. Re-apply only slices Matryoshka vectors; nothing to do.'
+          );
+        }
+
+        logger.info('[Embedding Profiles v1] Manual re-apply (Matryoshka) triggered', {
+          profileId: id,
+          truncateToDimensions: profile.truncateToDimensions,
+          normalizeL2: profile.normalizeL2,
+        });
+
+        const jobId = await enqueueEmbeddingReapplyProfile(user.id, {
+          profileId: id,
+        });
+
+        return successResponse({
+          message: 'Embedding profile re-apply job enqueued. A backup of each affected database will be created before any rewrite.',
+          jobId,
+          targetDimensions: profile.truncateToDimensions,
+        });
+      } catch (error) {
+        logger.error('[Embedding Profiles v1] Error triggering re-apply', { profileId: id }, error instanceof Error ? error : undefined);
+        return serverError('Failed to trigger re-apply');
       }
     },
   })

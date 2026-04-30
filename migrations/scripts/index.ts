@@ -225,6 +225,8 @@ import { addSummarizationGateFieldsMigration } from './add-summarization-gate-fi
 import { addSummaryAnchorFieldMigration } from './add-summary-anchor-field';
 // Add summaryAnchorMessageIds column to chats (edit-aware invalidation Phase 4)
 import { addSummaryAnchorMessageIdsFieldMigration } from './add-summary-anchor-message-ids-field';
+// Add truncateToDimensions + normalizeL2 columns to embedding_profiles (Matryoshka)
+import { addEmbeddingProfileTruncationFieldsMigration } from './add-embedding-profile-truncation-fields';
 
 /**
  * All available migrations.
@@ -445,6 +447,8 @@ export const migrations: Migration[] = [
   addSummaryAnchorFieldMigration,
   // Add summaryAnchorMessageIds column to chats (edit-aware invalidation Phase 4)
   addSummaryAnchorMessageIdsFieldMigration,
+  // Add Matryoshka truncation columns to embedding_profiles
+  addEmbeddingProfileTruncationFieldsMigration,
 ];
 
 export {
@@ -650,5 +654,7 @@ export {
   addSummaryAnchorFieldMigration,
   // Add summaryAnchorMessageIds column to chats (edit-aware invalidation Phase 4)
   addSummaryAnchorMessageIdsFieldMigration,
+  // Add Matryoshka truncation columns to embedding_profiles
+  addEmbeddingProfileTruncationFieldsMigration,
 };
 

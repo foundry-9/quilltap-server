@@ -137,10 +137,12 @@ async function generateApiEmbedding(
     { dimensions: profile.dimensions || undefined }
   )
 
+  const embedding = applyEmbeddingProfile(result.embedding, profile)
+
   return {
-    embedding: toUnitVector(result.embedding),
+    embedding,
     model: result.model,
-    dimensions: result.dimensions,
+    dimensions: embedding.length,
     provider: providerName,
   }
 }
@@ -190,11 +192,12 @@ async function generateBuiltinEmbedding(
     // Generate the embedding
     const result = embeddingProvider.generateEmbedding(text)
 
+    const embedding = applyEmbeddingProfile(result.embedding, profile)
 
     return {
-      embedding: toUnitVector(result.embedding),
+      embedding,
       model: result.model,
-      dimensions: result.dimensions,
+      dimensions: embedding.length,
       provider: 'BUILTIN',
     }
   } catch (error) {
@@ -382,6 +385,74 @@ function toUnitVector(v: ArrayLike<number>): Float32Array {
 }
 
 /**
+ * Apply an embedding profile's storage policy to a raw provider vector:
+ * optional Matryoshka slice followed by optional L2 normalisation. Returns a
+ * fresh Float32Array — never mutates the input.
+ *
+ * - If `profile.truncateToDimensions` is set and the raw vector is longer,
+ *   the first N components are kept (Matryoshka property).
+ * - If `profile.normalizeL2` is true (default), the result is unit-length.
+ *
+ * Insert-time and query-time paths both call this helper so they cannot drift.
+ */
+export function applyEmbeddingProfile(
+  v: ArrayLike<number>,
+  profile: Pick<EmbeddingProfile, 'truncateToDimensions' | 'normalizeL2'>
+): Float32Array {
+  const target = profile.truncateToDimensions ?? null
+  const source = v instanceof Float32Array ? v : new Float32Array(Array.from(v))
+  const sliceLen = target !== null && target < source.length ? target : source.length
+
+  // Always produce a fresh Float32Array so callers can keep / mutate it freely.
+  const out = new Float32Array(sliceLen)
+  for (let i = 0; i < sliceLen; i++) out[i] = source[i]
+
+  // normalizeL2 defaults to true — the field is only ever explicitly false for
+  // niche cases where downstream code wants raw magnitudes.
+  if (profile.normalizeL2 !== false) {
+    return normalizeVector(out)
+  }
+  return out
+}
+
+/**
+ * Error thrown when two embeddings being compared have different dimensions.
+ * Almost always means the active embedding profile's truncate/dimensions
+ * setting has drifted from the on-disk corpus — re-apply the profile to
+ * migrate.
+ */
+export class EmbeddingDimensionMismatchError extends Error {
+  constructor(
+    public readonly queryLength: number,
+    public readonly storedLength: number,
+    public readonly context?: string,
+  ) {
+    super(
+      `Embedding dimension mismatch${context ? ` (${context})` : ''}: ` +
+      `query is ${queryLength}-d, stored is ${storedLength}-d. ` +
+      `The active embedding profile differs from the on-disk corpus. ` +
+      `Re-apply the embedding profile to migrate stored vectors.`
+    )
+    this.name = 'EmbeddingDimensionMismatchError'
+  }
+}
+
+/**
+ * Assert that two embeddings share the same dimensionality. Throws an
+ * EmbeddingDimensionMismatchError with diagnostic context on mismatch — fail
+ * fast at search entry rather than letting cosineSimilarity throw mid-iteration.
+ */
+export function assertEmbeddingDimensionsMatch(
+  query: ArrayLike<number>,
+  stored: ArrayLike<number>,
+  context?: string,
+): void {
+  if (query.length !== stored.length) {
+    throw new EmbeddingDimensionMismatchError(query.length, stored.length, context)
+  }
+}
+
+/**
  * Calculate cosine similarity between two embedding vectors.
  *
  * Assumes both inputs are unit-length (guaranteed by `generateEmbeddingForUser`
@@ -391,7 +462,7 @@ function toUnitVector(v: ArrayLike<number>): Float32Array {
  */
 export function cosineSimilarity(a: ArrayLike<number>, b: ArrayLike<number>): number {
   if (a.length !== b.length) {
-    throw new Error('Vectors must have the same length')
+    throw new EmbeddingDimensionMismatchError(a.length, b.length)
   }
 
   let dotProduct = 0

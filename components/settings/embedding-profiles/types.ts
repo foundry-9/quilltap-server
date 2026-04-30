@@ -48,6 +48,10 @@ export interface EmbeddingProfile {
   baseUrl?: string
   modelName: string
   dimensions?: number
+  /** Matryoshka slice target — vectors longer than this are truncated before storage. */
+  truncateToDimensions?: number | null
+  /** Whether stored embeddings are L2-normalised (default true). */
+  normalizeL2?: boolean
   isDefault: boolean
   apiKey?: ApiKey | null
   /** Vocabulary stats for BUILTIN profiles */
@@ -63,6 +67,8 @@ export interface EmbeddingProfileFormData {
   baseUrl: string
   modelName: string
   dimensions: string
+  truncateToDimensions: string
+  normalizeL2: boolean
   isDefault: boolean
 }
 
