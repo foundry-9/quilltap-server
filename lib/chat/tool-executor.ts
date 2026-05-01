@@ -1008,8 +1008,12 @@ export async function executeToolCallWithContext(
             status: result.status,
             exitCode: result.exitCode,
             lines: result.lines,
+            totalLines: result.totalLines,
+            startLine: result.startLine,
+            endLine: result.endLine,
             truncated: result.truncated,
             scrollback: result.scrollback,
+            ...(result.rawScrollback !== undefined ? { rawScrollback: result.rawScrollback } : {}),
           },
           error: undefined,
         };
