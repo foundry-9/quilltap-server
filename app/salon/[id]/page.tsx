@@ -639,6 +639,18 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     fetchChatMemoryCount()
   }, [fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount])
 
+  // When a TerminalEmbed reports its PTY has exited, refresh the chat so the
+  // new Ariel close announcement appears inline.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ chatId?: string }>).detail
+      if (!detail?.chatId || detail.chatId !== id) return
+      void fetchChat()
+    }
+    window.addEventListener('quilltap:terminal-exited', handler)
+    return () => window.removeEventListener('quilltap:terminal-exited', handler)
+  }, [id, fetchChat])
+
   useEffect(() => {
     const fetchTemplateData = async () => {
       if (!chat?.roleplayTemplateId) {

@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Ariel close announcements + orphaned-session reconciliation
+
+Moved the terminal close announcement into `pty-manager.onExit` so it fires for natural shell exits (typing `exit`, command finishing) as well as user-initiated kills. Removed the explicit announce from the DELETE route to avoid double-posting; the announcement now carries the real exit code instead of always reporting `null`. Added `reconcileTerminalSessionsForChat(chatId)` which sweeps DB rows where `exitedAt == null` whose IDs aren't in `ptyManager` (orphans from a previous server lifetime), marks them exited, and posts a close announcement noting that the session likely ended at the last restart. Hooked into the chat GET handler so reconciliation runs before messages are fetched. TerminalEmbed dispatches a `quilltap:terminal-exited` window event on WS exit; the salon page listens and calls `fetchChat()` so the close announcement appears inline without a manual refresh.
+
 #### Fix: terminal_list tool returned empty results for chats with live sessions
 
 `TerminalSessionSchema` declared `label`, `exitedAt`, `exitCode`, and `transcriptPath` with bare `.nullable()`, but the SQLite hydration layer converts NULL → `undefined` to play nice with `.optional()` schemas. Every read silently failed Zod validation and the row was dropped, so `findByChatId` returned `[]` even when sessions existed. Switched the four fields to `.nullable().optional()` (matches the rest of the codebase) and updated the call sites that compared with `=== null` to use `==`/`!=` so the live/exited check still works.

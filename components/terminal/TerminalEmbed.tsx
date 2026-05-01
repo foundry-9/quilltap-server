@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Terminal } from './Terminal';
 import { useTerminalSession } from '@/hooks/useTerminalSession';
 import { showErrorToast } from '@/lib/toast';
@@ -25,6 +25,21 @@ export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) 
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(`terminalEmbed:${sessionId}:collapsed`) === 'true';
   });
+
+  // When the WS reports the PTY has exited, tell the salon page to refresh
+  // its message list so the new Ariel close announcement appears.
+  const exitDispatchedRef = useRef(false);
+  useEffect(() => {
+    if (session.state !== 'exited' || exitDispatchedRef.current) return;
+    exitDispatchedRef.current = true;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('quilltap:terminal-exited', {
+          detail: { chatId, sessionId },
+        }),
+      );
+    }
+  }, [session.state, chatId, sessionId]);
 
   // Persist collapse state
   const toggleCollapse = useCallback(() => {

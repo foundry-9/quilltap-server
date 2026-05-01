@@ -15,6 +15,7 @@ import type { WebSocket } from 'ws';
 import { getFilesDir, getLogsDir } from '@/lib/paths';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
+import { postArielSessionClosedAnnouncement } from '@/lib/services/ariel-notifications';
 import type { PtySession, PtySessionMeta, WsServerMsg } from './types';
 import type { TerminalSession } from '@/lib/schemas/terminal.types';
 
@@ -214,6 +215,17 @@ class PtyManager {
                 error: err.message,
               });
             });
+
+          postArielSessionClosedAnnouncement({
+            chatId: session.meta.chatId,
+            sessionId: id,
+            exitCode,
+          }).catch((err: Error) => {
+            ptyLogger.warn('[PTY] Failed to post close announcement', {
+              sessionId: id,
+              error: err.message,
+            });
+          });
 
           ptyLogger.info('[PTY] Session exited', {
             sessionId: id,

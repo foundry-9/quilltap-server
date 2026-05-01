@@ -19,6 +19,7 @@ import { renderMarkdownToHtml, canPreRenderMessage } from '@/lib/services/markdo
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
+import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
 import { handleGetAvatars, handleGetState, handleGetOutfit } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
@@ -169,6 +170,11 @@ export async function handleGet(
     if (!chatMetadata) {
       return notFound('Chat');
     }
+
+    // Sweep terminal sessions whose PTYs were lost across a server restart
+    // (DB row says "live" but ptyManager doesn't have it) and post the close
+    // announcements before we read the message history below.
+    await reconcileTerminalSessionsForChat(chatId);
 
     const enrichedParticipants = await Promise.all(
       chatMetadata.participants.map((p) => enrichParticipantDetail(p, repos, chatId))

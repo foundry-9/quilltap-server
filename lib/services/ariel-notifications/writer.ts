@@ -135,7 +135,12 @@ export interface ArielSessionClosedAnnouncement {
 export async function postArielSessionClosedAnnouncement(
   params: ArielSessionClosedAnnouncement,
 ): Promise<MessageEvent | null> {
-  const exitLabel = params.exitCode === 0 ? 'successfully' : `with exit code ${params.exitCode}`;
+  const exitLabel =
+    params.exitCode === 0
+      ? 'successfully'
+      : params.exitCode == null
+        ? '— Ariel could not recover an exit code; the session may have ended when the server last restarted'
+        : `with exit code ${params.exitCode}`;
   const content = `Ariel notes that the terminal session has closed — it exited ${exitLabel}.`;
 
   arielLogger.debug('[ArielNotification] Posting session-closed announcement', {

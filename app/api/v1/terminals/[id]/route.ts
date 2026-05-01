@@ -15,7 +15,6 @@ import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { successResponse, badRequest, notFound, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { ptyManager } from '@/lib/terminal/pty-manager';
-import { postArielSessionClosedAnnouncement } from '@/lib/services/ariel-notifications';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { RequestContext } from '@/lib/api/middleware';
 
@@ -176,14 +175,8 @@ async function handleDelete(
       return notFound('Terminal session');
     }
 
-    // Post close announcement before deletion
-    await postArielSessionClosedAnnouncement({
-      chatId: ptySession.meta.chatId,
-      sessionId: id,
-      exitCode: ptySession.meta.exitCode,
-    });
-
-    // Kill the session
+    // Kill the session — onExit will fire and post the close announcement with
+    // the real exit code, then persist exit state.
     ptyManager.kill(id, 'SIGTERM');
 
     // Delete from database
