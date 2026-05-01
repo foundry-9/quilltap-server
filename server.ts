@@ -10,14 +10,12 @@ const port = Number(process.env.PORT ?? 3000);
 
 const moduleLogger = logger.child({ module: 'server' });
 
-const app = next({ dev, hostname, port });
-const handle = app.getRequestHandler();
-
 const wss = new WebSocketServer({ noServer: true });
 
 async function main(): Promise<void> {
-  await app.prepare();
-
+  // Create the HTTP server first so we can hand it to Next; this lets Next
+  // attach its own upgrade listener (HMR, dev RSC) at prepare time rather
+  // than lazily on the first request.
   const server = createServer((req, res) => {
     handle(req, res).catch((err) => {
       moduleLogger.error('Request handler error', { url: req.url }, err as Error);
@@ -27,6 +25,11 @@ async function main(): Promise<void> {
       }
     });
   });
+
+  const app = next({ dev, hostname, port, httpServer: server });
+  const handle = app.getRequestHandler();
+
+  await app.prepare();
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = req.url ?? '';
@@ -52,7 +55,9 @@ async function main(): Promise<void> {
         });
       return;
     }
-    socket.destroy();
+    // Other upgrades (Next HMR, dev RSC, devtools) are handled by Next's own
+    // upgrade listener, which it attaches to this same server on first request.
+    // Returning without destroying lets that listener take over.
   });
 
   server.listen(port, hostname, () => {

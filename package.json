@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.4.0-dev.88",
+  "version": "4.4.0-dev.89",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -24,8 +24,8 @@
     "build:standalone": "tsx scripts/build-standalone-tarball.ts",
     "build:plugins": "tsx scripts/build-plugins.ts",
     "deploy:dev": "./cicd/deploy.sh",
-    "dev": "next dev --turbopack",
-    "dev:custom": "tsx server.ts",
+    "dev": "tsx server.ts",
+    "dev:next": "next dev --turbopack",
     "devssl": "next dev --experimental-https --experimental-https-key ./certs/localhost-key.pem --experimental-https-cert ./certs/localhost.pem",
     "generate:schemas": "tsx scripts/generate-plugin-manifest-schema.ts",
     "lint": "eslint .",
@@ -35,6 +35,7 @@
     "oneoff:theme-convert-v2.8": "tsx scripts/convert-theme-to-module.ts",
     "oneoff:theme-convert-v2.8:all": "tsx scripts/convert-theme-to-module.ts --all",
     "oneoff:theme-convert-v2.8:dry-run": "tsx scripts/convert-theme-to-module.ts --all --dry-run",
+    "postinstall": "node scripts/fix-node-pty-permissions.js",
     "start": "NODE_ENV=production node server.js",
     "start:docker": "tsx scripts/start-quilltap-docker.ts",
     "stop:docker": "docker stop quilltap && docker rm quilltap",

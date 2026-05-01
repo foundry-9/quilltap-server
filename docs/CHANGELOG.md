@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Fix: custom dev server (server.ts) now serves Next dev features properly
+
+The custom server's upgrade handler was calling `socket.destroy()` for any upgrade path that wasn't a terminal stream, which killed Next's HMR / dev RSC / devtools WebSocket connections (Next attaches its own listener to the same `http.Server`). Pages would render once and then sit on a dead HMR socket — no compile feedback, no fast refresh. Fixed by `return`ing instead of destroying for non-terminal paths so Next's listener gets the event. Also passed `httpServer: server` to `next({...})` so Next can attach its upgrade listener at prepare time rather than lazily on the first request. Verified `/_next/webpack-hmr` returns 101 + `turbopack-connected` + `sync` frames after the fix. Swapped scripts: `dev` is now `tsx server.ts` (the custom server, default for development); `dev:next` is the bare `next dev --turbopack` for cases where the custom server gets in the way.
+
+#### Fix: node-pty spawn-helper exec bit on macOS
+
+`node-pty`'s prebuild for `darwin-arm64` / `darwin-x64` ships `spawn-helper` without the executable bit on some installs, which makes `pty.spawn()` fail with `posix_spawnp failed`. Added `scripts/fix-node-pty-permissions.js` and wired it as a `postinstall` hook so a fresh `npm install` chmods the helper to 0755. No-op on Linux (where the prebuild already has the bit) and Windows (where there's no spawn-helper).
+
 #### Added in-chat terminal sessions (Ariel)
 
 Open a real PTY shell inside a Salon chat via xterm.js + node-pty over a custom WebSocket server. Sessions are scoped to the chat and end when the chat is deleted. LLM access is read-only via new `terminal_read` and `terminal_list` tools; only the user can type into the terminal. New `ariel` systemSender announces session open/close.
