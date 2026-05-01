@@ -1,31 +1,39 @@
 'use client'
 
 /**
- * SplitLayout - Resizable two-pane layout for Document Mode
+ * SplitLayout - resizable two-pane layout for the salon's Document Mode and
+ * Terminal Mode (collectively the "right pane").
  *
- * Wraps the chat main area and provides three layout states:
- * - normal: chat fills the full width (no document pane)
- * - split: chat + draggable divider + document pane
- * - focus: document pane fills the full width (chat hidden)
- *
- * Scriptorium Phase 3.5
+ * Layout states (combined across Document + Terminal modes):
+ * - normal: chat fills the full width.
+ * - split:  chat on the left, right pane on the right (with a draggable divider
+ *           between them). The right pane may host the document, the terminal,
+ *           or both — when both are present they are stacked top/bottom with a
+ *           horizontal divider (RightPaneVerticalSplit).
+ * - focus:  the right pane fills the full width and the chat is hidden.
  *
  * @module app/salon/[id]/components/SplitLayout
  */
 
 import { useCallback, useRef, useState, type ReactNode } from 'react'
+import RightPaneVerticalSplit from './RightPaneVerticalSplit'
 
 interface SplitLayoutProps {
-  /** Current layout mode */
+  /** Combined mode derived from documentMode + terminalMode. */
   mode: 'normal' | 'split' | 'focus'
-  /** Divider position as percentage of container width (20-80) */
+  /** Horizontal divider position as percentage of container width (20-80) */
   dividerPosition: number
-  /** Callback when divider position changes (on drag end) */
+  /** Callback when the horizontal divider position changes (on drag end) */
   onDividerPositionChange: (position: number) => void
+  /** Vertical divider position (%) for the right pane when both panes are present */
+  rightPaneVerticalSplit: number
+  onRightPaneVerticalSplitChange: (position: number) => void
   /** Chat content (message list + composer) */
   chatContent: ReactNode
-  /** Document pane content (editor, header, status bar) */
+  /** Document pane content. Null when Document Mode is off. */
   documentContent: ReactNode | null
+  /** Terminal pane content. Null when Terminal Mode is off. */
+  terminalContent: ReactNode | null
 }
 
 function clampDividerPosition(rawPercentage: number, containerWidth: number): number {
@@ -44,8 +52,11 @@ export default function SplitLayout({
   mode,
   dividerPosition,
   onDividerPositionChange,
+  rightPaneVerticalSplit,
+  onRightPaneVerticalSplitChange,
   chatContent,
   documentContent,
+  terminalContent,
 }: SplitLayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -122,8 +133,22 @@ export default function SplitLayout({
     onDividerPositionChange(clamped)
   }, [mode, isDragging, currentPosition, dividerPosition, onDividerPositionChange])
 
+  const rightPane: ReactNode = (() => {
+    if (documentContent && terminalContent) {
+      return (
+        <RightPaneVerticalSplit
+          position={rightPaneVerticalSplit}
+          onPositionChange={onRightPaneVerticalSplitChange}
+          topContent={documentContent}
+          bottomContent={terminalContent}
+        />
+      )
+    }
+    return documentContent ?? terminalContent ?? null
+  })()
+
   // Normal mode: just render chat content at full width
-  if (mode === 'normal' || !documentContent) {
+  if (mode === 'normal' || !rightPane) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
         {chatContent}
@@ -131,16 +156,16 @@ export default function SplitLayout({
     )
   }
 
-  // Focus mode: document fills the main area, chat hidden
+  // Focus mode: right pane fills the main area, chat hidden
   if (mode === 'focus') {
     return (
       <div className="qt-doc-focus-mode flex flex-col h-full overflow-hidden">
-        {documentContent}
+        {rightPane}
       </div>
     )
   }
 
-  // Split mode: chat + divider + document
+  // Split mode: chat + divider + right pane
   const splitPos = isDragging ? currentPosition : dividerPosition
 
   return (
@@ -158,7 +183,7 @@ export default function SplitLayout({
         className={`qt-doc-divider ${isDragging ? 'qt-doc-divider-active' : ''}`}
         onMouseDown={handleMouseDown}
         role="separator"
-        aria-label="Resize chat and document panes"
+        aria-label="Resize chat and right pane"
         aria-orientation="vertical"
         aria-valuenow={splitPos}
         aria-valuemin={20}
@@ -173,12 +198,12 @@ export default function SplitLayout({
         </div>
       </div>
 
-      {/* Document pane */}
+      {/* Right pane (document, terminal, or both stacked) */}
       <div
         className="qt-doc-pane"
         style={{ width: `${100 - splitPos}%` }}
       >
-        {documentContent}
+        {rightPane}
       </div>
     </div>
   )

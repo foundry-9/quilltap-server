@@ -4,6 +4,19 @@
 
 ### 4.4-dev
 
+#### Terminal Mode in the salon
+
+The salon's terminal feature now has a dedicated split-pane view that mirrors Document Mode. Clicking the composer's terminal button when no terminal is open spawns a session and enters Terminal Mode bound to it. If other live sessions exist for the chat, a small picker appears (attach to an existing session, or spawn a new one). The terminal pane lives on the right half of the salon with a draggable horizontal divider. When both Document Mode and Terminal Mode are on, the right pane vertically splits — document on top, terminal on bottom — with a second draggable divider.
+
+The pane header has two distinct exit buttons:
+
+- **Hide pane** (─): exits Terminal Mode but leaves the PTY alive. The inline `TerminalEmbed` in the chat message becomes interactive again.
+- **Kill** (red ✕): kills the PTY and exits Terminal Mode. Two-click confirm to forestall accidents.
+
+State (`terminalMode`, `activeTerminalSessionId`, `rightPaneVerticalSplit`) is persisted on the Chat record and survives reload. A new migration `add-terminal-mode-fields-v1` adds the three columns. The PUT chat schema now also accepts `documentMode` and `dividerPosition` so existing Document Mode persistence isn't silently stripped (latent bug fixed in passing). Inline `TerminalEmbed` for the bound session collapses to a "Showing in Terminal Mode pane →" banner so we never have two xterm instances on the same WebSocket. Keyboard shortcut: ⌘⇧T toggles. Also registered `addTerminalSessionsTableMigration` in the `migrations[]` array — it had been imported and exported but never registered to run.
+
+New: `app/salon/[id]/hooks/useTerminalMode.ts`, `terminalModeApi.ts`, `components/TerminalPane.tsx`, `components/RightPaneVerticalSplit.tsx`, `components/TerminalSessionPicker.tsx`. Refactored `SplitLayout` to take `terminalContent` + vertical-split props.
+
 #### Added `quilltap memory-diff` and a dry-run memory-extraction endpoint
 
 New CLI subcommand for iterating on the Commonplace Book extraction prompts without touching the database. `npx quilltap memory-diff <chatId>` reads the existing memories for a chat directly from the encrypted SQLite (read-only) and writes them to `<chatId>-existing.json`, then opens a streaming connection to the running server, runs the same per-turn extraction passes against the chat with persistence skipped, and writes the resulting candidates to `<chatId>-extracted.json`. Progress prints to stderr, one line per turn (`[i/N] turn <id>: K candidates`), so long chats are no longer a black box. Supports `--data-dir`, `--passphrase`, `--port`, `--out`.

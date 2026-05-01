@@ -17,6 +17,12 @@ export const updateChatSchema = z.object({
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shared by all participants)
   alertCharactersOfLanternImages: z.boolean().nullish(),
   allowCrossCharacterVaultReads: z.boolean().optional(),
+  // Layout state for the salon split panes
+  documentMode: z.enum(['normal', 'split', 'focus']).optional(),
+  dividerPosition: z.number().min(20).max(80).optional(),
+  terminalMode: z.enum(['normal', 'split', 'focus']).optional(),
+  activeTerminalSessionId: z.uuid().nullish(),
+  rightPaneVerticalSplit: z.number().min(20).max(80).optional(),
 });
 
 export const updateParticipantSchema = z.object({

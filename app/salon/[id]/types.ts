@@ -136,6 +136,12 @@ export interface Chat {
   documentMode?: 'normal' | 'split' | 'focus'
   /** Divider position for split mode as percentage of main area width */
   dividerPosition?: number
+  /** Terminal Mode layout state: normal (chat only), split (chat + terminal), focus (terminal only) */
+  terminalMode?: 'normal' | 'split' | 'focus'
+  /** Active terminal session shown in Terminal Mode pane (null = no session bound) */
+  activeTerminalSessionId?: string | null
+  /** Vertical divider position for the right-pane split when both Document and Terminal Modes are active (20-80) */
+  rightPaneVerticalSplit?: number
   /** Whether agent mode is enabled for this chat */
   agentModeEnabled?: boolean | null
   /** Resolved agent mode enabled state (from cascade: global → character → project → chat) */

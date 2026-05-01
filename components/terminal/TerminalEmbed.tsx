@@ -5,6 +5,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Terminal } from './Terminal';
 import { useTerminalSession } from '@/hooks/useTerminalSession';
 import { showErrorToast } from '@/lib/toast';
+import { useTerminalModeContext } from '@/app/salon/[id]/hooks/useTerminalMode';
 
 interface TerminalEmbedProps {
   sessionId: string;
@@ -21,6 +22,10 @@ interface TerminalEmbedProps {
 export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) {
   const router = useRouter();
   const session = useTerminalSession(sessionId);
+  const terminalModeCtx = useTerminalModeContext();
+  const isInTerminalPane =
+    terminalModeCtx.terminalMode !== 'normal' &&
+    terminalModeCtx.activeTerminalSessionId === sessionId;
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(`terminalEmbed:${sessionId}:collapsed`) === 'true';
@@ -69,6 +74,20 @@ export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) 
   const handlePopOut = useCallback(() => {
     router.push(`/salon/${chatId}/terminal/${sessionId}`);
   }, [router, chatId, sessionId]);
+
+  const handleFocusPane = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const pane = document.querySelector('.qt-doc-pane');
+    if (pane && 'scrollIntoView' in pane) {
+      try {
+        (pane as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch {
+        // ignore
+      }
+    }
+    const xtermTextarea = pane?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null;
+    xtermTextarea?.focus();
+  }, []);
 
   const title = label || (session.meta ? `Terminal — ${session.meta.shell}` : 'Terminal');
 
@@ -131,12 +150,28 @@ export function TerminalEmbed({ sessionId, label, chatId }: TerminalEmbedProps) 
 
       {/* Terminal Body */}
       {!collapsed && (
-        <div className="bg-black" style={{ height: '360px' }}>
-          <Terminal
-            sessionId={sessionId}
-            className="h-full w-full"
-          />
-        </div>
+        isInTerminalPane ? (
+          <div className="px-4 py-3 flex items-center justify-between gap-3 bg-gray-50 text-sm">
+            <span className="qt-text-secondary">
+              Showing in Terminal Mode pane.
+            </span>
+            <button
+              type="button"
+              onClick={handleFocusPane}
+              className="qt-button-secondary text-xs px-2 py-1"
+              title="Focus the Terminal Mode pane"
+            >
+              Go to pane →
+            </button>
+          </div>
+        ) : (
+          <div className="bg-black" style={{ height: '360px' }}>
+            <Terminal
+              sessionId={sessionId}
+              className="h-full w-full"
+            />
+          </div>
+        )
       )}
     </div>
   );

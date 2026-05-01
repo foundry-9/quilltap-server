@@ -231,6 +231,8 @@ import { addSummaryAnchorMessageIdsFieldMigration } from './add-summary-anchor-m
 import { addEmbeddingProfileTruncationFieldsMigration } from './add-embedding-profile-truncation-fields';
 // Terminal sessions table for in-chat terminal feature
 import { addTerminalSessionsTableMigration } from './add-terminal-sessions-table';
+// Terminal Mode fields on chats (split-pane persistence)
+import { addTerminalModeFieldsMigration } from './add-terminal-mode-fields';
 
 /**
  * All available migrations.
@@ -455,6 +457,10 @@ export const migrations: Migration[] = [
   addSummaryAnchorMessageIdsFieldMigration,
   // Add Matryoshka truncation columns to embedding_profiles
   addEmbeddingProfileTruncationFieldsMigration,
+  // Terminal sessions table for in-chat terminal feature
+  addTerminalSessionsTableMigration,
+  // Terminal Mode fields on chats (split-pane persistence)
+  addTerminalModeFieldsMigration,
 ];
 
 export {
@@ -666,5 +672,7 @@ export {
   addEmbeddingProfileTruncationFieldsMigration,
   // Terminal sessions table
   addTerminalSessionsTableMigration,
+  // Terminal Mode fields on chats (split-pane persistence)
+  addTerminalModeFieldsMigration,
 };
 

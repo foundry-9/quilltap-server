@@ -412,6 +412,15 @@ export const ChatMetadataSchema = z.object({
   /** Divider position for split mode as percentage of main area width (20-80) */
   dividerPosition: z.number().min(20).max(80).default(45),
 
+  /** Terminal Mode layout state: normal (chat only), split (chat + terminal), focus (terminal only) */
+  terminalMode: z.enum(['normal', 'split', 'focus']).default('normal'),
+
+  /** Active terminal session shown in Terminal Mode pane (null = no session bound) */
+  activeTerminalSessionId: UUIDSchema.nullable().optional(),
+
+  /** Vertical divider position (%) for the right-pane split when both Document and Terminal Modes are active (20-80) */
+  rightPaneVerticalSplit: z.number().min(20).max(80).default(50),
+
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),
 
@@ -574,6 +583,15 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Divider position for split mode as percentage of main area width (20-80) */
   dividerPosition: z.number().min(20).max(80).default(45),
+
+  /** Terminal Mode layout state: normal (chat only), split (chat + terminal), focus (terminal only) */
+  terminalMode: z.enum(['normal', 'split', 'focus']).default('normal'),
+
+  /** Active terminal session shown in Terminal Mode pane (null = no session bound) */
+  activeTerminalSessionId: UUIDSchema.nullable().optional(),
+
+  /** Vertical divider position (%) for the right-pane split when both Document and Terminal Modes are active (20-80) */
+  rightPaneVerticalSplit: z.number().min(20).max(80).default(50),
 
   /** Project this chat belongs to (optional) */
   projectId: UUIDSchema.nullable().optional(),

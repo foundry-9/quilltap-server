@@ -98,6 +98,8 @@ interface ChatComposerProps {
   narrationDelimiters?: NarrationDelimiters
   /** Callback to open a new terminal session */
   onOpenTerminalClick?: () => void
+  /** Whether Terminal Mode is currently active (hides the open-terminal button) */
+  isTerminalModeActive?: boolean
 }
 
 export function ChatComposer({
@@ -162,6 +164,7 @@ export function ChatComposer({
   onPendingToolResult,
   narrationDelimiters,
   onOpenTerminalClick,
+  isTerminalModeActive,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
@@ -474,7 +477,7 @@ export function ChatComposer({
               )}
 
               {/* Open Terminal button */}
-              {onOpenTerminalClick && (
+              {onOpenTerminalClick && !isTerminalModeActive && (
                 <button
                   type="button"
                   onClick={(e) => {

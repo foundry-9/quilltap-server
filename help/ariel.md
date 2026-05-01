@@ -30,9 +30,26 @@ Ariel operates under Quilltap's own user account and working directory. When you
 
 Similarly, environment variables, shell aliases, and PATH configuration are inherited from the server process. If you have questions about what is accessible from within a terminal session, apply the same caution and verification you would apply to any shell on your system.
 
+## Terminal Mode — promoting Ariel from the chat thread to a dedicated pane
+
+A terminal stuffed inside a chat bubble is a fine arrangement for an occasional check, but for sustained work — tailing logs, running a build, watching a server start up — the bubble grows tiresome. Terminal Mode offers proper accommodations: a dedicated pane on the right of the Salon, with the chat reposed quietly on the left, exactly the way Document Mode arranges its scribbling.
+
+Click the terminal button in the composer with no terminal yet running, and Ariel will spawn one and usher you straight into Terminal Mode. If a terminal session is already running in this chat, you'll be presented with a small picker — choose an existing session to bring into the pane, or commission a new one. Either way, the pane appears on the right, divider draggable, and the chat retreats to its half of the salon.
+
+Should you enter Document Mode while Terminal Mode is also active, the right-hand pane partitions itself horizontally — document on top, terminal beneath — with a second draggable divider between them. Both halves remain interactive; resize at your leisure.
+
+The terminal pane offers two distinct exit ceremonies, located at the right of its header:
+
+- **Close pane** (the dash icon) — the pane folds away, but the terminal session itself continues to draw breath. The familiar message-bubble embed in the chat thread becomes interactive once more; should you wish to consult the terminal again, click the composer's terminal button and the pane returns with the same session intact.
+- **Kill** (the red ✕) — terminates the underlying shell *and* closes the pane. Ariel's customary closing announcement appears in the chat. (The first click arms the kill; a second, within four seconds, executes it. This is to forestall accidental regicide.)
+
+The pane state — whether it is open, which session it shows, where you set the dividers — persists with the chat record, so reloading the page returns you to precisely the arrangement you left.
+
+**Keyboard shortcut:** ⌘⇧T (or Ctrl+Shift+T) toggles Terminal Mode. Escape exits focus mode back to a split.
+
 ## Closing a session
 
-Either click the termination button within the terminal bubble, or simply leave the chat — Ariel will tidy up the session when the conversation ends. Both methods are equally graceful; neither will leave orphaned processes.
+Either click the termination button within the terminal bubble (or the red ✕ in the Terminal Mode pane), or simply leave the chat — Ariel will tidy up the session when the conversation ends. Both methods are equally graceful; neither will leave orphaned processes.
 
 ## In-Chat Navigation
 

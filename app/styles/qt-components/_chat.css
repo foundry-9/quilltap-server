@@ -1455,6 +1455,55 @@
   }
 
   /**
+   * Vertical (top/bottom) split inside the right pane — used when both
+   * Document Mode and Terminal Mode are active. Document on top, terminal
+   * on bottom, with a draggable horizontal divider between them.
+   */
+  .qt-doc-vertical-split-layout {
+    @apply flex flex-col h-full w-full;
+    @apply overflow-hidden;
+  }
+
+  .qt-doc-vertical-pane {
+    @apply flex flex-col w-full;
+    @apply overflow-hidden;
+    min-height: 200px;
+  }
+
+  .qt-doc-vertical-divider {
+    @apply flex-shrink-0 w-full;
+    @apply flex items-center justify-center;
+    height: 6px;
+    cursor: row-resize;
+    background: var(--qt-border);
+    transition: background 0.15s ease;
+    user-select: none;
+    touch-action: none;
+  }
+
+  .qt-doc-vertical-divider:hover,
+  .qt-doc-vertical-divider.qt-doc-vertical-divider-active {
+    background: var(--qt-primary);
+  }
+
+  .qt-doc-vertical-divider-grip {
+    @apply flex flex-row gap-1;
+  }
+
+  .qt-doc-vertical-divider-grip span {
+    display: block;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--qt-text-muted);
+  }
+
+  .qt-doc-vertical-divider:hover .qt-doc-vertical-divider-grip span,
+  .qt-doc-vertical-divider.qt-doc-vertical-divider-active .qt-doc-vertical-divider-grip span {
+    background: var(--qt-primary-fg, #fff);
+  }
+
+  /**
    * Focus mode — document pane fills the entire main area
    * Chat pane is hidden
    */

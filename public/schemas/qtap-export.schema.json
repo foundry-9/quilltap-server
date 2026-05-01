@@ -381,6 +381,30 @@
         "equippedOutfit": {
           "type": ["object", "null"],
           "description": "Per-character equipped outfit state: { [characterId]: { top, bottom, footwear, accessories } }"
+        },
+        "documentMode": {
+          "enum": ["normal", "split", "focus"],
+          "description": "Salon Document Mode layout state for this chat"
+        },
+        "dividerPosition": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 80,
+          "description": "Horizontal divider position (%) for the salon split layout"
+        },
+        "terminalMode": {
+          "enum": ["normal", "split", "focus"],
+          "description": "Salon Terminal Mode layout state for this chat"
+        },
+        "activeTerminalSessionId": {
+          "type": ["string", "null"],
+          "description": "UUID of the terminal session currently bound to Terminal Mode (null = no session bound)"
+        },
+        "rightPaneVerticalSplit": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 80,
+          "description": "Vertical divider position (%) for the right pane when both Document and Terminal Modes are active"
         }
       }
     },

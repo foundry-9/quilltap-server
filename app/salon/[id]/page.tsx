@@ -56,7 +56,10 @@ import { GiftWardrobeItemModal } from '@/components/wardrobe/gift-wardrobe-item-
 import SplitLayout from './components/SplitLayout'
 import DocumentPane from './components/DocumentPane'
 import DocumentPickerModal from './components/DocumentPickerModal'
+import { TerminalPane } from './components/TerminalPane'
+import TerminalSessionPicker from './components/TerminalSessionPicker'
 import { useDocumentMode, type FocusRequest } from './hooks/useDocumentMode'
+import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -270,6 +273,23 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     onLibrarianMessage: appendLibrarianMessage,
   })
   const [showDocumentPicker, setShowDocumentPicker] = useState(false)
+
+  // --- Terminal Mode hook ---
+  // Mirrors Document Mode: persists layout state on the chat record so the
+  // pane comes back on reload. The Ariel session-opened announcement is posted
+  // server-side when we spawn, so the hook also calls fetchChat after spawn.
+  const terminalModeHook = useTerminalMode({
+    chatId: id,
+    chat,
+    fetchChat: () => fetchChat(),
+  })
+  const terminalCtxValue = useMemo(
+    () => ({
+      terminalMode: terminalModeHook.terminalMode,
+      activeTerminalSessionId: terminalModeHook.activeTerminalSessionId,
+    }),
+    [terminalModeHook.terminalMode, terminalModeHook.activeTerminalSessionId],
+  )
 
   // --- File attachments hook ---
   const fileHook = useFileAttachments(id, chat?.projectId)
@@ -776,6 +796,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return () => document.removeEventListener('keydown', handleDocKeyDown)
   }, [documentModeHook])
 
+  // Keyboard shortcuts for Terminal Mode (mirrors Document Mode's pattern).
+  useEffect(() => {
+    const handleTerminalKeyDown = (e: KeyboardEvent) => {
+      // Cmd+Shift+T / Ctrl+Shift+T: toggle Terminal Mode
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'T' || e.key === 't')) {
+        e.preventDefault()
+        if (terminalModeHook.terminalMode === 'normal') {
+          void terminalModeHook.requestOpen()
+        } else {
+          void terminalModeHook.hidePane()
+        }
+        return
+      }
+
+      // Escape exits terminal focus back to split.
+      if (e.key === 'Escape' && terminalModeHook.terminalMode === 'focus') {
+        e.preventDefault()
+        terminalModeHook.toggleFocusMode()
+      }
+    }
+
+    document.addEventListener('keydown', handleTerminalKeyDown)
+    return () => document.removeEventListener('keydown', handleTerminalKeyDown)
+  }, [terminalModeHook])
+
   // --- Toolbar setup ---
   const { setLeftContent, setRightContent } = usePageToolbar()
 
@@ -998,23 +1043,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     }
   }, [messages, modals])
 
-  const handleOpenTerminal = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/terminals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: id }),
-      })
-      if (!res.ok) {
-        showErrorToast(`Failed to open terminal (HTTP ${res.status})`)
-        return
-      }
-      await fetchChat()
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to open terminal')
-      console.error('Failed to open terminal', err)
-    }
-  }, [id, fetchChat])
+  // Terminal Mode entry: hook decides whether to re-attach a still-live bound
+  // session, show the session picker, or spawn-and-enter a fresh one.
+  const handleOpenTerminal = useCallback(() => {
+    void terminalModeHook.requestOpen()
+  }, [terminalModeHook])
 
   // Handle document open — opens the document; the server posts a Librarian announcement which
   // the hook surfaces via onLibrarianMessage, so the user never loses their turn.
@@ -1085,16 +1118,30 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }
 
   // --- Render ---
+  // Combine the two modes for SplitLayout. Focus on either side wins; otherwise
+  // either-side split wins; otherwise normal.
+  const combinedMode: 'normal' | 'split' | 'focus' =
+    documentModeHook.documentMode === 'focus' || terminalModeHook.terminalMode === 'focus'
+      ? 'focus'
+      : documentModeHook.documentMode === 'split' || terminalModeHook.terminalMode === 'split'
+        ? 'split'
+        : 'normal'
+
+  const isTerminalModeActive = terminalModeHook.terminalMode !== 'normal'
+
   return (
+    <TerminalModeContext.Provider value={terminalCtxValue}>
     <div
       className="qt-chat-layout"
       style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <div className="qt-chat-main">
         <SplitLayout
-          mode={documentModeHook.documentMode}
+          mode={combinedMode}
           dividerPosition={documentModeHook.dividerPosition}
           onDividerPositionChange={documentModeHook.setDividerPosition}
+          rightPaneVerticalSplit={terminalModeHook.rightPaneVerticalSplit}
+          onRightPaneVerticalSplitChange={terminalModeHook.setRightPaneVerticalSplit}
           chatContent={
             <>
               {/* Chat toggles - shown in multi-character chats */}
@@ -1285,6 +1332,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onPendingToolResult={handleAddPendingToolResult}
           narrationDelimiters={narrationDelimiters}
           onOpenTerminalClick={handleOpenTerminal}
+          isTerminalModeActive={isTerminalModeActive}
         />
             </>
           }
@@ -1315,6 +1363,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               />
             ) : null
           }
+          terminalContent={
+            terminalModeHook.activeTerminalSessionId && terminalModeHook.terminalMode !== 'normal' ? (
+              <TerminalPane
+                sessionId={terminalModeHook.activeTerminalSessionId}
+                chatId={id}
+                mode={terminalModeHook.terminalMode}
+                onToggleFocusMode={terminalModeHook.toggleFocusMode}
+                onHidePane={terminalModeHook.hidePane}
+                onKill={terminalModeHook.killTerminal}
+              />
+            ) : null
+          }
+        />
+
+        {/* Terminal Session Picker Modal */}
+        <TerminalSessionPicker
+          isOpen={terminalModeHook.showTerminalPicker}
+          sessions={terminalModeHook.pickerSessions}
+          onAttach={(sessionId) => {
+            void terminalModeHook.attachExistingSession(sessionId)
+          }}
+          onSpawnNew={() => {
+            void terminalModeHook.spawnNewSession()
+          }}
+          onClose={terminalModeHook.closeTerminalPicker}
         />
 
         {/* Document Picker Modal */}
@@ -1477,5 +1550,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         />
       )}
     </div>
+    </TerminalModeContext.Provider>
   )
 }

@@ -337,6 +337,9 @@ CREATE TABLE "chats" (
   "scenarioText" TEXT DEFAULT NULL,
   "documentMode" TEXT DEFAULT 'normal',
   "dividerPosition" INTEGER DEFAULT 45,
+  "terminalMode" TEXT DEFAULT 'normal',
+  "activeTerminalSessionId" TEXT DEFAULT NULL,
+  "rightPaneVerticalSplit" INTEGER DEFAULT 50,
   "allowCrossCharacterVaultReads" INTEGER DEFAULT 0,
   "compiledIdentityStacks" TEXT DEFAULT NULL
 );

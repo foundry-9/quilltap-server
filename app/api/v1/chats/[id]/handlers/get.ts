@@ -371,6 +371,9 @@ export async function handleGet(
       documentEditingMode: chatMetadata.documentEditingMode ?? false,
       documentMode: chatMetadata.documentMode || 'normal',
       dividerPosition: chatMetadata.dividerPosition ?? 45,
+      terminalMode: chatMetadata.terminalMode || 'normal',
+      activeTerminalSessionId: chatMetadata.activeTerminalSessionId ?? null,
+      rightPaneVerticalSplit: chatMetadata.rightPaneVerticalSplit ?? 50,
     };
 
     return NextResponse.json({ chat });
