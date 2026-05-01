@@ -12,6 +12,7 @@ FROM build-base AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY scripts/fix-node-pty-permissions.js ./scripts/fix-node-pty-permissions.js
 RUN npm ci
 
 # Install production-only dependencies (for the final image)
@@ -19,6 +20,7 @@ FROM build-base AS deps-prod
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY scripts/fix-node-pty-permissions.js ./scripts/fix-node-pty-permissions.js
 RUN npm ci --omit=dev && npm rebuild
 
 # Development stage
@@ -27,6 +29,7 @@ WORKDIR /app
 
 # Copy package files
 COPY package.json package-lock.json ./
+COPY scripts/fix-node-pty-permissions.js ./scripts/fix-node-pty-permissions.js
 
 # Install all dependencies (including dev dependencies for development)
 RUN npm ci

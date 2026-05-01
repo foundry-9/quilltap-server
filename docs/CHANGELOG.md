@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: Docker build failed in deps-prod stage on missing postinstall script
+
+The `node-pty` postinstall hook (`scripts/fix-node-pty-permissions.js`) is invoked by `npm ci`, but the `deps-prod` stage in `Dockerfile` and `Dockerfile.ci` only copied `package.json` + `package-lock.json` before running install — so npm aborted with `Cannot find module '/app/scripts/fix-node-pty-permissions.js'`. Added a `COPY scripts/fix-node-pty-permissions.js ./scripts/...` line in front of every `npm ci` in both Dockerfiles (deps, deps-prod, development).
+
 #### terminal_read: ANSI/control-char cleanup, raw passthrough, line-range slicing
 
 `terminal_read` now returns scrollback that's actually readable to the LLM. The default `scrollback` field is cleaned: ANSI escape sequences (CSI, OSC, two-byte intermediate+final, the full single-byte Fp/Fe/Fs ranges including `ESC =` / `ESC >`, plus orphan trailing ESCs) are stripped, backspaces (`\b`) are applied to erase the prior char, and lone carriage returns are treated as line-resets so prompt redraws and progress bars come out as their final state. Added a `raw: boolean` parameter (default false) — when true, the response also includes a `rawScrollback` field with the original bytes preserved. Added optional `start` / `end` integer parameters for line-range selection (0-indexed, inclusive); negative values resolve as `lastLineNumber - abs(value)` so `start=-50` means "fifty lines before the last." When neither start nor end is provided, the existing `lines` tail behavior (default 200) still applies. Output now also reports `totalLines`, `startLine`, and `endLine` so the LLM can paginate intelligently. Hard cap of 2000 lines per read still enforced. The `formattedText` block surfaces the line range and appends a `Raw (ANSI preserved)` block when raw=true.
