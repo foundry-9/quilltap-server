@@ -66,10 +66,12 @@ export async function handleTerminalUpgrade(
     return;
   }
 
+  wsLogger.info('[Terminal WS] Upgrade received', { sessionId });
+
   // Validate session exists in PTY manager
   const ptySession = ptyManager.get(sessionId);
   if (!ptySession) {
-    wsLogger.debug('[Terminal WS] Session not found', { sessionId });
+    wsLogger.warn('[Terminal WS] Session not found', { sessionId });
     try {
       ws.send(JSON.stringify({ type: 'exit', code: -1, signal: 'session_not_found' }));
     } catch {
@@ -106,7 +108,7 @@ export async function handleTerminalUpgrade(
     return;
   }
 
-  wsLogger.debug('[Terminal WS] Client connected', { sessionId });
+  wsLogger.info('[Terminal WS] Client connected', { sessionId });
 
   // Wire message handler
   ws.on('message', (rawData: Buffer) => {
@@ -114,7 +116,17 @@ export async function handleTerminalUpgrade(
       const msg = JSON.parse(rawData.toString()) as WsClientMsg;
 
       if (msg.type === 'input') {
-        ptyManager.write(sessionId, msg.data);
+        wsLogger.debug('[Terminal WS] input', {
+          sessionId,
+          dataLen: msg.data.length,
+        });
+        const ok = ptyManager.write(sessionId, msg.data);
+        if (!ok) {
+          wsLogger.warn('[Terminal WS] input dropped — PTY rejected write', {
+            sessionId,
+            dataLen: msg.data.length,
+          });
+        }
       } else if (msg.type === 'resize') {
         ptyManager.resize(sessionId, msg.cols, msg.rows);
       } else if (msg.type === 'ping') {

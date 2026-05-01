@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { PtySessionMeta, WsServerMessage } from '@/lib/schemas/terminal.types';
 
 type TerminalState = 'connecting' | 'live' | 'exited' | 'error';
+
+const MAX_REPLAY_BYTES = 512 * 1024;
 
 interface ExitInfo {
   code: number | null;
@@ -37,7 +39,16 @@ export function useTerminalSession(sessionId: string): UseTerminalSession {
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Client-side replay buffer. Output (including the server-side ring buffer
+  // sent on subscribe and the shell's first prompt) can arrive before xterm
+  // finishes its async lazy-import / open(); without buffering, those chunks
+  // would dispatch to zero subscribers and be dropped on the floor.
+  const replayBufferRef = useRef<string>('');
+
   const dispatchOutput = useCallback((chunk: string) => {
+    const next = replayBufferRef.current + chunk;
+    replayBufferRef.current =
+      next.length > MAX_REPLAY_BYTES ? next.slice(-MAX_REPLAY_BYTES) : next;
     subscribersRef.current.forEach((cb) => cb(chunk));
   }, []);
 
@@ -55,6 +66,16 @@ export function useTerminalSession(sessionId: string): UseTerminalSession {
 
   const onData = useCallback((cb: (chunk: string) => void) => {
     subscribersRef.current.add(cb);
+    // Replay buffered output (server ring buffer + any chunks that arrived
+    // before this subscriber attached) so a fresh xterm instance lands
+    // straight on the first prompt instead of an empty screen.
+    if (replayBufferRef.current.length > 0) {
+      try {
+        cb(replayBufferRef.current);
+      } catch (err) {
+        console.error('Terminal replay subscriber threw:', err);
+      }
+    }
     return () => {
       subscribersRef.current.delete(cb);
     };
@@ -142,12 +163,15 @@ export function useTerminalSession(sessionId: string): UseTerminalSession {
     };
   }, [connect]);
 
-  return {
-    state,
-    meta,
-    exitInfo,
-    send,
-    resize,
-    onData,
-  };
+  return useMemo(
+    () => ({
+      state,
+      meta,
+      exitInfo,
+      send,
+      resize,
+      onData,
+    }),
+    [state, meta, exitInfo, send, resize, onData],
+  );
 }

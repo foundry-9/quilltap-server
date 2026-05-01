@@ -437,4 +437,10 @@ class PtyManager {
   }
 }
 
-export const ptyManager = new PtyManager();
+// Pin the singleton on globalThis so dev-mode loaders that produce duplicate
+// module copies (Next.js's bundler vs. the tsx loader used for server.ts)
+// still see the same in-memory session map. Without this, a session spawned
+// via the API route is invisible to the WebSocket upgrade handler and every
+// connect immediately reports session_not_found.
+const globalForPty = globalThis as unknown as { __quilltapPtyManager?: PtyManager };
+export const ptyManager = globalForPty.__quilltapPtyManager ?? (globalForPty.__quilltapPtyManager = new PtyManager());

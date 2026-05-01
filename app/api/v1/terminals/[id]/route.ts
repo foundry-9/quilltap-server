@@ -35,7 +35,9 @@ const writeSchema = z.object({
 /**
  * GET /api/v1/terminals/[id]
  *
- * Get session metadata and the ring buffer (live data).
+ * Get session metadata and the ring buffer. If the session is no longer
+ * tracked in memory (server restart, natural exit), fall back to the DB row
+ * so callers can distinguish "exited" from "never existed".
  */
 async function handleGetSession(
   request: NextRequest,
@@ -48,15 +50,24 @@ async function handleGetSession(
     terminalLogger.debug('[Terminals API] Getting session', { sessionId: id });
 
     const ptySession = ptyManager.get(id);
-    if (!ptySession) {
+    if (ptySession) {
+      const ringBuffer = ptyManager.getRingBuffer(id);
+      return successResponse({
+        session: ptySession.meta,
+        ringBuffer,
+      });
+    }
+
+    const repos = getRepositories() as any;
+    const row = await repos.terminalSessions.findById(id);
+    if (!row) {
       return notFound('Terminal session');
     }
 
-    const ringBuffer = ptyManager.getRingBuffer(id);
-
+    const { createdAt: _c, updatedAt: _u, ...meta } = row;
     return successResponse({
-      session: ptySession.meta,
-      ringBuffer,
+      session: meta,
+      ringBuffer: null,
     });
   } catch (error) {
     terminalLogger.error('[Terminals API] Error getting session', {}, error instanceof Error ? error : undefined);

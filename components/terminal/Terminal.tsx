@@ -32,21 +32,38 @@ export function Terminal({
   const termRef = useRef<any>(null);
   const fitAddonRef = useRef<any>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const initStartedRef = useRef(false);
 
   const session = useTerminalSession(sessionId);
   const [initialized, setInitialized] = useState(false);
 
-  // Initialize xterm on mount (lazy import to avoid SSR)
+  // Keep a ref to the latest session so closures inside long-lived xterm
+  // listeners always reach the current callbacks.
+  const sessionRef = useRef(session);
   useEffect(() => {
-    if (initialized || !containerRef.current) {
+    sessionRef.current = session;
+  }, [session]);
+
+  // Initialize xterm on mount (lazy import to avoid SSR).
+  // Ref-guarded so React StrictMode's double-invoke (and any in-flight render)
+  // can't double-attach two xterm instances into the same container.
+  useEffect(() => {
+    if (initStartedRef.current || !containerRef.current) {
       return;
     }
+    initStartedRef.current = true;
+
+    let cancelled = false;
+    let createdTerm: any = null;
+    let createdObserver: ResizeObserver | null = null;
 
     (async () => {
       const { Terminal: XTermTerminal } = await import('@xterm/xterm');
       const { FitAddon } = await import('@xterm/addon-fit');
       const { WebLinksAddon } = await import('@xterm/addon-web-links');
       const { SerializeAddon } = await import('@xterm/addon-serialize');
+
+      if (cancelled || !containerRef.current) return;
 
       const theme = getTerminalTheme();
 
@@ -77,57 +94,91 @@ export function Terminal({
         // Canvas addon not available or not supported — fall back to DOM
       }
 
-      term.open(containerRef.current!);
-      fitAddon.fit();
+      if (cancelled || !containerRef.current) {
+        try { term.dispose(); } catch { /* noop */ }
+        return;
+      }
+
+      term.open(containerRef.current);
+      try { fitAddon.fit(); } catch { /* noop */ }
+      try { term.focus(); } catch { /* noop */ }
 
       termRef.current = term;
       fitAddonRef.current = fitAddon;
+      createdTerm = term;
 
-      // Setup ResizeObserver for responsive fitting
-      resizeObserverRef.current = new ResizeObserver(() => {
+      // Setup ResizeObserver for responsive fitting. We avoid closing over
+      // `session` here so its identity changes don't matter; the resize call
+      // routes through the latest send via the ref-stable callback.
+      const observer = new ResizeObserver(() => {
         if (fitAddonRef.current && termRef.current) {
           try {
             fitAddonRef.current.fit();
-            session.resize(termRef.current.cols, termRef.current.rows);
+            sessionRef.current?.resize(termRef.current.cols, termRef.current.rows);
           } catch {
             // Ignore resize errors during layout thrashing
           }
         }
       });
-
-      resizeObserverRef.current.observe(containerRef.current!);
+      observer.observe(containerRef.current);
+      resizeObserverRef.current = observer;
+      createdObserver = observer;
 
       setInitialized(true);
-    })();
-  }, [initialized, rows, cols, fontSize, session]);
-
-  // Wire session output to terminal
-  useEffect(() => {
-    if (!initialized || !termRef.current) {
-      return;
-    }
-
-    const unsubscribe = session.onData((chunk) => {
-      termRef.current.write(chunk);
-    });
-
-    return unsubscribe;
-  }, [initialized, session]);
-
-  // Wire terminal input to session
-  useEffect(() => {
-    if (!initialized || !termRef.current) {
-      return;
-    }
-
-    const disposable = termRef.current.onData((data: string) => {
-      session.send(data);
+    })().catch(() => {
+      // Swallow init errors — the next mount can retry by clearing the ref
+      initStartedRef.current = false;
     });
 
     return () => {
-      disposable.dispose();
+      cancelled = true;
+      if (createdObserver) {
+        try { createdObserver.disconnect(); } catch { /* noop */ }
+      }
+      if (createdTerm) {
+        try { createdTerm.dispose(); } catch { /* noop */ }
+      }
+      if (resizeObserverRef.current === createdObserver) {
+        resizeObserverRef.current = null;
+      }
+      if (termRef.current === createdTerm) {
+        termRef.current = null;
+      }
+      initStartedRef.current = false;
     };
-  }, [initialized, session]);
+  }, [rows, cols, fontSize]);
+
+  // Wire session output → terminal. Stable: reads the live session via ref.
+  useEffect(() => {
+    if (!initialized || !termRef.current) return;
+
+    const unsubscribe = sessionRef.current.onData((chunk) => {
+      termRef.current?.write(chunk);
+    });
+
+    return unsubscribe;
+  }, [initialized]);
+
+  // Wire xterm input → session. Stable: reads the live session via ref.
+  useEffect(() => {
+    if (!initialized || !termRef.current) return;
+
+    const disposable = termRef.current.onData((data: string) => {
+      sessionRef.current.send(data);
+    });
+
+    return () => {
+      try { disposable.dispose(); } catch { /* noop */ }
+    };
+  }, [initialized]);
+
+  // Refocus xterm once we know it's live so the user can type without an
+  // extra click after the prompt streams in.
+  useEffect(() => {
+    if (initialized && session.state === 'live' && termRef.current) {
+      try { termRef.current.focus(); } catch { /* noop */ }
+    }
+  }, [initialized, session.state]);
 
   // Handle session exit
   useEffect(() => {
@@ -146,18 +197,6 @@ export function Terminal({
       termRef.current._input.disabled = true;
     }
   }, [session.state, session.exitInfo]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (resizeObserverRef.current) {
-        resizeObserverRef.current.disconnect();
-      }
-      if (termRef.current) {
-        termRef.current.dispose();
-      }
-    };
-  }, []);
 
   return (
     <div className={`relative bg-black ${className}`}>
