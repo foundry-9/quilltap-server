@@ -113,6 +113,26 @@ export interface TurnMemoryExtractionContext {
   memoryExtractionLimits?: MemoryExtractionLimits
   /** Override the source-message timestamp on derived memories — used by batch re-extraction to backfill historical timing. */
   sourceMessageTimestamp?: string
+  /** When true, run all extraction passes but skip persistence — candidates are returned on the result instead. */
+  dryRun?: boolean
+}
+
+/**
+ * Candidate memory captured during a dry-run extraction. Mirrors the input to
+ * `createMemoryWithGate` plus the metadata a caller needs to attribute it
+ * (which character, observing whom, from which pass, sourced from which message).
+ */
+export interface ExtractedCandidate {
+  pass: 'USER' | 'SELF' | 'INTER'
+  characterId: string
+  characterName: string
+  aboutCharacterId: string
+  aboutCharacterName: string
+  sourceMessageId: string | null
+  content: string
+  summary: string
+  keywords: string[]
+  importance: number
 }
 
 export interface TurnMemoryProcessingResult {
@@ -131,6 +151,8 @@ export interface TurnMemoryProcessingResult {
   sourceMessageId: string | null
   /** Combined debug log lines, one per outcome, in extraction order. */
   debugLogs: string[]
+  /** Populated only when the context was run with `dryRun: true`. */
+  extractedCandidates?: ExtractedCandidate[]
   error?: string
 }
 
@@ -144,7 +166,10 @@ function toCheapLLMConfig(settings: CheapLLMSettings): CheapLLMConfig {
 
 interface WriteOptions {
   characterId: string
+  characterName: string
   aboutCharacterId: string
+  aboutCharacterName: string
+  pass: 'USER' | 'SELF' | 'INTER'
   candidate: MemoryCandidate
   passLabel: string
   ctx: TurnMemoryExtractionContext
@@ -152,9 +177,29 @@ interface WriteOptions {
   debugLogs: string[]
   createdIds: string[]
   reinforcedIds: string[]
+  collected: ExtractedCandidate[]
 }
 
 async function writeCandidate(opts: WriteOptions): Promise<void> {
+  if (opts.ctx.dryRun) {
+    opts.collected.push({
+      pass: opts.pass,
+      characterId: opts.characterId,
+      characterName: opts.characterName,
+      aboutCharacterId: opts.aboutCharacterId,
+      aboutCharacterName: opts.aboutCharacterName,
+      sourceMessageId: opts.sourceMessageId,
+      content: opts.candidate.content || '',
+      summary: opts.candidate.summary || '',
+      keywords: opts.candidate.keywords || [],
+      importance: opts.candidate.importance ?? 0.5,
+    })
+    opts.debugLogs.push(
+      `[Memory] DRY-RUN ${opts.passLabel} — would write: ${opts.candidate.summary}`
+    )
+    return
+  }
+
   const outcome: MemoryGateOutcome = await createMemoryWithGate(
     {
       characterId: opts.characterId,
@@ -223,6 +268,7 @@ export async function processTurnForMemory(
   const debugLogs: string[] = []
   const createdMemoryIds: string[] = []
   const reinforcedMemoryIds: string[] = []
+  const collectedCandidates: ExtractedCandidate[] = []
   const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
   const sourceMessageId = ctx.transcript.latestAssistantMessageId
 
@@ -238,6 +284,7 @@ export async function processTurnForMemory(
         usage: totalUsage,
         sourceMessageId,
         debugLogs,
+        ...(ctx.dryRun ? { extractedCandidates: collectedCandidates } : {}),
       }
     }
 
@@ -329,7 +376,10 @@ export async function processTurnForMemory(
           for (const candidate of candidates) {
             await writeCandidate({
               characterId: slice.characterId,
+              characterName: slice.characterName,
               aboutCharacterId: ctx.transcript.userCharacterId,
+              aboutCharacterName: ctx.transcript.userCharacterName ?? '',
+              pass: 'USER',
               candidate,
               passLabel: `USER memory for ${slice.characterName}`,
               ctx,
@@ -337,6 +387,7 @@ export async function processTurnForMemory(
               debugLogs,
               createdIds: createdMemoryIds,
               reinforcedIds: reinforcedMemoryIds,
+              collected: collectedCandidates,
             })
           }
         }
@@ -386,7 +437,10 @@ export async function processTurnForMemory(
         for (const candidate of candidates) {
           await writeCandidate({
             characterId: slice.characterId,
+            characterName: slice.characterName,
             aboutCharacterId: slice.characterId,
+            aboutCharacterName: slice.characterName,
+            pass: 'SELF',
             candidate,
             passLabel: `CHARACTER memory for ${slice.characterName}`,
             ctx,
@@ -394,6 +448,7 @@ export async function processTurnForMemory(
             debugLogs,
             createdIds: createdMemoryIds,
             reinforcedIds: reinforcedMemoryIds,
+            collected: collectedCandidates,
           })
         }
       } else {
@@ -441,7 +496,10 @@ export async function processTurnForMemory(
             for (const candidate of candidates) {
               await writeCandidate({
                 characterId: observer.characterId,
+                characterName: observer.characterName,
                 aboutCharacterId: subject.characterId,
+                aboutCharacterName: subject.characterName,
+                pass: 'INTER',
                 candidate,
                 passLabel: `INTER memory ${observer.characterName} about ${subject.characterName}`,
                 ctx,
@@ -449,6 +507,7 @@ export async function processTurnForMemory(
                 debugLogs,
                 createdIds: createdMemoryIds,
                 reinforcedIds: reinforcedMemoryIds,
+                collected: collectedCandidates,
               })
             }
           } else {
@@ -469,6 +528,7 @@ export async function processTurnForMemory(
       usage: totalUsage,
       sourceMessageId,
       debugLogs,
+      ...(ctx.dryRun ? { extractedCandidates: collectedCandidates } : {}),
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error'
@@ -482,6 +542,7 @@ export async function processTurnForMemory(
       usage: totalUsage,
       sourceMessageId,
       debugLogs,
+      ...(ctx.dryRun ? { extractedCandidates: collectedCandidates } : {}),
       error: errorMsg,
     }
   }

@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Added `quilltap memory-diff` and a dry-run memory-extraction endpoint
+
+New CLI subcommand for iterating on the Commonplace Book extraction prompts without touching the database. `npx quilltap memory-diff <chatId>` reads the existing memories for a chat directly from the encrypted SQLite (read-only) and writes them to `<chatId>-existing.json`, then opens a streaming connection to the running server, runs the same per-turn extraction passes against the chat with persistence skipped, and writes the resulting candidates to `<chatId>-extracted.json`. Progress prints to stderr, one line per turn (`[i/N] turn <id>: K candidates`), so long chats are no longer a black box. Supports `--data-dir`, `--passphrase`, `--port`, `--out`.
+
+Server side, `processTurnForMemory` in `lib/memory/memory-processor.ts` now accepts a `dryRun` flag on `TurnMemoryExtractionContext`. When set, `writeCandidate` collects the candidate (with `pass`, `characterId`/`characterName`, `aboutCharacterId`/`aboutCharacterName`, `sourceMessageId`, content/summary/keywords/importance) into a result-side `extractedCandidates` array instead of calling `createMemoryWithGate` — no embedding cost, no database writes, no jobs queued. Rate-limit and importance-floor logic still run so the dry-run reflects what would actually be written.
+
+A new chat action wires it up: `POST /api/v1/chats/[id]?action=extract-memories-dry-run` walks every USER turn inline, runs `processTurnForMemory` with `dryRun: true` per turn, and streams NDJSON events back to the client (`start`, `turn`, `candidate`, `turn-error`, `done`). It reuses the cheap-LLM resolution logic from `queue-memories` (factored into a small private helper) and the same transcript-building code path as the background job handler, so the dry-run output reflects the live extraction pipeline.
+
 #### Fix: Docker build failed in deps-prod stage on missing postinstall script
 
 The `node-pty` postinstall hook (`scripts/fix-node-pty-permissions.js`) is invoked by `npm ci`, but the `deps-prod` stage in `Dockerfile` and `Dockerfile.ci` only copied `package.json` + `package-lock.json` before running install — so npm aborted with `Cannot find module '/app/scripts/fix-node-pty-permissions.js'`. Added a `COPY scripts/fix-node-pty-permissions.js ./scripts/...` line in front of every `npm ci` in both Dockerfiles (deps, deps-prod, development).

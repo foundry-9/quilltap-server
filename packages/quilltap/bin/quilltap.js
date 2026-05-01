@@ -79,6 +79,7 @@ Subcommands:
   db                            Query encrypted databases
   themes                        Manage theme bundles
   docs                          Inspect, read, and export document mounts
+  memory-diff <chatId>          Dump existing memories and dry-run re-extraction for a chat
 
 Options:
   -p, --port <number>     Port to listen on (default: 3000)
@@ -869,6 +870,12 @@ if (process.argv[2] === 'db') {
 } else if (process.argv[2] === 'docs') {
   const { docsCommand } = require('../lib/docs-commands');
   docsCommand(process.argv.slice(3));
+} else if (process.argv[2] === 'memory-diff') {
+  const { memoryDiffCommand } = require('../lib/memory-diff-command');
+  memoryDiffCommand(process.argv.slice(3)).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
 } else {
   main();
 }

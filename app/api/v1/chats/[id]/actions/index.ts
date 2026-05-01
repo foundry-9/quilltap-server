@@ -18,7 +18,7 @@ export { handleTurnAction } from './turn';
 export { handleGetAvatars, handleSetAvatar, handleRemoveAvatar } from './avatars';
 export { handleBulkReattribute } from './bulk';
 export { handleAddToolResult, handleUpdateToolSettings } from './tools';
-export { handleQueueMemories } from './memories';
+export { handleQueueMemories, handleExtractMemoriesDryRun } from './memories';
 export { handleRng } from './rng';
 export { handleRunTool } from './run-tool';
 export { handleGetState, handleSetState, handleResetState } from './state';
