@@ -385,3 +385,26 @@ export {
   DOC_EDIT_TOOL_NAMES,
   type DocEditToolContext,
 } from './handlers/doc-edit-handler';
+
+// Terminal Tools (Prospero Phase 2)
+export {
+  terminalReadToolDefinition,
+  validateTerminalReadInput,
+  type TerminalReadInput,
+  type TerminalReadOutput,
+} from './terminal-read-tool';
+
+export {
+  terminalListToolDefinition,
+  validateTerminalListInput,
+  type TerminalListInput,
+  type TerminalListOutput,
+} from './terminal-list-tool';
+
+export {
+  executeTerminalReadTool,
+  executeTerminalListTool,
+  formatTerminalReadResults,
+  formatTerminalListResults,
+  TerminalToolError,
+} from './handlers/terminal-handler';

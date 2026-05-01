@@ -947,6 +947,9 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (message.systemSender === 'commonplaceBook') {
       return { name: 'The Commonplace Book', title: null, avatarUrl: '/images/avatars/commonplace-book-avatar.webp', defaultImage: null }
     }
+    if (message.systemSender === 'ariel') {
+      return { name: 'Ariel', title: null, avatarUrl: '/images/avatars/ariel-avatar.webp', defaultImage: null }
+    }
     if (message.participantId) {
       const participant = participantsWithImpersonation.getParticipantById(message.participantId)
       if (participant) {
@@ -982,6 +985,24 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
       })
     }
   }, [messages, modals])
+
+  const handleOpenTerminal = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/terminals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: id }),
+      })
+      if (!res.ok) {
+        showErrorToast(`Failed to open terminal (HTTP ${res.status})`)
+        return
+      }
+      await fetchChat()
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to open terminal')
+      console.error('Failed to open terminal', err)
+    }
+  }, [id, fetchChat])
 
   // Handle document open — opens the document; the server posts a Librarian announcement which
   // the hook surfaces via onLibrarianMessage, so the user never loses their turn.
@@ -1134,6 +1155,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           userParticipantId={participantsWithImpersonation.userParticipantId}
           isPaused={isPaused}
           respondingParticipantId={respondingParticipantId}
+          chatId={id}
           messageActions={messageActions}
           turnManagement={turnManagement}
           setEditContent={setEditContent}
@@ -1250,6 +1272,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           hideStopButton={modals.showParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
           narrationDelimiters={narrationDelimiters}
+          onOpenTerminalClick={handleOpenTerminal}
         />
             </>
           }

@@ -48,6 +48,7 @@ export { DocMountDocumentsRepository } from './doc-mount-documents.repository';
 export { DocMountBlobsRepository } from './doc-mount-blobs.repository';
 export { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
 export { ChatDocumentsRepository } from './chat-documents.repository';
+export { TerminalSessionsRepository } from './terminal-sessions.repository';
 
 // Import all repository classes for container
 import { BackgroundJobsRepository } from './background-jobs.repository';
@@ -85,6 +86,7 @@ import { DocMountDocumentsRepository } from './doc-mount-documents.repository';
 import { DocMountBlobsRepository } from './doc-mount-blobs.repository';
 import { ProjectDocMountLinksRepository } from './project-doc-mount-links.repository';
 import { ChatDocumentsRepository } from './chat-documents.repository';
+import { TerminalSessionsRepository } from './terminal-sessions.repository';
 
 /**
  * Container interface for all repository instances.
@@ -127,6 +129,7 @@ export interface RepositoryContainer {
   docMountBlobs: DocMountBlobsRepository;
   projectDocMountLinks: ProjectDocMountLinksRepository;
   chatDocuments: ChatDocumentsRepository;
+  terminalSessions: TerminalSessionsRepository;
 }
 
 /**
@@ -181,6 +184,7 @@ export function createRepositories(): RepositoryContainer {
       docMountBlobs: new DocMountBlobsRepository(),
       projectDocMountLinks: new ProjectDocMountLinksRepository(),
       chatDocuments: new ChatDocumentsRepository(),
+      terminalSessions: new TerminalSessionsRepository(),
     };
     return repositories;
   } catch (error) {

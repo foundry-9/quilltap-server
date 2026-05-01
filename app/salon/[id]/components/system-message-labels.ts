@@ -8,6 +8,7 @@ const SENDER_DISPLAY_NAMES: Record<NonNullable<Message['systemSender']>, string>
   prospero: 'Prospero',
   host: 'The Host',
   commonplaceBook: 'The Commonplace Book',
+  ariel: 'Ariel',
 }
 
 const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
@@ -33,6 +34,8 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'character-image': 'character image',
   'join-scenario': 'join scenario',
   'status-change': 'status change',
+  'session-opened': 'terminal opened',
+  'session-closed': 'terminal closed',
   timestamp: 'time',
 }
 
@@ -95,7 +98,12 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
       if (c.includes('turns to the entries')) return 'relevant-memories'
       if (c.includes('opens to the pages where you have noted those present')) return 'inter-character-memories'
       return 'consolidated'
+    case 'ariel':
+      if (c.includes('opened a terminal')) return 'session-opened'
+      if (c.includes('closed')) return 'session-closed'
+      return 'terminal'
   }
+  return 'announcement'
 }
 
 export function getSystemKindDisplayLabel(message: Pick<Message, 'systemSender' | 'systemKind' | 'content'>): string {

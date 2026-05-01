@@ -115,6 +115,14 @@ import {
   formatDeleteAnnotationResults,
   type DeleteAnnotationToolContext,
 } from '@/lib/tools/handlers/delete-annotation-handler';
+import {
+  executeTerminalReadTool,
+  executeTerminalListTool,
+  formatTerminalReadResults,
+  formatTerminalListResults,
+  TerminalToolError,
+  type TerminalToolError as TerminalToolErrorType,
+} from '@/lib/tools/handlers/terminal-handler';
 
 export interface ToolCallRequest {
   name: string;
@@ -234,6 +242,9 @@ const BUILT_IN_TOOLS = new Set<string>([
   'cp_host',
   // Document editing / management / UI tools — Scriptorium Phase 3.3+
   ...DOC_EDIT_TOOL_NAMES,
+  // Terminal tools — Prospero Phase 2
+  'terminal_read',
+  'terminal_list',
 ]);
 
 export async function executeToolCallWithContext(
@@ -960,6 +971,101 @@ export async function executeToolCallWithContext(
         } : null,
         error: result.success ? undefined : result.error,
       };
+    }
+
+    // Handle terminal_read (read terminal scrollback)
+    if (toolCall.name === 'terminal_read') {
+      const terminalReadContext = {
+        userId,
+        chatId,
+        config: {},
+      };
+
+      try {
+        // Import validators at the point of use to avoid circular imports
+        const { validateTerminalReadInput } = await import('@/lib/tools/terminal-read-tool');
+
+        if (!validateTerminalReadInput(toolCall.arguments)) {
+          return {
+            toolName: 'terminal_read',
+            success: false,
+            result: null,
+            error: 'Invalid arguments for terminal_read: sessionId is required',
+          };
+        }
+
+        const result = await executeTerminalReadTool(toolCall.arguments, terminalReadContext);
+        const formattedResult = formatTerminalReadResults(result);
+
+        return {
+          toolName: 'terminal_read',
+          success: true,
+          result: {
+            formattedText: formattedResult,
+            sessionId: result.sessionId,
+            shell: result.shell,
+            cwd: result.cwd,
+            status: result.status,
+            exitCode: result.exitCode,
+            lines: result.lines,
+            truncated: result.truncated,
+            scrollback: result.scrollback,
+          },
+          error: undefined,
+        };
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error reading terminal';
+        return {
+          toolName: 'terminal_read',
+          success: false,
+          result: null,
+          error: errorMsg,
+        };
+      }
+    }
+
+    // Handle terminal_list (list terminal sessions)
+    if (toolCall.name === 'terminal_list') {
+      const terminalListContext = {
+        userId,
+        chatId,
+        config: {},
+      };
+
+      try {
+        // Import validator at the point of use to avoid circular imports
+        const { validateTerminalListInput } = await import('@/lib/tools/terminal-list-tool');
+
+        if (!validateTerminalListInput(toolCall.arguments)) {
+          return {
+            toolName: 'terminal_list',
+            success: false,
+            result: null,
+            error: 'Invalid arguments for terminal_list',
+          };
+        }
+
+        const result = await executeTerminalListTool(toolCall.arguments, terminalListContext);
+        const formattedResult = formatTerminalListResults(result);
+
+        return {
+          toolName: 'terminal_list',
+          success: true,
+          result: {
+            formattedText: formattedResult,
+            sessions: result.sessions,
+          },
+          error: undefined,
+        };
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error listing terminals';
+        return {
+          toolName: 'terminal_list',
+          success: false,
+          result: null,
+          error: errorMsg,
+        };
+      }
     }
 
     // Unknown tool

@@ -8,11 +8,20 @@ import { TokenBadge } from '@/components/chat/TokenBadge'
 import { DangerFlagBadge } from '@/components/chat/DangerFlagBadge'
 import { DangerContentWrapper } from '@/components/chat/DangerContentWrapper'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
+import { TerminalEmbed } from '@/components/terminal/TerminalEmbed'
 import { getSystemSenderDisplayName, getSystemKindDisplayLabel } from './system-message-labels'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+
+const TERMINAL_SESSION_ID_RE = /<!--\s*terminalSessionId:([0-9a-f-]+)\s*-->/i
+
+function extractTerminalSessionId(content: string | null | undefined): string | null {
+  if (!content) return null
+  const m = content.match(TERMINAL_SESSION_ID_RE)
+  return m ? m[1] : null
+}
 
 interface MessageAvatarInfo {
   name: string
@@ -57,6 +66,8 @@ interface MessageRowProps {
   onViewLLMLogs?: (messageId: string) => void
   /** Character data for tool messages */
   character?: CharacterData
+  /** Chat ID for terminal embed rendering */
+  chatId?: string
 
   // Callbacks
   onEditStart: (message: Message) => void
@@ -120,6 +131,7 @@ function MessageRowInner({
   hasLLMLogs,
   onViewLLMLogs,
   character,
+  chatId,
   onEditStart,
   onEditSave,
   onEditCancel,
@@ -276,6 +288,11 @@ function MessageRowInner({
                   <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} />
                 )}
               </DangerContentWrapper>
+              {/* Terminal embed for ariel session-opened messages */}
+              {message.systemSender === 'ariel' && message.systemKind === 'session-opened' && chatId && (() => {
+                const terminalSessionId = extractTerminalSessionId(message.content)
+                return terminalSessionId ? <div className="mt-2"><TerminalEmbed sessionId={terminalSessionId} chatId={chatId} /></div> : null
+              })()}
               {/* Danger flag badges */}
               {showDangerBadges && message.dangerFlags && (
                 <DangerFlagBadge

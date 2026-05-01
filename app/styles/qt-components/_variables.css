@@ -717,6 +717,30 @@
   --qt-response-status-sending-fg: hsl(210 70% 68%);
   --qt-response-status-streaming-fg: hsl(152 55% 62%);
   --qt-response-status-tool-fg: hsl(270 50% 68%);
+
+  /* ==========================================================================
+     TERMINAL TOKENS
+     ========================================================================== */
+  --qt-terminal-bg: #1a1a1a;
+  --qt-terminal-fg: #e6e6e6;
+  --qt-terminal-cursor: #e6e6e6;
+  --qt-terminal-selection: rgba(255, 255, 255, 0.2);
+  --qt-terminal-ansi-black: #000000;
+  --qt-terminal-ansi-red: #cd3131;
+  --qt-terminal-ansi-green: #0dbc79;
+  --qt-terminal-ansi-yellow: #e5e510;
+  --qt-terminal-ansi-blue: #2472c8;
+  --qt-terminal-ansi-magenta: #bc3fbc;
+  --qt-terminal-ansi-cyan: #11a8cd;
+  --qt-terminal-ansi-white: #e5e5e5;
+  --qt-terminal-ansi-bright-black: #666666;
+  --qt-terminal-ansi-bright-red: #f14c4c;
+  --qt-terminal-ansi-bright-green: #23d18b;
+  --qt-terminal-ansi-bright-yellow: #f5f543;
+  --qt-terminal-ansi-bright-blue: #3b8eea;
+  --qt-terminal-ansi-bright-magenta: #d670d6;
+  --qt-terminal-ansi-bright-cyan: #29b8db;
+  --qt-terminal-ansi-bright-white: #e5e5e5;
 }
 
 /* ============================================================================

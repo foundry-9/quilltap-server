@@ -229,6 +229,8 @@ import { addSummaryAnchorFieldMigration } from './add-summary-anchor-field';
 import { addSummaryAnchorMessageIdsFieldMigration } from './add-summary-anchor-message-ids-field';
 // Add truncateToDimensions + normalizeL2 columns to embedding_profiles (Matryoshka)
 import { addEmbeddingProfileTruncationFieldsMigration } from './add-embedding-profile-truncation-fields';
+// Terminal sessions table for in-chat terminal feature
+import { addTerminalSessionsTableMigration } from './add-terminal-sessions-table';
 
 /**
  * All available migrations.
@@ -662,5 +664,7 @@ export {
   addSummaryAnchorMessageIdsFieldMigration,
   // Add Matryoshka truncation columns to embedding_profiles
   addEmbeddingProfileTruncationFieldsMigration,
+  // Terminal sessions table
+  addTerminalSessionsTableMigration,
 };
 

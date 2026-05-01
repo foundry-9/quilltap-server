@@ -62,7 +62,7 @@ console.log(`    Output:  ${tarballName}`);
 console.log('');
 
 // Step 1: Clean staging directory
-console.log('==> Step 1/7: Cleaning staging directory');
+console.log('==> Step 1/8: Cleaning staging directory');
 if (existsSync(STAGING_DIR)) {
   rmSync(STAGING_DIR, { recursive: true, force: true });
 }
@@ -70,15 +70,15 @@ mkdirSync(STAGING_DIR, { recursive: true });
 
 if (!skipBuild) {
   // Step 2: Build plugins
-  console.log('==> Step 2/7: Building plugins');
+  console.log('==> Step 2/8: Building plugins');
   run('npm run build:plugins', 'Building plugins');
 
   // Step 3: Build Next.js standalone
-  console.log('==> Step 3/7: Building Next.js (standalone output)');
+  console.log('==> Step 3/8: Building Next.js (standalone output)');
   run('npx next build --webpack', 'Building Next.js');
 } else {
-  console.log('==> Step 2/7: Skipping plugin build (--skip-build)');
-  console.log('==> Step 3/7: Skipping Next.js build (--skip-build)');
+  console.log('==> Step 2/8: Skipping plugin build (--skip-build)');
+  console.log('==> Step 3/8: Skipping Next.js build (--skip-build)');
 }
 
 // Verify standalone output exists
@@ -88,11 +88,18 @@ if (!existsSync(NEXT_STANDALONE)) {
 }
 
 // Step 4: Copy standalone output
-console.log('==> Step 4/7: Copying .next/standalone/ to staging');
+console.log('==> Step 4/8: Copying .next/standalone/ to staging');
 copyDir(`${NEXT_STANDALONE}/.`, STAGING_DIR);
 
-// Step 5: Copy static assets and public files
-console.log('==> Step 5/7: Copying static assets and public files');
+// Step 4.5: Compile server.ts and overwrite Next's generated server.js
+console.log('==> Step 5/8: Compiling server.ts to custom server');
+run(
+  `npx esbuild server.ts --bundle=false --platform=node --target=node22 --format=cjs --outfile="${join(STAGING_DIR, 'server.js')}"`,
+  'Compiling server.ts with esbuild'
+);
+
+// Step 6: Copy static assets and public files
+console.log('==> Step 6/8: Copying static assets and public files');
 const staticDest = join(STAGING_DIR, '.next', 'static');
 mkdirSync(staticDest, { recursive: true });
 copyDir(`${NEXT_STATIC}/.`, staticDest);
@@ -103,8 +110,8 @@ if (existsSync(PUBLIC_DIR)) {
   copyDir(`${PUBLIC_DIR}/.`, publicDest);
 }
 
-// Step 6: Copy bundled plugins and strip native modules
-console.log('==> Step 6/7: Copying plugins and stripping native modules');
+// Step 7: Copy bundled plugins and strip native modules
+console.log('==> Step 7/8: Copying plugins and stripping native modules');
 if (existsSync(PLUGINS_DIST)) {
   const pluginsDest = join(STAGING_DIR, 'plugins', 'dist');
   mkdirSync(pluginsDest, { recursive: true });
@@ -116,8 +123,9 @@ if (existsSync(standaloneNodeModules)) {
   // Remove native-only modules — they'll be resolved from the npm package's node_modules.
   // NOTE: sharp's JS wrapper and its pure-JS dependency @img/colour are kept in the
   // tarball. Only the platform-specific native binaries (@img/sharp-*, @img/sharp-libvips-*)
-  // and better-sqlite3 (entirely native) are stripped.
-  const nativeModulesToStrip = ['better-sqlite3'];
+  // and platform-specific native modules (better-sqlite3, node-pty) are stripped.
+  // They're reinstalled on the user's machine via npm install, which compiles them for the target platform.
+  const nativeModulesToStrip = ['better-sqlite3', 'node-pty'];
   for (const mod of nativeModulesToStrip) {
     const modPath = join(standaloneNodeModules, mod);
     if (existsSync(modPath)) {
@@ -173,8 +181,8 @@ if (existsSync(standaloneNodeModules)) {
   cleanDir(standaloneNodeModules);
 }
 
-// Step 7: Create tarball
-console.log('==> Step 7/7: Creating tarball');
+// Step 8: Create tarball
+console.log('==> Step 8/8: Creating tarball');
 // Remove old tarball if it exists
 if (existsSync(tarballPath)) {
   rmSync(tarballPath, { force: true });

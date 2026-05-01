@@ -69,6 +69,9 @@ RUN rm -rf /app/plugins/dist/*/node_modules
 # NODE_OPTIONS caps V8 heap to prevent OOM-kills in memory-constrained containers
 RUN SKIP_ENV_VALIDATION=true NODE_OPTIONS="--max-old-space-size=3072" npx next build --webpack
 
+# Compile our custom server.ts → .next/standalone/server.js, overwriting Next's generated server
+RUN npx esbuild server.ts --bundle=false --platform=node --target=node22 --format=cjs --outfile=.next/standalone/server.js
+
 # Production stage — clean image WITHOUT build tools (python3/make/g++/binutils)
 FROM node:22-alpine AS production
 WORKDIR /app

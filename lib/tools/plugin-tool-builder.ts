@@ -70,6 +70,12 @@ import { docDeleteFolderTool } from '@/lib/tools/doc-delete-folder-tool';
 import { docOpenDocumentTool } from '@/lib/tools/doc-open-document-tool';
 import { docCloseDocumentTool } from '@/lib/tools/doc-close-document-tool';
 import { docFocusTool } from '@/lib/tools/doc-focus-tool';
+import {
+  terminalReadToolDefinition,
+} from '@/lib/tools/terminal-read-tool';
+import {
+  terminalListToolDefinition,
+} from '@/lib/tools/terminal-list-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -325,6 +331,10 @@ export async function buildToolsForProvider(
   universalTools.push(upsertAnnotationToolDefinition as UniversalTool);
   universalTools.push(deleteAnnotationToolDefinition as UniversalTool);
   universalTools.push(searchScriptoriumToolDefinition as UniversalTool);
+
+  // Terminal tools (always enabled for Prospero - read-only terminal inspection)
+  universalTools.push(terminalListToolDefinition as UniversalTool);
+  universalTools.push(terminalReadToolDefinition as UniversalTool);
 
   // Add whisper tool if enabled (multi-character chats only)
   if (options.whisper) {

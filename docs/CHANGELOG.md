@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Added in-chat terminal sessions (Ariel)
+
+Open a real PTY shell inside a Salon chat via xterm.js + node-pty over a custom WebSocket server. Sessions are scoped to the chat and end when the chat is deleted. LLM access is read-only via new `terminal_read` and `terminal_list` tools; only the user can type into the terminal. New `ariel` systemSender announces session open/close.
+
 #### Added Manifesto character field
 
 Added a Manifesto field to characters: a Markdown property holding the character's basic tenets and most important facts of existence — the axiomatic core that every other field should remain consistent with. Syncs to the character vault as `manifest.md` and feeds into the per-chat system prompt (above Personality), the AI Wizard, Summon From Lore, and the Memory Optimizer.

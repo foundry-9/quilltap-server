@@ -16,7 +16,9 @@ const nextConfig = {
     '@openrouter/sdk',  // Used by lib/llm/pricing-fetcher.ts (dynamically imported, optional)
     'zod',              // Used throughout the app
     'better-sqlite3',   // Native module for SQLite database
+    'node-pty',         // Native module for terminal control
     'sharp',            // Native image processing (platform-specific binaries)
+    'ws',               // WebSocket library for terminal streaming
   ],
 
   // Include dependencies in standalone output for Docker deployments
@@ -27,8 +29,11 @@ const nextConfig = {
       './node_modules/@openrouter/**/*',
       './node_modules/zod/**/*',
       './node_modules/better-sqlite3/**/*',
+      './node_modules/node-pty/**/*',
       './node_modules/sharp/**/*',
+      './node_modules/ws/**/*',
       './node_modules/@img/**/*',
+      './node_modules/@xterm/**/*',
       './first-startup/**/*',
       './themes/bundled/**/*',
     ],
@@ -121,6 +126,8 @@ const nextConfig = {
       net: { browser: './lib/stubs/empty.js' },
       tls: { browser: './lib/stubs/empty.js' },
       'better-sqlite3': { browser: './lib/stubs/empty.js' },
+      'node-pty': { browser: './lib/stubs/empty.js' },
+      'ws': { browser: './lib/stubs/empty.js' },
     },
   },
 
@@ -134,6 +141,8 @@ const nextConfig = {
         net: false,
         tls: false,
         'better-sqlite3': false,
+        'node-pty': false,
+        'ws': false,
       };
     } else {
       // Mark native modules as external on server to prevent bundling
@@ -146,6 +155,12 @@ const nextConfig = {
           }
           // Exclude native modules from bundling
           if (request === 'better-sqlite3') {
+            return callback(null, `commonjs ${request}`);
+          }
+          if (request === 'node-pty') {
+            return callback(null, `commonjs ${request}`);
+          }
+          if (request === 'ws') {
             return callback(null, `commonjs ${request}`);
           }
           // Preserve node:module so createRequire works at runtime for dynamic plugin loading

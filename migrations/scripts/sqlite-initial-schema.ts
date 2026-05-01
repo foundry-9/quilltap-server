@@ -151,6 +151,28 @@ export const SQLITE_TABLES = [
       `CREATE UNIQUE INDEX IF NOT EXISTS "idx_chat_documents_unique" ON "chat_documents" ("chatId", "filePath", "scope", "mountPoint")`,
     ],
   },
+  // Terminal sessions (in-chat terminal feature: session metadata and transcripts)
+  {
+    name: 'terminal_sessions',
+    sql: `CREATE TABLE IF NOT EXISTS "terminal_sessions" (
+      "id" TEXT PRIMARY KEY,
+      "chatId" TEXT NOT NULL,
+      "label" TEXT,
+      "shell" TEXT NOT NULL,
+      "cwd" TEXT NOT NULL,
+      "startedAt" TEXT NOT NULL,
+      "exitedAt" TEXT,
+      "exitCode" INTEGER,
+      "transcriptPath" TEXT,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL,
+      FOREIGN KEY ("chatId") REFERENCES "chats" ("id") ON DELETE CASCADE
+    )`,
+    indexes: [
+      `CREATE INDEX IF NOT EXISTS "idx_terminal_sessions_chatId" ON "terminal_sessions" ("chatId")`,
+      `CREATE INDEX IF NOT EXISTS "idx_terminal_sessions_startedAt" ON "terminal_sessions" ("startedAt" DESC)`,
+    ],
+  },
   // Conversation annotations (Scriptorium: per-message annotations by characters)
   {
     name: 'conversation_annotations',

@@ -43,6 +43,8 @@ interface VirtualizedMessageListProps {
   userParticipantId: string | null
   isPaused: boolean
   respondingParticipantId: string | null
+  /** Chat ID for terminal embed rendering */
+  chatId: string
   // Message actions - signatures match useMessageActions return type
   messageActions: {
     startEdit: (message: Message) => void
@@ -120,6 +122,7 @@ export function VirtualizedMessageList({
   userParticipantId,
   isPaused,
   respondingParticipantId,
+  chatId,
   messageActions,
   turnManagement,
   setEditContent,
@@ -265,6 +268,7 @@ export function VirtualizedMessageList({
                   dangerousContentSettings={chatSettings?.dangerousContentSettings}
                   onOverrideDangerFlag={onOverrideDangerFlag}
                   character={getCharacterForMessage(message)}
+                  chatId={chatId}
                   onEditStart={messageActions.startEdit}
                   onEditSave={messageActions.saveEdit}
                   onEditCancel={messageActions.cancelEdit}

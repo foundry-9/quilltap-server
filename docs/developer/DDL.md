@@ -366,6 +366,38 @@ CREATE INDEX "idx_chat_documents_chatId" ON "chat_documents" ("chatId");
 CREATE UNIQUE INDEX "idx_chat_documents_unique" ON "chat_documents" ("chatId", "filePath", "scope", "mountPoint");
 ```
 
+### terminal_sessions
+
+```sql
+CREATE TABLE "terminal_sessions" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "label" TEXT,
+  "shell" TEXT NOT NULL,
+  "cwd" TEXT NOT NULL,
+  "startedAt" TEXT NOT NULL,
+  "exitedAt" TEXT,
+  "exitCode" INTEGER,
+  "transcriptPath" TEXT,
+  FOREIGN KEY ("chatId") REFERENCES "chats" ("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_terminal_sessions_chatId" ON "terminal_sessions" ("chatId");
+CREATE INDEX "idx_terminal_sessions_startedAt" ON "terminal_sessions" ("startedAt" DESC);
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| id | TEXT (UUID) | Primary key |
+| chatId | TEXT (UUID) | Chat this session belongs to; cascade deletes when chat is deleted |
+| label | TEXT (nullable) | Optional user-provided label for the session |
+| shell | TEXT | Shell executable name (e.g., `bash`, `zsh`) |
+| cwd | TEXT | Working directory when session was started |
+| startedAt | TEXT (ISO 8601) | Session creation timestamp |
+| exitedAt | TEXT (ISO 8601, nullable) | Session exit timestamp; `null` if session is still active |
+| exitCode | INTEGER (nullable) | Process exit code; `null` if session is still active |
+| transcriptPath | TEXT (nullable) | Relative path to transcript file if recorded; `null` if not recorded |
+
 ### conversation_annotations
 
 ```sql

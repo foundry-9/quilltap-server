@@ -96,6 +96,8 @@ interface ChatComposerProps {
   onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
   /** Current roleplay template narration delimiters (e.g. '*' or ['[', ']']) */
   narrationDelimiters?: NarrationDelimiters
+  /** Callback to open a new terminal session */
+  onOpenTerminalClick?: () => void
 }
 
 export function ChatComposer({
@@ -159,6 +161,7 @@ export function ChatComposer({
   hideStopButton = false,
   onPendingToolResult,
   narrationDelimiters,
+  onOpenTerminalClick,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const toolPaletteToggleRef = useRef<HTMLButtonElement>(null)
@@ -466,6 +469,23 @@ export function ChatComposer({
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Open Terminal button */}
+              {onOpenTerminalClick && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onOpenTerminalClick()
+                  }}
+                  className="qt-chat-toolbar-button"
+                  title="Open terminal"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </button>
               )}
