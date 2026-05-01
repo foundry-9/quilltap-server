@@ -89,6 +89,10 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
     parts.push(processTemplate(systemPromptContent, templateContext))
   }
 
+  if (character.manifesto) {
+    parts.push(`\n## Character Manifesto\n${processTemplate(character.manifesto, templateContext)}`)
+  }
+
   if (character.personality) {
     parts.push(`\n## Character Personality\n${processTemplate(character.personality, templateContext)}`)
   }

@@ -49,7 +49,7 @@ Watch the AI work through each extraction step:
 | Step | What It Does |
 |------|-------------|
 | Analyzing Source Material | Summarizes large source documents (only for long texts) |
-| Extracting Character Basics | Name, title, identity, description, personality, and an initial scenario (title and content) |
+| Extracting Character Basics | Name, title, identity, description, manifesto, personality, and an initial scenario (title and content) |
 | Generating Dialogue | First message and example dialogue exchanges |
 | Creating System Prompts | Instructions for AI roleplay behavior |
 | Describing Appearance | Physical descriptions at 5 detail levels for image generation |
@@ -77,14 +77,15 @@ Three actions are available:
 
 ## Field Vantage Points
 
-Summon From Lore distinguishes four character fields by *vantage point*. The AI is instructed not to mix them up — the same trait should not appear in two fields.
+Summon From Lore distinguishes five character fields by *vantage point*. The AI is instructed not to mix them up — the same trait should not appear in two fields.
 
 - **Identity** — outside view; what strangers know on sight or by reputation (name, station, occupation, public reputation). Never private mannerisms or appearance.
 - **Description** — acquaintance view; behaviour, mannerisms, frequent verbal patterns. Never physical appearance — that lives in physical descriptions.
+- **Manifesto** — axiomatic core; the character's foundational tenets and most important facts of existence. Load-bearing truths that every other field should remain consistent with. Never opinions or trends.
 - **Personality** — internal view; the character's own self-knowledge, inner drivers, motivations, beliefs.
 - **Physical descriptions** — appearance only; generated as a separate step in five detail levels.
 
-If your source material describes a character's looks, those details flow into the physical descriptions, not into the description field.
+If your source material describes a character's looks, those details flow into the physical descriptions, not into the description field. Similarly, foundational tenets (core beliefs, immutable principles) flow into the manifesto, not into personality or description.
 
 ## Tips
 

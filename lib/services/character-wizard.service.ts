@@ -36,6 +36,7 @@ export interface WizardRequest {
     title?: string;
     identity?: string;
     description?: string;
+    manifesto?: string;
     personality?: string;
     scenarios?: Array<{ id: string; title: string; content: string }>;
     exampleDialogues?: string;
@@ -47,6 +48,7 @@ export interface WizardRequest {
     | 'title'
     | 'identity'
     | 'description'
+    | 'manifesto'
     | 'personality'
     | 'scenarios'
     | 'exampleDialogues'
@@ -132,6 +134,19 @@ Strict rules:
 - Do NOT write the character's private inner monologue or self-knowledge — that belongs in PERSONALITY.
 
 Write in third person, present tense. Be vivid and specific about behaviour, not appearance.`,
+
+  manifesto: `${FIELD_SEMANTICS_PREAMBLE}
+
+Write the MANIFESTO field for this character: the basic tenets, the axiomatic core that every other field should remain consistent with. Short, declarative, foundational statements. If a fact would be devastating to contradict, it belongs here.
+
+Strict rules:
+- Focus on load-bearing truths — the foundational facts that define the character at the deepest level.
+- Use clear, contradiction-resistant language.
+- Avoid flowery prose; favour declarative statements.
+- Not a vantage-point field — nobody "sees" the manifesto, it is the truth the character is built on.
+- Every other field (identity, description, personality, physical, dialogues) should remain consistent with this.
+
+Format as a bulleted list of 3-5 core tenets.`,
 
   personality: `${FIELD_SEMANTICS_PREAMBLE}
 
@@ -295,6 +310,7 @@ ${documentContent}
     if (existingData.title?.trim()) existingFields.push(`Title: ${existingData.title}`);
     if (existingData.identity?.trim()) existingFields.push(`Identity: ${existingData.identity}`);
     if (existingData.description?.trim()) existingFields.push(`Description: ${existingData.description}`);
+    if (existingData.manifesto?.trim()) existingFields.push(`Manifesto: ${existingData.manifesto}`);
     if (existingData.personality?.trim()) existingFields.push(`Personality: ${existingData.personality}`);
     if (existingData.scenarios && existingData.scenarios.length > 0) {
       const scenarioLines = existingData.scenarios.map(s => `  - ${s.title}: ${s.content}`).join('\n');

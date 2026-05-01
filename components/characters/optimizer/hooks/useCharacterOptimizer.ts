@@ -327,6 +327,7 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
         const simpleFields = [
           'identity',
           'description',
+          'manifesto',
           'personality',
           'exampleDialogues',
           'talkativeness',

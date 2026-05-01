@@ -275,6 +275,7 @@
         "title": { "type": "string" },
         "identity": { "type": "string" },
         "description": { "type": "string" },
+        "manifesto": { "type": "string" },
         "personality": { "type": "string" },
         "scenario": { "type": "string" },
         "scenarios": {

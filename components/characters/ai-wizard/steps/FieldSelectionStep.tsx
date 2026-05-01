@@ -38,6 +38,7 @@ export function FieldSelectionStep({
     'title',
     'identity',
     'description',
+    'manifesto',
     'personality',
     'scenarios',
     'exampleDialogues',

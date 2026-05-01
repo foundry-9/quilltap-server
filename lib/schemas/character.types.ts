@@ -129,6 +129,15 @@ export const CharacterSchema = z.object({
    */
   description: z.string().nullable().optional(),
   /**
+   * The basic tenets — the most important facts of the character's existence.
+   * The axiomatic core that every other field (identity, description,
+   * personality, physical, dialogues) should remain consistent with. Not a
+   * vantage-point field; nobody "sees" the manifesto, it is the load-bearing
+   * truth the character is built on. Synced as `manifest.md` in the character
+   * vault.
+   */
+  manifesto: z.string().nullable().optional(),
+  /**
    * What the character knows about themselves. The internal driver of speech
    * and behaviour. Other characters don't see this unless the character shares
    * it. Distinct from `description` (outward-facing behaviour) and `identity`

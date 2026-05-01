@@ -185,6 +185,7 @@ If you want AI to generate content:
      - ☐ Title
      - ☐ Identity (outside view — what strangers know on sight)
      - ☐ Description (acquaintance view — behaviour and mannerisms, not appearance)
+     - ☐ Manifesto (axiomatic core — load-bearing truths and basic tenets)
      - ☐ Personality (internal view — self-knowledge and inner drivers)
      - ☐ Scenarios
      - ☐ Example Dialogues
@@ -192,7 +193,7 @@ If you want AI to generate content:
      - ☐ Physical Description (appearance only)
      - ☐ Wardrobe Items
    - Leave others blank for manual entry
-   - The wizard treats Identity, Description, Personality, and Physical Description as four distinct vantage points — the same trait won't be repeated across them.
+   - The wizard treats Identity, Description, Manifesto, Personality, and Physical Description as distinct vantage points — the same trait won't be repeated across them.
 8. **Step 4: Review and Generate**
    - AI generates selected content
    - Review generated text

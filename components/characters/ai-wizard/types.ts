@@ -19,6 +19,7 @@ export type GeneratableField =
   | 'title'
   | 'identity'
   | 'description'
+  | 'manifesto'
   | 'personality'
   | 'scenarios'
   | 'exampleDialogues'
@@ -54,6 +55,7 @@ export interface GeneratedCharacterData {
   title?: string
   identity?: string
   description?: string
+  manifesto?: string
   personality?: string
   scenarios?: Array<{ title: string; content: string }> | string  // string when LLM returns unparseable JSON
   exampleDialogues?: string
@@ -134,6 +136,7 @@ export interface AIWizardRequest {
     title?: string
     identity?: string
     description?: string
+    manifesto?: string
     personality?: string
     scenarios?: Array<{ id: string; title: string; content: string }>
     exampleDialogues?: string
@@ -166,6 +169,7 @@ export interface AIWizardModalProps {
     title?: string
     identity?: string
     description?: string
+    manifesto?: string
     personality?: string
     scenarios?: Array<{ id: string; title: string; content: string }>
     exampleDialogues?: string
@@ -229,6 +233,7 @@ export const FIELD_LABELS: Record<GeneratableField, string> = {
   title: 'Title',
   identity: 'Identity',
   description: 'Description',
+  manifesto: 'Manifesto',
   personality: 'Personality',
   scenarios: 'Scenarios',
   exampleDialogues: 'Example Dialogues',
@@ -242,6 +247,7 @@ export const FIELD_DESCRIPTIONS: Record<GeneratableField, string> = {
   title: 'A short epithet or title (e.g., "The Wanderer")',
   identity: 'Outside-view facts a stranger could know on sight: station, occupation, public reputation',
   description: 'How acquaintances perceive the character: behaviour, mannerisms, verbal patterns (not appearance)',
+  manifesto: 'The foundational tenets—the basic truths that anchor the character',
   personality: 'The character\'s own self-knowledge: inner drivers, motivations, beliefs',
   scenarios: 'Generate 2-3 named scenarios with distinct settings and contexts for interactions',
   exampleDialogues: 'Example conversations to guide AI responses',

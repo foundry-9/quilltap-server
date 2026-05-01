@@ -149,12 +149,13 @@ export function CharacterBasicInfo({
             </label>
             <p className="text-xs qt-text-secondary mt-1">
               When on, the character&rsquo;s basic properties (aliases, pronouns, title, first
-              message, talkativeness), description, personality, example dialogues, first physical
+              message, talkativeness), description, manifesto, personality, example dialogues, first physical
               description plus its prompts, named system prompt variants, named scenarios, and
               wardrobe items plus outfit presets are all read live from files inside the linked
               Scriptorium vault
               (<code className="mx-1">properties.json</code>,
               <code className="mx-1">description.md</code>,
+              <code className="mx-1">manifesto.md</code>,
               <code className="mx-1">personality.md</code>,
               <code className="mx-1">example-dialogues.md</code>,
               <code className="mx-1">physical-description.md</code>,
@@ -380,6 +381,22 @@ export function CharacterBasicInfo({
           rows={4}
           className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           placeholder="How acquaintances perceive the character — behaviour, mannerisms, verbal patterns. Not physical appearance."
+        />
+      </div>
+
+      {/* Manifesto Field */}
+      <div>
+        <label htmlFor="manifesto" className="block qt-text-label mb-2">
+          Manifesto (Optional)
+        </label>
+        <textarea
+          id="manifesto"
+          name="manifesto"
+          value={formData.manifesto}
+          onChange={onChange}
+          rows={4}
+          className="w-full rounded-lg border qt-border-default qt-bg-card px-3 py-2 text-foreground qt-shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          placeholder="The foundational tenets of this character — the basic truths that anchor everything else. What this character is, at root."
         />
       </div>
 

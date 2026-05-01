@@ -17,6 +17,7 @@ interface Character {
   id: string
   name: string
   description?: string | null
+  manifesto?: string | null
   personality?: string | null
   scenarios?: Array<{ id: string; title: string; content: string }>
   firstMessage?: string | null
@@ -36,6 +37,7 @@ interface UserCharacter {
   aliases?: string[]
   pronouns?: { subject: string; object: string; possessive: string }
   description?: string | null
+  manifesto?: string | null
   personality?: string | null
 }
 
@@ -79,6 +81,7 @@ export async function buildChatContext(
         aliases: uc.aliases && uc.aliases.length > 0 ? uc.aliases : undefined,
         pronouns: uc.pronouns || undefined,
         description: uc.description,
+        manifesto: uc.manifesto,
         personality: uc.personality,
       }
 
@@ -93,6 +96,7 @@ export async function buildChatContext(
         aliases: defaultPartner.aliases && defaultPartner.aliases.length > 0 ? defaultPartner.aliases : undefined,
         pronouns: defaultPartner.pronouns || undefined,
         description: defaultPartner.description,
+        manifesto: defaultPartner.manifesto,
         personality: defaultPartner.personality,
       }
 
@@ -193,6 +197,11 @@ function buildSystemPrompt({
   // Add character description (with templates processed)
   if (processedCharacter.description) {
     prompt += `\n\nCharacter Description:\n${processedCharacter.description}`
+  }
+
+  // Add manifesto (with templates processed)
+  if (processedCharacter.manifesto) {
+    prompt += `\n\nManifesto:\n${processedCharacter.manifesto}`
   }
 
   // Add personality (with templates processed)

@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Added Manifesto character field
+
+Added a Manifesto field to characters: a Markdown property holding the character's basic tenets and most important facts of existence — the axiomatic core that every other field should remain consistent with. Syncs to the character vault as `manifest.md` and feeds into the per-chat system prompt (above Personality), the AI Wizard, Summon From Lore, and the Memory Optimizer.
+
 #### Embedding profiles gain Matryoshka truncation + L2-normalize controls
 
 Embedding profiles can now slice the provider's raw vector to a configured length before storage. For Matryoshka-trained models like Qwen3-Embedding the first N components are themselves a valid embedding at dimension N, so truncating 4096d to 1024d cuts storage and cosine-search work to a quarter with negligible quality loss — and no provider call required.

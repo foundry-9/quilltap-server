@@ -3,8 +3,8 @@
  *
  * Builds and caches the per-participant character-identity stack on
  * `chats.compiledIdentityStacks`. The cached artifact is the bulk of the
- * per-turn system prompt — preamble, base prompt, personality, aliases,
- * pronouns, physical descriptions, example dialogues — with the chat-level
+ * per-turn system prompt — preamble, base prompt, manifesto, personality,
+ * aliases, pronouns, physical descriptions, example dialogues — with the chat-level
  * `{{user}}`, `{{scenario}}`, and `{{persona}}` template variables resolved.
  *
  * The per-turn `buildSystemPrompt` consumes the cached stack and wraps it
@@ -18,8 +18,8 @@
  *   - Participant `selectedSystemPromptId` changed (recompile that one).
  *   - Chat `scenarioText` changed (recompile every LLM character).
  *
- * Edits to the underlying character record (name, personality, aliases,
- * pronouns, physical descriptions, example dialogues, systemPrompts) are NOT
+ * Edits to the underlying character record (name, manifesto, personality,
+ * aliases, pronouns, physical descriptions, example dialogues, systemPrompts) are NOT
  * auto-invalidated — that fan-out across chats is its own design pass.
  * Read-through fallback in `buildSystemPrompt` ensures correctness when the
  * cache is missing or stale: the stack is rebuilt from current data and used

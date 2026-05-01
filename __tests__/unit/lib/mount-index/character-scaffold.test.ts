@@ -84,7 +84,7 @@ describe('scaffoldCharacterMount', () => {
 
     const result = await scaffoldCharacterMount(MOUNT_ID);
 
-    expect(result).toEqual({ filesCreated: 7, filesSkipped: 0, foldersCreated: 7 });
+    expect(result).toEqual({ filesCreated: 8, filesSkipped: 0, foldersCreated: 7 });
     expect(ensureFolderPathMock).toHaveBeenCalledTimes(7);
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Prompts');
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'Scenarios');
@@ -94,9 +94,10 @@ describe('scaffoldCharacterMount', () => {
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'images');
     expect(ensureFolderPathMock).toHaveBeenCalledWith(MOUNT_ID, 'files');
 
-    expect(writeDatabaseDocumentMock).toHaveBeenCalledTimes(7);
+    expect(writeDatabaseDocumentMock).toHaveBeenCalledTimes(8);
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'identity.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'description.md', '');
+    expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'manifest.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'personality.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'physical-description.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'example-dialogues.md', '');
@@ -185,7 +186,7 @@ describe('scaffoldCharacterMount', () => {
 
     const result = await scaffoldCharacterMount(MOUNT_ID);
 
-    expect(result.filesCreated).toBe(5);
+    expect(result.filesCreated).toBe(6);
     expect(result.filesSkipped).toBe(2);
     expect(result.foldersCreated).toBe(5);
 

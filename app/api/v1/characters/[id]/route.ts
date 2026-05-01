@@ -56,6 +56,7 @@ const updateCharacterSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   title: z.string().optional(),
   description: z.string().optional(),
+  manifesto: z.string().nullable().optional(),
   personality: z.string().optional(),
   scenarios: z
     .array(
@@ -807,6 +808,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(async (req,
           mountPointId: mountId,
           syncedProperties: snapshot.aliases !== undefined,
           syncedDescription: snapshot.description !== undefined,
+          syncedManifesto: snapshot.manifesto !== undefined,
           syncedPersonality: snapshot.personality !== undefined,
           syncedExampleDialogues: snapshot.exampleDialogues !== undefined,
           syncedPhysical: snapshot.physicalDescriptions !== undefined,

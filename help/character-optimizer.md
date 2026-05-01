@@ -103,6 +103,7 @@ The optimizer may propose changes to:
 
 - **Identity** — The surface, public-knowledge view of the character: name, station, occupation, reputation. What strangers know on sight or by hearsay.
 - **Description** — How acquaintances perceive the character: behaviour, mannerisms, frequent verbal patterns. Not physical appearance, not internal monologue.
+- **Manifesto** — The character's axiomatic core and load-bearing truths. *Suggestions are rare and high-stakes.* The optimizer only proposes manifesto edits when memory contradicts a basic tenet or reveals a foundational fact not yet captured — never for stylistic improvements. Manifesto instability is treated as a red flag warranting careful review.
 - **Personality** — The character's own self-knowledge: the internal driver of speech and behaviour. Not visible to others unless shared.
 - **Scenarios** — Updates to the content of existing named scenarios where the established description no longer reflects how the character actually behaves in that context, or an entirely new scenario with a title and content if the memories reveal a recurring setting not yet catalogued
 - **Example Dialogues** — Sample conversations demonstrating voice

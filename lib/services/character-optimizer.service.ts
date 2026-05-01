@@ -31,7 +31,7 @@ import type { Character, CharacterScenario, CharacterSystemPrompt, Memory } from
 
 export interface OptimizerSuggestion {
   id: string;
-  field: 'identity' | 'description' | 'personality' | 'scenarios' | 'exampleDialogues' | 'systemPrompt' | 'physicalDescription' | 'clothingRecord' | 'talkativeness';
+  field: 'identity' | 'description' | 'manifesto' | 'personality' | 'scenarios' | 'exampleDialogues' | 'systemPrompt' | 'physicalDescription' | 'clothingRecord' | 'talkativeness';
   subId?: string;
   subName?: string;
   title?: string;
@@ -154,6 +154,9 @@ export function buildCharacterContext(character: Character): string {
     '',
     `Description:`,
     character.description || '(empty)',
+    '',
+    `Manifesto:`,
+    character.manifesto || '(empty)',
     '',
     `Personality:`,
     character.personality || '(empty)',
@@ -286,6 +289,7 @@ Based on the behavioral analysis below and the character's current configuration
 
   - identity (public-knowledge / outside-view facts only — name, station, occupation, reputation)
   - description (behavior, mannerisms, verbal patterns visible to interlocutors)
+  - manifesto (the basic tenets, the axiomatic core; not a vantage-point field, it is the load-bearing truth the character is built on)
   - personality (the character's own self-knowledge; inner drivers of speech and behavior)
   - exampleDialogues
   - talkativeness (a number between 0.1 and 1.0)
@@ -293,6 +297,7 @@ Based on the behavioral analysis below and the character's current configuration
 The vantage-point rule is strict:
 - A suggestion for IDENTITY may only contain facts a stranger could plausibly know without having spoken to the character. Never put internal motivation, private mannerisms, or self-knowledge here.
 - A suggestion for DESCRIPTION must reflect things someone who has interacted with the character would notice — not the character's own internal monologue, and not surface-level public reputation.
+- A suggestion for MANIFESTO should be rare and high-stakes — propose manifesto changes only when the memory contradicts a basic tenet, not for tonal or stylistic improvements. Manifesto edits reverberate across every other field.
 - A suggestion for PERSONALITY must reflect the character's own self-knowledge and inner drivers. Never put outward behavior someone else would observe here, and never put public-facing identity facts.
 - Do NOT propose the same content under two different fields. Pick the one whose vantage point matches.
 - Do NOT suggest edits to title, scenarios, system prompts, physical descriptions, or clothing records in this response — those are out of scope for this pass (scenarios and system prompts are handled by separate passes).
@@ -1031,6 +1036,7 @@ function groupSuggestionsForReport(suggestions: OptimizerSuggestion[]): Suggesti
     } else if (
       s.field === 'identity' ||
       s.field === 'description' ||
+      s.field === 'manifesto' ||
       s.field === 'personality' ||
       s.field === 'exampleDialogues' ||
       s.field === 'talkativeness'
@@ -1067,6 +1073,8 @@ function describeSuggestion(s: OptimizerSuggestion): string {
       return 'Identity';
     case 'description':
       return 'Description';
+    case 'manifesto':
+      return 'Manifesto';
     case 'personality':
       return 'Personality';
     case 'exampleDialogues':

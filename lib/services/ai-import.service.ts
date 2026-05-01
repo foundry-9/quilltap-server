@@ -78,6 +78,7 @@ export interface AIImportStepResults {
     title?: string;
     identity?: string;
     description?: string;
+    manifesto?: string;
     personality?: string;
     scenario?: string;
   };
@@ -162,6 +163,7 @@ Respond with JSON:
   "title": "A short epithet or title (2-5 words, like 'The Wandering Scholar')",
   "identity": "1-2 paragraphs of public-knowledge / outside-view facts only — name, station, occupation, public reputation, signifying outward facts a stranger could plausibly know without having spoken to the character. Never internal motivation, never private mannerisms, never physical appearance.",
   "description": "1-2 paragraphs of what someone who has interacted with the character would notice — behaviour, mannerisms, frequent verbal patterns, conversational tics. NOT physical appearance (that lives in physicalDescriptions). NOT the character's private inner monologue. NOT the public-facing reputation that already lives in identity. Write in third person, present tense.",
+  "manifesto": "The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Not a vantage-point field; nobody 'sees' the manifesto, it is the load-bearing truth the character is built on. Short, declarative, foundational. If a fact would be devastating to contradict, it belongs here.",
   "personality": "1-2 paragraphs of the character's own self-knowledge — inner drivers of speech and behaviour, motivations, beliefs, emotional tendencies, things only the character knows about themselves unless they choose to share them. Never put outward behaviour someone else would observe here, and never put public-facing identity facts.",
   "scenario": "1-2 paragraphs setting the default scene for interactions. Present tense, describing environment and relationship context. The scenario is the stage, not the actor — do not restate personality or appearance here."
 }
@@ -523,6 +525,7 @@ export function assembleQtapExport(
     title: basics.title || null,
     identity: basics.identity || null,
     description: basics.description || null,
+    manifesto: basics.manifesto || null,
     personality: basics.personality || null,
     scenarios: basics.scenario ? [{
       id: crypto.randomUUID(),

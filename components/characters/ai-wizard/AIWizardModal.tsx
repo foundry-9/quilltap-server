@@ -24,6 +24,7 @@ interface AIWizardModalProps {
     title?: string
     identity?: string
     description?: string
+    manifesto?: string
     personality?: string
     scenarios?: Array<{ id: string; title: string; content: string }>
     exampleDialogues?: string

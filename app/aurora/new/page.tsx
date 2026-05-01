@@ -33,6 +33,7 @@ export default function NewCharacterPage() {
     title: '',
     identity: '',
     description: '',
+    manifesto: '',
     personality: '',
     scenario: '',
     firstMessage: '',
@@ -310,6 +311,21 @@ export default function NewCharacterPage() {
             rows={4}
             className="qt-textarea"
             placeholder="How acquaintances perceive the character — behaviour, mannerisms, frequent verbal patterns. Not physical appearance (that lives in physical descriptions)."
+          />
+        </div>
+
+        <div>
+          <label htmlFor="manifesto" className="block qt-label mb-2 text-foreground">
+            Manifesto (Optional)
+          </label>
+          <textarea
+            id="manifesto"
+            name="manifesto"
+            value={formData.manifesto}
+            onChange={handleChange}
+            rows={4}
+            className="qt-textarea"
+            placeholder="The foundational tenets of this character — the basic truths that anchor everything else. What this character is, at root."
           />
         </div>
 

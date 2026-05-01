@@ -508,8 +508,8 @@ export const ChatMetadataSchema = z.object({
 
   /**
    * Phase H: precompiled per-participant identity stack — the character-static
-   * portion of the system prompt (identity preamble, base prompt, personality,
-   * aliases, pronouns, physical descriptions, example dialogues), with
+   * portion of the system prompt (identity preamble, base prompt, manifesto,
+   * personality, aliases, pronouns, physical descriptions, example dialogues), with
    * templates ({{user}}, {{scenario}}, {{persona}}) resolved at compile time.
    * Keyed by participantId. Recompiled at chat creation, on participant add,
    * on selectedSystemPromptId change, and on chat.scenarioText change. Edits
@@ -667,8 +667,8 @@ export const ChatMetadataBaseSchema = z.object({
 
   /**
    * Phase H: precompiled per-participant identity stack — the character-static
-   * portion of the system prompt (identity preamble, base prompt, personality,
-   * aliases, pronouns, physical descriptions, example dialogues), with
+   * portion of the system prompt (identity preamble, base prompt, manifesto,
+   * personality, aliases, pronouns, physical descriptions, example dialogues), with
    * templates ({{user}}, {{scenario}}, {{persona}}) resolved at compile time.
    * Keyed by participantId. Recompiled at chat creation, on participant add,
    * on selectedSystemPromptId change, and on chat.scenarioText change. Edits

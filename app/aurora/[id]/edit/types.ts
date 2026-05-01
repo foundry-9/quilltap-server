@@ -16,6 +16,7 @@ export interface Character {
   title?: string | null
   identity?: string | null
   description?: string | null
+  manifesto?: string | null
   personality?: string | null
   scenarios?: CharacterScenario[]
   firstMessage?: string | null
@@ -44,6 +45,7 @@ export interface CharacterFormData {
   title: string
   identity: string
   description: string
+  manifesto: string
   personality: string
   scenarios: CharacterScenario[]
   firstMessage: string

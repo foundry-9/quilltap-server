@@ -72,6 +72,13 @@ The Details tab contains all basic character information.
 - Click to edit. Can be lengthy and supports multiple paragraphs
 - Example: "Speaks slowly, weighs every word twice. Tends to drum two fingers on the table when stalling for time."
 
+**Manifesto**
+
+- The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field (identity, description, personality, physical, dialogues) should remain consistent with
+- Not a vantage point — nobody "sees" the Manifesto; it is the load-bearing truth the character is built on. Foundational, declarative, contradiction-resistant
+- Click to edit. A Markdown property synced to the character vault as `manifest.md`
+- Example: "She is fundamentally incapable of betrayal. She believes the strong protect the weak. She has never broken a promise."
+
 **Personality**
 
 - What the character knows about themselves — the internal driver of their speech and behaviour. Other characters don't see it unless she shares it
@@ -115,6 +122,7 @@ Each character carries a private vault in the Scriptorium — a small database-b
 | `properties.json` | **pronouns**, **aliases**, **title**, **first message**, **talkativeness** |
 | `identity.md` | **Identity** (the surface, outside-view prose field) |
 | `description.md` | **Description** (the acquaintance-view prose field) |
+| `manifest.md` | **Manifesto** (the axiomatic-core, load-bearing-truth prose field) |
 | `personality.md` | **Personality** (the inward, self-knowledge prose field) |
 | `example-dialogues.md` | **Example Dialogues** (style samples for the LLM) |
 | `physical-description.md` | The **Full Description** of the character's first (default) physical description |

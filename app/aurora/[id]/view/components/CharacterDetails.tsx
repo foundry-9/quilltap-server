@@ -119,6 +119,26 @@ export function CharacterDetails({
           </div>
         )}
 
+        {character?.manifesto && (
+          <div>
+            <h2 className="qt-heading-4 text-foreground mb-2">
+              Manifesto
+              {(templateCounts.fieldCounts.manifesto?.char > 0 || templateCounts.fieldCounts.manifesto?.user > 0) && (
+                <span className="ml-2 text-xs font-normal qt-text-xs">
+                  (template replacements available)
+                </span>
+              )}
+            </h2>
+            <div className="qt-text-small">
+              <TemplateDisplay
+                content={character.manifesto}
+                characterName={character.name}
+                userCharacterName={defaultPartnerName}
+              />
+            </div>
+          </div>
+        )}
+
         {character?.personality && (
           <div>
             <h2 className="qt-heading-4 text-foreground mb-2">

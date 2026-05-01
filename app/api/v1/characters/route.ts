@@ -50,6 +50,7 @@ const createCharacterSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   title: z.string().optional(),
   description: z.string().optional(),
+  manifesto: z.string().optional(),
   personality: z.string().optional(),
   scenarios: z
     .array(
@@ -128,6 +129,7 @@ const wizardRequestSchema = z.object({
     .object({
       title: z.string().optional(),
       description: z.string().optional(),
+      manifesto: z.string().optional(),
       personality: z.string().optional(),
       scenarios: z.array(z.object({ id: z.string(), title: z.string(), content: z.string() })).optional(),
       exampleDialogues: z.string().optional(),
@@ -140,6 +142,7 @@ const wizardRequestSchema = z.object({
       'name',
       'title',
       'description',
+      'manifesto',
       'personality',
       'scenarios',
       'exampleDialogues',
@@ -431,6 +434,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     name: validatedData.name,
     title: validatedData.title || null,
     description: validatedData.description || null,
+    manifesto: validatedData.manifesto || null,
     personality: validatedData.personality || null,
     scenarios: normalizedScenarios,
     firstMessage: validatedData.firstMessage || null,
@@ -477,6 +481,7 @@ async function handleQuickCreate(req: NextRequest, context: AuthenticatedContext
     name: validatedData.name,
     title: null,
     description: 'Character created during chat import',
+    manifesto: null,
     personality: null,
     scenarios: [],
     firstMessage: null,

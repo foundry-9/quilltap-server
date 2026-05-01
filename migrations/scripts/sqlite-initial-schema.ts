@@ -52,6 +52,7 @@ export const SQLITE_TABLES = [
       "title" TEXT,
       "identity" TEXT,
       "description" TEXT,
+      "manifesto" TEXT,
       "personality" TEXT,
       "scenario" TEXT,
       "firstMessage" TEXT,

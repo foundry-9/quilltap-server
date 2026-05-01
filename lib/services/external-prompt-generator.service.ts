@@ -266,6 +266,12 @@ function buildUserMessage(
     parts.push('');
   }
 
+  if (character.manifesto) {
+    parts.push('## Manifesto');
+    parts.push(character.manifesto);
+    parts.push('');
+  }
+
   if (character.personality) {
     parts.push('## Personality');
     parts.push(character.personality);
