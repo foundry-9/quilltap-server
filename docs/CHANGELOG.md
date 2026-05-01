@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Fix: terminal_list tool returned empty results for chats with live sessions
+
+`TerminalSessionSchema` declared `label`, `exitedAt`, `exitCode`, and `transcriptPath` with bare `.nullable()`, but the SQLite hydration layer converts NULL → `undefined` to play nice with `.optional()` schemas. Every read silently failed Zod validation and the row was dropped, so `findByChatId` returned `[]` even when sessions existed. Switched the four fields to `.nullable().optional()` (matches the rest of the codebase) and updated the call sites that compared with `=== null` to use `==`/`!=` so the live/exited check still works.
+
 #### Fix: custom dev server (server.ts) now serves Next dev features properly
 
 The custom server's upgrade handler was calling `socket.destroy()` for any upgrade path that wasn't a terminal stream, which killed Next's HMR / dev RSC / devtools WebSocket connections (Next attaches its own listener to the same `http.Server`). Pages would render once and then sit on a dead HMR socket — no compile feedback, no fast refresh. Fixed by `return`ing instead of destroying for non-terminal paths so Next's listener gets the event. Also passed `httpServer: server` to `next({...})` so Next can attach its upgrade listener at prepare time rather than lazily on the first request. Verified `/_next/webpack-hmr` returns 101 + `turbopack-connected` + `sync` frames after the fix. Swapped scripts: `dev` is now `tsx server.ts` (the custom server, default for development); `dev:next` is the bare `next dev --turbopack` for cases where the custom server gets in the way.

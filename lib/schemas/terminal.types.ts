@@ -20,13 +20,13 @@ import { UUIDSchema, TimestampSchema } from './common.types';
 export const TerminalSessionSchema = z.object({
   id: UUIDSchema,
   chatId: UUIDSchema,
-  label: z.string().nullable(),
+  label: z.string().nullable().optional(),
   shell: z.string(),
   cwd: z.string(),
   startedAt: TimestampSchema,
-  exitedAt: TimestampSchema.nullable(),
-  exitCode: z.number().int().nullable(),
-  transcriptPath: z.string().nullable(),
+  exitedAt: TimestampSchema.nullable().optional(),
+  exitCode: z.number().int().nullable().optional(),
+  transcriptPath: z.string().nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

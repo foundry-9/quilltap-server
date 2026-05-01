@@ -60,7 +60,7 @@ export async function executeTerminalReadTool(
 
   const liveSession = ptyManager.get(input.sessionId);
 
-  if (liveSession && session.exitedAt === null) {
+  if (liveSession && session.exitedAt == null) {
     const ringBuffer = ptyManager.getRingBuffer(input.sessionId);
     if (ringBuffer) {
       const result = tailLines(ringBuffer, lines);
@@ -84,7 +84,7 @@ export async function executeTerminalReadTool(
     }
   }
 
-  const status = session.exitedAt === null ? 'live' : 'exited';
+  const status = session.exitedAt == null ? 'live' : 'exited';
 
   moduleLogger.debug('Terminal read executed', {
     sessionId: input.sessionId,
@@ -98,7 +98,7 @@ export async function executeTerminalReadTool(
     shell: session.shell,
     cwd: session.cwd,
     status,
-    exitCode: session.exitCode,
+    exitCode: session.exitCode ?? null,
     lines: tailCount,
     truncated,
     scrollback,
@@ -119,12 +119,12 @@ export async function executeTerminalListTool(
   const output: TerminalListOutput = {
     sessions: sessions.map((session) => ({
       sessionId: session.id,
-      label: session.label,
+      label: session.label ?? null,
       shell: session.shell,
       cwd: session.cwd,
       startedAt: session.startedAt,
-      status: session.exitedAt === null ? 'live' : 'exited',
-      exitCode: session.exitCode,
+      status: session.exitedAt == null ? 'live' : 'exited',
+      exitCode: session.exitCode ?? null,
     })),
   };
 

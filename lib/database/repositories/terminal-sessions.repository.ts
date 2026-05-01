@@ -136,7 +136,7 @@ export class TerminalSessionsRepository extends AbstractBaseRepository<TerminalS
     return this.safeQuery(
       async () => {
         const sessions = await this.findByChatId(chatId);
-        return sessions.filter((session) => session.exitedAt === null);
+        return sessions.filter((session) => session.exitedAt == null);
       },
       'Error finding active sessions by chat ID',
       { chatId },
