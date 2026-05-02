@@ -485,21 +485,6 @@ export interface TextProviderPlugin {
   stripTextToolMarkers?: (text: string) => string;
 
   /**
-   * Check whether a specific model supports assistant message prefill (optional)
-   *
-   * Assistant prefill is the technique of ending the messages array with an
-   * assistant role message to steer the model's response format. Some newer
-   * models (e.g., Claude 4.6) no longer support this.
-   *
-   * When this returns false, Quilltap falls back to system prompt instructions
-   * for multi-character identity anchoring instead of appending a prefill message.
-   *
-   * @param model The model ID (e.g., 'claude-sonnet-4-6')
-   * @returns true if the model supports prefill, false if not. Defaults to true if not implemented.
-   */
-  modelSupportsPrefill?: (model: string) => boolean;
-
-  /**
    * Get image provider constraints (optional)
    * Only applicable for providers with imageGeneration capability
    */

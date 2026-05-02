@@ -14073,17 +14073,6 @@ var plugin = {
     ];
   },
   /**
-   * Check whether a model supports assistant message prefill.
-   * Claude 4.6 models dropped support for assistant prefill — ending the
-   * messages array with an assistant role message now returns a 400 error.
-   */
-  modelSupportsPrefill: (model) => {
-    if (/claude-(?:opus|sonnet|haiku)-4-6/.test(model)) {
-      return false;
-    }
-    return true;
-  },
-  /**
    * Render the Anthropic icon
    */
   /**

@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Always use system-prompt anchoring for Anthropic multi-character chats
+
+The per-model `modelSupportsPrefill` plumbing added in f242f80c is removed. Multi-character identity anchoring now picks one of two paths based purely on provider: Anthropic always gets the system-prompt instruction (`IMPORTANT: You are X. Always begin your response with [X]…`); every other provider keeps the assistant-prefill message. This avoids a regex-vs-future-models gap (the old check matched only `claude-*-4-6`, so a future `claude-*-4-7` would have silently re-broken with the same 400 error) and removes the optional `modelSupportsPrefill` method from `LLMProviderPlugin`, the registry helper, and the Anthropic plugin's regex.
+
 #### Fix: character vault file lookups are now case-insensitive; renamed `manifest.md` → `manifesto.md`
 
 Character vault path lookups in `doc_mount_documents` and `doc_mount_files` now use a new `$ieq` case-insensitive equality operator on the SQLite query translator (emits `COLLATE NOCASE`), so a hand-named `Manifesto.md` matches the canonical `manifesto.md` the overlay reads. Folder enumeration in `findManyByMountPointsInFolder` already relied on SQLite's case-insensitive ASCII `LIKE`; the in-JS prefix filter was tightened to lowercase both sides so the SQL and JS layers agree on what counts as a match. `findByMountPointAndPath` on both repos updated for the same reason — `writeDatabaseDocument`'s upsert existence check now finds rows regardless of casing, so writes don't create duplicate rows when a user-cased file already exists.
