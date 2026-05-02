@@ -103,6 +103,19 @@ export interface EmbeddingRefitPayload {
 export interface EmbeddingReindexAllPayload {
   /** ID of the embedding profile */
   profileId: string;
+  /**
+   * Selection scope. Defaults to `'all'` for backwards compatibility.
+   *
+   * - `'all'` (default): wipe and re-embed every memory, conversation chunk,
+   *   and help doc. This is the path the manual "Re-embed Everything" button
+   *   takes after a model swap.
+   * - `'mismatched-dim'`: only re-embed rows whose stored embedding dim
+   *   differs from the profile's target dim
+   *   (`truncateToDimensions ?? dimensions`). Used to clean up orphans left
+   *   behind by a previous embedding model without paying for a full reindex.
+   *   Does not delete vector stores or cancel in-flight jobs.
+   */
+  scope?: 'all' | 'mismatched-dim';
 }
 
 /**

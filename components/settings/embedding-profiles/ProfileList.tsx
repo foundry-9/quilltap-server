@@ -30,6 +30,8 @@ export function ProfileList({
   const [refitSuccess, setRefitSuccess] = useState<string | null>(null)
   const [reapplyConfirming, setReapplyConfirming] = useState<string | null>(null)
   const [reapplySuccess, setReapplySuccess] = useState<string | null>(null)
+  const [reindexMismatchedConfirming, setReindexMismatchedConfirming] = useState<string | null>(null)
+  const [reindexMismatchedSuccess, setReindexMismatchedSuccess] = useState<string | null>(null)
 
   const {
     loading: deleteLoading,
@@ -50,6 +52,13 @@ export function ProfileList({
     error: reapplyError,
     execute: executeReapply,
     clearError: clearReapplyError,
+  } = useAsyncOperation<void>()
+
+  const {
+    loading: reindexMismatchedLoading,
+    error: reindexMismatchedError,
+    execute: executeReindexMismatched,
+    clearError: clearReindexMismatchedError,
   } = useAsyncOperation<void>()
 
   const handleDelete = async (id: string) => {
@@ -101,6 +110,29 @@ export function ProfileList({
     })
   }
 
+  const handleReindexMismatched = async (profile: EmbeddingProfile) => {
+    setReindexMismatchedSuccess(null)
+    const targetDim = profile.truncateToDimensions ?? profile.dimensions
+    await executeReindexMismatched(async () => {
+      const result = await fetchJson(
+        `/api/v1/embedding-profiles/${profile.id}?action=reindex`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: 'mismatched-dim' }),
+        }
+      )
+      if (!result.ok) {
+        throw new Error(result.error || 'Failed to trigger partial reindex')
+      }
+      notifyQueueChange()
+      setReindexMismatchedConfirming(null)
+      setReindexMismatchedSuccess(
+        `Partial re-embedding queued. Only rows whose stored vector dim differs from ${targetDim}d will be re-embedded against this profile. Track progress via the Emb badge.`
+      )
+    })
+  }
+
   if (profiles.length === 0) {
     return (
       <EmptyState
@@ -140,6 +172,33 @@ export function ProfileList({
           message={reapplyError}
           onRetry={clearReapplyError}
         />
+      )}
+
+      {reindexMismatchedError && (
+        <ErrorAlert
+          message={reindexMismatchedError}
+          onRetry={clearReindexMismatchedError}
+        />
+      )}
+
+      {reindexMismatchedSuccess && (
+        <div className="qt-alert-success">
+          <div className="flex items-center justify-between gap-4">
+            <p className="qt-label flex-1">{reindexMismatchedSuccess}</p>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Link href="/settings?tab=system" className="qt-button-ghost qt-button-sm">
+                View Tasks Queue
+              </Link>
+              <button
+                type="button"
+                onClick={() => setReindexMismatchedSuccess(null)}
+                className="qt-button-ghost qt-button-sm"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {reapplySuccess && (
@@ -252,6 +311,33 @@ export function ProfileList({
                 ? (reapplyLoading ? 'Queuing…' : `Confirm: slice to ${profile.truncateToDimensions}d`)
                 : 'Re-apply (Matryoshka)',
               onClick: isConfirming ? () => handleReapply(profile) : () => setReapplyConfirming(profile.id),
+              variant: 'secondary' as const,
+            })
+          }
+
+          // Add partial-reindex button for default non-BUILTIN profiles whose
+          // target dim is determinable. Re-embeds only rows whose stored
+          // vector dim differs from this profile's target — useful when an
+          // earlier provider left orphans behind that the Matryoshka slicer
+          // can't safely fix (different embedding space, not just dim).
+          const partialReindexTargetDim =
+            profile.truncateToDimensions ?? profile.dimensions
+          if (
+            profile.isDefault &&
+            profile.provider !== 'BUILTIN' &&
+            partialReindexTargetDim &&
+            partialReindexTargetDim > 0
+          ) {
+            const isConfirming = reindexMismatchedConfirming === profile.id
+            actions.push({
+              label: isConfirming
+                ? (reindexMismatchedLoading
+                    ? 'Queuing…'
+                    : `Confirm: re-embed misfits at ${partialReindexTargetDim}d`)
+                : 'Re-embed Mismatched',
+              onClick: isConfirming
+                ? () => handleReindexMismatched(profile)
+                : () => setReindexMismatchedConfirming(profile.id),
               variant: 'secondary' as const,
             })
           }

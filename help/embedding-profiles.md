@@ -161,6 +161,14 @@ The whole pass is a pure-local mathematical operation — no provider calls, no 
 
 The runner refuses to operate on vectors *shorter* than the target dimension (those would need to grow, which requires a real re-embedding). If you've gone the other way — increased the truncation target, or switched to a different model entirely — use **Re-embed Everything** instead, which calls the provider afresh for each piece of text.
 
+### Cleaning Up Mismatched Vectors Without a Full Reindex
+
+When you swap embedding models, the corpus often ends up with a few stragglers that didn't come from your current default — a handful of OpenAI text-embedding-3-small vectors lingering in a Qwen3 corpus, say. Slicing those Matryoshka-style is mathematically valid but semantically wrong: a 1024-d slice of OpenAI text-3-small lives in a different vector space than a 1024-d Qwen3 vector, and cross-space cosine similarity is meaningless. They need *re-embedding*, not slicing.
+
+For exactly this case the profile list offers a **Re-embed Mismatched** button on default non-built-in profiles. It enqueues an `EMBEDDING_GENERATE` job for every memory, conversation chunk, and help doc whose stored vector dimension differs from the active profile's target (its `truncateToDimensions` if set, otherwise its `dimensions`). Rows that already match are left alone — no provider call, no charge.
+
+Two clicks; the second confirms. Unlike **Re-embed Everything**, this mode does not delete vector stores, cancel in-flight jobs, or wipe help-doc embeddings — it touches only the orphans. Track progress via the **Emb** badge in the header.
+
 ## Deleting an Embedding Profile
 
 To remove a profile:
