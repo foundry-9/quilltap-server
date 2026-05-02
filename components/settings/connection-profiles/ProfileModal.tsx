@@ -686,6 +686,11 @@ export function ProfileModal({
               <AnthropicOptions formData={form.formData} onSetField={form.setField} />
             )}
 
+            {/* OpenAI-specific options */}
+            {form.formData.provider === 'OPENAI' && (
+              <OpenAIOptions formData={form.formData} onSetField={form.setField} />
+            )}
+
             {/* Tag Editor (only show when editing) */}
             {profile?.id && (
               <div className="pt-4">
@@ -863,6 +868,70 @@ function AnthropicOptions({
       <p className="qt-text-xs">
         Prompt caching can reduce costs by up to 90% for repeated context.
       </p>
+    </div>
+  )
+}
+
+/**
+ * OpenAI-specific options component
+ */
+function OpenAIOptions({
+  formData,
+  onSetField,
+}: {
+  formData: ProfileFormData
+  onSetField: (name: keyof ProfileFormData, value: any) => void
+}) {
+  return (
+    <div className="border qt-border-default rounded-lg p-4 qt-bg-muted/50">
+      <h4 className="font-medium text-sm mb-3">OpenAI Options</h4>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Verbosity */}
+        <div>
+          <label htmlFor="verbosity" className="qt-text-label-xs">
+            Verbosity
+          </label>
+          <select
+            id="verbosity"
+            value={formData.verbosity}
+            onChange={(e) => onSetField('verbosity', e.target.value)}
+            className="qt-select text-sm"
+          >
+            <option value="">(model default)</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+          <p className="qt-text-xs mt-1">
+            Scales how long and detailed the answer is. Supported on GPT-5 and newer models; older models will
+            ignore it.
+          </p>
+        </div>
+
+        {/* Reasoning Effort */}
+        <div>
+          <label htmlFor="reasoningEffort" className="qt-text-label-xs">
+            Reasoning Effort
+          </label>
+          <select
+            id="reasoningEffort"
+            value={formData.reasoningEffort}
+            onChange={(e) => onSetField('reasoningEffort', e.target.value)}
+            className="qt-select text-sm"
+          >
+            <option value="">(model default)</option>
+            <option value="minimal">Minimal</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+          <p className="qt-text-xs mt-1">
+            How hard the model thinks before responding. Applies to reasoning models (o-series, GPT-5); ignored on
+            non-reasoning models. Background tasks always use Low regardless of this setting.
+          </p>
+        </div>
+      </div>
     </div>
   )
 }

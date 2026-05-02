@@ -86,6 +86,9 @@ export interface ProfileFormData {
   enableCacheBreakpoints: boolean
   cacheStrategy: 'system_only' | 'system_and_long_context'
   cacheTTL: '5m' | '1h'
+  // OpenAI-specific fields. Empty string means "leave unset / use model default".
+  verbosity: '' | 'low' | 'medium' | 'high'
+  reasoningEffort: '' | 'minimal' | 'low' | 'medium' | 'high'
 }
 
 export const initialFormState: ProfileFormData = {
@@ -115,4 +118,7 @@ export const initialFormState: ProfileFormData = {
   enableCacheBreakpoints: false,
   cacheStrategy: 'system_and_long_context',
   cacheTTL: '5m',
+  // OpenAI-specific fields
+  verbosity: '',
+  reasoningEffort: '',
 }

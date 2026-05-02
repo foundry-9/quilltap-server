@@ -335,6 +335,15 @@ export class OpenAIProvider implements TextProvider {
         if ((params.maxTokens ?? 0) < minTokensForReasoning) {
           requestParams.max_output_tokens = minTokensForReasoning;
         }
+        // Per-profile reasoning effort applies in the normal (non-strict) path.
+        // Strict mode is reserved for background tasks and forces 'low' below.
+        const reasoningEffort = params.profileParameters?.reasoningEffort;
+        if (
+          typeof reasoningEffort === 'string' &&
+          ['minimal', 'low', 'medium', 'high'].includes(reasoningEffort)
+        ) {
+          requestParams.reasoning = { effort: reasoningEffort };
+        }
       } else {
         // Strict mode: use low reasoning effort so the model doesn't burn
         // the entire output budget on thinking. This is for background tasks
@@ -355,8 +364,13 @@ export class OpenAIProvider implements TextProvider {
       requestParams.tools = tools;
     }
 
-    const textConfig = this.buildTextConfig(params.responseFormat);
-    if (textConfig) {
+    const textConfig: OpenAI.Responses.ResponseTextConfig =
+      this.buildTextConfig(params.responseFormat) ?? {};
+    const verbosity = params.profileParameters?.verbosity;
+    if (typeof verbosity === 'string' && ['low', 'medium', 'high'].includes(verbosity)) {
+      textConfig.verbosity = verbosity as 'low' | 'medium' | 'high';
+    }
+    if (Object.keys(textConfig).length > 0) {
       requestParams.text = textConfig;
     }
 

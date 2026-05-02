@@ -4,6 +4,37 @@
 
 ### 4.4-dev
 
+#### Partial reindex: re-embed only mismatched-dim rows
+
+`POST /api/v1/embedding-profiles/[id]?action=reindex` now accepts an optional `{ scope: 'all' | 'mismatched-dim' }` body. Default is `'all'` (existing behavior). `'mismatched-dim'` enqueues `EMBEDDING_GENERATE` jobs only for memories, conversation chunks, and help docs whose stored vector dim differs from the profile's target (`truncateToDimensions ?? dimensions`). Rows that already match are skipped. Rejected with 400 if the profile has neither truncation nor explicit dimensions set (no target to compare against).
+
+The partial path skips every destructive prep step the full path takes — no `cancelByType('EMBEDDING_GENERATE')`, no `markAllPendingByProfileId`, no `vectorStoreManager.deleteStore` per character, no `helpDocs.clearAllEmbeddings`. Only the in-memory mount-chunk cache is invalidated, since some of its underlying vectors will change. Per-row `EMBEDDING_GENERATE` jobs overwrite the affected vectors in place.
+
+UI: a third button **Re-embed Mismatched** appears on default non-`BUILTIN` profiles whose target dim is determinable, between the existing **Re-embed Everything** and **Re-apply (Matryoshka)** buttons. Two-click confirmation pattern matching the re-apply flow. Successful enqueue surfaces a success bar with a "View Tasks Queue" link.
+
+Use case: cleaning up orphan vectors left behind by a previous embedding model — e.g. 719 OpenAI `text-embedding-3-small` 1536-d rows lingering in a Qwen3-1024 corpus. The Matryoshka re-apply pass deliberately leaves those alone (slicing them gives a vector in OpenAI's space, not Qwen3's, which is mathematically valid but semantically wrong for cross-row similarity); this mode re-embeds them through the active profile so they end up in the right space.
+
+`embeddingMatchesDim()` helper in the handler treats null/undefined/empty embeddings as a mismatch so they get re-embedded too. Closing log line gains `scope`, `targetDim`, and per-table `*Skipped` counts so the operator can see what the partial pass actually did.
+
+#### Migration: apply Matryoshka truncation to existing stored vectors
+
+New startup migration `apply-embedding-profile-truncation-v1` slices and re-normalizes any stored embedding BLOBs that don't yet match the active embedding profile's `truncateToDimensions`. Mirrors the runtime `EMBEDDING_REAPPLY_PROFILE` job (`lib/embedding/reapply-profile.ts`) but runs at server boot, so an instance that flips a profile to a Matryoshka target gets its corpus aligned automatically without anyone having to push the manual "Re-apply (Matryoshka)" button. Background: a Friday instance hit `Vector dimension mismatch: expected 4096, got 1024` errors during memory recall because the Qwen3 profile was set to truncate to 1024-d but the 35k existing 4096-d rows in `vector_entries`/`memories` were never re-applied.
+
+Walks the same five tables the manual job touches: `memories`, `vector_entries`, `conversation_chunks`, `help_docs` (main DB) and `doc_mount_chunks` (mount index DB). Selects the smallest active `truncateToDimensions` value across all profiles as the target. Conservative scope: only touches rows whose stored dim is an integer multiple of the target (e.g. 4096 → 1024 at 4×). Non-multiple rows (e.g. a 1536-d OpenAI text-embedding-3-small row in a Qwen3-1024 corpus) are left alone, because slicing them produces a 1024-d vector in a different embedding space than the active profile — mathematically valid but semantically wrong for cross-row similarity. Those rows need re-embedding, not slicing, and the migration logs a count of how many it skipped on this basis.
+
+Safety mirrors the runtime job: `VACUUM INTO` backup of each affected DB before any writes (encrypted backups inherit the SQLCipher key context), per-table rewrite in a single transaction, post-write VACUUM to reclaim space. Idempotent — rows already at target length or shorter than target are skipped. Depends on `add-embedding-profile-truncation-fields-v1` and `normalize-embeddings-unit-vectors-v1`.
+
+#### OpenAI verbosity and reasoning_effort surfaced per connection profile
+
+Added two new per-profile knobs to the OpenAI provider, both exposed in an "OpenAI Options" panel in the create/edit connection profile form:
+
+- `verbosity` (low / medium / high, or unset) — passed as `text.verbosity` on the Responses API request. Merges into the existing `text` config alongside `format` so structured output and verbosity coexist. Empty string in the form means "omit the parameter," so older models that don't recognize it are unaffected.
+- `reasoningEffort` (minimal / low / medium / high, or unset) — passed as `reasoning.effort` on the Responses API request. Only applied for reasoning models (o-series, GPT-5). The pre-existing `strictMaxTokens` behavior — which pins background tasks like summarization and keyword extraction to `effort: 'low'` so they don't burn the whole output budget on hidden thinking — is preserved unchanged. The user's profile setting only takes effect on normal (non-strict) reasoning calls.
+
+Storage: both fields live in the existing `connection_profiles.parameters` JSON blob, so no migration is needed. Form data type, `initialFormState`, `loadProfileIntoForm`, and `buildRequestBody` all updated to round-trip the values. The new `OpenAIOptions` component matches the visual pattern of `AnthropicOptions` (bordered panel with label + dropdown + helper text). Help doc `help/connection-profiles.md` gained a description of both fields under the OpenAI provider-specific notes.
+
+OpenAI plugin bumped 1.0.35 → 1.0.36 in both `package.json` and `manifest.json`; rebuilt via `npm run build:plugins`.
+
 #### Memory extractor overhaul: two prompts, canon block, vault `Others/` lookup
 
 Collapsed the three memory-extraction prompts (about-user, about-self, about-other-character) into two (about-self, about-other) and removed the dedicated user-pass dispatch path. The user is now treated as a character — extraction routes the user through the about-other path with the user as `{B}` like any other subject. Reflects the data model, where `ChatParticipant.type` is the single-value enum `'CHARACTER'` and the user is a participant with `controlledBy: 'user'`.

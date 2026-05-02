@@ -67,6 +67,9 @@ export function useProfileForm(providers: ProviderConfig[]) {
         enableCacheBreakpoints: profile.parameters?.enableCacheBreakpoints ?? false,
         cacheStrategy: profile.parameters?.cacheStrategy ?? 'system_and_long_context',
         cacheTTL: profile.parameters?.cacheTTL ?? '5m',
+        // OpenAI-specific fields
+        verbosity: profile.parameters?.verbosity ?? '',
+        reasoningEffort: profile.parameters?.reasoningEffort ?? '',
       })
     },
     [form]
@@ -107,6 +110,17 @@ export function useProfileForm(providers: ProviderConfig[]) {
       parameters.enableCacheBreakpoints = true
       parameters.cacheStrategy = form.formData.cacheStrategy
       parameters.cacheTTL = form.formData.cacheTTL
+    }
+
+    // Add OpenAI-specific parameters. Empty string means "don't send the parameter
+    // — let the model use its default" so we omit those keys entirely.
+    if (form.formData.provider === 'OPENAI') {
+      if (form.formData.verbosity) {
+        parameters.verbosity = form.formData.verbosity
+      }
+      if (form.formData.reasoningEffort) {
+        parameters.reasoningEffort = form.formData.reasoningEffort
+      }
     }
 
     const requestBody: any = {

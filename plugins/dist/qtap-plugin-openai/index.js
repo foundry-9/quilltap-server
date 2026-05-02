@@ -7535,6 +7535,10 @@ var OpenAIProvider = class {
         if ((params.maxTokens ?? 0) < minTokensForReasoning) {
           requestParams.max_output_tokens = minTokensForReasoning;
         }
+        const reasoningEffort = params.profileParameters?.reasoningEffort;
+        if (typeof reasoningEffort === "string" && ["minimal", "low", "medium", "high"].includes(reasoningEffort)) {
+          requestParams.reasoning = { effort: reasoningEffort };
+        }
       } else {
         requestParams.reasoning = { effort: "low" };
       }
@@ -7550,8 +7554,12 @@ var OpenAIProvider = class {
     if (tools.length > 0) {
       requestParams.tools = tools;
     }
-    const textConfig = this.buildTextConfig(params.responseFormat);
-    if (textConfig) {
+    const textConfig = this.buildTextConfig(params.responseFormat) ?? {};
+    const verbosity = params.profileParameters?.verbosity;
+    if (typeof verbosity === "string" && ["low", "medium", "high"].includes(verbosity)) {
+      textConfig.verbosity = verbosity;
+    }
+    if (Object.keys(textConfig).length > 0) {
       requestParams.text = textConfig;
     }
     const promptCacheKey = params.profileParameters?.promptCacheKey;
