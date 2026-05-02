@@ -7,6 +7,8 @@
 export {
   postArielSessionOpenedAnnouncement,
   postArielSessionClosedAnnouncement,
+  postArielTerminalOutputAnnouncement,
   type ArielSessionOpenedAnnouncement,
   type ArielSessionClosedAnnouncement,
+  type ArielTerminalOutputAnnouncement,
 } from './writer';

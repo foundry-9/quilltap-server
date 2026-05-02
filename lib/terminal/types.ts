@@ -36,6 +36,12 @@ export interface PtySession {
   ringBuffer: string;
   subscribers: Set<WebSocket>;
   transcriptStream: WriteStream | null;
+  /** Raw bytes accumulated since the last Ariel summary flush. */
+  arielFlushBuffer: string;
+  /** Idle debounce: fires `ARIEL_FLUSH_IDLE_MS` after the last chunk arrived. */
+  arielIdleTimer: NodeJS.Timeout | null;
+  /** Max-age cap: fires `ARIEL_FLUSH_MAX_AGE_MS` after the buffer started, regardless of activity. */
+  arielMaxAgeTimer: NodeJS.Timeout | null;
 }
 
 export type WsClientMsg = WsClientMessage;

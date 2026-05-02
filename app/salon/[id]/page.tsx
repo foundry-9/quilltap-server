@@ -671,6 +671,19 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     return () => window.removeEventListener('quilltap:terminal-exited', handler)
   }, [id, fetchChat])
 
+  // The terminal WebSocket pushes `chat-update` server messages when something
+  // (e.g., an Ariel periodic terminal-output summary) gets posted to the chat
+  // out-of-band. Refetch so the new message shows up without a manual reload.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ chatId?: string }>).detail
+      if (!detail?.chatId || detail.chatId !== id) return
+      void fetchChat()
+    }
+    window.addEventListener('quilltap:chat-update', handler)
+    return () => window.removeEventListener('quilltap:chat-update', handler)
+  }, [id, fetchChat])
+
   useEffect(() => {
     const fetchTemplateData = async () => {
       if (!chat?.roleplayTemplateId) {

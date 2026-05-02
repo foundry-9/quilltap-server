@@ -15,7 +15,11 @@ import type { WebSocket } from 'ws';
 import { getFilesDir, getLogsDir } from '@/lib/paths';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { postArielSessionClosedAnnouncement } from '@/lib/services/ariel-notifications';
+import {
+  postArielSessionClosedAnnouncement,
+  postArielTerminalOutputAnnouncement,
+} from '@/lib/services/ariel-notifications';
+import { cleanTerminalOutput } from './clean-output';
 import type { PtySession, PtySessionMeta, WsServerMsg } from './types';
 import type { TerminalSession } from '@/lib/schemas/terminal.types';
 
@@ -23,8 +27,98 @@ const ptyLogger = logger.child({ module: 'pty-manager' });
 
 const MAX_RING_BUFFER_SIZE = 256 * 1024; // 256 KB
 
+// Ariel periodic-summary tuning.
+// Idle: flush after this much quiet time since the last chunk arrived.
+// Max-age: flush regardless of activity if the buffer is at least this old —
+// guards against a steady drip of output (e.g. a long build) that would
+// otherwise never satisfy the idle condition.
+const ARIEL_FLUSH_IDLE_MS = 30_000;
+const ARIEL_FLUSH_MAX_AGE_MS = 120_000;
+
 class PtyManager {
   private sessions = new Map<string, PtySession>();
+
+  /**
+   * Flush the per-session Ariel buffer to the chat.
+   *
+   * Clears both timers, drains the buffer, cleans it (ANSI/backspace/CR), and
+   * posts a single Ariel message with the cleaned text. Empty buffers are a
+   * no-op; the writer also short-circuits whitespace-only payloads.
+   *
+   * Errors are swallowed — terminal I/O must not fail because chat persistence
+   * had a hiccup.
+   */
+  private flushArielBuffer(session: PtySession, reason: 'idle' | 'max-age' | 'session-closed'): void {
+    if (session.arielIdleTimer) {
+      clearTimeout(session.arielIdleTimer);
+      session.arielIdleTimer = null;
+    }
+    if (session.arielMaxAgeTimer) {
+      clearTimeout(session.arielMaxAgeTimer);
+      session.arielMaxAgeTimer = null;
+    }
+
+    const raw = session.arielFlushBuffer;
+    if (raw.length === 0) return;
+    session.arielFlushBuffer = '';
+
+    const cleaned = cleanTerminalOutput(raw);
+
+    postArielTerminalOutputAnnouncement({
+      chatId: session.meta.chatId,
+      sessionId: session.meta.id,
+      cleanedOutput: cleaned,
+      reason,
+    })
+      .then((posted) => {
+        // Only nudge the client if the writer actually wrote something —
+        // empty/whitespace flushes return null and there's nothing new to
+        // refresh.
+        if (!posted) return;
+        const msg: WsServerMsg = {
+          type: 'chat-update',
+          chatId: session.meta.chatId,
+          reason: 'ariel-terminal-output',
+        };
+        const payload = JSON.stringify(msg);
+        session.subscribers.forEach((ws) => {
+          try {
+            if (ws.readyState === 1) {
+              ws.send(payload);
+            }
+          } catch (sendErr) {
+            ptyLogger.debug('[PTY] Failed to broadcast chat-update', {
+              sessionId: session.meta.id,
+              error: sendErr instanceof Error ? sendErr.message : String(sendErr),
+            });
+          }
+        });
+      })
+      .catch((err: Error) => {
+        ptyLogger.warn('[PTY] Failed to post Ariel terminal-output announcement', {
+          sessionId: session.meta.id,
+          reason,
+          error: err.message,
+        });
+      });
+  }
+
+  private scheduleArielFlush(session: PtySession): void {
+    if (session.arielIdleTimer) {
+      clearTimeout(session.arielIdleTimer);
+    }
+    session.arielIdleTimer = setTimeout(() => {
+      session.arielIdleTimer = null;
+      this.flushArielBuffer(session, 'idle');
+    }, ARIEL_FLUSH_IDLE_MS);
+
+    if (!session.arielMaxAgeTimer) {
+      session.arielMaxAgeTimer = setTimeout(() => {
+        session.arielMaxAgeTimer = null;
+        this.flushArielBuffer(session, 'max-age');
+      }, ARIEL_FLUSH_MAX_AGE_MS);
+    }
+  }
 
   async spawn(opts: {
     chatId: string;
@@ -124,6 +218,9 @@ class PtyManager {
         ringBuffer,
         subscribers: new Set(),
         transcriptStream,
+        arielFlushBuffer: '',
+        arielIdleTimer: null,
+        arielMaxAgeTimer: null,
       };
 
       // Wire data handler
@@ -133,6 +230,9 @@ class PtyManager {
             Math.max(0, (ringBuffer + data).length - MAX_RING_BUFFER_SIZE)
           );
           session.ringBuffer = ringBuffer;
+
+          session.arielFlushBuffer += data;
+          this.scheduleArielFlush(session);
 
           if (transcriptStream && (transcriptStream as any).writable !== false) {
             try {
@@ -171,6 +271,11 @@ class PtyManager {
         ptyHandle.onExit(({ exitCode, signal }: { exitCode: number; signal?: number }) => {
           session.meta.exitedAt = new Date().toISOString();
           session.meta.exitCode = exitCode;
+
+          // Drain any remaining buffered output so trailing bytes (and the
+          // final prompt right before exit) make it into the chat before the
+          // session-closed announcement lands.
+          this.flushArielBuffer(session, 'session-closed');
 
           const msg: WsServerMsg = {
             type: 'exit',
@@ -426,6 +531,13 @@ class PtyManager {
       .map(([id]) => id);
 
     for (const id of sessionIds) {
+      const session = this.sessions.get(id);
+      if (session) {
+        // Drain pending Ariel buffer before the map entry disappears — onExit
+        // still has the closure but we want the flush to land synchronously
+        // with the kick, not whenever the OS reaps the process.
+        this.flushArielBuffer(session, 'session-closed');
+      }
       this.kill(id, 'SIGTERM');
       this.sessions.delete(id);
     }

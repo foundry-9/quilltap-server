@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import { ptyManager } from '@/lib/terminal/pty-manager';
+import { cleanTerminalOutput } from '@/lib/terminal/clean-output';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import type { ToolContext } from '../registry';
@@ -19,62 +20,6 @@ const MAX_RETURN_LINES = 2000;
 
 function splitLines(text: string): string[] {
   return text.split(/\r?\n/);
-}
-
-/**
- * Strip ANSI escape sequences. Covers CSI (ESC [ … final), OSC (ESC ] … BEL/ST),
- * two-byte intermediate+final (ESC SP F, ESC ( B, …) and the full single-byte
- * range (Fp 0x30-3F, Fe 0x40-5F, Fs 0x60-7E — e.g. ESC =, ESC >, ESC 7), plus
- * any orphan trailing ESC.
- */
-function stripAnsi(input: string): string {
-  return input.replace(
-    /\x1B\[[0-?]*[ -/]*[@-~]|\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)|\x1B[ -/][0-~]|\x1B[0-~]|\x1B/g,
-    '',
-  );
-}
-
-/**
- * Apply backspace (0x08) by erasing the prior character on the same line.
- * Orphan backspaces at the start of a line are dropped silently.
- */
-function applyBackspaces(input: string): string {
-  if (input.indexOf('\b') === -1) return input;
-  let out = '';
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i];
-    if (ch === '\b') {
-      if (out.length > 0 && out[out.length - 1] !== '\n') {
-        out = out.slice(0, -1);
-      }
-    } else {
-      out += ch;
-    }
-  }
-  return out;
-}
-
-/**
- * Treat lone carriage returns (not part of CRLF) as "reset to start of line":
- * keep only the content after the last \r on each line. Approximates the way a
- * terminal redraws an in-place prompt or progress indicator.
- */
-function applyCarriageReturns(input: string): string {
-  if (input.indexOf('\r') === -1) return input;
-  // Normalize CRLF first so we don't accidentally collapse line breaks.
-  const normalized = input.replace(/\r\n/g, '\n');
-  return normalized
-    .split('\n')
-    .map((line) => {
-      const idx = line.lastIndexOf('\r');
-      return idx >= 0 ? line.slice(idx + 1) : line;
-    })
-    .join('\n');
-}
-
-function cleanTerminalOutput(input: string): string {
-  if (!input) return input;
-  return applyCarriageReturns(applyBackspaces(stripAnsi(input)));
 }
 
 /**

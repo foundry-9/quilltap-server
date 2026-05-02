@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Ariel posts periodic terminal-output summaries to the chat
+
+LLMs in the Salon don't read xterm; the in-pane terminal was effectively invisible to them. The PTY manager now buffers raw bytes from `onData` into a per-session flush buffer alongside the existing ring buffer, and Ariel posts a cleaned summary into the chat after a quiet window. Two timers gate it: an **idle** timer (30s without new output) and a **max-age** timer (120s from the first byte in the buffer, regardless of activity) — the latter prevents a steady drip workload (e.g. a long build emitting a chunk every 25s) from buffering forever. Both timers are cleared on flush; the max-age timer is set once when the buffer is empty and not reset by subsequent chunks.
+
+The flush runs the buffered bytes through `cleanTerminalOutput` (ANSI strip, backspace apply, lone-CR collapse — extracted from `terminal-handler.ts` into a new shared module `lib/terminal/clean-output.ts` so the tool handler and the PTY manager share one implementation). Cleaned output longer than 16 KB is elided as `head 8 KB + "[N characters elided]" + tail 8 KB`. Empty/whitespace-only flushes are skipped. The message is posted via a new `postArielTerminalOutputAnnouncement` writer with `systemSender: 'ariel'` and `systemKind` set to `terminal-output-idle`, `terminal-output-max-age`, or `terminal-output-session-closed`. Content is wrapped in a fenced code block whose backtick count is computed dynamically so triple-backticks in the output don't break the fence.
+
+`onExit` and `kickAllForChat` both force-flush any pending buffer so trailing output (the final prompt right before exit, the shell's "logout" line) lands in the chat before the session-closed announcement. Errors from the writer are swallowed and logged — terminal I/O must not fail because chat persistence had a hiccup.
+
+To make the new message appear without a manual reload, the PTY manager broadcasts a new `chat-update` WebSocket frame to all subscribers of the session immediately after a successful Ariel post (skipped when the writer returns null for an empty payload). Added the `chat-update` variant to `WsServerMessageSchema` (carries `chatId` and a `reason: 'ariel-terminal-output'` hint). `useTerminalSession` re-emits it as a `quilltap:chat-update` DOM event, and the Salon page listens for it next to the existing `quilltap:terminal-exited` listener and calls `fetchChat()`. Same pattern as the close announcement; same `detail.chatId !== id` guard.
+
 #### Terminal Mode in the salon
 
 The salon's terminal feature now has a dedicated split-pane view that mirrors Document Mode. Clicking the composer's terminal button when no terminal is open spawns a session and enters Terminal Mode bound to it. If other live sessions exist for the chat, a small picker appears (attach to an existing session, or spawn a new one). The terminal pane lives on the right half of the salon with a draggable horizontal divider. When both Document Mode and Terminal Mode are on, the right pane vertically splits — document on top, terminal on bottom — with a second draggable divider.

@@ -121,6 +121,85 @@ export async function postArielSessionOpenedAnnouncement(
   );
 }
 
+export interface ArielTerminalOutputAnnouncement {
+  chatId: string;
+  sessionId: string;
+  cleanedOutput: string;
+  reason: 'idle' | 'max-age' | 'session-closed';
+}
+
+const TERMINAL_OUTPUT_MAX_CHARS = 16 * 1024;
+const TERMINAL_OUTPUT_HEAD_TAIL_CHARS = 8 * 1024;
+
+function computeFenceLength(content: string): number {
+  const matches = content.match(/`+/g);
+  const longestRun = matches ? matches.reduce((m, run) => Math.max(m, run.length), 0) : 0;
+  return Math.max(3, longestRun + 1);
+}
+
+function elideForChat(input: string): string {
+  if (input.length <= TERMINAL_OUTPUT_MAX_CHARS) return input;
+  const head = input.slice(0, TERMINAL_OUTPUT_HEAD_TAIL_CHARS);
+  const tail = input.slice(-TERMINAL_OUTPUT_HEAD_TAIL_CHARS);
+  const elidedBytes = input.length - head.length - tail.length;
+  return `${head}\n\n… [${elidedBytes.toLocaleString('en-US')} characters elided] …\n\n${tail}`;
+}
+
+/**
+ * Post a periodic terminal-output summary from Ariel.
+ *
+ * Returns null if `cleanedOutput` is empty or whitespace-only — there is no
+ * value in posting a blank message just because a debounce timer fired.
+ */
+export async function postArielTerminalOutputAnnouncement(
+  params: ArielTerminalOutputAnnouncement,
+): Promise<MessageEvent | null> {
+  if (!params.cleanedOutput || params.cleanedOutput.trim().length === 0) {
+    arielLogger.debug('[ArielNotification] Skipping empty terminal-output announcement', {
+      context: 'ariel-notifications',
+      chatId: params.chatId,
+      sessionId: params.sessionId,
+      reason: params.reason,
+    });
+    return null;
+  }
+
+  const elided = elideForChat(params.cleanedOutput);
+  const fence = '`'.repeat(computeFenceLength(elided));
+  const sessionLabel = params.sessionId.slice(0, 8);
+  const reasonNote =
+    params.reason === 'session-closed'
+      ? ' (final, session closed)'
+      : params.reason === 'max-age'
+        ? ' (long-running, periodic flush)'
+        : '';
+
+  const content = [
+    `Terminal output from session \`${sessionLabel}\`${reasonNote}:`,
+    '',
+    `${fence}`,
+    elided,
+    `${fence}`,
+  ].join('\n');
+
+  arielLogger.debug('[ArielNotification] Posting terminal-output announcement', {
+    context: 'ariel-notifications',
+    chatId: params.chatId,
+    sessionId: params.sessionId,
+    reason: params.reason,
+    cleanedChars: params.cleanedOutput.length,
+    postedChars: elided.length,
+    elided: elided.length !== params.cleanedOutput.length,
+  });
+
+  return postArielMessage(
+    params.chatId,
+    content,
+    `terminal-output-${params.reason}`,
+    params.sessionId,
+  );
+}
+
 export interface ArielSessionClosedAnnouncement {
   chatId: string;
   sessionId: string;

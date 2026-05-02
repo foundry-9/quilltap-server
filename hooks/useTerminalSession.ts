@@ -116,6 +116,17 @@ export function useTerminalSession(sessionId: string): UseTerminalSession {
         } else if (message.type === 'exit') {
           setState('exited');
           setExitInfo({ code: message.code, signal: message.signal ?? undefined });
+        } else if (message.type === 'chat-update') {
+          // Server is telling us a new chat message (e.g., an Ariel
+          // periodic terminal-output summary) just landed. Re-emit as a DOM
+          // event so the Salon page can refetch its message list.
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('quilltap:chat-update', {
+                detail: { chatId: message.chatId, reason: message.reason },
+              }),
+            );
+          }
         }
       } catch (err) {
         console.error('Failed to parse WS message:', err);

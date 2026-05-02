@@ -108,6 +108,11 @@ export const WsServerMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('pong'),
   }),
+  z.object({
+    type: z.literal('chat-update'),
+    chatId: z.string(),
+    reason: z.enum(['ariel-terminal-output']).optional(),
+  }),
 ]);
 
 export type WsServerMessage = z.infer<typeof WsServerMessageSchema>;
