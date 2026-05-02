@@ -149,7 +149,7 @@ CREATE TABLE "characters" (
   "title" TEXT,                           -- The user's or character's own private label/framing (e.g. "the protagonist", "the rival"). Not how others refer to them.
   "identity" TEXT,                        -- Surface-level public-knowledge view: name, station, occupation, reputation. What strangers know on sight.
   "description" TEXT,                     -- Acquaintance-perceivable behaviour, mannerisms, verbal patterns. NOT physical (see physicalDescriptions).
-  "manifesto" TEXT,                       -- The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Synced as `manifest.md` in the character vault.
+  "manifesto" TEXT,                       -- The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Synced as `manifesto.md` in the character vault.
   "personality" TEXT,                     -- The character's own self-knowledge — internal driver of speech and behaviour.
   "scenario" TEXT,                        -- DEPRECATED: use scenarios instead
   "scenarios" TEXT DEFAULT '[]',          -- JSON array of { id, title, content, createdAt, updatedAt }

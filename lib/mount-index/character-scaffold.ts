@@ -23,7 +23,7 @@ const logger = createServiceLogger('MountIndex:CharacterScaffold');
 const BLANK_MARKDOWN_FILES = [
   'identity.md',
   'description.md',
-  'manifest.md',
+  'manifesto.md',
   'personality.md',
   'physical-description.md',
   'example-dialogues.md',

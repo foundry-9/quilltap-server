@@ -969,7 +969,7 @@ describe('applyDocumentStoreOverlay — batching', () => {
 
     const result = await applyDocumentStoreOverlay(chars);
     // 8 single-file overlay paths: properties.json, identity.md, description.md,
-    // manifest.md, personality.md, example-dialogues.md, physical-description.md, physical-prompts.json
+    // manifesto.md, personality.md, example-dialogues.md, physical-description.md, physical-prompts.json
     expect(findManyByMountPointsAndPath).toHaveBeenCalledTimes(8);
     // 2 directory overlays: Prompts, Scenarios
     expect(findManyByMountPointsInFolder).toHaveBeenCalledTimes(2);

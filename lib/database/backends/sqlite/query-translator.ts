@@ -149,6 +149,14 @@ function translateFieldFilter(
           params.push(toSqliteParam(opValue));
           break;
 
+        case '$ieq':
+          // Case-insensitive equals via SQLite's NOCASE collation. ASCII-only
+          // case folding — sufficient for filesystem paths and identifiers,
+          // not for arbitrary Unicode text.
+          clauses.push(`${columnExpr} = ? COLLATE NOCASE`);
+          params.push(toSqliteParam(opValue));
+          break;
+
         case '$ne':
           clauses.push(`${columnExpr} != ?`);
           params.push(toSqliteParam(opValue));

@@ -97,7 +97,7 @@ describe('scaffoldCharacterMount', () => {
     expect(writeDatabaseDocumentMock).toHaveBeenCalledTimes(8);
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'identity.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'description.md', '');
-    expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'manifest.md', '');
+    expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'manifesto.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'personality.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'physical-description.md', '');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith(MOUNT_ID, 'example-dialogues.md', '');

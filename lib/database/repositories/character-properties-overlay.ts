@@ -150,7 +150,7 @@ const LegacyVaultWardrobeJsonSchema = z.object({
 export const CHARACTER_PROPERTIES_JSON_PATH = 'properties.json';
 export const CHARACTER_IDENTITY_MD_PATH = 'identity.md';
 export const CHARACTER_DESCRIPTION_MD_PATH = 'description.md';
-export const CHARACTER_MANIFESTO_MD_PATH = 'manifest.md';
+export const CHARACTER_MANIFESTO_MD_PATH = 'manifesto.md';
 export const CHARACTER_PERSONALITY_MD_PATH = 'personality.md';
 export const CHARACTER_EXAMPLE_DIALOGUES_MD_PATH = 'example-dialogues.md';
 export const CHARACTER_PHYSICAL_DESCRIPTION_MD_PATH = 'physical-description.md';
@@ -1053,7 +1053,7 @@ export async function readCharacterVaultDescription(
 }
 
 /**
- * Read the raw markdown content of manifest.md. Returns null if missing or
+ * Read the raw markdown content of manifesto.md. Returns null if missing or
  * if the read fails; returns the empty string if the file exists but is empty.
  */
 export async function readCharacterVaultManifesto(

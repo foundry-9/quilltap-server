@@ -133,8 +133,8 @@ export const CharacterSchema = z.object({
    * The axiomatic core that every other field (identity, description,
    * personality, physical, dialogues) should remain consistent with. Not a
    * vantage-point field; nobody "sees" the manifesto, it is the load-bearing
-   * truth the character is built on. Synced as `manifest.md` in the character
-   * vault.
+   * truth the character is built on. Synced as `manifesto.md` in the character
+   * vault. Vault lookups are case-insensitive, so `Manifesto.md` matches too.
    */
   manifesto: z.string().nullable().optional(),
   /**

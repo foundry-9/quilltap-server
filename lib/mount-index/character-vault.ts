@@ -112,7 +112,7 @@ async function populateVaultWithCharacterData(
 
   await writeDatabaseDocument(mountPointId, 'identity.md', character.identity ?? '');
   await writeDatabaseDocument(mountPointId, 'description.md', character.description ?? '');
-  await writeDatabaseDocument(mountPointId, 'manifest.md', character.manifesto ?? '');
+  await writeDatabaseDocument(mountPointId, 'manifesto.md', character.manifesto ?? '');
   await writeDatabaseDocument(mountPointId, 'personality.md', character.personality ?? '');
 
   const primaryPhysical = (character.physicalDescriptions ?? [])[0];

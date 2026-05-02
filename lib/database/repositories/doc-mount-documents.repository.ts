@@ -120,7 +120,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
     return this.safeQuery(
       async () => this.findOneByFilter({
         mountPointId,
-        relativePath,
+        relativePath: { $ieq: relativePath },
       } as TypedQueryFilter<DocMountDocument>),
       'Error finding document by mount point and path',
       { mountPointId, relativePath },
@@ -131,7 +131,9 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
   /**
    * Find documents at the same relativePath across many mount points in one
    * query. Used by batched overlay loaders (e.g. character properties.json)
-   * to avoid N+1 reads when hydrating bulk character lists.
+   * to avoid N+1 reads when hydrating bulk character lists. Path comparison
+   * is case-insensitive so user-managed vault files like `Manifesto.md` match
+   * the canonical `manifesto.md` lookup the overlay performs.
    */
   async findManyByMountPointsAndPath(
     mountPointIds: string[],
@@ -144,7 +146,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
       async () =>
         this.findByFilter({
           mountPointId: { $in: mountPointIds },
-          relativePath,
+          relativePath: { $ieq: relativePath },
         } as TypedQueryFilter<DocMountDocument>),
       'Error finding documents by mount point IDs and path',
       { mountPointIdCount: mountPointIds.length, relativePath },
@@ -175,7 +177,13 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
     // The SQLite $regex translator cannot express anchored patterns
     // (it always wraps in %…%), so an anchored regex like
     // `^folder/[^/]+\.md$` silently matches nothing.
+    //
+    // SQLite's LIKE is case-insensitive for ASCII by default, so the SQL
+    // prefix already matches `Wardrobe/` and `wardrobe/` interchangeably.
+    // The JS filter mirrors that to keep the two layers consistent.
     const prefix = `${folder}/`;
+    const prefixLower = prefix.toLowerCase();
+    const extensionLower = extension.toLowerCase();
     return this.safeQuery(
       async () => {
         const rows = await this.findByFilter({
@@ -183,10 +191,11 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
           relativePath: { $like: `${prefix}%` },
         } as TypedQueryFilter<DocMountDocument>);
         return rows.filter((doc) => {
-          if (!doc.relativePath.startsWith(prefix)) return false;
-          const rest = doc.relativePath.slice(prefix.length);
+          const pathLower = doc.relativePath.toLowerCase();
+          if (!pathLower.startsWith(prefixLower)) return false;
+          const rest = pathLower.slice(prefixLower.length);
           if (rest.length === 0 || rest.includes('/')) return false;
-          return rest.endsWith(extension);
+          return rest.endsWith(extensionLower);
         });
       },
       'Error finding documents by mount point IDs and folder',

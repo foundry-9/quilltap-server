@@ -172,7 +172,7 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
         });
         const result = await this.findOneByFilter({
           mountPointId,
-          relativePath,
+          relativePath: { $ieq: relativePath },
         } as TypedQueryFilter<DocMountFile>);
         logger.debug('Find by mount point and path result', {
           context: 'DocMountFilesRepository.findByMountPointAndPath',

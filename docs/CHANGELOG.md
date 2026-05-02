@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Fix: character vault file lookups are now case-insensitive; renamed `manifest.md` → `manifesto.md`
+
+Character vault path lookups in `doc_mount_documents` and `doc_mount_files` now use a new `$ieq` case-insensitive equality operator on the SQLite query translator (emits `COLLATE NOCASE`), so a hand-named `Manifesto.md` matches the canonical `manifesto.md` the overlay reads. Folder enumeration in `findManyByMountPointsInFolder` already relied on SQLite's case-insensitive ASCII `LIKE`; the in-JS prefix filter was tightened to lowercase both sides so the SQL and JS layers agree on what counts as a match. `findByMountPointAndPath` on both repos updated for the same reason — `writeDatabaseDocument`'s upsert existence check now finds rows regardless of casing, so writes don't create duplicate rows when a user-cased file already exists.
+
+Renamed `CHARACTER_MANIFESTO_MD_PATH` from `manifest.md` to `manifesto.md` to match the field name and the established sibling-file convention (`description.md`, `personality.md`, etc.). Updated the writer (`lib/mount-index/character-vault.ts`), the new-vault scaffold (`lib/mount-index/character-scaffold.ts`), and the matching tests. The UI hint in the character editor already said `manifesto.md`, so the new constant brings the code in line with what users were told. Existing vaults containing `manifest.md` remain accessible via the case-insensitive lookup; existing `Manifesto.md` files are likewise picked up without renaming.
+
 #### Ariel posts periodic terminal-output summaries to the chat
 
 LLMs in the Salon don't read xterm; the in-pane terminal was effectively invisible to them. The PTY manager now buffers raw bytes from `onData` into a per-session flush buffer alongside the existing ring buffer, and Ariel posts a cleaned summary into the chat after a quiet window. Two timers gate it: an **idle** timer (30s without new output) and a **max-age** timer (120s from the first byte in the buffer, regardless of activity) — the latter prevents a steady drip workload (e.g. a long build emitting a chunk every 25s) from buffering forever. Both timers are cleared on flush; the max-age timer is set once when the buffer is empty and not reset by subsequent chunks.
