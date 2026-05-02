@@ -229,6 +229,8 @@ import { addSummaryAnchorFieldMigration } from './add-summary-anchor-field';
 import { addSummaryAnchorMessageIdsFieldMigration } from './add-summary-anchor-message-ids-field';
 // Add truncateToDimensions + normalizeL2 columns to embedding_profiles (Matryoshka)
 import { addEmbeddingProfileTruncationFieldsMigration } from './add-embedding-profile-truncation-fields';
+// Apply Matryoshka truncation to existing stored vectors so they match the active profile
+import { applyEmbeddingProfileTruncationMigration } from './apply-embedding-profile-truncation';
 // Terminal sessions table for in-chat terminal feature
 import { addTerminalSessionsTableMigration } from './add-terminal-sessions-table';
 // Terminal Mode fields on chats (split-pane persistence)
@@ -457,6 +459,8 @@ export const migrations: Migration[] = [
   addSummaryAnchorMessageIdsFieldMigration,
   // Add Matryoshka truncation columns to embedding_profiles
   addEmbeddingProfileTruncationFieldsMigration,
+  // Apply Matryoshka truncation to existing stored vectors
+  applyEmbeddingProfileTruncationMigration,
   // Terminal sessions table for in-chat terminal feature
   addTerminalSessionsTableMigration,
   // Terminal Mode fields on chats (split-pane persistence)
@@ -670,6 +674,8 @@ export {
   addSummaryAnchorMessageIdsFieldMigration,
   // Add Matryoshka truncation columns to embedding_profiles
   addEmbeddingProfileTruncationFieldsMigration,
+  // Apply Matryoshka truncation to existing stored vectors
+  applyEmbeddingProfileTruncationMigration,
   // Terminal sessions table
   addTerminalSessionsTableMigration,
   // Terminal Mode fields on chats (split-pane persistence)
