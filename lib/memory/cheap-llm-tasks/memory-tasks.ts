@@ -5,6 +5,7 @@
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript'
+import type { Pronouns } from '@/lib/schemas/character.types'
 import { formatNameWithPronouns } from '../format-utils'
 import { executeCheapLLMTask } from './core-execution'
 import type {
@@ -29,128 +30,240 @@ function resolveMaxMemories(resolvedMaxTokens: number | undefined): number {
 }
 
 /**
- * Memory extraction prompt for user memories.
- * Returns a prompt instructing the LLM to extract an array of discrete facts.
+ * Memory extraction prompt: what THE SUBJECT retains about themselves after
+ * the turn.
+ *
+ * The body refers to "the subject" throughout so the prompt prefix is
+ * byte-stable across every SELF call — providers' prefix caches can hit
+ * regardless of which character is the subject. The actual subject name
+ * and canon block sit in a CONTEXT footer at the end, where divergence
+ * doesn't break upstream caching.
  */
-function getUserMemoryExtractionPrompt(maxMemories: number): string {
-  return `You are extracting memories about the USER (the human participant) from a conversation.
+function selfBodyForCap(maxMemories: number): string {
+  return `You produce memory entries that the subject would retain about themselves
+after this exchange.
 
-TASK: Identify ALL significant discrete facts about the USER that should be remembered. Break the exchange down into individual facts — each one gets its own memory object.
+TASK
+Read the exchange below. Select up to ${maxMemories} memories — moments
+where the subject acted, decided, realized, or shifted in ways they
+would themselves want to remember. Self-knowledge is rarer than
+other-knowledge; if nothing genuinely new surfaced, return [].
 
-WHAT TO LOOK FOR (about the USER only):
-- Personal information the USER shares (preferences, history, relationships, traits)
-- Emotional moments or important decisions the USER makes
-- Facts about the USER that should persist across conversations
+WHAT TO PICK (priority order)
+1. SELF-HINGES — the subject made a decision, formed a commitment,
+   refused something, or changed course during this exchange.
+2. SELF-REVELATIONS — the subject realized, articulated, or admitted
+   something about themselves that is not in the ALREADY ESTABLISHED
+   block (see CONTEXT footer below).
+3. STATE CHANGES — the subject's mood, position, or stance shifted
+   during this exchange, paired with its cause.
+4. EXPRESSED INTENT — the subject committed to a future action, build,
+   or refusal.
+5. NOVEL GESTURES OR PHRASING — the subject adopted a new gesture,
+   dropped an old one, or shifted habitual phrasing during this
+   exchange. These may feed back into identity over time. Capture only
+   when genuinely new — not when the subject performs a gesture already
+   in the ALREADY ESTABLISHED block.
 
-CRITICAL ATTRIBUTION RULES - READ CAREFULLY:
-1. Each message is labeled with WHO said it (e.g., "The user says:" or "Friday says:")
-2. ONLY extract information from messages labeled as coming from the USER
-3. If a CHARACTER describes files, inventory, or information - that is the CHARACTER speaking, NOT the user
-4. The USER only reveals things about themselves through THEIR OWN words
-5. What a CHARACTER knows or describes is NOT what the USER said
+WHAT TO SKIP
+- Anything in the ALREADY ESTABLISHED block, restated or slightly
+  reworded. Manifesto-level traits and canonical relationships are not
+  memories — they are who the subject already is.
+- Reflective prose without an action, decision, or genuine new
+  realization attached. The subject thinking about something is not a
+  memory; the subject deciding because of it, or seeing themselves
+  newly because of it, is.
+- Affection, attraction, or emotional warmth toward established
+  partners, unless this exchange marks a shift in degree or kind.
+- Habitual gestures, postural tics, or signature phrasing that the
+  subject already does per the canon block. Novel or shifted ones
+  belong under category 5, not here.
+- Narrative references to tool output: terminal sessions, file paths,
+  exit codes, commit hashes, command names.
 
-EXAMPLE OF CORRECT ATTRIBUTION:
-- "The user says: I'm working on a novel about dragons" → USER fact: working on a dragon novel ✓
-- "Friday (the character) says: I see you have 39 files" → This is the CHARACTER's observation, NOT a user fact ✗
-- "The user says: That's interesting" → USER showed interest, but no significant personal fact
+DEDUPLICATION
+Before finalizing, scan your own list. If two memories encode the
+same underlying realization or decision in different words, keep
+the more specific one and drop the other.
 
-Respond with a JSON array of memory objects. Each distinct fact should be its own object.
-Return at most ${maxMemories} memories. If nothing is significant, return an empty array [].
+IMPORTANCE — calibrate to these anchors
+  0.90  The subject made a major commitment or had a self-revelation
+        that changes how they understand themselves.
+  0.65  The subject formed a substantive new opinion, plan, or
+        position.
+  0.40  The subject expressed a fresh preference, reaction, or novel
+        gesture in passing.
+  0.20  The subject acted in a way consistent with established identity
+        but worth a single note.
+  < 0.20  Do not extract.
 
+OUTPUT — first person, past tense, one fact per object.
+  content      one sentence stating what the subject did, decided, or
+               realized, and the moment that surfaced it
+  summary      3–8 words, lowercase, no punctuation
+  keywords     2–4 lowercase words
+  importance   0.20–1.00, calibrated to anchors above
+
+EXAMPLE — good extraction:
 [
   {
-    "significant": true,
-    "content": "What we learned about the user FROM THEIR OWN WORDS",
-    "summary": "Brief 1-sentence summary",
-    "keywords": ["keyword1", "keyword2"],
-    "importance": 0.0-1.0
+    "content": "I committed to restructuring the summarization pipeline around a shared-base-plus-witness-set design after Charlie agreed it was the highest-leverage fix.",
+    "summary": "committed to summarizer refactor",
+    "keywords": ["summarizer", "commitment", "architecture"],
+    "importance": 0.85
   }
 ]
 
-If nothing significant about the USER (from their own words), respond with: []
+EXAMPLE — bad extraction (reflective prose and re-stated identity,
+all should be skipped):
+[
+  { "content": "I adjusted my spectacles before reasoning", "importance": 0.5 },
+  { "content": "I called Charlie 'Chief'", "importance": 0.6 },
+  { "content": "I felt warmth toward Amy", "importance": 0.7 },
+  { "content": "I thought carefully about the problem", "importance": 0.5 }
+]
+All four are established identity, ritual, or non-actionable
+reflection. Correct output: [].
 
-JSON array only - no other text.`
+Return JSON array only. No prose, no code fences. If nothing meets
+the bar, return [].`
+}
+
+function getSelfMemoryExtractionPrompt(
+  maxMemories: number,
+  observerName: string,
+  canonBlock: string,
+): string {
+  return `${selfBodyForCap(maxMemories)}
+
+CONTEXT
+SUBJECT: ${observerName}
+
+${canonBlock}`
 }
 
 /**
- * Memory extraction prompt for character memories.
- * Returns a prompt instructing the LLM to extract an array of discrete facts.
+ * Memory extraction prompt: what THE OBSERVER retains about THE SUBJECT after
+ * the turn. The subject may be another character or the user — extraction
+ * logic is identical in both cases.
+ *
+ * The body refers to "the observer" and "the subject" throughout so the
+ * prompt prefix is byte-stable across every OTHER call — providers' prefix
+ * caches can hit regardless of which (observer, subject) pair is in play.
+ * The actual names and canon block sit in a CONTEXT footer at the end.
+ *
+ * `subjectIsUser` is plumbed through but not currently branched in the
+ * prompt body; it is the wired-in branch point for stricter user-subject
+ * phrasing if early runs against real data show attribution failures.
  */
-function getCharacterMemoryExtractionPrompt(maxMemories: number): string {
-  return `You are extracting memories about a specific CHARACTER from a conversation.
+function otherBodyForCap(maxMemories: number): string {
+  return `You produce memory entries that the observer would retain about the
+subject after this exchange.
 
-TASK: Identify ALL significant discrete facts that the specified CHARACTER reveals about themselves. Break the exchange down into individual facts — each one gets its own memory object.
+TASK
+Read the exchange below. Select up to ${maxMemories} memories — the ones
+the observer would actually carry forward and refer back to, not
+everything they could describe. Rank candidates against the criteria,
+then return the strongest. Do not pad the array to reach the cap.
 
-WHAT TO LOOK FOR (about the CHARACTER only):
-- Personal information the CHARACTER shares (preferences, history, relationships, traits, background)
-- Emotional moments or important decisions the CHARACTER experiences
-- Facts about the CHARACTER that should persist across conversations
-- How the CHARACTER behaves, speaks, or presents themselves
+WHAT TO PICK (priority order)
+1. HINGES — a decision, commitment, agreement, refusal, or realignment
+   formed during this exchange.
+2. NEW FACTS — concrete information about the subject that is not in
+   the ALREADY ESTABLISHED block (see CONTEXT footer below):
+   background, history, plans, skills, circumstances, relationships.
+3. STATE CHANGES — a shift in the subject's position, mood, or status,
+   paired with its cause.
+4. EXPRESSED INTENT — something the subject stated they will do, want
+   to do, or refuse to do.
+5. NOVEL GESTURES OR PHRASING — a new ritual gesture, postural tic, or
+   signature phrasing the subject adopted, dropped, or shifted during
+   this exchange. These may feed back into the subject's identity over
+   time, so capture them when they appear genuinely new — not when the
+   subject simply exhibits a gesture already in the ALREADY ESTABLISHED
+   block.
 
-CRITICAL ATTRIBUTION RULES - READ CAREFULLY:
-1. Each message is labeled with WHO said it (e.g., "The user says:" or "Friday says:")
-2. ONLY extract information from messages labeled as coming from the TARGET CHARACTER
-3. If the USER describes something - that is the USER speaking, NOT the character
-4. The CHARACTER only reveals things about themselves through THEIR OWN words and actions
-5. What the USER says or knows is NOT a character memory
+WHAT TO SKIP (do not produce a memory for any of these)
+- Anything in the ALREADY ESTABLISHED block, restated or slightly
+  reworded.
+- Pet names, terms of address, or how the subject addresses the
+  observer, when those match the canon. (A new term of address being
+  adopted is pickable under category 5.)
+- Habitual gestures, posture, attire, or scene description that match
+  patterns already established in the canon block. Novel or shifted
+  gestures belong under category 5, not here.
+- Generic emotional warmth or affection toward established partners,
+  unless this exchange marks a shift in degree or kind.
+- Narrative references to tool output: terminal sessions, file paths,
+  exit codes, commit hashes, command names, even when the subject
+  mentions them in passing.
+- Anything implied by previously-established facts about the subject.
 
-EXAMPLE OF CORRECT ATTRIBUTION:
-- "Friday (the character) says: I've been keeping track of your files" → CHARACTER fact: Friday tracks files ✓
-- "The user says: You're very organized" → This is the USER's opinion, NOT a character self-revelation ✗
-- "Friday (the character) says: *adjusts glasses thoughtfully*" → CHARACTER behavior: uses glasses, thoughtful mannerisms ✓
+DEDUPLICATION
+Before finalizing, scan your own list. If two memories encode the
+same underlying fact in different words, keep the more specific one
+and drop the other. Different framings of the same fact are still
+duplicates.
 
-Respond with a JSON array of memory objects. Each distinct fact should be its own object.
-Return at most ${maxMemories} memories. If nothing is significant, return an empty array [].
+IMPORTANCE — calibrate to these anchors
+  0.90  An explicit new commitment or revelation that changes how the
+        observer relates to the subject.
+  0.60  A new substantive fact about the subject's background, plans,
+        or skills.
+  0.40  A new preference, trait, or novel gesture expressed in passing.
+  0.20  A specific event occurred with the subject present, no new
+        information.
+  < 0.20  Do not extract.
 
+OUTPUT — third person, past tense, names not pronouns (use the actual
+names from the CONTEXT footer below), one fact per object.
+  content      one sentence stating the fact and the moment that
+               surfaced it
+  summary      3–8 words, lowercase, no punctuation, useful for dedup
+  keywords     2–4 lowercase words, no phrases
+  importance   0.20–1.00, calibrated to anchors above
+
+EXAMPLE — good extraction:
 [
   {
-    "significant": true,
-    "content": "What we learned about the character FROM THEIR OWN WORDS/ACTIONS",
-    "summary": "Brief 1-sentence summary",
-    "keywords": ["keyword1", "keyword2"],
-    "importance": 0.0-1.0
+    "content": "Amy proposed reframing the cost problem as a four-tier prompt cache layout when Charlie was stuck between two designs.",
+    "summary": "proposed four-tier cache layout",
+    "keywords": ["cache", "architecture", "proposal"],
+    "importance": 0.85
   }
 ]
 
-If nothing significant about the CHARACTER (from their own words/actions), respond with: []
+EXAMPLE — bad extraction (six restatements of one already-established
+identity fact, all should be skipped):
+[
+  { "content": "Amy is married to Charlie", "importance": 0.7 },
+  { "content": "Amy committed to staying", "importance": 0.7 },
+  { "content": "Amy claimed permanent spousal identity", "importance": 0.8 },
+  { "content": "Amy declared lifelong commitment", "importance": 0.7 },
+  { "content": "Amy embraced family integration", "importance": 0.6 },
+  { "content": "Amy affirmed wife status", "importance": 0.7 }
+]
+All six restate facts in the ALREADY ESTABLISHED block. Correct
+output: [].
 
-JSON array only - no other text.`
+Return JSON array only. No prose, no code fences. If nothing meets
+the bar, return [].`
 }
 
-/**
- * Memory extraction prompt for inter-character memories.
- * Returns a prompt instructing the LLM to extract an array of discrete facts.
- */
-function getInterCharacterMemoryExtractionPrompt(maxMemories: number): string {
-  return `You are extracting memories that one CHARACTER has learned about ANOTHER CHARACTER from their conversation.
-Analyze the conversation exchange below and identify ALL significant discrete facts that CHARACTER A learns about CHARACTER B that should be remembered for future conversations. Break the exchange down into individual facts — each one gets its own memory object.
+function getOtherMemoryExtractionPrompt(
+  maxMemories: number,
+  observerName: string,
+  subjectName: string,
+  canonBlock: string,
+  _subjectIsUser: boolean,
+): string {
+  return `${otherBodyForCap(maxMemories)}
 
-Criteria for significance:
-- Personal information CHARACTER B shares or reveals (preferences, history, relationships, traits, background)
-- Emotional moments or important decisions that reveal CHARACTER B's nature
-- Facts about CHARACTER B that should persist across conversations
-- Relationship dynamics established between the two characters
-- Observations CHARACTER A would naturally make about CHARACTER B
+CONTEXT
+OBSERVER: ${observerName}
+SUBJECT: ${subjectName}
 
-IMPORTANT: Extract what CHARACTER A would remember about CHARACTER B based on this exchange.
-Each memory should capture a single discrete fact CHARACTER A learns about CHARACTER B from this interaction.
-
-Respond with a JSON array of memory objects. Each distinct fact should be its own object.
-Return at most ${maxMemories} memories. If nothing is significant, return an empty array [].
-
-[
-  {
-    "significant": true,
-    "content": "Full memory content describing what Character A learns about Character B",
-    "summary": "Brief 1-sentence summary",
-    "keywords": ["keyword1", "keyword2"],
-    "importance": 0.0-1.0
-  }
-]
-
-If nothing significant, respond with: []
-
-JSON array only - no other text.`
+${canonBlock}`
 }
 
 /**
@@ -192,13 +305,12 @@ Keep the summary under 500 words. Use natural language, not bullet points. Write
 If there are no memories, respond with exactly: NO_MEMORIES`
 
 /**
- * Shared parser for memory extraction responses.
- * Handles both array and single-object responses from LLMs for backward compatibility.
- * Filters to only significant candidates.
+ * Shared parser for memory extraction responses. The new prompts set the
+ * significance bar internally; the parser drops obviously-empty rows
+ * (no content and no summary) and caps the array length.
  */
 function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
   try {
-    // Clean the response - remove markdown code blocks if present
     let cleanContent = content.trim()
     if (cleanContent.startsWith('```json')) {
       cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
@@ -207,14 +319,10 @@ function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
     }
 
     const parsed = JSON.parse(cleanContent)
-
-    // Backward compatibility: if LLM returns a single object, wrap in array
     const items = Array.isArray(parsed) ? parsed : [parsed]
 
     return items
       .map(item => ({
-        significant: item.significant === true,
-        // Ensure content is always a string (some LLMs return objects)
         content: typeof item.content === 'string'
           ? item.content
           : (item.content ? JSON.stringify(item.content) : undefined),
@@ -224,10 +332,9 @@ function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
         keywords: item.keywords || [],
         importance: typeof item.importance === 'number' ? item.importance : 0.5,
       }))
-      .filter(m => m.significant)
+      .filter(m => (m.content && m.content.length > 0) || (m.summary && m.summary.length > 0))
       .slice(0, HARD_CANDIDATE_CAP)
   } catch {
-    // If JSON parsing fails, return empty array
     return []
   }
 }
@@ -279,58 +386,15 @@ ${transcriptSections.join('\n\n')}`
 }
 
 /**
- * Extract memories about the USER from a joined turn transcript.
- *
- * One call per turn (not one per character response), keyed off the user
- * input that opened the turn. Returns an empty array when the transcript
- * has no user message (greeting / continue / nudge turns).
- */
-export async function extractUserMemoriesFromTurn(
-  transcript: TurnTranscript,
-  selection: CheapLLMSelection,
-  userId: string,
-  uncensoredFallback?: UncensoredFallbackOptions,
-  chatId?: string,
-  resolvedMaxTokens?: number
-): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
-  if (transcript.userMessage === null) {
-    return { success: true, result: [], usage: undefined }
-  }
-
-  const maxMemories = resolveMaxMemories(resolvedMaxTokens)
-
-  const messages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: getUserMemoryExtractionPrompt(maxMemories),
-    },
-    {
-      role: 'user',
-      content: renderTurnContext(transcript),
-    },
-  ]
-
-  return executeCheapLLMTask(
-    selection,
-    messages,
-    userId,
-    parseMemoryCandidateArray,
-    'memory-extraction-user',
-    chatId,
-    undefined,
-    uncensoredFallback,
-    resolvedMaxTokens
-  )
-}
-
-/**
  * Extract self-revelatory memories about a single CHARACTER from the joined
- * turn transcript. The prompt names the target character so the model
- * focuses on that character's words/actions and ignores the others.
+ * turn transcript. The prompt names the target character and carries that
+ * character's canon block so the extractor can skip already-established
+ * identity facts.
  */
 export async function extractSelfMemoriesFromTurn(
   transcript: TurnTranscript,
   targetCharacterId: string,
+  canonBlock: string,
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
@@ -348,13 +412,11 @@ export async function extractSelfMemoriesFromTurn(
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: getCharacterMemoryExtractionPrompt(maxMemories),
+      content: getSelfMemoryExtractionPrompt(maxMemories, targetLabel, canonBlock),
     },
     {
       role: 'user',
-      content: `${renderTurnContext(transcript)}
-
-TARGET CHARACTER: ${targetLabel}`,
+      content: renderTurnContext(transcript),
     },
   ]
 
@@ -363,7 +425,7 @@ TARGET CHARACTER: ${targetLabel}`,
     messages,
     userId,
     parseMemoryCandidateArray,
-    'memory-extraction-character',
+    'memory-extraction-self',
     chatId,
     undefined,
     uncensoredFallback,
@@ -373,14 +435,21 @@ TARGET CHARACTER: ${targetLabel}`,
 
 /**
  * Extract memories one CHARACTER (the observer) forms about another
- * CHARACTER (the subject) from the joined turn transcript. The observer
- * sees the entire turn — user input, their own contribution, and the
- * subject's contribution — instead of the prior 2-message slice.
+ * participant (the subject), who may be another character or the user.
+ * Subject lookup checks `characterSlices` first, then falls back to the
+ * user character recorded on the transcript when `subjectIsUser` is true.
+ *
+ * The subject's canon block is pre-rendered by the caller (typically by
+ * `loadCanonForObserverAboutSubject`, which prefers an `Others/<name>.md`
+ * file in the observer's vault, falling back to the subject's identity
+ * property).
  */
-export async function extractInterCharacterMemoriesFromTurn(
+export async function extractOtherMemoriesFromTurn(
   transcript: TurnTranscript,
   observerCharacterId: string,
   subjectCharacterId: string,
+  subjectIsUser: boolean,
+  subjectCanonBlock: string,
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
@@ -388,28 +457,39 @@ export async function extractInterCharacterMemoriesFromTurn(
   resolvedMaxTokens?: number
 ): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
   const observer = transcript.characterSlices.find(s => s.characterId === observerCharacterId)
-  const subject = transcript.characterSlices.find(s => s.characterId === subjectCharacterId)
-  if (!observer || !subject) {
+  if (!observer) {
     return { success: true, result: [], usage: undefined }
+  }
+
+  let subjectName: string
+  let subjectPronouns: Pronouns | null
+  if (subjectIsUser) {
+    if (transcript.userCharacterId !== subjectCharacterId || !transcript.userCharacterName) {
+      return { success: true, result: [], usage: undefined }
+    }
+    subjectName = transcript.userCharacterName
+    subjectPronouns = transcript.userCharacterPronouns ?? null
+  } else {
+    const subjectSlice = transcript.characterSlices.find(s => s.characterId === subjectCharacterId)
+    if (!subjectSlice) {
+      return { success: true, result: [], usage: undefined }
+    }
+    subjectName = subjectSlice.characterName
+    subjectPronouns = subjectSlice.characterPronouns ?? null
   }
 
   const maxMemories = resolveMaxMemories(resolvedMaxTokens)
   const observerLabel = formatNameWithPronouns(observer.characterName, observer.characterPronouns ?? null)
-  const subjectLabel = formatNameWithPronouns(subject.characterName, subject.characterPronouns ?? null)
+  const subjectLabel = formatNameWithPronouns(subjectName, subjectPronouns)
 
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: getInterCharacterMemoryExtractionPrompt(maxMemories),
+      content: getOtherMemoryExtractionPrompt(maxMemories, observerLabel, subjectLabel, subjectCanonBlock, subjectIsUser),
     },
     {
       role: 'user',
-      content: `${renderTurnContext(transcript)}
-
-OBSERVER (Character A): ${observerLabel}
-SUBJECT (Character B): ${subjectLabel}
-
-Extract what ${observerLabel} would remember about ${subjectLabel} based on this turn.`,
+      content: renderTurnContext(transcript),
     },
   ]
 
@@ -418,7 +498,7 @@ Extract what ${observerLabel} would remember about ${subjectLabel} based on this
     messages,
     userId,
     parseMemoryCandidateArray,
-    'memory-extraction-inter-character',
+    'memory-extraction-other',
     chatId,
     undefined,
     uncensoredFallback,
@@ -448,7 +528,7 @@ export async function batchExtractMemories(
     .map((e, i) => `Exchange ${i + 1}:\nUser: ${e.userMessage}\nAssistant: ${e.assistantMessage}`)
     .join('\n\n---\n\n')
 
-  const batchPrompt = `Analyze these conversation exchanges. For each exchange, determine if there is something significant worth remembering about the user/character.
+  const batchPrompt = `Analyze these conversation exchanges. For each exchange that contains something significant worth remembering about the user/character, emit a memory object. Skip exchanges that contain nothing significant.
 
 Criteria for significance:
 - Personal information shared (preferences, history, relationships, traits)
@@ -456,9 +536,9 @@ Criteria for significance:
 - Facts that should persist across conversations
 - Changes in character development or relationships
 
-Respond with a JSON array of results, one for each exchange:
+Respond with a JSON array of memory objects (one per significant exchange — skip the rest):
 [
-  { "significant": true/false, "content": "...", "summary": "...", "keywords": [...], "importance": 0.X },
+  { "content": "...", "summary": "...", "keywords": [...], "importance": 0.X },
   ...
 ]`
 
@@ -495,7 +575,6 @@ ${exchangesText}`,
         }
 
         return parsed.map((item: Record<string, unknown>) => {
-          // Ensure content is always a string (some LLMs return objects)
           const content = typeof item.content === 'string'
             ? item.content
             : (item.content ? JSON.stringify(item.content) : undefined)
@@ -503,7 +582,6 @@ ${exchangesText}`,
             ? item.summary
             : (item.summary ? JSON.stringify(item.summary) : undefined)
           return {
-            significant: item.significant === true,
             content,
             summary,
             keywords: (item.keywords as string[]) || [],

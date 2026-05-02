@@ -255,6 +255,7 @@ export async function handleExtractMemoriesDryRun(
 
             const result = await processTurnForMemory({
               transcript,
+              participantCharacters,
               chatId,
               userId: user.id,
               connectionProfile,

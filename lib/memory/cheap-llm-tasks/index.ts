@@ -23,13 +23,21 @@ export type {
 
 // Memory tasks
 export {
-  extractUserMemoriesFromTurn,
   extractSelfMemoriesFromTurn,
-  extractInterCharacterMemoriesFromTurn,
+  extractOtherMemoriesFromTurn,
   batchExtractMemories,
   extractMemorySearchKeywords,
   summarizeMemoryRecap,
 } from './memory-tasks'
+
+// Canon block loader (used by the memory orchestrator to feed extractor prompts)
+export {
+  renderCanonBlock,
+  loadCanonForSelf,
+  loadCanonForObserverAboutSubject,
+  NO_CANON_FALLBACK,
+  type CanonSource,
+} from './canon'
 
 // Chat tasks
 export {

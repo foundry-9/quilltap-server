@@ -26,8 +26,8 @@ import type { MemoryExtractionPayload } from '../queue-service';
  * Resolve the user-controlled character (if any) from the chat's participants.
  *
  * Quilltap is single-user per instance: at most one CHARACTER participant is
- * marked as the user persona. When no participant is the user, user-pass
- * extraction is skipped and the per-character processor emits a host whisper.
+ * marked as the user persona. When no user-controlled character exists, the
+ * OTHER pass simply omits the user from its subject set.
  */
 function resolveUserCharacterParticipant(
   participants: ChatParticipantBase[],
@@ -112,6 +112,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
 
   const result = await processTurnForMemory({
     transcript,
+    participantCharacters,
     chatId: payload.chatId,
     userId: job.userId,
     connectionProfile,

@@ -8,9 +8,8 @@
 
 // Cheap LLM Tasks
 export {
-  extractUserMemoriesFromTurn,
   extractSelfMemoriesFromTurn,
-  extractInterCharacterMemoriesFromTurn,
+  extractOtherMemoriesFromTurn,
   summarizeChat,
   titleChat,
   updateContextSummary,
@@ -18,11 +17,16 @@ export {
   batchExtractMemories,
   considerTitleUpdate,
   deriveSceneContext,
+  renderCanonBlock,
+  loadCanonForSelf,
+  loadCanonForObserverAboutSubject,
+  NO_CANON_FALLBACK,
   type MemoryCandidate,
   type ChatMessage,
   type Attachment,
   type CheapLLMTaskResult,
   type DeriveSceneContextInput,
+  type CanonSource,
 } from './cheap-llm-tasks'
 
 // Memory Processor (per-turn extraction)

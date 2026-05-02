@@ -122,8 +122,10 @@ describe('Memory Module Barrel Exports', () => {
   it('re-exports the per-turn processor and transcript-shaped extractors from the memory index', async () => {
     const memoryModule = await import('@/lib/memory')
     expect(typeof memoryModule.processTurnForMemory).toBe('function')
-    expect(typeof memoryModule.extractUserMemoriesFromTurn).toBe('function')
     expect(typeof memoryModule.extractSelfMemoriesFromTurn).toBe('function')
-    expect(typeof memoryModule.extractInterCharacterMemoriesFromTurn).toBe('function')
+    expect(typeof memoryModule.extractOtherMemoriesFromTurn).toBe('function')
+    expect(typeof memoryModule.loadCanonForSelf).toBe('function')
+    expect(typeof memoryModule.loadCanonForObserverAboutSubject).toBe('function')
+    expect(typeof memoryModule.renderCanonBlock).toBe('function')
   })
 })

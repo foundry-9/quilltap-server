@@ -4,16 +4,19 @@
  * Runs once per chat turn (not once per assistant message). The orchestrator
  * defers extraction until the turn closes, builds a TurnTranscript covering
  * the user opener plus every character contribution, and feeds the whole
- * transcript through three extraction passes:
+ * transcript through two extraction passes:
  *
- *   1. ONE user-pass against the joined transcript — produces user-memory
- *      candidates that are written to every character that participated in
- *      the turn (each character keeps their own copy).
- *   2. ONE self-pass per character — each character extracts what they
- *      themselves revealed, with the joined turn as social context.
- *   3. ONE inter-character pass per (observer, subject) pair — observer
- *      forms memories about subject from the full turn, not a 2-message
- *      slice plucked out of history.
+ *   1. SELF — one call per allowed character, with that character's identity
+ *      preloaded into the prompt as an ALREADY ESTABLISHED canon block so the
+ *      extractor can skip facts already on file.
+ *   2. OTHER — one call per (observer, subject) pair where subject ranges over
+ *      every other allowed character plus the user-controlled character (if
+ *      any). The subject canon block is loaded from the observer's vault at
+ *      `Others/<subject>.md`, falling back to the subject's identity property.
+ *
+ * The user is no longer special-cased — they are a participant with
+ * `controlledBy: 'user'` and a real character record, so they route through
+ * the OTHER pass like any other subject.
  *
  * Rate-limiting is per-character-per-turn (existing per-hour cap continues
  * to apply). The chat flow never blocks on memory extraction.
@@ -21,35 +24,22 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import {
-  extractUserMemoriesFromTurn,
   extractSelfMemoriesFromTurn,
-  extractInterCharacterMemoriesFromTurn,
+  extractOtherMemoriesFromTurn,
+  loadCanonForSelf,
+  loadCanonForObserverAboutSubject,
+  renderCanonBlock,
   MemoryCandidate,
   UncensoredFallbackOptions,
 } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { resolveMaxTokens } from '@/lib/llm/model-context-data'
-import { ConnectionProfile, CheapLLMSettings } from '@/lib/schemas/types'
+import { ConnectionProfile, CheapLLMSettings, Character } from '@/lib/schemas/types'
 import type { DangerousContentSettings, MemoryExtractionLimits } from '@/lib/schemas/settings.types'
 import type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-message/turn-transcript'
 import { createMemoryWithGate } from './memory-service'
 import type { MemoryGateOutcome } from './memory-gate'
 import { logger } from '@/lib/logger'
-import { postHostNoUserCharacterAnnouncement } from '@/lib/services/host-notifications/writer'
-
-/**
- * Fire-and-forget Host whisper for chats with no user-controlled character.
- */
-async function emitNoUserCharacterWhisper(chatId: string): Promise<void> {
-  try {
-    await postHostNoUserCharacterAnnouncement({ chatId })
-  } catch (error) {
-    logger.warn('[Memory] No-user-character whisper failed (non-fatal)', {
-      chatId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-}
 
 type RateLimitDecision =
   | { mode: 'allow' }
@@ -103,6 +93,13 @@ function applyImportanceFloor(candidates: MemoryCandidate[], floor: number): Mem
  */
 export interface TurnMemoryExtractionContext {
   transcript: TurnTranscript
+  /**
+   * Hydrated character records keyed by characterId, covering every CHARACTER
+   * participant in the chat (including the user-controlled one when present).
+   * Used by the canon loader to read `identity` and `characterDocumentMountPointId`
+   * without making fresh DB calls per extraction pass.
+   */
+  participantCharacters: Map<string, Character>
   chatId: string
   userId: string
   connectionProfile: ConnectionProfile
@@ -123,7 +120,7 @@ export interface TurnMemoryExtractionContext {
  * (which character, observing whom, from which pass, sourced from which message).
  */
 export interface ExtractedCandidate {
-  pass: 'USER' | 'SELF' | 'INTER'
+  pass: 'SELF' | 'OTHER'
   characterId: string
   characterName: string
   aboutCharacterId: string
@@ -169,7 +166,7 @@ interface WriteOptions {
   characterName: string
   aboutCharacterId: string
   aboutCharacterName: string
-  pass: 'USER' | 'SELF' | 'INTER'
+  pass: 'SELF' | 'OTHER'
   candidate: MemoryCandidate
   passLabel: string
   ctx: TurnMemoryExtractionContext
@@ -337,79 +334,49 @@ export async function processTurnForMemory(
     })
 
     // ---------------------------------------------------------------------
-    // Pass 1: USER memories (one extraction call, written to every allowed
-    // character so each one gets their own copy of facts about the user).
+    // Build the subject set for the OTHER pass: every allowed character plus
+    // the user-controlled character (if any). The user's character record is
+    // also used here just like an AI character's — we look up its identity
+    // and vault mount point exactly the same way.
     // ---------------------------------------------------------------------
-    if (
-      ctx.transcript.userMessage !== null &&
-      ctx.transcript.userCharacterId &&
-      allowedSlices.length > 0
-    ) {
-      const userResult = await extractUserMemoriesFromTurn(
-        ctx.transcript,
-        selection,
-        ctx.userId,
-        uncensoredFallback,
-        ctx.chatId,
-        cheapMaxTokens
-      )
-
-      if (userResult.usage) {
-        totalUsage.promptTokens += userResult.usage.promptTokens
-        totalUsage.completionTokens += userResult.usage.completionTokens
-        totalUsage.totalTokens += userResult.usage.totalTokens
-      }
-
-      if (userResult.success) {
-        const rawCandidates = userResult.result || []
-        for (const slice of allowedSlices) {
-          const rl = rateLimits.get(slice.characterId)!
-          const candidates = rl.mode === 'throttle'
-            ? applyImportanceFloor(rawCandidates, rl.floor)
-            : rawCandidates
-          if (rl.mode === 'throttle' && candidates.length < rawCandidates.length) {
-            debugLogs.push(
-              `[Memory] Throttle dropped ${rawCandidates.length - candidates.length} USER candidate(s) ` +
-              `for ${slice.characterName} below importance ${rl.floor}`
-            )
-          }
-          for (const candidate of candidates) {
-            await writeCandidate({
-              characterId: slice.characterId,
-              characterName: slice.characterName,
-              aboutCharacterId: ctx.transcript.userCharacterId,
-              aboutCharacterName: ctx.transcript.userCharacterName ?? '',
-              pass: 'USER',
-              candidate,
-              passLabel: `USER memory for ${slice.characterName}`,
-              ctx,
-              sourceMessageId: slice.contributingMessageIds[slice.contributingMessageIds.length - 1] ?? sourceMessageId,
-              debugLogs,
-              createdIds: createdMemoryIds,
-              reinforcedIds: reinforcedMemoryIds,
-              collected: collectedCandidates,
-            })
-          }
-        }
-      } else {
-        debugLogs.push(`[Memory] USER memory extraction failed: ${userResult.error}`)
-      }
-    } else if (ctx.transcript.userMessage !== null && !ctx.transcript.userCharacterId) {
-      debugLogs.push(
-        '[Memory] Skipped USER memory pass — no user-controlled character on this chat. ' +
-        'Add or create a user persona to start collecting memories about the operator.'
-      )
-      void emitNoUserCharacterWhisper(ctx.chatId)
+    type Subject = { id: string; name: string; identity: string | null; isUser: boolean }
+    const subjects: Subject[] = []
+    for (const slice of allowedSlices) {
+      const character = ctx.participantCharacters.get(slice.characterId)
+      subjects.push({
+        id: slice.characterId,
+        name: slice.characterName,
+        identity: character?.identity ?? null,
+        isUser: false,
+      })
+    }
+    if (ctx.transcript.userCharacterId && ctx.transcript.userCharacterName) {
+      const userCharacter = ctx.participantCharacters.get(ctx.transcript.userCharacterId)
+      subjects.push({
+        id: ctx.transcript.userCharacterId,
+        name: ctx.transcript.userCharacterName,
+        identity: userCharacter?.identity ?? null,
+        isUser: true,
+      })
     }
 
     // ---------------------------------------------------------------------
-    // Pass 2: SELF memories (one call per allowed character).
+    // Pass 1: SELF memories (one call per allowed character; canon = own
+    // identity, no vault lookup).
     // ---------------------------------------------------------------------
     for (const slice of allowedSlices) {
       const rl = rateLimits.get(slice.characterId)!
+      const observerCharacter = ctx.participantCharacters.get(slice.characterId)
+      const selfCanonBlock = renderCanonBlock(loadCanonForSelf({
+        id: slice.characterId,
+        name: slice.characterName,
+        identity: observerCharacter?.identity ?? null,
+      }))
+
       const selfResult = await extractSelfMemoriesFromTurn(
         ctx.transcript,
         slice.characterId,
+        selfCanonBlock,
         selection,
         ctx.userId,
         uncensoredFallback,
@@ -434,6 +401,7 @@ export async function processTurnForMemory(
             `for ${slice.characterName} below importance ${rl.floor}`
           )
         }
+        debugLogs.push(`[Memory] SELF for ${slice.characterName}: ${candidates.length} candidate(s)`)
         for (const candidate of candidates) {
           await writeCandidate({
             characterId: slice.characterId,
@@ -442,7 +410,7 @@ export async function processTurnForMemory(
             aboutCharacterName: slice.characterName,
             pass: 'SELF',
             candidate,
-            passLabel: `CHARACTER memory for ${slice.characterName}`,
+            passLabel: `SELF memory for ${slice.characterName}`,
             ctx,
             sourceMessageId: slice.contributingMessageIds[slice.contributingMessageIds.length - 1] ?? sourceMessageId,
             debugLogs,
@@ -452,69 +420,86 @@ export async function processTurnForMemory(
           })
         }
       } else {
-        debugLogs.push(`[Memory] SELF memory extraction failed for ${slice.characterName}: ${selfResult.error}`)
+        debugLogs.push(`[Memory] SELF extraction failed for ${slice.characterName}: ${selfResult.error}`)
       }
     }
 
     // ---------------------------------------------------------------------
-    // Pass 3: INTER-CHARACTER memories (one call per (observer, subject) pair
-    // among allowed characters; observer rate-limit gates the pair).
+    // Pass 2: OTHER memories (one call per (observer, subject) pair where
+    // subject is any other allowed character or the user-controlled
+    // character). Observer rate-limit gates the pair. Subject canon comes
+    // from the observer's vault `Others/<subject>.md` first, then falls
+    // back to the subject's own identity property.
     // ---------------------------------------------------------------------
-    if (allowedSlices.length >= 2) {
-      for (const observer of allowedSlices) {
-        const rl = rateLimits.get(observer.characterId)!
-        for (const subject of allowedSlices) {
-          if (subject.characterId === observer.characterId) continue
-          const interResult = await extractInterCharacterMemoriesFromTurn(
-            ctx.transcript,
-            observer.characterId,
-            subject.characterId,
-            selection,
-            ctx.userId,
-            uncensoredFallback,
-            ctx.chatId,
-            cheapMaxTokens
-          )
+    for (const observer of allowedSlices) {
+      const rl = rateLimits.get(observer.characterId)!
+      const observerCharacter = ctx.participantCharacters.get(observer.characterId)
+      const observerVault = {
+        characterId: observer.characterId,
+        mountPointId: observerCharacter?.characterDocumentMountPointId ?? null,
+      }
 
-          if (interResult.usage) {
-            totalUsage.promptTokens += interResult.usage.promptTokens
-            totalUsage.completionTokens += interResult.usage.completionTokens
-            totalUsage.totalTokens += interResult.usage.totalTokens
-          }
+      for (const subject of subjects) {
+        if (subject.id === observer.characterId) continue
 
-          if (interResult.success) {
-            const rawCandidates = interResult.result || []
-            const candidates = rl.mode === 'throttle'
-              ? applyImportanceFloor(rawCandidates, rl.floor)
-              : rawCandidates
-            if (rl.mode === 'throttle' && candidates.length < rawCandidates.length) {
-              debugLogs.push(
-                `[Memory] Throttle dropped ${rawCandidates.length - candidates.length} INTER candidate(s) ` +
-                `for ${observer.characterName} about ${subject.characterName} below importance ${rl.floor}`
-              )
-            }
-            for (const candidate of candidates) {
-              await writeCandidate({
-                characterId: observer.characterId,
-                characterName: observer.characterName,
-                aboutCharacterId: subject.characterId,
-                aboutCharacterName: subject.characterName,
-                pass: 'INTER',
-                candidate,
-                passLabel: `INTER memory ${observer.characterName} about ${subject.characterName}`,
-                ctx,
-                sourceMessageId: observer.contributingMessageIds[observer.contributingMessageIds.length - 1] ?? sourceMessageId,
-                debugLogs,
-                createdIds: createdMemoryIds,
-                reinforcedIds: reinforcedMemoryIds,
-                collected: collectedCandidates,
-              })
-            }
-          } else {
+        const canon = await loadCanonForObserverAboutSubject(observerVault, subject)
+        const subjectCanonBlock = renderCanonBlock(canon)
+
+        const otherResult = await extractOtherMemoriesFromTurn(
+          ctx.transcript,
+          observer.characterId,
+          subject.id,
+          subject.isUser,
+          subjectCanonBlock,
+          selection,
+          ctx.userId,
+          uncensoredFallback,
+          ctx.chatId,
+          cheapMaxTokens
+        )
+
+        if (otherResult.usage) {
+          totalUsage.promptTokens += otherResult.usage.promptTokens
+          totalUsage.completionTokens += otherResult.usage.completionTokens
+          totalUsage.totalTokens += otherResult.usage.totalTokens
+        }
+
+        if (otherResult.success) {
+          const rawCandidates = otherResult.result || []
+          const candidates = rl.mode === 'throttle'
+            ? applyImportanceFloor(rawCandidates, rl.floor)
+            : rawCandidates
+          if (rl.mode === 'throttle' && candidates.length < rawCandidates.length) {
             debugLogs.push(
-              `[Memory] INTER extraction failed (${observer.characterName} → ${subject.characterName}): ${interResult.error}`
+              `[Memory] Throttle dropped ${rawCandidates.length - candidates.length} OTHER candidate(s) ` +
+              `for ${observer.characterName} about ${subject.name} below importance ${rl.floor}`
             )
           }
+          debugLogs.push(
+            `[Memory] OTHER observer=${observer.characterName} subject=${subject.name} ` +
+            `canon=${canon.source}: ${candidates.length} candidate(s)`
+          )
+          for (const candidate of candidates) {
+            await writeCandidate({
+              characterId: observer.characterId,
+              characterName: observer.characterName,
+              aboutCharacterId: subject.id,
+              aboutCharacterName: subject.name,
+              pass: 'OTHER',
+              candidate,
+              passLabel: `OTHER memory ${observer.characterName} about ${subject.name}`,
+              ctx,
+              sourceMessageId: observer.contributingMessageIds[observer.contributingMessageIds.length - 1] ?? sourceMessageId,
+              debugLogs,
+              createdIds: createdMemoryIds,
+              reinforcedIds: reinforcedMemoryIds,
+              collected: collectedCandidates,
+            })
+          }
+        } else {
+          debugLogs.push(
+            `[Memory] OTHER extraction failed (${observer.characterName} → ${subject.name}): ${otherResult.error}`
+          )
         }
       }
     }

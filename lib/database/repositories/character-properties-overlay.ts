@@ -1529,7 +1529,7 @@ export async function projectVaultWardrobe(
   }
 }
 
-async function readVaultTextFile(
+export async function readVaultTextFile(
   mountPointId: string,
   path: string,
   characterId?: string,

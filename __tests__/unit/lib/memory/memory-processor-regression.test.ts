@@ -1,18 +1,20 @@
 /**
  * Regression tests for the per-turn memory processor.
  *
- * Covers the gate-handling surface area the prior per-message regression
- * suite did, but updated to the new transcript-shaped extractors:
+ * Covers the gate-handling surface area for the new two-pass shape:
+ *   - SELF pass: one call per allowed character, aboutCharacterId = self
+ *   - OTHER pass: one call per (observer, subject) pair where subject ranges
+ *     over every other allowed character + the user-controlled character (if
+ *     any). aboutCharacterId = subject. The user is NOT special-cased.
+ *
+ * Also exercises:
  *   - Multiple extracted candidates → multiple memory writes
  *   - sourceMessageTimestamp preservation
  *   - Rate-limit skip and throttle modes
  *   - SKIP_NEAR_DUPLICATE / SKIP_EMBEDDING_FAILED don't add IDs
- *   - User-pass writes aboutCharacterId = userCharacterId
- *   - Self-pass writes aboutCharacterId = characterId
- *   - Inter-character pass writes aboutCharacterId = subject
  */
 
-import { beforeEach, describe, expect, it, jest } from '@jest/globals'
+import { beforeEach, describe, expect, it } from '@jest/globals'
 
 jest.mock('@/lib/logger', () => ({
   logger: {
@@ -33,17 +35,25 @@ jest.mock('@/lib/llm/model-context-data', () => ({
 }))
 
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
-  extractUserMemoriesFromTurn: jest.fn(),
   extractSelfMemoriesFromTurn: jest.fn(),
-  extractInterCharacterMemoriesFromTurn: jest.fn(),
+  extractOtherMemoriesFromTurn: jest.fn(),
+  loadCanonForSelf: jest.fn(() => ({
+    characterId: 'noop',
+    characterName: 'noop',
+    body: null,
+    source: 'none',
+  })),
+  loadCanonForObserverAboutSubject: jest.fn().mockResolvedValue({
+    characterId: 'noop',
+    characterName: 'noop',
+    body: null,
+    source: 'none',
+  }),
+  renderCanonBlock: jest.fn(() => 'CANON'),
 }))
 
 jest.mock('@/lib/memory/memory-service', () => ({
   createMemoryWithGate: jest.fn(),
-}))
-
-jest.mock('@/lib/services/host-notifications/writer', () => ({
-  postHostNoUserCharacterAnnouncement: jest.fn().mockResolvedValue(null),
 }))
 
 const { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } = jest.requireMock('@/lib/llm/cheap-llm') as {
@@ -54,9 +64,11 @@ const { resolveMaxTokens } = jest.requireMock('@/lib/llm/model-context-data') as
   resolveMaxTokens: jest.Mock
 }
 const tasks = jest.requireMock('@/lib/memory/cheap-llm-tasks') as {
-  extractUserMemoriesFromTurn: jest.Mock
   extractSelfMemoriesFromTurn: jest.Mock
-  extractInterCharacterMemoriesFromTurn: jest.Mock
+  extractOtherMemoriesFromTurn: jest.Mock
+  loadCanonForSelf: jest.Mock
+  loadCanonForObserverAboutSubject: jest.Mock
+  renderCanonBlock: jest.Mock
 }
 const { createMemoryWithGate } = jest.requireMock('@/lib/memory/memory-service') as {
   createMemoryWithGate: jest.Mock
@@ -71,22 +83,45 @@ function makeTranscript(extra: {
     text: string
   }>
 } = {}) {
+  const slices = (extra.characterSlices ?? [
+    { characterId: 'char-1', characterName: 'Avery', text: "I'll remember the compass." },
+  ]).map(s => ({
+    ...s,
+    characterPronouns: null,
+    contributingMessageIds: [`assistant-${s.characterId}`],
+  }))
+
+  // Build participantCharacters map covering every slice + the user character.
+  const participantCharacters = new Map<string, any>()
+  for (const s of slices) {
+    participantCharacters.set(s.characterId, {
+      id: s.characterId,
+      name: s.characterName,
+      identity: null,
+      characterDocumentMountPointId: null,
+    })
+  }
+  const userCharacterId = 'userCharacterId' in extra ? (extra.userCharacterId ?? undefined) : 'user-char-1'
+  if (userCharacterId) {
+    participantCharacters.set(userCharacterId, {
+      id: userCharacterId,
+      name: 'Bob',
+      identity: null,
+      characterDocumentMountPointId: null,
+    })
+  }
+
   return {
     transcript: {
       turnOpenerMessageId: 'opener-1',
-      userMessage: 'userMessage' in extra ? extra.userMessage : 'I keep my grandmother\'s compass in my satchel.',
-      userCharacterId: 'userCharacterId' in extra ? (extra.userCharacterId ?? undefined) : 'user-char-1',
-      userCharacterName: 'Bob',
+      userMessage: 'userMessage' in extra ? extra.userMessage : "I keep my grandmother's compass in my satchel.",
+      userCharacterId,
+      userCharacterName: userCharacterId ? 'Bob' : undefined,
       userCharacterPronouns: null,
-      characterSlices: (extra.characterSlices ?? [
-        { characterId: 'char-1', characterName: 'Avery', text: 'I\'ll remember the compass.' },
-      ]).map(s => ({
-        ...s,
-        characterPronouns: null,
-        contributingMessageIds: [`assistant-${s.characterId}`],
-      })),
+      characterSlices: slices,
       latestAssistantMessageId: `assistant-${(extra.characterSlices?.[0]?.characterId) ?? 'char-1'}`,
     },
+    participantCharacters,
     chatId: 'chat-1',
     userId: 'user-1',
     sourceMessageTimestamp: '2026-04-01T12:34:56.000Z',
@@ -117,17 +152,25 @@ describe('processTurnForMemory regressions', () => {
     } as any)
     resolveUncensoredCheapLLMSelection.mockImplementation((selection: unknown) => selection as any)
     resolveMaxTokens.mockReturnValue(2048)
-    tasks.extractUserMemoriesFromTurn.mockResolvedValue({
-      success: true,
-      result: [],
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    tasks.loadCanonForSelf.mockReturnValue({
+      characterId: 'noop',
+      characterName: 'noop',
+      body: null,
+      source: 'none',
     } as any)
+    tasks.loadCanonForObserverAboutSubject.mockResolvedValue({
+      characterId: 'noop',
+      characterName: 'noop',
+      body: null,
+      source: 'none',
+    } as any)
+    tasks.renderCanonBlock.mockReturnValue('CANON')
     tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [],
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
-    tasks.extractInterCharacterMemoriesFromTurn.mockResolvedValue({
+    tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [],
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
@@ -141,18 +184,18 @@ describe('processTurnForMemory regressions', () => {
   })
 
   it('aggregates token usage and writes one memory per gated candidate', async () => {
-    tasks.extractUserMemoriesFromTurn.mockResolvedValue({
+    tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        { significant: true, content: 'compass fact', summary: 'compass', keywords: ['compass'], importance: 0.8 },
-        { significant: true, content: 'storm fear', summary: 'storms', keywords: ['storms'], importance: 0.7 },
+        { content: 'compass fact', summary: 'compass', keywords: ['compass'], importance: 0.8 },
+        { content: 'storm fear', summary: 'storms', keywords: ['storms'], importance: 0.7 },
       ],
       usage: { promptTokens: 12, completionTokens: 4, totalTokens: 16 },
     } as any)
     tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        { significant: true, content: 'Avery is steady', summary: 'steady', keywords: [], importance: 0.6 },
+        { content: 'Avery is steady', summary: 'steady', keywords: [], importance: 0.6 },
       ],
       usage: { promptTokens: 9, completionTokens: 3, totalTokens: 12 },
     } as any)
@@ -164,6 +207,7 @@ describe('processTurnForMemory regressions', () => {
 
     const result = await processTurnForMemory(makeTranscript())
 
+    // SELF pass writes 1 candidate, OTHER pass (1 char + 1 user subject) writes 2 candidates.
     expect(createMemoryWithGate).toHaveBeenCalledTimes(3)
     expect(result.success).toBe(true)
     expect(result.createdMemoryIds).toEqual(['mem-1', 'mem-2'])
@@ -175,7 +219,7 @@ describe('processTurnForMemory regressions', () => {
     tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        { significant: true, content: 'Avery is steady', summary: 'steady', keywords: [], importance: 0.7 },
+        { content: 'Avery is steady', summary: 'steady', keywords: [], importance: 0.7 },
       ],
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
@@ -194,7 +238,7 @@ describe('processTurnForMemory regressions', () => {
     tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        { significant: true, content: 'fact', summary: 'fact', keywords: [], importance: 0.7 },
+        { content: 'fact', summary: 'fact', keywords: [], importance: 0.7 },
       ],
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
@@ -203,6 +247,12 @@ describe('processTurnForMemory regressions', () => {
       action: 'SKIP_NEAR_DUPLICATE',
       memory: { id: 'mem-existing', reinforcementCount: 5 },
       similarity: 0.95,
+    } as any)
+    // OTHER pass (user as subject) returns nothing — skip is only on SELF.
+    tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
+      success: true,
+      result: [],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
 
     const result = await processTurnForMemory(makeTranscript())
@@ -217,7 +267,7 @@ describe('processTurnForMemory regressions', () => {
     tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        { significant: true, content: 'fact', summary: 'fact', keywords: [], importance: 0.7 },
+        { content: 'fact', summary: 'fact', keywords: [], importance: 0.7 },
       ],
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
@@ -226,6 +276,11 @@ describe('processTurnForMemory regressions', () => {
       action: 'SKIP_EMBEDDING_FAILED',
       memory: null,
       reason: 'Embedding failed after retry: ECONNREFUSED',
+    } as any)
+    tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
+      success: true,
+      result: [],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
 
     const result = await processTurnForMemory(makeTranscript())
@@ -246,7 +301,7 @@ describe('processTurnForMemory regressions', () => {
     tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        { significant: true, content: 'fact', summary: 'fact', keywords: [], importance: 0.7 },
+        { content: 'fact', summary: 'fact', keywords: [], importance: 0.7 },
       ],
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
@@ -264,7 +319,7 @@ describe('processTurnForMemory regressions', () => {
 
     expect(result.success).toBe(true)
     expect(tasks.extractSelfMemoriesFromTurn).not.toHaveBeenCalled()
-    expect(tasks.extractUserMemoriesFromTurn).not.toHaveBeenCalled()
+    expect(tasks.extractOtherMemoriesFromTurn).not.toHaveBeenCalled()
     expect(result.debugLogs.join('\n')).toContain('rate limit reached')
   })
 
@@ -276,12 +331,12 @@ describe('processTurnForMemory regressions', () => {
       memories: { countCreatedSince: jest.fn<any>().mockResolvedValue(15) },
     })
 
-    tasks.extractUserMemoriesFromTurn.mockResolvedValue({
+    tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        { significant: true, content: 'low', summary: 'low', keywords: [], importance: 0.5 },
-        { significant: true, content: 'alsoLow', summary: 'alsoLow', keywords: [], importance: 0.6 },
-        { significant: true, content: 'high', summary: 'high', keywords: [], importance: 0.8 },
+        { content: 'low', summary: 'low', keywords: [], importance: 0.5 },
+        { content: 'alsoLow', summary: 'alsoLow', keywords: [], importance: 0.6 },
+        { content: 'high', summary: 'high', keywords: [], importance: 0.8 },
       ],
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
@@ -302,11 +357,11 @@ describe('processTurnForMemory regressions', () => {
     expect(result.debugLogs.join('\n')).toContain('floor 0.7')
   })
 
-  it('skips USER memory extraction when no user-controlled character is attached', async () => {
+  it('omits the user from OTHER subjects when no user-controlled character is attached', async () => {
     tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        { significant: true, content: 'Avery feels protective.', summary: 'Avery is protective', keywords: [], importance: 0.6 },
+        { content: 'Avery feels protective.', summary: 'Avery is protective', keywords: [], importance: 0.6 },
       ],
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
@@ -316,9 +371,9 @@ describe('processTurnForMemory regressions', () => {
     const result = await processTurnForMemory(ctx)
 
     expect(result.success).toBe(true)
-    expect(tasks.extractUserMemoriesFromTurn).not.toHaveBeenCalled()
     expect(tasks.extractSelfMemoriesFromTurn).toHaveBeenCalledTimes(1)
-    expect(result.debugLogs.join('\n')).toContain('Skipped USER memory pass')
+    // No other characters and no user — OTHER pass dispatches zero calls.
+    expect(tasks.extractOtherMemoriesFromTurn).not.toHaveBeenCalled()
     expect(createMemoryWithGate).toHaveBeenCalledWith(
       expect.objectContaining({
         characterId: 'char-1',
@@ -328,17 +383,31 @@ describe('processTurnForMemory regressions', () => {
     )
   })
 
-  it('user-pass writes aboutCharacterId = userCharacterId for every participating character', async () => {
-    tasks.extractUserMemoriesFromTurn.mockResolvedValue({
+  it('OTHER pass writes aboutCharacterId = userCharacterId when subject is the user', async () => {
+    tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        { significant: true, content: 'User likes jazz.', summary: 'jazz', keywords: ['jazz'], importance: 0.6 },
+        { content: 'User likes jazz.', summary: 'jazz', keywords: ['jazz'], importance: 0.6 },
       ],
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
 
     await processTurnForMemory(makeTranscript())
 
+    // 1 character + 1 user subject = 1 OTHER call (observer=char-1, subject=user-char-1).
+    expect(tasks.extractOtherMemoriesFromTurn).toHaveBeenCalledTimes(1)
+    expect(tasks.extractOtherMemoriesFromTurn).toHaveBeenCalledWith(
+      expect.anything(),       // transcript
+      'char-1',                // observerCharacterId
+      'user-char-1',           // subjectCharacterId
+      true,                    // subjectIsUser
+      expect.any(String),      // subjectCanonBlock
+      expect.anything(),       // selection
+      'user-1',                // userId
+      undefined,               // uncensoredFallback
+      'chat-1',                // chatId
+      2048,                    // resolvedMaxTokens
+    )
     expect(createMemoryWithGate).toHaveBeenCalledWith(
       expect.objectContaining({
         characterId: 'char-1',
@@ -348,11 +417,11 @@ describe('processTurnForMemory regressions', () => {
     )
   })
 
-  it('inter-character pass fires per (observer, subject) pair when 2+ characters spoke in the turn', async () => {
-    tasks.extractInterCharacterMemoriesFromTurn.mockResolvedValue({
+  it('OTHER pass fires per (observer, subject) pair across characters AND user (N=2 chars + user → 4 calls)', async () => {
+    tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
       result: [
-        { significant: true, content: 'Other character is calm', summary: 'calm', keywords: [], importance: 0.6 },
+        { content: 'Other character is calm', summary: 'calm', keywords: [], importance: 0.6 },
       ],
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
@@ -366,15 +435,24 @@ describe('processTurnForMemory regressions', () => {
 
     await processTurnForMemory(ctx)
 
-    // 2 characters → 2 (observer, subject) ordered pairs.
-    expect(tasks.extractInterCharacterMemoriesFromTurn).toHaveBeenCalledTimes(2)
-    // Each pair invokes the gate with characterId=observer, aboutCharacterId=subject.
+    // 2 characters + 1 user subject = each observer hits 2 subjects = 2 × 2 = 4 OTHER calls.
+    expect(tasks.extractOtherMemoriesFromTurn).toHaveBeenCalledTimes(4)
+    // Char-to-char pairings.
     expect(createMemoryWithGate).toHaveBeenCalledWith(
       expect.objectContaining({ characterId: 'char-1', aboutCharacterId: 'char-2' }),
       { userId: 'user-1' },
     )
     expect(createMemoryWithGate).toHaveBeenCalledWith(
       expect.objectContaining({ characterId: 'char-2', aboutCharacterId: 'char-1' }),
+      { userId: 'user-1' },
+    )
+    // Both characters also extract memories about the user.
+    expect(createMemoryWithGate).toHaveBeenCalledWith(
+      expect.objectContaining({ characterId: 'char-1', aboutCharacterId: 'user-char-1' }),
+      { userId: 'user-1' },
+    )
+    expect(createMemoryWithGate).toHaveBeenCalledWith(
+      expect.objectContaining({ characterId: 'char-2', aboutCharacterId: 'user-char-1' }),
       { userId: 'user-1' },
     )
   })
