@@ -64,6 +64,42 @@ interface PerTableResult {
   degenerate: number;
 }
 
+/**
+ * Re-align `vector_indices.dimensions` for every character whose `vector_entries`
+ * now contains at least one row at the target dim. Without this, the runtime
+ * `CharacterVectorStore.load()` reads `meta.dimensions` (still 4096) and rejects
+ * subsequent writes at the new target dim — re-creating the very mismatch the
+ * truncation pass was supposed to clear.
+ *
+ * Characters with no target-dim entries (e.g. only 1536-d rows from a different
+ * model that the conservative scope skipped) keep their existing metadata so
+ * search continues to filter by the old dim until those rows are re-embedded.
+ */
+function realignVectorIndicesDimensions(
+  db: DatabaseType,
+  targetDim: number,
+): number {
+  if (
+    !tableExistsIn(db, 'vector_indices') ||
+    !tableExistsIn(db, 'vector_entries')
+  ) {
+    return 0;
+  }
+  const targetBytes = targetDim * BYTES_PER_FLOAT;
+  const now = new Date().toISOString();
+  const stmt = db.prepare(
+    `UPDATE vector_indices
+        SET dimensions = ?, "updatedAt" = ?
+      WHERE dimensions != ?
+        AND "characterId" IN (
+          SELECT DISTINCT "characterId" FROM vector_entries
+          WHERE length(embedding) = ?
+        )`,
+  );
+  const result = stmt.run(targetDim, now, targetDim, targetBytes);
+  return Number(result.changes ?? 0);
+}
+
 interface ActiveTruncationProfile {
   id: string;
   truncateToDimensions: number;
@@ -356,6 +392,18 @@ export const applyEmbeddingProfileTruncationMigration: Migration = {
         logger.info(`${table} pass complete`, {
           context: 'migration.apply-embedding-profile-truncation',
           ...result,
+        });
+      }
+
+      // Re-align vector_indices.dimensions for characters whose vector_entries
+      // now contain target-dim rows. Without this, CharacterVectorStore.load()
+      // would still see the old dim in meta and reject new target-dim writes.
+      const indicesUpdated = realignVectorIndicesDimensions(main, targetDim);
+      if (indicesUpdated > 0) {
+        logger.info('vector_indices dimensions re-aligned', {
+          context: 'migration.apply-embedding-profile-truncation',
+          rowsUpdated: indicesUpdated,
+          targetDim,
         });
       }
 
