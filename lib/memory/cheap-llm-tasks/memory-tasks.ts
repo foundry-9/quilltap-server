@@ -20,8 +20,12 @@ import type {
  * of the cheap-LLM profile's output-token budget. Applied both in the prompt
  * (so the model is told the cap) and after parsing (as defense-in-depth when
  * the model ignores the instruction).
+ *
+ * SELF: per-call cap (one observer, one subject — themselves).
+ * OTHER: per-subject cap inside a single multi-subject call; the call's
+ *        total cap is `HARD_CANDIDATE_CAP × number-of-subjects`.
  */
-export const HARD_CANDIDATE_CAP = 3
+export const HARD_CANDIDATE_CAP = 2
 
 /** Resolves the per-call maxMemories from the token budget, clamped to the hard cap. */
 function resolveMaxMemories(resolvedMaxTokens: number | undefined): number {
@@ -156,22 +160,27 @@ ${canonBlock}`
  * prompt body; it is the wired-in branch point for stricter user-subject
  * phrasing if early runs against real data show attribution failures.
  */
-function otherBodyForCap(maxMemories: number): string {
-  return `You produce memory entries that the observer would retain about the
-subject after this exchange.
+function otherBodyForCap(perSubjectCap: number): string {
+  return `You produce memory entries that the observer would retain about
+each of multiple subjects after this exchange. One LLM call covers every
+subject the observer interacted with this turn — extract per subject,
+return a single flat array tagged by subjectIndex.
 
 TASK
-Read the exchange below. Select up to ${maxMemories} memories — the ones
-the observer would actually carry forward and refer back to, not
-everything they could describe. Rank candidates against the criteria,
-then return the strongest. Do not pad the array to reach the cap.
+Read the exchange below. For EACH numbered SUBJECT in the CONTEXT
+footer, select up to ${perSubjectCap} memories — the ones the observer
+would actually carry forward about THAT subject, not everything they
+could describe. Rank candidates per subject, then return the strongest.
+Do not pad to reach the cap. Subjects with nothing worth keeping
+should simply be omitted from the array.
 
-WHAT TO PICK (priority order)
+WHAT TO PICK (priority order, applied per subject)
 1. HINGES — a decision, commitment, agreement, refusal, or realignment
    formed during this exchange.
 2. NEW FACTS — concrete information about the subject that is not in
-   the ALREADY ESTABLISHED block (see CONTEXT footer below):
-   background, history, plans, skills, circumstances, relationships.
+   their ALREADY ESTABLISHED block (each subject has their own block
+   in the CONTEXT footer): background, history, plans, skills,
+   circumstances, relationships.
 3. STATE CHANGES — a shift in the subject's position, mood, or status,
    paired with its cause.
 4. EXPRESSED INTENT — something the subject stated they will do, want
@@ -180,12 +189,12 @@ WHAT TO PICK (priority order)
    signature phrasing the subject adopted, dropped, or shifted during
    this exchange. These may feed back into the subject's identity over
    time, so capture them when they appear genuinely new — not when the
-   subject simply exhibits a gesture already in the ALREADY ESTABLISHED
-   block.
+   subject simply exhibits a gesture already in their ALREADY
+   ESTABLISHED block.
 
 WHAT TO SKIP (do not produce a memory for any of these)
-- Anything in the ALREADY ESTABLISHED block, restated or slightly
-  reworded.
+- Anything in a subject's ALREADY ESTABLISHED block, restated or
+  slightly reworded.
 - Pet names, terms of address, or how the subject addresses the
   observer, when those match the canon. (A new term of address being
   adopted is pickable under category 5.)
@@ -200,10 +209,11 @@ WHAT TO SKIP (do not produce a memory for any of these)
 - Anything implied by previously-established facts about the subject.
 
 DEDUPLICATION
-Before finalizing, scan your own list. If two memories encode the
-same underlying fact in different words, keep the more specific one
-and drop the other. Different framings of the same fact are still
-duplicates.
+Before finalizing, scan your own list. Within a single subject, if two
+memories encode the same underlying fact in different words, keep the
+more specific one and drop the other. Different subjects can have
+distinct memories about the same event from their own angle — that
+is allowed and expected.
 
 IMPORTANCE — calibrate to these anchors
   0.90  An explicit new commitment or revelation that changes how the
@@ -216,54 +226,147 @@ IMPORTANCE — calibrate to these anchors
   < 0.20  Do not extract.
 
 OUTPUT — third person, past tense, names not pronouns (use the actual
-names from the CONTEXT footer below), one fact per object.
+names from the CONTEXT footer below), one fact per object. Every item
+MUST carry subjectIndex matching a numbered SUBJECT in the CONTEXT
+footer; items missing or with an out-of-range subjectIndex will be
+discarded.
+  subjectIndex 1-based integer, matches a SUBJECT N: line below
   content      one sentence stating the fact and the moment that
                surfaced it
   summary      3–8 words, lowercase, no punctuation, useful for dedup
   keywords     2–4 lowercase words, no phrases
   importance   0.20–1.00, calibrated to anchors above
 
-EXAMPLE — good extraction:
+EXAMPLE — good extraction (observer is Friday, subjects 1=Amy 2=Charlie):
 [
   {
+    "subjectIndex": 1,
     "content": "Amy proposed reframing the cost problem as a four-tier prompt cache layout when Charlie was stuck between two designs.",
     "summary": "proposed four-tier cache layout",
     "keywords": ["cache", "architecture", "proposal"],
     "importance": 0.85
+  },
+  {
+    "subjectIndex": 2,
+    "content": "Charlie agreed to defer the renaming pass until after Amy's cache patch lands.",
+    "summary": "deferred rename until after cache patch",
+    "keywords": ["rename", "deferred", "agreement"],
+    "importance": 0.65
   }
 ]
 
 EXAMPLE — bad extraction (six restatements of one already-established
-identity fact, all should be skipped):
+identity fact about subject 1, all should be skipped):
 [
-  { "content": "Amy is married to Charlie", "importance": 0.7 },
-  { "content": "Amy committed to staying", "importance": 0.7 },
-  { "content": "Amy claimed permanent spousal identity", "importance": 0.8 },
-  { "content": "Amy declared lifelong commitment", "importance": 0.7 },
-  { "content": "Amy embraced family integration", "importance": 0.6 },
-  { "content": "Amy affirmed wife status", "importance": 0.7 }
+  { "subjectIndex": 1, "content": "Amy is married to Charlie", "importance": 0.7 },
+  { "subjectIndex": 1, "content": "Amy committed to staying", "importance": 0.7 },
+  { "subjectIndex": 1, "content": "Amy claimed permanent spousal identity", "importance": 0.8 },
+  { "subjectIndex": 1, "content": "Amy declared lifelong commitment", "importance": 0.7 },
+  { "subjectIndex": 1, "content": "Amy embraced family integration", "importance": 0.6 },
+  { "subjectIndex": 1, "content": "Amy affirmed wife status", "importance": 0.7 }
 ]
-All six restate facts in the ALREADY ESTABLISHED block. Correct
-output: [].
+All six restate facts in subject 1's ALREADY ESTABLISHED block.
+Correct output: [].
 
-Return JSON array only. No prose, no code fences. If nothing meets
-the bar, return [].`
+Return JSON array only. No prose, no code fences. If nothing meets the
+bar for any subject, return [].`
+}
+
+export interface OtherSubjectInput {
+  /** Stable identifier the caller will use to route returned candidates. */
+  id: string
+  name: string
+  pronouns: Pronouns | null
+  /** True for the user-controlled character; false for AI characters. */
+  isUser: boolean
+  /** Pre-rendered "ALREADY ESTABLISHED about <name>" block for this subject. */
+  canonBlock: string
 }
 
 function getOtherMemoryExtractionPrompt(
-  maxMemories: number,
+  perSubjectCap: number,
   observerName: string,
-  subjectName: string,
-  canonBlock: string,
-  _subjectIsUser: boolean,
+  subjects: ReadonlyArray<{ name: string; pronouns: Pronouns | null; isUser: boolean; canonBlock: string }>,
 ): string {
-  return `${otherBodyForCap(maxMemories)}
+  const subjectsBlock = subjects.map((s, i) => {
+    const label = formatNameWithPronouns(s.name, s.pronouns)
+    const userTag = s.isUser ? ' (the user-controlled character)' : ''
+    return `SUBJECT ${i + 1}: ${label}${userTag}\n${s.canonBlock}`
+  }).join('\n\n')
+
+  return `${otherBodyForCap(perSubjectCap)}
 
 CONTEXT
 OBSERVER: ${observerName}
-SUBJECT: ${subjectName}
 
-${canonBlock}`
+${subjectsBlock}`
+}
+
+/**
+ * Multi-subject parser: routes each item back to its subject by 1-based
+ * `subjectIndex`. Items missing/invalid subjectIndex are dropped, items
+ * beyond the per-subject cap are dropped, items beyond the total cap
+ * (perSubjectCap × subjects.length) are dropped.
+ */
+function parseOtherCandidatesBySubject(
+  content: string,
+  subjects: ReadonlyArray<OtherSubjectInput>,
+  perSubjectCap: number,
+): Map<string, MemoryCandidate[]> {
+  const result = new Map<string, MemoryCandidate[]>()
+  for (const s of subjects) result.set(s.id, [])
+
+  if (subjects.length === 0) return result
+  const totalCap = perSubjectCap * subjects.length
+
+  let cleanContent = content.trim()
+  if (cleanContent.startsWith('```json')) {
+    cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+  } else if (cleanContent.startsWith('```')) {
+    cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(cleanContent)
+  } catch {
+    return result
+  }
+
+  const items = Array.isArray(parsed) ? parsed : [parsed]
+  let total = 0
+
+  for (const raw of items) {
+    if (total >= totalCap) break
+    if (!raw || typeof raw !== 'object') continue
+    const item = raw as Record<string, unknown>
+
+    const idx = typeof item.subjectIndex === 'number' ? item.subjectIndex : NaN
+    if (!Number.isInteger(idx) || idx < 1 || idx > subjects.length) continue
+    const subject = subjects[idx - 1]
+    const bucket = result.get(subject.id)
+    if (!bucket || bucket.length >= perSubjectCap) continue
+
+    const candidate: MemoryCandidate = {
+      content: typeof item.content === 'string'
+        ? item.content
+        : (item.content ? JSON.stringify(item.content) : undefined),
+      summary: typeof item.summary === 'string'
+        ? item.summary
+        : (item.summary ? JSON.stringify(item.summary) : undefined),
+      keywords: Array.isArray(item.keywords) ? (item.keywords as string[]) : [],
+      importance: typeof item.importance === 'number' ? item.importance : 0.5,
+    }
+    if ((!candidate.content || candidate.content.length === 0) &&
+        (!candidate.summary || candidate.summary.length === 0)) {
+      continue
+    }
+
+    bucket.push(candidate)
+    total++
+  }
+
+  return result
 }
 
 /**
@@ -434,58 +537,46 @@ export async function extractSelfMemoriesFromTurn(
 }
 
 /**
- * Extract memories one CHARACTER (the observer) forms about another
- * participant (the subject), who may be another character or the user.
- * Subject lookup checks `characterSlices` first, then falls back to the
- * user character recorded on the transcript when `subjectIsUser` is true.
- *
- * The subject's canon block is pre-rendered by the caller (typically by
+ * Extract memories one CHARACTER (the observer) forms about every other
+ * participant (subjects) in a single LLM call. Subjects may include other
+ * characters or the user-controlled character. The caller pre-resolves
+ * each subject's canon block (typically via
  * `loadCanonForObserverAboutSubject`, which prefers an `Others/<name>.md`
- * file in the observer's vault, falling back to the subject's identity
+ * file in the observer's vault and falls back to the subject's identity
  * property).
+ *
+ * Returns a Map keyed by subject id so the caller can route candidates
+ * back to the right `aboutCharacterId` without ambiguity. Subjects that
+ * yielded no candidates appear in the map with an empty array.
+ *
+ * The single-subject equivalent existed before — folding all subjects
+ * into one call collapses an O(observers × subjects) call count to
+ * O(observers), which is the bottleneck for long extraction runs.
  */
 export async function extractOtherMemoriesFromTurn(
   transcript: TurnTranscript,
   observerCharacterId: string,
-  subjectCharacterId: string,
-  subjectIsUser: boolean,
-  subjectCanonBlock: string,
+  subjects: ReadonlyArray<OtherSubjectInput>,
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
   chatId?: string,
   resolvedMaxTokens?: number
-): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
+): Promise<CheapLLMTaskResult<Map<string, MemoryCandidate[]>>> {
   const observer = transcript.characterSlices.find(s => s.characterId === observerCharacterId)
-  if (!observer) {
-    return { success: true, result: [], usage: undefined }
+  if (!observer || subjects.length === 0) {
+    const empty = new Map<string, MemoryCandidate[]>()
+    for (const s of subjects) empty.set(s.id, [])
+    return { success: true, result: empty, usage: undefined }
   }
 
-  let subjectName: string
-  let subjectPronouns: Pronouns | null
-  if (subjectIsUser) {
-    if (transcript.userCharacterId !== subjectCharacterId || !transcript.userCharacterName) {
-      return { success: true, result: [], usage: undefined }
-    }
-    subjectName = transcript.userCharacterName
-    subjectPronouns = transcript.userCharacterPronouns ?? null
-  } else {
-    const subjectSlice = transcript.characterSlices.find(s => s.characterId === subjectCharacterId)
-    if (!subjectSlice) {
-      return { success: true, result: [], usage: undefined }
-    }
-    subjectName = subjectSlice.characterName
-    subjectPronouns = subjectSlice.characterPronouns ?? null
-  }
-
-  const maxMemories = resolveMaxMemories(resolvedMaxTokens)
+  const perSubjectCap = resolveMaxMemories(resolvedMaxTokens)
   const observerLabel = formatNameWithPronouns(observer.characterName, observer.characterPronouns ?? null)
-  const subjectLabel = formatNameWithPronouns(subjectName, subjectPronouns)
 
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: getOtherMemoryExtractionPrompt(maxMemories, observerLabel, subjectLabel, subjectCanonBlock, subjectIsUser),
+      content: getOtherMemoryExtractionPrompt(perSubjectCap, observerLabel, subjects),
     },
     {
       role: 'user',
@@ -497,7 +588,7 @@ export async function extractOtherMemoriesFromTurn(
     selection,
     messages,
     userId,
-    parseMemoryCandidateArray,
+    (content: string) => parseOtherCandidatesBySubject(content, subjects, perSubjectCap),
     'memory-extraction-other',
     chatId,
     undefined,

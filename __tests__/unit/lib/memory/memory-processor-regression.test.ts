@@ -1,11 +1,12 @@
 /**
  * Regression tests for the per-turn memory processor.
  *
- * Covers the gate-handling surface area for the new two-pass shape:
+ * Covers the gate-handling surface area for the two-pass shape:
  *   - SELF pass: one call per allowed character, aboutCharacterId = self
- *   - OTHER pass: one call per (observer, subject) pair where subject ranges
- *     over every other allowed character + the user-controlled character (if
- *     any). aboutCharacterId = subject. The user is NOT special-cased.
+ *   - OTHER pass: one MULTI-SUBJECT call per observer, covering every other
+ *     allowed character + the user-controlled character (if any). The call's
+ *     return is a Map<subjectId, MemoryCandidate[]> so the dispatcher can
+ *     route each candidate's aboutCharacterId. The user is NOT special-cased.
  *
  * Also exercises:
  *   - Multiple extracted candidates → multiple memory writes
@@ -72,6 +73,20 @@ const tasks = jest.requireMock('@/lib/memory/cheap-llm-tasks') as {
 }
 const { createMemoryWithGate } = jest.requireMock('@/lib/memory/memory-service') as {
   createMemoryWithGate: jest.Mock
+}
+
+/** Build the Map shape returned by extractOtherMemoriesFromTurn (multi-subject). */
+function otherResult(byId: Record<string, Array<{ content: string; summary: string; keywords?: string[]; importance?: number }>>) {
+  const map = new Map<string, unknown>()
+  for (const [id, candidates] of Object.entries(byId)) {
+    map.set(id, candidates.map(c => ({
+      content: c.content,
+      summary: c.summary,
+      keywords: c.keywords ?? [],
+      importance: c.importance ?? 0.5,
+    })))
+  }
+  return map
 }
 
 function makeTranscript(extra: {
@@ -172,7 +187,7 @@ describe('processTurnForMemory regressions', () => {
     } as any)
     tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
-      result: [],
+      result: new Map(),
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
     createMemoryWithGate.mockResolvedValue({
@@ -186,10 +201,12 @@ describe('processTurnForMemory regressions', () => {
   it('aggregates token usage and writes one memory per gated candidate', async () => {
     tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
-      result: [
-        { content: 'compass fact', summary: 'compass', keywords: ['compass'], importance: 0.8 },
-        { content: 'storm fear', summary: 'storms', keywords: ['storms'], importance: 0.7 },
-      ],
+      result: otherResult({
+        'user-char-1': [
+          { content: 'compass fact', summary: 'compass', keywords: ['compass'], importance: 0.8 },
+          { content: 'storm fear', summary: 'storms', keywords: ['storms'], importance: 0.7 },
+        ],
+      }),
       usage: { promptTokens: 12, completionTokens: 4, totalTokens: 16 },
     } as any)
     tasks.extractSelfMemoriesFromTurn.mockResolvedValue({
@@ -251,7 +268,7 @@ describe('processTurnForMemory regressions', () => {
     // OTHER pass (user as subject) returns nothing — skip is only on SELF.
     tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
-      result: [],
+      result: new Map(),
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
 
@@ -279,7 +296,7 @@ describe('processTurnForMemory regressions', () => {
     } as any)
     tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
-      result: [],
+      result: new Map(),
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     } as any)
 
@@ -333,11 +350,13 @@ describe('processTurnForMemory regressions', () => {
 
     tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
-      result: [
-        { content: 'low', summary: 'low', keywords: [], importance: 0.5 },
-        { content: 'alsoLow', summary: 'alsoLow', keywords: [], importance: 0.6 },
-        { content: 'high', summary: 'high', keywords: [], importance: 0.8 },
-      ],
+      result: otherResult({
+        'user-char-1': [
+          { content: 'low', summary: 'low', keywords: [], importance: 0.5 },
+          { content: 'alsoLow', summary: 'alsoLow', keywords: [], importance: 0.6 },
+          { content: 'high', summary: 'high', keywords: [], importance: 0.8 },
+        ],
+      }),
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
 
@@ -386,22 +405,25 @@ describe('processTurnForMemory regressions', () => {
   it('OTHER pass writes aboutCharacterId = userCharacterId when subject is the user', async () => {
     tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
-      result: [
-        { content: 'User likes jazz.', summary: 'jazz', keywords: ['jazz'], importance: 0.6 },
-      ],
+      result: otherResult({
+        'user-char-1': [
+          { content: 'User likes jazz.', summary: 'jazz', keywords: ['jazz'], importance: 0.6 },
+        ],
+      }),
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
 
     await processTurnForMemory(makeTranscript())
 
-    // 1 character + 1 user subject = 1 OTHER call (observer=char-1, subject=user-char-1).
+    // 1 character + 1 user subject = 1 multi-subject OTHER call from char-1
+    // covering subjects=[user-char-1].
     expect(tasks.extractOtherMemoriesFromTurn).toHaveBeenCalledTimes(1)
     expect(tasks.extractOtherMemoriesFromTurn).toHaveBeenCalledWith(
       expect.anything(),       // transcript
       'char-1',                // observerCharacterId
-      'user-char-1',           // subjectCharacterId
-      true,                    // subjectIsUser
-      expect.any(String),      // subjectCanonBlock
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'user-char-1', isUser: true }),
+      ]),                       // subjects
       expect.anything(),       // selection
       'user-1',                // userId
       undefined,               // uncensoredFallback
@@ -417,12 +439,14 @@ describe('processTurnForMemory regressions', () => {
     )
   })
 
-  it('OTHER pass fires per (observer, subject) pair across characters AND user (N=2 chars + user → 4 calls)', async () => {
+  it('OTHER pass fires once per observer covering all subjects (N=2 chars + user → 2 calls, 4 gate writes)', async () => {
     tasks.extractOtherMemoriesFromTurn.mockResolvedValue({
       success: true,
-      result: [
-        { content: 'Other character is calm', summary: 'calm', keywords: [], importance: 0.6 },
-      ],
+      result: otherResult({
+        'char-1': [{ content: 'about-char-1', summary: 'about-char-1', keywords: [], importance: 0.6 }],
+        'char-2': [{ content: 'about-char-2', summary: 'about-char-2', keywords: [], importance: 0.6 }],
+        'user-char-1': [{ content: 'about-user', summary: 'about-user', keywords: [], importance: 0.6 }],
+      }),
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
     } as any)
 
@@ -435,8 +459,10 @@ describe('processTurnForMemory regressions', () => {
 
     await processTurnForMemory(ctx)
 
-    // 2 characters + 1 user subject = each observer hits 2 subjects = 2 × 2 = 4 OTHER calls.
-    expect(tasks.extractOtherMemoriesFromTurn).toHaveBeenCalledTimes(4)
+    // One multi-subject call per observer (2 observers → 2 calls). Each call's
+    // returned Map is consulted for every subject the observer is paired with,
+    // so the gate still fires 2 × 2 = 4 times for the OTHER pass.
+    expect(tasks.extractOtherMemoriesFromTurn).toHaveBeenCalledTimes(2)
     // Char-to-char pairings.
     expect(createMemoryWithGate).toHaveBeenCalledWith(
       expect.objectContaining({ characterId: 'char-1', aboutCharacterId: 'char-2' }),

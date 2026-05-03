@@ -29,6 +29,7 @@ export {
   extractMemorySearchKeywords,
   summarizeMemoryRecap,
 } from './memory-tasks'
+export type { OtherSubjectInput } from './memory-tasks'
 
 // Canon block loader (used by the memory orchestrator to feed extractor prompts)
 export {

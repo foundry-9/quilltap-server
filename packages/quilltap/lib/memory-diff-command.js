@@ -38,16 +38,20 @@ Nothing is persisted; the server runs the extraction passes in dry-run mode
 so the comparison is non-destructive.
 
 Options:
-  -d, --data-dir <path>     Override data directory (instance root)
-      --passphrase <pass>   Decrypt .dbkey if peppered
-      --port <number>       Server port for API calls (default: 3000)
-      --out <dir>           Output directory (default: cwd)
-  -h, --help                Show this help
+  -d, --data-dir <path>      Override data directory (instance root)
+      --passphrase <pass>    Decrypt .dbkey if peppered
+      --port <number>        Server port for API calls (default: 3000)
+      --out <dir>            Output directory (default: cwd)
+      --concurrency <number> Parallel turns to process (default: 4, max: 32).
+                             Cloud cheap-LLMs can handle 8–16; keep this low
+                             for local Ollama to avoid saturating the model.
+  -h, --help                 Show this help
 
 Examples:
   quilltap memory-diff <chatId>
   quilltap memory-diff <chatId> --data-dir ~/iCloud/Quilltap/Friday
   quilltap memory-diff <chatId> --out /tmp/extract-diff
+  quilltap memory-diff <chatId> --concurrency 8     # cloud cheap-LLM
 `);
 }
 
@@ -57,6 +61,7 @@ function parseFlags(args) {
     passphrase: '',
     port: 3000,
     out: process.cwd(),
+    concurrency: 4,
     help: false,
   };
   const positional = [];
@@ -78,6 +83,15 @@ function parseFlags(args) {
           process.exit(1);
         }
         flags.port = p;
+        break;
+      }
+      case '--concurrency': {
+        const n = parseInt(args[++i], 10);
+        if (isNaN(n) || n < 1 || n > 32) {
+          console.error('Error: --concurrency must be between 1 and 32');
+          process.exit(1);
+        }
+        flags.concurrency = n;
         break;
       }
       case '--out':
@@ -245,8 +259,12 @@ async function memoryDiffCommand(args) {
   process.stderr.write(`  wrote ${GREEN}${existing.length}${RESET} memories to ${existingPath}\n`);
 
   // -------- 2. Stream dry-run re-extraction from the server ----------------
-  const url = `http://localhost:${flags.port}/api/v1/chats/${encodeURIComponent(chatId)}?action=extract-memories-dry-run`;
-  process.stderr.write(`${BOLD}Streaming re-extraction${RESET} from ${DIM}${url}${RESET}\n`);
+  const url =
+    `http://localhost:${flags.port}/api/v1/chats/${encodeURIComponent(chatId)}` +
+    `?action=extract-memories-dry-run&concurrency=${flags.concurrency}`;
+  process.stderr.write(
+    `${BOLD}Streaming re-extraction${RESET} (concurrency ${CYAN}${flags.concurrency}${RESET}) from ${DIM}${url}${RESET}\n`
+  );
 
   let res;
   try {
@@ -298,6 +316,10 @@ async function memoryDiffCommand(args) {
         process.stderr.write(
           `  ${RED}[${event.index + 1}/${turnCount}] FAILED${RESET}: ${event.error}\n`
         );
+        break;
+      case 'ping':
+        // Server-side heartbeat keeping the connection warm during long
+        // first-turn LLM passes; nothing to display.
         break;
       case 'done':
         totalCandidates = event.totalCandidates;

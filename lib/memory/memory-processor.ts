@@ -32,9 +32,11 @@ import {
   MemoryCandidate,
   UncensoredFallbackOptions,
 } from './cheap-llm-tasks'
+import type { OtherSubjectInput } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { resolveMaxTokens } from '@/lib/llm/model-context-data'
 import { ConnectionProfile, CheapLLMSettings, Character } from '@/lib/schemas/types'
+import type { Pronouns } from '@/lib/schemas/character.types'
 import type { DangerousContentSettings, MemoryExtractionLimits } from '@/lib/schemas/settings.types'
 import type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-message/turn-transcript'
 import { createMemoryWithGate } from './memory-service'
@@ -425,11 +427,12 @@ export async function processTurnForMemory(
     }
 
     // ---------------------------------------------------------------------
-    // Pass 2: OTHER memories (one call per (observer, subject) pair where
-    // subject is any other allowed character or the user-controlled
-    // character). Observer rate-limit gates the pair. Subject canon comes
-    // from the observer's vault `Others/<subject>.md` first, then falls
-    // back to the subject's own identity property.
+    // Pass 2: OTHER memories (one multi-subject call per observer; the
+    // call covers every other allowed character and the user-controlled
+    // character). Observer rate-limit gates the whole call. Each subject's
+    // canon block comes from the observer's vault `Others/<subject>.md`
+    // first, then falls back to the subject's own identity property; the
+    // canon source is preserved per subject so debug logs can attribute it.
     // ---------------------------------------------------------------------
     for (const observer of allowedSlices) {
       const rl = rateLimits.get(observer.characterId)!
@@ -439,67 +442,88 @@ export async function processTurnForMemory(
         mountPointId: observerCharacter?.characterDocumentMountPointId ?? null,
       }
 
-      for (const subject of subjects) {
-        if (subject.id === observer.characterId) continue
+      const observerSubjects = subjects.filter(s => s.id !== observer.characterId)
+      if (observerSubjects.length === 0) continue
 
+      // Resolve every subject's canon block + pronouns up front so the
+      // single LLM call can be assembled in one shot. We hold the source
+      // tag separately so per-subject debug logs can still report
+      // canon=<source> the way the per-pair version did.
+      type ResolvedSubject = OtherSubjectInput & { canonSource: string; subjectName: string }
+      const resolvedSubjects: ResolvedSubject[] = []
+      for (const subject of observerSubjects) {
         const canon = await loadCanonForObserverAboutSubject(observerVault, subject)
         const subjectCanonBlock = renderCanonBlock(canon)
+        const pronouns: Pronouns | null = subject.isUser
+          ? (ctx.transcript.userCharacterPronouns ?? null)
+          : (ctx.transcript.characterSlices.find(s => s.characterId === subject.id)?.characterPronouns ?? null)
+        resolvedSubjects.push({
+          id: subject.id,
+          name: subject.name,
+          pronouns,
+          isUser: subject.isUser,
+          canonBlock: subjectCanonBlock,
+          canonSource: canon.source,
+          subjectName: subject.name,
+        })
+      }
 
-        const otherResult = await extractOtherMemoriesFromTurn(
-          ctx.transcript,
-          observer.characterId,
-          subject.id,
-          subject.isUser,
-          subjectCanonBlock,
-          selection,
-          ctx.userId,
-          uncensoredFallback,
-          ctx.chatId,
-          cheapMaxTokens
+      const otherResult = await extractOtherMemoriesFromTurn(
+        ctx.transcript,
+        observer.characterId,
+        resolvedSubjects,
+        selection,
+        ctx.userId,
+        uncensoredFallback,
+        ctx.chatId,
+        cheapMaxTokens
+      )
+
+      if (otherResult.usage) {
+        totalUsage.promptTokens += otherResult.usage.promptTokens
+        totalUsage.completionTokens += otherResult.usage.completionTokens
+        totalUsage.totalTokens += otherResult.usage.totalTokens
+      }
+
+      if (!otherResult.success) {
+        debugLogs.push(
+          `[Memory] OTHER extraction failed (${observer.characterName} → ${resolvedSubjects.length} subject(s)): ${otherResult.error}`
         )
+        continue
+      }
 
-        if (otherResult.usage) {
-          totalUsage.promptTokens += otherResult.usage.promptTokens
-          totalUsage.completionTokens += otherResult.usage.completionTokens
-          totalUsage.totalTokens += otherResult.usage.totalTokens
+      const candidatesBySubject = otherResult.result ?? new Map<string, MemoryCandidate[]>()
+      for (const subject of resolvedSubjects) {
+        const rawCandidates = candidatesBySubject.get(subject.id) ?? []
+        const candidates = rl.mode === 'throttle'
+          ? applyImportanceFloor(rawCandidates, rl.floor)
+          : rawCandidates
+        if (rl.mode === 'throttle' && candidates.length < rawCandidates.length) {
+          debugLogs.push(
+            `[Memory] Throttle dropped ${rawCandidates.length - candidates.length} OTHER candidate(s) ` +
+            `for ${observer.characterName} about ${subject.subjectName} below importance ${rl.floor}`
+          )
         }
-
-        if (otherResult.success) {
-          const rawCandidates = otherResult.result || []
-          const candidates = rl.mode === 'throttle'
-            ? applyImportanceFloor(rawCandidates, rl.floor)
-            : rawCandidates
-          if (rl.mode === 'throttle' && candidates.length < rawCandidates.length) {
-            debugLogs.push(
-              `[Memory] Throttle dropped ${rawCandidates.length - candidates.length} OTHER candidate(s) ` +
-              `for ${observer.characterName} about ${subject.name} below importance ${rl.floor}`
-            )
-          }
-          debugLogs.push(
-            `[Memory] OTHER observer=${observer.characterName} subject=${subject.name} ` +
-            `canon=${canon.source}: ${candidates.length} candidate(s)`
-          )
-          for (const candidate of candidates) {
-            await writeCandidate({
-              characterId: observer.characterId,
-              characterName: observer.characterName,
-              aboutCharacterId: subject.id,
-              aboutCharacterName: subject.name,
-              pass: 'OTHER',
-              candidate,
-              passLabel: `OTHER memory ${observer.characterName} about ${subject.name}`,
-              ctx,
-              sourceMessageId: observer.contributingMessageIds[observer.contributingMessageIds.length - 1] ?? sourceMessageId,
-              debugLogs,
-              createdIds: createdMemoryIds,
-              reinforcedIds: reinforcedMemoryIds,
-              collected: collectedCandidates,
-            })
-          }
-        } else {
-          debugLogs.push(
-            `[Memory] OTHER extraction failed (${observer.characterName} → ${subject.name}): ${otherResult.error}`
-          )
+        debugLogs.push(
+          `[Memory] OTHER observer=${observer.characterName} subject=${subject.subjectName} ` +
+          `canon=${subject.canonSource}: ${candidates.length} candidate(s)`
+        )
+        for (const candidate of candidates) {
+          await writeCandidate({
+            characterId: observer.characterId,
+            characterName: observer.characterName,
+            aboutCharacterId: subject.id,
+            aboutCharacterName: subject.subjectName,
+            pass: 'OTHER',
+            candidate,
+            passLabel: `OTHER memory ${observer.characterName} about ${subject.subjectName}`,
+            ctx,
+            sourceMessageId: observer.contributingMessageIds[observer.contributingMessageIds.length - 1] ?? sourceMessageId,
+            debugLogs,
+            createdIds: createdMemoryIds,
+            reinforcedIds: reinforcedMemoryIds,
+            collected: collectedCandidates,
+          })
         }
       }
     }

@@ -155,7 +155,7 @@ export async function handleQueueMemories(
  * Quilltap is single-user per instance and this is a developer tool.
  */
 export async function handleExtractMemoriesDryRun(
-  _req: NextRequest,
+  req: NextRequest,
   chatId: string,
   chat: ChatMetadata,
   ctx: AuthenticatedContext,
@@ -165,6 +165,20 @@ export async function handleExtractMemoriesDryRun(
 
   if (!connectionProfileId) {
     return badRequest('No valid cheap LLM configured. Please set a cheap LLM profile in settings.');
+  }
+
+  // Bounded turn-parallelism. Defaults to 4: enough to give a noticeable
+  // speedup against cloud providers without crushing a local Ollama. Cap
+  // at 32 to keep the cheap-LLM provider from drowning even when the user
+  // explicitly asks for more.
+  const concurrencyParam = req.nextUrl.searchParams.get('concurrency');
+  let concurrency = 4;
+  if (concurrencyParam !== null) {
+    const parsed = Number.parseInt(concurrencyParam, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      return badRequest('concurrency must be a positive integer');
+    }
+    concurrency = Math.min(parsed, 32);
   }
 
   const connectionProfile = await repos.connections.findById(connectionProfileId);
@@ -212,21 +226,47 @@ export async function handleExtractMemoriesDryRun(
   logger.info('[Chats v1] Streaming dry-run memory extraction', {
     chatId,
     turnCount: turnOpenerIds.length,
+    concurrency,
   });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (obj: unknown) => {
-        controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
+      // Defensive write: a controller closed mid-flight (client disconnect,
+      // response timeout, dev-server reload) would otherwise throw on every
+      // subsequent enqueue, cascade through the per-turn catch, and re-throw
+      // out of the outer catch — flooding the logs with misleading
+      // "Controller is already closed" turn failures. Tracking `closed` lets
+      // the loop bail instead of running 30-60 s of LLM passes for output
+      // that nobody will ever read.
+      let closed = false;
+      const send = (obj: unknown): boolean => {
+        if (closed) return false;
+        try {
+          controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
+          return true;
+        } catch {
+          closed = true;
+          return false;
+        }
       };
 
+      // Heartbeat keeps the response from going quiet during the first turn's
+      // LLM passes. Without it the underlying socket can be torn down before
+      // the first `candidate`/`turn` event ever fires.
+      const heartbeat = setInterval(() => {
+        send({ type: 'ping', t: Date.now() });
+      }, 5000);
+
       try {
-        send({ type: 'start', chatId, turnCount: turnOpenerIds.length });
+        send({ type: 'start', chatId, turnCount: turnOpenerIds.length, concurrency });
 
         let totalCandidates = 0;
 
-        for (let i = 0; i < turnOpenerIds.length; i++) {
+        // Process a single turn. The body is identical to the previous
+        // serial loop body — extracting it into a function lets the worker
+        // pool below pull turns concurrently without duplicating logic.
+        const processTurn = async (i: number): Promise<void> => {
           const turnOpenerMessageId = turnOpenerIds[i];
           try {
             const transcript = buildTurnTranscript(
@@ -250,7 +290,7 @@ export async function handleExtractMemoriesDryRun(
                 candidatesAdded: 0,
                 debugLogs: ['[Memory] Turn has no character contributions — skipped'],
               });
-              continue;
+              return;
             }
 
             const result = await processTurnForMemory({
@@ -267,6 +307,7 @@ export async function handleExtractMemoriesDryRun(
               dryRun: true,
             });
 
+            if (closed) return;
             const candidates = result.extractedCandidates ?? [];
             for (const candidate of candidates) {
               send({ type: 'candidate', turnIndex: i, ...candidate });
@@ -282,6 +323,7 @@ export async function handleExtractMemoriesDryRun(
               debugLogs: result.debugLogs,
             });
           } catch (err) {
+            if (closed) return;
             const message = err instanceof Error ? err.message : String(err);
             logger.warn('[Chats v1] Dry-run turn failed', { chatId, turnOpenerMessageId, error: message });
             send({
@@ -292,19 +334,40 @@ export async function handleExtractMemoriesDryRun(
               error: message,
             });
           }
-        }
+        };
 
-        send({ type: 'done', totalCandidates });
+        // Worker pool: `concurrency` parallel pullers share a cursor over
+        // turnOpenerIds. Each worker grabs the next index, awaits its turn,
+        // then loops. Settles when the cursor is exhausted (or `closed`
+        // flips). NDJSON output is interleaved across turns; the CLI sorts
+        // by `index` when assembling the final extracted.json so this is
+        // safe for the diff workflow.
+        let nextIndex = 0;
+        const worker = async (): Promise<void> => {
+          while (!closed) {
+            const i = nextIndex++;
+            if (i >= turnOpenerIds.length) return;
+            await processTurn(i);
+          }
+        };
+
+        const workerCount = Math.min(concurrency, turnOpenerIds.length);
+        await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+        if (!closed) send({ type: 'done', totalCandidates });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        logger.error('[Chats v1] Dry-run stream failed', { chatId }, err instanceof Error ? err : undefined);
-        try {
+        if (!closed) {
+          const message = err instanceof Error ? err.message : String(err);
+          logger.error('[Chats v1] Dry-run stream failed', { chatId }, err instanceof Error ? err : undefined);
           send({ type: 'fatal', error: message });
-        } catch {
-          // controller might already be closed
         }
       } finally {
-        controller.close();
+        clearInterval(heartbeat);
+        try {
+          controller.close();
+        } catch {
+          // already closed
+        }
       }
     },
   });

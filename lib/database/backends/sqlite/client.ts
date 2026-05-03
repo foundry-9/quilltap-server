@@ -237,8 +237,16 @@ export function setupSQLiteShutdownHandlers(): void {
   process.on('SIGINT', handleShutdown);
 
   process.on('uncaughtException', (error) => {
+    if (isRecoverableContentParseError(error)) {
+      logger.warn('Uncaught content-parse error (recovered, server kept alive)', {
+        error: error.message,
+        stack: (error as Error).stack,
+      });
+      return;
+    }
     logger.error('Uncaught exception, closing SQLite connection', {
-      error: error instanceof Error ? error.message : String(error),
+      error: error.message,
+      stack: error.stack,
     });
     closeSQLiteClient();
     releaseActiveInstanceLock();
@@ -261,8 +269,22 @@ export function setupSQLiteShutdownHandlers(): void {
       return;
     }
 
+    // SyntaxError from JSON.parse on transient/malformed network content
+    // (e.g. an LLM provider returning an empty or truncated streaming chunk)
+    // is recoverable in the same way — the offending request fails, but the
+    // server should keep running long enough for the next one to succeed.
+    if (isRecoverableContentParseError(reason)) {
+      const err = reason as SyntaxError;
+      logger.warn('Unhandled content-parse rejection (recovered, server kept alive)', {
+        reason: err.message,
+        stack: err.stack,
+      });
+      return;
+    }
+
     logger.error('Unhandled rejection, closing SQLite connection', {
       reason: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
     });
     closeSQLiteClient();
     releaseActiveInstanceLock();
@@ -311,6 +333,22 @@ function isRecoverableNetworkRejection(reason: unknown): boolean {
   }
 
   return false;
+}
+
+/**
+ * `JSON.parse` on a truncated/empty network response throws a `SyntaxError`
+ * that often surfaces here when an LLM provider hangs up mid-stream and the
+ * SDK's stream iterator is processing chunks from a fire-and-forget context
+ * (cleanup callbacks, abort handlers, log writers). These should fail the
+ * specific request, not the whole server. Anchored on `JSON.parse` in the
+ * stack so it stays narrow — a real source-level SyntaxError won't match.
+ */
+function isRecoverableContentParseError(reason: unknown): boolean {
+  return (
+    reason instanceof SyntaxError &&
+    typeof reason.stack === 'string' &&
+    reason.stack.includes('JSON.parse')
+  );
 }
 
 // ============================================================================

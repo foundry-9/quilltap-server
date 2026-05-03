@@ -4,6 +4,32 @@
 
 ### 4.4-dev
 
+#### Memory dry-run: bounded turn-parallelism via `--concurrency`
+
+`POST /api/v1/chats/[id]?action=extract-memories-dry-run` now accepts `?concurrency=N` (default 4, capped at 32). The per-turn loop is replaced by a worker pool of N parallel pullers sharing a cursor, so cloud cheap-LLM providers (OpenAI, Anthropic, Z.AI) actually get saturated instead of waiting one round-trip per turn. The CLI got a matching `--concurrency N` flag (default 4, range 1–32) that's passed through as a query-string param.
+
+Concrete impact on a 70-turn chat: serial run was ~17 hours against an OpenAI cheap-LLM. Concurrency 16 hits ~14 cheap-LLM completions/min in steady state, dropping the same workload to roughly 40 minutes. NDJSON event ordering becomes interleaved across turns (the CLI sorts by `index` for the final `extracted.json` so the diff workflow is unaffected; the human-readable progress lines on stderr land out of order). Heartbeat, defensive `send`, and per-turn try/catch are unchanged.
+
+Defaulted to 4 deliberately: enough to give a noticeable speedup against any cloud provider without crushing a local Ollama. Users with cloud cheap-LLMs should crank it higher (8–16). The route validates the param is a positive integer and clamps to 32.
+
+#### OTHER memory pass folded into a single multi-subject call per observer
+
+Previously the OTHER pass fired one cheap-LLM call per `(observer, subject)` pair — for a 4-character chat that's 16 OTHER calls per turn, on top of 4 SELF calls. Now each observer issues a single multi-subject OTHER call covering every other allowed character plus the user-controlled character; the prompt lists subjects with numbered `SUBJECT N:` blocks each carrying its own `ALREADY ESTABLISHED` canon block, and the model returns a flat array tagged with `subjectIndex` per item.
+
+Per-turn OTHER call count drops from `n_observers × n_subjects` to `n_observers` — a ~4× reduction in cheap-LLM round-trips for typical chats. The new parser routes by 1-based `subjectIndex` back to the right `aboutCharacterId`, drops items with missing/out-of-range indices, and enforces both the per-subject cap and the `perSubjectCap × n_subjects` total cap.
+
+`HARD_CANDIDATE_CAP` lowered from 3 to 2: SELF cap is 2 per call, OTHER's per-subject cap is 2, so the OTHER call's total cap is `2 × n_subjects` — matching the rule "max 2 self, max 2*n other per character per turn". With reasonable cheap-LLM `maxTokens`, the practical effect is small (the model rarely hit the cap anyway under the new hinges-not-facts framing) but the upper bound is now tighter.
+
+`extractOtherMemoriesFromTurn` signature changed: instead of `(observerId, subjectId, subjectIsUser, canonBlock, ...)` it now takes `(observerId, subjects: ReadonlyArray<OtherSubjectInput>, ...)` and returns `CheapLLMTaskResult<Map<string, MemoryCandidate[]>>` keyed by subject id. New `OtherSubjectInput` type exported from `lib/memory/cheap-llm-tasks/index.ts`. `memory-processor.ts` builds each observer's subjects list with canon + pronouns once per turn, fires a single OTHER call, then dispatches the returned Map back through `writeCandidate`. Per-subject debug logs still report `canon=<source>` the way the per-pair version did. Existing test suites updated for the new Map return shape and call-count assertions.
+
+#### `quilltap memory-diff` CLI hardening: streaming + dev-server resilience
+
+Three fixes for crashes and silent stalls observed running `memory-diff` against a 70-turn chat:
+
+1. The dry-run handler's `send()` is now defensive — `controller.enqueue` errors set a `closed` flag and short-circuit further work instead of cascading through the per-turn catch and re-throwing out of the outer catch with a misleading "Controller is already closed" log line. Pattern matches the existing `safeEnqueue` helper in `lib/services/chat-message/streaming.service.ts`.
+2. Added a 5-second `{ type: 'ping', t }` heartbeat from inside the start callback so the response stream doesn't go quiet during a 30–60 second first-turn LLM pass and get torn down by an idle timeout. CLI silently consumes pings (no display).
+3. SQLite client's `unhandledRejection` and `uncaughtException` handlers now treat `SyntaxError` whose stack mentions `JSON.parse` as recoverable — log full stack + keep the dev server alive — instead of `process.exit(1)`. A truncated streaming chunk from a cheap-LLM provider should fail the request, not the whole server. Both handlers also gained a `stack` field on every fall-through log so the next time something fires we'll see exactly where the parse came from.
+
 #### Partial reindex: re-embed only mismatched-dim rows
 
 `POST /api/v1/embedding-profiles/[id]?action=reindex` now accepts an optional `{ scope: 'all' | 'mismatched-dim' }` body. Default is `'all'` (existing behavior). `'mismatched-dim'` enqueues `EMBEDDING_GENERATE` jobs only for memories, conversation chunks, and help docs whose stored vector dim differs from the profile's target (`truncateToDimensions ?? dimensions`). Rows that already match are skipped. Rejected with 400 if the profile has neither truncation nor explicit dimensions set (no target to compare against).
