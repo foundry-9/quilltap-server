@@ -362,7 +362,8 @@ async function createMemoryDirect(
     const embeddingResult = await generateEmbeddingForUser(
       `${data.summary}\n\n${data.content}`,
       options.userId,
-      options.embeddingProfileId
+      options.embeddingProfileId,
+      { priority: 'background' }
     )
 
     const updatedMemory = await repos.memories.updateForCharacter(
@@ -828,7 +829,8 @@ export async function findSimilarMemories(
     const embeddingResult = await generateEmbeddingForUser(
       `${summary}\n\n${content}`,
       options.userId,
-      options.embeddingProfileId
+      options.embeddingProfileId,
+      { priority: 'background' }
     )
 
     const vectorStore = await getCharacterVectorStore(characterId)
@@ -926,7 +928,8 @@ export async function generateMissingEmbeddings(
       const embeddingResult = await generateEmbeddingForUser(
         `${memory.summary}\n\n${memory.content}`,
         options.userId,
-        options.embeddingProfileId
+        options.embeddingProfileId,
+        { priority: 'background' }
       )
 
       // Update memory with embedding

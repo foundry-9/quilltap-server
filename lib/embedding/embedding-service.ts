@@ -65,6 +65,37 @@ export class EmbeddingError extends Error {
 }
 
 /**
+ * Hard cap on the text length we'll send to an embedding provider. Local
+ * Ollama models like qwen3-embedding refuse anything past their context
+ * window with a 500, and even when they accept it, requests in the
+ * 100KB+ range can park the queue for tens of seconds — long enough to
+ * starve interactive memory recall on the chat path.
+ */
+export const EMBEDDING_MAX_CHARS = 128 * 1024
+
+/**
+ * Priority lane for embedding requests.
+ *
+ * - `interactive`: chat-path memory/scriptorium/help searches. Run immediately.
+ * - `background`: re-index, dedup, and other queue-driven work. Yields to any
+ *   pending interactive request so chat doesn't sit behind a backlog of
+ *   bulk embedding work.
+ *
+ * The bottleneck is the embedding provider (Ollama serializes per loaded
+ * model), not Node — so a worker thread wouldn't help. What helps is keeping
+ * non-interactive callers from piling into the queue while a chat is waiting.
+ */
+export type EmbeddingPriority = 'interactive' | 'background'
+
+let interactivePending = 0
+
+async function waitForInteractiveQuiet(): Promise<void> {
+  while (interactivePending > 0) {
+    await new Promise<void>(resolve => setTimeout(resolve, 50))
+  }
+}
+
+/**
  * Get the default embedding profile for a user
  */
 export async function getDefaultEmbeddingProfile(userId: string): Promise<EmbeddingProfile | null> {
@@ -241,44 +272,64 @@ export async function generateEmbedding(
 }
 
 /**
- * Generate an embedding for text using the user's default profile
+ * Generate an embedding for text using the user's default profile.
+ *
+ * Honors a priority lane (default `'interactive'`): background callers should
+ * pass `{ priority: 'background' }` so they yield to any chat-path embedding
+ * work in flight. See `EmbeddingPriority` for the why.
  */
 export async function generateEmbeddingForUser(
   text: string,
   userId: string,
-  profileId?: string
+  profileId?: string,
+  opts: { priority?: EmbeddingPriority } = {}
 ): Promise<EmbeddingResult> {
-  let profile: EmbeddingProfile | null = null
-  let profileSource = 'default'
+  const priority = opts.priority ?? 'interactive'
 
-  if (profileId) {
-    profile = await getEmbeddingProfile(profileId)
-    if (profile) {
-      profileSource = 'explicit'
+  if (priority === 'background') {
+    await waitForInteractiveQuiet()
+  } else {
+    interactivePending++
+  }
+
+  try {
+    let profile: EmbeddingProfile | null = null
+    let profileSource = 'default'
+
+    if (profileId) {
+      profile = await getEmbeddingProfile(profileId)
+      if (profile) {
+        profileSource = 'explicit'
+      }
+    }
+
+    if (!profile) {
+      profile = await getDefaultEmbeddingProfile(userId)
+      profileSource = profileId ? 'default (explicit not found)' : 'default'
+    }
+
+    if (!profile) {
+      throw new EmbeddingError('No embedding profile configured')
+    }
+
+    logger.debug('[Embedding] Generating embedding for user', {
+      context: 'embedding-service',
+      profileId: profile.id,
+      profileName: profile.name,
+      provider: profile.provider,
+      modelName: profile.modelName,
+      dimensions: profile.dimensions,
+      profileSource,
+      priority,
+      textLength: text.length,
+    })
+
+    return await generateEmbedding(text, profile, userId)
+  } finally {
+    if (priority === 'interactive') {
+      interactivePending--
     }
   }
-
-  if (!profile) {
-    profile = await getDefaultEmbeddingProfile(userId)
-    profileSource = profileId ? 'default (explicit not found)' : 'default'
-  }
-
-  if (!profile) {
-    throw new EmbeddingError('No embedding profile configured')
-  }
-
-  logger.debug('[Embedding] Generating embedding for user', {
-    context: 'embedding-service',
-    profileId: profile.id,
-    profileName: profile.name,
-    provider: profile.provider,
-    modelName: profile.modelName,
-    dimensions: profile.dimensions,
-    profileSource,
-    textLength: text.length,
-  })
-
-  return generateEmbedding(text, profile, userId)
 }
 
 /**
@@ -338,10 +389,11 @@ export function extractSearchTerms(text: string): FallbackSearchResult {
 export async function prepareForSearch(
   text: string,
   userId: string,
-  profileId?: string
+  profileId?: string,
+  opts: { priority?: EmbeddingPriority } = {}
 ): Promise<SearchPreparationResult> {
   try {
-    const embedding = await generateEmbeddingForUser(text, userId, profileId)
+    const embedding = await generateEmbeddingForUser(text, userId, profileId, opts)
     return {
       usedEmbedding: true,
       embedding,

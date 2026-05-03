@@ -4,6 +4,18 @@
 
 ### 4.4-dev
 
+#### Embedding queue: 128KB cap and interactive priority lane
+
+Two related fixes for chat-path memory recall stalls. Symptom: "Searching X's memories..." sat for 100–160 seconds before sending the turn to the LLM, with one observed 4GB OOM at the same time.
+
+Root cause was Ollama serializing embedding requests behind a backlog of background mount-chunk re-index jobs, including some chunks too big for the model's context (Qwen3 returned 500 "input length exceeds the context length") that the queue then retried indefinitely. A single 346KB JSON document opened in Document Mode produced a 198KB chunk that re-failed every save.
+
+Fix 1 — hard size cap: `EMBEDDING_MAX_CHARS = 128 * 1024` exported from `lib/embedding/embedding-service.ts`. The four `EMBEDDING_GENERATE` job handlers (memory, conversation chunk, help doc, mount chunk) now check text length before calling the provider, and on overflow log a warning, mark the embedding-status row as failed, and `return` without throwing. No throw means the queue treats the job as completed and doesn't retry, so an oversize chunk stops monopolizing the queue. Skipped entities lose semantic-search coverage on their content; that's the explicit trade-off.
+
+Fix 2 — priority lane: `generateEmbeddingForUser` and `prepareForSearch` gained an optional `{ priority: 'interactive' | 'background' }` argument (default `'interactive'`). Interactive callers increment a module-level `interactivePending` counter; background callers `await` until the counter is zero before firing. The mechanism is application-level — workers wouldn't help, since the contention is at the Ollama HTTP queue regardless of which thread sends the request. Background-tagged sites: the four queue handlers, `lib/memory/memory-gate.ts` (extraction-time dedup + re-embed), `lib/memory/memory-service.ts` `createMemory`/`findSimilarMemories`/`regenerateEmbeddings`, and `character-optimizer.service.ts`. Interactive sites (search-memory, scriptorium tool, help-search tool, character-optimizer's interactive paths) keep the default and run immediately.
+
+Layered behavior: this is independent of the existing queue-claim priority in `enqueueEmbeddingGenerate` (`MEMORY`/`CONVERSATION_CHUNK = 10`, `HELP_DOC`/`MOUNT_CHUNK = 0`). Queue priority controls which job gets claimed next; the lane control governs whether a claimed background job actually fires its provider call now or yields. They compose.
+
 #### Memory dry-run: bounded turn-parallelism via `--concurrency`
 
 `POST /api/v1/chats/[id]?action=extract-memories-dry-run` now accepts `?concurrency=N` (default 4, capped at 32). The per-turn loop is replaced by a worker pool of N parallel pullers sharing a cursor, so cloud cheap-LLM providers (OpenAI, Anthropic, Z.AI) actually get saturated instead of waiting one round-trip per turn. The CLI got a matching `--concurrency N` flag (default 4, range 1–32) that's passed through as a query-string param.

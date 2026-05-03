@@ -505,7 +505,7 @@ export async function runCharacterOptimizer(
         try {
           const embeddingAvailable = await isEmbeddingAvailable(userId);
           if (embeddingAvailable) {
-            const embeddingResult = await generateEmbeddingForUser(searchQuery, userId);
+            const embeddingResult = await generateEmbeddingForUser(searchQuery, userId, undefined, { priority: 'background' });
             const vectorStore = await getCharacterVectorStore(characterId);
             const results = vectorStore.search(embeddingResult.embedding, 500);
             const matchedIds = new Set(results.map(r => r.id));
