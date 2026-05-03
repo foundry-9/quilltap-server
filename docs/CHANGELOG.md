@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Memory list: dedup on append to fix duplicate React keys during regenerate
+
+Bug: viewing a character's Memories tab while a `MEMORY_REGENERATE_*` sweep was in flight produced "Encountered two children with the same key" warnings. Cause: offset-based pagination is unstable when the underlying corpus is being mutated — deletions inside an already-loaded page (or inserts above the next offset) shift items so that `offset=N` returns IDs already present at `offset<N`. Fix: `components/memory/memory-list.tsx` filters out IDs already in state before appending the next page.
+
 #### Regenerate Memories button: wipe + rebuild every chat-linked memory
 
 New card in the Commonplace Book settings tab (`/settings?tab=memory`, section `memory-regenerate`) with a two-step confirm that wipes every chat-linked memory and re-runs the current extraction pipeline. Manual non-chat memories are untouched. Orphan memories (chat already deleted) are wiped too.
