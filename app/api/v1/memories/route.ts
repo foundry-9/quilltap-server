@@ -15,6 +15,8 @@
  * - POST ?action=housekeeping-config - Update auto-housekeeping settings
  * - POST ?action=extraction-limits-config - Update per-hour extraction rate limits
  * - POST ?action=backfill-embeddings - Enqueue embedding-generate jobs for memories missing an embedding
+ * - POST ?action=regenerate-all - Wipe and rebuild every chat-linked memory in the background
+ * - POST ?action=extraction-concurrency - Update the per-user MEMORY_EXTRACTION concurrency cap
  * - PUT ?action=embeddings - Rebuild vector index (characterId in body)
  * - GET ?action=housekeep&characterId= - Get housekeeping preview
  * - GET ?action=embeddings&characterId= - Get embedding status
@@ -22,6 +24,8 @@
  * - GET ?action=extraction-limits-config - Read current extraction rate limits
  * - GET ?action=backfill-embeddings - Report progress of the embedding backfill
  * - GET ?action=character-memory-counts - List user's characters with memory counts (for housekeeping UI)
+ * - GET ?action=extraction-concurrency - Read current MEMORY_EXTRACTION concurrency cap
+ * - GET ?action=regenerate-all - Report whether a regenerate sweep is in flight
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -29,12 +33,18 @@ import {
   createAuthenticatedHandler,
   getActionParam,
 } from '@/lib/api/middleware';
-import { createMemoryWithEmbedding, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex } from '@/lib/memory/memory-service';
+import { createMemoryWithEmbedding, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex, deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service';
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
-import { enqueueEmbeddingGenerate, enqueueMemoryHousekeeping } from '@/lib/background-jobs/queue-service';
+import { enqueueEmbeddingGenerate, enqueueMemoryHousekeeping, enqueueMemoryRegenerateAll } from '@/lib/background-jobs/queue-service';
+import { setMemoryExtractionConcurrencyOverride } from '@/lib/background-jobs/processor';
+import {
+  getMemoryExtractionConcurrency,
+  setMemoryExtractionConcurrency,
+  getMemoryExtractionLimits,
+  setMemoryExtractionLimits,
+} from '@/lib/instance-settings';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
@@ -112,6 +122,10 @@ const backfillStartSchema = z.object({
   batchSize: z.number().int().min(1).max(2000).prefault(500),
 });
 
+const extractionConcurrencySchema = z.object({
+  concurrency: z.number().int().min(1).max(32),
+});
+
 // =============================================================================
 // GET /api/v1/memories - List memories
 // =============================================================================
@@ -146,6 +160,14 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'character-memory-counts') {
     return handleCharacterMemoryCounts(req, { user, repos });
+  }
+
+  if (action === 'extraction-concurrency') {
+    return handleReadExtractionConcurrency(req, { user, repos });
+  }
+
+  if (action === 'regenerate-all') {
+    return handleRegenerateAllStatus(req, { user, repos });
   }
 
   // Standard list operations - require a filter
@@ -210,6 +232,14 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'backfill-embeddings') {
     return handleBackfillStart(req, { user, repos });
+  }
+
+  if (action === 'regenerate-all') {
+    return handleRegenerateAll(req, { user, repos });
+  }
+
+  if (action === 'extraction-concurrency') {
+    return handleWriteExtractionConcurrency(req, { user, repos });
   }
 
   // Default: Create memory
@@ -731,21 +761,15 @@ async function handleWriteHousekeepingConfig(
 
 async function handleReadExtractionLimitsConfig(
   _req: NextRequest,
-  { user, repos }: { user: { id: string }; repos: any }
+  _ctx: { user: { id: string }; repos: any }
 ) {
-  const settings = await repos.chatSettings.findByUserId(user.id);
-  const memoryExtractionLimits = settings?.memoryExtractionLimits ?? {
-    enabled: false,
-    maxPerHour: 20,
-    softStartFraction: 0.7,
-    softFloor: 0.7,
-  };
+  const memoryExtractionLimits = await getMemoryExtractionLimits();
   return NextResponse.json({ success: true, settings: memoryExtractionLimits });
 }
 
 async function handleWriteExtractionLimitsConfig(
   req: NextRequest,
-  { user, repos }: { user: { id: string }; repos: any }
+  _ctx: { user: { id: string }; repos: any }
 ) {
   const body = await req.json();
   const parsed = extractionLimitsConfigSchema.safeParse(body);
@@ -753,14 +777,7 @@ async function handleWriteExtractionLimitsConfig(
     return validationError(parsed.error);
   }
 
-  const existing = await repos.chatSettings.findByUserId(user.id);
-  const currentSettings = existing?.memoryExtractionLimits ?? {
-    enabled: false,
-    maxPerHour: 20,
-    softStartFraction: 0.7,
-    softFloor: 0.7,
-  };
-
+  const currentSettings = await getMemoryExtractionLimits();
   const merged = {
     enabled: parsed.data.enabled ?? currentSettings.enabled,
     maxPerHour: parsed.data.maxPerHour ?? currentSettings.maxPerHour,
@@ -768,12 +785,9 @@ async function handleWriteExtractionLimitsConfig(
     softFloor: parsed.data.softFloor ?? currentSettings.softFloor,
   };
 
-  await repos.chatSettings.updateForUser(user.id, {
-    memoryExtractionLimits: merged,
-  });
+  await setMemoryExtractionLimits(merged);
 
-  logger.info('[Memories API] Extraction rate limits updated', {
-    userId: user.id,
+  logger.info('[Memories API] Extraction rate limits updated (instance-wide)', {
     enabled: merged.enabled,
     maxPerHour: merged.maxPerHour,
   });
@@ -1020,65 +1034,158 @@ async function handleDeleteByChatId(
     return notFound('Chat');
   }
 
-  // Get all memories for this chat first (for vector store cleanup)
-  const memories = await repos.memories.findByChatId(chatId);
-
-  if (memories.length === 0) {
-    return NextResponse.json({
-      success: true,
-      chatId,
-      deletedCount: 0,
-    });
-  }
-
-  logger.info('[Memories API] Deleting memories for chat', {
-    chatId,
-    memoryCount: memories.length,
-  });
-
-  // Group memories by character for vector store cleanup
-  const memoriesByCharacter = new Map<string, string[]>();
-  for (const memory of memories) {
-    const existing = memoriesByCharacter.get(memory.characterId) || [];
-    existing.push(memory.id);
-    memoriesByCharacter.set(memory.characterId, existing);
-  }
-
-  // Clean up vector stores
-  for (const [characterId, memoryIds] of memoriesByCharacter) {
-    try {
-      const vectorStore = await getCharacterVectorStore(characterId);
-      for (const memoryId of memoryIds) {
-        try {
-          await vectorStore.removeVector(memoryId);
-        } catch (err) {
-          logger.warn('[Memories API] Failed to remove vector', {
-            characterId,
-            memoryId,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      }
-      await vectorStore.save();
-    } catch (err) {
-      logger.warn('[Memories API] Failed to clean up vector store', {
-        characterId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  // Delete from database
-  const deletedCount = await repos.memories.deleteByChatId(chatId);
-
-  logger.info('[Memories API] Memories deleted successfully', {
-    chatId,
-    deletedCount,
-  });
+  const { deleted } = await deleteMemoriesByChatIdWithVectors(chatId);
 
   return NextResponse.json({
     success: true,
     chatId,
-    deletedCount,
+    deletedCount: deleted,
   });
+}
+
+async function handleRegenerateAll(
+  _req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any },
+) {
+  // Pressing the button again is an explicit "kill the previous sweep and
+  // start over" gesture — wipe every PENDING/PROCESSING job from the
+  // previous run before enqueueing the new fan-out. Currently-executing
+  // handlers will finish their LLM call and try to mark themselves
+  // complete; those updates become no-ops because the row is gone, and
+  // any memories they wrote post-cancel get cleaned up by the next round
+  // of MEMORY_REGENERATE_CHAT wipes the fresh sweep enqueues.
+  const cleared = await repos.backgroundJobs.deleteByTypesAndStatuses(
+    [
+      'MEMORY_REGENERATE_ALL',
+      'MEMORY_REGENERATE_CHAT',
+      'MEMORY_EXTRACTION',
+      'INTER_CHARACTER_MEMORY',
+    ],
+    ['PENDING', 'PROCESSING'],
+  );
+  if (cleared > 0) {
+    logger.info('[Memories API] Cleared in-flight regenerate jobs before fresh sweep', {
+      userId: user.id,
+      cleared,
+    });
+  }
+
+  // Resolve the standard + dangerous-compatible cheap profiles up front and
+  // hand them to the fan-out job. Resolution is cheap (a single connection
+  // lookup) but it has to happen before we enqueue, so the job's payload is
+  // self-contained.
+  const settings = await repos.chatSettings.findByUserId(user.id);
+  const profiles = await repos.connections.findByUserId(user.id);
+
+  const cheapDefaultId = settings?.cheapLLMSettings?.defaultCheapProfileId ?? null;
+  const cheapDefault = cheapDefaultId
+    ? profiles.find((p: { id: string }) => p.id === cheapDefaultId)
+    : null;
+  const standardProfileId = cheapDefault?.id ?? profiles[0]?.id ?? null;
+  if (!standardProfileId) {
+    return badRequest(
+      'No connection profiles found. Add at least one provider connection before regenerating memories.',
+    );
+  }
+
+  const uncensoredTextProfileId =
+    settings?.dangerousContentSettings?.uncensoredTextProfileId ?? null;
+  const uncensoredCheap = uncensoredTextProfileId
+    ? profiles.find(
+        (p: { id: string; isCheap?: boolean }) =>
+          p.id === uncensoredTextProfileId && p.isCheap === true,
+      )
+    : null;
+  const anyDangerousCheap = profiles.find(
+    (p: { isCheap?: boolean; isDangerousCompatible?: boolean }) =>
+      p.isCheap === true && p.isDangerousCompatible === true,
+  );
+  const dangerousProfileId =
+    uncensoredCheap?.id ?? anyDangerousCheap?.id ?? standardProfileId;
+
+  // Single fan-out job — the actual chat enumeration, orphan walk, and
+  // per-chat enqueues happen in the background processor so this endpoint
+  // returns in milliseconds even on instances with tens of thousands of
+  // memories. Dedupes on userId so a double-click doesn't produce two
+  // fan-outs.
+  const { jobId, isNew } = await enqueueMemoryRegenerateAll(user.id, {
+    standardProfileId,
+    dangerousProfileId,
+  });
+
+  logger.info('[Memories API] Regenerate-all fan-out enqueued', {
+    userId: user.id,
+    jobId,
+    isNew,
+    standardProfileId,
+    dangerousProfileId,
+  });
+
+  const clearedSuffix = cleared > 0
+    ? ` Cleared ${cleared} in-flight job${cleared === 1 ? '' : 's'} from the previous sweep.`
+    : '';
+
+  return NextResponse.json({
+    success: true,
+    jobId,
+    isNew,
+    cleared,
+    message: isNew
+      ? `Regeneration scheduled — building the chat list in the background. The Mem badge will start ticking shortly.${clearedSuffix}`
+      : `A regeneration sweep is already in progress. The existing run will continue.${clearedSuffix}`,
+  });
+}
+
+async function handleRegenerateAllStatus(
+  _req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any },
+) {
+  const [pending, processing] = await Promise.all([
+    repos.backgroundJobs.findByUserId(user.id, 'PENDING'),
+    repos.backgroundJobs.findByUserId(user.id, 'PROCESSING'),
+  ]);
+  const all = [...pending, ...processing];
+  const inFlightFanOut = all.filter(
+    (j: { type: string }) => j.type === 'MEMORY_REGENERATE_ALL',
+  ).length;
+  const inFlightWipes = all.filter(
+    (j: { type: string }) => j.type === 'MEMORY_REGENERATE_CHAT',
+  ).length;
+  const inFlightExtractions = all.filter(
+    (j: { type: string }) => j.type === 'MEMORY_EXTRACTION',
+  ).length;
+  return NextResponse.json({
+    success: true,
+    inFlightFanOut,
+    inFlightWipes,
+    inFlightExtractions,
+    inFlight: inFlightFanOut + inFlightWipes + inFlightExtractions,
+  });
+}
+
+async function handleReadExtractionConcurrency(
+  _req: NextRequest,
+  _ctx: { user: { id: string }; repos: any },
+) {
+  const concurrency = await getMemoryExtractionConcurrency();
+  return NextResponse.json({ success: true, concurrency });
+}
+
+async function handleWriteExtractionConcurrency(
+  req: NextRequest,
+  _ctx: { user: { id: string }; repos: any },
+) {
+  const body = await req.json();
+  const parsed = extractionConcurrencySchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  await setMemoryExtractionConcurrency(parsed.data.concurrency);
+  // Push the new value into the processor's runtime cache so it takes effect
+  // on the next claim tick rather than waiting for the next cache refresh.
+  setMemoryExtractionConcurrencyOverride(parsed.data.concurrency);
+  logger.info('[Memories API] Memory extraction concurrency updated (instance-wide)', {
+    concurrency: parsed.data.concurrency,
+  });
+  return NextResponse.json({ success: true, concurrency: parsed.data.concurrency });
 }

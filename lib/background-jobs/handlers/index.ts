@@ -20,6 +20,8 @@ import { handleSceneStateTracking } from './scene-state-tracking';
 import { handleCharacterAvatarGeneration } from './character-avatar';
 import { handleConversationRender } from './conversation-render';
 import { handleMemoryHousekeeping } from './memory-housekeeping';
+import { handleMemoryRegenerateChat } from './memory-regenerate-chat';
+import { handleMemoryRegenerateAll } from './memory-regenerate-all';
 import { handleWardrobeOutfitAnnouncement } from './wardrobe-announcement';
 
 /**
@@ -46,6 +48,8 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   CHARACTER_AVATAR_GENERATION: handleCharacterAvatarGeneration,
   CONVERSATION_RENDER: handleConversationRender,
   MEMORY_HOUSEKEEPING: handleMemoryHousekeeping,
+  MEMORY_REGENERATE_CHAT: handleMemoryRegenerateChat,
+  MEMORY_REGENERATE_ALL: handleMemoryRegenerateAll,
   WARDROBE_OUTFIT_ANNOUNCEMENT: handleWardrobeOutfitAnnouncement,
 };
 
@@ -76,4 +80,6 @@ export { handleSceneStateTracking };
 export { handleCharacterAvatarGeneration };
 export { handleConversationRender };
 export { handleMemoryHousekeeping };
+export { handleMemoryRegenerateChat };
+export { handleMemoryRegenerateAll };
 export { handleWardrobeOutfitAnnouncement };

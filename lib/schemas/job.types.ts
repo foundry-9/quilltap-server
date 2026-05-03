@@ -33,6 +33,8 @@ export const BackgroundJobTypeEnum = z.enum([
   'CHARACTER_AVATAR_GENERATION', // Generate character avatar based on equipped wardrobe items
   'CONVERSATION_RENDER', // Deterministic Markdown rendering of conversation (Scriptorium)
   'MEMORY_HOUSEKEEPING', // Prune / merge a character's memories against retention policy
+  'MEMORY_REGENERATE_CHAT', // Wipe one chat's auto-extracted memories and re-enqueue extraction per turn
+  'MEMORY_REGENERATE_ALL', // Fan-out wrapper: enumerate chats + orphans and enqueue MEMORY_REGENERATE_CHAT jobs
   'WARDROBE_OUTFIT_ANNOUNCEMENT', // Debounced Aurora announcement of outfit changes
 ]);
 export type BackgroundJobType = z.infer<typeof BackgroundJobTypeEnum>;

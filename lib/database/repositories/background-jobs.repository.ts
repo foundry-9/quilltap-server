@@ -569,6 +569,47 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
+   * Hard-delete every job whose type AND status matches the given filters.
+   *
+   * Used by the regenerate-all flow when the operator presses the button
+   * a second time and wants to fully reset the queue: PENDING and
+   * PROCESSING jobs from a prior sweep get removed entirely, not just
+   * marked DEAD, so the fresh sweep starts from a clean slate.
+   *
+   * Currently-executing JS handlers will continue running until their
+   * LLM call returns; their subsequent markCompleted/markFailed calls
+   * become no-ops (the row is gone). Any memories those late writes
+   * produce are cleaned up by the next round of MEMORY_REGENERATE_CHAT
+   * wipes that the fresh sweep enqueues.
+   */
+  async deleteByTypesAndStatuses(
+    types: BackgroundJobType[],
+    statuses: BackgroundJobStatus[],
+  ): Promise<number> {
+    if (types.length === 0 || statuses.length === 0) return 0;
+    return this.safeQuery(
+      async () => {
+        const deletedCount = await this.deleteMany({
+          type: { $in: types },
+          status: { $in: statuses },
+        } as TypedQueryFilter<BackgroundJob>);
+        if (deletedCount > 0) {
+          logger.info('Deleted background jobs by types/statuses', {
+            context: 'BackgroundJobsRepository.deleteByTypesAndStatuses',
+            types,
+            statuses,
+            deletedCount,
+          });
+        }
+        return deletedCount;
+      },
+      'Error deleting background jobs by types/statuses',
+      { types, statuses },
+      0,
+    );
+  }
+
+  /**
    * Cancel all non-completed jobs of a given type.
    * Used during re-embed to clear stale EMBEDDING_GENERATE jobs before
    * enqueuing fresh ones.  Includes PROCESSING jobs which may be orphaned

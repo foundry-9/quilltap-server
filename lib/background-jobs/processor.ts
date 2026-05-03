@@ -12,6 +12,7 @@ import { BackgroundJob } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getHandler } from './handlers';
 import { getErrorMessage } from '@/lib/errors';
+import { getMemoryExtractionConcurrency } from '@/lib/instance-settings';
 
 /** Processor state */
 let processorRunning = false;
@@ -47,14 +48,78 @@ const STUCK_JOB_CHECK_INTERVAL_MS = 5 * 60 * 1000;
  */
 const EMBEDDING_CONCURRENCY = 4;
 
-/** Small delay between claiming successive embedding jobs (ms) */
-const EMBEDDING_CLAIM_DELAY = 50;
+/** Small delay between claiming successive concurrent jobs (ms) */
+const CONCURRENT_CLAIM_DELAY = 50;
 
 /** Stuck job recovery timer */
 let stuckJobCheckInterval: ReturnType<typeof setInterval> | null = null;
 
-/** Number of embedding jobs currently in-flight */
-let embeddingInFlight = 0;
+/**
+ * Per-type in-flight counters. Sequential jobs (anything not listed in
+ * CONCURRENT_JOB_TYPES) don't need a counter — they go through the
+ * `isProcessing` mutex instead.
+ */
+const inFlightByType = new Map<string, number>();
+
+function inFlight(type: string): number {
+  return inFlightByType.get(type) ?? 0;
+}
+
+function bumpInFlight(type: string, delta: number): void {
+  inFlightByType.set(type, Math.max(0, inFlight(type) + delta));
+}
+
+/**
+ * MEMORY_EXTRACTION concurrency. Defaults to 1 (sequential, original
+ * behaviour) and is overridden at runtime from the user's chatSettings via
+ * setMemoryExtractionConcurrencyOverride. The Memory Settings UI updates
+ * this when the operator drags the slider.
+ *
+ * The first call to startProcessor seeds this from chatSettings so a saved
+ * value survives a server restart without needing the operator to revisit
+ * the slider.
+ */
+let memoryExtractionConcurrencyOverride = 1;
+let memoryExtractionConcurrencySeeded = false;
+
+async function seedMemoryExtractionConcurrencyFromSettings(): Promise<void> {
+  if (memoryExtractionConcurrencySeeded) return;
+  memoryExtractionConcurrencySeeded = true;
+  try {
+    const value = await getMemoryExtractionConcurrency();
+    memoryExtractionConcurrencyOverride = value;
+    logger.info('[JobQueue] Seeded memory extraction concurrency from instance settings', { value });
+  } catch (error) {
+    logger.warn('[JobQueue] Failed to seed memory extraction concurrency from instance settings', {
+      error: getErrorMessage(error),
+    });
+  }
+}
+
+export function setMemoryExtractionConcurrencyOverride(value: number): void {
+  if (!Number.isFinite(value)) return;
+  const clamped = Math.max(1, Math.min(32, Math.floor(value)));
+  memoryExtractionConcurrencyOverride = clamped;
+  logger.info('[JobQueue] Memory extraction concurrency override updated', { value: clamped });
+}
+
+export function getMemoryExtractionConcurrencyOverride(): number {
+  return memoryExtractionConcurrencyOverride;
+}
+
+function concurrencyFor(type: string): number {
+  if (type === 'EMBEDDING_GENERATE') return EMBEDDING_CONCURRENCY;
+  if (type === 'MEMORY_EXTRACTION') return memoryExtractionConcurrencyOverride;
+  return 1;
+}
+
+function totalConcurrentInFlight(): number {
+  let total = 0;
+  for (const type of CONCURRENT_JOB_TYPES) {
+    total += inFlight(type);
+  }
+  return total;
+}
 
 /**
  * Timer that re-starts the processor when a FAILED job's `scheduledAt` comes due.
@@ -86,7 +151,7 @@ function armWakeUpTimer(scheduledAt: string): void {
 }
 
 /** Job types eligible for concurrent processing */
-const CONCURRENT_JOB_TYPES = new Set(['EMBEDDING_GENERATE']);
+const CONCURRENT_JOB_TYPES = new Set(['EMBEDDING_GENERATE', 'MEMORY_EXTRACTION']);
 
 /**
  * Start the job processor
@@ -109,7 +174,20 @@ export function startProcessor(intervalMs: number = DEFAULT_POLL_INTERVAL): void
     });
   }, intervalMs);
 
-  logger.info('[JobQueue] Processor started', { intervalMs, embeddingConcurrency: EMBEDDING_CONCURRENCY });
+  logger.info('[JobQueue] Processor started', {
+    intervalMs,
+    embeddingConcurrency: EMBEDDING_CONCURRENCY,
+    memoryExtractionConcurrency: memoryExtractionConcurrencyOverride,
+  });
+
+  // Seed the runtime concurrency override from persisted chat settings so a
+  // saved value survives a restart. Fire-and-forget; the worst case is one
+  // poll cycle running at the default before the seeded value kicks in.
+  seedMemoryExtractionConcurrencyFromSettings().catch((error) => {
+    logger.warn('[JobQueue] Memory extraction concurrency seed failed', {
+      error: getErrorMessage(error),
+    });
+  });
 
   // Reset ALL orphaned PROCESSING jobs on startup — no job can legitimately
   // be in PROCESSING state when the server just started.
@@ -210,17 +288,12 @@ export async function processNextJob(): Promise<boolean> {
   isProcessing = true;
 
   try {
-    // If embedding slots are full, skip claiming until some finish
-    if (embeddingInFlight >= EMBEDDING_CONCURRENCY) {
-      return false;
-    }
-
     const repos = getRepositories();
     const job = await repos.backgroundJobs.claimNextJob();
 
     if (!job) {
-      // Auto-stop when queue is empty and no embedding jobs are in-flight
-      if (processorRunning && embeddingInFlight === 0) {
+      // Auto-stop when queue is empty and no concurrent jobs remain in-flight
+      if (processorRunning && totalConcurrentInFlight() === 0) {
         // Check for retry-eligible jobs scheduled in the future so we can wake
         // the processor back up in time — otherwise FAILED retries strand here
         // until something new is enqueued.
@@ -242,11 +315,10 @@ export async function processNextJob(): Promise<boolean> {
       attempts: job.attempts,
     });
 
-    // Concurrent path for embedding jobs
+    // Concurrent path: dispatch without awaiting, then try to fill more slots
     if (CONCURRENT_JOB_TYPES.has(job.type)) {
-      runEmbeddingJob(job);
-      // After dispatching, try to fill remaining concurrency slots immediately
-      await fillEmbeddingSlots();
+      runConcurrentJob(job);
+      await fillConcurrentSlots();
       return true;
     }
 
@@ -263,24 +335,27 @@ export async function processNextJob(): Promise<boolean> {
 }
 
 /**
- * Fire an embedding job without awaiting it.
- * Tracks in-flight count so we respect the concurrency limit.
+ * Fire a concurrent-eligible job without awaiting it. Tracks per-type
+ * in-flight count so each type respects its own concurrency limit.
  */
-function runEmbeddingJob(job: BackgroundJob): void {
-  embeddingInFlight++;
-  logger.debug('[JobQueue] Embedding job dispatched', {
+function runConcurrentJob(job: BackgroundJob): void {
+  const limit = concurrencyFor(job.type);
+  bumpInFlight(job.type, +1);
+  logger.debug('[JobQueue] Concurrent job dispatched', {
     jobId: job.id,
-    inFlight: embeddingInFlight,
-    max: EMBEDDING_CONCURRENCY,
+    type: job.type,
+    inFlight: inFlight(job.type),
+    max: limit,
   });
 
   executeJob(job).finally(() => {
-    embeddingInFlight--;
+    bumpInFlight(job.type, -1);
     // Proactively fill the freed slot instead of waiting for the next
     // interval tick (up to 2s idle otherwise).
-    if (processorRunning && embeddingInFlight < EMBEDDING_CONCURRENCY) {
-      fillEmbeddingSlots().catch((error) => {
-        logger.error('[JobQueue] Error back-filling embedding slot', {
+    if (processorRunning) {
+      fillConcurrentSlots().catch((error) => {
+        logger.error('[JobQueue] Error back-filling concurrent slot', {
+          type: job.type,
           error: getErrorMessage(error),
         });
       });
@@ -289,32 +364,73 @@ function runEmbeddingJob(job: BackgroundJob): void {
 }
 
 /**
- * Claim and dispatch embedding jobs until concurrency slots are full
- * or no more embedding jobs are available.
+ * Re-entrancy guard for fillConcurrentSlots. When many short jobs finish at
+ * once, each runConcurrentJob's finally hook calls fillConcurrentSlots —
+ * along with the startProcessor interval. Without this flag, multiple
+ * fills run in parallel, each independently checking inFlight before any
+ * of them increments it, and the per-type cap gets blown wide open
+ * (observed: 166 MEMORY_EXTRACTION jobs running with cap=32). Serializing
+ * the fill loop turns those concurrent claims into one ordered sequence.
  */
-async function fillEmbeddingSlots(): Promise<void> {
-  const repos = getRepositories();
+let fillingConcurrentSlots = false;
 
-  while (embeddingInFlight < EMBEDDING_CONCURRENCY) {
-    const job = await repos.backgroundJobs.claimNextJob();
-    if (!job) break;
+/**
+ * Claim and dispatch concurrent-eligible jobs until at least one type's
+ * slots are full, or no more jobs are available.
+ *
+ * Sequential jobs that get claimed during back-fill are executed inline
+ * (the same way the original embedding back-fill behaved) so we don't
+ * leave them indefinitely stranded.
+ */
+async function fillConcurrentSlots(): Promise<void> {
+  if (fillingConcurrentSlots) {
+    // Another fill is already in progress; it will pick up any newly-freed
+    // slots when it next loops. Re-entering here would race the in-flight
+    // counter and overshoot the cap.
+    return;
+  }
+  fillingConcurrentSlots = true;
 
-    logger.info('[JobQueue] Processing job', {
-      jobId: job.id,
-      type: job.type,
-      attempts: job.attempts,
-    });
+  try {
+    const repos = getRepositories();
 
-    if (CONCURRENT_JOB_TYPES.has(job.type)) {
-      runEmbeddingJob(job);
-      // Small delay between claims to avoid hammering the DB
-      await new Promise((resolve) => setTimeout(resolve, EMBEDDING_CLAIM_DELAY));
-    } else {
-      // Hit a non-embedding job — run it sequentially then stop filling
-      await executeJob(job);
-      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY));
-      break;
+    // Bail when every concurrent type is at its cap.
+    const anySlotOpen = (): boolean => {
+      for (const type of CONCURRENT_JOB_TYPES) {
+        if (inFlight(type) < concurrencyFor(type)) return true;
+      }
+      return false;
+    };
+
+    while (anySlotOpen()) {
+      const job = await repos.backgroundJobs.claimNextJob();
+      if (!job) break;
+
+      logger.info('[JobQueue] Processing job', {
+        jobId: job.id,
+        type: job.type,
+        attempts: job.attempts,
+      });
+
+      if (CONCURRENT_JOB_TYPES.has(job.type)) {
+        // If the claimed job's type is already at its cap, run it inline so
+        // we don't violate the cap or strand the job.
+        if (inFlight(job.type) >= concurrencyFor(job.type)) {
+          await executeJob(job);
+          await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY));
+          continue;
+        }
+        runConcurrentJob(job);
+        await new Promise((resolve) => setTimeout(resolve, CONCURRENT_CLAIM_DELAY));
+      } else {
+        // Sequential job — run it inline then stop filling.
+        await executeJob(job);
+        await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY));
+        break;
+      }
     }
+  } finally {
+    fillingConcurrentSlots = false;
   }
 }
 
@@ -394,11 +510,15 @@ export function getProcessorStatus(): {
   processing: boolean;
   embeddingInFlight: number;
   embeddingConcurrency: number;
+  memoryExtractionInFlight: number;
+  memoryExtractionConcurrency: number;
 } {
   return {
     running: processorRunning,
     processing: isProcessing,
-    embeddingInFlight,
+    embeddingInFlight: inFlight('EMBEDDING_GENERATE'),
     embeddingConcurrency: EMBEDDING_CONCURRENCY,
+    memoryExtractionInFlight: inFlight('MEMORY_EXTRACTION'),
+    memoryExtractionConcurrency: memoryExtractionConcurrencyOverride,
   };
 }

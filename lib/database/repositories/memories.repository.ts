@@ -960,6 +960,29 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     );
   }
 
+  /**
+   * Find every distinct, non-null chatId currently referenced by any memory.
+   *
+   * Used by the regenerate-all fan-out to spot orphan memories whose chat
+   * has been deleted — much cheaper than walking each character's memories
+   * individually on instances with tens of thousands of rows.
+   */
+  async findDistinctChatIds(): Promise<string[]> {
+    return this.safeQuery(
+      async () => {
+        const rows = (await rawQuery<Array<{ chatId: string | null }>>(
+          'SELECT DISTINCT chatId FROM memories WHERE chatId IS NOT NULL'
+        )) ?? [];
+        return rows
+          .map((r) => r.chatId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      },
+      'Error listing distinct memory chatIds',
+      {},
+      []
+    );
+  }
+
   // ============================================================================
   // SEARCH AND REPLACE OPERATIONS
   // ============================================================================

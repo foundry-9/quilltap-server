@@ -20,6 +20,7 @@ import { createMemoryExtractionEvent } from '@/lib/services/system-events.servic
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import type { Character, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
+import { getMemoryExtractionLimits } from '@/lib/instance-settings';
 import type { MemoryExtractionPayload } from '../queue-service';
 
 /**
@@ -109,6 +110,29 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
 
   const availableProfiles = await repos.connections.findByUserId(job.userId);
   const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+  const memoryExtractionLimits = await getMemoryExtractionLimits();
+
+  // Anchor derived memories to the historical chat timestamp rather than
+  // letting createdAt default to "now". Without this, a regenerate sweep
+  // re-extracts a chat from 2025-08 and the new memory rows look like
+  // they were written today — wrong for chronology, recency, and the
+  // housekeeping signals that decay against age.
+  //
+  // Use the latest assistant message in the turn (matches the
+  // sourceMessageId the processor will attach), falling back to the user
+  // turn opener, then to the chat's own createdAt.
+  let sourceMessageTimestamp: string | undefined;
+  if (transcript.latestAssistantMessageId) {
+    const m = messageEvents.find((m) => m.id === transcript.latestAssistantMessageId);
+    sourceMessageTimestamp = m?.createdAt;
+  }
+  if (!sourceMessageTimestamp && payload.turnOpenerMessageId) {
+    const m = messageEvents.find((m) => m.id === payload.turnOpenerMessageId);
+    sourceMessageTimestamp = m?.createdAt;
+  }
+  if (!sourceMessageTimestamp) {
+    sourceMessageTimestamp = chat.createdAt;
+  }
 
   const result = await processTurnForMemory({
     transcript,
@@ -120,7 +144,8 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
     availableProfiles,
     dangerSettings,
     isDangerousChat: chat.isDangerousChat === true,
-    memoryExtractionLimits: chatSettings.memoryExtractionLimits,
+    memoryExtractionLimits,
+    sourceMessageTimestamp,
   });
 
   if (!result.success) {

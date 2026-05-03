@@ -185,6 +185,10 @@ import { normalizeEmbeddingsUnitVectorsMigration } from './normalize-embeddings-
 import { addAutoHousekeepingSettingsFieldMigration } from './add-auto-housekeeping-settings-field';
 // Add memoryExtractionLimits column to chat_settings
 import { addMemoryExtractionLimitsFieldMigration } from './add-memory-extraction-limits-field';
+// Add memoryExtractionConcurrency column to chat_settings
+import { addMemoryExtractionConcurrencyFieldMigration } from './add-memory-extraction-concurrency-field';
+// Move memory extraction knobs out of chat_settings into instance_settings
+import { migrateExtractionKnobsToInstanceSettingsMigration } from './migrate-extraction-knobs-to-instance-settings';
 // Add supportsImageUpload column to connection_profiles (per-profile vision capability)
 import { addProfileSupportsImageUploadFieldMigration } from './add-profile-supports-image-upload-field';
 // Add Lantern image alert columns to projects and chats
@@ -415,6 +419,10 @@ export const migrations: Migration[] = [
   addAutoHousekeepingSettingsFieldMigration,
   // Add memoryExtractionLimits column to chat_settings
   addMemoryExtractionLimitsFieldMigration,
+  // Add memoryExtractionConcurrency column to chat_settings
+  addMemoryExtractionConcurrencyFieldMigration,
+  // Move memory extraction knobs out of chat_settings into instance_settings
+  migrateExtractionKnobsToInstanceSettingsMigration,
   // Add supportsImageUpload column to connection_profiles
   addProfileSupportsImageUploadFieldMigration,
   // Add Lantern image alert columns to projects and chats
@@ -630,6 +638,10 @@ export {
   addAutoHousekeepingSettingsFieldMigration,
   // Add memoryExtractionLimits column to chat_settings
   addMemoryExtractionLimitsFieldMigration,
+  // Add memoryExtractionConcurrency column to chat_settings
+  addMemoryExtractionConcurrencyFieldMigration,
+  // Move memory extraction knobs out of chat_settings into instance_settings
+  migrateExtractionKnobsToInstanceSettingsMigration,
   // Add supportsImageUpload column to connection_profiles
   addProfileSupportsImageUploadFieldMigration,
   // Add Lantern image alert columns to projects and chats

@@ -4,6 +4,48 @@
 
 ### 4.4-dev
 
+#### Regenerate Memories button: wipe + rebuild every chat-linked memory
+
+New card in the Commonplace Book settings tab (`/settings?tab=memory`, section `memory-regenerate`) with a two-step confirm that wipes every chat-linked memory and re-runs the current extraction pipeline. Manual non-chat memories are untouched. Orphan memories (chat already deleted) are wiped too.
+
+Three job types form the pipeline. `MEMORY_REGENERATE_ALL` is the fan-out: one job per button press. Its handler enumerates the user's chats, runs a single `SELECT DISTINCT chatId FROM memories` to find orphans, snapshots in-flight jobs once, and enqueues one `MEMORY_REGENERATE_CHAT` per chat. `MEMORY_REGENERATE_CHAT` deletes the chat's memories (and their vector store entries via shared `deleteMemoriesByChatIdWithVectors` helper in `lib/memory/memory-service.ts`), then enqueues one `MEMORY_EXTRACTION` per user-message turn opener with `skipDedupCheck: true` (the chat just got wiped, dedup scans would no-op). Greeting-only chats get a single null-opener extraction.
+
+The HTTP endpoint `POST /api/v1/memories?action=regenerate-all` returns in milliseconds with the fan-out enqueued — previously it walked every memory inline and took 2+ minutes on instances with tens of thousands of memories. Pressing the button while a sweep is in progress hard-deletes every PENDING/PROCESSING `MEMORY_REGENERATE_*`, `MEMORY_EXTRACTION`, and `INTER_CHARACTER_MEMORY` job from the previous run, then enqueues a fresh fan-out — explicit "kill the previous sweep and start over" via the new `BackgroundJobsRepository.deleteByTypesAndStatuses`. Currently-running JS handlers finish their LLM call and find their row gone on `markCompleted`/`markFailed`; both fall through to `null` returns, no crash. Any stragglers they wrote get cleaned up by the next round of wipes the fresh sweep enqueues.
+
+`GET /api/v1/memories?action=regenerate-all` reports in-flight counts (fan-outs, wipes, extractions). The card polls it every 5s while work is active.
+
+Per-chat connection profile resolution: the standard cheap-LLM profile is used for normal chats; chats marked `isDangerousChat` get routed through the user's `dangerousContentSettings.uncensoredTextProfileId` (when also marked `isCheap`) or any profile that is both `isCheap` and `isDangerousCompatible`. Falls back to standard when nothing matches.
+
+Source-message timestamps preserved on derived memories. The extraction handler at `lib/background-jobs/handlers/memory-extraction.ts` resolves `transcript.latestAssistantMessageId`'s `createdAt` (or the user opener's, or the chat's) and passes it as `sourceMessageTimestamp` to `processTurnForMemory` — the processor was already plumbing this through to `createMemoryWithGate` via the existing `data.sourceMessageTimestamp ? { createdAt, updatedAt } : ...` branch in `memory-service.ts:336-337`, but the regenerate path was never setting it. Without this, regenerated memories from a chat written in 2025-08 looked like they were created at sweep time — wrong for chronology, recency signals, and the housekeeping decay against age.
+
+#### Memory extraction concurrency control (instance-wide)
+
+New `memoryExtractionConcurrency` knob (1–32, default 1) controls how many `MEMORY_EXTRACTION` background jobs the processor runs in parallel. 32 matches the upper bound of the `memory-diff` CLI's `--concurrency` flag — cloud providers tolerate 8–16 happily, local Ollama prefers 2–4. Surfaces in the regenerate card (saves on blur). API: `POST /api/v1/memories?action=extraction-concurrency`, `GET ?action=extraction-concurrency`.
+
+Persisted in the `instance_settings` KV table — application-wide, not per-user. (`memoryExtractionLimits` was also moved out of `chat_settings` in the same change for consistency.) Original location was per-user `chat_settings`, which works in normal operation but is brittle on instances that accumulated orphan rows from old test users — the seed picked the first row by storage order rather than the SINGLE_USER_ID row, and a saved value of 16 routinely resurfaced as the orphans' default of 1. Both knobs are properties of the single background processor this instance runs; per-user storage was the wrong shape.
+
+Migration `migrate-extraction-knobs-to-instance-settings-v1` reads SINGLE_USER_ID's row from `chat_settings` on first run and copies the values into `instance_settings`. Idempotent (skips if both keys are already present via `INSERT … ON CONFLICT DO NOTHING`). The `chat_settings.memoryExtractionLimits` and `memoryExtractionConcurrency` columns are left intact as legacy/dead data — dropping columns on SQLite is fragile and the existing logical-backup pipeline reads the columns, so leaving them gives the migration something to seed from on a restored DB.
+
+New `lib/instance-settings/index.ts` provides typed get/set helpers (`getMemoryExtractionConcurrency`, `setMemoryExtractionConcurrency`, `getMemoryExtractionLimits`, `setMemoryExtractionLimits`) backed by raw SQL against the `instance_settings` table — same pattern `lib/startup/version-guard.ts` already uses. Processor seed at `startProcessor` reads via `getMemoryExtractionConcurrency` so the saved value survives restarts. API setter pushes new values into the processor's in-memory cache via `setMemoryExtractionConcurrencyOverride` so the change takes effect on the next claim tick.
+
+Backup-coverage gap: `instance_settings` is not currently included in logical backups (only physical/byte-level backups capture it). For the canonical "fresh restore" use case the migration safety net (chat_settings → instance_settings) covers it; for "restore on top of existing v4.4 DB" the values would drift toward the backed-up chat_settings row's value. Pre-existing gap (instance_settings has been around since 3.3.0); flagged as a follow-up if it becomes a real problem.
+
+#### Processor concurrency overshoot fix
+
+Bug: `fillConcurrentSlots` in `lib/background-jobs/processor.ts` could be called repeatedly from multiple finishing-job finally hooks plus the polling interval, each independently checking the in-flight counter before any of them incremented it. With `EMBEDDING_GENERATE` cap 4 the overshoot was small and tolerable; with the new `MEMORY_EXTRACTION` cap up to 32 against a fast cloud LLM the observed overshoot was 5x (166 jobs running with cap 32). Fixed with a `fillingConcurrentSlots` mutex + `try/finally` so only one fill loop runs at a time. Embeddings get the same fix — they should now actually respect their 4-cap which they hadn't been doing.
+
+#### Mem badge: wider job type coverage
+
+`components/layout/queue-status-badges.tsx` Mem badge now also counts `MEMORY_REGENERATE_CHAT` and `MEMORY_REGENERATE_ALL`. The wipe and fan-out phases are visible in the page header alongside extraction.
+
+#### Help
+
+New `help/memory-regenerate.md` covers the regenerate workflow, dangerous-chat routing, and the concurrency knob. Existing `help_navigate` pattern with frontmatter `url` and an "In-Chat Navigation" section.
+
+#### DDL
+
+`docs/developer/DDL.md` updated. Both `memoryExtractionLimits` and the newly-added `memoryExtractionConcurrency` columns on `chat_settings` are marked DEPRECATED in 4.4 (superseded by `instance_settings`; columns retained for backwards compat). New `instance_settings` keys (`memoryExtractionConcurrency`, `memoryExtractionLimits`) documented under the table's "Known keys" list.
+
 #### Embedding queue: 128KB cap and interactive priority lane
 
 Two related fixes for chat-path memory recall stalls. Symptom: "Searching X's memories..." sat for 100–160 seconds before sending the turn to the LLM, with one observed 4GB OOM at the same time.

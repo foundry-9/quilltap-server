@@ -19,6 +19,7 @@ import { enqueueMemoryExtractionBatch, ensureProcessorRunning } from '@/lib/back
 import { processTurnForMemory } from '@/lib/memory/memory-processor';
 import { buildTurnTranscript } from '@/lib/services/chat-message/turn-transcript';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { getMemoryExtractionLimits } from '@/lib/instance-settings';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type {
   Character,
@@ -222,6 +223,7 @@ export async function handleExtractMemoriesDryRun(
   const availableProfiles = await repos.connections.findByUserId(user.id);
   const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
   const isDangerousChat = chat.isDangerousChat === true;
+  const memoryExtractionLimits = await getMemoryExtractionLimits();
 
   logger.info('[Chats v1] Streaming dry-run memory extraction', {
     chatId,
@@ -303,7 +305,7 @@ export async function handleExtractMemoriesDryRun(
               availableProfiles,
               dangerSettings,
               isDangerousChat,
-              memoryExtractionLimits: chatSettings.memoryExtractionLimits,
+              memoryExtractionLimits,
               dryRun: true,
             });
 

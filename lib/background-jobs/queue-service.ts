@@ -21,6 +21,13 @@ export interface EnqueueJobOptions {
   maxAttempts?: number;
   /** When the job should become eligible to run (default: now) */
   scheduledAt?: Date;
+  /**
+   * Skip the per-call dedup scan for enqueue helpers that own a precomputed
+   * in-flight set. Set this when bulk-enqueuing many jobs in a tight loop —
+   * e.g. the regenerate-chat handler enqueuing per-turn extractions, where
+   * a per-call scan turns N enqueues into 2N DB queries.
+   */
+  skipDedupCheck?: boolean;
 }
 
 /**
@@ -207,6 +214,36 @@ export interface MemoryHousekeepingPayload {
 }
 
 /**
+ * Payload for the per-chat memory regenerate job.
+ *
+ * One job per chat. The handler wipes the chat's existing memories
+ * (and their vector store entries), then enqueues one MEMORY_EXTRACTION
+ * job per user-message turn opener. For greeting-only chats with no user
+ * messages, it enqueues a single null-opener extraction.
+ */
+export interface MemoryRegenerateChatPayload {
+  chatId: string;
+  /** Connection profile to use for the extraction LLM passes — resolved at enqueue time. */
+  connectionProfileId: string;
+}
+
+/**
+ * Payload for the regenerate-all fan-out job.
+ *
+ * The HTTP handler returns immediately after enqueuing one of these. The
+ * background processor then enumerates the user's chats, walks the memory
+ * table for orphan chatIds, and enqueues one MEMORY_REGENERATE_CHAT per
+ * chat. Doing the heavy enumeration here keeps the API response sub-second
+ * even on instances with tens of thousands of memories.
+ */
+export interface MemoryRegenerateAllPayload {
+  /** Standard cheap-LLM profile to use for non-dangerous chats. */
+  standardProfileId: string;
+  /** Profile to use for chats marked `isDangerousChat`; same as standardProfileId when no dangerous-compatible cheap LLM is configured. */
+  dangerousProfileId: string;
+}
+
+/**
  * Payload for scene state tracking job
  */
 export interface SceneStateTrackingPayload {
@@ -372,6 +409,10 @@ export async function enqueueMemoryExtraction(
   payload: MemoryExtractionPayload,
   options?: EnqueueJobOptions
 ): Promise<string> {
+  if (options?.skipDedupCheck) {
+    return enqueueJob(userId, 'MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
+  }
+
   const repos = getRepositories();
 
   try {
@@ -450,6 +491,95 @@ export async function enqueueMemoryHousekeeping(
     payload as unknown as Record<string, unknown>,
     { ...options, maxAttempts: options?.maxAttempts ?? 1 },
   );
+}
+
+/**
+ * Enqueue a per-chat memory regeneration job.
+ *
+ * Dedupes: if a PENDING or PROCESSING MEMORY_REGENERATE_CHAT job already
+ * exists for the same (userId, chatId) pair, returns the existing job ID
+ * rather than queuing a duplicate wipe.
+ *
+ * Capped at maxAttempts: 1 — a retry would double-enqueue the per-turn
+ * extraction jobs spawned by the first attempt.
+ */
+export async function enqueueMemoryRegenerateChat(
+  userId: string,
+  payload: MemoryRegenerateChatPayload,
+  options?: EnqueueJobOptions,
+): Promise<string> {
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'MEMORY_REGENERATE_CHAT') return false;
+      const existingPayload = j.payload as unknown as MemoryRegenerateChatPayload;
+      return existingPayload.chatId === payload.chatId;
+    });
+    if (existing) {
+      logger.debug('[MemoryRegenerateChat] Skipping enqueue — job already in-flight for chat', {
+        jobId: existing.id,
+        chatId: payload.chatId,
+      });
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[MemoryRegenerateChat] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return enqueueJob(
+    userId,
+    'MEMORY_REGENERATE_CHAT',
+    payload as unknown as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
+}
+
+/**
+ * Enqueue the regenerate-all fan-out job.
+ *
+ * The HTTP handler returns immediately after this; the actual chat
+ * enumeration and per-chat enqueues happen inside the background job.
+ *
+ * Dedupes on userId (only one fan-out per user at a time). Capped at
+ * maxAttempts: 1 — a retry would re-enqueue every per-chat wipe.
+ */
+export async function enqueueMemoryRegenerateAll(
+  userId: string,
+  payload: MemoryRegenerateAllPayload,
+  options?: EnqueueJobOptions,
+): Promise<{ jobId: string; isNew: boolean }> {
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(
+      (j) => j.type === 'MEMORY_REGENERATE_ALL',
+    );
+    if (existing) {
+      logger.debug('[MemoryRegenerateAll] Skipping enqueue — fan-out already in-flight', {
+        jobId: existing.id,
+      });
+      return { jobId: existing.id, isNew: false };
+    }
+  } catch (error) {
+    logger.warn('[MemoryRegenerateAll] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const jobId = await enqueueJob(
+    userId,
+    'MEMORY_REGENERATE_ALL',
+    payload as unknown as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
+  return { jobId, isNew: true };
 }
 
 /**

@@ -523,7 +523,8 @@ CREATE TABLE "chat_settings" (
   "defaultTimestampConfig" TEXT DEFAULT '{}',
   "memoryCascadePreferences" TEXT DEFAULT '{}',
   "autoHousekeepingSettings" TEXT DEFAULT '{"enabled":false,"perCharacterCap":2000,"perCharacterCapOverrides":{},"autoMergeSimilarThreshold":0.9,"mergeSimilar":false}',
-  "memoryExtractionLimits" TEXT DEFAULT '{"enabled":false,"maxPerHour":20,"softStartFraction":0.7,"softFloor":0.7}',
+  "memoryExtractionLimits" TEXT DEFAULT '{"enabled":false,"maxPerHour":20,"softStartFraction":0.7,"softFloor":0.7}', -- DEPRECATED in 4.4: superseded by instance_settings['memoryExtractionLimits']; column retained for backwards compat
+  "memoryExtractionConcurrency" INTEGER DEFAULT 1, -- DEPRECATED at introduction in 4.4: superseded by instance_settings['memoryExtractionConcurrency']; column retained for backwards compat
   "tokenDisplaySettings" TEXT DEFAULT '{}',
   "contextCompressionSettings" TEXT DEFAULT '{}',
   "llmLoggingSettings" TEXT DEFAULT '{}',
@@ -1003,6 +1004,12 @@ CREATE TABLE "instance_settings" (
   "value" TEXT NOT NULL
 );
 ```
+
+Known keys (others may be present from migrations / startup hooks):
+- `highest_app_version` — startup version guard (string).
+- `wardrobe_folder_migrated_v1`, `wardrobe_json_refreshed_v1` — one-shot startup migration flags ("true").
+- `memoryExtractionConcurrency` (4.4+) — integer 1–32. Per-instance MEMORY_EXTRACTION job concurrency cap. Read by `lib/background-jobs/processor.ts` at startup; updated by `POST /api/v1/memories?action=extraction-concurrency`.
+- `memoryExtractionLimits` (4.4+) — JSON: `{enabled, maxPerHour, softStartFraction, softFloor}`. Per-instance memory extraction rate limits. Read by `lib/background-jobs/handlers/memory-extraction.ts` and the dry-run extraction route; updated by `POST /api/v1/memories?action=extraction-limits-config`. Migrated from `chat_settings.memoryExtractionLimits` for SINGLE_USER_ID by `migrate-extraction-knobs-to-instance-settings-v1`.
 
 ### quilltap_meta
 

@@ -1105,3 +1105,60 @@ export async function deleteMemoriesBySourceMessagesWithVectors(
 
   return { deleted: totalDeleted, vectorsRemoved: totalVectorsRemoved }
 }
+
+/**
+ * Delete every memory tied to the given chat (across all characters) and
+ * remove their entries from each character's vector store.
+ *
+ * Used by the DELETE /api/v1/memories?chatId= route and by the
+ * MEMORY_REGENERATE_CHAT job when wiping a chat's auto-extracted memories
+ * before re-running extraction from scratch.
+ */
+export async function deleteMemoriesByChatIdWithVectors(
+  chatId: string,
+): Promise<{ deleted: number; vectorsRemoved: number; characterCount: number }> {
+  const repos = getRepositories()
+
+  const memories = await repos.memories.findByChatId(chatId)
+  if (memories.length === 0) {
+    return { deleted: 0, vectorsRemoved: 0, characterCount: 0 }
+  }
+
+  const memoryIdsByCharacter = new Map<string, string[]>()
+  for (const memory of memories) {
+    const existing = memoryIdsByCharacter.get(memory.characterId) || []
+    existing.push(memory.id)
+    memoryIdsByCharacter.set(memory.characterId, existing)
+  }
+
+  let vectorsRemoved = 0
+  for (const [characterId, memoryIds] of memoryIdsByCharacter) {
+    try {
+      const vectorStore = await getCharacterVectorStore(characterId)
+      for (const memoryId of memoryIds) {
+        if (vectorStore.hasVector(memoryId)) {
+          await vectorStore.removeVector(memoryId)
+          vectorsRemoved++
+        }
+      }
+      await vectorStore.save()
+    } catch (error) {
+      logger.warn('[Memory] Failed to remove vectors for character during chat wipe', {
+        characterId,
+        memoryCount: memoryIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const deleted = await repos.memories.deleteByChatId(chatId)
+
+  logger.info('[Memory] Cascade deleted memories for chat', {
+    chatId,
+    deleted,
+    vectorsRemoved,
+    characterCount: memoryIdsByCharacter.size,
+  })
+
+  return { deleted, vectorsRemoved, characterCount: memoryIdsByCharacter.size }
+}

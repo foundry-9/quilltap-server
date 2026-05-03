@@ -2,13 +2,33 @@ import * as processor from '@/lib/background-jobs/processor';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getHandler } from '@/lib/background-jobs/handlers';
 
-jest.mock('@/lib/logger', () => ({
-  logger: {
+jest.mock('@/lib/logger', () => {
+  const mockLogger = {
     debug: jest.fn(),
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
-  },
+    child: jest.fn(),
+  };
+  // Make .child return the same mock so chained loggers in transitive
+  // imports (e.g. lib/database/backends/sqlite/protection.ts) work.
+  mockLogger.child.mockReturnValue(mockLogger);
+  return { logger: mockLogger };
+});
+
+// instance-settings transitively pulls in the database manager, which loads
+// the SQLite backend at module-eval time. Stub the helpers it would
+// actually call so the processor tests don't need a real DB.
+jest.mock('@/lib/instance-settings', () => ({
+  getMemoryExtractionConcurrency: jest.fn().mockResolvedValue(1),
+  setMemoryExtractionConcurrency: jest.fn().mockResolvedValue(undefined),
+  getMemoryExtractionLimits: jest.fn().mockResolvedValue({
+    enabled: false,
+    maxPerHour: 20,
+    softStartFraction: 0.7,
+    softFloor: 0.7,
+  }),
+  setMemoryExtractionLimits: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('@/lib/repositories/factory', () => ({
@@ -57,9 +77,12 @@ afterEach(() => {
 describe('processNextJob', () => {
   it('runs the handler, marks completion, and rate-limits the next job', async () => {
     jest.useFakeTimers();
+    // TITLE_UPDATE stays on the sequential path (unlike MEMORY_EXTRACTION,
+    // which gained per-instance concurrency in 4.4 and now dispatches async
+    // through runConcurrentJob — see CONCURRENT_JOB_TYPES in processor.ts).
     const job = {
       id: 'job-1',
-      type: 'MEMORY_EXTRACTION',
+      type: 'TITLE_UPDATE',
       attempts: 0,
     } as any;
     backgroundJobs.claimNextJob.mockResolvedValue(job);
@@ -69,7 +92,7 @@ describe('processNextJob', () => {
     const processed = await promise;
 
     expect(processed).toBe(true);
-    expect(mockGetHandler).toHaveBeenCalledWith('MEMORY_EXTRACTION');
+    expect(mockGetHandler).toHaveBeenCalledWith('TITLE_UPDATE');
     expect(handlerImpl).toHaveBeenCalledWith(job);
     expect(backgroundJobs.markCompleted).toHaveBeenCalledWith('job-1');
   });
@@ -149,7 +172,8 @@ describe('processNextJob', () => {
 describe('processJobs', () => {
   it('processes jobs sequentially until the queue is empty', async () => {
     jest.useFakeTimers();
-    const job = { id: 'job-10', type: 'MEMORY_EXTRACTION', attempts: 0 } as any;
+    // TITLE_UPDATE remains sequential (see CONCURRENT_JOB_TYPES note above).
+    const job = { id: 'job-10', type: 'TITLE_UPDATE', attempts: 0 } as any;
     backgroundJobs.claimNextJob
       .mockResolvedValueOnce(job)
       .mockResolvedValueOnce(null);
