@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### `npm start` runs the custom WebSocket server
+
+`package.json`'s `start` script pointed at `node server.js`, which doesn't exist at the repo root — only `server.ts` does. Production paths (Docker, standalone tarball) compile `server.ts` to `.next/standalone/server.js` with esbuild before launching, but local `npm run build && npm run start` skipped that step and crashed with `MODULE_NOT_FOUND`. Changed `start` to `NODE_ENV=production tsx server.ts`, mirroring the `dev` script so the custom server (with the `/api/v1/terminals/[id]/stream` WebSocket upgrade for Ariel) actually runs in local production-mode smoke tests.
+
 #### Memory list: dedup on append to fix duplicate React keys during regenerate
 
 Bug: viewing a character's Memories tab while a `MEMORY_REGENERATE_*` sweep was in flight produced "Encountered two children with the same key" warnings. Cause: offset-based pagination is unstable when the underlying corpus is being mutated — deletions inside an already-loaded page (or inserts above the next offset) shift items so that `offset=N` returns IDs already present at `offset<N`. Fix: `components/memory/memory-list.tsx` filters out IDs already in state before appending the next page.
