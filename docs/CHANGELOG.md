@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Native-text uploads to database-backed stores route through `doc_mount_documents`
+
+Bug: uploading a `.md` (or `.txt` / `.json` / `.jsonl`) file via the Scriptorium upload UI created a `doc_mount_blobs` row plus a `doc_mount_files` row with `fileType: 'blob'` and `conversionStatus: 'skipped'`, and **never** wrote a `doc_mount_documents` row. As a result, `listProjectScenarios` (which queries `doc_mount_documents`) couldn't see the file, so uploaded scenarios never appeared in the project's Scenarios card or the new-chat scenario dropdown — and Document Mode in chats couldn't see them either. PDF/DOCX uploads were unaffected because they have their own extracted-text path.
+
+Fix: `POST /api/v1/mount-points/[id]/blobs` now branches early when the upload's extension is a native-text type (`.md` / `.markdown` / `.txt` / `.json` / `.jsonl` / `.ndjson`) **and** the mount has `mountType === 'database'`. In that case the route decodes the bytes as UTF-8 and calls `writeDatabaseDocument` (which creates the `doc_mount_documents` row, mirrors `doc_mount_files` with the correct `fileType` and `conversionStatus: 'converted'`, and emits the `document-written` event), then fires off `reindexSingleFile` + `enqueueEmbeddingJobsForMountPoint` + `refreshStats` in the background — same shape as the doc-edit tool handler's `triggerReindexIfNeeded`. The response shape changes from `{ blob }` to `{ document }` for these uploads; `useMountPointBlobUpload` now reads `data.blob ?? data.document` so both the Scriptorium FileTable and any other caller of the hook keep working. Filesystem-backed mounts and binary uploads (images, PDFs, DOCX, arbitrary blobs) continue down the existing blob path unchanged.
+
 #### Un-ignore `packages/quilltap` for `Dockerfile.ci`
 
 `Dockerfile.ci` copies `packages/quilltap` directly from the build context to bundle the CLI into the image, but `.dockerignore` excluded `packages` wholesale, so the CI build failed at `[production 13/16]` with `failed to compute cache key … "/packages/quilltap": not found` (BuildKit even emitted the `CopyIgnoredFile` warning). The regular `Dockerfile` sidesteps this by copying from a builder stage that has the full repo cloned in. Added `!packages/quilltap` (with `packages/quilltap/node_modules` re-excluded) to `.dockerignore` so only the CLI source slips through.

@@ -23,17 +23,42 @@ import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/bl
 import { convertBufferToPlainText } from '@/lib/mount-index/converters';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { emitDocumentWritten } from '@/lib/mount-index/db-store-events';
+import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import { reindexSingleFile } from '@/lib/doc-edit/reindex-file';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import type { DocMountFile } from '@/lib/schemas/mount-index.types';
 
 type BlobMirrorFileType = 'pdf' | 'docx' | 'blob';
+type NativeTextFileType = 'markdown' | 'txt' | 'json' | 'jsonl';
 
 function detectBlobFileType(relativePath: string): BlobMirrorFileType {
   const ext = path.extname(relativePath).toLowerCase();
   if (ext === '.pdf') return 'pdf';
   if (ext === '.docx') return 'docx';
   return 'blob';
+}
+
+/**
+ * Native-text extensions that belong in `doc_mount_documents` rather than the
+ * blob mirror. Mirrors `detectDatabaseFileType` in `lib/mount-index/database-store.ts`
+ * — keep them aligned.
+ */
+function detectNativeTextFileType(relativePath: string): NativeTextFileType | null {
+  const ext = path.extname(relativePath).toLowerCase();
+  switch (ext) {
+    case '.md':
+    case '.markdown':
+      return 'markdown';
+    case '.txt':
+      return 'txt';
+    case '.json':
+      return 'json';
+    case '.jsonl':
+    case '.ndjson':
+      return 'jsonl';
+    default:
+      return null;
+  }
 }
 
 export const GET = createAuthenticatedParamsHandler<{ id: string }>(
@@ -93,6 +118,53 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       }
       const originalMimeType = file.type || 'application/octet-stream';
       const originalFileName = file.name || relativePath.split('/').pop() || 'blob';
+
+      // Native-text uploads to database-backed stores must go through the
+      // document layer — `doc_mount_documents` is the source of truth for
+      // anything that lists scenarios, runs Document Mode, or queries chunks.
+      // The blob mirror is for binary files (images, PDFs, DOCX) only.
+      const nativeTextFileType = detectNativeTextFileType(relativePath);
+      if (nativeTextFileType && mountPoint.mountType === 'database') {
+        const text = rawBytes.toString('utf-8');
+        const { mtime } = await writeDatabaseDocument(mountPoint.id, relativePath, text);
+
+        // Fire-and-forget chunk + embedding enqueue, mirroring the doc-edit
+        // tool handler's `triggerReindexIfNeeded` shape.
+        reindexSingleFile(mountPoint.id, relativePath, '')
+          .then(() => Promise.all([
+            enqueueEmbeddingJobsForMountPoint(mountPoint.id),
+            repos.docMountPoints.refreshStats(mountPoint.id),
+          ]))
+          .catch(err => {
+            logger.warn('[Mount Points v1] Background reindex failed for native-text upload', {
+              mountPointId: mountPoint.id,
+              relativePath,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
+
+        const fileRow = await repos.docMountFiles.findByMountPointAndPath(mountPoint.id, relativePath);
+
+        logger.info('[Mount Points v1] Uploaded native-text document', {
+          mountPointId: mountPoint.id,
+          relativePath,
+          fileType: nativeTextFileType,
+          sizeBytes: Buffer.byteLength(text, 'utf-8'),
+          userId: user.id,
+        });
+
+        return created({
+          document: {
+            id: fileRow?.id ?? null,
+            mountPointId: mountPoint.id,
+            relativePath,
+            fileName: path.basename(relativePath),
+            fileType: nativeTextFileType,
+            sizeBytes: Buffer.byteLength(text, 'utf-8'),
+            lastModified: new Date(mtime).toISOString(),
+          },
+        });
+      }
 
       // Transcode bitmap images to WebP; everything else (WebP, SVG, PDFs,
       // arbitrary binaries) passes through untouched.

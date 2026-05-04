@@ -21,6 +21,10 @@ interface UseMountPointBlobUploadOptions {
 
 interface UploadResponse {
   blob?: { id: string; relativePath: string }
+  // Native-text uploads (.md/.txt/.json/.jsonl) on database-backed mounts
+  // route through the document layer instead of the blob mirror — the
+  // endpoint returns this shape in that case.
+  document?: { id: string | null; relativePath: string }
   error?: string
 }
 
@@ -65,10 +69,11 @@ export function useMountPointBlobUpload({
         })
 
         const data = await safeJsonParse<UploadResponse>(res)
-        if (!res.ok || !data.blob) {
+        const written = data.blob ?? data.document
+        if (!res.ok || !written) {
           throw new Error(data.error || 'Failed to upload file')
         }
-        uploaded.push(data.blob.relativePath)
+        uploaded.push(written.relativePath)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         console.error('[useMountPointBlobUpload] Upload failed', {
