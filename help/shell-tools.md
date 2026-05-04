@@ -75,7 +75,7 @@ No security system can protect against everything, and honesty about limitations
 
 Here is a truth that bears stating plainly, lest it catch you off guard like an unexpected plot twist in the third act: **packages installed inside the VM or Docker container do not survive a restart**.
 
-When you ask the AI to install something via `apk add` or `apt-get install`, that package lives in the container's ephemeral layer — rather like chalk writing on a pavement before the rain. Stop the container, and the slate is wiped clean. The same applies to Lima VMs if the VM is recreated, though Lima VMs are somewhat more durable in practice, persisting through ordinary restarts and only losing their state when explicitly deleted or rebuilt.
+When you ask the AI to install something via `apt-get install`, that package lives in the container's ephemeral layer — rather like chalk writing on a pavement before the rain. Stop the container, and the slate is wiped clean. The same applies to Lima VMs if the VM is recreated, though Lima VMs are somewhat more durable in practice, persisting through ordinary restarts and only losing their state when explicitly deleted or rebuilt.
 
 Your **workspace files**, being stored on a mounted volume, survive perfectly well through restarts. It is only the system-level changes — installed binaries, configuration files tucked into `/etc/`, libraries deposited in `/usr/lib/` — that vanish.
 

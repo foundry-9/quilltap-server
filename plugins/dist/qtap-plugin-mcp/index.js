@@ -3945,7 +3945,7 @@ var require_core = __commonJS({
       constructor(opts = {}) {
         this.schemas = {};
         this.refs = {};
-        this.formats = {};
+        this.formats = /* @__PURE__ */ Object.create(null);
         this._compilations = /* @__PURE__ */ new Set();
         this._loading = {};
         this._cache = /* @__PURE__ */ new Map();
@@ -7049,7 +7049,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "6.34.0";
+var VERSION = "6.35.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -10111,8 +10111,8 @@ var Speech = class extends APIResource {
    * ```ts
    * const speech = await client.audio.speech.create({
    *   input: 'input',
-   *   model: 'string',
-   *   voice: 'string',
+   *   model: 'tts-1',
+   *   voice: 'alloy',
    * });
    *
    * const content = await speech.blob();
@@ -10550,10 +10550,10 @@ var toFloat32Array = (base64Str) => {
 // ../../../node_modules/openai/internal/utils/env.mjs
 var readEnv = (env) => {
   if (typeof globalThis.process !== "undefined") {
-    return globalThis.process.env?.[env]?.trim() ?? void 0;
+    return globalThis.process.env?.[env]?.trim() || void 0;
   }
   if (typeof globalThis.Deno !== "undefined") {
-    return globalThis.Deno.env?.get?.(env)?.trim();
+    return globalThis.Deno.env?.get?.(env)?.trim() || void 0;
   }
   return void 0;
 };
@@ -14017,7 +14017,6 @@ var BUILTIN_TOOL_NAMES = /* @__PURE__ */ new Set([
   "search",
   "search_web",
   "project_info",
-  "file_management",
   "request_full_context",
   "help_search",
   "help_settings",
@@ -14034,6 +14033,7 @@ var BUILTIN_TOOL_NAMES = /* @__PURE__ */ new Set([
   "doc_update_heading",
   // Document file management tools (Scriptorium Phase 3.4)
   "doc_move_file",
+  "doc_copy_file",
   "doc_delete_file",
   "doc_create_folder",
   "doc_delete_folder"

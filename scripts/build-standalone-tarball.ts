@@ -94,7 +94,7 @@ copyDir(`${NEXT_STANDALONE}/.`, STAGING_DIR);
 // Step 4.5: Compile server.ts and overwrite Next's generated server.js
 console.log('==> Step 5/8: Compiling server.ts to custom server');
 run(
-  `npx esbuild server.ts --bundle=false --platform=node --target=node22 --format=cjs --outfile="${join(STAGING_DIR, 'server.js')}"`,
+  `npx esbuild server.ts --bundle=false --platform=node --target=node24 --format=cjs --outfile="${join(STAGING_DIR, 'server.js')}"`,
   'Compiling server.ts with esbuild'
 );
 

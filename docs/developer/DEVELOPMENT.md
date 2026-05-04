@@ -139,7 +139,7 @@ quilltap/
 
 ### Prerequisites
 
-- **Node.js 22+**
+- **Node.js 24+** (LTS)
 - **SQLite with SQLCipher** (automatic with better-sqlite3-multiple-ciphers) — note that the standard `sqlite3` CLI cannot open Quilltap's encrypted database files; use `npx quilltap db` for direct database access
 - **File storage**: Local filesystem
 

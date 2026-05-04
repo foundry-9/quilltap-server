@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting everything between sessions. 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.4.0--dev.110-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.4.0--dev.111-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.com/channels/1476289075152556205/1476290238187049184)
@@ -61,7 +61,7 @@ That second question deserves a moment of your attention. As AI models grow more
 
 | | Desktop App | Docker | Node.js (`npx`) |
 | --- | --- | --- | --- |
-| **You install** | Download from GitHub | Docker Desktop or Docker Engine | Node.js 22+ |
+| **You install** | Download from GitHub | Docker Desktop or Docker Engine | Node.js 24+ |
 | **First launch** | Double-click the app | Fast — pulls the container image | Fast — downloads app files, runs directly |
 | **AI sandbox** | ✅ VM isolation (Lima/WSL2) or container | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
 | **Best for** | Most users — native window, managed updates | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
@@ -133,7 +133,7 @@ npm run dev        # Development mode with hot reload
 npm run build && npm run start   # Production build
 ```
 
-Requires **Node.js 22+** and **git**. See the [Development Guide](docs/developer/DEVELOPMENT.md) for building Docker images from source.
+Requires **Node.js 24+** and **git**. See the [Development Guide](docs/developer/DEVELOPMENT.md) for building Docker images from source.
 
 ---
 

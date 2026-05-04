@@ -4,6 +4,38 @@
 
 ### 4.4-dev
 
+#### Dependency refresh across root, packages, and plugins
+
+Ran `npm update -S` everywhere. Notable bumps:
+
+- **Root:** `openai` 6.34→6.35, `node-pty` 1.0→1.1, `pdfjs-dist` 5.6→5.7, `ws` 8.18→8.20, `yaml` 2.8.3→2.8.4, `zod` 4.3.6→4.4.3, `ajv` 8.18→8.20, `@openrouter/sdk` 0.12.20→0.12.25, `esbuild` 0.24.0→0.24.2, `postcss` 8.5.10→8.5.13, `@types/ws` 8.5.13→8.18.1.
+- **Packages:** `packages/plugin-utils` picks up `openai` 6.34→6.35; `packages/theme-storybook` picks up `storybook` / `@storybook/react` 10.3.5→10.3.6.
+- **Plugins:** all 11 LLM/tool plugins refresh `@quilltap/plugin-utils` 2.2.3→2.2.5; `qtap-plugin-google` also picks up `@google/genai` 1.50.1→1.51.0; `qtap-plugin-openrouter` picks up `@openrouter/sdk` 0.12.20→0.12.25; `qtap-plugin-grok`, `qtap-plugin-openai`, and `qtap-plugin-openai-compatible` pick up `openai` 6.34→6.35.
+
+Plugin patch versions bumped (package.json + manifest.json kept in sync) and `npm run build:plugins` re-ran cleanly: anthropic 1.0.31→1.0.32, builtin-embeddings 1.0.9→1.0.10, curl 1.0.13→1.0.14, default-system-prompts 1.1.5→1.1.6, google 1.1.25→1.1.26, grok 1.0.30→1.0.31, mcp 1.1.24→1.1.25, ollama 1.0.22→1.0.23, openai 1.0.36→1.0.37, openai-compatible 1.0.24→1.0.25, openrouter 1.0.34→1.0.35, search-serper 1.0.8→1.0.9.
+
+Workspace packages with dep changes were patch-bumped and published manually (these are not auto-versioned — only `packages/quilltap` is auto-versioned/published by the release workflow): `@quilltap/plugin-utils` 2.2.5→2.2.6 (openai bump), `@quilltap/plugin-types` 2.3.0→2.3.1 (@types/node bump from the Node 24 migration), `create-quilltap-theme` 2.0.7→2.0.8 (@types/node bump), `@quilltap/theme-storybook` 1.0.32→1.0.33 (storybook bump). After publish, `npm update -S` was re-run in the root and every plugin so the new versions are pinned in `package.json` and the lockfile. The root app is not patch-bumped here.
+
+#### Docker images move from `node:22-alpine` to `node:24-bookworm-slim`
+
+Two motivations: Node 22 entered Maintenance LTS on 2026-04-24 (Node 24 is now Active LTS), and Docker Scout was issuing a Grade D against the production image driven by an unfixed Critical CVE in Alpine's `zlib` package (CVE-2026-22184) that affects every current `node:22-alpine*` variant. Debian's `zlib` is patched, so the Grade D goes away by switching base.
+
+This is a libc-level change (musl → glibc), but the existing `optionalDependencies` handle it: `package-lock.json` already records both `@img/sharp-linux-*` (glibc) and `@img/sharp-linuxmusl-*` (musl) variants, and the same is true for `@napi-rs/canvas`, `@tailwindcss/oxide`, `lightningcss`, and `@unrs/resolver-binding-*`. `npm ci` in the new Debian container picks the glibc variants automatically — no lockfile regeneration required.
+
+Changes in this commit:
+
+- `Dockerfile` and `Dockerfile.ci`: base image `node:22-alpine` → `node:24-bookworm-slim` for every stage. `apk upgrade` / `apk add` calls replaced with `apt-get update && apt-get -y upgrade` and `apt-get install -y --no-install-recommends …`, each followed by `rm -rf /var/lib/apt/lists/*` to keep image size down.
+- User creation switched from Alpine's busybox `addgroup --system` / `adduser --system` to Debian's `groupadd --system` / `useradd --system --no-create-home --shell /usr/sbin/nologin`.
+- Production stage now installs `bash` (Ariel's terminal hard-codes `/bin/bash` — Alpine's BusyBox `ash` was breaking it) and `unzip` (`lib/backup/restore-service.ts` shells out to `unzip` for backup restores; Alpine had it via busybox, Debian needs the real package). The earlier "alpine busybox unzip avoids CVE-2008-0888" comment is no longer relevant — Debian's `unzip` package is fine.
+- WSL2 stage in `Dockerfile.ci`: `libstdc++` / `libgcc` apk packages dropped (their glibc equivalents ship in `bookworm-slim`); only `zip` / `unzip` get installed at this layer now.
+- esbuild target bumped from `--target=node22` to `--target=node24` in `Dockerfile` and `scripts/build-standalone-tarball.ts`.
+- `package.json` engines field: `"node": ">=22.0.0"` → `">=24.0.0"`. `packages/quilltap/package.json` (the CLI shipped to npm) bumped to match — it downloads and runs the standalone tarball, which is now esbuild-compiled with `--target=node24`, so the CLI cannot honestly claim Node 22 support.
+- `@types/node` bumped from `^22.19.17` to `^24.12.2` in `package.json`, `packages/create-quilltap-theme/package.json`, and `packages/plugin-types/package.json` so TypeScript checks against the Node 24 standard library (e.g., the newer `node:test` / `node:sqlite` shapes) instead of the Node 22 baseline.
+- `.github/workflows/ci.yml` and `.github/workflows/release.yml`: every `node-version: '22'` → `'24'` (3 + 4 occurrences).
+- `lib/tools/shell/shell-tools.ts`: the `sudo_sync` tool description (LLM-facing) updated to reference `apt-get install` and `/etc/apt` instead of `apk add` and `/etc/apk` so the agent picks the right package manager inside the container.
+- `README.md` and `docs/developer/DEVELOPMENT.md`: bumped `Node.js 22+` → `Node.js 24+`.
+- `.nvmrc` was already at `v24.13.1` (set previously); no change needed locally.
+
 #### Mount-index DB cold-open: retry transient reads instead of locking into degraded mode
 
 Bug: every mount-blob lookup returned 500 (`Mount-blob not found for storageKey: mount-blob:…`) when running the Docker image against an iCloud Drive data dir, while the same data dir worked fine when accessed directly by the local dev server or by `npx quilltap db --mount-points "…"`. The blobs were on disk; the host CLI read them; Docker couldn't.

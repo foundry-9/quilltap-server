@@ -268,7 +268,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.34.0";
+var VERSION = "6.35.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -3330,8 +3330,8 @@ var Speech = class extends APIResource {
    * ```ts
    * const speech = await client.audio.speech.create({
    *   input: 'input',
-   *   model: 'string',
-   *   voice: 'string',
+   *   model: 'tts-1',
+   *   voice: 'alloy',
    * });
    *
    * const content = await speech.blob();
@@ -3769,10 +3769,10 @@ var toFloat32Array = (base64Str) => {
 // node_modules/openai/internal/utils/env.mjs
 var readEnv = (env) => {
   if (typeof globalThis.process !== "undefined") {
-    return globalThis.process.env?.[env]?.trim() ?? void 0;
+    return globalThis.process.env?.[env]?.trim() || void 0;
   }
   if (typeof globalThis.Deno !== "undefined") {
-    return globalThis.Deno.env?.get?.(env)?.trim();
+    return globalThis.Deno.env?.get?.(env)?.trim() || void 0;
   }
   return void 0;
 };

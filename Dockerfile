@@ -1,11 +1,17 @@
 # Build base — includes native-module compilation tools (NOT used in production)
-FROM node:22-alpine AS build-base
+# Debian bookworm-slim on Node 24 LTS (glibc, not musl) — picked over Alpine for
+# fewer unfixed-CVE flags and a more conventional native-module build environment.
+FROM node:24-bookworm-slim AS build-base
 
-# Upgrade all Alpine packages to latest security patches
-RUN apk upgrade --no-cache
+# Refresh package index and apply security patches
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install build dependencies for native modules (better-sqlite3)
-RUN apk add --no-cache python3 make g++
+# Install build dependencies for native modules (better-sqlite3, node-pty)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install all dependencies (for building)
 FROM build-base AS deps
@@ -37,12 +43,15 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Rebuild native modules for the current Alpine Linux platform
+# Rebuild native modules for the current Debian/glibc platform
 RUN npm rebuild
 
 # Generate self-signed localhost certificate for dev SSL usage
-RUN apk add --no-cache openssl && \
-    mkdir -p certs && \
+# (openssl ships in bookworm-slim, but install explicitly for clarity)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p certs && \
     openssl req -x509 -nodes -newkey rsa:2048 \
       -keyout certs/localhost-key.pem \
       -out certs/localhost.pem \
@@ -73,21 +82,23 @@ RUN rm -rf /app/plugins/dist/*/node_modules
 RUN SKIP_ENV_VALIDATION=true NODE_OPTIONS="--max-old-space-size=3072" npx next build --webpack
 
 # Compile our custom server.ts → .next/standalone/server.js, overwriting Next's generated server
-RUN npx esbuild server.ts --bundle=false --platform=node --target=node22 --format=cjs --outfile=.next/standalone/server.js
+RUN npx esbuild server.ts --bundle=false --platform=node --target=node24 --format=cjs --outfile=.next/standalone/server.js
 
-# Production stage — clean image WITHOUT build tools (python3/make/g++/binutils)
-FROM node:22-alpine AS production
+# Production stage — clean image WITHOUT build tools (python3/make/g++)
+FROM node:24-bookworm-slim AS production
 WORKDIR /app
 
-# Upgrade all Alpine packages to latest security patches
-RUN apk upgrade --no-cache
+# Refresh package index and apply security patches
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV DOCKER_CONTAINER=true
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# Create non-root user (Debian groupadd/useradd, not Alpine busybox addgroup/adduser)
+RUN groupadd --system --gid 1001 nodejs \
+    && useradd --system --uid 1001 --gid nodejs --no-create-home --shell /usr/sbin/nologin nextjs
 
 # Create data directories (data, files, logs, plugins/npm)
 RUN mkdir -p /app/quilltap/data /app/quilltap/files /app/quilltap/logs /app/quilltap/plugins/npm && \
@@ -104,10 +115,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/plugins/dist ./plugins/dist
 # Copy package files for native module dependencies
 COPY package.json package-lock.json ./
 
-# Install zip for backup/restore and common tools for LLM shell agent use
-# (busybox provides unzip, avoiding CVE-2008-0888 in alpine/unzip)
-# All packages pulled from the already-upgraded Alpine index (see apk upgrade above)
-RUN apk add --no-cache zip git curl wget jq
+# Install runtime tools:
+#   - zip + unzip — backup/restore (lib/backup/restore-service.ts shells out to `unzip`)
+#   - bash — required by Ariel's terminal (PTY hard-codes /bin/bash)
+#   - git, curl, wget, jq — common tools available to the LLM shell agent
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash zip unzip git curl wget jq \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-compiled production node_modules from build stage (native modules already built)
 COPY --from=deps-prod /app/node_modules ./node_modules

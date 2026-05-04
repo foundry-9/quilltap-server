@@ -122,18 +122,18 @@ export const shellSudoSyncToolDefinition = {
   function: {
     name: 'sudo_sync',
     description:
-      'Execute a shell command with elevated (root) privileges. Requires explicit user approval before execution. Use for system administration tasks like installing packages (apk add), modifying system configuration, or managing services. The command will NOT execute until the user approves it. Note: Unlike other shell tools, sudo commands may legitimately need absolute paths (e.g., "/etc/apk") since they operate on the VM system. The working directory is still the workspace.',
+      'Execute a shell command with elevated (root) privileges. Requires explicit user approval before execution. Use for system administration tasks like installing packages (apt-get install), modifying system configuration, or managing services. The command will NOT execute until the user approves it. Note: Unlike other shell tools, sudo commands may legitimately need absolute paths (e.g., "/etc/apt") since they operate on the VM system. The working directory is still the workspace.',
     parameters: {
       type: 'object',
       properties: {
         command: {
           type: 'string',
-          description: 'The command to execute as root (e.g., "apk", "rc-service")',
+          description: 'The command to execute as root (e.g., "apt-get", "systemctl")',
         },
         parameters: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Command arguments as separate strings (e.g., ["add", "python3"])',
+          description: 'Command arguments as separate strings (e.g., ["install", "-y", "python3"])',
         },
         timeout_ms: {
           type: 'integer',

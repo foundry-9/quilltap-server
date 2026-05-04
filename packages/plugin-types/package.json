@@ -1,6 +1,6 @@
 {
   "name": "@quilltap/plugin-types",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Type definitions for Quilltap plugin development",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -44,7 +44,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^22.19.17",
+    "@types/node": "^24.12.2",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   },
