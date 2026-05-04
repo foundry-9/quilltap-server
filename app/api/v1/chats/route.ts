@@ -346,6 +346,7 @@ async function applyOutfitSelections(
                   cheapSelection,
                   context.userId,
                   chatId,
+                  characterId,
                 );
 
                 if (result.success && result.result) {

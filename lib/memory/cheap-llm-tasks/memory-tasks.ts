@@ -532,7 +532,8 @@ export async function extractSelfMemoriesFromTurn(
     chatId,
     undefined,
     uncensoredFallback,
-    resolvedMaxTokens
+    resolvedMaxTokens,
+    targetCharacterId
   )
 }
 
@@ -593,7 +594,8 @@ export async function extractOtherMemoriesFromTurn(
     chatId,
     undefined,
     uncensoredFallback,
-    resolvedMaxTokens
+    resolvedMaxTokens,
+    observerCharacterId
   )
 }
 
@@ -707,7 +709,8 @@ export async function extractMemorySearchKeywords(
   characterName: string,
   selection: CheapLLMSelection,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  characterId?: string
 ): Promise<CheapLLMTaskResult<string[]>> {
   // Truncate messages to keep cheap LLM call fast
   const cappedMessages = recentMessages.slice(-20)
@@ -758,7 +761,11 @@ export async function extractMemorySearchKeywords(
       }
     },
     'memory-keyword-extraction',
-    chatId
+    chatId,
+    undefined,
+    undefined,
+    undefined,
+    characterId
   )
 }
 
@@ -784,7 +791,8 @@ export async function summarizeMemoryRecap(
   selection: CheapLLMSelection,
   userId: string,
   chatId?: string,
-  uncensoredFallback?: UncensoredFallbackOptions
+  uncensoredFallback?: UncensoredFallbackOptions,
+  characterId?: string
 ): Promise<CheapLLMTaskResult<string>> {
   const totalCount = tieredMemories.high.length + tieredMemories.medium.length + tieredMemories.low.length
   if (totalCount === 0) {
@@ -826,6 +834,8 @@ export async function summarizeMemoryRecap(
     'memory-recap-summarization',
     chatId,
     undefined,
-    uncensoredFallback
+    uncensoredFallback,
+    undefined,
+    characterId
   )
 }

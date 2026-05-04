@@ -830,7 +830,8 @@ async function processMessage(
       character.name,
       recallSelection,
       userId,
-      chatId
+      chatId,
+      character.id
     )
 
     if (!keywordResult.success || !keywordResult.result || keywordResult.result.length === 0) {

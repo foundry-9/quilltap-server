@@ -50,6 +50,7 @@ export async function chooseLLMOutfit(
   selection: CheapLLMSelection,
   userId: string,
   chatId?: string,
+  characterId?: string,
 ): Promise<CheapLLMTaskResult<EquippedSlots>> {
   if (wardrobeItems.length === 0) {
     logger.debug('[OutfitSelection] No wardrobe items available, returning empty slots', {
@@ -156,5 +157,9 @@ Choose what ${characterName} should wear for this scene:`,
     },
     'outfit-selection',
     chatId,
+    undefined,
+    undefined,
+    undefined,
+    characterId,
   )
 }

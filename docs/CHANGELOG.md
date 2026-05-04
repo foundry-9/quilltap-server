@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Cheap-LLM logs now record `characterId` for character-scoped tasks
+
+Every cheap-LLM call routed through `executeCheapLLMTask` was writing `llm_logs.characterId = NULL`, even for clearly per-character work like memory extraction or memory-recap summarization. The column was wired up on the `logLLMCall` side but `core-execution.ts` never accepted or forwarded it. Per-character cost attribution from `llm_logs` was therefore impossible — only `CHAT_MESSAGE` rows carried the split.
+
+Fix: added a trailing `characterId?: string` parameter to `executeCheapLLMTask` and `sendToProvider` in `lib/memory/cheap-llm-tasks/core-execution.ts` and threaded it into the `logLLMCall` payload. Updated the character-scoped task call sites to pass it: `extractSelfMemoriesFromTurn` (target), `extractOtherMemoriesFromTurn` (observer), `extractMemorySearchKeywords`, `summarizeMemoryRecap`, and `chooseLLMOutfit`. Chat-scoped tasks (context summary, title generation, danger gate, conversation compression, scene state, image-prompt crafting, appearance resolution) keep `characterId = NULL` because they cover the whole chat or operate on multiple characters at once.
+
+Also fixed the `mapTaskTypeToLogType` mapping in the same file: `'memory-extraction-self'` and `'memory-extraction-other'` were not listed and were falling through to the default `SUMMARIZATION` tag — those self/other extraction calls were being miscounted as summarizations. Replaced the dead `'memory-extraction-user'/-character/-inter-character'` entries (no task uses those strings) with the real `'memory-extraction-self'/-other'` keys, and added explicit entries for `'fold-chat-summary'`, `'compress-memories'`, and `'outfit-selection'` so every emitted task string maps somewhere instead of riding the default.
+
 #### Native-text uploads to database-backed stores route through `doc_mount_documents`
 
 Bug: uploading a `.md` (or `.txt` / `.json` / `.jsonl`) file via the Scriptorium upload UI created a `doc_mount_blobs` row plus a `doc_mount_files` row with `fileType: 'blob'` and `conversionStatus: 'skipped'`, and **never** wrote a `doc_mount_documents` row. As a result, `listProjectScenarios` (which queries `doc_mount_documents`) couldn't see the file, so uploaded scenarios never appeared in the project's Scenarios card or the new-chat scenario dropdown — and Document Mode in chats couldn't see them either. PDF/DOCX uploads were unaffected because they have their own extracted-text path.
