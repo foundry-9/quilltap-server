@@ -36,8 +36,69 @@ declare global {
 // Client Management
 // ============================================================================
 
+/** Retry budget for cold-open of the mount-index DB. See attemptOpen() below. */
+const OPEN_RETRY_BACKOFF_MS = [200, 600, 1500];
+
+/**
+ * One attempt to open + key + verify the mount-index DB. Throws on any
+ * failure so the caller can decide whether to retry. On success, returns a
+ * fully configured connection ready for use.
+ */
+function attemptOpenMountIndex(config: SQLiteConfig): DatabaseType {
+  const db = new Database(config.path);
+  let configured = false;
+  try {
+    // SQLCipher key MUST be the first pragma before any other operations.
+    const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
+    if (sqlcipherKey) {
+      const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
+      db.pragma(`key = "x'${keyHex}'"`);
+    }
+
+    // Verify probe — forces SQLCipher to decrypt page 1 and parse the
+    // SQLite header. Failure here surfaces cleanly as `file is not a
+    // database` rather than waiting for the first user query to fail. This
+    // is also where a flaky iCloud Drive / VirtioFS read bites us, so
+    // putting it inside the try lets the outer retry loop recover.
+    db.prepare('SELECT count(*) AS cnt FROM sqlite_master').get();
+
+    if (config.walMode) {
+      db.pragma('journal_mode = WAL');
+    } else {
+      db.pragma(`journal_mode = ${config.journalMode}`);
+    }
+    db.pragma(`synchronous = ${config.synchronous}`);
+    db.pragma(`busy_timeout = ${config.busyTimeout}`);
+    db.pragma(`cache_size = ${config.cacheSize}`);
+    db.pragma('mmap_size = 268435456'); // 256MB
+    db.pragma('temp_store = MEMORY');
+    db.pragma('foreign_keys = ON');
+
+    configured = true;
+    return db;
+  } finally {
+    if (!configured) {
+      try { db.close(); } catch { /* ignore */ }
+    }
+  }
+}
+
+function sleepSync(ms: number): void {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    // busy-wait
+  }
+}
+
 /**
  * Initialize and return the mount index database connection.
+ *
+ * Wraps the open + key + verify-probe sequence in a retry loop. A single
+ * transient failure during cold open — typically `file is not a database`
+ * caused by a bind-mounted iCloud Drive returning incomplete page-1 bytes
+ * to Docker — used to lock the connection into degraded mode for the whole
+ * process lifetime, breaking every mount-blob lookup. The retry gives the
+ * filesystem a moment to settle before we give up.
  *
  * Uses the same pragma set as the main DB. Foreign keys are enabled
  * because the mount index has inter-table relationships.
@@ -55,50 +116,43 @@ export function getMountIndexSQLiteClient(config: SQLiteConfig): DatabaseType | 
     walMode: config.walMode,
   });
 
-  try {
-    const db = new Database(config.path);
+  let lastError: unknown;
+  const maxAttempts = OPEN_RETRY_BACKOFF_MS.length + 1;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const db = attemptOpenMountIndex(config);
+      globalThis.__quilltapMountIndexDatabase = db;
+      globalThis.__quilltapMountIndexDegraded = false;
 
-    // SQLCipher key MUST be the first pragma before any other operations.
-    const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
-    if (sqlcipherKey) {
-      const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
-      db.pragma(`key = "x'${keyHex}'"`);
-      moduleLogger.debug('SQLCipher key set on mount index database');
+      moduleLogger.info('Mount index database connection established', {
+        path: config.path,
+        attempts: attempt + 1,
+      });
+
+      return db;
+    } catch (error) {
+      lastError = error;
+      const backoff = OPEN_RETRY_BACKOFF_MS[attempt];
+      if (backoff !== undefined) {
+        moduleLogger.warn('Mount index cold-open failed — retrying', {
+          path: config.path,
+          attempt: attempt + 1,
+          maxAttempts,
+          backoffMs: backoff,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        sleepSync(backoff);
+      }
     }
-
-    // Configure pragmas. Journal mode defaults to a single-file mode
-    // (truncate) for safety on cloud-synced data directories; WAL is opt-in
-    // via SQLITE_WAL_MODE=true.
-    if (config.walMode) {
-      db.pragma('journal_mode = WAL');
-    } else {
-      db.pragma(`journal_mode = ${config.journalMode}`);
-    }
-    db.pragma(`synchronous = ${config.synchronous}`);
-    db.pragma(`busy_timeout = ${config.busyTimeout}`);
-    db.pragma(`cache_size = ${config.cacheSize}`);
-    db.pragma('mmap_size = 268435456'); // 256MB
-    db.pragma('temp_store = MEMORY');
-
-    // Enable foreign keys — mount index has inter-table relationships
-    db.pragma('foreign_keys = ON');
-
-    globalThis.__quilltapMountIndexDatabase = db;
-    globalThis.__quilltapMountIndexDegraded = false;
-
-    moduleLogger.info('Mount index database connection established', {
-      path: config.path,
-    });
-
-    return db;
-  } catch (error) {
-    moduleLogger.error('Failed to initialize mount index database — entering degraded mode', {
-      path: config.path,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    globalThis.__quilltapMountIndexDegraded = true;
-    return null;
   }
+
+  moduleLogger.error('Failed to initialize mount index database — entering degraded mode', {
+    path: config.path,
+    attempts: maxAttempts,
+    error: lastError instanceof Error ? lastError.message : String(lastError),
+  });
+  globalThis.__quilltapMountIndexDegraded = true;
+  return null;
 }
 
 /**

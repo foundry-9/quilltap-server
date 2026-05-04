@@ -247,7 +247,7 @@ export async function register() {
         } catch { /* ignore — module may not be loaded yet */ }
 
         const { getSQLiteDatabasePath, getLLMLogsDatabasePath, getMountIndexDatabasePath } = await import('./lib/paths');
-        const { isDatabaseEncrypted } = await import('./lib/startup/db-encryption-state');
+        const { getDatabaseEncryptionState } = await import('./lib/startup/db-encryption-state');
         const { convertDatabaseToEncrypted } = await import('./lib/startup/db-encryption-converter');
         const fsMod = await import('fs');
 
@@ -256,67 +256,93 @@ export async function register() {
         const mountIndexDbPath = getMountIndexDatabasePath();
         const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
 
-        // Convert main database if it exists and is plaintext
-        if (fsMod.default.existsSync(mainDbPath) && !isDatabaseEncrypted(mainDbPath)) {
-          logger.info('Phase -0.5b: Converting main database to encrypted format', {
-            context: 'instrumentation.register',
-            dbPath: mainDbPath,
-          });
+        // Convert main database if it exists and is plaintext.
+        // Skip on `unknown` (transient read failure) — re-encrypting a DB
+        // we couldn't verify is far worse than waiting for the next restart.
+        if (fsMod.default.existsSync(mainDbPath)) {
+          const state = getDatabaseEncryptionState(mainDbPath);
+          if (state === 'unknown') {
+            logger.warn('Skipping main database encryption check — header read failed; will retry on next restart', {
+              context: 'instrumentation.register',
+              dbPath: mainDbPath,
+            });
+          } else if (state === 'plaintext') {
+            logger.info('Phase -0.5b: Converting main database to encrypted format', {
+              context: 'instrumentation.register',
+              dbPath: mainDbPath,
+            });
 
-          try {
-            convertDatabaseToEncrypted(mainDbPath, pepper);
-            logger.info('Main database encryption conversion complete', {
-              context: 'instrumentation.register',
-            });
-          } catch (convErr) {
-            logger.error('Main database encryption conversion FAILED', {
-              context: 'instrumentation.register',
-              error: convErr instanceof Error ? convErr.message : String(convErr),
-            });
-            // Fatal — can't proceed with inconsistent encryption state
-            process.exit(1);
+            try {
+              convertDatabaseToEncrypted(mainDbPath, pepper);
+              logger.info('Main database encryption conversion complete', {
+                context: 'instrumentation.register',
+              });
+            } catch (convErr) {
+              logger.error('Main database encryption conversion FAILED', {
+                context: 'instrumentation.register',
+                error: convErr instanceof Error ? convErr.message : String(convErr),
+              });
+              // Fatal — can't proceed with inconsistent encryption state
+              process.exit(1);
+            }
           }
         }
 
         // Convert LLM logs database if it exists and is plaintext
-        if (fsMod.default.existsSync(llmLogsDbPath) && !isDatabaseEncrypted(llmLogsDbPath)) {
-          logger.info('Phase -0.5b: Converting LLM logs database to encrypted format', {
-            context: 'instrumentation.register',
-            dbPath: llmLogsDbPath,
-          });
+        if (fsMod.default.existsSync(llmLogsDbPath)) {
+          const state = getDatabaseEncryptionState(llmLogsDbPath);
+          if (state === 'unknown') {
+            logger.warn('Skipping LLM logs encryption check — header read failed; will retry on next restart', {
+              context: 'instrumentation.register',
+              dbPath: llmLogsDbPath,
+            });
+          } else if (state === 'plaintext') {
+            logger.info('Phase -0.5b: Converting LLM logs database to encrypted format', {
+              context: 'instrumentation.register',
+              dbPath: llmLogsDbPath,
+            });
 
-          try {
-            convertDatabaseToEncrypted(llmLogsDbPath, pepper);
-            logger.info('LLM logs database encryption conversion complete', {
-              context: 'instrumentation.register',
-            });
-          } catch (convErr) {
-            logger.warn('LLM logs database encryption conversion failed — continuing', {
-              context: 'instrumentation.register',
-              error: convErr instanceof Error ? convErr.message : String(convErr),
-            });
-            // Non-fatal for LLM logs — they're expendable
+            try {
+              convertDatabaseToEncrypted(llmLogsDbPath, pepper);
+              logger.info('LLM logs database encryption conversion complete', {
+                context: 'instrumentation.register',
+              });
+            } catch (convErr) {
+              logger.warn('LLM logs database encryption conversion failed — continuing', {
+                context: 'instrumentation.register',
+                error: convErr instanceof Error ? convErr.message : String(convErr),
+              });
+              // Non-fatal for LLM logs — they're expendable
+            }
           }
         }
 
         // Convert mount index database if it exists and is plaintext
-        if (fsMod.default.existsSync(mountIndexDbPath) && !isDatabaseEncrypted(mountIndexDbPath)) {
-          logger.info('Phase -0.5b: Converting mount index database to encrypted format', {
-            context: 'instrumentation.register',
-            dbPath: mountIndexDbPath,
-          });
+        if (fsMod.default.existsSync(mountIndexDbPath)) {
+          const state = getDatabaseEncryptionState(mountIndexDbPath);
+          if (state === 'unknown') {
+            logger.warn('Skipping mount index encryption check — header read failed; will retry on next restart', {
+              context: 'instrumentation.register',
+              dbPath: mountIndexDbPath,
+            });
+          } else if (state === 'plaintext') {
+            logger.info('Phase -0.5b: Converting mount index database to encrypted format', {
+              context: 'instrumentation.register',
+              dbPath: mountIndexDbPath,
+            });
 
-          try {
-            convertDatabaseToEncrypted(mountIndexDbPath, pepper);
-            logger.info('Mount index database encryption conversion complete', {
-              context: 'instrumentation.register',
-            });
-          } catch (convErr) {
-            logger.warn('Mount index database encryption conversion failed — continuing', {
-              context: 'instrumentation.register',
-              error: convErr instanceof Error ? convErr.message : String(convErr),
-            });
-            // Non-fatal for mount index — it can be rebuilt
+            try {
+              convertDatabaseToEncrypted(mountIndexDbPath, pepper);
+              logger.info('Mount index database encryption conversion complete', {
+                context: 'instrumentation.register',
+              });
+            } catch (convErr) {
+              logger.warn('Mount index database encryption conversion failed — continuing', {
+                context: 'instrumentation.register',
+                error: convErr instanceof Error ? convErr.message : String(convErr),
+              });
+              // Non-fatal for mount index — it can be rebuilt
+            }
           }
         }
       }

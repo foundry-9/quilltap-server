@@ -64,6 +64,12 @@ RUN apk add --no-cache zip git curl wget jq
 # Copy pre-compiled production node_modules from build stage (native modules already built)
 COPY --from=deps-prod /app/node_modules ./node_modules
 
+# Bundle the quilltap CLI for in-container debugging. CLI deps resolve via
+# Node's module resolution up to /app/node_modules — see Dockerfile for the
+# matching block in the regular build pipeline.
+COPY --chown=nextjs:nodejs packages/quilltap ./packages/quilltap
+RUN ln -s /app/packages/quilltap/bin/quilltap.js /usr/local/bin/quilltap
+
 # Copy entrypoint script
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

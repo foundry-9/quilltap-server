@@ -4,6 +4,26 @@
 
 ### 4.4-dev
 
+#### Mount-index DB cold-open: retry transient reads instead of locking into degraded mode
+
+Bug: every mount-blob lookup returned 500 (`Mount-blob not found for storageKey: mount-blob:…`) when running the Docker image against an iCloud Drive data dir, while the same data dir worked fine when accessed directly by the local dev server or by `npx quilltap db --mount-points "…"`. The blobs were on disk; the host CLI read them; Docker couldn't.
+
+Two compounding root causes — both in the cold-open path:
+
+1. **`isDatabaseEncrypted()` treated transient read errors as "plaintext."** The 16-byte header read for `quilltap-mount-index.db` returned `EAGAIN` (`Unknown system error -35`) because the bind-mounted iCloud Drive directory's file provider was still materializing pages when Docker started. The function caught the error and returned `false`, causing instrumentation to log "Phase -0.5b: Converting mount index database to encrypted format" and attempt a destructive in-place re-encryption against an already-encrypted file. The conversion's first `copyfile` also hit `EAGAIN` and bailed out, so the on-disk DB was actually fine — but the false "plaintext" reading was never the right answer.
+
+2. **`getMountIndexSQLiteClient()` had no retry on cold-open.** ~20s later, the mount-index client opened the DB, set the SQLCipher key, and the next pragma triggered a page-1 decryption that returned `file is not a database` (same family of flaky-read symptom). The catch block flipped `globalThis.__quilltapMountIndexDegraded = true` for the lifetime of the process. Every subsequent `repos.docMountBlobs.readData(...)` threw "Mount index database is in degraded mode," got swallowed by the `readMountBlob` catch into a `null` return, and surfaced as the "Mount-blob not found" error — for every mount-blob file in the system, until the next restart.
+
+Fixes in this change:
+
+- `lib/startup/db-encryption-state.ts`: header read now retries on `EAGAIN`/`EBUSY`/`EWOULDBLOCK`/`EINTR` with exponential backoff (5 attempts, capped at ~3s). New `getDatabaseEncryptionState(path)` returns `'encrypted' | 'plaintext' | 'unknown'` so callers can branch explicitly on uncertainty. `isDatabaseEncrypted(path)` is preserved as a thin boolean wrapper for back-compat (and existing tests).
+- `instrumentation.ts` and `app/api/v1/system/unlock/route.ts`: switched to `getDatabaseEncryptionState`. On `'unknown'` they log a warning and skip the conversion entirely — far better than running an in-place re-encrypt against a DB we couldn't verify.
+- `lib/database/backends/sqlite/mount-index-client.ts`: `getMountIndexSQLiteClient` now wraps `new Database()` + `PRAGMA key` + a verify probe (`SELECT count(*) FROM sqlite_master`, which forces SQLCipher to decrypt page 1) in a 4-attempt retry loop with 200ms / 600ms / 1500ms backoff. Each failed attempt closes the connection before retrying. Only after the retries are exhausted does it enter degraded mode. The verify probe also moves the failure point into init rather than into the first user query.
+
+#### Quilltap CLI bundled into the Docker / Lima / WSL images
+
+Future debugging inside the runtime image can now run `quilltap db --tables`, `quilltap db --mount-points "..."`, etc. directly. The production stage of `Dockerfile` (and `Dockerfile.ci`) copies `packages/quilltap/` into `/app/packages/quilltap` and symlinks `/usr/local/bin/quilltap → /app/packages/quilltap/bin/quilltap.js`. The CLI's runtime deps (`better-sqlite3-multiple-ciphers` aliased as `better-sqlite3`, `sharp`, `tar`, `yauzl`) all already live in `/app/node_modules` from the `deps-prod` stage, so Node's module resolution walking up from `bin/quilltap.js` reuses them — no duplicate install, no extra image weight, no publish-before-build dependency on npm. Lima and WSL2 rootfs images both build from the production stage (per `scripts/build-rootfs.ts`), so they inherit the CLI for free.
+
 #### `npm start` runs the custom WebSocket server
 
 `package.json`'s `start` script pointed at `node server.js`, which doesn't exist at the repo root — only `server.ts` does. Production paths (Docker, standalone tarball) compile `server.ts` to `.next/standalone/server.js` with esbuild before launching, but local `npm run build && npm run start` skipped that step and crashed with `MODULE_NOT_FOUND`. Changed `start` to `NODE_ENV=production tsx server.ts`, mirroring the `dev` script so the custom server (with the `/api/v1/terminals/[id]/stream` WebSocket upgrade for Ariel) actually runs in local production-mode smoke tests.
