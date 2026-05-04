@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Opt Discord-notify jobs into Node 24
+
+`tsickert/discord-webhook@v7.0.0` (release workflow) and `tristanbudd/discord-commit-github-action@1.0.1` (CI workflow) both still bundle Node 20, triggering GitHub's deprecation warning on every run. Both pinned versions are the latest upstream tags — no Node-24 releases exist yet — so set `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` at the job level on `github-releases-to-discord` in `.github/workflows/release.yml` and on `discord-notify` in `.github/workflows/ci.yml` to silence the warnings and force the actions onto the Node 24 runner.
+
 #### Dependency refresh across root, packages, and plugins
 
 Ran `npm update -S` everywhere. Notable bumps:
