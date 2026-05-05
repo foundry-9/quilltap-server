@@ -592,17 +592,10 @@ async function createInitialMessagesScenarioAndStaff(
         accessories: titleFor('accessories'),
       };
 
-      const allWardrobeItems = await repos.wardrobe.findByCharacterId(characterId);
-      const equippedIdSet = new Set(equippedItemIds);
-      const availableItems = allWardrobeItems
-        .filter((w) => !equippedIdSet.has(w.id))
-        .map((w) => ({ title: w.title }));
-
       await postOpeningOutfitWhisper({
         chatId,
         characterName: character.name,
         outfit,
-        availableItems,
       });
 
       await triggerAvatarGenerationIfEnabled(repos, {

@@ -25,51 +25,25 @@ import { getErrorMessage } from '@/lib/errors';
 import { describeOutfit, type OutfitSlotValues } from '@/lib/wardrobe/outfit-description';
 import type { MessageEvent } from '@/lib/schemas/types';
 
-export interface AvailableWardrobeItem {
-  title: string;
-}
-
 interface BuildContentParams {
   characterName: string;
   outfit: OutfitSlotValues;
-  availableItems?: AvailableWardrobeItem[];
-}
-
-/**
- * Render a list of non-equipped wardrobe items, capped at a sensible length.
- * Returns null when there is nothing to render.
- */
-function renderAvailableWardrobe(items: AvailableWardrobeItem[] | undefined): string | null {
-  if (!items || items.length === 0) return null;
-  const display = items.slice(0, 15);
-  const lines = display.map((item) => `- ${item.title}`);
-  let section = lines.join('\n');
-  if (items.length > 15) {
-    section += `\n(and ${items.length - 15} more — call list_wardrobe to browse the full register)`;
-  }
-  return section;
 }
 
 /**
  * Opening-of-chat outfit announcement. Establishes how a character is dressed
- * before the first character speaks. Includes the available wardrobe so the
- * LLM has the full picture once and need not call `list_wardrobe` immediately.
+ * before the first character speaks. Reports only what they're wearing now —
+ * the LLM can call `list_wardrobe` if it needs the full register.
  */
 export function buildOpeningOutfitContent(params: BuildContentParams): string {
-  const { characterName, outfit, availableItems } = params;
+  const { characterName, outfit } = params;
   const outfitText = describeOutfit(outfit);
   const lines: string[] = [
     `*Aurora regards ${characterName} and pronounces upon their attire —*`,
     '',
+    '',
     outfitText.trimEnd(),
   ];
-  const wardrobeBlock = renderAvailableWardrobe(availableItems);
-  if (wardrobeBlock) {
-    lines.push('');
-    lines.push(`*Aurora notes the rest of ${characterName}'s wardrobe is also at hand:*`);
-    lines.push('');
-    lines.push(wardrobeBlock);
-  }
   return lines.join('\n');
 }
 
@@ -79,20 +53,14 @@ export function buildOpeningOutfitContent(params: BuildContentParams): string {
  * `pendingOutfitNotifications` flow.
  */
 export function buildOutfitChangeContent(params: BuildContentParams): string {
-  const { characterName, outfit, availableItems } = params;
+  const { characterName, outfit } = params;
   const outfitText = describeOutfit(outfit);
   const lines: string[] = [
     `*Aurora marks an alteration to ${characterName}'s attire. They are now turned out as follows —*`,
     '',
+    '',
     outfitText.trimEnd(),
   ];
-  const wardrobeBlock = renderAvailableWardrobe(availableItems);
-  if (wardrobeBlock) {
-    lines.push('');
-    lines.push(`*The remainder of ${characterName}'s wardrobe stands ready:*`);
-    lines.push('');
-    lines.push(wardrobeBlock);
-  }
   return lines.join('\n');
 }
 
@@ -168,7 +136,6 @@ export interface OpeningOutfitAnnouncement {
   chatId: string;
   characterName: string;
   outfit: OutfitSlotValues;
-  availableItems?: AvailableWardrobeItem[];
 }
 
 export async function postOpeningOutfitWhisper(
@@ -185,7 +152,6 @@ export interface OutfitChangeAnnouncement {
   chatId: string;
   characterName: string;
   outfit: OutfitSlotValues;
-  availableItems?: AvailableWardrobeItem[];
 }
 
 export async function postOutfitChangeWhisper(

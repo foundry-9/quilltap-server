@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Aurora outfit whispers: drop the rest-of-wardrobe block and add a paragraph break before the slot list
+
+`lib/services/aurora-notifications/writer.ts`: both `buildOpeningOutfitContent` and `buildOutfitChangeContent` previously appended a "rest of the wardrobe is also at hand" / "remainder of the wardrobe stands ready" bulleted section listing up to 15 unequipped items. The opening variant always emitted it; the change variant did the same on every slot edit. Removed entirely — Aurora now reports only what the character is currently wearing, and the LLM can call `list_wardrobe` if it needs the full register.
+
+Both builders also now emit an extra blank line between the italicized intro paragraph and the first slot bullet so the unordered list no longer renders flush against the preceding line.
+
+The dead `availableItems` plumbing is stripped: `AvailableWardrobeItem`, `renderAvailableWardrobe`, and the `availableItems` field on `OpeningOutfitAnnouncement` / `OutfitChangeAnnouncement` are gone, along with the upstream `findByCharacterId` + filter passes in `app/api/v1/chats/route.ts` (chat-open) and `lib/background-jobs/handlers/wardrobe-announcement.ts` (debounced change handler).
+
 #### Salon: "Continue Elsewhere" Tool Palette button forks a chat with full carryover
 
 New button in the Tool Palette's ORGANIZE section. Reuses the standard new-chat modal in continuation mode (pre-filled with the source chat's project and current participants), then on submit creates a new chat that is preloaded with the source chat's tail.

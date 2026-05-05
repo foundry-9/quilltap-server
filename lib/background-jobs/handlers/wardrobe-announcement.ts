@@ -70,12 +70,6 @@ export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Prom
   const character = await repos.characters.findById(characterId);
   const charName = character?.name ?? 'A character';
 
-  const allWardrobeItems = await repos.wardrobe.findByCharacterId(characterId);
-  const equippedIdSet = new Set(equippedItemIds);
-  const availableItems = allWardrobeItems
-    .filter((w) => !equippedIdSet.has(w.id))
-    .map((w) => ({ title: w.title }));
-
   await postOutfitChangeWhisper({
     chatId,
     characterName: charName,
@@ -85,6 +79,5 @@ export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Prom
       footwear: titleFor(slots.footwear),
       accessories: titleFor(slots.accessories),
     },
-    availableItems,
   });
 }
