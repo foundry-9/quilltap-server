@@ -34,6 +34,11 @@ export type CommonplaceWhisperKind =
  * headers like `## Relevant Memories`).
  */
 export interface CommonplaceParts {
+  /** Snapshot of the chat's present moment (location, who is here, what they
+   * are doing, what they are wearing, and the announced time when applicable).
+   * Rendered ahead of memory sections — the speaker takes stock of *now*
+   * before recalling. */
+  currentState?: string;
   /** Narrative recap of what the character remembers (chat start / character join only). */
   recap?: string;
   /** Semantic-search results that bear on the current moment. */
@@ -48,10 +53,16 @@ export interface CommonplaceParts {
  */
 export function buildCommonplacePersonaWhisper(parts: CommonplaceParts): string {
   const sections: string[] = [];
+  const currentState = parts.currentState?.trim();
   const recap = parts.recap?.trim();
   const relevant = parts.relevant?.trim();
   const interChar = parts.interChar?.trim();
 
+  if (currentState) {
+    sections.push(
+      `*The Commonplace Book sets its memories aside for a moment to take stock of where you stand —*\n\n${currentState}`,
+    );
+  }
   if (recap) {
     sections.push(
       `*The Commonplace Book lays open at your bookmark; here is the gist of what you have noted so far —*\n\n${recap}`,
@@ -77,10 +88,14 @@ export function buildCommonplacePersonaWhisper(parts: CommonplaceParts): string 
  */
 export function buildCommonplaceLLMContext(parts: CommonplaceParts): string {
   const sections: string[] = [];
+  const currentState = parts.currentState?.trim();
   const recap = parts.recap?.trim();
   const relevant = parts.relevant?.trim();
   const interChar = parts.interChar?.trim();
 
+  if (currentState) {
+    sections.push(`Here is the present state of the scene:\n\n${currentState}`);
+  }
   if (recap) {
     sections.push(`You remember the gist of what has happened so far:\n\n${recap}`);
   }

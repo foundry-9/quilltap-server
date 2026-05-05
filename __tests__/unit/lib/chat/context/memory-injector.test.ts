@@ -15,10 +15,12 @@
 import {
   formatFrozenMemoryArchive,
   formatDynamicMemoryHead,
+  formatCurrentSceneState,
   DYNAMIC_HEAD_TOKEN_BUDGET,
   DYNAMIC_HEAD_DEFAULT_SIZE,
 } from '@/lib/chat/context/memory-injector'
 import type { Memory, Provider } from '@/lib/schemas/types'
+import type { SceneState } from '@/lib/schemas/chat.types'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
 
 const provider: Provider = {
@@ -161,5 +163,120 @@ describe('memory-injector: formatDynamicMemoryHead (Phase 3b)', () => {
     const r = formatDynamicMemoryHead([searchResult(m)], provider)
     expect(r.content).toContain('short summary')
     expect(r.content).not.toContain('long body content')
+  })
+})
+
+describe('memory-injector: formatCurrentSceneState', () => {
+  function scene(overrides: Partial<SceneState> = {}): SceneState {
+    return {
+      location: 'Kitchen breakfast nook',
+      characters: [
+        {
+          characterId: '00000000-0000-0000-0000-000000000001',
+          characterName: 'Friday',
+          action: 'Sipping coffee while planning the day.',
+          appearance: 'Strawberry-blonde shoulder-length hair.',
+          clothing: 'Charcoal Sweater, Charcoal Cigarette Trousers, barefoot',
+        },
+        {
+          characterId: '00000000-0000-0000-0000-000000000002',
+          characterName: 'Amy',
+          action: 'Reading at the table.',
+          appearance: 'Glossy jet-black wavy hair.',
+          clothing: 'Forest Green Long Writing Cardigan',
+        },
+      ],
+      updatedAt: '2026-05-04T10:00:00.000Z',
+      updatedAtMessageCount: 42,
+      ...overrides,
+    }
+  }
+
+  it('returns empty content when scene state is null', () => {
+    const r = formatCurrentSceneState(null, null, provider)
+    expect(r).toEqual({ content: '', tokenCount: 0 })
+  })
+
+  it('returns empty content when scene state is undefined', () => {
+    const r = formatCurrentSceneState(undefined, null, provider)
+    expect(r).toEqual({ content: '', tokenCount: 0 })
+  })
+
+  it('renders the canonical Current State block with all fields', () => {
+    const r = formatCurrentSceneState(scene(), '10:42 PM', provider)
+    expect(r.content).toContain('## Current State')
+    expect(r.content).toContain('- **Location**: Kitchen breakfast nook')
+    expect(r.content).toContain('- **Characters Present**: Friday, Amy')
+    expect(r.content).toContain('- **Time**: 10:42 PM')
+    expect(r.content).toContain('- **Active Now**: true')
+    expect(r.content).toContain('### Friday')
+    expect(r.content).toContain('#### Action')
+    expect(r.content).toContain('Sipping coffee while planning the day.')
+    expect(r.content).toContain('#### Clothing')
+    expect(r.content).toContain('Charcoal Sweater, Charcoal Cigarette Trousers, barefoot')
+    expect(r.content).toContain('### Amy')
+    expect(r.tokenCount).toBeGreaterThan(0)
+  })
+
+  it('omits the Time line entirely when no time is provided', () => {
+    const r = formatCurrentSceneState(scene(), null, provider)
+    expect(r.content).not.toContain('Time')
+    expect(r.content).toContain('- **Active Now**: true')
+  })
+
+  it('omits the Time line when time is empty/whitespace', () => {
+    const r = formatCurrentSceneState(scene(), '   ', provider)
+    expect(r.content).not.toContain('- **Time**')
+  })
+
+  it('renders a single character correctly', () => {
+    const oneChar = scene({
+      characters: [
+        {
+          characterId: '00000000-0000-0000-0000-000000000001',
+          characterName: 'Friday',
+          action: 'Alone in the study.',
+          appearance: null,
+          clothing: 'Wool overcoat',
+        },
+      ],
+    })
+    const r = formatCurrentSceneState(oneChar, null, provider)
+    expect(r.content).toContain('- **Characters Present**: Friday')
+    expect(r.content).toContain('### Friday')
+    expect(r.content).not.toContain('### Amy')
+  })
+
+  it('shows _unspecified_ placeholders when action or clothing is null/blank', () => {
+    const blank = scene({
+      characters: [
+        {
+          characterId: '00000000-0000-0000-0000-000000000001',
+          characterName: 'Friday',
+          action: '',
+          appearance: null,
+          clothing: null,
+        },
+      ],
+    })
+    const r = formatCurrentSceneState(blank, null, provider)
+    expect(r.content).toContain('_unspecified_')
+    // Both Action and Clothing should fall back
+    const matches = r.content.match(/_unspecified_/g) ?? []
+    expect(matches.length).toBe(2)
+  })
+
+  it('preserves character order from the scene state', () => {
+    const r = formatCurrentSceneState(scene(), null, provider)
+    const fridayIdx = r.content.indexOf('### Friday')
+    const amyIdx = r.content.indexOf('### Amy')
+    expect(fridayIdx).toBeGreaterThan(0)
+    expect(amyIdx).toBeGreaterThan(fridayIdx)
+  })
+
+  it('does not surface character appearance (appearance stays in the JSON)', () => {
+    const r = formatCurrentSceneState(scene(), null, provider)
+    expect(r.content).not.toContain('Strawberry-blonde')
+    expect(r.content).not.toContain('jet-black wavy hair')
   })
 })

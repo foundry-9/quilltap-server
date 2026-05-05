@@ -40,11 +40,14 @@ import {
   formatSummaryForContext,
   formatFrozenMemoryArchive,
   formatDynamicMemoryHead,
+  formatCurrentSceneState,
   DYNAMIC_HEAD_TOKEN_BUDGET,
   DYNAMIC_HEAD_DEFAULT_SIZE,
   type DebugMemoryInfo,
   type DebugInterCharacterMemoryInfo,
 } from './context/memory-injector'
+import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
+import type { MessageEvent } from '@/lib/schemas/types'
 import { getOrComputeFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import {
   filterMessagesByHistoryAccess,
@@ -111,13 +114,10 @@ export {
   selectRecentMessages,
 }
 
-// Inter-character whisper sizing. Average formatted line on Friday's data
-// is ~40 tokens; the 3× buffer absorbs the gap between SQLite's importance
-// sort and the formatter's effective-weight re-rank, plus shorter-than-
-// average lines packing tighter than the budget assumes.
-const INTER_CHAR_AVG_LINE_TOKENS = 40
-const INTER_CHAR_LIMIT_BUFFER = 3
-const INTER_CHAR_LIMIT_FLOOR = 20
+// Per-character cap on inter-character memories. Top 10 by SQL ordering
+// (importance DESC, lastReinforcedAt/createdAt DESC); the formatter then
+// re-ranks the slice by effective weight inside each character's block.
+const INTER_CHAR_PER_CHARACTER_LIMIT = 10
 
 /**
  * Message format expected by the context manager
@@ -940,6 +940,38 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     compactionGeneration: chat.compactionGeneration ?? 0,
   })
 
+  // 2a-bis. Render the latest scene-state snapshot as the `## Current State`
+  // section that prefaces the Commonplace Book whisper. Time is included only
+  // when the chat would also announce it via the Host (matches the gate at
+  // postHostTimestampAnnouncement below).
+  let currentStateContent = ''
+  let currentStateTokens = 0
+  try {
+    const rawScene = (chat as { sceneState?: unknown }).sceneState
+    let parsedScene: SceneState | null = null
+    if (rawScene) {
+      const candidate = typeof rawScene === 'string'
+        ? (() => { try { return JSON.parse(rawScene) } catch { return null } })()
+        : rawScene
+      if (candidate) {
+        const result = SceneStateSchema.safeParse(candidate)
+        if (result.success) parsedScene = result.data
+      }
+    }
+    let sceneTime: string | null = null
+    if (
+      options.timestampConfig?.autoPrepend &&
+      shouldInjectTimestamp(options.timestampConfig, options.isInitialMessage ?? false)
+    ) {
+      sceneTime = calculateCurrentTimestamp(options.timestampConfig, options.timezone).formatted
+    }
+    const formatted = formatCurrentSceneState(parsedScene, sceneTime, provider)
+    currentStateContent = formatted.content
+    currentStateTokens = formatted.tokenCount
+  } catch (error) {
+    warnings.push(`Failed to format current scene state: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+
   // 2b. Retrieve inter-character memories in multi-character chats
   let interCharacterMemoryContent = ''
   let interCharacterMemoryTokens = 0
@@ -966,26 +998,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         }
       }
 
-      // Half the remaining memory budget is reserved for inter-character whispers.
-      const interCharacterBudget = Math.floor((budget.memoryBudget - memoryTokens) / 2)
+      // Half the remaining memory budget is reserved for inter-character
+      // whispers. Current State (rendered above the memory sections) is
+      // accounted for here so it doesn't crowd out inter-character lines.
+      const interCharacterBudget = Math.floor(
+        (budget.memoryBudget - memoryTokens - currentStateTokens) / 2,
+      )
 
       if (otherCharacterIds.length > 0 && interCharacterBudget > 0) {
-        // Size the per-character SQL LIMIT from the token budget. Average
-        // formatted line is ~40 tokens (172-char content + prefix); the 3×
-        // buffer absorbs (a) the formatter's effective-weight re-ranking
-        // diverging from raw importance order and (b) shorter-than-average
-        // lines packing more rows into the budget. Floor keeps tiny budgets
-        // from starving the fetch.
-        const maxEntries = Math.ceil(interCharacterBudget / INTER_CHAR_AVG_LINE_TOKENS)
-        const maxEntriesPerCharacter = Math.max(
-          INTER_CHAR_LIMIT_FLOOR,
-          Math.ceil(maxEntries / otherCharacterIds.length) * INTER_CHAR_LIMIT_BUFFER
-        )
-
         const interCharacterMemories = await repos.memories.findByCharacterAboutCharacters(
           character.id,
           otherCharacterIds,
-          maxEntriesPerCharacter,
+          INTER_CHAR_PER_CHARACTER_LIMIT,
         )
         interCharacterLoadedCount = interCharacterMemories.length
 
@@ -1309,6 +1333,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // this turn's LLM call. The Staff persona stays in the transcript; the LLM
   // receives clean second-person recall, not meta-narrative.
   const cmpbParts = {
+    currentState: currentStateContent || undefined,
     recap: memoryRecapContent || undefined,
     relevant: memoryContent || undefined,
     interChar: interCharacterMemoryContent || undefined,
@@ -1321,12 +1346,50 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // in multi-character chats; untargeted in single-character (only one
     // character anyway, so no privacy concern).
     const targetParticipantId = isMultiCharacter ? respondingParticipant?.id ?? null : null
-    await postCommonplaceWhisper({
+    const posted = await postCommonplaceWhisper({
       chatId: chat.id,
       targetParticipantId,
       content: personaWhisper,
       kind: 'consolidated',
     })
+
+    // The Commonplace Book whisper is a snapshot reminder, not a permanent
+    // record — once a fresher one lands for this character, every prior
+    // commonplaceBook whisper targeted at the same scope is stale. Sweep
+    // them after the new one is durably posted (so a write failure on the
+    // new one cannot orphan the character with no whisper at all).
+    if (posted) {
+      try {
+        const refreshed = await getRepositories().chats.getMessages(chat.id)
+        const stale = refreshed
+          .filter((m): m is MessageEvent => m.type === 'message')
+          .filter(m => m.systemSender === 'commonplaceBook' && m.id !== posted.id)
+          .filter(m => {
+            const ids = m.targetParticipantIds
+            if (targetParticipantId === null) {
+              return ids === null || ids === undefined
+            }
+            return Array.isArray(ids) && ids.includes(targetParticipantId)
+          })
+          .map(m => m.id)
+
+        if (stale.length > 0) {
+          const removed = await getRepositories().chats.deleteMessagesByIds(chat.id, stale)
+          logger.info('[CommonplaceWhisper] Swept stale whispers', {
+            chatId: chat.id,
+            messageId: posted.id,
+            targetParticipantId,
+            deletedCount: removed,
+          })
+        }
+      } catch (sweepError) {
+        logger.error('[CommonplaceWhisper] Failed to sweep stale whispers', {
+          chatId: chat.id,
+          targetParticipantId,
+          error: getErrorMessage(sweepError),
+        }, sweepError as Error)
+      }
+    }
   }
 
   // Add new user message (only if provided - not in continue mode)

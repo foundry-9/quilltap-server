@@ -6,6 +6,7 @@
  */
 
 import type { Provider, Memory } from '@/lib/schemas/types'
+import type { SceneState } from '@/lib/schemas/chat.types'
 import { estimateTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { calculateEffectiveWeight, formatRelativeAge } from '@/lib/memory/memory-weighting'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
@@ -52,6 +53,52 @@ export interface FormattedInterCharacterMemoriesResult {
   tokenCount: number
   memoriesUsed: number
   debugMemories: DebugInterCharacterMemoryInfo[]
+}
+
+/**
+ * Render the latest scene-state snapshot as the `## Current State` section
+ * for the Commonplace Book whisper. Returns `''` when no scene state is
+ * available so callers can treat the section as absent.
+ *
+ * `time` is the chat's announced timestamp (the same string the Host
+ * announces); pass `null`/`undefined` when the chat is not announcing time
+ * and the Time line is dropped entirely.
+ */
+export function formatCurrentSceneState(
+  sceneState: SceneState | null | undefined,
+  time: string | null | undefined,
+  provider?: Provider,
+): { content: string; tokenCount: number } {
+  if (!sceneState) return { content: '', tokenCount: 0 }
+
+  const characters = Array.isArray(sceneState.characters) ? sceneState.characters : []
+  const names = characters.map(c => c.characterName).filter(n => typeof n === 'string' && n.length > 0)
+
+  const lines: string[] = ['## Current State', '']
+  lines.push(`- **Location**: ${sceneState.location || 'Unknown'}`)
+  lines.push(`- **Characters Present**: ${names.join(', ')}`)
+  if (time && time.trim().length > 0) {
+    lines.push(`- **Time**: ${time.trim()}`)
+  }
+  lines.push('- **Active Now**: true')
+
+  for (const c of characters) {
+    if (!c.characterName) continue
+    lines.push('')
+    lines.push(`### ${c.characterName}`)
+    lines.push('')
+    lines.push('#### Action')
+    lines.push('')
+    lines.push((c.action ?? '').trim() || '_unspecified_')
+    lines.push('')
+    lines.push('#### Clothing')
+    lines.push('')
+    lines.push((c.clothing ?? '').trim() || '_unspecified_')
+  }
+
+  const content = lines.join('\n')
+  const tokenCount = estimateTokens(content + '\n', provider)
+  return { content, tokenCount }
 }
 
 /**
