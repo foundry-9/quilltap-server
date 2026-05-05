@@ -4,6 +4,16 @@
 
 ### 4.4-dev
 
+#### Local file backend: retry transient filesystem errors (Docker bind-mount on iCloud Drive)
+
+`fix(mount-index): retry cold-open + bundle CLI in container` (`35e8a216`) added retry/backoff to the SQLCipher cold-open path so a transient `EAGAIN` from Docker Desktop's VirtioFS layer (when the bind-mounted host directory lives on macOS iCloud Drive) couldn't lock the mount-index DB into degraded mode. The same race still hit every other filesystem read: avatars, character images, story backgrounds, and thumbnails returned `Failed to download file '<key>': Unknown system error -35` (`EDEADLK`, "Resource deadlock avoided") inside the container while `ls`/`stat` on the same path worked fine.
+
+Fix: new `lib/file-storage/backends/local/retry.ts` with `withFsRetry(op, { operation, key })` — five attempts, 50/150/400/800/1500 ms backoff, retried on `EAGAIN | EBUSY | EWOULDBLOCK | EINTR | EDEADLK`. Non-transient codes (`ENOENT`, `EACCES`, `ENOTEMPTY`, etc.) rethrow immediately so existing not-found / permission paths in `delete`, `exists`, `list`, `getFileMetadata`, `folderExists`, and `deleteFolder` keep their fast-path behavior unchanged. After exhausting retries the last transient error is rethrown unchanged so callers see the original code/stack.
+
+Wrapped operations in `LocalFileStorageBackend`: `download` (the user-facing culprit), `upload` (`mkdir` + `writeFile`), `delete` (file + legacy sidecar), `exists`, `copy` (`mkdir` + `copyFile`), `getFileMetadata`, `list` (per-`readdir`), `createFolder`, `deleteFolder`, `folderExists`. `testConnection` is left bare — it runs once at startup and a transient failure there is informational, not load-bearing.
+
+The retry warns once per attempt with `operation`, `key`, `attempt`, `maxAttempts`, `backoffMs`, and the original `code` so the same diagnostic story works whether the user is on iCloud Drive, a flaky network mount, or a normal disk.
+
 #### Standalone tarball: bundle server.ts so `lib/logger` resolves at runtime
 
 `scripts/build-standalone-tarball.ts` was running esbuild with `--bundle=false`, so the compiled `server.js` kept a literal `require('./lib/logger')` but no `lib/logger.js` was ever produced. Next's tracer copies `lib/logger.ts` (and its peers) into `.next/standalone/lib/` as raw `.ts` source, which Node can't `require`. Every standalone tarball cut after `be9f5ce5` (which added the logger import to `server.ts`) shipped broken — `MODULE_NOT_FOUND: './lib/logger'` at startup, and the launcher times out after 60 health-check attempts.

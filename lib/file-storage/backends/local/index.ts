@@ -22,6 +22,7 @@ import type {
   FileBackendMetadata,
   FileMetadata,
 } from '../../interfaces';
+import { withFsRetry } from './retry';
 
 const logger = createLogger('file-storage:local');
 
@@ -214,7 +215,10 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     try {
       // Ensure parent directory exists
       const directory = dirname(filePath);
-      await mkdir(directory, { recursive: true });
+      await withFsRetry(
+        () => mkdir(directory, { recursive: true }),
+        { operation: 'upload:mkdir', key },
+      );
 
       // Convert Readable to Buffer if necessary
       let fileContent: Buffer;
@@ -230,7 +234,10 @@ export class LocalFileStorageBackend implements FileStorageBackend {
       }
 
       // Write file (no sidecar — metadata lives in DB)
-      await writeFile(filePath, fileContent as any);
+      await withFsRetry(
+        () => writeFile(filePath, fileContent as any),
+        { operation: 'upload:writeFile', key },
+      );
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown upload error';
@@ -257,7 +264,10 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     const filePath = this.buildSafePath(key);
 
     try {
-      const content = await readFile(filePath);
+      const content = await withFsRetry(
+        () => readFile(filePath),
+        { operation: 'download', key },
+      );
       return content;
     } catch (error) {
       const errorMsg =
@@ -287,7 +297,10 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     try {
       // Delete the file
       try {
-        await unlink(filePath);
+        await withFsRetry(
+          () => unlink(filePath),
+          { operation: 'delete', key },
+        );
       } catch (error) {
         // File doesn't exist, which is fine for idempotent delete
         if (
@@ -301,7 +314,10 @@ export class LocalFileStorageBackend implements FileStorageBackend {
 
       // Clean up any leftover legacy sidecar file
       try {
-        await unlink(`${filePath}.meta.json`);
+        await withFsRetry(
+          () => unlink(`${filePath}.meta.json`),
+          { operation: 'delete:sidecar', key },
+        );
       } catch (error) {
         // Sidecar doesn't exist, which is expected in the new format
         if (
@@ -336,7 +352,10 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     const filePath = this.buildSafePath(key);
 
     try {
-      await access(filePath);
+      await withFsRetry(
+        () => access(filePath),
+        { operation: 'exists', key },
+      );
       return true;
     } catch (error) {
       if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -391,10 +410,16 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     try {
       // Ensure destination directory exists
       const directory = dirname(destinationPath);
-      await mkdir(directory, { recursive: true });
+      await withFsRetry(
+        () => mkdir(directory, { recursive: true }),
+        { operation: 'copy:mkdir', key: destinationKey },
+      );
 
       // Copy the file
-      await copyFile(sourcePath, destinationPath);
+      await withFsRetry(
+        () => copyFile(sourcePath, destinationPath),
+        { operation: 'copy', key: sourceKey },
+      );
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown copy error';
@@ -425,7 +450,10 @@ export class LocalFileStorageBackend implements FileStorageBackend {
 
     try {
       // Get file stats
-      const stats = await stat(filePath);
+      const stats = await withFsRetry(
+        () => stat(filePath),
+        { operation: 'getFileMetadata', key },
+      );
 
       const metadata: FileMetadata = {
         size: stats.size,
@@ -475,7 +503,10 @@ export class LocalFileStorageBackend implements FileStorageBackend {
         }
 
         try {
-          const entries = await readdir(dirPath, { withFileTypes: true });
+          const entries = await withFsRetry(
+            () => readdir(dirPath, { withFileTypes: true }),
+            { operation: 'list:readdir', key: currentPrefix },
+          );
 
           for (const entry of entries) {
             if (maxKeys && results.length >= maxKeys) {
@@ -543,7 +574,10 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     const fullPath = this.buildSafePath(folderPath);
 
     try {
-      await mkdir(fullPath, { recursive: true });
+      await withFsRetry(
+        () => mkdir(fullPath, { recursive: true }),
+        { operation: 'createFolder', key: folderPath },
+      );
     } catch (error) {
       const errorMsg =
         error instanceof Error ? error.message : 'Unknown folder creation error';
@@ -570,7 +604,10 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     const fullPath = this.buildSafePath(folderPath);
 
     try {
-      await rmdir(fullPath);
+      await withFsRetry(
+        () => rmdir(fullPath),
+        { operation: 'deleteFolder', key: folderPath },
+      );
     } catch (error) {
       // Directory doesn't exist, which is fine for idempotent delete
       if (
@@ -614,7 +651,10 @@ export class LocalFileStorageBackend implements FileStorageBackend {
     const fullPath = this.buildSafePath(folderPath);
 
     try {
-      const stats = await stat(fullPath);
+      const stats = await withFsRetry(
+        () => stat(fullPath),
+        { operation: 'folderExists', key: folderPath },
+      );
       const exists = stats.isDirectory();
       return exists;
     } catch (error) {
