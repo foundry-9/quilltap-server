@@ -926,9 +926,17 @@ export async function enqueueWardrobeOutfitAnnouncement(
   const repos = getRepositories();
   const scheduledAt = new Date(Date.now() + WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS);
 
+  // Only collapse against a still-PENDING job. findPendingForChat also returns
+  // PROCESSING jobs, but a job that has already been claimed and is running
+  // (or about to run) the announcement handler can't absorb fresh changes —
+  // its scheduledAt is ignored once claimed, and it has already snapshotted
+  // the equipped state. Letting that path return isNew=false strands any
+  // post-claim slot edits with no follow-up announcement. Treat PROCESSING
+  // as "missed the bus" and enqueue a fresh debounced job instead.
   const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
   const existing = pendingJobs.find(
     job => job.type === 'WARDROBE_OUTFIT_ANNOUNCEMENT'
+      && job.status === 'PENDING'
       && (job.payload as unknown as WardrobeOutfitAnnouncementPayload).characterId === payload.characterId
   );
 

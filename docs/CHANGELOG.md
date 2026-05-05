@@ -4,6 +4,18 @@
 
 ### 4.4-dev
 
+#### Outfit-change debounce no longer collapses against an already-running announcement
+
+`enqueueWardrobeOutfitAnnouncement` looked up the existing in-flight job via `findPendingForChat`, which returns both `PENDING` **and** `PROCESSING` rows. When a slot edit landed during the ~1s window between the announcement job being claimed (`PENDING → PROCESSING`) and the handler finishing, the dedup branch matched the now-`PROCESSING` job, called `update({ scheduledAt })` on it (a no-op — the worker no longer consults `scheduledAt` after claim), returned `isNew: false`, and skipped enqueueing a fresh debounced job. Result: the late slot edit was stranded with no announcement at all, even though the 60s debounce window was supposedly active.
+
+Fix in `lib/background-jobs/queue-service.ts`: the dedup `find()` now also requires `job.status === 'PENDING'`. A `PROCESSING` job has already snapshotted equipped state and is past the point where new changes can be folded in, so it falls through to the normal `enqueueJob` path — a brand-new debounced announcement is scheduled 60s out, capturing the post-claim edits when it eventually fires.
+
+#### Aurora's opening wardrobe announcement now covers every character, including the user's
+
+The chat-open Aurora outfit whisper in `app/api/v1/chats/route.ts` filtered participants on `controlledBy !== 'user'`, so user-controlled characters never got an opening "wearing X" announcement — even though `applyOutfitSelections` already populated their equipped slots. This left the LLMs and the operator without an authoritative record of what the user character was wearing at chat start, and skipped avatar generation for that character entirely.
+
+Fix: `createInitialMessages` now iterates every `type === 'CHARACTER'` participant, posts an opening outfit whisper for each (the existing `getEquippedOutfitForCharacter` skip-on-null guard still protects against missing data), and calls `triggerAvatarGenerationIfEnabled` from `lib/wardrobe/avatar-generation` inside the same loop so avatars (re)generate for every character — user-controlled and LLM-controlled alike — when `chat.avatarGenerationEnabled` is on. The avatar trigger reuses the same enqueue path (`enqueueCharacterAvatarGeneration`, deduped on `(chatId, characterId)`) used by sidebar outfit changes.
+
 #### Cheap-LLM logs now record `characterId` for character-scoped tasks
 
 Every cheap-LLM call routed through `executeCheapLLMTask` was writing `llm_logs.characterId = NULL`, even for clearly per-character work like memory extraction or memory-recap summarization. The column was wired up on the `logLLMCall` side but `core-execution.ts` never accepted or forwarded it. Per-character cost attribution from `llm_logs` was therefore impossible — only `CHAT_MESSAGE` rows carried the split.

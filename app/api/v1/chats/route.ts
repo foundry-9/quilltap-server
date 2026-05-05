@@ -51,6 +51,7 @@ import {
   postHostUserCharacterAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { postOpeningOutfitWhisper } from '@/lib/services/aurora-notifications/writer';
+import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import {
   loadProsperoProjectContext,
   postProsperoProjectContextAnnouncement,
@@ -464,11 +465,15 @@ async function createInitialMessages(
     }
   }
 
-  // Phase D: Aurora establishes how each LLM-controlled character is dressed
-  // at the opening of the chat. Replaces the per-turn `## Current Outfit` /
-  // `## Available Wardrobe` blocks. Outfit selection has already been applied
-  // by handleCreate before this runs, so equippedOutfit is populated.
-  for (const participant of llmCharacterParticipants) {
+  // Aurora establishes how every character in the chat is dressed at the opening
+  // of the chat — including the user-controlled character — and, when avatar
+  // generation is enabled for the chat, kicks off avatar (re)generation for each
+  // of them. Outfit selection has already been applied for every character by
+  // handleCreate before this runs, so equippedOutfit is populated.
+  const allCharacterParticipants = participants.filter(
+    (p) => p.type === 'CHARACTER' && p.characterId,
+  );
+  for (const participant of allCharacterParticipants) {
     try {
       const characterId = participant.characterId as string;
       const character = await repos.characters.findById(characterId);
@@ -509,6 +514,13 @@ async function createInitialMessages(
         characterName: character.name,
         outfit,
         availableItems,
+      });
+
+      await triggerAvatarGenerationIfEnabled(repos, {
+        userId,
+        chatId,
+        characterId,
+        callerContext: '[Chats v1] chat-open',
       });
     } catch (error) {
       logger.warn('[Chats v1] Failed to post opening outfit whisper', {
