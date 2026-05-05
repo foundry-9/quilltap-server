@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.4.0-dev.121",
+  "version": "4.4.0-dev.122",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -144,6 +144,8 @@
   },
   "overrides": {
     "glob": "^12.0.0",
-    "cookie": "^0.7.0"
+    "cookie": "^0.7.0",
+    "pdfjs-dist": "$pdfjs-dist",
+    "@napi-rs/canvas": "^0.1.100"
   }
 }

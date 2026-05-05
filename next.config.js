@@ -18,6 +18,7 @@ const nextConfig = {
     'better-sqlite3',   // Native module for SQLite database
     'node-pty',         // Native module for terminal control
     'sharp',            // Native image processing (platform-specific binaries)
+    '@napi-rs/canvas',  // Native canvas backend used by pdfjs-dist for PDF rendering
     'ws',               // WebSocket library for terminal streaming
   ],
 
@@ -33,6 +34,7 @@ const nextConfig = {
       './node_modules/sharp/**/*',
       './node_modules/ws/**/*',
       './node_modules/@img/**/*',
+      './node_modules/@napi-rs/**/*',
       './node_modules/@xterm/**/*',
       './first-startup/**/*',
       './themes/bundled/**/*',

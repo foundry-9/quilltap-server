@@ -75,7 +75,7 @@ if (!skipBuild) {
 
   // Step 3: Build Next.js standalone
   console.log('==> Step 3/8: Building Next.js (standalone output)');
-  run('npx next build --webpack', 'Building Next.js');
+  run('npx next build', 'Building Next.js');
 } else {
   console.log('==> Step 2/8: Skipping plugin build (--skip-build)');
   console.log('==> Step 3/8: Skipping Next.js build (--skip-build)');
@@ -166,6 +166,19 @@ if (existsSync(standaloneNodeModules)) {
         const entryPath = join(imgDir, entry);
         rmSync(entryPath, { recursive: true, force: true });
         console.log(`    Stripped: @img/${entry}`);
+      }
+    }
+  }
+
+  // Remove @napi-rs/canvas-* platform-specific native packages but keep the JS
+  // wrapper (@napi-rs/canvas) and pure-JS siblings like @napi-rs/wasm-runtime.
+  const napiDir = join(standaloneNodeModules, '@napi-rs');
+  if (existsSync(napiDir)) {
+    for (const entry of readdirSync(napiDir)) {
+      if (entry.startsWith('canvas-')) {
+        const entryPath = join(napiDir, entry);
+        rmSync(entryPath, { recursive: true, force: true });
+        console.log(`    Stripped: @napi-rs/${entry}`);
       }
     }
   }

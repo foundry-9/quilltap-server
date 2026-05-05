@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Standalone tarball: build with Turbopack and ship `@napi-rs/canvas` for server-side PDF rendering
+
+After the logger bundling fix in `9606db9e`, the embedded Node server in the Electron shell hit a new startup error: `Cannot find module 'next/dist/compiled/webpack/webpack-lib'` from `loadWebpackHook` during `loadConfig`. Next's webpack tracer skips `next/dist/compiled/webpack/` because it isn't reached by traced code paths — but `loadWebpackHook` resolves it via a `require.resolve` string the tracer can't follow. `scripts/build-standalone-tarball.ts` now runs `npx next build` (Turbopack default) instead of `npx next build --webpack`. Turbopack's NFT tracer was already tuned in `25de49f6`; the `turbopack: { resolveAlias }` block in `next.config.js` covers what the webpack callback handled for client builds; and `serverExternalPackages` already covers native-module externals for both bundlers. The webpack callback in `next.config.js` is left in place for now in case `--webpack` is needed for debugging.
+
+Server-side PDF rendering was silently broken on standalone builds: every boot logged `Cannot load "@napi-rs/canvas" package: Cannot find module '@napi-rs/canvas'` because Next's tracer dropped it (it's loaded via optional try/catch require inside `pdfjs-dist`). Fix: added `@napi-rs/canvas` to `serverExternalPackages` and `./node_modules/@napi-rs/**/*` to `outputFileTracingIncludes` so the JS wrapper is staged. The build script now strips `@napi-rs/canvas-*` platform binary packages from the tarball — same pattern as `@img/sharp-*` — so the tarball stays platform-agnostic and npm reinstalls the correct binary on the user's machine. Added `@napi-rs/canvas: ^0.1.100` to `packages/quilltap/package.json` so the user-facing CLI pulls the platform binary alongside `sharp`.
+
+Also deduped `pdfjs-dist` and `@napi-rs/canvas` to single versions. Two `pdfjs-dist` copies existed (5.4 from `pdf-parse`'s pinned dep, 5.7 from the direct dep), each pulling its own canvas build. Added a `"pdfjs-dist": "$pdfjs-dist"` override so transitive callers share the root's `5.7.284`, and an `"@napi-rs/canvas": "^0.1.100"` override to align all callers on the version `pdfjs-dist@5.7.284` resolves.
+
 #### Aurora outfit whispers: drop the rest-of-wardrobe block and add a paragraph break before the slot list
 
 `lib/services/aurora-notifications/writer.ts`: both `buildOpeningOutfitContent` and `buildOutfitChangeContent` previously appended a "rest of the wardrobe is also at hand" / "remainder of the wardrobe stands ready" bulleted section listing up to 15 unequipped items. The opening variant always emitted it; the change variant did the same on every slot edit. Removed entirely — Aurora now reports only what the character is currently wearing, and the LLM can call `list_wardrobe` if it needs the full register.
