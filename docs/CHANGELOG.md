@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Standalone tarball: bundle server.ts so `lib/logger` resolves at runtime
+
+`scripts/build-standalone-tarball.ts` was running esbuild with `--bundle=false`, so the compiled `server.js` kept a literal `require('./lib/logger')` but no `lib/logger.js` was ever produced. Next's tracer copies `lib/logger.ts` (and its peers) into `.next/standalone/lib/` as raw `.ts` source, which Node can't `require`. Every standalone tarball cut after `be9f5ce5` (which added the logger import to `server.ts`) shipped broken — `MODULE_NOT_FOUND: './lib/logger'` at startup, and the launcher times out after 60 health-check attempts.
+
+Fix: the esbuild step now uses `--bundle --packages=external --tsconfig=tsconfig.json`, which inlines local imports (logger and its transitive deps) into `server.js` while leaving npm packages as runtime requires resolved from the staged `node_modules/`. The `@/*` path alias resolves via the included tsconfig.
+
+`./lib/terminal/ws` is kept external (`--external:./lib/terminal/ws`) because it imports `node-pty` at module load and `server.ts` loads it dynamically only when a terminal upgrade arrives — bundling it would defeat the lazy-load and pull node-pty into every server start. A second esbuild pass compiles `lib/terminal/ws.ts` to `lib/terminal/ws.js` in staging (with `--packages=external` so node-pty stays a runtime require) so the dynamic `import('./lib/terminal/ws')` resolves.
+
 #### Commonplace Book whisper now opens with a `## Current State` snapshot, caps inter-character memories at 10, and is ephemeral
 
 The Commonplace Book whisper that fronts every per-character LLM turn used to begin straight with `## Memory Anchors` (the frozen archive) and `## Memories About Other Characters`. The character about to speak had no canonical "where am I, who else is here, what are they doing, what are they wearing" briefing — scene-state tracking already produced the JSON for that, but the only consumer was image generation.

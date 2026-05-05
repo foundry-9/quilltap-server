@@ -92,10 +92,22 @@ console.log('==> Step 4/8: Copying .next/standalone/ to staging');
 copyDir(`${NEXT_STANDALONE}/.`, STAGING_DIR);
 
 // Step 4.5: Compile server.ts and overwrite Next's generated server.js
+//
+// We bundle local imports (so ./lib/logger gets inlined) but keep node_modules
+// deps external (--packages=external) so they resolve from the staged
+// node_modules at runtime. ./lib/terminal/ws is kept external on purpose: it
+// pulls in node-pty at module load, and server.ts loads it dynamically only
+// when a terminal upgrade arrives. We compile it as a separate sibling file
+// so the dynamic import resolves at runtime.
 console.log('==> Step 5/8: Compiling server.ts to custom server');
+const esbuildBase = '--platform=node --target=node24 --format=cjs --bundle --packages=external --tsconfig=tsconfig.json';
 run(
-  `npx esbuild server.ts --bundle=false --platform=node --target=node24 --format=cjs --outfile="${join(STAGING_DIR, 'server.js')}"`,
-  'Compiling server.ts with esbuild'
+  `npx esbuild server.ts ${esbuildBase} --external:./lib/terminal/ws --outfile="${join(STAGING_DIR, 'server.js')}"`,
+  'Compiling server.ts with esbuild',
+);
+run(
+  `npx esbuild lib/terminal/ws.ts ${esbuildBase} --outfile="${join(STAGING_DIR, 'lib', 'terminal', 'ws.js')}"`,
+  'Compiling lib/terminal/ws.ts with esbuild',
 );
 
 // Step 6: Copy static assets and public files
