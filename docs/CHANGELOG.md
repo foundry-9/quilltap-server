@@ -4,6 +4,12 @@
 
 ### 4.4-dev
 
+#### Local file backend: match transient errors by errno, not just `code` (Docker on iCloud Drive)
+
+The retry helper added in `a3ac105b` was meant to absorb the `EDEADLK` ("Resource deadlock avoided") races that Docker Desktop's VirtioFS layer emits when the bind-mounted host directory lives on macOS iCloud Drive. In practice it never fired: libuv on Linux has no symbolic name for errno 35, so the `fs.readFile` rejection inside the container surfaces with `code: 'Unknown system error -35'` and `errno: -35`. The guard checked `TRANSIENT_FS_CODES.has(err.code)` only, so every cold avatar/image read failed straight to the browser — affected characters showed initials on a black tile until navigating away and back warmed the file provider.
+
+Fix: `lib/file-storage/backends/local/retry.ts` now also matches a `TRANSIENT_FS_ERRNOS` set of libuv negative errnos (`-4` EINTR, `-11` EAGAIN/EWOULDBLOCK, `-16` EBUSY, `-35` EDEADLK on Linux / EAGAIN on macOS). Same five-attempt 50/150/400/800/1500 ms backoff. Cold reads of `/api/v1/files/[id]` now retry instead of bubbling the libuv error, and the retry path emits its existing `Transient filesystem error — retrying` warning so the diagnostic trail is visible in Docker logs.
+
 #### Standalone tarball: build with Turbopack and ship `@napi-rs/canvas` for server-side PDF rendering
 
 After the logger bundling fix in `9606db9e`, the embedded Node server in the Electron shell hit a new startup error: `Cannot find module 'next/dist/compiled/webpack/webpack-lib'` from `loadWebpackHook` during `loadConfig`. Next's webpack tracer skips `next/dist/compiled/webpack/` because it isn't reached by traced code paths — but `loadWebpackHook` resolves it via a `require.resolve` string the tracer can't follow. `scripts/build-standalone-tarball.ts` now runs `npx next build` (Turbopack default) instead of `npx next build --webpack`. Turbopack's NFT tracer was already tuned in `25de49f6`; the `turbopack: { resolveAlias }` block in `next.config.js` covers what the webpack callback handled for client builds; and `serverExternalPackages` already covers native-module externals for both bundlers. The webpack callback in `next.config.js` is left in place for now in case `--webpack` is needed for debugging.

@@ -41,13 +41,34 @@ const TRANSIENT_FS_CODES = new Set([
   'EDEADLK',
 ]);
 
+/**
+ * Numeric errno fallback. libuv on Linux has no symbolic name for EDEADLK
+ * (errno 35), so the error surfaces with `code: 'Unknown system error -35'`
+ * and only the numeric `errno: -35` is reliable. Match those numerically so
+ * the iCloud-via-VirtioFS case actually triggers the retry.
+ *
+ * Values are libuv's negative errnos:
+ *   -4  EINTR
+ *   -11 EAGAIN / EWOULDBLOCK (Linux)
+ *   -16 EBUSY (Linux)
+ *   -35 EDEADLK (Linux) / EAGAIN (macOS) — both transient
+ */
+const TRANSIENT_FS_ERRNOS = new Set([-4, -11, -16, -35]);
+
 const RETRY_BACKOFF_MS = [50, 150, 400, 800, 1500];
 const MAX_ATTEMPTS = RETRY_BACKOFF_MS.length + 1;
 
 function isTransientFsError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   const code = (err as { code?: unknown }).code;
-  return typeof code === 'string' && TRANSIENT_FS_CODES.has(code);
+  if (typeof code === 'string' && TRANSIENT_FS_CODES.has(code)) {
+    return true;
+  }
+  const errno = (err as { errno?: unknown }).errno;
+  if (typeof errno === 'number' && TRANSIENT_FS_ERRNOS.has(errno)) {
+    return true;
+  }
+  return false;
 }
 
 function sleep(ms: number): Promise<void> {
