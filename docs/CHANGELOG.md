@@ -4,6 +4,14 @@
 
 ### 4.4-dev
 
+#### Standalone tarball: set `__NEXT_PRIVATE_STANDALONE_CONFIG` before requiring next
+
+The `Cannot find module 'next/dist/compiled/webpack/webpack-lib'` startup crash that the previous entry attributed to webpack-vs-Turbopack was misdiagnosed. `node_modules/next/dist/server/config.js:1156` calls `loadWebpackHook()` unconditionally — which `require.resolve`s a list of `next/dist/compiled/webpack/*` paths — but the surrounding try/catch silently swallows the failure when `process.env.__NEXT_PRIVATE_STANDALONE_CONFIG` is set (see `config.js:1158-1163`). Next's own generated `.next/standalone/server.js` sets that env var on line 14, just before requiring `next`. Our build script (since `9606db9e`) overwrites that file with the esbuild bundle of our own `server.ts`, which never set the var, so the swallow gate stayed shut and the resolve threw.
+
+Fix: `scripts/build-standalone-tarball.ts` now compiles `server.ts` to `server-impl.js` and writes a small `server.js` bootstrapper that sets `process.env.NODE_ENV = 'production'` (without it our `server.ts` flips Next into dev mode and tries to load `router-utils/setup-dev-bundler`, which isn't in the tarball), reads `.next/required-server-files.json`, sets `process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(requiredFiles.config)`, and then `require('./server-impl.js')`. This mirrors the env-var-before-require pattern from Next's generated server.js without taking on the rest of its boilerplate.
+
+The Turbopack switch from the previous entry is kept — it's still the right direction for the project — but it was not what fixed this bug.
+
 #### Local file backend: match transient errors by errno, not just `code` (Docker on iCloud Drive)
 
 The retry helper added in `a3ac105b` was meant to absorb the `EDEADLK` ("Resource deadlock avoided") races that Docker Desktop's VirtioFS layer emits when the bind-mounted host directory lives on macOS iCloud Drive. In practice it never fired: libuv on Linux has no symbolic name for errno 35, so the `fs.readFile` rejection inside the container surfaces with `code: 'Unknown system error -35'` and `errno: -35`. The guard checked `TRANSIENT_FS_CODES.has(err.code)` only, so every cold avatar/image read failed straight to the browser — affected characters showed initials on a black tile until navigating away and back warmed the file provider.
