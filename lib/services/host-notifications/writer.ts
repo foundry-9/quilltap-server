@@ -666,6 +666,68 @@ export async function postHostOffSceneCharactersAnnouncement(
 }
 
 // ---------------------------------------------------------------------------
+// Continuation announcements.
+//
+// When a Salon conversation is forked into a new chat (a "change of venue"),
+// the Host posts a public bubble in each chat that links to its counterpart.
+// The new chat's first user-visible message points back to the source chat,
+// so the conversation feels continuous; the source chat's tail bubble points
+// forward, so a returning visitor can follow the proceedings to wherever
+// they have moved. Both are public — no targetParticipantIds.
+// ---------------------------------------------------------------------------
+
+const HOST_KIND_CONTINUATION_FROM = 'continuation-from';
+const HOST_KIND_CONTINUATION_TO = 'continuation-to';
+
+function buildContinuationFromContent(sourceChatId: string, sourceTitle: string | null): string {
+  const titleFragment = sourceTitle && sourceTitle.trim().length > 0 ? ` ("${sourceTitle.trim()}")` : '';
+  return [
+    `The Host raises a hand for attention: this conversation continues from [an earlier chapter](/salon/${sourceChatId})${titleFragment}.`,
+    '',
+    'The thread that brought us here is preserved below. Carry on.',
+  ].join('\n');
+}
+
+function buildContinuationToContent(newChatId: string, newTitle: string | null): string {
+  const titleFragment = newTitle && newTitle.trim().length > 0 ? ` ("${newTitle.trim()}")` : '';
+  return `The Host clears their throat: the conversation has moved to [a new venue](/salon/${newChatId})${titleFragment}. The proceedings continue there.`;
+}
+
+export interface HostContinuationFromAnnouncement {
+  chatId: string;
+  sourceChatId: string;
+  sourceTitle?: string | null;
+}
+
+export async function postHostContinuationFromAnnouncement(
+  params: HostContinuationFromAnnouncement,
+): Promise<MessageEvent | null> {
+  return postHostMessageWithTargets(
+    params.chatId,
+    buildContinuationFromContent(params.sourceChatId, params.sourceTitle ?? null),
+    HOST_KIND_CONTINUATION_FROM,
+    null,
+  );
+}
+
+export interface HostContinuationToAnnouncement {
+  chatId: string;
+  newChatId: string;
+  newTitle?: string | null;
+}
+
+export async function postHostContinuationToAnnouncement(
+  params: HostContinuationToAnnouncement,
+): Promise<MessageEvent | null> {
+  return postHostMessageWithTargets(
+    params.chatId,
+    buildContinuationToContent(params.newChatId, params.newTitle ?? null),
+    HOST_KIND_CONTINUATION_TO,
+    null,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // "No user character attached" advisory whisper.
 //
 // The auto-memory pipeline emits this whisper the first time it encounters a

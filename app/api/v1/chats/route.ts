@@ -57,6 +57,7 @@ import {
   postProsperoProjectContextAnnouncement,
 } from '@/lib/services/prospero-notifications/writer';
 import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
+import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
 
 type Repos = RepositoryContainer;
 const CHAT_GET_ACTIONS = ['has-dangerous'] as const;
@@ -95,6 +96,15 @@ const createChatSchema = z.object({
   imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
   outfitSelections: z.array(OutfitSelectionSchema).optional(), // Per-character outfit selections for chat start
   avatarGenerationEnabled: z.boolean().optional(), // Enable auto-generated character avatars on outfit changes
+  /**
+   * When set, the new chat is a "change of venue" continuation of an existing
+   * chat: the source chat's most recent Librarian summary plus every later
+   * message are replayed into the new chat (with participant IDs remapped),
+   * turn state is replicated, and Host bubbles linking the two chats are
+   * posted in both. The auto-generated first character message is skipped.
+   * The source chat must belong to the same user.
+   */
+  continuationFromChatId: z.uuid().optional(),
 });
 
 // ============================================================================
@@ -267,6 +277,14 @@ interface OutfitSelectionContext {
   userId: string;
   scenarioText?: string | null;
   cheapLLMConfig?: CheapLLMConfig;
+  /**
+   * When the new chat is a continuation of an existing one, the source chat
+   * ID flows through here so the `'previous_chat'` mode can copy each
+   * character's equipped outfit forward. Falls back to default outfit when
+   * the source chat has nothing equipped for a given character (e.g. a
+   * newly-joined participant).
+   */
+  sourceChatId?: string | null;
 }
 
 /**
@@ -304,6 +322,55 @@ async function applyOutfitSelections(
       case 'none': {
         await repos.chats.setEquippedOutfit(chatId, characterId, { ...EMPTY_EQUIPPED_SLOTS });
         logger.debug('[Chats v1] Applied empty outfit for character', { chatId, characterId });
+        break;
+      }
+
+      case 'previous_chat': {
+        // Continuation flow: bring the character in wearing whatever they
+        // were wearing at the end of the source chat. Falls back to default
+        // outfit when the source has nothing for this character (e.g. newly
+        // added participant) or when the context is missing.
+        let applied = false;
+        if (context?.sourceChatId) {
+          try {
+            const previousSlots = await repos.chats.getEquippedOutfitForCharacter(
+              context.sourceChatId,
+              characterId,
+            );
+            if (previousSlots) {
+              await repos.chats.setEquippedOutfit(chatId, characterId, previousSlots);
+              applied = true;
+              logger.debug('[Chats v1] Applied previous-chat outfit for character', {
+                chatId,
+                characterId,
+                sourceChatId: context.sourceChatId,
+                slots: previousSlots,
+              });
+            } else {
+              logger.debug('[Chats v1] No previous outfit found in source chat; falling back to default', {
+                chatId,
+                characterId,
+                sourceChatId: context.sourceChatId,
+              });
+            }
+          } catch (error) {
+            logger.warn('[Chats v1] Failed to copy previous-chat outfit; falling back to default', {
+              chatId,
+              characterId,
+              sourceChatId: context.sourceChatId,
+              error: getErrorMessage(error, 'Unknown error'),
+            });
+          }
+        } else {
+          logger.warn('[Chats v1] previous_chat outfit mode requested without sourceChatId; falling back to default', {
+            chatId,
+            characterId,
+          });
+        }
+        if (!applied) {
+          const slots = await resolveDefaultOutfit(characterId, repos);
+          await repos.chats.setEquippedOutfit(chatId, characterId, slots);
+        }
         break;
       }
 
@@ -392,14 +459,16 @@ async function applyOutfitSelections(
   }
 }
 
-async function createInitialMessages(
+/**
+ * Write the SYSTEM prompt message at the head of a freshly-created chat.
+ * Split out from `createInitialMessages` so the continuation flow can
+ * interleave the carryover backfill between this and the scenario-and-staff
+ * phase.
+ */
+async function writeSystemPromptMessage(
   chatId: string,
   context: ChatContext,
-  participants: ChatParticipantBaseInput[],
-  userId: string,
   repos: Repos,
-  projectId?: string | null,
-  scenarioText?: string | null,
 ): Promise<void> {
   const systemMessage: ChatEvent = {
     type: 'message',
@@ -410,7 +479,27 @@ async function createInitialMessages(
     createdAt: new Date().toISOString(),
   };
   await repos.chats.addMessage(chatId, systemMessage);
+}
 
+interface ScenarioAndStaffOptions {
+  /**
+   * Skip the auto-generated first character message. Set true on the
+   * continuation flow — a chat that's "picking up where the last one left
+   * off" should not open with a fresh "Hello, ${userName}!" greeting.
+   */
+  skipFirstMessage?: boolean;
+}
+
+async function createInitialMessagesScenarioAndStaff(
+  chatId: string,
+  context: ChatContext,
+  participants: ChatParticipantBaseInput[],
+  userId: string,
+  repos: Repos,
+  projectId?: string | null,
+  scenarioText?: string | null,
+  options: ScenarioAndStaffOptions = {},
+): Promise<void> {
   // Phase E: emit Prospero project-context whisper at chat-start when a
   // project is attached and has description/instructions. Replaces the
   // per-turn `## Project Context` block previously injected via the system
@@ -531,6 +620,11 @@ async function createInitialMessages(
     }
   }
 
+  if (options.skipFirstMessage) {
+    logger.debug('[Chats v1] Skipping auto first message (continuation mode)', { chatId });
+    return;
+  }
+
   let firstMessageContent = (context.firstMessage || '').trim();
 
   if (!firstMessageContent) {
@@ -558,7 +652,33 @@ async function createInitialMessages(
     attachments: [],
     createdAt: new Date().toISOString(),
   };
-  await repos.chats.addMessage(chatId, firstMessage);}
+  await repos.chats.addMessage(chatId, firstMessage);
+}
+
+/**
+ * Backwards-compatible wrapper for the legacy non-continuation call site.
+ * Writes the system prompt and then runs the scenario-and-staff phase.
+ */
+async function createInitialMessages(
+  chatId: string,
+  context: ChatContext,
+  participants: ChatParticipantBaseInput[],
+  userId: string,
+  repos: Repos,
+  projectId?: string | null,
+  scenarioText?: string | null,
+): Promise<void> {
+  await writeSystemPromptMessage(chatId, context, repos);
+  await createInitialMessagesScenarioAndStaff(
+    chatId,
+    context,
+    participants,
+    userId,
+    repos,
+    projectId,
+    scenarioText,
+  );
+}
 
 async function autoGenerateFirstMessage(
   chatId: string,
@@ -868,6 +988,21 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   const body = await req.json();
   const validatedData = createChatSchema.parse(body);
 
+  // Permission-check the continuation source up front, before doing any
+  // create work. The user-scoped repos.chats.findById returns null for chats
+  // that don't belong to the current user, which is exactly the rejection
+  // we want.
+  if (validatedData.continuationFromChatId) {
+    const sourceChat = await repos.chats.findById(validatedData.continuationFromChatId);
+    if (!sourceChat) {
+      logger.warn('[Chats v1] continuationFromChatId references a chat not owned by current user', {
+        userId: user.id,
+        continuationFromChatId: validatedData.continuationFromChatId,
+      });
+      return notFound('Source chat');
+    }
+  }
+
   const buildResult = await buildAllParticipants(validatedData.participants, user.id, repos);
   if ('error' in buildResult) {
     return badRequest(buildResult.error);
@@ -1014,6 +1149,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     userId: user.id,
     scenarioText: resolvedScenario,
     cheapLLMConfig,
+    sourceChatId: validatedData.continuationFromChatId ?? null,
   };
   try {
     if (validatedData.outfitSelections && validatedData.outfitSelections.length > 0) {
@@ -1076,21 +1212,56 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     });
   }
 
-  await createInitialMessages(
-    chat.id,
-    chatContext,
-    participantsWithTimestamps,
-    user.id,
-    repos,
-    validatedData.projectId || null,
-    resolvedScenario || null,
-  );
+  if (validatedData.continuationFromChatId) {
+    // Continuation flow: prelude (system prompt) → backfill from source +
+    // turn-state replication + cross-link bubbles → scenario/staff
+    // (Prospero, Host scenario, Host adds, Aurora outfits, avatar gen),
+    // skipping the auto first message.
+    await writeSystemPromptMessage(chat.id, chatContext, repos);
+    try {
+      await applyChatContinuation({
+        newChatId: chat.id,
+        sourceChatId: validatedData.continuationFromChatId,
+        userId: user.id,
+        repos,
+      });
+    } catch (error) {
+      logger.error('[Chats v1] applyChatContinuation failed', {
+        chatId: chat.id,
+        sourceChatId: validatedData.continuationFromChatId,
+        error: getErrorMessage(error),
+      }, error instanceof Error ? error : undefined);
+    }
+    await createInitialMessagesScenarioAndStaff(
+      chat.id,
+      chatContext,
+      participantsWithTimestamps,
+      user.id,
+      repos,
+      validatedData.projectId || null,
+      resolvedScenario || null,
+      { skipFirstMessage: true },
+    );
+  } else {
+    await createInitialMessages(
+      chat.id,
+      chatContext,
+      participantsWithTimestamps,
+      user.id,
+      repos,
+      validatedData.projectId || null,
+      resolvedScenario || null,
+    );
+  }
 
   const enrichedParticipants = await Promise.all(
     chat.participants.map((p) => enrichParticipantSummary(p, repos))
   );
 
-  logger.info('[Chats v1] Chat created', { chatId: chat.id });
+  logger.info('[Chats v1] Chat created', {
+    chatId: chat.id,
+    continuationFromChatId: validatedData.continuationFromChatId ?? null,
+  });
 
   return NextResponse.json({ chat: { ...chat, participants: enrichedParticipants } }, { status: 201 });
 }

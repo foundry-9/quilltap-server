@@ -35,6 +35,17 @@ export interface OutfitSelectorCharacter {
   name: string
 }
 
+/**
+ * Per-character per-slot summary of what was equipped at the end of a source
+ * chat. Surfaced in the UI when the new chat is a "change of venue"
+ * continuation, so the user can see what each character was wearing before
+ * they click Continue.
+ */
+export type PreviousOutfitSummary = Record<
+  string,
+  Partial<Record<'top' | 'bottom' | 'footwear' | 'accessories', { itemId: string; title: string } | null>>
+>
+
 export interface OutfitSelectorProps {
   /** LLM-controlled characters in this chat */
   characters: OutfitSelectorCharacter[]
@@ -42,6 +53,14 @@ export interface OutfitSelectorProps {
   onSelectionsChange: (selections: OutfitSelection[]) => void
   /** Whether the parent form is submitting */
   disabled?: boolean
+  /**
+   * Continuation mode: when set, exposes a "Same as last conversation" option
+   * that copies each character's equipped outfit forward from the source
+   * chat. The summary is rendered as a preview alongside the option so the
+   * user can verify before committing.
+   */
+  sourceChatId?: string | null
+  previousOutfitSummary?: PreviousOutfitSummary | null
 }
 
 // ============================================================================
@@ -72,6 +91,17 @@ interface CharacterOutfitSectionProps {
   disabled?: boolean
   /** Whether to show the character name header (hidden for single character) */
   showHeader: boolean
+  /**
+   * Continuation mode: enables the "Same as last conversation" radio option
+   * for this character.
+   */
+  showPreviousChatOption?: boolean
+  /**
+   * Continuation mode: per-slot summary of what this character was wearing
+   * at the end of the source chat. Rendered as a small preview under the
+   * "Same as last conversation" option.
+   */
+  previousChatSlots?: Partial<Record<'top' | 'bottom' | 'footwear' | 'accessories', { itemId: string; title: string } | null>> | null
 }
 
 function CharacterOutfitSection({
@@ -80,6 +110,8 @@ function CharacterOutfitSection({
   onChange,
   disabled,
   showHeader,
+  showPreviousChatOption,
+  previousChatSlots,
 }: CharacterOutfitSectionProps) {
   const [expanded, setExpanded] = useState(false)
   const [internalMode, setInternalMode] = useState<InternalMode>(selection.mode)
@@ -165,6 +197,15 @@ function CharacterOutfitSection({
     description?: string
     disabled?: boolean
   }> = [
+    ...(showPreviousChatOption
+      ? [
+          {
+            value: 'previous_chat' as InternalMode,
+            label: 'Same as last conversation',
+            description: 'Carry forward whatever they were wearing at the end of the source chat',
+          },
+        ]
+      : []),
     { value: 'default', label: 'Use Defaults' },
     { value: 'manual', label: 'Choose Outfit' },
     { value: 'preset', label: 'Use Saved Preset' },
@@ -179,6 +220,21 @@ function CharacterOutfitSection({
       description: 'Character will start undressed',
     },
   ]
+
+  const previousChatPreview = (() => {
+    if (!previousChatSlots) return null
+    const equipped = (['top', 'bottom', 'footwear', 'accessories'] as const)
+      .map((slot) => {
+        const item = previousChatSlots[slot]
+        if (!item) return null
+        return { slot, title: item.title }
+      })
+      .filter((entry): entry is { slot: 'top' | 'bottom' | 'footwear' | 'accessories'; title: string } => entry !== null)
+    if (equipped.length === 0) {
+      return 'Nothing equipped at the end of the source chat — defaults will be used.'
+    }
+    return equipped.map((e) => `${SLOT_LABELS[e.slot]}: ${e.title}`).join(' · ')
+  })()
 
   return (
     <div className="rounded-lg border qt-border-default qt-bg-muted/20 p-3">
@@ -324,6 +380,14 @@ function CharacterOutfitSection({
               Character will start undressed
             </div>
           )}
+
+          {/* Continuation mode preview: what they were wearing at the end of
+              the source chat. Shown beneath the radio so users can verify. */}
+          {internalMode === 'previous_chat' && previousChatPreview && (
+            <div className="mt-2 ml-6 rounded border qt-border-default qt-bg-muted/40 px-2 py-1.5 text-xs qt-text-secondary">
+              {previousChatPreview}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -338,12 +402,18 @@ export function OutfitSelector({
   characters,
   onSelectionsChange,
   disabled,
+  sourceChatId,
+  previousOutfitSummary,
 }: OutfitSelectorProps) {
+  // In continuation mode, default each character to "Same as last conversation"
+  // so the chat picks up where the previous one left off without the user
+  // having to flip every radio. In normal mode, keep the historical default.
+  const initialMode: OutfitSelectionMode = sourceChatId ? 'previous_chat' : 'default'
   const [selections, setSelections] = useState<Map<string, OutfitSelection>>(
     () => {
       const map = new Map<string, OutfitSelection>()
       for (const char of characters) {
-        map.set(char.id, { characterId: char.id, mode: 'default' })
+        map.set(char.id, { characterId: char.id, mode: initialMode })
       }
       return map
     }
@@ -381,12 +451,14 @@ export function OutfitSelector({
           selection={
             selections.get(char.id) || {
               characterId: char.id,
-              mode: 'default',
+              mode: initialMode,
             }
           }
           onChange={handleSelectionChange}
           disabled={disabled}
           showHeader={showHeaders}
+          showPreviousChatOption={Boolean(sourceChatId)}
+          previousChatSlots={previousOutfitSummary?.[char.id] ?? null}
         />
       ))}
     </div>

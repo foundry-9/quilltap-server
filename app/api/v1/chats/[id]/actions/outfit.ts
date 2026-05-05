@@ -41,6 +41,70 @@ export async function handleGetOutfit(
 }
 
 /**
+ * GET ?action=outfit-summary — Return per-character equipped outfit with
+ * resolved item titles. Used by the new-chat modal's continuation flow to
+ * show users what each character was wearing at the end of the source chat
+ * (so they can verify before clicking "Continue"). Shape:
+ *
+ *   { summary: { [characterId]: { [slot]: { itemId, title } | null } } }
+ */
+export async function handleGetOutfitSummary(
+  chatId: string,
+  { repos }: AuthenticatedContext
+): Promise<NextResponse> {
+  try {
+    logger.debug('[Chats v1] Fetching equipped outfit summary', { chatId, context: 'wardrobe' });
+
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      return notFound('Chat');
+    }
+
+    const equippedOutfit = (await repos.chats.getEquippedOutfit(chatId)) ?? {};
+
+    // Collect every itemId across all characters/slots, then bulk-resolve titles.
+    const allItemIds = new Set<string>();
+    for (const slots of Object.values(equippedOutfit)) {
+      if (!slots) continue;
+      for (const id of Object.values(slots)) {
+        if (typeof id === 'string' && id.length > 0) allItemIds.add(id);
+      }
+    }
+
+    const itemsById = new Map<string, { id: string; title: string }>();
+    if (allItemIds.size > 0) {
+      const items = await repos.wardrobe.findByIds(Array.from(allItemIds));
+      for (const item of items) {
+        itemsById.set(item.id, { id: item.id, title: item.title });
+      }
+    }
+
+    const summary: Record<string, Record<string, { itemId: string; title: string } | null>> = {};
+    for (const [characterId, slots] of Object.entries(equippedOutfit)) {
+      const slotMap: Record<string, { itemId: string; title: string } | null> = {
+        top: null,
+        bottom: null,
+        footwear: null,
+        accessories: null,
+      };
+      if (slots) {
+        for (const [slot, itemId] of Object.entries(slots)) {
+          if (typeof itemId !== 'string' || itemId.length === 0) continue;
+          const item = itemsById.get(itemId);
+          if (item) slotMap[slot] = { itemId: item.id, title: item.title };
+        }
+      }
+      summary[characterId] = slotMap;
+    }
+
+    return NextResponse.json({ summary });
+  } catch (error) {
+    logger.error('[Chats v1] Error fetching equipped outfit summary', { chatId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to fetch equipped outfit summary');
+  }
+}
+
+/**
  * POST ?action=equip — Update a single equipped slot for a character in this chat
  */
 export async function handleEquipSlot(

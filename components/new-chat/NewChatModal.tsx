@@ -1,9 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NewChatForm } from './NewChatForm'
 import { CharacterPickerPanel } from './CharacterPickerPanel'
 import { useNewChat } from './hooks'
+import type { TimestampConfig } from '@/lib/schemas/types'
+import type { PreviousOutfitSummary } from '@/components/wardrobe'
+
+interface ProjectListEntry {
+  id: string
+  name: string
+  color?: string | null
+}
 
 interface NewChatModalProps {
   isOpen: boolean
@@ -13,6 +21,24 @@ interface NewChatModalProps {
   projectId?: string
   /** When true, clicking Cancel navigates to /aurora (opened via ?action=chat deep link). */
   openedFromQuery?: boolean
+  /**
+   * "Change of venue" continuation: when set, the new chat is created as a
+   * continuation of `continuationFromChatId`. The server replays that chat's
+   * tail (Librarian summary + later messages) into the new chat, replicates
+   * turn state, and posts cross-link Host bubbles. Title and submit copy
+   * flip to reflect this.
+   */
+  continuationFromChatId?: string
+  /** LLM characters to pre-select (continuation mode). */
+  initialSelectedCharacterIds?: string[]
+  /** User-controlled character to pre-select (continuation mode). */
+  initialUserCharacterId?: string | null
+  /** Image profile to pre-fill (continuation mode). */
+  initialImageProfileId?: string | null
+  /** Avatar-generation flag to pre-fill (continuation mode). */
+  initialAvatarGenerationEnabled?: boolean
+  /** Timestamp config to pre-fill (continuation mode). */
+  initialTimestampConfig?: TimestampConfig | null
 }
 
 export function NewChatModal({
@@ -22,8 +48,80 @@ export function NewChatModal({
   characterName,
   projectId,
   openedFromQuery,
+  continuationFromChatId,
+  initialSelectedCharacterIds,
+  initialUserCharacterId,
+  initialImageProfileId,
+  initialAvatarGenerationEnabled,
+  initialTimestampConfig,
 }: NewChatModalProps) {
-  const [pickerExpanded, setPickerExpanded] = useState(false)
+  const isContinuation = Boolean(continuationFromChatId)
+
+  // In continuation mode, default the character picker open so the user can
+  // see (and remove or augment) the carried-over cast without an extra click.
+  const [pickerExpanded, setPickerExpanded] = useState(isContinuation)
+
+  // Mutable project ID — only mutable in continuation mode (the regular
+  // new-chat flows pin to the page they were launched from). Initialised
+  // from the prop and reset whenever the prop changes (the props-as-state
+  // sync pattern uses a tracking state value updated during render so
+  // React's prop-derived-state guidance is satisfied without an effect).
+  const [currentProjectId, setCurrentProjectId] = useState<string | undefined>(projectId)
+  const [lastSeenProjectId, setLastSeenProjectId] = useState<string | undefined>(projectId)
+  if (projectId !== lastSeenProjectId) {
+    setLastSeenProjectId(projectId)
+    setCurrentProjectId(projectId)
+  }
+
+  // Continuation mode: list of all the user's projects for the project
+  // selector. Fetched once when the modal opens.
+  const [availableProjects, setAvailableProjects] = useState<ProjectListEntry[]>([])
+  useEffect(() => {
+    if (!isOpen || !isContinuation) return
+    let cancelled = false
+    fetch('/api/v1/projects')
+      .then((res) => (res.ok ? res.json() : { projects: [] }))
+      .then((data) => {
+        if (cancelled) return
+        const list: ProjectListEntry[] = Array.isArray(data?.projects)
+          ? data.projects.map((p: { id: string; name: string; color?: string | null }) => ({
+              id: p.id,
+              name: p.name,
+              color: p.color ?? null,
+            }))
+          : []
+        setAvailableProjects(list)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setAvailableProjects([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, isContinuation])
+
+  // Continuation mode: per-character per-slot summary of what was equipped at
+  // the end of the source chat. Threaded through NewChatForm to OutfitSelector
+  // so the "Same as last conversation" option can render a preview.
+  const [previousOutfitSummary, setPreviousOutfitSummary] = useState<PreviousOutfitSummary | null>(null)
+  useEffect(() => {
+    if (!isOpen || !continuationFromChatId) return
+    let cancelled = false
+    fetch(`/api/v1/chats/${continuationFromChatId}?action=outfit-summary`)
+      .then((res) => (res.ok ? res.json() : { summary: null }))
+      .then((data) => {
+        if (cancelled) return
+        setPreviousOutfitSummary(data?.summary ?? null)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setPreviousOutfitSummary(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, continuationFromChatId])
 
   const {
     loading,
@@ -40,8 +138,14 @@ export function NewChatModal({
     setState,
     handleCreateChat,
   } = useNewChat({
-    initialCharacterId: isOpen ? characterId : undefined,
-    projectId: isOpen ? projectId : undefined,
+    initialCharacterId: isOpen && !isContinuation ? characterId : undefined,
+    projectId: isOpen ? currentProjectId : undefined,
+    continuationFromChatId: isOpen ? continuationFromChatId : undefined,
+    initialSelectedCharacterIds: isOpen ? initialSelectedCharacterIds : undefined,
+    initialUserCharacterId: isOpen ? initialUserCharacterId : undefined,
+    initialImageProfileId: isOpen ? initialImageProfileId : undefined,
+    initialAvatarGenerationEnabled: isOpen ? initialAvatarGenerationEnabled : undefined,
+    initialTimestampConfig: isOpen ? initialTimestampConfig : undefined,
   })
 
   if (!isOpen) return null
@@ -77,9 +181,11 @@ export function NewChatModal({
       >
         <div className="mb-4 flex items-start justify-between gap-4 flex-shrink-0">
           <h3 className="qt-dialog-title">
-            {selectedCharacters.length > 1
-              ? `Start Chat (${selectedCharacters.length} characters)`
-              : `Start Chat with ${characterName}`}
+            {isContinuation
+              ? 'Continue Conversation Elsewhere'
+              : selectedCharacters.length > 1
+                ? `Start Chat (${selectedCharacters.length} characters)`
+                : `Start Chat with ${characterName}`}
           </h3>
           <button
             type="button"
@@ -97,6 +203,31 @@ export function NewChatModal({
           </div>
         ) : (
           <div className="overflow-y-auto flex-1 pr-2 -mr-2 space-y-6">
+            {isContinuation && (
+              <div className="rounded-xl border qt-border-default qt-bg-card p-4 space-y-2">
+                <label htmlFor="continuation-project-select" className="qt-text-small font-medium">
+                  Project
+                </label>
+                <select
+                  id="continuation-project-select"
+                  value={currentProjectId ?? ''}
+                  onChange={(e) => setCurrentProjectId(e.target.value || undefined)}
+                  disabled={creating}
+                  className="qt-select w-full"
+                >
+                  <option value="">— No project —</option>
+                  {availableProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="qt-text-xs qt-text-muted">
+                  The new chat will be filed under this project. The original chat is unchanged.
+                </p>
+              </div>
+            )}
+
             {pickerExpanded && (
               <CharacterPickerPanel
                 characters={characters}
@@ -120,6 +251,8 @@ export function NewChatModal({
               projectScenarios={projectScenarios}
               creating={creating}
               showSingleCharacterControls={!pickerExpanded}
+              continuationFromChatId={continuationFromChatId ?? null}
+              previousOutfitSummary={previousOutfitSummary}
             />
           </div>
         )}
@@ -138,7 +271,9 @@ export function NewChatModal({
             disabled={!canSubmit}
             className="inline-flex items-center rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-success-foreground shadow transition hover:qt-bg-success/90 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
           >
-            {creating ? 'Creating...' : 'Start Chat'}
+            {creating
+              ? (isContinuation ? 'Continuing...' : 'Creating...')
+              : (isContinuation ? 'Continue' : 'Start Chat')}
           </button>
         </div>
       </div>

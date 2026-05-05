@@ -51,6 +51,7 @@ import {
   ChatModals,
 } from './components'
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
+import { NewChatModal } from '@/components/new-chat/NewChatModal'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
 import { GiftWardrobeItemModal } from '@/components/wardrobe/gift-wardrobe-item-modal'
 import SplitLayout from './components/SplitLayout'
@@ -1333,6 +1334,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onRenameClick={modals.openRename}
           onProjectClick={modals.openChatProject}
           projectName={chat?.projectName}
+          onContinueChatClick={modals.openContinueChat}
           onDeleteChatMemoriesClick={memoryActions.handleDeleteChatMemories}
           onReextractMemoriesClick={memoryActions.handleReextractMemories}
           onSearchReplaceClick={modals.openSearchReplace}
@@ -1415,6 +1417,31 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             setShowDocumentPicker(false)
           }}
         />
+
+        {/* Continue Elsewhere — fork this conversation into a new chat with a
+            different scenario or project. Reuses the standard new-chat modal
+            in continuation mode, which posts continuationFromChatId to the
+            create endpoint so the server backfills the new chat with the
+            tail of this one. */}
+        {chat && (
+          <NewChatModal
+            isOpen={modals.continueChatModalOpen}
+            onClose={modals.closeContinueChat}
+            characterId={chat.participants.find((p) => p.controlledBy !== 'user')?.character?.id || ''}
+            characterName={chat.participants.find((p) => p.controlledBy !== 'user')?.character?.name || ''}
+            projectId={chat.projectId ?? undefined}
+            continuationFromChatId={id}
+            initialSelectedCharacterIds={chat.participants
+              .filter((p) => p.type === 'CHARACTER' && p.controlledBy !== 'user' && !p.removedAt)
+              .map((p) => p.character?.id)
+              .filter((cid): cid is string => typeof cid === 'string' && cid.length > 0)}
+            initialUserCharacterId={chat.participants
+              .find((p) => p.type === 'CHARACTER' && p.controlledBy === 'user' && !p.removedAt)
+              ?.character?.id ?? null}
+            initialImageProfileId={chat.imageProfileId ?? null}
+            initialAvatarGenerationEnabled={chat.avatarGenerationEnabled ?? false}
+          />
+        )}
 
         {/* Modals */}
         <ChatModals

@@ -90,7 +90,7 @@ export type OutfitPreset = z.infer<typeof OutfitPresetSchema>;
 // OUTFIT SELECTION (for new chat creation)
 // ============================================================================
 
-export const OutfitSelectionModeEnum = z.enum(['default', 'manual', 'llm_choose', 'none']);
+export const OutfitSelectionModeEnum = z.enum(['default', 'manual', 'llm_choose', 'none', 'previous_chat']);
 export type OutfitSelectionMode = z.infer<typeof OutfitSelectionModeEnum>;
 
 export const OutfitSelectionSchema = z.object({

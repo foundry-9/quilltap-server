@@ -25,7 +25,7 @@ export { handleGetState, handleSetState, handleResetState } from './state';
 export { handleToggleAgentMode } from './agent-mode';
 export { handleRegenerateBackground } from './story-background';
 export { handleReclassifyDanger } from './danger-classification';
-export { handleGetOutfit, handleEquipSlot } from './outfit';
+export { handleGetOutfit, handleGetOutfitSummary, handleEquipSlot } from './outfit';
 export { handleToggleAvatarGeneration } from './toggle-avatar-generation';
 export { handleRegenerateAvatar } from './regenerate-avatar';
 export { handleRenderConversation } from './render-conversation';

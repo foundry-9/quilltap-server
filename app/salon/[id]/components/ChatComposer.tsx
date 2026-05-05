@@ -79,6 +79,7 @@ interface ChatComposerProps {
   onRenameClick?: () => void
   onProjectClick?: () => void
   projectName?: string | null
+  onContinueChatClick?: () => void
   onDeleteChatMemoriesClick: () => void
   onReextractMemoriesClick: () => void
   onSearchReplaceClick?: () => void
@@ -149,6 +150,7 @@ export function ChatComposer({
   onRenameClick,
   onProjectClick,
   projectName,
+  onContinueChatClick,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
   onSearchReplaceClick,
@@ -358,6 +360,7 @@ export function ChatComposer({
           onRenameClick={onRenameClick}
           onProjectClick={onProjectClick}
           projectName={projectName}
+          onContinueChatClick={onContinueChatClick}
           onAddCharacterClick={onAddCharacterClick}
           onDeleteChatMemoriesClick={onDeleteChatMemoriesClick}
           onReextractMemoriesClick={onReextractMemoriesClick}

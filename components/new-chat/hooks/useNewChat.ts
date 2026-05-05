@@ -13,10 +13,28 @@ import type {
   SelectedCharacter,
   UserControlledCharacter,
 } from '../types'
+import type { TimestampConfig } from '@/lib/schemas/types'
 
 interface UseNewChatOptions {
   initialCharacterId?: string
   projectId?: string
+  /**
+   * "Change of venue" continuation mode: when set, handleCreateChat sends
+   * `continuationFromChatId` in the POST body so the server replays the
+   * source chat's tail into the new one.
+   */
+  continuationFromChatId?: string
+  /**
+   * Pre-selected LLM character IDs (continuation mode). Each is loaded from
+   * the character roster and seeded as an LLM-controlled SelectedCharacter
+   * with its default connection profile and system prompt.
+   */
+  initialSelectedCharacterIds?: string[]
+  /** Pre-selected user-controlled character ID. */
+  initialUserCharacterId?: string | null
+  initialImageProfileId?: string | null
+  initialAvatarGenerationEnabled?: boolean
+  initialTimestampConfig?: TimestampConfig | null
 }
 
 interface UseNewChatReturn {
@@ -61,7 +79,16 @@ function generateTitle(selected: SelectedCharacter[]): string {
   return `Group Chat (${llm.length} characters)`
 }
 
-export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions = {}): UseNewChatReturn {
+export function useNewChat({
+  initialCharacterId,
+  projectId,
+  continuationFromChatId,
+  initialSelectedCharacterIds,
+  initialUserCharacterId,
+  initialImageProfileId,
+  initialAvatarGenerationEnabled,
+  initialTimestampConfig,
+}: UseNewChatOptions = {}): UseNewChatReturn {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -78,6 +105,10 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
 
   const seededRef = useRef(false)
   const prevLlmIdsRef = useRef<string>('')
+
+  // Memoise the joined character-ID list so the fetchData useEffect doesn't
+  // churn when the parent passes a fresh array reference each render.
+  const initialSelectedKey = (initialSelectedCharacterIds || []).join(',')
 
   useEffect(() => {
     let cancelled = false
@@ -180,8 +211,53 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
         const projectDefaultScenarioPath =
           loadedProjectScenarios.find((s) => s.isDefault)?.path ?? null
 
+        // Continuation mode: seed multi-character + form state from the
+        // source chat's roster, bypassing the single-character seed branch.
+        if (
+          initialSelectedCharacterIds &&
+          initialSelectedCharacterIds.length > 0 &&
+          !seededRef.current
+        ) {
+          seededRef.current = true
+          const seededSelected: SelectedCharacter[] = []
+          for (const cid of initialSelectedCharacterIds) {
+            const char = loadedCharacters.find((c) => c.id === cid)
+            if (!char) continue
+            const connectionProfileId =
+              char.defaultConnectionProfileId || loadedProfiles[0]?.id || ''
+            const defaultPromptId = char.defaultSystemPromptId
+              ? char.systemPrompts?.find((p) => p.id === char.defaultSystemPromptId)?.id
+              : char.systemPrompts?.find((p) => p.isDefault)?.id ?? char.systemPrompts?.[0]?.id
+            seededSelected.push({
+              character: char,
+              connectionProfileId,
+              selectedSystemPromptId: defaultPromptId ?? null,
+              controlledBy: 'llm',
+            })
+          }
+          if (seededSelected.length > 0) {
+            setSelectedCharacters(seededSelected)
+          }
+          setState((prev) => ({
+            ...prev,
+            selectedUserCharacterId: initialUserCharacterId ?? prev.selectedUserCharacterId,
+            timestampConfig: initialTimestampConfig ?? prev.timestampConfig,
+            // Continuation mode intentionally does NOT pre-fill scenario:
+            // the whole point is to pick a new one.
+            scenarioId: null,
+            projectScenarioPath: projectDefaultScenarioPath,
+            imageProfileId:
+              initialImageProfileId ||
+              loadedProject?.defaultImageProfileId ||
+              prev.imageProfileId,
+            avatarGenerationEnabled:
+              initialAvatarGenerationEnabled ??
+              loadedProject?.defaultAvatarGenerationEnabled ??
+              prev.avatarGenerationEnabled,
+          }))
+        }
         // Seed selected character + defaults when initialCharacterId is provided
-        if (initialCharacterId && seededChar && !seededRef.current) {
+        else if (initialCharacterId && seededChar && !seededRef.current) {
           seededRef.current = true
           const char = seededChar
           const connectionProfileId =
@@ -238,7 +314,19 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
     return () => {
       cancelled = true
     }
-  }, [initialCharacterId, projectId])
+    // The continuation seed depends on the joined character-ID list (serialised
+    // as initialSelectedKey above) so a fresh array reference from the parent
+    // doesn't churn the fetch. Other initial-* options are scalars.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    initialCharacterId,
+    projectId,
+    continuationFromChatId,
+    initialSelectedKey,
+    initialUserCharacterId,
+    initialImageProfileId,
+    initialAvatarGenerationEnabled,
+  ])
 
   // When exactly one LLM character is selected (and it wasn't seeded), propagate their defaults.
   // Matches behavior of the former /salon/new page for multi-char mode.
@@ -347,6 +435,10 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
         requestBody.outfitSelections = state.outfitSelections
       }
 
+      if (continuationFromChatId) {
+        requestBody.continuationFromChatId = continuationFromChatId
+      }
+
       const res = await fetch('/api/v1/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -359,7 +451,7 @@ export function useNewChat({ initialCharacterId, projectId }: UseNewChatOptions 
       }
 
       const data = await res.json()
-      showSuccessToast('Chat created!')
+      showSuccessToast(continuationFromChatId ? 'Conversation continued in a new chat!' : 'Chat created!')
       router.push(`/salon/${data.chat.id}`)
       return { chatId: data.chat.id }
     } catch (err) {

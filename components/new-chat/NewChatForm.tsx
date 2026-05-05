@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
 import { OutfitSelector } from '@/components/wardrobe'
-import type { OutfitSelection } from '@/components/wardrobe'
+import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardrobe'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import type {
@@ -37,6 +37,16 @@ interface NewChatFormProps {
    * When false, the caller is expected to render those controls in a picker panel.
    */
   showSingleCharacterControls?: boolean
+  /**
+   * Continuation mode: source chat ID forwarded to OutfitSelector so it can
+   * render the "Same as last conversation" option and default to it.
+   */
+  continuationFromChatId?: string | null
+  /**
+   * Continuation mode: per-character per-slot preview of what each
+   * character was wearing at the end of the source chat.
+   */
+  previousOutfitSummary?: PreviousOutfitSummary | null
 }
 
 export function NewChatForm({
@@ -51,6 +61,8 @@ export function NewChatForm({
   projectScenarios = [],
   creating,
   showSingleCharacterControls = false,
+  continuationFromChatId,
+  previousOutfitSummary,
 }: NewChatFormProps) {
   const { formatCharacterName } = useUserCharacterDisplayName()
 
@@ -371,6 +383,8 @@ export function NewChatForm({
             characters={outfitCharacters}
             onSelectionsChange={handleOutfitSelectionsChange}
             disabled={creating}
+            sourceChatId={continuationFromChatId ?? null}
+            previousOutfitSummary={previousOutfitSummary ?? null}
           />
         )}
 

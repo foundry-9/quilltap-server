@@ -45,6 +45,7 @@ export function useModalState() {
   const [toolPaletteOpen, setToolPaletteOpen] = useState(false)
   const [chatSettingsModalOpen, setChatSettingsModalOpen] = useState(false)
   const [chatProjectModalOpen, setChatProjectModalOpen] = useState(false)
+  const [continueChatModalOpen, setContinueChatModalOpen] = useState(false)
   const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [generateImageDialogOpen, setGenerateImageDialogOpen] = useState(false)
   const [addCharacterDialogOpen, setAddCharacterDialogOpen] = useState(false)
@@ -74,6 +75,8 @@ export function useModalState() {
   const closeChatSettings = useCallback(() => setChatSettingsModalOpen(false), [])
   const openChatProject = useCallback(() => setChatProjectModalOpen(true), [])
   const closeChatProject = useCallback(() => setChatProjectModalOpen(false), [])
+  const openContinueChat = useCallback(() => setContinueChatModalOpen(true), [])
+  const closeContinueChat = useCallback(() => setContinueChatModalOpen(false), [])
   const openRename = useCallback(() => setRenameModalOpen(true), [])
   const closeRename = useCallback(() => setRenameModalOpen(false), [])
   const openGenerateImage = useCallback(() => setGenerateImageDialogOpen(true), [])
@@ -101,6 +104,7 @@ export function useModalState() {
     toolPaletteOpen, setToolPaletteOpen,
     chatSettingsModalOpen,
     chatProjectModalOpen,
+    continueChatModalOpen,
     renameModalOpen,
     generateImageDialogOpen,
     addCharacterDialogOpen,
@@ -124,6 +128,7 @@ export function useModalState() {
     openGallery, closeGallery,
     openChatSettings, closeChatSettings,
     openChatProject, closeChatProject,
+    openContinueChat, closeContinueChat,
     openRename, closeRename,
     openGenerateImage, closeGenerateImage,
     openAddCharacter, closeAddCharacter,

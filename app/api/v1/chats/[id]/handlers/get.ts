@@ -20,7 +20,7 @@ import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
-import { handleGetAvatars, handleGetState, handleGetOutfit } from '../actions';
+import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 
@@ -106,6 +106,11 @@ export async function handleGet(
   // Handle outfit action - return equipped outfit state
   if (action === 'outfit') {
     return handleGetOutfit(chatId, ctx);
+  }
+
+  // Handle outfit-summary action - equipped outfit with resolved item titles
+  if (action === 'outfit-summary') {
+    return handleGetOutfitSummary(chatId, ctx);
   }
 
   // Handle get-background action - returns story background URL for the chat

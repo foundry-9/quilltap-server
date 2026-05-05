@@ -20,6 +20,7 @@ interface ToolPaletteProps {
   onRenameClick?: () => void
   onProjectClick?: () => void
   projectName?: string | null
+  onContinueChatClick?: () => void
   onAddCharacterClick?: () => void
   onDeleteChatMemoriesClick?: () => void
   onReextractMemoriesClick?: () => void
@@ -62,6 +63,7 @@ export default function ToolPalette({
   onRenameClick,
   onProjectClick,
   projectName,
+  onContinueChatClick,
   onAddCharacterClick,
   onDeleteChatMemoriesClick,
   onReextractMemoriesClick,
@@ -145,6 +147,11 @@ export default function ToolPalette({
 
   const handleProjectClick = () => {
     onProjectClick?.()
+    onClose()
+  }
+
+  const handleContinueChatClick = () => {
+    onContinueChatClick?.()
     onClose()
   }
 
@@ -337,6 +344,21 @@ export default function ToolPalette({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
               </svg>
               <span>{projectName ? projectName : 'Project'}</span>
+            </button>
+          )}
+
+          {/* Continue Elsewhere — fork this conversation into a new chat */}
+          {onContinueChatClick && (
+            <button
+              type="button"
+              onClick={handleContinueChatClick}
+              className="qt-tool-palette-button"
+              title="Continue this conversation in a new chat with a different scenario or project"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+              <span>Continue Elsewhere</span>
             </button>
           )}
 
