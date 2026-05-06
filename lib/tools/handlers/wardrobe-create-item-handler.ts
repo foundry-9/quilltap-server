@@ -23,6 +23,7 @@ import type { WardrobeItem, WardrobeItemType, EquippedSlots } from '@/lib/schema
 import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types';
 import { equipItem } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { unionTypes } from '@/lib/wardrobe/composite-types';
 
 export interface WardrobeCreateItemToolContext {
   userId: string;
@@ -140,18 +141,6 @@ async function resolveComponentItems(
   }
 
   return resolved;
-}
-
-/**
- * Compute the union of slot types across a list of components, in canonical
- * slot order. Used to derive a composite item's `types` from its components.
- */
-function unionTypes(components: readonly WardrobeItem[]): WardrobeItemType[] {
-  const set = new Set<WardrobeItemType>();
-  for (const c of components) {
-    for (const t of c.types) set.add(t);
-  }
-  return WARDROBE_SLOT_TYPES.filter((s) => set.has(s));
 }
 
 /**

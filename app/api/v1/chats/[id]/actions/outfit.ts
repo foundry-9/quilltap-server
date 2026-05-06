@@ -24,15 +24,17 @@ import {
 import { expandComposites } from '@/lib/wardrobe/expand-composites';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, EquippedSlotsSchema } from '@/lib/schemas/wardrobe.types';
 import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 
 const equipBodySchema = z
   .object({
     characterId: z.string().min(1, 'characterId is required'),
-    mode: z.enum(['equip', 'add_to_slot', 'remove_from_slot', 'clear_slot']),
+    mode: z.enum(['equip', 'add_to_slot', 'remove_from_slot', 'clear_slot', 'set_all']),
     slot: z.enum(['top', 'bottom', 'footwear', 'accessories']).optional(),
     itemId: z.string().nullable().optional(),
+    /** Required when mode === 'set_all'. Replaces every slot atomically. */
+    slots: EquippedSlotsSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (
@@ -52,6 +54,13 @@ const equipBodySchema = z
         code: z.ZodIssueCode.custom,
         path: ['itemId'],
         message: `itemId is required for mode "${value.mode}"`,
+      });
+    }
+    if (value.mode === 'set_all' && !value.slots) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['slots'],
+        message: 'slots is required for mode "set_all"',
       });
     }
   });
@@ -167,7 +176,7 @@ export async function handleEquipSlot(
   const { repos } = ctx;
   try {
     const body = await req.json();
-    const { characterId, mode, slot, itemId } = equipBodySchema.parse(body);
+    const { characterId, mode, slot, itemId, slots: bodySlots } = equipBodySchema.parse(body);
 
     logger.debug('[Chats v1] Equipping wardrobe slot', {
       chatId,
@@ -180,7 +189,28 @@ export async function handleEquipSlot(
 
     let updatedSlots;
 
-    if (mode === 'equip') {
+    if (mode === 'set_all') {
+      // Atomic replace — used by the dialog's "Wear this fitting" button to
+      // commit a fitting-room composition all at once. Validate every id
+      // resolves to an item in this character's wardrobe before persisting.
+      const allIds = new Set<string>();
+      for (const key of WARDROBE_SLOT_TYPES) {
+        for (const id of bodySlots![key]) allIds.add(id);
+      }
+      if (allIds.size > 0) {
+        const found = await repos.wardrobe.findByIdsForCharacter(characterId, Array.from(allIds));
+        const foundIds = new Set(found.map((i) => i.id));
+        for (const id of allIds) {
+          if (!foundIds.has(id)) {
+            return badRequest(`Wardrobe item ${id} not available to this character`);
+          }
+        }
+      }
+      updatedSlots = await repos.chats.setEquippedOutfit(chatId, characterId, bodySlots!);
+      logger.info('[Chats v1] Equipped outfit replaced (set_all)', {
+        chatId, characterId, context: 'wardrobe',
+      });
+    } else if (mode === 'equip') {
       // itemId guaranteed by schema. Validate the item resolves and covers
       // at least one slot we recognize.
       const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!);

@@ -20,7 +20,6 @@ import { useMemo, useState, useCallback } from 'react'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { Avatar } from '@/components/ui/Avatar'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
-import type { OutfitState, WardrobeCache } from '@/app/salon/[id]/hooks/useOutfit'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
 import type { TurnOrderEntry, TurnOrderStatus } from '@/lib/chat/turn-manager'
 
@@ -64,13 +63,9 @@ interface ParticipantSidebarProps {
   // System prompt override per participant (passed to cards)
   onSystemPromptChange?: (participantId: string, promptId: string | null) => void
   onParticipantSettingsChange?: (participantId: string, updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
-  // Outfit display
-  outfitState?: OutfitState
-  wardrobeCache?: WardrobeCache
-  outfitLoading?: boolean
-  onEquipSlot?: (participantId: string, slot: string, itemId: string | null) => void
-  // Gift wardrobe item
-  onGiftItem?: (participantId: string) => void
+  /** Chat ID — forwarded to participant cards so the Wardrobe button can
+   *  surface chat-scoped equip controls when opened. */
+  chatId?: string
   // Avatar regeneration
   onRegenerateAvatar?: (participantId: string) => void
   // Danger state — when the Concierge has flagged this chat
@@ -105,11 +100,7 @@ export function ParticipantSidebar({
   onConnectionProfileChange,
   onSystemPromptChange,
   onParticipantSettingsChange,
-  outfitState,
-  wardrobeCache,
-  outfitLoading,
-  onEquipSlot,
-  onGiftItem,
+  chatId,
   onRegenerateAvatar,
   isDangerousChat = false,
   className = '',
@@ -423,11 +414,6 @@ export function ParticipantSidebar({
           // Get turn order info for this participant
           const turnEntry = turnOrderMap.get(participant.id)
 
-          // Get outfit data for this participant's character
-          const characterId = participant.character?.id
-          const charOutfit = characterId && outfitState ? outfitState[characterId] : undefined
-          const charWardrobe = characterId && wardrobeCache ? wardrobeCache[characterId] : undefined
-
           return (
             <ParticipantCard
               key={participant.id}
@@ -461,12 +447,7 @@ export function ParticipantSidebar({
                 ? (pId, status) => onParticipantSettingsChange(pId, { status, isActive: status === 'active' || status === 'silent' })
                 : undefined}
               onWhisper={activeParticipantCount >= 3 ? onWhisper : undefined}
-              equippedSlots={charOutfit?.slots}
-              itemsBySlot={charOutfit?.itemsBySlot}
-              wardrobeItems={charWardrobe}
-              onEquipSlot={onEquipSlot}
-              outfitLoading={outfitLoading}
-              onGiftItem={onGiftItem}
+              chatId={chatId}
               onRegenerateAvatar={onRegenerateAvatar}
               isDangerousChat={isDangerousChat}
             />

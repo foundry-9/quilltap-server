@@ -19,6 +19,8 @@ const updateWardrobeItemSchema = z.object({
   types: z.array(WardrobeItemTypeEnum).min(1).optional(),
   appropriateness: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
+  /** Replace this item's composite components (use `[]` to demote to a leaf). */
+  componentItemIds: z.array(z.string()).optional(),
 });
 
 // GET /api/v1/characters/[id]/wardrobe/[itemId]

@@ -40,7 +40,6 @@ import {
   useImpersonation,
   useChatControls,
   useSSEStreaming,
-  useOutfit,
   type SwipeState,
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
@@ -53,7 +52,6 @@ import {
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
 import { NewChatModal } from '@/components/new-chat/NewChatModal'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
-import { GiftWardrobeItemModal } from '@/components/wardrobe/gift-wardrobe-item-modal'
 import SplitLayout from './components/SplitLayout'
 import DocumentPane from './components/DocumentPane'
 import DocumentPickerModal from './components/DocumentPickerModal'
@@ -117,7 +115,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const [pendingToolResults, setPendingToolResults] = useState<PendingToolResult[]>([])
   const [showAllWhispers, setShowAllWhispers] = useState(false)
   const [whisperTarget, setWhisperTarget] = useState<{ participantId: string; name: string } | null>(null)
-  const [giftTarget, setGiftTarget] = useState<{ participantId: string; characterId: string; name: string } | null>(null)
 
   // --- Refs ---
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -147,15 +144,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const participant = chat?.participants.find(p => p.id === participantId)
     const name = participant?.character?.name || 'Unknown'
     setWhisperTarget({ participantId, name })
-  }, [chat?.participants])
-
-  const handleGiftItem = useCallback((participantId: string) => {
-    const participant = chat?.participants.find(p => p.id === participantId)
-    const characterId = participant?.character?.id
-    const name = participant?.character?.name || 'Unknown'
-    if (characterId) {
-      setGiftTarget({ participantId, characterId, name })
-    }
   }, [chat?.participants])
 
   // --- Avatar generation polling ---
@@ -422,53 +410,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   // --- Outfit hook ---
   // Collect all character IDs from participants so we can fetch wardrobe for all of them
   // (including user-controlled characters that may not have equipped outfits yet)
-  const participantCharacterIds = useMemo(() =>
-    (chat?.participants ?? [])
-      .filter(p => p.type === 'CHARACTER' && p.character?.id)
-      .map(p => p.character!.id),
-    [chat?.participants]
-  )
-  const outfit = useOutfit(id, participantCharacterIds)
-
-  // Refresh outfit state when a tool result comes back (generation completes).
-  // Invalidate wardrobe cache first since tools may have created/gifted new items.
-  // The Aurora announcement of any tool-driven change is scheduled server-side
-  // by the wardrobe-update-outfit tool handler, so the client only needs to
-  // refresh its local view of the outfit.
-  const wasGeneratingForOutfitRef = useRef(false)
-  useEffect(() => {
-    const isGenerating = sseStreaming.streaming || sseStreaming.waitingForResponse
-    if (wasGeneratingForOutfitRef.current && !isGenerating) {
-      outfit.invalidateWardrobe()
-      void outfit.refreshOutfit()
-    }
-    wasGeneratingForOutfitRef.current = isGenerating
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- outfit.refreshOutfit and invalidateWardrobe are stable (useCallback)
-  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, outfit.refreshOutfit, outfit.invalidateWardrobe])
-
-  // Equip slot handler that maps participantId -> characterId. The participant
-  // sidebar's per-slot dropdown is a "replace what's worn" gesture: picking an
-  // item swaps it in (`equipItem` — replace mode), choosing the empty option
-  // clears the slot entirely (`removeFromSlot` with no itemId). Layering (a
-  // t-shirt under a sweater) is a deliberate add via the wardrobe item picker
-  // or LLM tool calls, not the sidebar dropdown.
-  const handleEquipSlot = useCallback(async (participantId: string, slot: string, itemId: string | null) => {
-    const participant = chat?.participants.find(p => p.id === participantId)
-    const characterId = participant?.character?.id
-    if (characterId) {
-      const slotKey = slot as 'top' | 'bottom' | 'footwear' | 'accessories'
-      if (itemId === null) {
-        await outfit.removeFromSlot(characterId, slotKey)
-      } else {
-        await outfit.equipItem(characterId, itemId)
-      }
-      // If avatar generation is enabled, start polling for the auto-triggered avatar update
-      if (chat?.avatarGenerationEnabled) {
-        startAvatarPoll(characterId)
-      }
-    }
-  }, [chat?.participants, chat?.avatarGenerationEnabled, outfit, startAvatarPoll])
-
   // --- Virtualizer ---
   const getItemKey = useCallback((index: number) => {
     return visibleMessages[index]?.id ?? index
@@ -1562,11 +1503,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onSystemPromptChange={chatControls.handleSystemPromptChange}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}
-          outfitState={outfit.outfitState}
-          wardrobeCache={outfit.wardrobeCache}
-          outfitLoading={outfit.loading}
-          onEquipSlot={handleEquipSlot}
-          onGiftItem={handleGiftItem}
+          chatId={id}
           onRegenerateAvatar={chat?.avatarGenerationEnabled ? handleRegenerateAvatar : undefined}
           isDangerousChat={chat?.isDangerousChat === true}
         />
@@ -1586,19 +1523,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
         />
       )}
 
-      {giftTarget && (
-        <GiftWardrobeItemModal
-          recipientCharacterId={giftTarget.characterId}
-          recipientName={giftTarget.name}
-          chatId={id}
-          onClose={() => setGiftTarget(null)}
-          onGifted={() => {
-            outfit.invalidateWardrobe(giftTarget.characterId)
-            setGiftTarget(null)
-            outfit.refreshOutfit()
-          }}
-        />
-      )}
     </div>
     </TerminalModeContext.Provider>
   )

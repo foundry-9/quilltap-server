@@ -17,10 +17,8 @@
 import { useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
-import { OutfitIndicator } from '@/components/wardrobe/outfit-indicator'
+import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
-import type { EquippedSlots } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItemSummary, ResolvedSlotItems } from '@/app/salon/[id]/hooks/useOutfit'
 
 // Special constant for user impersonation selection
 const USER_IMPERSONATION_VALUE = '__user__'
@@ -100,15 +98,9 @@ interface ParticipantCardProps {
   onStatusChange?: (participantId: string, status: 'active' | 'silent' | 'absent' | 'removed') => void
   // Whisper support
   onWhisper?: (participantId: string) => void
-  // Outfit display
-  equippedSlots?: EquippedSlots | null
-  /** Resolved leaf items per slot, in layering order. */
-  itemsBySlot?: ResolvedSlotItems
-  wardrobeItems?: WardrobeItemSummary[]
-  onEquipSlot?: (participantId: string, slot: string, itemId: string | null) => void
-  outfitLoading?: boolean
-  // Gift wardrobe item
-  onGiftItem?: (participantId: string) => void
+  /** Optional chat ID — passed through to the Wardrobe dialog so it can
+   *  surface the chat's "wearing now" pane when summoned from this card. */
+  chatId?: string
   // Avatar regeneration
   onRegenerateAvatar?: (participantId: string) => void
   // Danger state — when the Concierge has flagged this chat
@@ -142,15 +134,11 @@ export function ParticipantCard({
   onActiveChange,
   onStatusChange,
   onWhisper,
-  equippedSlots,
-  itemsBySlot,
-  wardrobeItems,
-  onEquipSlot,
-  outfitLoading,
-  onGiftItem,
+  chatId,
   onRegenerateAvatar,
   isDangerousChat = false,
 }: ParticipantCardProps) {
+  const wardrobeDialog = useWardrobeDialogOptional()
   const [localTalkativeness, setLocalTalkativeness] = useState(
     participant.character?.talkativeness ?? 0.5
   )
@@ -435,17 +423,20 @@ export function ParticipantCard({
             </div>
           )}
 
-          {/* Outfit indicator for all characters with wardrobe data */}
-          {isCharacter && onEquipSlot && (equippedSlots || (wardrobeItems && wardrobeItems.length > 0) || outfitLoading) && (
-            <OutfitIndicator
-              characterId={participant.character?.id || ''}
-              equippedSlots={equippedSlots ?? null}
-              itemsBySlot={itemsBySlot ?? { top: [], bottom: [], footwear: [], accessories: [] }}
-              wardrobeItems={wardrobeItems ?? []}
-              onEquipSlot={(slot, itemId) => onEquipSlot(participant.id, slot, itemId)}
-              isLoading={outfitLoading}
-              onGiftItem={onGiftItem ? () => onGiftItem(participant.id) : undefined}
-            />
+          {/* Wardrobe button — opens the global Wardrobe dialog scoped to
+              this character (and the current chat, if available). */}
+          {isCharacter && participant.character?.id && wardrobeDialog && (
+            <button
+              type="button"
+              onClick={() => wardrobeDialog.open({
+                characterId: participant.character!.id,
+                ...(chatId ? { chatId } : {}),
+              })}
+              className="qt-button-ghost qt-button-sm mt-2"
+              title={`Open ${name}'s wardrobe`}
+            >
+              Wardrobe
+            </button>
           )}
 
           {/* Talkativeness slider for characters */}

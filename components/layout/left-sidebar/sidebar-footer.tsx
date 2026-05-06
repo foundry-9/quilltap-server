@@ -11,6 +11,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { useHasDangerousChats } from '@/components/hooks/use-has-dangerous-chats'
 import { useTheme } from '@/components/providers/theme-provider'
@@ -18,6 +19,12 @@ import { ProfileMenu } from './profile-menu'
 import { NavUserMenuThemeContent } from '@/components/dashboard/nav-user-menu-theme'
 import { NavUserMenuQuickHideContent, QuickHideIcon } from '@/components/dashboard/nav-user-menu-quick-hide'
 import { useHelpChatOptional } from '@/components/providers/help-chat-provider'
+import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
+
+// Match a UUID immediately following /salon/. If the user is reading a chat,
+// the sidebar's Wardrobe button should pass that chat id along so the dialog
+// can show Wearing now / Wear this against the right scope.
+const SALON_CHAT_PATH_RE = /^\/salon\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/
 
 /**
  * Foundry icon (anvil/wrench)
@@ -62,6 +69,27 @@ function PaletteIcon({ className }: { className?: string }) {
 }
 
 /**
+ * Wardrobe icon (clothes hanger)
+ */
+function WardrobeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" />
+      <path d="M12 9v2" />
+      <path d="M12 11 3.5 16.5a1 1 0 0 0 .5 1.85h16a1 1 0 0 0 .5-1.85L12 11z" />
+    </svg>
+  )
+}
+
+/**
  * Help icon (question mark in circle)
  */
 function HelpIcon({ className }: { className?: string }) {
@@ -89,6 +117,8 @@ export function SidebarFooter() {
   const { hasDangerousChats } = useHasDangerousChats()
   const theme = useTheme()
   const helpChat = useHelpChatOptional()
+  const wardrobeDialog = useWardrobeDialogOptional()
+  const pathname = usePathname()
   const [openPopout, setOpenPopout] = useState<PopoutMenu>(null)
   const themesRef = useRef<HTMLDivElement>(null)
   const quickHideRef = useRef<HTMLDivElement>(null)
@@ -146,6 +176,20 @@ export function SidebarFooter() {
             <HelpIcon className="qt-left-sidebar-item-icon w-5 h-5" />
           </button>
         )}
+        {wardrobeDialog && (
+          <button
+            type="button"
+            onClick={() => {
+              const chatMatch = pathname?.match(SALON_CHAT_PATH_RE)
+              wardrobeDialog.open(chatMatch ? { chatId: chatMatch[1] } : undefined)
+            }}
+            className="qt-left-sidebar-item justify-center px-0"
+            title="Wardrobe"
+          >
+            <WardrobeIcon className="qt-left-sidebar-item-icon w-5 h-5" />
+          </button>
+        )}
+
         <a
           href="/settings"
           className="qt-left-sidebar-item justify-center px-0"

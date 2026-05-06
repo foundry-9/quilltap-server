@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
@@ -9,6 +9,7 @@ import FormActions from '@/components/ui/FormActions'
 import MessageContent from '@/components/chat/MessageContent'
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { unionTypes } from '@/lib/wardrobe/composite-types'
 
 interface WardrobeItemEditorProps {
   characterId: string
@@ -17,6 +18,16 @@ interface WardrobeItemEditorProps {
   isShared?: boolean
   onClose: () => void
   onSave: () => void
+}
+
+/** A wardrobe item summary shape used by the components multi-select. */
+interface CandidateItem {
+  id: string
+  title: string
+  types: WardrobeItemType[]
+  componentItemIds: string[]
+  /** Whether this is a shared archetype (no characterId) */
+  isShared: boolean
 }
 
 export function WardrobeItemEditor({
@@ -42,39 +53,142 @@ export function WardrobeItemEditor({
   const [selectedTypes, setSelectedTypes] = useState<WardrobeItemType[]>(
     item?.types || []
   )
+  const [componentItemIds, setComponentItemIds] = useState<string[]>(
+    item?.componentItemIds ?? [],
+  )
+  const [candidates, setCandidates] = useState<CandidateItem[]>([])
+  const [candidatesLoading, setCandidatesLoading] = useState(false)
+  const [componentSearch, setComponentSearch] = useState('')
 
   const { loading: saving, execute: executeSave, clearError } = useAsyncOperation<void>()
   const [showPreview, setShowPreview] = useState(false)
 
-  const handleTypeToggle = (type: WardrobeItemType) => {
+  // Load candidate items (this character's wardrobe + shared archetypes) so
+  // the user can pick components for a composite. We do this once on mount;
+  // adding fresh items mid-edit is rare and a re-open will refresh.
+  useEffect(() => {
+    let cancelled = false
+    const load = async (): Promise<void> => {
+      setCandidatesLoading(true)
+      try {
+        const [personalRes, archetypeRes] = await Promise.all([
+          fetch(`/api/v1/characters/${characterId}/wardrobe`),
+          fetch('/api/v1/wardrobe'),
+        ])
+
+        const collected: CandidateItem[] = []
+        if (personalRes.ok) {
+          const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItem[] }
+          for (const w of data.wardrobeItems ?? []) {
+            collected.push({
+              id: w.id,
+              title: w.title,
+              types: w.types,
+              componentItemIds: Array.isArray(w.componentItemIds) ? w.componentItemIds : [],
+              isShared: false,
+            })
+          }
+        }
+        if (archetypeRes.ok) {
+          const data = (await archetypeRes.json()) as { wardrobeItems?: WardrobeItem[] }
+          for (const w of data.wardrobeItems ?? []) {
+            if (!collected.some((c) => c.id === w.id)) {
+              collected.push({
+                id: w.id,
+                title: w.title,
+                types: w.types,
+                componentItemIds: Array.isArray(w.componentItemIds) ? w.componentItemIds : [],
+                isShared: true,
+              })
+            }
+          }
+        }
+        if (!cancelled) setCandidates(collected)
+      } catch (err) {
+        if (!cancelled) {
+          console.warn('[WardrobeItemEditor] Failed to load candidate items', err)
+          setCandidates([])
+        }
+      } finally {
+        if (!cancelled) setCandidatesLoading(false)
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [characterId])
+
+  /**
+   * Items the user can pick as components, excluding:
+   *  - this item itself (self-reference is a trivial cycle)
+   *  - items that already reference this item as a component (direct parents,
+   *    which would make a cycle on save — server enforces this anyway)
+   */
+  const eligibleCandidates = useMemo<CandidateItem[]>(() => {
+    const excluded = new Set<string>()
+    if (item) {
+      excluded.add(item.id)
+      for (const c of candidates) {
+        if (c.componentItemIds.includes(item.id)) excluded.add(c.id)
+      }
+    }
+    const search = componentSearch.trim().toLowerCase()
+    return candidates
+      .filter((c) => !excluded.has(c.id))
+      .filter((c) => (search ? c.title.toLowerCase().includes(search) : true))
+  }, [candidates, item, componentSearch])
+
+  const isComposite = componentItemIds.length > 0
+
+  // Auto-compute types from components when composite. The server runs the
+  // exact same union; we mirror it here so the UI always shows what's about
+  // to be saved.
+  const computedTypes = useMemo<WardrobeItemType[]>(() => {
+    if (!isComposite) return selectedTypes
+    const components = candidates.filter((c) => componentItemIds.includes(c.id))
+    return unionTypes(components)
+  }, [isComposite, candidates, componentItemIds, selectedTypes])
+
+  const effectiveTypes = isComposite ? computedTypes : selectedTypes
+
+  const handleTypeToggle = (type: WardrobeItemType): void => {
+    if (isComposite) return
     setSelectedTypes((prev) =>
-      prev.includes(type)
-        ? prev.filter((t) => t !== type)
-        : [...prev, type]
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
     )
   }
 
-  const handleSave = async () => {
-    if (selectedTypes.length === 0) {
+  const toggleComponent = (id: string): void => {
+    setComponentItemIds((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id],
+    )
+  }
+
+  const handleSave = async (): Promise<void> => {
+    if (!isComposite && selectedTypes.length === 0) {
       showErrorToast('Please select at least one type')
+      return
+    }
+    if (isComposite && computedTypes.length === 0) {
+      showErrorToast('Selected components do not cover any slots')
       return
     }
 
     clearError()
 
     await executeSave(async () => {
-      const payload = {
+      const payload: Record<string, unknown> = {
         title: formData.title,
         description: formData.description || null,
-        types: selectedTypes,
+        types: effectiveTypes,
         appropriateness: formData.appropriateness || null,
         isDefault: formData.isDefault,
+        componentItemIds,
       }
 
       // Route to the correct API endpoint based on shared status
       let url: string
-      let method: string
-
       if (isShared) {
         const sharedBaseUrl = '/api/v1/wardrobe'
         url = isEditing ? `${sharedBaseUrl}/${item.id}` : sharedBaseUrl
@@ -82,7 +196,7 @@ export function WardrobeItemEditor({
         const charBaseUrl = `/api/v1/characters/${characterId}/wardrobe`
         url = isEditing ? `${charBaseUrl}/${item.id}` : charBaseUrl
       }
-      method = isEditing ? 'PUT' : 'POST'
+      const method = isEditing ? 'PUT' : 'POST'
 
       const result = await fetchJson<{ id: string }>(url, {
         method,
@@ -101,17 +215,24 @@ export function WardrobeItemEditor({
     })
   }
 
-  const charCountClass = (current: number, max: number) => {
+  const charCountClass = (current: number, max: number): string => {
     if (current > max) return 'qt-text-destructive'
     if (current > max * 0.9) return 'qt-text-warning'
     return 'qt-text-secondary'
   }
 
+  const selectedComponents = useMemo(() => {
+    return componentItemIds
+      .map((id) => candidates.find((c) => c.id === id))
+      .filter((c): c is CandidateItem => Boolean(c))
+  }, [candidates, componentItemIds])
+
   return (
     <>
-      {/* Overlay */}
+      {/* Overlay — z values sit above the qt-dialog-overlay (z-[60]) so this
+          editor always stacks on top when summoned from another dialog. */}
       <button
-        className="qt-dialog-overlay !p-0 cursor-default border-none z-40"
+        className="qt-dialog-overlay !p-0 cursor-default border-none z-[70]"
         onClick={onClose}
         aria-label="Close dialog"
         type="button"
@@ -119,7 +240,7 @@ export function WardrobeItemEditor({
 
       {/* Dialog */}
       <div
-        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-auto"
+        className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[80] pointer-events-auto"
         style={{ width: 'min(var(--qt-page-max-width), calc(100vw - 2rem))' }}
       >
         <div className="qt-dialog qt-dialog-wide max-h-[90vh] overflow-y-auto flex flex-col">
@@ -165,32 +286,128 @@ export function WardrobeItemEditor({
               />
             </div>
 
-            {/* Types (multi-select checkboxes) */}
+            {/* Types (multi-select checkboxes — auto-computed for composites) */}
             <div>
               <span className="qt-label mb-2 block">
-                Type(s) *
+                Type(s) {isComposite ? '(auto from components)' : '*'}
               </span>
               <div className="flex flex-wrap gap-3">
-                {WARDROBE_SLOT_TYPES.map((type) => (
-                  <label
-                    key={type}
-                    className="inline-flex items-center gap-2 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedTypes.includes(type)}
-                      onChange={() => handleTypeToggle(type)}
-                      className="qt-checkbox"
-                    />
-                    <span className="text-sm capitalize text-foreground">{type}</span>
-                  </label>
-                ))}
+                {WARDROBE_SLOT_TYPES.map((type) => {
+                  const checked = effectiveTypes.includes(type)
+                  return (
+                    <label
+                      key={type}
+                      className={`inline-flex items-center gap-2 ${isComposite ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => handleTypeToggle(type)}
+                        disabled={isComposite}
+                        className="qt-checkbox"
+                      />
+                      <span className="text-sm capitalize text-foreground">{type}</span>
+                    </label>
+                  )
+                })}
               </div>
-              {selectedTypes.length === 0 && (
-                <p className="mt-1 text-xs qt-text-destructive">
-                  Select at least one type
+              {isComposite ? (
+                <p className="mt-1 text-xs qt-text-small">
+                  Composite items inherit the union of their components&apos; slot types.
                 </p>
+              ) : (
+                selectedTypes.length === 0 && (
+                  <p className="mt-1 text-xs qt-text-destructive">
+                    Select at least one type
+                  </p>
+                )
               )}
+            </div>
+
+            {/* Composes (composite components) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="qt-label">Composes</span>
+                <span className="qt-text-xs qt-text-secondary">
+                  {componentItemIds.length === 0
+                    ? 'Leaf item'
+                    : `Composite of ${componentItemIds.length}`}
+                </span>
+              </div>
+              <p className="qt-text-xs qt-text-small mb-2">
+                Bundle other items into this one — e.g., a &quot;Rain Outfit&quot; that pulls in
+                a raincoat, jeans, and boots. Leave empty for a single garment.
+              </p>
+
+              {selectedComponents.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {selectedComponents.map((c) => (
+                    <span
+                      key={c.id}
+                      className="inline-flex items-center gap-1 rounded-full qt-bg-muted border qt-border-default px-2 py-0.5 qt-text-xs"
+                    >
+                      {c.title}
+                      {c.isShared ? <span className="qt-text-secondary">(shared)</span> : null}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${c.title}`}
+                        onClick={() => toggleComponent(c.id)}
+                        className="qt-text-secondary hover:text-foreground"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <input
+                type="search"
+                value={componentSearch}
+                onChange={(e) => setComponentSearch(e.target.value)}
+                placeholder="Search items to add as components…"
+                className="qt-input mb-2"
+              />
+
+              <div className="max-h-48 overflow-y-auto rounded border qt-border-default qt-bg-muted/40">
+                {candidatesLoading ? (
+                  <div className="px-3 py-2 qt-text-small qt-text-secondary">Loading…</div>
+                ) : eligibleCandidates.length === 0 ? (
+                  <div className="px-3 py-2 qt-text-small qt-text-secondary">
+                    {candidates.length === 0
+                      ? 'No other wardrobe items to bundle.'
+                      : 'No candidates match your filter.'}
+                  </div>
+                ) : (
+                  <ul className="divide-y qt-border-default">
+                    {eligibleCandidates.map((c) => {
+                      const checked = componentItemIds.includes(c.id)
+                      return (
+                        <li key={c.id}>
+                          <label className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:qt-bg-muted">
+                            <input
+                              type="checkbox"
+                              className="qt-checkbox"
+                              checked={checked}
+                              onChange={() => toggleComponent(c.id)}
+                            />
+                            <span className="flex-1 truncate text-sm text-foreground">
+                              {c.title}
+                              {c.isShared ? (
+                                <span className="ml-1 qt-text-xs qt-text-secondary">(shared)</span>
+                              ) : null}
+                            </span>
+                            <span className="qt-text-xs qt-text-secondary">
+                              {c.types.join(', ')}
+                              {c.componentItemIds.length > 0 ? ' · composite' : ''}
+                            </span>
+                          </label>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
             </div>
 
             {/* Appropriateness */}
@@ -266,7 +483,7 @@ export function WardrobeItemEditor({
                 <span className="text-sm text-foreground">Default outfit item</span>
               </label>
               <p className="mt-1 text-xs qt-text-small">
-                Default items are part of the character&apos;s standard outfit
+                Default items make up this character&apos;s standard outfit when a chat starts.
               </p>
             </div>
 
@@ -305,7 +522,11 @@ export function WardrobeItemEditor({
               submitLabel={isEditing ? 'Update' : 'Create'}
               cancelLabel="Cancel"
               isLoading={saving}
-              isDisabled={!formData.title.trim() || selectedTypes.length === 0}
+              isDisabled={
+                !formData.title.trim() ||
+                (!isComposite && selectedTypes.length === 0) ||
+                (isComposite && computedTypes.length === 0)
+              }
             />
           </div>
         </div>

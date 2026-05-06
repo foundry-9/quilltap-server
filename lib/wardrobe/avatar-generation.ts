@@ -16,18 +16,44 @@ interface AvatarGenerationParams {
   characterId: string;
   /** Identifies the call site in log messages (e.g. 'wardrobe-create-item-handler') */
   callerContext: string;
+  /**
+   * One-shot override: use this image profile instead of the chat's default.
+   * The chat's stored `imageProfileId` is NOT mutated. Used when the user
+   * picks a non-default model from the wardrobe dialog.
+   */
+  imageProfileIdOverride?: string | null;
+  /**
+   * One-shot equipped-slots override: when set, the avatar prompt is built
+   * from these slots instead of whatever is stored on the chat. Used by the
+   * dialog's "fitting room" — a transient outfit composition that has not
+   * been committed to the chat's equipped state.
+   */
+  equippedSlotsOverride?: {
+    top: string[];
+    bottom: string[];
+    footwear: string[];
+    accessories: string[];
+  } | null;
 }
 
 /**
  * Trigger avatar generation if the chat has avatarGenerationEnabled.
- * Resolves the image profile from the chat-level setting or falls back to default.
- * Failures are caught and logged — they must not propagate to the caller.
+ * Resolves the image profile from the override first, then chat-level
+ * setting, then global default. Failures are caught and logged — they must
+ * not propagate to the caller.
  */
 export async function triggerAvatarGenerationIfEnabled(
   repos: ReturnType<typeof getRepositories>,
   params: AvatarGenerationParams
 ): Promise<void> {
-  const { userId, chatId, characterId, callerContext } = params;
+  const {
+    userId,
+    chatId,
+    characterId,
+    callerContext,
+    imageProfileIdOverride,
+    equippedSlotsOverride,
+  } = params;
 
   try {
     const chat = await repos.chats.findById(chatId);
@@ -39,10 +65,29 @@ export async function triggerAvatarGenerationIfEnabled(
       return;
     }
 
-    // Resolve image profile: chat-level first, then default
+    // Resolve image profile: explicit override → chat-level → global default
     let imageProfileId: string | null = null;
 
-    if (chat.imageProfileId) {
+    if (imageProfileIdOverride) {
+      const profile = await repos.imageProfiles.findById(imageProfileIdOverride);
+      if (profile) {
+        imageProfileId = profile.id;
+        logger.debug('Avatar generation using one-shot profile override', {
+          context: callerContext,
+          chatId,
+          characterId,
+          imageProfileId,
+        });
+      } else {
+        logger.warn('Avatar generation override profile not found, falling back', {
+          context: callerContext,
+          chatId,
+          imageProfileIdOverride,
+        });
+      }
+    }
+
+    if (!imageProfileId && chat.imageProfileId) {
       const profile = await repos.imageProfiles.findById(chat.imageProfileId);
       if (profile) {
         imageProfileId = profile.id;
@@ -70,6 +115,7 @@ export async function triggerAvatarGenerationIfEnabled(
       chatId,
       characterId,
       imageProfileId,
+      ...(equippedSlotsOverride ? { equippedSlotsOverride } : {}),
     });
 
     logger.debug('Avatar generation enqueued after outfit change', {

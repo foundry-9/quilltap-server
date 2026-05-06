@@ -18,6 +18,11 @@ const createArchetypeSchema = z.object({
   types: z.array(WardrobeItemTypeEnum).min(1, 'At least one type is required'),
   appropriateness: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
+  /**
+   * IDs of other items this composite bundles. Empty/omitted = leaf item.
+   * Cycle rejection is enforced by the repository.
+   */
+  componentItemIds: z.array(z.string()).optional(),
 });
 
 // GET /api/v1/wardrobe
@@ -47,14 +52,12 @@ export const POST = createAuthenticatedHandler(async (req, { repos }) => {
     types: validatedData.types,
   });
 
-  // `componentItemIds: []` marks this archetype as a leaf item — composites
-  // are built explicitly by editing an existing item.
   const item = await repos.wardrobe.create({
     characterId: null,
     title: validatedData.title,
     description: validatedData.description ?? null,
     types: validatedData.types,
-    componentItemIds: [],
+    componentItemIds: validatedData.componentItemIds ?? [],
     appropriateness: validatedData.appropriateness ?? null,
     isDefault: validatedData.isDefault ?? false,
     migratedFromClothingRecordId: null,

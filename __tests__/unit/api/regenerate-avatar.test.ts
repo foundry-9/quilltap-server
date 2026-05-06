@@ -69,6 +69,8 @@ describe('handleRegenerateAvatar', () => {
       chatId: 'chat-1',
       characterId: 'char-1',
       callerContext: '[Chats v1] regenerate-avatar',
+      imageProfileIdOverride: null,
+      equippedSlotsOverride: null,
     })
   })
 

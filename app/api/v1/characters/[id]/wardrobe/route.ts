@@ -18,6 +18,8 @@ const createWardrobeItemSchema = z.object({
   types: z.array(WardrobeItemTypeEnum).min(1, 'At least one type is required'),
   appropriateness: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
+  /** Optional composite components — empty/omitted = leaf item. */
+  componentItemIds: z.array(z.string()).optional(),
 });
 
 // GET /api/v1/characters/[id]/wardrobe
@@ -59,14 +61,12 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       types: validatedData.types,
     });
 
-    // `componentItemIds: []` marks this as a leaf item — composites are built
-    // explicitly via the wardrobe-management UI by editing an existing item.
     const item = await repos.wardrobe.create({
       characterId: id,
       title: validatedData.title,
       description: validatedData.description ?? null,
       types: validatedData.types,
-      componentItemIds: [],
+      componentItemIds: validatedData.componentItemIds ?? [],
       appropriateness: validatedData.appropriateness ?? null,
       isDefault: validatedData.isDefault ?? false,
       migratedFromClothingRecordId: null,

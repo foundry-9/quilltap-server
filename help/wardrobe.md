@@ -42,6 +42,24 @@ To furnish a character's wardrobe:
 
 You may also edit or remove items at any time. The wardrobe is yours to curate, though your characters may have opinions about it (see below).
 
+## The Wardrobe Control Dialog
+
+For day-to-day fussing-about with what a character is wearing, there is a more direct instrument than the Aurora page's tabs and panels: the **Wardrobe** dialog. A small clothes-hanger icon dwells on the left sidebar (between Themes, when shown, and Settings) and is accessible from every page that bears the sidebar — Salon, Aurora, Prospero, the Foundry, and so on.
+
+What the dialog allows you to do, with the directness of a valet pulling out the morning's tweeds:
+
+- **Pick any character** from a single dropdown at the top — the dialog needn't be tied to whoever is presently speaking in a chat.
+- **Browse the wardrobe** in full: filter by slot, mark items as **default** (a star toggle), edit them in place, delete them, or compose new ones.
+- **Build composite items** — a "Rain Outfit" that bundles a raincoat, jeans, and boots; a "Nice Jewellery" set comprising earrings, locket, and ring. The editor's *Composes* panel lets you pick existing items as components; the system computes the slot coverage automatically and refuses to allow circular bundles.
+- When opened **inside a chat**, a second column appears with two tabs:
+  - *Wearing now* — what this character is actually wearing in the chat. Each slot lists what is currently equipped as removable chips; a small **+** opens a picker to add items (use **Replace** to swap or **Add** to layer); a **Clear** button empties the slot. Composite items are shown as a single chip with a "composite" note. **Edits to this tab persist** through the equip API.
+  - *Fitting room* — a virtual outfit just for the avatar generator. Edits here never reach the chat unless you say so. Buttons let you reset the fitting room from what the character is currently wearing, from their default-outfit items, or to clear it entirely. A **Wear this** button (in chat only) commits the whole composition at once, replacing what the character is wearing — Aurora announces the change, the avatar regenerates against the new outfit, and the dialog closes itself with the work complete.
+- Wardrobe rows on the left switch their action labels based on which tab is active: *Wear* / *+ Layer* live in the *Wearing now* tab; *Try on* / *+ Add* push the same items into the fitting room without committing.
+- Out of chat, only the *Fitting room* tab appears. It is seeded from the character's defaults so a click of **Generate avatar** has something to work with even before you fuss with it.
+- **Generate a new avatar** with a model of your choosing. The fitting-room outfit is what the avatar generator sees — meaning you can compose a never-before-worn outfit, take a portrait of it, and never disturb the character's actual chat state. In a chat, the new portrait replaces the character's avatar in that conversation only (the chat's default model is not touched). Out of chat, the dialog produces a downloadable preview and saves nothing to the character's avatar record.
+
+The Wardrobe dialog supersedes the per-participant outfit dropdowns and the standalone "Gift Item" modal that previously lived in the participant sidebar. The same operations remain reachable, but with rather more elbow room.
+
 ### Import from Image
 
 For those moments when visual inspiration strikes --- a photograph discovered in one's research, a portrait from a fashion plate, a screenshot from a film --- Quilltap can analyze a reference image and propose wardrobe items derived from whatever garments are visible therein. It is rather like having a couturier examine a daguerreotype and reproduce the ensemble, stitch by stitch.

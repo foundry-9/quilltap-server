@@ -30,8 +30,7 @@ import {
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
-import { describeOutfit } from '@/lib/wardrobe/outfit-description';
-import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 
 /**
@@ -90,49 +89,17 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  // 4. Build appearance description from physical descriptions + equipped wardrobe
-  const appearanceParts: string[] = [];
+  // 4. Build portrait prompt — 3/4 shot from thighs up, no scenario context.
+  // Scenario text is deliberately excluded: it often mentions other characters
+  // or narrative elements that cause image models to depict multiple people.
+  // The fitting-room override (when present) takes priority over the chat's
+  // stored equipped state — the operator may be previewing an outfit that
+  // hasn't been committed to the chat.
+  const equippedSlots = payload.equippedSlotsOverride
+    ?? await repos.chats.getEquippedOutfitForCharacter(payload.chatId, payload.characterId);
+  const { prompt, hasAppearance, leafCounts } = await buildCharacterAvatarPrompt(repos, character, { equippedSlots });
 
-  // Physical descriptions
-  const physicalDescriptions = character.physicalDescriptions || [];
-  if (physicalDescriptions.length > 0) {
-    const desc = physicalDescriptions[0]; // Use first/default description
-    const descText = desc.mediumPrompt || desc.shortPrompt || desc.longPrompt
-      || desc.completePrompt || desc.fullDescription || '';
-    if (descText) {
-      appearanceParts.push(descText);
-    }
-  }
-
-  // Equipped wardrobe items — expand composites and use canonical
-  // describeOutfit. Each slot is an array of leaf item titles after expansion;
-  // we wrap titles with `(description)` when descriptions are present so the
-  // image model gets the extra detail.
-  const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, payload.characterId);
-  if (equippedSlots) {
-    const resolved = await resolveEquippedOutfitForCharacter(repos, payload.characterId, equippedSlots);
-    const decorate = (items: { title: string; description?: string | null }[]): string[] =>
-      items.map(i => i.description ? `${i.title} (${i.description})` : i.title);
-    appearanceParts.push(describeOutfit({
-      top: decorate(resolved.leafItemsBySlot.top),
-      bottom: decorate(resolved.leafItemsBySlot.bottom),
-      footwear: decorate(resolved.leafItemsBySlot.footwear),
-      accessories: decorate(resolved.leafItemsBySlot.accessories),
-    }));
-    logger.debug('[CharacterAvatar] Resolved equipped wardrobe', {
-      context: 'background-jobs.character-avatar',
-      jobId: job.id,
-      characterId: payload.characterId,
-      leafCounts: {
-        top: resolved.leafItemsBySlot.top.length,
-        bottom: resolved.leafItemsBySlot.bottom.length,
-        footwear: resolved.leafItemsBySlot.footwear.length,
-        accessories: resolved.leafItemsBySlot.accessories.length,
-      },
-    });
-  }
-
-  if (appearanceParts.length === 0) {
+  if (!hasAppearance) {
     logger.warn('[CharacterAvatar] No appearance data available, skipping', {
       context: 'background-jobs.character-avatar',
       jobId: job.id,
@@ -141,17 +108,12 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  // 5. Build portrait prompt — 3/4 shot from thighs up, no scenario context
-  // Scenario text is deliberately excluded: it often mentions other characters
-  // or narrative elements that cause image models to depict multiple people.
-  const appearanceText = appearanceParts.join('. ');
-  const prompt = `Solo portrait of a single person: ${character.name}. Show exactly one figure, from the thighs up, three-quarter view. ${appearanceText}. Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
-
   logger.debug('[CharacterAvatar] Generated portrait prompt', {
     context: 'background-jobs.character-avatar',
     jobId: job.id,
     promptLength: prompt.length,
     promptPreview: prompt.substring(0, 200),
+    leafCounts,
   });
 
   // 6. Concierge check — classify the prompt for dangerous content

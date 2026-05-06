@@ -4,6 +4,33 @@
 
 ### 4.4-dev
 
+#### Wardrobe control dialog
+
+New global wardrobe-management dialog reachable from a clothes-hanger button on the left sidebar (between Themes and Settings) and from a "Wardrobe" button on each participant card in the Salon. Available from every page that mounts the left sidebar.
+
+- **Character selector at the top** — switch between any character without leaving the dialog.
+- **Left column: full wardrobe CRUD.** Filter by slot or composites, create new items, edit existing ones (including a **Composes** picker that bundles other items into a composite), delete, and toggle `isDefault` via a star button on each row. Composite rows expand to show their components nested inline.
+- **Right column: tabbed Wearing-now / Fitting-room.** *Wearing now* (in-chat only) is the live equip surface — chip changes hit `?action=equip` immediately. *Fitting room* (always available) is a transient outfit composition that drives avatar generation without touching the chat's stored `equippedOutfit`. Reset buttons re-seed the fitting room from worn (in-chat), defaults, or empty. **Wear this** (in-chat only) commits the fitting composition atomically via the new `mode: 'set_all'` (validates every id resolves to an item the character can wear, then `chats.setEquippedOutfit`) and closes the dialog on success. Wardrobe-row buttons retitle themselves based on the active tab (*Wear*/*+Layer* live, *Try on*/*+Add* fitting). The dialog gets a footer **Done** button so closing is obvious instead of just an X.
+- **Sidebar Wardrobe button** picks up the current chat. When invoked from `/salon/<id>`, the button now extracts the chat id from the URL so the dialog opens with the *Wearing now* tab and *Wear this* button visible. Other pages still open the dialog out-of-chat.
+- **Outfit announcements fire immediately.** The 60-second debounce on `enqueueWardrobeOutfitAnnouncement` is gone — the operator's "Wear this" gesture is intentional and the Aurora announcement (and avatar regen) should land promptly. Pending duplicates for the same `(chatId, characterId)` are still collapsed so back-to-back changes don't fan out.
+- **Generate avatar** with a one-shot image-model picker, sourced from the fitting-room slots. In a chat: regenerates the chat-scoped avatar with those slots; the chat's stored `imageProfileId` and `equippedOutfit` are both unchanged. Out of chat: produces a downloadable preview saved to the character's gallery; nothing overwrites the character's avatar.
+- **Provider/Hook plumbing.** `WardrobeDialogProvider` (Context-based) hosts open/close state and is mounted once at the layout level alongside `HelpChatProvider`. `useWardrobeDialog().open({ characterId?, chatId? })` opens the dialog with optional context.
+
+Removals to make room:
+
+- `OutfitIndicator` and the per-participant outfit dropdowns are gone — superseded by the dialog.
+- `GiftWardrobeItemModal` is gone — the dialog's "+ New Item" with the recipient selected covers the same job.
+- `ParticipantSidebar` and `ParticipantCard` no longer accept `outfitState`, `wardrobeCache`, `outfitLoading`, `onEquipSlot`, or `onGiftItem` props. The Salon page no longer instantiates the `useOutfit` hook (the dialog manages its own).
+
+Plumbing:
+
+- `useOutfit` body relocated to `lib/hooks/use-outfit.ts`; the salon hook now re-exports it. The hook accepts `chatId: string | null` so out-of-chat surfaces can use it without firing equip API calls.
+- `unionTypes` lifted from `lib/tools/handlers/wardrobe-create-item-handler.ts` to `lib/wardrobe/composite-types.ts`. Both the editor and the create-item tool now derive composite `types` from the same helper.
+- Avatar prompt building extracted from `lib/background-jobs/handlers/character-avatar.ts` to `lib/wardrobe/avatar-prompt.ts:buildCharacterAvatarPrompt`. The job and the new preview endpoint share one prompt shape.
+- `triggerAvatarGenerationIfEnabled` accepts optional `imageProfileIdOverride` and `equippedSlotsOverride` for one-shot model + outfit selection without mutating chat state. The override flows through `CharacterAvatarGenerationPayload` to the avatar handler, which uses it in place of `chats.getEquippedOutfitForCharacter` when present. `POST /api/v1/chats/[id]?action=regenerate-avatar` accepts optional `imageProfileId` and `equippedSlots` body fields.
+- New endpoint `POST /api/v1/wardrobe/preview-avatar` — takes `{ characterId, equippedSlots, imageProfileId? }`, runs the prompt builder + image generation, saves the result as a generated image (linked to the character via tags but never written to `avatarOverrides`/`characterAvatars`), and returns `{ fileId, url, mimeType, prompt }`.
+- The four wardrobe routes (`POST /api/v1/wardrobe`, `PUT /api/v1/wardrobe/[itemId]`, `POST /api/v1/characters/[id]/wardrobe`, `PUT /api/v1/characters/[id]/wardrobe/[itemId]`) now accept an optional `componentItemIds` field. Repository cycle detection is the backstop.
+
 #### Wardrobe rework: arrays per slot, composite items, OutfitPreset eliminated
 
 Substantial change to the wardrobe data model.

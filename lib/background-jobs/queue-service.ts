@@ -159,6 +159,18 @@ export interface CharacterAvatarGenerationPayload {
   characterId: string;
   /** Image profile ID to use for generation */
   imageProfileId: string;
+  /**
+   * One-shot equipped-slots override: when set, the avatar prompt is built
+   * from these slots instead of the chat's stored `equippedOutfit`. Used
+   * when the user generates from a "fitting room" composition that does
+   * not match what the character is actually wearing in the chat.
+   */
+  equippedSlotsOverride?: {
+    top: string[];
+    bottom: string[];
+    footwear: string[];
+    accessories: string[];
+  } | null;
 }
 
 /**
@@ -904,27 +916,21 @@ export interface WardrobeOutfitAnnouncementPayload {
 }
 
 /**
- * Debounce window for outfit announcements. Each new wardrobe change for the
- * same (chatId, characterId) pair pushes the existing pending job's
- * scheduledAt forward by this much, so a flurry of slot edits collapses into
- * a single announcement once the dust settles.
- */
-const WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS = 60_000;
-
-/**
- * Enqueue a wardrobe outfit announcement job, debounced per (chatId, characterId).
+ * Enqueue a wardrobe outfit announcement job, fire-and-forget.
  *
- * If a pending job already exists for this pair, its scheduledAt is pushed
- * forward by WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS rather than enqueuing a duplicate.
- * The job, when it finally fires, reads the chat's current equipped outfit and
- * posts an Aurora system message visible to everyone in the chat.
+ * Originally this scheduled the announcement an entire minute out so a flurry
+ * of small slot edits could collapse into a single Aurora message. With the
+ * Wardrobe dialog's "Wear this" gesture committing whole compositions in one
+ * shot, the operator expects the announcement (and avatar regen) to land
+ * promptly. We still collapse against any *unclaimed* pending job for the
+ * same (chatId, characterId) pair so back-to-back changes don't fan out.
  */
 export async function enqueueWardrobeOutfitAnnouncement(
   userId: string,
   payload: WardrobeOutfitAnnouncementPayload,
 ): Promise<{ jobId: string; isNew: boolean }> {
   const repos = getRepositories();
-  const scheduledAt = new Date(Date.now() + WARDROBE_ANNOUNCEMENT_DEBOUNCE_MS);
+  const scheduledAt = new Date();
 
   // Only collapse against a still-PENDING job. findPendingForChat also returns
   // PROCESSING jobs, but a job that has already been claimed and is running
@@ -941,13 +947,13 @@ export async function enqueueWardrobeOutfitAnnouncement(
   );
 
   if (existing) {
-    await repos.backgroundJobs.update(existing.id, { scheduledAt: scheduledAt.toISOString() });
-    logger.info('[WardrobeAnnouncement] Rescheduled pending announcement', {
+    // A pending announcement is already on its way; let it fire as-is rather
+    // than spawning a duplicate.
+    logger.info('[WardrobeAnnouncement] Pending announcement reused', {
       context: 'background-jobs.queue',
       chatId: payload.chatId,
       characterId: payload.characterId,
       jobId: existing.id,
-      newScheduledAt: scheduledAt.toISOString(),
     });
     return { jobId: existing.id, isNew: false };
   }
