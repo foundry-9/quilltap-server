@@ -34,7 +34,9 @@ Do not include any other text, explanation, or markdown formatting. Just the JSO
  * Ask an LLM to choose an outfit for a character based on context.
  *
  * @param characterName The character's display name
- * @param characterPersonality Brief personality description (for context)
+ * @param characterDescription What an interlocutor perceives — behaviour, mannerisms (may be null)
+ * @param characterPersonality Internal driver of speech and behaviour (may be null)
+ * @param characterManifesto Foundational tenets the character is built on (may be null)
  * @param wardrobeItems Available wardrobe items the LLM can choose from
  * @param scenarioText The scenario or setting for the chat (may be null)
  * @param selection The cheap LLM provider selection to use
@@ -44,7 +46,9 @@ Do not include any other text, explanation, or markdown formatting. Just the JSO
  */
 export async function chooseLLMOutfit(
   characterName: string,
+  characterDescription: string | null,
   characterPersonality: string | null,
+  characterManifesto: string | null,
   wardrobeItems: WardrobeItem[],
   scenarioText: string | null,
   selection: CheapLLMSelection,
@@ -71,12 +75,20 @@ export async function chooseLLMOutfit(
     return `  - ID: ${item.id} | "${item.title}" (covers: ${types})${appropriateness}${desc}`
   }).join('\n')
 
-  const personalityNote = characterPersonality
-    ? `\nCharacter Personality: ${characterPersonality.substring(0, 300)}`
+  const manifestoNote = characterManifesto && characterManifesto.trim().length > 0
+    ? `\nCharacter Manifesto (foundational tenets):\n${characterManifesto}`
+    : ''
+
+  const descriptionNote = characterDescription && characterDescription.trim().length > 0
+    ? `\nCharacter Description (behaviour and mannerisms):\n${characterDescription}`
+    : ''
+
+  const personalityNote = characterPersonality && characterPersonality.trim().length > 0
+    ? `\nCharacter Personality (internal drivers):\n${characterPersonality}`
     : ''
 
   const scenarioNote = scenarioText
-    ? `\nScenario: ${scenarioText.substring(0, 500)}`
+    ? `\nScenario: ${scenarioText}`
     : '\nScenario: (general conversation, no specific setting)'
 
   const messages: LLMMessage[] = [
@@ -86,7 +98,7 @@ export async function chooseLLMOutfit(
     },
     {
       role: 'user',
-      content: `Character: ${characterName}${personalityNote}${scenarioNote}
+      content: `Character: ${characterName}${manifestoNote}${descriptionNote}${personalityNote}${scenarioNote}
 
 Available Wardrobe Items:
 ${wardrobeSection}

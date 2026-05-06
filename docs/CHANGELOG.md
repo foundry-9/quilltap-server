@@ -4,6 +4,10 @@
 
 ### 4.4-dev
 
+#### Outfit selection: pass full description, personality, and manifesto to the LLM
+
+`lib/memory/cheap-llm-tasks/outfit-selection.ts` previously sent only `character.personality`, hard-truncated to 300 chars, and `scenarioText` truncated to 500 chars. The LLM had no idea what the character was like from the outside, what they publicly were, or what the load-bearing facts of their existence were. `chooseLLMOutfit` now takes `characterDescription`, `characterPersonality`, and `characterManifesto` as separate full-text args (each emitted only when non-empty, with a labeled header so the LLM knows which vantage point it's reading), and the scenario is passed through untruncated. Caller updated in `app/api/v1/chats/route.ts` to pass `character.description`, `character.personality`, and `character.manifesto`.
+
 #### Standalone tarball: set `__NEXT_PRIVATE_STANDALONE_CONFIG` before requiring next
 
 The `Cannot find module 'next/dist/compiled/webpack/webpack-lib'` startup crash that the previous entry attributed to webpack-vs-Turbopack was misdiagnosed. `node_modules/next/dist/server/config.js:1156` calls `loadWebpackHook()` unconditionally — which `require.resolve`s a list of `next/dist/compiled/webpack/*` paths — but the surrounding try/catch silently swallows the failure when `process.env.__NEXT_PRIVATE_STANDALONE_CONFIG` is set (see `config.js:1158-1163`). Next's own generated `.next/standalone/server.js` sets that env var on line 14, just before requiring `next`. Our build script (since `9606db9e`) overwrites that file with the esbuild bundle of our own `server.ts`, which never set the var, so the swallow gate stayed shut and the resolve threw.

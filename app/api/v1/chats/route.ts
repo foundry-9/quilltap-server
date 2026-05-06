@@ -408,7 +408,9 @@ async function applyOutfitSelections(
 
                 const result = await chooseLLMOutfit(
                   character.name,
+                  character.description || null,
                   character.personality || null,
+                  character.manifesto || null,
                   wardrobeItems,
                   context.scenarioText || null,
                   cheapSelection,
